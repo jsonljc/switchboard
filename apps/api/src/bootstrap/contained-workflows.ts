@@ -14,6 +14,10 @@ import { buildLeadIntakeIngressSubmitRequest } from "../services/workflows/lead-
 import type { FollowUpSendSubmitInput } from "../services/cron/scheduled-follow-up-dispatch.js";
 import { buildReminderSendSubmitRequest } from "../services/workflows/reminder-send-request.js";
 import type { ReminderSendSubmitInput } from "../services/workflows/reminder-send-request.js";
+import {
+  buildRecommendationHandoffSubmitRequest,
+  type RecommendationHandoffSubmitInput,
+} from "../services/workflows/recommendation-handoff-request.js";
 
 interface ContainedWorkflowBootstrapDeps {
   prismaClient: unknown;
@@ -45,6 +49,17 @@ export interface ContainedWorkflowBootstrapResult {
    * PlatformIngress with trigger:"schedule".
    */
   submitScheduledReminder: (input: ReminderSendSubmitInput) => Promise<SubmitWorkResponse>;
+  /**
+   * Top-level submit closure for the Riley weekly-audit cron's agent handoff
+   * (Contract 3). Builds the canonical request (or returns null when Riley abstains)
+   * and submits through PlatformIngress with the resolved Riley deployment as the
+   * targetHint, parking for mandatory human approval via the seeded policy. No
+   * parentWorkUnitId — cron-initiated work units are legitimate trace roots.
+   */
+  submitRecommendationHandoff: (
+    input: RecommendationHandoffSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse | null>;
 }
 
 /**
@@ -464,5 +479,25 @@ export async function bootstrapContainedWorkflows(
     return platformIngress.submit(buildReminderSendSubmitRequest(input, deployment));
   };
 
-  return { instantFormAdapter, submitScheduledFollowUp, submitScheduledReminder };
+  // Riley → agent recommendation handoff (Contract 3). The deployment is resolved by
+  // the cron itself (it iterates the org's active ad-optimizer deployments and passes
+  // {deploymentId, skillSlug:"ad-optimizer"}), so the top-level resolver's intent-prefix
+  // slug derivation ("adoptimizer" ≠ seeded "ad-optimizer") never bites here.
+  const submitRecommendationHandoff = async (
+    input: RecommendationHandoffSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ): Promise<SubmitWorkResponse | null> => {
+    const req = buildRecommendationHandoffSubmitRequest(input, deployment);
+    // null ⇒ Riley abstained (evidence floor / learning lockout / unroutable). Do not
+    // submit — the builder owns this first-line abstention; the handler re-checks.
+    if (!req) return null;
+    return platformIngress.submit(req);
+  };
+
+  return {
+    instantFormAdapter,
+    submitScheduledFollowUp,
+    submitScheduledReminder,
+    submitRecommendationHandoff,
+  };
 }

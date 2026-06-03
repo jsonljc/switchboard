@@ -29,6 +29,7 @@ import {
   PrismaConversionRecordStore,
   PrismaOpportunityStore,
   PrismaReconciliationStore,
+  PrismaBusinessFactsStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -71,7 +72,10 @@ import type {
   CronDependencies,
   SignalHealthCronDependencies,
   InstantFormAdapter,
+  RecommendationHandoffSubmitter,
 } from "@switchboard/ad-optimizer";
+import { synthesizeCreativeBrief } from "../services/workflows/creative-brief-synthesis.js";
+import type { RecommendationHandoffSubmitInput } from "../services/workflows/recommendation-handoff-request.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
@@ -139,6 +143,16 @@ export interface RegisterInngestOptions {
    * governed work. No parentWorkUnitId — cron work units are trace roots.
    */
   submitScheduledReminder?: (input: ReminderSendSubmitInput) => Promise<SubmitWorkResponse>;
+  /**
+   * Top-level submit closure for the Riley weekly-audit cron's agent handoff
+   * (Contract 3). Built in bootstrapContainedWorkflows and threaded here so the cron
+   * submits through the same PlatformIngress front door. No parentWorkUnitId — cron
+   * work units are trace roots. Returns null when Riley abstains.
+   */
+  submitRecommendationHandoff?: (
+    input: RecommendationHandoffSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse | null>;
 }
 
 export async function registerInngest(
@@ -228,7 +242,7 @@ export async function registerInngest(
       cronId: ctx.cronId,
       ...(ctx.deploymentId ? { deploymentId: ctx.deploymentId } : {}),
     });
-    return { surface: result.surface };
+    return { surface: result.surface, id: result.id };
   };
 
   // PR2 Gate-4: per-campaign booked-VALUE provider for the weekly audit's
@@ -236,6 +250,41 @@ export async function registerInngest(
   // audit passes the resolved orgId per call); structurally satisfies the
   // ad-optimizer BookedValueByCampaignProvider port.
   const bookedValueByCampaignStore = new PrismaConversionRecordStore(app.prisma!);
+
+  // Riley → agent recommendation handoff. The cron (via the audit-runner sink) calls
+  // this for each EMITTED creative recommendation that clears the abstention. We
+  // resolve a fresh creative brief per handoff (BusinessFacts + medspa fallback) and
+  // route through the top-level submit closure built in bootstrapContainedWorkflows
+  // (parking for mandatory human approval). Best-effort: a handoff failure is caught
+  // + logged so it never breaks the weekly audit.
+  const businessFactsStore = new PrismaBusinessFactsStore(app.prisma);
+  const recommendationHandoffSubmitter: RecommendationHandoffSubmitter = async (candidate) => {
+    if (!options.submitRecommendationHandoff) return;
+    try {
+      // A cheap indexed BusinessFacts read; a weekly audit yields only a handful of
+      // creative recs per org. Resolved per handoff (no process-lifetime cache) so an
+      // operator's BusinessFacts edits take effect on the next run.
+      const brief = synthesizeCreativeBrief(await businessFactsStore.get(candidate.organizationId));
+      const input: RecommendationHandoffSubmitInput = {
+        organizationId: candidate.organizationId,
+        recommendationId: candidate.recommendationId,
+        actionType: candidate.actionType,
+        campaignId: candidate.campaignId,
+        rationale: candidate.rationale,
+        evidence: candidate.evidence,
+        learningPhaseActive: candidate.learningPhaseActive,
+        brief,
+      };
+      await options.submitRecommendationHandoff(input, {
+        deploymentId: candidate.deploymentId,
+        skillSlug: "ad-optimizer",
+      });
+    } catch (err) {
+      app.log.warn(
+        `[inngest] Riley recommendation handoff failed for rec=${candidate.recommendationId}: ${String(err)}`,
+      );
+    }
+  };
 
   const adOptimizerDeps: CronDependencies = {
     listActiveDeployments: async () => {
@@ -288,6 +337,7 @@ export async function registerInngest(
     createSignalHealthChecker,
     recommendationEmitter: rileyRecommendationEmitter,
     bookedValueByCampaignProvider: bookedValueByCampaignStore,
+    recommendationHandoffSubmitter,
   };
 
   // Signal-health daily cron uses a slimmer dep set than the audit cron —

@@ -484,3 +484,113 @@ describe("runRecommendationSink — economic basis + per-campaign economics in d
     expect(flat).toContain("ctwa 3.8x true ROAS · instant_form 1.5x true ROAS");
   });
 });
+
+describe("runRecommendationSink — Riley -> agent handoff dispatch", () => {
+  const refreshRec = () =>
+    baseRec({ action: "refresh_creative", campaignId: "c-1", campaignName: "Spring Promo" });
+  const ctx = () =>
+    new Map([
+      ["c-1", { evidence: { clicks: 50, conversions: 3, days: 7 }, learningPhaseActive: false }],
+    ]);
+  const emitOk = (
+    id: string | null,
+    surface: "queue" | "dropped" = "queue",
+  ): RecommendationEmitter => vi.fn(async () => ({ surface, id }) as EmitOutcome);
+
+  it("submits a handoff for an emitted, evidence-met creative recommendation", async () => {
+    const recommendationHandoffSubmitter = vi.fn(async (_c: unknown) => {});
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "audit-1",
+      recommendations: [refreshRec()],
+      emit: emitOk("rec_db_1"),
+      emissionContext: { cronId: "test-cron", deploymentId: "dep_riley" },
+      handoffContextByCampaign: ctx(),
+      recommendationHandoffSubmitter,
+    });
+    expect(recommendationHandoffSubmitter).toHaveBeenCalledTimes(1);
+    expect(recommendationHandoffSubmitter.mock.calls[0]![0]).toEqual({
+      organizationId: "org-1",
+      deploymentId: "dep_riley",
+      recommendationId: "rec_db_1",
+      actionType: "refresh_creative",
+      campaignId: "c-1",
+      rationale: "Refresh creative on Spring Promo — saves $40/day",
+      evidence: { clicks: 50, conversions: 3, days: 7 },
+      learningPhaseActive: false,
+    });
+  });
+
+  it("does NOT hand off a dropped recommendation (no id)", async () => {
+    const recommendationHandoffSubmitter = vi.fn(async (_c: unknown) => {});
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "audit-1",
+      recommendations: [refreshRec()],
+      emit: emitOk(null, "dropped"),
+      emissionContext: { cronId: "test-cron", deploymentId: "dep_riley" },
+      handoffContextByCampaign: ctx(),
+      recommendationHandoffSubmitter,
+    });
+    expect(recommendationHandoffSubmitter).not.toHaveBeenCalled();
+  });
+
+  it("does NOT hand off a non-creative (unroutable) recommendation", async () => {
+    const recommendationHandoffSubmitter = vi.fn(async (_c: unknown) => {});
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "audit-1",
+      recommendations: [baseRec({ action: "pause", campaignId: "c-1" })],
+      emit: emitOk("rec_db_2"),
+      emissionContext: { cronId: "test-cron", deploymentId: "dep_riley" },
+      handoffContextByCampaign: ctx(),
+      recommendationHandoffSubmitter,
+    });
+    expect(recommendationHandoffSubmitter).not.toHaveBeenCalled();
+  });
+
+  it("does NOT hand off when the emitter returns no id (back-compat emitters)", async () => {
+    const recommendationHandoffSubmitter = vi.fn(async (_c: unknown) => {});
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "audit-1",
+      recommendations: [refreshRec()],
+      emit: vi.fn(async () => ({ surface: "queue" }) as EmitOutcome),
+      emissionContext: { cronId: "test-cron", deploymentId: "dep_riley" },
+      handoffContextByCampaign: ctx(),
+      recommendationHandoffSubmitter,
+    });
+    expect(recommendationHandoffSubmitter).not.toHaveBeenCalled();
+  });
+
+  it("does NOT hand off when no deployment id is in scope (analysis-only caller)", async () => {
+    const recommendationHandoffSubmitter = vi.fn(async (_c: unknown) => {});
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "audit-1",
+      recommendations: [refreshRec()],
+      emit: emitOk("rec_db_3"),
+      emissionContext: { cronId: "test-cron" },
+      handoffContextByCampaign: ctx(),
+      recommendationHandoffSubmitter,
+    });
+    expect(recommendationHandoffSubmitter).not.toHaveBeenCalled();
+  });
+
+  it("a handoff submitter that throws never breaks emission/routing", async () => {
+    const recommendationHandoffSubmitter = vi.fn(async (_c: unknown) => {
+      throw new Error("ingress down");
+    });
+    const result = await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "audit-1",
+      recommendations: [refreshRec()],
+      emit: emitOk("rec_db_4"),
+      emissionContext: { cronId: "test-cron", deploymentId: "dep_riley" },
+      handoffContextByCampaign: ctx(),
+      recommendationHandoffSubmitter,
+    });
+    expect(result.routedQueue).toBe(1);
+    expect(recommendationHandoffSubmitter).toHaveBeenCalledTimes(1);
+  });
+});

@@ -12,6 +12,7 @@ import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/sch
 import type { SignalHealthReport, SignalHealthReportProvider } from "./signal-health-checker.js";
 import type { RecommendationEmitter } from "./recommendation-sink.js";
 import type { CoverageReport } from "./onboarding/coverage-validator.js";
+import type { RecommendationHandoffSubmitter } from "./recommendation-handoff-dispatch.js";
 
 interface DeploymentInfo {
   id: string;
@@ -82,6 +83,14 @@ export interface CronDependencies {
    * PrismaConversionRecordStore. Absent ⇒ trueROAS reported null (graceful).
    */
   bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
+  /**
+   * Optional. When provided, each EMITTED creative recommendation that clears the
+   * handoff abstention is routed to a governed Mira draft (parking for mandatory
+   * human approval) through this bootstrap-injected submit callback. Wired in
+   * apps/api/src/bootstrap/inngest.ts; ad-optimizer (Layer 2) never imports
+   * PlatformIngress. Absent ⇒ the weekly audit produces no Riley -> agent handoffs.
+   */
+  recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
 }
 
 interface StepTools {
@@ -197,6 +206,9 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
                 deploymentId: deployment.id,
               },
             }
+          : {}),
+        ...(deps.recommendationHandoffSubmitter
+          ? { recommendationHandoffSubmitter: deps.recommendationHandoffSubmitter }
           : {}),
       });
       const report = await runner.run(dateRanges);
