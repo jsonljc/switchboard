@@ -95,6 +95,7 @@ describe("ClaimClassifierConfigSchema", () => {
       mode: "off",
       latencyBudgetMs: 800,
       model: "claude-haiku-4-5-20251001",
+      confidenceThreshold: 0.7,
     });
   });
 
@@ -108,6 +109,7 @@ describe("ClaimClassifierConfigSchema", () => {
       mode: "enforce",
       latencyBudgetMs: 1200,
       model: "claude-sonnet-4-6",
+      confidenceThreshold: 0.7,
     });
   });
 
@@ -118,6 +120,23 @@ describe("ClaimClassifierConfigSchema", () => {
 
   it("rejects unknown mode", () => {
     expect(ClaimClassifierConfigSchema.safeParse({ mode: "warn" }).success).toBe(false);
+  });
+
+  it("defaults confidenceThreshold to 0.7", () => {
+    expect(ClaimClassifierConfigSchema.parse({}).confidenceThreshold).toBe(0.7);
+  });
+
+  it("accepts an explicit confidenceThreshold", () => {
+    expect(
+      ClaimClassifierConfigSchema.parse({ confidenceThreshold: 0.5 }).confidenceThreshold,
+    ).toBe(0.5);
+  });
+
+  it("rejects a confidenceThreshold outside [0,1]", () => {
+    expect(ClaimClassifierConfigSchema.safeParse({ confidenceThreshold: 1.5 }).success).toBe(false);
+    expect(ClaimClassifierConfigSchema.safeParse({ confidenceThreshold: -0.1 }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -151,6 +170,16 @@ describe("resolveClaimClassifierConfig", () => {
     const resolved = resolveClaimClassifierConfig(config);
     expect(resolved.mode).toBe("enforce");
     expect(resolved.latencyBudgetMs).toBe(600);
+  });
+
+  it("surfaces confidenceThreshold from the passthrough sub-block (and defaults to 0.7)", () => {
+    expect(resolveClaimClassifierConfig(null).confidenceThreshold).toBe(0.7);
+    const config = GovernanceConfigSchema.parse({
+      jurisdiction: "SG",
+      clinicType: "medical",
+      claimClassifier: { mode: "enforce", confidenceThreshold: 0.85 },
+    });
+    expect(resolveClaimClassifierConfig(config).confidenceThreshold).toBe(0.85);
   });
 });
 

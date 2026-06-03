@@ -13,6 +13,7 @@ import type { ClaimType } from "@switchboard/schemas";
 function fakeResolver(
   mode: "off" | "observe" | "enforce" | "missing" | "error",
   latencyBudgetMs = 800,
+  confidenceThreshold?: number,
 ): GovernanceConfigResolver {
   return async () => {
     if (mode === "missing") return { status: "missing" };
@@ -23,7 +24,12 @@ function fakeResolver(
         jurisdiction: "SG",
         clinicType: "medical",
         deterministicGate: { mode: "off" },
-        claimClassifier: { mode, latencyBudgetMs, model: "claude-haiku-4-5-20251001" },
+        claimClassifier: {
+          mode,
+          latencyBudgetMs,
+          model: "claude-haiku-4-5-20251001",
+          ...(confidenceThreshold !== undefined ? { confidenceThreshold } : {}),
+        },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     };
@@ -52,6 +58,18 @@ function fakeClassifier(outcomes: Record<string, ClaimType>): AnthropicClaimClas
   return {
     classify: async ({ sentence, model }) => ({
       result: { sentence, claimType: outcomes[sentence] ?? "none", confidence: 0.9 },
+      promptVersion: "claim-classifier@1.0.0",
+      promptHash: "0123456789abcdef",
+      schemaVersion: "1.0.0",
+      model,
+    }),
+  };
+}
+
+function fakeClassifierConf(claimType: ClaimType, confidence: number): AnthropicClaimClassifier {
+  return {
+    classify: async ({ sentence, model }) => ({
+      result: { sentence, claimType, confidence },
       promptVersion: "claim-classifier@1.0.0",
       promptHash: "0123456789abcdef",
       schemaVersion: "1.0.0",
@@ -154,6 +172,7 @@ function makeHook(
     posture: { mode: "off" | "observe" | "enforce" } | undefined;
     rewrites: ReadonlyArray<RewriteTemplateEntry>;
     latencyBudgetMs: number;
+    confidenceThreshold: number;
   }> = {},
 ) {
   const mode = overrides.configMode ?? "enforce";
@@ -164,7 +183,11 @@ function makeHook(
   const conversationStore = fakeConversationStore();
   const postureCache = fakePostureCache(overrides.posture);
   const hook = new ClaimClassifierHook({
-    governanceConfigResolver: fakeResolver(mode, overrides.latencyBudgetMs),
+    governanceConfigResolver: fakeResolver(
+      mode,
+      overrides.latencyBudgetMs,
+      overrides.confidenceThreshold,
+    ),
     postureCache,
     classifier,
     substantiationResolver: substantiation,
@@ -455,5 +478,63 @@ describe("ClaimClassifierHook — outcome matrix in enforce mode", () => {
     expect(handoffStore.saved).toHaveLength(1);
     expect(conversationStore.getStatus("sess_1")).toBe("human_override");
     expect(result.response).toContain("clinic team");
+  });
+});
+
+describe("ClaimClassifierHook — confidence floor (T1.1)", () => {
+  it("allows a rewriteable claim below the confidence floor (no rewrite, no verdict)", async () => {
+    const { hook, verdictStore, handoffStore } = makeHook({
+      classifier: fakeClassifierConf("efficacy", 0.6),
+      substantiation: "missing",
+    });
+    const result = makeResult("Visible slimming after one session.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    expect(verdictStore.saved).toHaveLength(0);
+    expect(handoffStore.saved).toHaveLength(0);
+    expect(result.response).toBe("Visible slimming after one session.");
+  });
+
+  it("allows an escalate-only claim below the floor (uniform floor)", async () => {
+    const { hook, verdictStore, conversationStore } = makeHook({
+      classifier: fakeClassifierConf("diagnosis", 0.6),
+    });
+    const result = makeResult("You might have rosacea.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    expect(verdictStore.saved).toHaveLength(0);
+    expect(conversationStore.getStatus("sess_1")).toBeUndefined();
+    expect(result.response).toBe("You might have rosacea.");
+  });
+
+  it("still rewrites a rewriteable claim at/above the floor", async () => {
+    const { hook, verdictStore } = makeHook({
+      classifier: fakeClassifierConf("efficacy", 0.8),
+      substantiation: "missing",
+    });
+    const result = makeResult("Visible slimming after one session.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    expect(verdictStore.saved).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((verdictStore.saved[0] as any).action).toBe("rewrite");
+  });
+
+  it("still escalates an escalate-only claim at/above the floor", async () => {
+    const { hook, verdictStore, conversationStore } = makeHook({
+      classifier: fakeClassifierConf("diagnosis", 0.9),
+    });
+    const result = makeResult("You might have rosacea.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    expect(verdictStore.saved).toHaveLength(1);
+    expect(conversationStore.getStatus("sess_1")).toBe("human_override");
+  });
+
+  it("respects a configured (lower) confidenceThreshold", async () => {
+    const { hook, verdictStore } = makeHook({
+      classifier: fakeClassifierConf("efficacy", 0.6),
+      substantiation: "missing",
+      confidenceThreshold: 0.5,
+    });
+    const result = makeResult("Visible slimming after one session.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    expect(verdictStore.saved).toHaveLength(1);
   });
 });

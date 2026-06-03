@@ -32,13 +32,18 @@ export function resolveGovernanceMode(config: GovernanceConfig | null): Governan
  * sub-blocks at runtime.
  *
  * Defaults: mode="off" (pure pass-through), latencyBudgetMs=800 (per-turn budget
- * for all sentence classifications combined), model="claude-haiku-4-5-20251001".
+ * for all sentence classifications combined), model="claude-haiku-4-5-20251001",
+ * confidenceThreshold=0.7 (a sub-threshold classification is treated as allow).
  */
 export const ClaimClassifierConfigSchema = z
   .object({
     mode: GovernanceModeSchema.default("off"),
     latencyBudgetMs: z.number().int().positive().default(800),
     model: z.string().min(1).default("claude-haiku-4-5-20251001"),
+    // T1.1: a classification below this confidence is not trusted to rewrite or
+    // escalate a turn (the hook treats it as allow). De-risks the off->enforce
+    // flip; root of over-flag #673. Principled default, not an operator UI knob.
+    confidenceThreshold: z.number().min(0).max(1).default(0.7),
   })
   .default({});
 

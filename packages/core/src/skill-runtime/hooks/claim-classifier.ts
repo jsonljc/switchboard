@@ -112,6 +112,7 @@ export class ClaimClassifierHook implements SkillHook {
           jurisdiction,
           deploymentId: ctx.deploymentId,
           latencyBudgetMs: classifierConfig.latencyBudgetMs,
+          confidenceThreshold: classifierConfig.confidenceThreshold,
         }),
       );
     }
@@ -150,8 +151,10 @@ export class ClaimClassifierHook implements SkillHook {
     jurisdiction: "SG" | "MY";
     deploymentId: string;
     latencyBudgetMs: number;
+    confidenceThreshold: number;
   }): Promise<SentenceAction> {
-    const { outcome, sentence, jurisdiction, deploymentId, latencyBudgetMs } = args;
+    const { outcome, sentence, jurisdiction, deploymentId, latencyBudgetMs, confidenceThreshold } =
+      args;
 
     if (outcome.status === "timeout") {
       return {
@@ -194,6 +197,12 @@ export class ClaimClassifierHook implements SkillHook {
     };
 
     if (result.claimType === "none") return { kind: "allow" };
+
+    // T1.1 confidence floor: a sub-threshold classification is not trusted to
+    // rewrite or escalate a turn. Below the floor we allow the sentence rather
+    // than acting on a guess. Applies uniformly to all non-"none" claim types;
+    // error/timeout outcomes above carry no confidence and still escalate.
+    if (result.confidence < confidenceThreshold) return { kind: "allow" };
 
     if (ESCALATE_ONLY.includes(result.claimType)) {
       return {
