@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type {
   StoryboardOutput,
   ScriptWriterOutput,
@@ -258,7 +257,10 @@ export async function runVideoProducer(
       // and leave durableAssetUrl unset (publish fails loud downstream). A storage
       // failure propagates (fail loud) rather than fake-succeeding with a temp path.
       if (deps.assetStorage) {
-        const baseKey = `creative-assets/${input.jobId}/${randomUUID()}`;
+        // Deterministic per-job key: a retry of the production stage re-uploads to
+        // the SAME key (overwrite, idempotent — no orphaned objects accumulate),
+        // and the cuid2 jobId keeps it unguessable. One assembled video per run.
+        const baseKey = `creative-assets/${input.jobId}/assembled`;
         const uploadedVideo = await deps.assetStorage.upload({
           localPath: assembled.videoUrl,
           key: `${baseKey}.mp4`,

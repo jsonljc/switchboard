@@ -205,11 +205,17 @@ describe("runVideoProducer", () => {
     expect(upload).toHaveBeenCalledTimes(2);
     expect(upload).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ contentType: "video/mp4" }),
+      expect.objectContaining({
+        key: "creative-assets/job_1/assembled.mp4",
+        contentType: "video/mp4",
+      }),
     );
     expect(upload).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ contentType: "image/jpeg" }),
+      expect.objectContaining({
+        key: "creative-assets/job_1/assembled-thumb.jpg",
+        contentType: "image/jpeg",
+      }),
     );
     expect(result.assembledVideos?.[0]?.videoUrl).toBe(
       "https://cdn.example.com/creative-assets/job_1/u.mp4",

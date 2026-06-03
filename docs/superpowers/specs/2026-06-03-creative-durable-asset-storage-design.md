@@ -92,8 +92,9 @@ step** (no spend, not claim-bearing); the governed/claim-gated moment remains pu
    AWS S3 / MinIO by changing env only. No SDK in any `@switchboard/*` package.
 
 2. **Access model = public-read object + stable URL.** The assembled object is stored under
-   an **unguessable key** (`creative-assets/<jobId>/<uuid>.mp4`; `jobId` is a cuid2, plus a
-   random UUID) in a bucket configured for **public read** at a CDN/custom-domain base URL.
+   an **unguessable, deterministic-per-job key** (`creative-assets/<jobId>/assembled.mp4`; the
+   cuid2 `jobId` is the secret, so a stage retry re-uploads to the SAME key — idempotent
+   overwrite, no orphaned objects) in a bucket configured for **public read** at a CDN/custom-domain base URL.
    The stored `durableAssetUrl` is the **permanent** `"<CREATIVE_ASSET_PUBLIC_BASE_URL>/<key>"`.
    Rationale: it never expires (robust through Meta's multi-day review window + parked human
    approval), it works with #830's existing plain-`fetch` consumer **unchanged** (PR A stays
@@ -178,9 +179,10 @@ present; `endpoint` optional (R2), `region` defaults to `"auto"`.
 Add `jobId: string` to `VideoProducerInput` (passed from `run-stage.ts` `StageInput.jobId`).
 In the `if (assembled)` block, when `deps.assetStorage` is present:
 
-1. `key = "creative-assets/" + input.jobId + "/" + randomUUID()`; upload
-   `assembled.videoUrl` (`<key>.mp4`, `video/mp4`) and `assembled.thumbnailUrl`
-   (`<key>-thumb.jpg`, `image/jpeg`).
+1. `baseKey = "creative-assets/" + input.jobId + "/assembled"` (deterministic → a stage
+   retry overwrites the same object, no orphans; unguessable via the cuid2 `jobId`); upload
+   `assembled.videoUrl` (`<baseKey>.mp4`, `video/mp4`) and `assembled.thumbnailUrl`
+   (`<baseKey>-thumb.jpg`, `image/jpeg`).
 2. Use the returned durable URLs in the pushed `assembledVideos` entry (so the persisted
    `stageOutputs.production` carries durable, not `/tmp`, URLs).
 3. Set a local `durableAssetUrl` = the durable **video** URL.
