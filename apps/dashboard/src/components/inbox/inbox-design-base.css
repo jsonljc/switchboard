@@ -66,10 +66,7 @@
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* shadow */
-  --shadow-card: 0 1px 0 rgba(40, 30, 20, 0.04), 0 1px 2px rgba(40, 30, 20, 0.04);
-  --shadow-lift: 0 12px 28px rgba(40, 30, 20, 0.1), 0 2px 6px rgba(40, 30, 20, 0.06);
-  --shadow-sheet: 0 -10px 30px rgba(40, 30, 20, 0.08), 0 -1px 2px rgba(40, 30, 20, 0.04);
+  /* shadows inherit the global elevation ladder (EL1); no scoped redefs. */
 }
 
 /* Base sheet shell — slide-up bottom-sheet (mobile) / right rail (desktop).
@@ -106,7 +103,7 @@
     border-radius: 0;
     border-left: 1px solid var(--hair);
     transform: translateX(100%);
-    box-shadow: -20px 0 40px rgba(40, 30, 20, 0.1);
+    box-shadow: -20px 0 40px hsl(var(--shadow-color) / 0.1);
   }
   .sheet[data-open="true"] {
     transform: translateX(0);
@@ -194,7 +191,9 @@
 }
 
 /* placeholder is desktop-only */
-.inbox-detail-empty { display: none; }
+.inbox-detail-empty {
+  display: none;
+}
 
 /* ─── Desktop master-detail two-pane (additive at lg) ─── */
 /* Scoped under .app-main (the shell wrapper) so specificity (0,2,0) beats
@@ -208,10 +207,15 @@
     align-items: start;
     padding-bottom: 32px;
   }
-  .app-main .inbox-list { grid-column: 1; min-width: 0; }
+  .app-main .inbox-list {
+    grid-column: 1;
+    min-width: 0;
+  }
   /* dock the detail sheet (and the empty placeholder) into the right column */
   .sheet,
-  .inbox-detail-empty { grid-column: 2; }
+  .inbox-detail-empty {
+    grid-column: 2;
+  }
   .sheet {
     position: sticky;
     top: calc(var(--header-h, 68px) + 16px);
@@ -227,7 +231,9 @@
     border-radius: var(--r-lg);
     box-shadow: var(--shadow-sheet);
   }
-  .sheet[data-open="true"] { transform: none; }
+  .sheet[data-open="true"] {
+    transform: none;
+  }
   /* Re-cap the docked pane height: `.sheet.ds { max-height: 92% }` (0,2,0) wins over a
      bare `.sheet`, and 92% resolves to `none` (auto-height ancestors), so scope to 0,3,0
      here — the pane caps at the viewport and `.sheet-body` (flex:1; overflow-y:auto)
@@ -236,7 +242,9 @@
     max-height: calc(100dvh - var(--header-h, 68px) - 48px);
   }
   /* no dimming overlay in two-pane mode */
-  .scrim { display: none; }
+  .scrim {
+    display: none;
+  }
   .inbox-detail-empty {
     display: flex;
     align-items: center;
