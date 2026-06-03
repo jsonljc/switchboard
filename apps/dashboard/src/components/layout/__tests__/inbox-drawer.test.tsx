@@ -7,14 +7,18 @@ import type { ReactNode } from "react";
 // ---------- Stable top-level mocks (no resetModules / doMock anywhere) ----------
 
 // Feed: a mutable variable that tests reassign before render/rerender.
+// Shape mirrors the React Query result <QueryStates> consumes: it derives
+// state from {data, error} (keys-pending-safe), so every feed carries `error`.
 let mockFeed: {
   data:
     | { decisions: unknown[]; counts: { total: number; approval: number; handoff: number } }
     | undefined;
+  error: unknown;
   isLoading: boolean;
   isError: boolean;
 } = {
   data: { decisions: [], counts: { total: 3, approval: 2, handoff: 1 } },
+  error: null,
   isLoading: false,
   isError: false,
 };
@@ -99,6 +103,7 @@ beforeEach(() => {
   mockTenant = { orgId: "org-1", keys: {} };
   mockFeed = {
     data: { decisions: [], counts: { total: 3, approval: 2, handoff: 1 } },
+    error: null,
     isLoading: false,
     isError: false,
   };
@@ -119,6 +124,7 @@ describe("InboxDrawer — header DOM contract", () => {
   it("preserves the folio-link trigger DOM (pip + label + separator + count)", () => {
     mockFeed = {
       data: { decisions: [], counts: { total: 3, approval: 2, handoff: 1 } },
+      error: null,
       isLoading: false,
       isError: false,
     };
@@ -138,6 +144,7 @@ describe("InboxDrawer — trigger aria-label", () => {
   it("reads 'Inbox, empty' when total is 0", () => {
     mockFeed = {
       data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
+      error: null,
       isLoading: false,
       isError: false,
     };
@@ -148,6 +155,7 @@ describe("InboxDrawer — trigger aria-label", () => {
   it("reads 'Inbox, 1 item' when total is 1", () => {
     mockFeed = {
       data: { decisions: [], counts: { total: 1, approval: 1, handoff: 0 } },
+      error: null,
       isLoading: false,
       isError: false,
     };
@@ -158,6 +166,7 @@ describe("InboxDrawer — trigger aria-label", () => {
   it("reads 'Inbox, 3 items' when total is 3", () => {
     mockFeed = {
       data: { decisions: [], counts: { total: 3, approval: 2, handoff: 1 } },
+      error: null,
       isLoading: false,
       isError: false,
     };
@@ -171,6 +180,7 @@ describe("InboxDrawer — tenant-null trigger", () => {
     mockTenant = null;
     mockFeed = {
       data: undefined,
+      error: null,
       isLoading: false,
       isError: false,
     };
@@ -191,6 +201,7 @@ describe("InboxDrawer — accessibility", () => {
     const user = userEvent.setup();
     mockFeed = {
       data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
+      error: null,
       isLoading: false,
       isError: false,
     };
@@ -207,6 +218,7 @@ describe("InboxDrawer — list states", () => {
     const user = userEvent.setup();
     mockFeed = {
       data: undefined,
+      error: null,
       isLoading: true,
       isError: false,
     };
@@ -219,6 +231,7 @@ describe("InboxDrawer — list states", () => {
     const user = userEvent.setup();
     mockFeed = {
       data: undefined,
+      error: new Error("Failed to load decisions"),
       isLoading: false,
       isError: true,
     };
@@ -227,10 +240,29 @@ describe("InboxDrawer — list states", () => {
     expect(await screen.findByText(/Couldn't load your inbox\./i)).toBeInTheDocument();
   });
 
+  it("keys-pending feed (data undefined, isLoading false, no error) shows the loading affordance, not the empty state", async () => {
+    // Disabled query during keys-pending: React Query reports data:undefined,
+    // error:null, isLoading:false. The old `isLoading && !data` gate was skipped
+    // and the body false-emptied. <QueryStates> derives from {data,error} only,
+    // so this must show "Reading…" — never the "caught up" empty state.
+    const user = userEvent.setup();
+    mockFeed = {
+      data: undefined,
+      error: null,
+      isLoading: false,
+      isError: false,
+    };
+    render(<InboxDrawer />, { wrapper });
+    await user.click(screen.getByRole("button", { name: /^Inbox/ }));
+    expect(await screen.findByText(/reading your inbox/i)).toBeInTheDocument();
+    expect(screen.queryByText(/you're caught up/i)).toBeNull();
+  });
+
   it("renders the editorial empty-state copy when total is 0", async () => {
     const user = userEvent.setup();
     mockFeed = {
       data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
+      error: null,
       isLoading: false,
       isError: false,
     };
@@ -290,6 +322,7 @@ describe("InboxDrawer — populated list", () => {
         ],
         counts: { total: 2, approval: 1, handoff: 1 },
       },
+      error: null,
       isLoading: false,
       isError: false,
     };
@@ -345,6 +378,7 @@ describe("InboxDrawer — action dispatch", () => {
         ],
         counts: { total: 1, approval: 0, handoff: 1 },
       },
+      error: null,
       isLoading: false,
       isError: false,
     };
@@ -400,12 +434,14 @@ describe("InboxDrawer — auto-close on inbox-zero", () => {
         ],
         counts: { total: 1, approval: 1, handoff: 0 },
       },
+      error: null,
       isLoading: false,
       isError: false,
     };
   }
   const emptyFeed = {
     data: { decisions: [], counts: { total: 0, approval: 0, handoff: 0 } },
+    error: null,
     isLoading: false,
     isError: false,
   };
@@ -509,6 +545,7 @@ describe("InboxDrawer — risk gate (P1-B coherence)", () => {
         ],
         counts: { total: 1, approval: 1, handoff: 0 },
       },
+      error: null,
       isLoading: false,
       isError: false,
     };
