@@ -10,6 +10,10 @@ import {
   creativeAllowPolicyId,
   creativePublishApprovalPolicyId,
 } from "./creative-governance.js";
+import {
+  recommendationHandoffAllowPolicyId,
+  recommendationHandoffApprovalPolicyId,
+} from "./recommendation-handoff-governance.js";
 
 interface FindUniqueArgs {
   where: { slug: string };
@@ -142,9 +146,11 @@ describe("seedMiraCreativeDeployment", () => {
 
   it("upserts an org-scoped allow policy so creative.job.* is governed-not-denied", async () => {
     await seedMiraCreativeDeployment(prisma, "org_dev");
-    // Two policies are seeded together: the allow policy AND the publish
-    // mandatory-approval policy (an org allowed but ungated would auto-publish).
-    expect(prisma._policyUpserts).toHaveLength(2);
+    // Four policies are seeded together: the creative allow + publish
+    // mandatory-approval policies AND the recommendation-handoff allow +
+    // mandatory-approval policies (a workflow intent default-denies without an
+    // allow policy; a Riley handoff that is allowed but ungated would auto-route).
+    expect(prisma._policyUpserts).toHaveLength(4);
     const call = prisma._policyUpserts.find(
       (c) => c.where.id === creativeAllowPolicyId("org_dev"),
     )!;
@@ -170,6 +176,36 @@ describe("seedMiraCreativeDeployment", () => {
     );
     expect(publish).toBeDefined();
     expect(publish!.create).toMatchObject({
+      organizationId: "org_dev",
+      effect: "require_approval",
+      approvalRequirement: "mandatory",
+      active: true,
+    });
+  });
+
+  it("upserts the recommendation-handoff allow policy (governed-not-denied)", async () => {
+    await seedMiraCreativeDeployment(prisma, "org_dev");
+    const allow = prisma._policyUpserts.find(
+      (c) => c.where.id === recommendationHandoffAllowPolicyId("org_dev"),
+    );
+    expect(allow).toBeDefined();
+    expect(allow!.create).toMatchObject({
+      organizationId: "org_dev",
+      effect: "allow",
+      active: true,
+    });
+    expect(JSON.stringify(allow!.create.rule)).toContain(
+      "adoptimizer\\\\.recommendation\\\\.handoff",
+    );
+  });
+
+  it("upserts the recommendation-handoff mandatory-approval policy (Riley stays advisory)", async () => {
+    await seedMiraCreativeDeployment(prisma, "org_dev");
+    const approval = prisma._policyUpserts.find(
+      (c) => c.where.id === recommendationHandoffApprovalPolicyId("org_dev"),
+    );
+    expect(approval).toBeDefined();
+    expect(approval!.create).toMatchObject({
       organizationId: "org_dev",
       effect: "require_approval",
       approvalRequirement: "mandatory",

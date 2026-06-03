@@ -5,6 +5,10 @@ import {
   buildCreativeAllowPolicyInput,
   buildCreativePublishApprovalPolicyInput,
 } from "./creative-governance.js";
+import {
+  buildRecommendationHandoffAllowPolicyInput,
+  buildRecommendationHandoffApprovalPolicyInput,
+} from "./recommendation-handoff-governance.js";
 
 /**
  * The marketplace listing that backs the creative pipeline. Seeded by
@@ -92,5 +96,26 @@ export async function seedMiraCreativeDeployment(
     where: { id: publishPolicyId },
     create: { id: publishPolicyId, ...publishPolicyData },
     update: publishPolicyData,
+  });
+
+  // Riley -> agent advisory handoff (adoptimizer.recommendation.handoff): a
+  // workflow intent default-denies without an allow policy, and a Riley-initiated
+  // handoff can lead to creative spend (it creates a Mira draft a human later
+  // funds), so seed the allow + mandatory-approval policies together (mirrors the
+  // creative publish gate). Idempotent on the deterministic per-org policy ids.
+  const { id: handoffAllowId, ...handoffAllowData } =
+    buildRecommendationHandoffAllowPolicyInput(orgId);
+  await prisma.policy.upsert({
+    where: { id: handoffAllowId },
+    create: { id: handoffAllowId, ...handoffAllowData },
+    update: handoffAllowData,
+  });
+
+  const { id: handoffApprovalId, ...handoffApprovalData } =
+    buildRecommendationHandoffApprovalPolicyInput(orgId);
+  await prisma.policy.upsert({
+    where: { id: handoffApprovalId },
+    create: { id: handoffApprovalId, ...handoffApprovalData },
+    update: handoffApprovalData,
   });
 }

@@ -156,6 +156,14 @@ export {
   buildCreativePublishApprovalPolicyInput,
 } from "./seed/creative-governance.js";
 export {
+  RECOMMENDATION_HANDOFF_ALLOW_POLICY_RULE,
+  recommendationHandoffAllowPolicyId,
+  buildRecommendationHandoffAllowPolicyInput,
+  RECOMMENDATION_HANDOFF_APPROVAL_POLICY_RULE,
+  recommendationHandoffApprovalPolicyId,
+  buildRecommendationHandoffApprovalPolicyInput,
+} from "./seed/recommendation-handoff-governance.js";
+export {
   seedAlexSkillPack,
   assertAlexSkillPackSeeded,
   ALEX_SKILL_PACK_SCOPES,

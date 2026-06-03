@@ -81,6 +81,8 @@ export * from "./agent-persona.js";
 
 // Creative Pipeline (Performance Creative Director)
 export * from "./creative-job.js";
+// Agent-synergy handoff seams (Governed Handoff Contract Freeze)
+export * from "./creative-concept-draft.js";
 
 // UGC v2 — Creative Pipeline
 export * from "./ugc-job.js";
@@ -148,6 +150,8 @@ export * from "./pcd-identity.js";
 
 // Recommendations (surface, status, action enums + canonical input shape)
 export * from "./recommendations.js";
+// Riley -> agent recommendation handoff payload (Governed Handoff Contract Freeze §4.3)
+export * from "./recommendation-handoff.js";
 
 // Reports v1 view-model (operator deep-dive surface)
 export * from "./reports/v1.js";
