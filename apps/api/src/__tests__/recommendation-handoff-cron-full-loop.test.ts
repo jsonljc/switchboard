@@ -476,10 +476,16 @@ interface ParkedHandoff {
 }
 
 /**
- * Builds the CronDependencies whose recommendationHandoffSubmitter MIRRORS production
- * (the inngest.ts closure + the contained-workflows submitRecommendationHandoff
- * closure): synthesizeCreativeBrief -> buildRecommendationHandoffSubmitRequest ->
- * REAL ingress.submit. Captures each parked submit for assertion.
+ * Builds the CronDependencies whose recommendationHandoffSubmitter MIRRORS the
+ * production submit MECHANISM (the inngest.ts closure + the contained-workflows
+ * submitRecommendationHandoff closure): synthesizeCreativeBrief ->
+ * buildRecommendationHandoffSubmitRequest -> REAL ingress.submit. Captures each
+ * parked submit for assertion.
+ *
+ * synthesizeCreativeBrief(null) is exactly what org_dev yields in production: the
+ * inngest closure calls synthesizeCreativeBrief(await businessFactsStore.get(orgId)),
+ * and org_dev has no seeded BusinessFacts (only org_demo does), so that read returns
+ * null and the medspa fallback brief is used.
  */
 function buildCronDeps(ingress: PlatformIngress, parked: ParkedHandoff[]): CronDependencies {
   const recommendationHandoffSubmitter: RecommendationHandoffSubmitter = async (candidate) => {
