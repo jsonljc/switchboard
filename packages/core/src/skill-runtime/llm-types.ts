@@ -39,12 +39,18 @@ export type LLMStopReason = "end_turn" | "tool_use" | "max_tokens";
 export interface LLMUsage {
   inputTokens: number;
   outputTokens: number;
+  /** Tokens read from the prompt cache (Anthropic `cache_read_input_tokens`). Excluded from `inputTokens`. */
+  cacheReadTokens?: number;
+  /** Tokens written to the prompt cache (Anthropic `cache_creation_input_tokens`). Excluded from `inputTokens`. */
+  cacheCreationTokens?: number;
 }
 
 export interface LLMResponse {
   content: LLMContentBlock[];
   stopReason: LLMStopReason;
   usage: LLMUsage;
+  /** The concrete model the adapter actually called (for telemetry; independent of the router flag). */
+  model?: string;
 }
 
 export interface LLMError {

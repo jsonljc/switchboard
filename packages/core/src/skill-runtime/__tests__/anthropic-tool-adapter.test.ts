@@ -95,6 +95,34 @@ describe("AnthropicToolAdapter", () => {
     expect(result.content[0]!.type).toBe("text");
   });
 
+  it("captures cache tokens and the model in the usage", async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "hi" }],
+      stop_reason: "end_turn",
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_read_input_tokens: 800,
+        cache_creation_input_tokens: 0,
+      },
+    });
+    const adapter = new AnthropicToolAdapter({ messages: { create } } as never);
+    const res = await adapter.chatWithTools({
+      system: "s",
+      messages: [{ role: "user", content: "x" }],
+      tools: [],
+      profile: {
+        model: "claude-haiku-4-5-20251001",
+        maxTokens: 1024,
+        temperature: 0.7,
+        timeoutMs: 8000,
+      },
+    });
+    expect(res.usage.cacheReadTokens).toBe(800);
+    expect(res.usage.cacheCreationTokens).toBe(0);
+    expect(res.model).toBe("claude-haiku-4-5-20251001");
+  });
+
   it("encodes dotted tool names on the outgoing API call", async () => {
     const mockCreate = vi.fn().mockResolvedValue({
       content: [{ type: "text", text: "done" }],
