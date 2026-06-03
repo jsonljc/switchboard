@@ -2,7 +2,11 @@
 import type { FastifyPluginAsync } from "fastify";
 import { randomUUID } from "node:crypto";
 import { getConnectionStore } from "../utils/connection-store.js";
-import { CreateConnectionBodySchema, UpdateConnectionBodySchema } from "../validation.js";
+import {
+  CreateConnectionBodySchema,
+  SetMetaPageIdBodySchema,
+  UpdateConnectionBodySchema,
+} from "../validation.js";
 
 function redactCredentials<T extends { credentials: unknown }>(
   connection: T,
@@ -208,6 +212,59 @@ export const connectionsRoutes: FastifyPluginAsync = async (app) => {
         credentials: body.credentials ?? existing.credentials,
         scopes: body.scopes ?? existing.scopes,
       });
+
+      return reply.code(200).send({ connection: { id, updated: true } });
+    },
+  );
+
+  // PUT /api/connections/:id/meta-page-id — set the Facebook Page id on a meta-ads connection
+  app.put(
+    "/:id/meta-page-id",
+    {
+      schema: {
+        description:
+          "Set the Facebook Page id used for Meta ad creatives on a meta-ads connection.",
+        tags: ["Connections"],
+      },
+    },
+    async (request, reply) => {
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+      }
+
+      const organizationId = request.organizationIdFromAuth;
+      if (!organizationId) {
+        return reply.code(403).send({ error: "Organization context required", statusCode: 403 });
+      }
+
+      const parsed = SetMetaPageIdBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: parsed.error.issues.map((i) => i.message).join("; "),
+          statusCode: 400,
+        });
+      }
+
+      if (!hasEncryptionKey()) {
+        return reply.code(503).send({
+          error:
+            "Credential encryption is not configured. Set CREDENTIALS_ENCRYPTION_KEY environment variable.",
+          statusCode: 503,
+        });
+      }
+
+      const { id } = request.params as { id: string };
+      const store = await getConnectionStore(app.prisma);
+      const result = await store.mergeCredentialsById(id, organizationId, "meta-ads", {
+        pageId: parsed.data.pageId,
+      });
+
+      if (result === "not_found") {
+        return reply.code(404).send({ error: "Connection not found", statusCode: 404 });
+      }
+      if (result === "wrong_service") {
+        return reply.code(400).send({ error: "Not a Meta Ads connection", statusCode: 400 });
+      }
 
       return reply.code(200).send({ connection: { id, updated: true } });
     },

@@ -30,6 +30,7 @@ import {
 import { Plus, Trash2, Plug, RefreshCw, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { SERVICE_FIELD_CONFIGS, SERVICE_CONNECTION_CONFIGS } from "@/lib/service-field-configs";
 import { WhatsAppEmbeddedSignup } from "./whatsapp-embedded-signup";
+import { SetMetaPageIdDialog } from "./set-meta-page-id-dialog";
 
 const serviceOptions = [
   { id: "meta-ads", name: "Meta Ads" },
@@ -70,6 +71,7 @@ interface ConnectionRecord {
 export function ConnectionsList() {
   const [formOpen, setFormOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [pageIdConn, setPageIdConn] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<
     Record<string, { healthy: boolean; detail?: string } | null>
   >({});
@@ -218,6 +220,11 @@ export function ConnectionsList() {
                       <RefreshCw className="h-3 w-3 mr-1" />
                       Test
                     </Button>
+                    {conn.serviceId === "meta-ads" && (
+                      <Button variant="outline" size="sm" onClick={() => setPageIdConn(conn.id)}>
+                        Set Facebook Page
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -421,6 +428,8 @@ export function ConnectionsList() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <SetMetaPageIdDialog connectionId={pageIdConn} onClose={() => setPageIdConn(null)} />
     </>
   );
 }
