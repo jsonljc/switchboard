@@ -56,7 +56,7 @@ export function ThisWeek({ model }: ThisWeekProps) {
           <span className={styles.weeknoteTime}>Mon → today</span>
         </header>
         <p className={styles.weeknoteBody}>
-          <em>Your week&rsquo;s still being tallied — check back soon.</em>
+          <em>Your week&rsquo;s still being tallied. Check back soon.</em>
         </p>
         <span className={styles.weeknoteSignoff}>
           <span className={styles.weeknoteSignoffMark} style={avatarStyle} aria-hidden="true">
@@ -120,14 +120,14 @@ export function ThisWeek({ model }: ThisWeekProps) {
     );
   }
 
-  // Interleave clauses with ", " connectors, replacing the last separator with " — ".
+  // Interleave clauses with ", " connectors, joining the final clause with "and".
   const prose: React.ReactNode[] = [];
   clauses.forEach((clause, i) => {
     prose.push(clause);
     if (i < clauses.length - 2) {
       prose.push(", ");
     } else if (i === clauses.length - 2) {
-      prose.push(" — ");
+      prose.push(clauses.length > 2 ? ", and " : " and ");
     }
   });
 

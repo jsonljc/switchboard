@@ -100,6 +100,7 @@ const CORPUS = [
   "components/cockpit/mira/mira-brief-box.tsx",
   "components/cockpit/mira/mira-clip-actions.tsx",
   "app/(auth)/mira/creatives/[id]/creative-detail-page.tsx",
+  "components/home/this-week.tsx",
 ] as const;
 
 interface Offense {

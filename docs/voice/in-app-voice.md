@@ -46,12 +46,9 @@ The em-dash used as inline prose punctuation reads as generic machine writing. I
 
 ### The editorial exemption (narrow and deliberate)
 
-Two editorial conventions are intentionally kept and are not in the guard corpus:
+One editorial convention is intentionally kept and is not in the guard corpus: the quote-attribution byline under the Results verdict and the handoff suggested-opening byline. This is a standard citation convention (a quote signed with its source), distinct from a prose dash.
 
-- The Home weeknote prose voice (an "employee email"), which `docs/audits/2026-06-02-ui-ux-feel-audit/direction.md` section 3 designates as load-bearing craft.
-- The quote-attribution byline under the Results verdict and the handoff suggested-opening byline, a standard citation convention.
-
-The letter sign-off dash itself is dropped per rule 5; the quote-attribution byline is preserved. This is a deliberate, revisitable line, not an accident. The user dislikes em-dashes generally, so the bias is toward replacing them; revisit the byline treatment with the aesthetic re-skin work.
+The Home weeknote is fully de-em-dashed and is in the guard corpus: its prose, its connector, and its letter sign-off all drop the dash, while its actual craft (the drop-cap, the monogram, the serif, the tabular figures) stays. The user dislikes em-dashes generally, so the bias is toward replacing them; revisit the remaining byline treatment with the aesthetic re-skin work.
 
 ## How this is enforced
 
