@@ -71,7 +71,7 @@ export function OpenDecisions({ agentKey, onOpenDecision }: OpenDecisionsProps) 
               const contactName = decision.meta.contactName;
               const gist =
                 contactName && !decision.humanSummary.includes(contactName)
-                  ? `${contactName} — ${decision.humanSummary}`
+                  ? `${contactName} · ${decision.humanSummary}`
                   : decision.humanSummary;
 
               return (

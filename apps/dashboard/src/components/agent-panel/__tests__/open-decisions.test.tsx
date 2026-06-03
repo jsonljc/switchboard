@@ -150,7 +150,7 @@ describe("OpenDecisions slot", () => {
     feedData = makeFeed([dec]);
     render(<OpenDecisions agentKey="alex" onOpenDecision={vi.fn()} />);
     // contactName is not in the summary → prepend
-    expect(screen.getByText("Maya R. — Approve appointment for next Thursday")).toBeInTheDocument();
+    expect(screen.getByText("Maya R. · Approve appointment for next Thursday")).toBeInTheDocument();
   });
 
   it("does NOT double-prepend contactName when already in humanSummary", () => {

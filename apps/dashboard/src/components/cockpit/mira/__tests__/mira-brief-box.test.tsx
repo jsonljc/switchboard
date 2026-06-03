@@ -24,7 +24,7 @@ describe("MiraBriefBox", () => {
     render(<MiraBriefBox />);
     typeLine("Summer Botox special");
     fireEvent.click(screen.getByRole("button", { name: /preview|make the draft/i }));
-    expect(screen.getByText(/got it — a draft ad/i)).toBeInTheDocument();
+    expect(screen.getByText(/got it\. a draft ad/i)).toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled(); // cost-confirm: never before [Make the draft]
   });
 
@@ -77,6 +77,8 @@ describe("MiraBriefBox", () => {
     fireEvent.click(screen.getByRole("button", { name: /^preview/i }));
     fireEvent.click(screen.getByRole("button", { name: /^tweak/i }));
     expect(screen.getByRole("button", { name: /^preview/i })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/summer botox special/i)).toHaveValue("Summer Botox special");
+    expect(screen.getByPlaceholderText(/summer botox special/i)).toHaveValue(
+      "Summer Botox special",
+    );
   });
 });

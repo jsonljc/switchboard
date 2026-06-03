@@ -52,7 +52,7 @@ export function FirstRunNote() {
         Your first results land here once your team books a consult.
       </p>
       <p className={styles.stateFirstRunBody}>
-        Riley and Alex are already running — check back after your next booking comes in.
+        Riley and Alex are already running. Check back after your next booking comes in.
       </p>
     </aside>
   );

@@ -53,7 +53,7 @@ describe("riley-config", () => {
 
   it("RILEY_COMPOSER_PLACEHOLDER carries the locked Riley voice placeholder", () => {
     expect(RILEY_COMPOSER_PLACEHOLDER).toBe(
-      "Tell Riley what to do — pause the Cold Interests adset, raise daily budget to $200…",
+      "Tell Riley what to do. Pause the Cold Interests adset, raise daily budget to $200…",
     );
   });
 

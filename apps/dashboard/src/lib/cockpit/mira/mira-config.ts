@@ -16,11 +16,11 @@ export const MIRA_ACCENT = {
   paper: "hsl(var(--agent-mira-tint))",
 } as const;
 
-export const MIRA_MISSION_SUBTITLE = "Creative drafts — for your review";
+export const MIRA_MISSION_SUBTITLE = "Creative drafts, ready for your review";
 
 export const MIRA_EMPTY_TITLE = "No drafts yet";
 export const MIRA_EMPTY_BODY =
-  "When creative drafts come in, they'll appear here for your review. Draft only — nothing is published without you.";
+  "When creative drafts come in, they'll appear here for your review. Draft only. Nothing is published without you.";
 
 // M1 has NO composer on /mira (no new submission from the Mira UI). This footer
 // explains where drafts originate instead of showing an inert input.

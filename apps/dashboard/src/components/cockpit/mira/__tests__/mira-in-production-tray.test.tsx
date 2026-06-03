@@ -15,7 +15,7 @@ const item = (over: Partial<MiraDeskItem>): MiraDeskItem => ({
 describe("MiraInProductionTray", () => {
   it("shows plain stage copy per item by default", () => {
     render(<MiraInProductionTray items={[item({ id: "a", stage: "production" })]} />);
-    expect(screen.getByText(/generating draft/i)).toBeInTheDocument();
+    expect(screen.getByText(/drafting/i)).toBeInTheDocument();
     expect(screen.queryByText(/storyboard|inngest|stage/i)).not.toBeInTheDocument();
   });
 

@@ -50,7 +50,7 @@ describe("MiraDeskPage", () => {
     });
     render(<MiraDeskPage />);
     expect(screen.getByText(/2 drafts ready/i)).toBeInTheDocument();
-    expect(screen.getByText(/generating draft/i)).toBeInTheDocument();
+    expect(screen.getByText(/drafting/i)).toBeInTheDocument();
   });
 
   it("shows the skeleton while keys are pending (data undefined, no error)", () => {

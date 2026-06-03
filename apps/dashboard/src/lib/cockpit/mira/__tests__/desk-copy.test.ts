@@ -7,7 +7,7 @@ const BANNED =
 describe("desk copy guardrails", () => {
   it("maps every pipeline stage to plain status copy", () => {
     expect(STAGE_COPY.trends).toMatch(/concept|idea/i);
-    expect(STAGE_COPY.production).toMatch(/generat/i);
+    expect(STAGE_COPY.production).toMatch(/draft/i);
     expect(STAGE_COPY.complete).toMatch(/ready/i);
   });
 

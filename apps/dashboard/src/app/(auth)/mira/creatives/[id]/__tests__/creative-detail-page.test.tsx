@@ -81,7 +81,7 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     // No standalone "published" outside of the draft-only disclaimer
     const publishTexts = screen
       .queryAllByText(/published/i)
-      .filter((el) => !el.textContent?.includes("not published"));
+      .filter((el) => !el.textContent?.toLowerCase().includes("not published"));
     expect(publishTexts).toHaveLength(0);
   });
 
