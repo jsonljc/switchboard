@@ -193,6 +193,16 @@ export function createPromMetrics(): SwitchboardMetrics {
     bookingCancel: new PromCounter("switchboard_booking_cancel_total", "Bookings cancelled", [
       "orgId",
     ]),
+    skillLlmTokensTotal: new PromCounter(
+      "switchboard_skill_llm_tokens_total",
+      "LLM tokens per skill execution, labeled by model and kind (input/output/cache_read/cache_creation)",
+      ["model", "kind"],
+    ),
+    skillLlmCostUsdTotal: new PromCounter(
+      "switchboard_skill_llm_cost_usd_total",
+      "Per-execution LLM cost in USD, by model",
+      ["model"],
+    ),
   };
 }
 

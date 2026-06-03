@@ -27,9 +27,11 @@ export interface ResolveOptions {
 }
 
 export interface TierContext {
-  messageIndex: number;
+  /** Total user+assistant messages in the conversation incl. the current turn
+   *  (≈ how deep the back-and-forth is). The tier baseline keys on this — NOT the
+   *  intra-invocation LLM-loop counter (T2.9 fix). */
+  conversationDepth: number;
   toolCount: number;
-  hasHighRiskTools: boolean;
   previousTurnUsedTools: boolean;
   previousTurnEscalated: boolean;
   modelFloor?: ModelSlot;
@@ -40,6 +42,8 @@ export interface TierContext {
   currentStage?: DialogueStage;
 }
 
+// Fallback when a slot config somehow lacks a per-tier timeout (defensive; every
+// SLOT_CONFIGS entry now sets one explicitly). Kept Haiku-shaped intentionally.
 const DEFAULT_TIMEOUT_MS = 8000;
 
 const SLOT_RANK: Record<ModelSlot, number> = {
@@ -49,30 +53,38 @@ const SLOT_RANK: Record<ModelSlot, number> = {
   embedding: -1,
 };
 
-const SLOT_CONFIGS: Record<ModelSlot, Omit<ModelConfig, "fallbackSlot" | "timeoutMs">> = {
+// Per-tier request timeouts (ms). Replaces the old single Haiku-shaped 8s default:
+// stronger models legitimately take longer per call, so the slot carries its own
+// budget. Only consulted when the router is ON (the executor passes profile.timeoutMs);
+// an explicit ResolveOptions.timeoutMs still overrides the slot value.
+const SLOT_CONFIGS: Record<ModelSlot, Omit<ModelConfig, "fallbackSlot">> = {
   default: {
     slot: "default",
     modelId: "claude-haiku-4-5-20251001",
     maxTokens: 1024,
     temperature: 0.7,
+    timeoutMs: 15_000,
   },
   premium: {
     slot: "premium",
     modelId: "claude-sonnet-4-6",
     maxTokens: 2048,
     temperature: 0.5,
+    timeoutMs: 25_000,
   },
   critical: {
     slot: "critical",
     modelId: "claude-opus-4-6",
     maxTokens: 4096,
     temperature: 0.3,
+    timeoutMs: 30_000,
   },
   embedding: {
     slot: "embedding",
     modelId: "voyage-3-large",
     maxTokens: 0,
     temperature: 0,
+    timeoutMs: 8_000,
   },
 };
 
@@ -85,7 +97,10 @@ export class ModelRouter {
 
     const base = SLOT_CONFIGS[effectiveSlot];
     if (!base) {
-      return { ...SLOT_CONFIGS.default, timeoutMs: timeoutMs ?? DEFAULT_TIMEOUT_MS };
+      return {
+        ...SLOT_CONFIGS.default,
+        timeoutMs: timeoutMs ?? SLOT_CONFIGS.default.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      };
     }
 
     // Determine fallback
@@ -100,29 +115,28 @@ export class ModelRouter {
 
     return {
       ...base,
-      timeoutMs: timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      // Explicit option wins; otherwise the per-tier slot value; DEFAULT_TIMEOUT_MS
+      // is a last-resort guard (every slot config now sets timeoutMs).
+      timeoutMs: timeoutMs ?? base.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       fallbackSlot,
     };
   }
 
   resolveTier(context: TierContext): ModelSlot {
     let slot: ModelSlot;
-    if (context.messageIndex === 0)
-      slot = "default"; // Rule 1: greetings
-    else if (context.toolCount === 0)
-      slot = "default"; // Rule 2: conversational
-    else if (context.previousTurnEscalated)
-      slot = "critical"; // Rule 3: escalation
+    if (context.previousTurnEscalated)
+      slot = "critical"; // escalation → strong, any depth
     else if (context.previousTurnUsedTools)
-      slot = "premium"; // Rule 4: tool follow-up
-    else if (context.hasHighRiskTools)
-      slot = "premium"; // Rule 5: high risk
-    else slot = "default"; // Rule 6: default
+      slot = "premium"; // processing a tool result → strong
+    else if (context.conversationDepth <= 1)
+      slot = "default"; // first-contact greeting → cheap
+    else if (context.toolCount === 0)
+      slot = "default"; // tool-less skill → cheap even when deep
+    else slot = "premium"; // engaged, tool-bearing conversation → strong
 
-    // Stage-aware escalation: take the higher of the rule slot and the stage
-    // slot so a high-stakes turn (objection/closing/fear) is never under-served.
-    // The merge is a rank-max, so this can only ever raise the tier — never lower
-    // it — and is a no-op when no stage is present.
+    // Stage-aware escalation (rank-max; only ever raises). Depth enters the
+    // baseline ABOVE this merge, so a deep emotional turn still resolves strong:
+    // the stage can lift the tier but never lower it, and is a no-op when absent.
     const stageSlot = this.stageToSlot(context.currentStage);
     if (stageSlot) slot = this.maxSlot(slot, stageSlot);
 

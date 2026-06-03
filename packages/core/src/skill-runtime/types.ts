@@ -104,7 +104,12 @@ export interface SkillExecutionParams {
 export interface SkillExecutionResult {
   response: string;
   toolCalls: ToolCallRecord[];
-  tokenUsage: { input: number; output: number };
+  tokenUsage: {
+    input: number;
+    output: number;
+    cacheRead?: number;
+    cacheCreation?: number;
+  };
   trace: SkillExecutionTraceData;
   /**
    * OPTIONAL. When set, indicates the LLM declared this outbound serves a specific
@@ -152,6 +157,9 @@ export interface SkillExecutionTraceData {
    * config — parsing and stripping is always-on (spec §7.1).
    */
   qualificationSignals: WorkTraceQualificationSignals | null;
+  /** Concrete model that produced the final response (for telemetry). The recorder
+   *  derives costUsd from this + the token breakdown — the executor does not compute cost. */
+  model?: string;
 }
 
 export interface SkillExecutionTrace {
@@ -165,7 +173,14 @@ export interface SkillExecutionTrace {
   inputParametersHash: string;
   toolCalls: ToolCallRecord[];
   governanceDecisions: GovernanceLogEntry[];
-  tokenUsage: { input: number; output: number };
+  tokenUsage: {
+    input: number;
+    output: number;
+    cacheRead?: number;
+    cacheCreation?: number;
+    costUsd?: number;
+    model?: string;
+  };
   durationMs: number;
   turnCount: number;
   status: "success" | "error" | "budget_exceeded" | "denied";
@@ -227,6 +242,12 @@ export interface SkillHookContext {
   sessionId: string;
   trustLevel: "supervised" | "guided" | "autonomous";
   trustScore: number;
+  /**
+   * Stable hash of the invocation's input parameters. Persisted on the execution
+   * trace by the telemetry recorder (TracePersistenceHook). Built once per
+   * `execute()` by the executor and threaded through the hook context.
+   */
+  inputParametersHash?: string;
 }
 
 export interface LlmCallContext {
@@ -297,7 +318,19 @@ export interface SkillRuntimePolicy {
   maxToolCalls: number;
   maxLlmTurns: number;
   maxTotalTokens: number;
+  /**
+   * Whole-conversation wall-clock budget across every LLM call + tool turn in a
+   * single `execute()`. The executor also bounds each individual LLM call by
+   * `maxLlmCallMs` (per-call abort deadline), so this larger ceiling does not
+   * weaken runaway protection — the loop is already capped by turn/tool limits.
+   */
   maxRuntimeMs: number;
+  /**
+   * Per-LLM-call wall-clock deadline. The executor aborts the in-flight call when
+   * this (or `profile.timeoutMs`, whichever is smaller, clamped to the remaining
+   * whole-conversation budget) fires — stopping the output-token-burn leak.
+   */
+  maxLlmCallMs: number;
   maxWritesPerExecution: number;
   maxWritesPerHour: number;
   trustLevel: "supervised" | "guided" | "autonomous";
@@ -311,7 +344,8 @@ export const DEFAULT_SKILL_RUNTIME_POLICY: SkillRuntimePolicy = {
   maxToolCalls: 5,
   maxLlmTurns: 6,
   maxTotalTokens: 64_000,
-  maxRuntimeMs: 30_000,
+  maxRuntimeMs: 120_000,
+  maxLlmCallMs: 30_000,
   maxWritesPerExecution: 5,
   maxWritesPerHour: 20,
   trustLevel: "guided",

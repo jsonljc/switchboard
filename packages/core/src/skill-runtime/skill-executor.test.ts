@@ -1,9 +1,26 @@
+/* eslint-disable max-lines */
+// Legacy-debt marker: this consolidated SkillExecutorImpl suite (interpolation,
+// governance, budget/timeout, cache-token accounting, and the A5 isolated
+// execution-trace recorder) exceeds 600 lines. Splitting would fragment the
+// shared mock-adapter/mock-skill scaffold across files; the codebase convention
+// is the eslint-disable marker over an awkward split (see calendar-book.test.ts).
 import { describe, it, expect, vi } from "vitest";
 import { SkillExecutorImpl, parseIntentTag } from "./skill-executor.js";
 import type { ToolCallingLLMAdapter } from "./llm-types.js";
-import type { SkillDefinition, SkillTool } from "./types.js";
-import { SkillParameterError, SkillExecutionBudgetError } from "./types.js";
+import type {
+  SkillDefinition,
+  SkillTool,
+  SkillHookContext,
+  SkillExecutionResult,
+} from "./types.js";
+import {
+  SkillParameterError,
+  SkillExecutionBudgetError,
+  DEFAULT_SKILL_RUNTIME_POLICY,
+} from "./types.js";
 import { GovernanceHook } from "./hooks/governance-hook.js";
+import type { ExecutionTracePartial } from "./hooks/trace-persistence-hook.js";
+import { ModelRouter } from "../model-router.js";
 import { ok } from "./tool-result.js";
 
 const mockSkill: SkillDefinition = {
@@ -40,6 +57,15 @@ function createMockAdapter(
     }),
   };
 }
+
+describe("DEFAULT_SKILL_RUNTIME_POLICY budget split (C2)", () => {
+  it("splits per-call vs whole-conversation budget", () => {
+    // Per-call deadline (30s) bounds any single hung LLM call; the whole-
+    // conversation ceiling (120s) gives a legitimate multi-tool booking room.
+    expect(DEFAULT_SKILL_RUNTIME_POLICY.maxLlmCallMs).toBe(30_000);
+    expect(DEFAULT_SKILL_RUNTIME_POLICY.maxRuntimeMs).toBe(120_000);
+  });
+});
 
 describe("SkillExecutorImpl", () => {
   it("interpolates params and calls adapter with governance constraints", async () => {
@@ -453,7 +479,11 @@ describe("SkillExecutorImpl", () => {
     ).rejects.toThrow(SkillExecutionBudgetError);
   });
 
-  it("enforces runtime timeout", async () => {
+  it("enforces the per-call deadline via the race backstop (non-cooperative adapter)", async () => {
+    // This mock ignores the abort signal (it just resolves after a delay that
+    // outlasts the per-call deadline). It proves the Promise.race BACKSTOP still
+    // unblocks execute() with SkillExecutionBudgetError even when the adapter does
+    // not honor abort. A short policy keeps the suite fast (was a 35s mock).
     const slowAdapter: ToolCallingLLMAdapter = {
       chatWithTools: vi.fn().mockImplementation(
         () =>
@@ -465,13 +495,14 @@ describe("SkillExecutorImpl", () => {
                   stopReason: "end_turn",
                   usage: { inputTokens: 100, outputTokens: 50 },
                 }),
-              35_000,
+              500,
             ),
           ),
       ),
     };
 
-    const executor = new SkillExecutorImpl(slowAdapter, new Map());
+    const policy = { ...DEFAULT_SKILL_RUNTIME_POLICY, maxLlmCallMs: 30, maxRuntimeMs: 60 };
+    const executor = new SkillExecutorImpl(slowAdapter, new Map(), undefined, [], policy);
 
     await expect(
       executor.execute({
@@ -484,7 +515,7 @@ describe("SkillExecutorImpl", () => {
         trustLevel: "guided",
       }),
     ).rejects.toThrow(SkillExecutionBudgetError);
-  }, 40_000);
+  });
 
   it("returns trace data with execution metadata", async () => {
     const adapter = createMockAdapter([
@@ -568,6 +599,350 @@ describe("SkillExecutorImpl", () => {
     expect(result.trace.writeCount).toBe(1);
     expect(result.trace.governanceDecisions).toHaveLength(1);
     expect(result.trace.governanceDecisions[0]!.tier).toBe("write");
+  });
+
+  it("accumulates cache tokens + model and keeps the budget on full-price tokens", async () => {
+    // A large cache_read (5000) plus tiny full-price input+output (120) must NOT
+    // trip the 64k budget — the budget gates on billable (uncached) tokens only.
+    const adapter: ToolCallingLLMAdapter = {
+      chatWithTools: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "Hi there" }],
+        stopReason: "end_turn",
+        model: "claude-sonnet-4-6",
+        usage: {
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 5000,
+          cacheCreationTokens: 0,
+        },
+      }),
+    };
+
+    const executor = new SkillExecutorImpl(adapter, new Map());
+    const result = await executor.execute({
+      skill: mockSkill,
+      parameters: { NAME: "Alice" },
+      messages: [{ role: "user", content: "hello" }],
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 50,
+      trustLevel: "guided",
+    });
+
+    expect(result.tokenUsage.cacheRead).toBe(5000);
+    expect(result.tokenUsage.cacheCreation).toBe(0);
+    expect(result.trace.model).toBe("claude-sonnet-4-6");
+    // large cache_read must NOT trip the 64k budget (full-price input+output is only 120):
+    expect(result.trace.status).toBe("success");
+  });
+
+  // --- A5: isolated execution-trace recorder (8th constructor arg) ---
+
+  const traceBaseParams = () => ({
+    skill: mockSkill,
+    parameters: { NAME: "Alice" },
+    messages: [{ role: "user" as const, content: "hello" }],
+    deploymentId: "d1",
+    orgId: "org1",
+    trustScore: 50,
+    trustLevel: "guided" as const,
+  });
+
+  const okTraceAdapter = (): ToolCallingLLMAdapter => ({
+    chatWithTools: vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "Hi there" }],
+      stopReason: "end_turn",
+      usage: { inputTokens: 10, outputTokens: 5 },
+    }),
+  });
+
+  it("invokes the execution trace hook with the result on success", async () => {
+    const calls: SkillExecutionResult[] = [];
+    const traceHook = {
+      afterSkill: async (_c: SkillHookContext, r: SkillExecutionResult) => {
+        calls.push(r);
+      },
+      onError: async () => {},
+    };
+    const exec = new SkillExecutorImpl(
+      okTraceAdapter(),
+      new Map(),
+      undefined,
+      [],
+      undefined,
+      new Map(),
+      undefined,
+      traceHook,
+    );
+    const result = await exec.execute(traceBaseParams());
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toBe(result);
+    expect(calls[0]!.tokenUsage.input).toBe(10);
+  });
+
+  it("a throwing trace hook does NOT break the response", async () => {
+    const traceHook = {
+      afterSkill: async () => {
+        throw new Error("telemetry down");
+      },
+      onError: async () => {},
+    };
+    const exec = new SkillExecutorImpl(
+      okTraceAdapter(),
+      new Map(),
+      undefined,
+      [],
+      undefined,
+      new Map(),
+      undefined,
+      traceHook,
+    );
+    const result = await exec.execute(traceBaseParams());
+    expect(result.response).toBe("Hi there");
+  });
+
+  it("invokes onError when the turn throws", async () => {
+    const errors: Error[] = [];
+    const traceHook = {
+      afterSkill: async () => {},
+      onError: async (_c: SkillHookContext, e: Error) => {
+        errors.push(e);
+      },
+    };
+    // Adapter returns large token usage; the maxTotalTokens:1 budget throws
+    // SkillExecutionBudgetError on the first turn.
+    const budgetBustingAdapter: ToolCallingLLMAdapter = {
+      chatWithTools: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "over" }],
+        stopReason: "end_turn",
+        usage: { inputTokens: 1000, outputTokens: 1000 },
+      }),
+    };
+    const exec = new SkillExecutorImpl(
+      budgetBustingAdapter,
+      new Map(),
+      undefined,
+      [],
+      { ...DEFAULT_SKILL_RUNTIME_POLICY, maxLlmTurns: 1, maxTotalTokens: 1 },
+      new Map(),
+      undefined,
+      traceHook,
+    );
+    await expect(exec.execute(traceBaseParams())).rejects.toThrow(SkillExecutionBudgetError);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toBeInstanceOf(SkillExecutionBudgetError);
+  });
+
+  it("onError receives a partial carrying the burned tokens of the failed turn", async () => {
+    const partials: Array<ExecutionTracePartial | undefined> = [];
+    const traceHook = {
+      afterSkill: async () => {},
+      onError: async (_c: SkillHookContext, _e: Error, partial?: ExecutionTracePartial) => {
+        partials.push(partial);
+      },
+    };
+    // The turn burns 1000+1000 tokens BEFORE the maxTotalTokens:1 budget trips —
+    // the partial must reflect that real cost, not a zero fallback.
+    const budgetBustingAdapter: ToolCallingLLMAdapter = {
+      chatWithTools: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "over" }],
+        stopReason: "end_turn",
+        model: "claude-sonnet-4-6",
+        usage: { inputTokens: 1000, outputTokens: 1000, cacheReadTokens: 200 },
+      }),
+    };
+    const exec = new SkillExecutorImpl(
+      budgetBustingAdapter,
+      new Map(),
+      undefined,
+      [],
+      { ...DEFAULT_SKILL_RUNTIME_POLICY, maxLlmTurns: 1, maxTotalTokens: 1 },
+      new Map(),
+      undefined,
+      traceHook,
+    );
+    await expect(exec.execute(traceBaseParams())).rejects.toThrow(SkillExecutionBudgetError);
+    expect(partials).toHaveLength(1);
+    expect(partials[0]).toBeDefined();
+    expect(partials[0]!.tokenUsage.input).toBeGreaterThan(0);
+    expect(partials[0]!.tokenUsage.output).toBeGreaterThan(0);
+    expect(partials[0]!.tokenUsage.cacheRead).toBe(200);
+    expect(partials[0]!.turnCount).toBe(1);
+    expect(partials[0]!.model).toBe("claude-sonnet-4-6");
+  });
+
+  // --- C3: abort the in-flight LLM call on the per-call deadline ---
+
+  it("aborts the in-flight LLM call when the per-call deadline fires", async () => {
+    // The fake adapter NEVER resolves on its own; only the executor's per-call
+    // deadline (AbortController) can end the turn. This proves the in-flight call
+    // is actually aborted — not merely that the outer race resolves.
+    let receivedSignal: AbortSignal | undefined;
+    const adapter: ToolCallingLLMAdapter = {
+      chatWithTools: (p: { signal?: AbortSignal }) => {
+        receivedSignal = p.signal;
+        return new Promise((_res, rej) => {
+          p.signal?.addEventListener("abort", () =>
+            rej(Object.assign(new Error("aborted"), { name: "AbortError" })),
+          );
+        });
+      },
+    };
+    // Short policy so the deadline fires in milliseconds (suite stays fast).
+    const policy = { ...DEFAULT_SKILL_RUNTIME_POLICY, maxLlmCallMs: 30, maxRuntimeMs: 60 };
+    const exec = new SkillExecutorImpl(adapter, new Map(), undefined, [], policy);
+    await expect(
+      exec.execute({
+        skill: mockSkill,
+        parameters: { NAME: "X" },
+        messages: [{ role: "user", content: "hi" }],
+        deploymentId: "d1",
+        orgId: "org1",
+        trustScore: 50,
+        trustLevel: "guided",
+      }),
+    ).rejects.toThrow(SkillExecutionBudgetError);
+    // The load-bearing assertion: the signal handed to the adapter was aborted.
+    expect(receivedSignal).toBeDefined();
+    expect(receivedSignal?.aborted).toBe(true);
+  });
+
+  it("classifies an SDK timeout error as a budget error even when the signal has not aborted", async () => {
+    // Races the executor's per-call deadline: the SDK's own per-request timeout
+    // rejects a hair BEFORE the executor's abort() fires. The deadline is long
+    // enough (the policy keeps the suite fast but well above the immediate reject)
+    // that controller.signal.aborted is still false — proving the name-based
+    // timeout-like classification, not the abort flag, is what normalizes it.
+    let observedAbortedAtReject: boolean | undefined;
+    const timeoutAdapter: ToolCallingLLMAdapter = {
+      chatWithTools: (p: { signal?: AbortSignal }) =>
+        Promise.reject(
+          ((): never => {
+            observedAbortedAtReject = p.signal?.aborted;
+            throw Object.assign(new Error("Request timed out."), {
+              name: "APIConnectionTimeoutError",
+            });
+          })(),
+        ),
+    };
+    const policy = { ...DEFAULT_SKILL_RUNTIME_POLICY, maxLlmCallMs: 5000, maxRuntimeMs: 10_000 };
+    const exec = new SkillExecutorImpl(timeoutAdapter, new Map(), undefined, [], policy);
+    await expect(
+      exec.execute({
+        skill: mockSkill,
+        parameters: { NAME: "X" },
+        messages: [{ role: "user", content: "hi" }],
+        deploymentId: "d1",
+        orgId: "org1",
+        trustScore: 50,
+        trustLevel: "guided",
+      }),
+    ).rejects.toThrow(SkillExecutionBudgetError);
+    // The reject happened before any abort — classification came from the name.
+    expect(observedAbortedAtReject).toBe(false);
+  });
+
+  // --- B2: conversation-depth tiering (router ON) ---
+
+  // Records the profile.model the executor resolved for each LLM call.
+  const recordingAdapter = (seen: Array<string | undefined>): ToolCallingLLMAdapter => ({
+    chatWithTools: vi.fn().mockImplementation((p: { profile?: { model?: string } }) => {
+      seen.push(p.profile?.model);
+      return Promise.resolve({
+        content: [{ type: "text", text: "ok" }],
+        stopReason: "end_turn",
+        usage: { inputTokens: 1, outputTokens: 1 },
+      });
+    }),
+  });
+
+  // An Alex-shaped tool map: a single tool (external_mutation) so the tier
+  // context's toolCount > 0 — the depth re-key needs a tool-bearing skill.
+  const alexLikeTools = (): Map<string, SkillTool> =>
+    new Map<string, SkillTool>([
+      [
+        "calendar-book",
+        {
+          id: "calendar-book",
+          operations: {
+            "booking.create": {
+              description: "Book an appointment.",
+              effectCategory: "external_mutation" as const,
+              idempotent: false,
+              inputSchema: { type: "object", properties: {}, required: [] },
+              execute: async () => ok({}),
+            },
+          },
+        },
+      ],
+    ]);
+
+  const alexLikeSkill: SkillDefinition = {
+    ...mockSkill,
+    parameters: [],
+    tools: ["calendar-book"],
+    body: "Help the customer book.",
+  };
+
+  // 8 alternating user/assistant messages; the FINAL user message is neutral —
+  // no price/trust/timing/fear/comparison keyword and no ready-now phrasing — so
+  // classifyEmotionalSignal yields no stage. This proves the conversation-DEPTH
+  // re-key (not the stage-raise) is what routes a deep turn to Sonnet.
+  const deepNeutralMessages = (
+    count: number,
+  ): Array<{ role: "user" | "assistant"; content: string }> => {
+    const msgs: Array<{ role: "user" | "assistant"; content: string }> = [];
+    for (let i = 0; i < count - 1; i++) {
+      msgs.push({
+        role: i % 2 === 0 ? "user" : "assistant",
+        content: i % 2 === 0 ? "Tell me about the treatment options." : "Here are the options.",
+      });
+    }
+    msgs.push({ role: "user", content: "ok, and what would the next step look like for me?" });
+    return msgs;
+  };
+
+  it("routes a deep neutral turn to Sonnet (premium), not Haiku, when the router is ON", async () => {
+    const seen: Array<string | undefined> = [];
+    const exec = new SkillExecutorImpl(
+      recordingAdapter(seen),
+      alexLikeTools(),
+      new ModelRouter(),
+      [],
+    );
+    await exec.execute({
+      skill: alexLikeSkill,
+      parameters: {},
+      messages: deepNeutralMessages(8),
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 100,
+      trustLevel: "autonomous",
+      sessionId: "s1",
+    });
+    expect(seen[0]).toBe("claude-sonnet-4-6");
+    expect(seen[0]).not.toBe("claude-haiku-4-5-20251001");
+  });
+
+  it("routes a first-contact greeting to Haiku (default) when the router is ON", async () => {
+    const seen: Array<string | undefined> = [];
+    const exec = new SkillExecutorImpl(
+      recordingAdapter(seen),
+      alexLikeTools(),
+      new ModelRouter(),
+      [],
+    );
+    await exec.execute({
+      skill: alexLikeSkill,
+      parameters: {},
+      messages: [{ role: "user", content: "hi there" }],
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 100,
+      trustLevel: "autonomous",
+      sessionId: "s1",
+    });
+    expect(seen[0]).toBe("claude-haiku-4-5-20251001");
   });
 });
 

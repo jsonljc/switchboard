@@ -68,6 +68,7 @@ export async function bootstrapSkillMode(
     loadSkill,
     SkillExecutorImpl,
     GovernanceHook,
+    TracePersistenceHook,
     DeterministicSafetyGateHook,
     ClaimClassifierHook,
     PdpaConsentGateHook,
@@ -105,6 +106,7 @@ export async function bootstrapSkillMode(
     PrismaBusinessFactsStore,
     PrismaDeploymentStore,
     PrismaGovernanceVerdictStore,
+    PrismaExecutionTraceStore,
     PrismaKnowledgeEntryStore,
     PrismaScheduledFollowUpStore,
     createPrismaApprovedComplianceClaimStore,
@@ -569,6 +571,17 @@ export async function bootstrapSkillMode(
       ? "ModelRouter ENABLED — per-turn model tiering active for Alex"
       : "ModelRouter disabled (set ALEX_MODEL_ROUTER_ENABLED=true to enable) — adapter default model in use",
   );
+
+  // Per-execution telemetry recorder (tokens incl. cache, cost, model, latency).
+  // Wired as the isolated 8th executor arg (the `qualificationEvaluationHook`
+  // template) — invoked DIRECTLY by the executor, NOT via runAfterSkillHooks, so
+  // the dormant governance afterSkill gates stay dormant. Live executor only;
+  // the simulation executor omits it so sim/eval runs carry no trace hook.
+  const tracePersistenceHook = new TracePersistenceHook(
+    new PrismaExecutionTraceStore(prismaClient),
+    { trigger: "chat_message" },
+  );
+
   const skillExecutor = new SkillExecutorImpl(
     adapter,
     toolsMap,
@@ -577,6 +590,7 @@ export async function bootstrapSkillMode(
     undefined,
     toolFactories,
     qualificationEvaluationHook,
+    tracePersistenceHook,
   );
 
   const builderRegistry = new BuilderRegistry();

@@ -33,6 +33,8 @@ export interface SwitchboardMetrics {
   bookingSlotConflict: Counter;
   bookingReschedule: Counter;
   bookingCancel: Counter;
+  skillLlmTokensTotal: Counter;
+  skillLlmCostUsdTotal: Counter;
 }
 
 export interface Counter {
@@ -106,5 +108,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     bookingSlotConflict: new InMemoryCounter(),
     bookingReschedule: new InMemoryCounter(),
     bookingCancel: new InMemoryCounter(),
+    skillLlmTokensTotal: new InMemoryCounter(),
+    skillLlmCostUsdTotal: new InMemoryCounter(),
   };
 }

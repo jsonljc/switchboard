@@ -95,6 +95,81 @@ describe("AnthropicToolAdapter", () => {
     expect(result.content[0]!.type).toBe("text");
   });
 
+  it("captures cache tokens and the model in the usage", async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "hi" }],
+      stop_reason: "end_turn",
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_read_input_tokens: 800,
+        cache_creation_input_tokens: 0,
+      },
+    });
+    const adapter = new AnthropicToolAdapter({ messages: { create } } as never);
+    const res = await adapter.chatWithTools({
+      system: "s",
+      messages: [{ role: "user", content: "x" }],
+      tools: [],
+      profile: {
+        model: "claude-haiku-4-5-20251001",
+        maxTokens: 1024,
+        temperature: 0.7,
+        timeoutMs: 8000,
+      },
+    });
+    expect(res.usage.cacheReadTokens).toBe(800);
+    expect(res.usage.cacheCreationTokens).toBe(0);
+    expect(res.model).toBe("claude-haiku-4-5-20251001");
+  });
+
+  it("passes signal, per-request timeout and explicit maxRetries to the SDK", async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    const adapter = new AnthropicToolAdapter({ messages: { create } } as never);
+    const ctrl = new AbortController();
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [{ role: "user", content: "x" }],
+      tools: [],
+      signal: ctrl.signal,
+      profile: { model: "claude-sonnet-4-6", maxTokens: 2048, temperature: 0.5, timeoutMs: 25000 },
+    });
+    const opts = create.mock.calls[0]![1] as {
+      signal?: AbortSignal;
+      timeout?: number;
+      maxRetries?: number;
+    };
+    expect(opts.signal).toBe(ctrl.signal);
+    expect(opts.timeout).toBe(25000);
+    expect(opts.maxRetries).toBe(1);
+  });
+
+  it("omits signal/timeout from the options when not provided but still sets maxRetries", async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    const adapter = new AnthropicToolAdapter({ messages: { create } } as never);
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [{ role: "user", content: "x" }],
+      tools: [],
+    });
+    const opts = create.mock.calls[0]![1] as {
+      signal?: AbortSignal;
+      timeout?: number;
+      maxRetries?: number;
+    };
+    expect(opts.signal).toBeUndefined();
+    expect(opts.timeout).toBeUndefined();
+    expect(opts.maxRetries).toBe(1);
+  });
+
   it("encodes dotted tool names on the outgoing API call", async () => {
     const mockCreate = vi.fn().mockResolvedValue({
       content: [{ type: "text", text: "done" }],
