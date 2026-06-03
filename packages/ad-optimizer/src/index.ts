@@ -118,3 +118,12 @@ export {
   learningPhaseImpactText,
   ACTION_RESETS_LEARNING,
 } from "./action-reset-classification.js";
+export {
+  shouldAbstainFromHandoff,
+  CREATIVE_HANDOFF_ACTIONS,
+} from "./recommendation-handoff-abstention.js";
+export type {
+  HandoffAbstentionDecision,
+  HandoffAbstentionInput,
+  HandoffAbstentionReason,
+} from "./recommendation-handoff-abstention.js";

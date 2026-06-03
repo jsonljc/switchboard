@@ -150,6 +150,8 @@ export * from "./pcd-identity.js";
 
 // Recommendations (surface, status, action enums + canonical input shape)
 export * from "./recommendations.js";
+// Riley -> agent recommendation handoff payload (Governed Handoff Contract Freeze §4.3)
+export * from "./recommendation-handoff.js";
 
 // Reports v1 view-model (operator deep-dive surface)
 export * from "./reports/v1.js";

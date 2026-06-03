@@ -96,6 +96,8 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/creative-job-submit-workflow.js");
   const { buildCreativeConceptDraftWorkflow } =
     await import("../services/workflows/creative-concept-draft-workflow.js");
+  const { buildRecommendationHandoffWorkflow } =
+    await import("../services/workflows/recommendation-handoff-workflow.js");
   const { buildCreativeJobDecisionWorkflow } =
     await import("../services/workflows/creative-job-decision-workflow.js");
   const { buildMetaLeadIntakeWorkflow } =
@@ -165,6 +167,11 @@ export async function bootstrapContainedWorkflows(
       prismaClient as ConstructorParameters<typeof PrismaOrgAgentEnablementStore>[0],
     ),
   });
+
+  // Riley→agent advisory handoff (Contract 3): on approval, routes a Riley creative
+  // recommendation to a draft-only creative.concept.draft child. Stateless handler
+  // (it submits the child through `services.submitChildWork`).
+  const recommendationHandoffWorkflow = buildRecommendationHandoffWorkflow();
 
   // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
   // difference between callers is how the WhatsApp 24h-window timestamp is resolved
@@ -282,6 +289,7 @@ export async function bootstrapContainedWorkflows(
   const handlers = new Map<string, WorkflowHandler>([
     ["creative.job.submit", buildCreativeJobSubmitWorkflow(prismaClient)],
     ["creative.concept.draft", creativeConceptDraftWorkflow],
+    ["adoptimizer.recommendation.handoff", recommendationHandoffWorkflow],
     ["creative.job.continue", buildCreativeJobDecisionWorkflow(prismaClient, "continue")],
     ["creative.job.stop", buildCreativeJobDecisionWorkflow(prismaClient, "stop")],
     ["creative.job.publish", creativePublishWorkflow],
@@ -354,6 +362,20 @@ export async function bootstrapContainedWorkflows(
       budgetClass: "cheap",
       approvalPolicy: "none",
       approvalMode: "system_auto_approved",
+      allowedTriggers: ["internal"],
+    },
+    {
+      // Riley→agent advisory handoff (Contract 3). A Riley-initiated (system) edge
+      // that can lead to creative spend (it creates a Mira draft a human later
+      // funds), so it is deliberately NOT system_auto_approved — the seeded
+      // require_approval(mandatory) policy (db seed recommendation-handoff-
+      // governance.ts) parks it for a human. approvalPolicy here is decorative (the
+      // policy engine reads policyApprovalOverride, not this). Internal-trigger-only
+      // (not reachable from the public API).
+      intent: "adoptimizer.recommendation.handoff",
+      workflowId: "adoptimizer.recommendation.handoff",
+      budgetClass: "cheap",
+      approvalPolicy: "always",
       allowedTriggers: ["internal"],
     },
     {
