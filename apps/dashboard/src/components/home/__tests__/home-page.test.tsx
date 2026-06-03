@@ -411,6 +411,28 @@ describe("HomePage", () => {
     expect(verdictEl.textContent).not.toMatch(/working/i);
   });
 
+  it("agent-state unavailable → no 'Working' status and no breathing avatar (honest floor)", () => {
+    // Feed is live so the page renders the ACTIVE layout, and mission reports the
+    // core complete so agents are genuinely set up — but /api/agents/state is
+    // unavailable. statusForAgent must return "idle" for every agent, so NO tile
+    // shows "Working" and NO avatar breathes (data-playing="true").
+    decisionFeedState = {
+      data: {
+        decisions: [makeDecision({ id: "d1" })],
+        counts: { total: 1, approval: 1, handoff: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    };
+    missionState = { data: makeMission(true), isError: false };
+    agentStateState = { data: undefined, isError: true };
+
+    const { container } = render(<HomePage />);
+
+    expect(container.querySelector('[data-playing="true"]')).toBeNull();
+    expect(screen.queryByText("Working")).not.toBeInTheDocument();
+  });
+
   it("auto-opens the agent panel for a deep-linked initialAgent (no interaction)", () => {
     // /?agent=alex deep-link → server passes initialAgent → panel is open on mount.
     render(<HomePage initialAgent="alex" />);

@@ -9,6 +9,12 @@ export const agentDisplay: Record<PanelAgentKey, { name: string; role: string }>
   mira: { name: "Mira", role: "Creative" },
 };
 
+/** Canonical agent key -> legacy agentRole used by /api/agents/state. Mira has no role row. */
+export const AGENT_ROLE_FOR_KEY: Partial<Record<AgentKey, string>> = {
+  alex: "responder",
+  riley: "optimizer",
+};
+
 /**
  * Narrows an untrusted value (e.g. a `?agent=` query param) to a known
  * PanelAgentKey, or null. Used by Home's server page to validate the agent

@@ -24,6 +24,7 @@ export function teamStatusLabel(a: TeamBandAgent): string {
     case "analyzing":
       return "Working";
     case "waiting_approval":
+    case "error":
       return "Needs you";
     default:
       return "Ready";
@@ -48,6 +49,7 @@ export function TeamBand({ agents, onOpenAgent }: TeamBandProps) {
       <div className={styles.teamBandGrid} role="list">
         {agents.map((agent) => {
           const { key, name, setUp, halted } = agent;
+          const statusLabel = teamStatusLabel(agent);
           return (
             <div key={key} role="listitem">
               <button
@@ -56,19 +58,19 @@ export function TeamBand({ agents, onOpenAgent }: TeamBandProps) {
                 data-agent={key}
                 data-disabled={String(!setUp)}
                 data-testid={`team-mate-${key}`}
-                aria-label={`Open ${name}`}
+                aria-label={`Open ${name}, ${statusLabel}`}
                 onClick={() => onOpenAgent?.(key)}
               >
                 <PrintedPortraitAvatar
                   agentKey={key}
-                  size={96}
+                  size={88}
                   status={setUp ? agent.status : "idle"}
                   halted={halted}
                   allowMotion={key === focalKey}
                   showPip
                 />
                 <span className={styles.teamMateName}>{name}</span>
-                <span className={styles.teamMateStatus}>{teamStatusLabel(agent)}</span>
+                <span className={styles.teamMateStatus}>{statusLabel}</span>
               </button>
             </div>
           );

@@ -14,7 +14,7 @@ import { useMiraEnabled } from "@/hooks/use-mira-enabled";
 import { useGovernanceStatus } from "@/hooks/use-governance";
 import type { Decision } from "@/lib/decisions/types";
 import { AgentPanel } from "@/components/agent-panel/agent-panel";
-import type { PanelAgentKey } from "@/components/agent-panel/lib/agent-display";
+import { AGENT_ROLE_FOR_KEY, type PanelAgentKey } from "@/components/agent-panel/lib/agent-display";
 import { coreSetupIncomplete } from "@/components/agent-panel/lib/key-result-state";
 import { Verdict } from "./verdict";
 import { composeVerdict } from "./compose-verdict";
@@ -38,12 +38,7 @@ import type { DerivedAgentStateEntry } from "@/lib/api-client-types";
 import { HomeModuleBoundary } from "./home-module-boundary";
 import styles from "./home.module.css";
 
-/** Canonical key -> legacy agentRole used by /api/agents/state (mira has no row). */
-const AGENT_ROLE_FOR_KEY: Partial<Record<AgentKey, string>> = {
-  alex: "responder",
-  riley: "optimizer",
-};
-
+// Returns "idle" when state is unavailable (the honest floor: a "Working" claim and the breathing animation both require a real working status; the verdict's working clause is separately gated by rosterStateAvailable).
 /** Real per-agent activity. Mira (no role row) is never inferred working here. */
 function statusForAgent(
   key: AgentKey,
@@ -249,8 +244,8 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
       />
     </HomeModuleBoundary>
   );
-  const teamPulseNode = (
-    <HomeModuleBoundary key="team-pulse">
+  const teamBandNode = (
+    <HomeModuleBoundary key="team-band">
       <TeamBand agents={teamBandAgents} onOpenAgent={setPanelAgent} />
     </HomeModuleBoundary>
   );
@@ -282,7 +277,7 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
     ? [
         verdictNode,
         thisWeekNode,
-        teamPulseNode,
+        teamBandNode,
         whileYouSleptNode,
         workInProgressNode,
         permissionsNode,
@@ -290,7 +285,7 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
     : [
         verdictNode,
         needsYouNode,
-        teamPulseNode,
+        teamBandNode,
         thisWeekNode,
         whileYouSleptNode,
         workInProgressNode,

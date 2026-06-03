@@ -27,6 +27,9 @@ describe("teamStatusLabel", () => {
       }),
     ).toBe("Needs you");
     expect(
+      teamStatusLabel({ key: "alex", name: "Alex", setUp: true, status: "error", halted: false }),
+    ).toBe("Needs you");
+    expect(
       teamStatusLabel({ key: "alex", name: "Alex", setUp: true, status: "working", halted: true }),
     ).toBe("Asleep");
     expect(
@@ -63,6 +66,11 @@ describe("<TeamBand>", () => {
   it("shows Mira's honest not-set-up status (a trust signal, not a dead end)", () => {
     render(<TeamBand agents={AGENTS} />);
     expect(screen.getByText("Not set up yet")).toBeInTheDocument();
+  });
+
+  it("folds the live status into the tile's accessible name (not hidden from screen readers)", () => {
+    render(<TeamBand agents={AGENTS} />);
+    expect(screen.getByRole("button", { name: "Open Mira, Not set up yet" })).toBeInTheDocument();
   });
 
   it("each tile is a button that opens that agent's panel", () => {

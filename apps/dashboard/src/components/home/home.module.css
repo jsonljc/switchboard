@@ -425,7 +425,7 @@
 }
 .teamBandGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 .teamMate {
@@ -465,4 +465,13 @@
 .teamMateStatus {
   font-size: 11.5px;
   color: var(--ink-3);
+}
+@media (max-width: 360px) {
+  .teamBandGrid {
+    gap: 6px;
+  }
+  .teamMate {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
