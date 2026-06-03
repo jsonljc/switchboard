@@ -11,18 +11,18 @@ describe("<PrintedPortraitAvatar>", () => {
     expect(riley.container.querySelector("svg")).not.toBeNull();
   });
 
-  it("falls back to an in-frame letter for mira (no sprite bundle)", () => {
-    const { container, getByText } = render(<PrintedPortraitAvatar agentKey="mira" />);
-    expect(getByText("M")).toBeInTheDocument();
-    expect(container.querySelector("svg")).toBeNull();
+  it("renders the pixel sprite SVG for mira (no letter fallback)", () => {
+    const { container, queryByText } = render(<PrintedPortraitAvatar agentKey="mira" />);
+    expect(container.querySelector("svg")).not.toBeNull();
+    expect(queryByText("M")).toBeNull();
   });
 
-  it("keeps Mira's letter even when working (no sprite bundle yet)", () => {
-    const { container, getByText } = render(
+  it("renders Mira's sprite when working and resolves the draft sprite-state", () => {
+    const { container, queryByText } = render(
       <PrintedPortraitAvatar agentKey="mira" status="working" />,
     );
-    expect(getByText("M")).toBeInTheDocument();
-    expect(container.querySelector("svg")).toBeNull();
+    expect(container.querySelector("svg")).not.toBeNull();
+    expect(queryByText("M")).toBeNull();
     expect((container.firstElementChild as HTMLElement).dataset.spriteState).toBe("draft");
   });
 

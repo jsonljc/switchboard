@@ -2,6 +2,8 @@
 // creative cockpit: NO composer (no new submission from the Mira UI), so there
 // is intentionally no composer placeholder here. A footer note explains where
 // drafts originate instead.
+import { MIRA_VARIANTS } from "@/components/cockpit/sprite/mira-variants";
+import type { SpriteVariantKey } from "@/components/cockpit/sprite/types";
 
 // Mira identity accent. Adopts the canonical per-agent token --agent-mira
 // (270 45% 58%) — violet is IDENTITY ONLY (avatar, tints, identity edges),
@@ -26,3 +28,8 @@ export const MIRA_EMPTY_BODY =
 // explains where drafts originate instead of showing an inert input.
 export const MIRA_FOOTER_NOTE =
   "New briefs come from the existing creative pipeline. Mira's review starts once a draft exists.";
+
+/** Hardcoded sprite variant for Mira. Operators do not pick this. */
+export const DEFAULT_MIRA_VARIANT: SpriteVariantKey = "maker";
+
+export { MIRA_VARIANTS };

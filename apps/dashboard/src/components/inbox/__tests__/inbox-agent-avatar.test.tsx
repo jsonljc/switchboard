@@ -13,9 +13,8 @@ describe("<InboxAgentAvatar>", () => {
     expect(container.querySelector("svg")).not.toBeNull();
   });
 
-  it("falls back to an initial disc for mira (no sprite bundle)", () => {
-    const { container, getByText } = render(<InboxAgentAvatar agentKey="mira" />);
-    expect(getByText("M")).toBeInTheDocument();
-    expect(container.querySelector("svg")).toBeNull();
+  it("renders the pixel sprite SVG for mira", () => {
+    const { container } = render(<InboxAgentAvatar agentKey="mira" />);
+    expect(container.querySelector("svg")).not.toBeNull();
   });
 });
