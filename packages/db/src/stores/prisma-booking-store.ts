@@ -97,6 +97,53 @@ export class PrismaBookingStore {
     return this.prisma.booking.findFirstOrThrow({ where: { id: bookingId, organizationId } });
   }
 
+  async findUpcomingByContact(orgId: string, contactId: string, now: Date = new Date()) {
+    return this.prisma.booking.findMany({
+      where: {
+        organizationId: orgId,
+        contactId,
+        status: { notIn: ["cancelled", "failed"] },
+        startsAt: { gte: now },
+      },
+      orderBy: { startsAt: "asc" },
+      select: {
+        id: true,
+        calendarEventId: true,
+        service: true,
+        startsAt: true,
+        endsAt: true,
+        status: true,
+      },
+    });
+  }
+
+  async reschedule(orgId: string, bookingId: string, slot: { startsAt: Date; endsAt: Date }) {
+    const result = await this.prisma.booking.updateMany({
+      where: { id: bookingId, organizationId: orgId },
+      data: {
+        startsAt: slot.startsAt,
+        endsAt: slot.endsAt,
+        rescheduleCount: { increment: 1 },
+        rescheduledAt: new Date(),
+      },
+    });
+    if (result.count === 0) throw new StaleVersionError(bookingId, -1, -1);
+    return this.prisma.booking.findFirstOrThrow({
+      where: { id: bookingId, organizationId: orgId },
+    });
+  }
+
+  async cancel(orgId: string, bookingId: string) {
+    const result = await this.prisma.booking.updateMany({
+      where: { id: bookingId, organizationId: orgId },
+      data: { status: "cancelled" },
+    });
+    if (result.count === 0) throw new StaleVersionError(bookingId, -1, -1);
+    return this.prisma.booking.findFirstOrThrow({
+      where: { id: bookingId, organizationId: orgId },
+    });
+  }
+
   async listByDate(
     orgId: string,
     date: Date,
