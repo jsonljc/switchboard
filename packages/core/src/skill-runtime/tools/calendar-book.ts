@@ -3,7 +3,7 @@ import type { SkillTool, SkillRequestContext } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
 import { getMetrics } from "../../telemetry/metrics.js";
-import { SlotQuerySchema } from "@switchboard/schemas";
+import { SlotQuerySchema, STAGES_AT_OR_BEYOND_BOOKED } from "@switchboard/schemas";
 import type { CalendarProvider, AttributionChain } from "@switchboard/schemas";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
 import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
@@ -49,6 +49,12 @@ type TransactionFn = (
       update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
     };
     outboxEvent: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
+    opportunity: {
+      updateMany(args: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }): Promise<{ count: number }>;
+    };
   }) => Promise<unknown>,
 ) => Promise<unknown>;
 
@@ -294,6 +300,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           }
 
           // 3. On success: confirm booking + write outbox in one transaction
+          let stageAdvanced = false;
           try {
             const eventId = randomUUID();
             await deps.runTransaction(async (tx) => {
@@ -332,6 +339,22 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                   },
                 },
               });
+              // Monotonic stage advance inside the same durable tx as the
+              // confirm + outbox write: a confirmed booking always implies a
+              // booked opportunity. updateMany never throws on count:0, and the
+              // `notIn` guard skips an already-booked/showed/won/lost opp, so a
+              // stage no-op can never fail the booking.
+              if (opportunityId) {
+                const adv = await tx.opportunity.updateMany({
+                  where: {
+                    id: opportunityId,
+                    organizationId: orgId,
+                    stage: { notIn: STAGES_AT_OR_BEYOND_BOOKED },
+                  },
+                  data: { stage: "booked" },
+                });
+                stageAdvanced = adv.count > 0;
+              }
             });
           } catch (error) {
             const failResult = await deps.failureHandler.handle({
@@ -348,6 +371,9 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               data: failResult as unknown as Record<string, unknown>,
             });
           }
+
+          getMetrics().bookingConfirmed.inc({ orgId });
+          if (stageAdvanced) getMetrics().bookingStageAdvanced.inc({ orgId });
 
           return ok(
             {

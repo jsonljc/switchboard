@@ -35,6 +35,9 @@ function makeRunTransaction() {
       outboxEvent: {
         create: vi.fn().mockResolvedValue({ id: "ob_1" }),
       },
+      opportunity: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
     }),
   );
 }
@@ -317,6 +320,82 @@ describe("createCalendarBookToolFactory", () => {
     );
   });
 
+  describe("booking.create opportunity stage advance", () => {
+    // Build a tool whose runTransaction exposes the opportunity.updateMany spy
+    // (asserts the monotonic stage-advance args / no-op) plus booking-counter
+    // spies on a fresh in-memory metrics registry.
+    function buildToolWithStageCapture(updateManyResult: { count: number }) {
+      const updateManySpy = vi.fn().mockResolvedValue(updateManyResult);
+      const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          booking: { update: vi.fn().mockResolvedValue({}) },
+          outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
+          opportunity: { updateMany: updateManySpy },
+        }),
+      );
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+      const metrics = createInMemoryMetrics();
+      const confirmedSpy = vi.spyOn(metrics.bookingConfirmed, "inc");
+      const advancedSpy = vi.spyOn(metrics.bookingStageAdvanced, "inc");
+      setMetrics(metrics);
+      const t = createCalendarBookToolFactory({
+        calendarProviderFactory: calendarProviderFactory as never,
+        isCalendarProviderConfigured: isCalendarProviderConfigured as never,
+        bookingStore: bookingStore as never,
+        opportunityStore: opportunityStore as never,
+        runTransaction: runTx as never,
+        failureHandler: failureHandler as never,
+        contactStore: contactStore as never,
+        defaultCurrency: "SGD",
+      })({ ...TRUSTED_CTX, contactId: "ct_1" });
+      return { tool: t, updateManySpy, confirmedSpy, advancedSpy };
+    }
+
+    const validInput = {
+      service: "consultation",
+      slotStart: "2026-04-20T10:00:00+08:00",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    };
+
+    it("advances opp to booked (monotonic guard) + incs confirmed & stageAdvanced", async () => {
+      const {
+        tool: t,
+        updateManySpy,
+        confirmedSpy,
+        advancedSpy,
+      } = buildToolWithStageCapture({
+        count: 1,
+      });
+
+      const result = await t.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("success");
+      expect(updateManySpy).toHaveBeenCalledWith({
+        where: {
+          id: "opp_1",
+          organizationId: "org_trusted",
+          stage: { notIn: ["booked", "showed", "won", "lost"] },
+        },
+        data: { stage: "booked" },
+      });
+      expect(confirmedSpy).toHaveBeenCalledWith({ orgId: "org_trusted" });
+      expect(advancedSpy).toHaveBeenCalledWith({ orgId: "org_trusted" });
+    });
+
+    it("does NOT surface a stage-write no-op (count 0) as a failure, and skips stageAdvanced", async () => {
+      const { tool: t, confirmedSpy, advancedSpy } = buildToolWithStageCapture({ count: 0 });
+
+      const result = await t.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("success");
+      expect(confirmedSpy).toHaveBeenCalledWith({ orgId: "org_trusted" });
+      expect(advancedSpy).not.toHaveBeenCalled();
+    });
+  });
+
   it("booking.create inputSchema omits contactId, attendeeName, attendeeEmail", () => {
     const schema = tool.operations["booking.create"]!.inputSchema as {
       properties: Record<string, unknown>;
@@ -465,6 +544,7 @@ describe("createCalendarBookToolFactory", () => {
               return { id: "ob_1" };
             }),
           },
+          opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
         }),
       );
       bookingStore.create.mockResolvedValue({ id: "bk_1" });
