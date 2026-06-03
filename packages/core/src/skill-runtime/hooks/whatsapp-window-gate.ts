@@ -51,6 +51,19 @@ type BlockSubCause =
   | "template_not_approved"
   | "marketing_substitution_blocked";
 
+/**
+ * Three-state result of resolving WhatsApp-window governance for a deployment.
+ *  - "off":          no governanceConfig, or a config without a `whatsappWindow`
+ *                    block → WhatsApp gating is not configured → clean no-op.
+ *  - "config":       a usable posture (resolved, or recovered from the cache on error).
+ *  - "unavailable":  a genuine resolver error/throw with NO cached posture → no mode
+ *                    signal → fail-closed (matches the gate's deliberate 1c precedent).
+ */
+type WhatsAppConfigResolution =
+  | { kind: "off" }
+  | { kind: "config"; config: WhatsAppWindowGateConfig }
+  | { kind: "unavailable" };
+
 export class WhatsAppWindowGateHook implements SkillHook {
   readonly name = "whatsapp-window-gate";
 
@@ -62,9 +75,17 @@ export class WhatsAppWindowGateHook implements SkillHook {
     // and fail-closed (matching 1c precedent). If the flag is off, return immediately
     // without touching the channel resolver — preserving "default off → zero behavioral
     // change" even when the channel resolver is transiently unavailable.
-    const config = await this.resolveConfig(ctx.deploymentId);
-    if (!config) {
-      // Fail-closed: governance is unavailable. Match 1c's precedent — block hard.
+    const resolution = await this.resolveConfig(ctx.deploymentId);
+    if (resolution.kind === "off") {
+      // No WhatsApp governance configured for this deployment (governanceConfig missing,
+      // or present without a `whatsappWindow` block). Clean no-op — mirrors the three
+      // sibling afterSkill gates which early-return on resolver status:"missing". THIS is
+      // what makes wiring runAfterSkillHooks byte-identical for an unseeded deployment.
+      return;
+    }
+    if (resolution.kind === "unavailable") {
+      // Genuine resolver error/throw with no cached posture → no mode signal. Preserve the
+      // deliberate hard-block posture (1c precedent) for an actually-erroring resolver.
       await this.emitVerdict({
         ctx,
         action: "block",
@@ -77,6 +98,7 @@ export class WhatsAppWindowGateHook implements SkillHook {
       result.response = "";
       return;
     }
+    const config = resolution.config;
     if (!config.enabled) return;
 
     // Channel resolution AFTER the flag check. Now that we have config, a throw here
@@ -260,26 +282,38 @@ export class WhatsAppWindowGateHook implements SkillHook {
     }
   }
 
-  private async resolveConfig(deploymentId: string): Promise<WhatsAppWindowGateConfig | null> {
+  private async resolveConfig(deploymentId: string): Promise<WhatsAppConfigResolution> {
     try {
       const resolution = await this.deps.governanceConfigResolver(deploymentId);
-      if (resolution.status !== "resolved") return null;
+      if (resolution.status === "missing") {
+        // No governanceConfig at all → WhatsApp gating is off. Clean no-op.
+        return { kind: "off" };
+      }
+      if (resolution.status === "error") {
+        // Config present but invalid (or store error). Fail-closed only via a cached
+        // posture; otherwise unavailable.
+        const cached = this.deps.postureCache.lastKnown(deploymentId);
+        return cached ? { kind: "config", config: cached } : { kind: "unavailable" };
+      }
       const raw = resolution.config as {
         whatsappWindow?: Omit<WhatsAppWindowGateConfig, "clinicType" | "jurisdiction">;
         jurisdiction: Jurisdiction;
         clinicType: "medical" | "nonMedical";
       };
-      if (!raw.whatsappWindow) return null;
+      if (!raw.whatsappWindow) {
+        // A governanceConfig exists but opts out of WhatsApp-window gating → no-op.
+        return { kind: "off" };
+      }
       const posture: WhatsAppWindowGateConfig = {
         ...raw.whatsappWindow,
         jurisdiction: raw.jurisdiction,
         clinicType: raw.clinicType,
       };
       this.deps.postureCache.remember(deploymentId, posture);
-      return posture;
+      return { kind: "config", config: posture };
     } catch {
       const cached = this.deps.postureCache.lastKnown(deploymentId);
-      return cached ?? null;
+      return cached ? { kind: "config", config: cached } : { kind: "unavailable" };
     }
   }
 

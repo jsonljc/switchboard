@@ -620,3 +620,38 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
     );
   });
 });
+
+describe("WhatsAppWindowGateHook — unconfigured deployment (no-op, byte-identical)", () => {
+  it("status:'missing' → passthrough: response unchanged, no verdict, channel resolver never called", async () => {
+    const deps = makeDeps({
+      governanceConfigResolver: vi.fn().mockResolvedValue({ status: "missing" }),
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    const before = result.response;
+
+    await hook.afterSkill!(makeCtx(), result);
+
+    expect(result.response).toBe(before);
+    expect(deps.verdictStore.save).not.toHaveBeenCalled();
+    expect(deps.handoffStore.save).not.toHaveBeenCalled();
+    expect(deps.channelTypeResolver.resolve).not.toHaveBeenCalled();
+  });
+
+  it("resolved governanceConfig WITHOUT a whatsappWindow block → passthrough, no verdict", async () => {
+    const deps = makeDeps({
+      governanceConfigResolver: vi.fn().mockResolvedValue({
+        status: "resolved",
+        config: { jurisdiction: "SG", clinicType: "medical" }, // no whatsappWindow sub-block
+      }),
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    const before = result.response;
+
+    await hook.afterSkill!(makeCtx(), result);
+
+    expect(result.response).toBe(before);
+    expect(deps.verdictStore.save).not.toHaveBeenCalled();
+  });
+});
