@@ -139,9 +139,11 @@ export function listModelCosts(): ModelCostEntry[] {
 /**
  * Map a concrete (possibly versioned) model id to a LLM_COST_TABLE key.
  * The router emits ids like "claude-sonnet-4-6" / "claude-haiku-4-5-20251001";
- * the table is keyed by family ("claude-sonnet-4"). Prefix-match the family.
+ * the table is keyed by family ("claude-sonnet-4"). Substring-match the family.
  */
 function normalizeModelId(modelId: string): string {
+  // embedding models are not priced on the chat-cost path; pass through to the table's unknown→default fallback
+  if (modelId.includes("voyage")) return modelId;
   if (modelId.includes("opus")) return "claude-opus-4";
   if (modelId.includes("sonnet")) return "claude-sonnet-4";
   if (modelId.includes("haiku")) return "claude-haiku-4";
