@@ -68,14 +68,14 @@ export { RealCrmDataProvider } from "./crm-data-provider/real-provider.js";
 export { compareSources, compareCampaigns } from "./analyzers/source-comparator.js";
 export {
   decideSourceReallocation,
-  computeSourceReallocationSection,
+  computeAuditEconomicsSections,
   findShiftCandidates,
   MIN_SOURCE_LEADS,
   MIN_SOURCE_BOOKINGS,
 } from "./analyzers/source-reallocation.js";
 export type {
   SourceReallocationInput,
-  SourceReallocationSectionInput,
+  AuditEconomicsSectionsInput,
 } from "./analyzers/source-reallocation.js";
 export {
   resolveEconomicTarget,

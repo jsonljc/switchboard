@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   decideSourceReallocation,
-  computeSourceReallocationSection,
+  computeAuditEconomicsSections,
   MIN_SOURCE_BOOKINGS,
 } from "./source-reallocation.js";
 import type { SourceComparisonRow } from "./source-comparator.js";
@@ -104,7 +104,7 @@ describe("decideSourceReallocation", () => {
   });
 });
 
-describe("computeSourceReallocationSection", () => {
+describe("computeAuditEconomicsSections", () => {
   const insight = (over: Partial<CampaignInsight>): CampaignInsight => ({
     campaignId: "c1",
     campaignName: "C1",
@@ -123,32 +123,35 @@ describe("computeSourceReallocationSection", () => {
     dateStop: "2026-05-07",
     ...over,
   });
+  const sectionBase = {
+    currentInsights: [insight({})],
+    adSetData: null,
+    measurementTrusted: true,
+    nextCycleDate: "2026-05-14",
+    orgId: "org-1",
+    dateRange: { since: "2026-05-01", until: "2026-05-07" },
+  };
 
-  it("returns no reallocation when the provider gave no per-source funnel", () => {
-    const out = computeSourceReallocationSection({
-      crmData: {},
-      currentInsights: [insight({})],
-      adSetData: null,
-      measurementTrusted: true,
-      nextCycleDate: "2026-05-14",
+  it("returns nothing when the provider gave no per-source / per-campaign funnel", async () => {
+    const out = await computeAuditEconomicsSections({
+      ...sectionBase,
+      bySource: undefined,
+      byCampaign: undefined,
     });
     expect(out.reallocation).toBeNull();
     expect(out.sourceComparison).toBeUndefined();
+    expect(out.campaignEconomics).toBeUndefined();
   });
 
-  it("computes sourceComparison and a shift rec from a clear-winner per-source funnel", () => {
-    // ctwa: revenue 38000c -> $380 / spend ~50 -> trueRoas ~7.6; instant_form: 10000c -> $100 / ~50 -> ~2.0
-    const out = computeSourceReallocationSection({
-      crmData: {
-        bySource: {
-          ctwa: funnel({ received: 40, booked: 10, paid: 12, revenue: 38000 }),
-          instant_form: funnel({ received: 30, booked: 6, paid: 3, revenue: 10000 }),
-        },
-      },
+  it("computes sourceComparison and a shift rec from a clear-winner per-source funnel", async () => {
+    const out = await computeAuditEconomicsSections({
+      ...sectionBase,
       currentInsights: [insight({ spend: 100, inlineLinkClicks: 200, conversions: 20 })],
-      adSetData: null,
-      measurementTrusted: true,
-      nextCycleDate: "2026-05-14",
+      bySource: {
+        ctwa: funnel({ received: 40, booked: 10, paid: 12, revenue: 38000 }),
+        instant_form: funnel({ received: 30, booked: 6, paid: 3, revenue: 10000 }),
+      },
+      byCampaign: undefined,
     });
     expect(out.sourceComparison?.rows.length).toBe(2);
     expect(out.reallocation?.type).toBe("recommendation");

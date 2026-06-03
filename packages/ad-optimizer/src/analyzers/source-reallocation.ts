@@ -4,9 +4,9 @@ import type {
   CampaignInsightSchema as CampaignInsight,
   AdSetLearningInput,
 } from "@switchboard/schemas";
-import type { SourceComparisonRow } from "./source-comparator.js";
-import type { SourceFunnel } from "../crm-data-provider/real-provider.js";
-import { compareSources } from "./source-comparator.js";
+import type { SourceComparisonRow, CampaignEconomicsRow } from "./source-comparator.js";
+import type { SourceFunnel, CampaignFunnel } from "../crm-data-provider/real-provider.js";
+import { compareSources, compareCampaigns } from "./source-comparator.js";
 import { computeSpendBySource } from "./spend-attributor.js";
 import { resetsLearningFor, learningPhaseImpactText } from "../action-reset-classification.js";
 import { meetsEvidenceFloor } from "../evidence-floor.js";
@@ -168,41 +168,90 @@ export function decideSourceReallocation(
   };
 }
 
-export interface SourceReallocationSectionInput {
-  crmData: { bySource?: Record<string, SourceFunnel> };
+/**
+ * Minimal shape of the injected booked-VALUE port (audit-runner's
+ * BookedValueByCampaignProvider). Declared structurally so this module does NOT
+ * import from audit-runner (which imports this module). Values are CENTS.
+ */
+interface BookedValueProvider {
+  queryBookedValueCentsByCampaign(query: {
+    orgId: string;
+    from: Date;
+    to: Date;
+    campaignIds?: string[];
+  }): Promise<Map<string, number>>;
+}
+
+export interface AuditEconomicsSectionsInput {
+  /** Per-source funnel (real-provider only); undefined ⇒ no source comparison / reallocation. */
+  bySource: Record<string, SourceFunnel> | undefined;
+  /** Per-campaign funnel (real-provider only); undefined ⇒ no campaign economics. */
+  byCampaign: Record<string, CampaignFunnel> | undefined;
   currentInsights: CampaignInsight[];
   adSetData: AdSetLearningInput[] | null;
   measurementTrusted: boolean;
   nextCycleDate: string;
+  orgId: string;
+  dateRange: { since: string; until: string };
+  /** Injected booked-VALUE port; absent ⇒ trueROAS reported null (graceful). */
+  bookedValueProvider?: BookedValueProvider;
 }
 
 /**
- * Audit-runner Step-8b orchestrator (relocated from audit-runner.ts to keep that
- * file under the 600-line cap). Computes the per-source comparison AND the
- * account-level reallocation decision together. Pure/sync — the booked-VALUE
- * per-campaign economics stay in audit-runner (they need an async provider call).
- * Returns `sourceComparison` for the report plus the reallocation rec/watch (or null).
+ * Audit-runner Step-8b economics orchestrator, relocated from audit-runner.ts to keep
+ * that file under the 600-line cap. Computes BOTH the per-source comparison (and the
+ * account-level reallocation advisory it now drives) AND the per-campaign economics
+ * (booked-CAC + trueROAS) in one place. The reallocation is the NEW behavior: the
+ * per-source economics, previously computed-then-discarded, now drive one advisory
+ * `shift_budget_to_source` rec. The campaignEconomics computation is moved verbatim
+ * (behavior-preserving).
  */
-export function computeSourceReallocationSection(input: SourceReallocationSectionInput): {
+export async function computeAuditEconomicsSections(input: AuditEconomicsSectionsInput): Promise<{
   sourceComparison?: { rows: SourceComparisonRow[] };
+  campaignEconomics?: { rows: CampaignEconomicsRow[] };
   reallocation: RecommendationOutput | WatchOutput | null;
-} {
-  const bySource = input.crmData.bySource;
-  if (!bySource || Object.keys(bySource).length === 0) {
-    return { reallocation: null };
+}> {
+  // Per-source comparison + the account-level reallocation advisory.
+  let sourceComparison: { rows: SourceComparisonRow[] } | undefined;
+  let reallocation: RecommendationOutput | WatchOutput | null = null;
+  const { bySource } = input;
+  if (bySource && Object.keys(bySource).length > 0) {
+    const spendBySource = computeSpendBySource(input.currentInsights, bySource, input.adSetData);
+    sourceComparison = compareSources({ bySource, spendBySource });
+    reallocation = decideSourceReallocation({
+      sourceComparison,
+      bySource,
+      accountEvidence: {
+        clicks: input.currentInsights.reduce((s, i) => s + i.inlineLinkClicks, 0),
+        conversions: input.currentInsights.reduce((s, i) => s + i.conversions, 0),
+        days: 7,
+      },
+      measurementTrusted: input.measurementTrusted,
+      nextCycleDate: input.nextCycleDate,
+    });
   }
-  const spendBySource = computeSpendBySource(input.currentInsights, bySource, input.adSetData);
-  const sourceComparison = compareSources({ bySource, spendBySource });
-  const reallocation = decideSourceReallocation({
-    sourceComparison,
-    bySource,
-    accountEvidence: {
-      clicks: input.currentInsights.reduce((s, i) => s + i.inlineLinkClicks, 0),
-      conversions: input.currentInsights.reduce((s, i) => s + i.conversions, 0),
-      days: 7,
-    },
-    measurementTrusted: input.measurementTrusted,
-    nextCycleDate: input.nextCycleDate,
-  });
-  return { sourceComparison, reallocation };
+
+  // Per-campaign economics (booked-CAC + trueROAS). Booked VALUE (cents) comes from the
+  // injected port; absent ⇒ trueROAS null (graceful degradation, never a fabricated 0).
+  let campaignEconomics: { rows: CampaignEconomicsRow[] } | undefined;
+  const { byCampaign } = input;
+  if (byCampaign && Object.keys(byCampaign).length > 0) {
+    const spendByCampaign: Record<string, number> = {};
+    for (const i of input.currentInsights) spendByCampaign[i.campaignId] = i.spend;
+    const bookedValueCentsByCampaign = input.bookedValueProvider
+      ? await input.bookedValueProvider.queryBookedValueCentsByCampaign({
+          orgId: input.orgId,
+          from: new Date(input.dateRange.since),
+          to: new Date(input.dateRange.until),
+          campaignIds: input.currentInsights.map((i) => i.campaignId),
+        })
+      : new Map<string, number>();
+    campaignEconomics = compareCampaigns({
+      byCampaign,
+      spendByCampaign,
+      bookedValueCentsByCampaign,
+    });
+  }
+
+  return { sourceComparison, campaignEconomics, reallocation };
 }
