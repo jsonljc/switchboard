@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useSetMetaPageId } from "@/hooks/use-connections";
@@ -60,6 +61,9 @@ export function SetMetaPageIdDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Set Facebook Page</DialogTitle>
+          <DialogDescription>
+            Store the numeric Facebook Page ID this connection&apos;s ads run from.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">

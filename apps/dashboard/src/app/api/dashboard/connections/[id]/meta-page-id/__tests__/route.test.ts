@@ -59,4 +59,20 @@ describe("PUT /api/dashboard/connections/:id/meta-page-id (proxy)", () => {
     const res = await PUT(mkReq({ pageId: "123456789012345" }), ctx);
     expect(res.status).toBe(400);
   });
+
+  it("maps a missing-org backend error to 403", async () => {
+    setMetaPageId.mockRejectedValueOnce(new Error("Organization context required"));
+    const res = await PUT(mkReq({ pageId: "123456789012345" }), ctx);
+    expect(res.status).toBe(403);
+  });
+
+  it("maps a credential-encryption config error to 503", async () => {
+    setMetaPageId.mockRejectedValueOnce(
+      new Error(
+        "Credential encryption is not configured. Set CREDENTIALS_ENCRYPTION_KEY environment variable.",
+      ),
+    );
+    const res = await PUT(mkReq({ pageId: "123456789012345" }), ctx);
+    expect(res.status).toBe(503);
+  });
 });
