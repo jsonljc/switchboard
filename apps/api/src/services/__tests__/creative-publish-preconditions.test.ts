@@ -111,4 +111,17 @@ describe("assertPublishable", () => {
     );
     expect(r).toMatchObject({ ok: false, code: "META_PAGE_NOT_CONFIGURED" });
   });
+
+  it("loop-closing: accepts a PR-A storage URL and surfaces the exact value to the handler", async () => {
+    const url = "https://cdn.example.com/creative-assets/job_1/abc.mp4";
+    const r = await assertPublishable(
+      deps({ job: { ...KEPT_JOB, durableAssetUrl: url } }),
+      "org_1",
+      "j1",
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.durableAssetUrl).toBe(url);
+    }
+  });
 });
