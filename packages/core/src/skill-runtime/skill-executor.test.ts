@@ -807,6 +807,41 @@ describe("SkillExecutorImpl", () => {
     expect(receivedSignal?.aborted).toBe(true);
   });
 
+  it("classifies an SDK timeout error as a budget error even when the signal has not aborted", async () => {
+    // Races the executor's per-call deadline: the SDK's own per-request timeout
+    // rejects a hair BEFORE the executor's abort() fires. The deadline is long
+    // enough (the policy keeps the suite fast but well above the immediate reject)
+    // that controller.signal.aborted is still false — proving the name-based
+    // timeout-like classification, not the abort flag, is what normalizes it.
+    let observedAbortedAtReject: boolean | undefined;
+    const timeoutAdapter: ToolCallingLLMAdapter = {
+      chatWithTools: (p: { signal?: AbortSignal }) =>
+        Promise.reject(
+          ((): never => {
+            observedAbortedAtReject = p.signal?.aborted;
+            throw Object.assign(new Error("Request timed out."), {
+              name: "APIConnectionTimeoutError",
+            });
+          })(),
+        ),
+    };
+    const policy = { ...DEFAULT_SKILL_RUNTIME_POLICY, maxLlmCallMs: 5000, maxRuntimeMs: 10_000 };
+    const exec = new SkillExecutorImpl(timeoutAdapter, new Map(), undefined, [], policy);
+    await expect(
+      exec.execute({
+        skill: mockSkill,
+        parameters: { NAME: "X" },
+        messages: [{ role: "user", content: "hi" }],
+        deploymentId: "d1",
+        orgId: "org1",
+        trustScore: 50,
+        trustLevel: "guided",
+      }),
+    ).rejects.toThrow(SkillExecutionBudgetError);
+    // The reject happened before any abort — classification came from the name.
+    expect(observedAbortedAtReject).toBe(false);
+  });
+
   // --- B2: conversation-depth tiering (router ON) ---
 
   // Records the profile.model the executor resolved for each LLM call.

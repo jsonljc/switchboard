@@ -103,6 +103,15 @@ const FALLBACK_READ_OP: SkillToolOperation = {
   execute: async () => ok(),
 };
 
+// Generic name check (NOT an SDK-type import — core must not depend on the
+// Anthropic SDK). Covers the race where the SDK's own per-request `timeout`
+// rejects a hair before the executor's same-deadline `abort()` fires: the SDK
+// timeout error (e.g. `APIConnectionTimeoutError`) must still normalize to the
+// budget error rather than leak as a generic failure.
+function isTimeoutLikeError(err: unknown): boolean {
+  return err instanceof Error && /timeout|abort/i.test(err.name);
+}
+
 // Escape sentinel-confusable substrings so tool output can't close the wrapper
 // early. Replaces the ASCII angle brackets in `<|` / `|>` with Unicode
 // mathematical angle brackets (U+27E8/U+27E9) — distinct glyphs to the model.
@@ -248,9 +257,11 @@ export class SkillExecutorImpl implements SkillExecutor {
         }),
       ]);
     } catch (err) {
-      // We aborted → surface the budget error even if the adapter's AbortError
-      // (or a downstream rejection) won the race over the backstop reject.
-      if (controller.signal.aborted) throw overDeadline;
+      // Surface the budget error when EITHER (a) we aborted — even if the adapter's
+      // AbortError (or a downstream rejection) won the race over the backstop
+      // reject — or (b) the error is timeout-like by name, covering the race where
+      // the SDK's own per-request timeout rejects a hair before our abort() fires.
+      if (controller.signal.aborted || isTimeoutLikeError(err)) throw overDeadline;
       throw err;
     } finally {
       clearTimeout(timeoutId);
