@@ -16,6 +16,9 @@ const SkillExecutorImpl = vi.fn().mockImplementation(function (
   return this;
 });
 
+const tracePersistenceInstance = { name: "trace-persistence" };
+const TracePersistenceHook = vi.fn().mockImplementation(() => tracePersistenceInstance);
+
 vi.mock("@switchboard/core/skill-runtime", () => ({
   loadSkill: vi.fn(() => ({
     slug: "alex",
@@ -25,6 +28,7 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   })),
   SkillExecutorImpl,
   GovernanceHook,
+  TracePersistenceHook,
   DeterministicSafetyGateHook: vi
     .fn()
     .mockImplementation(() => ({ name: "deterministic-safety-gate" })),
@@ -148,6 +152,9 @@ vi.mock("@switchboard/db", () => ({
   })),
   createPrismaContactConsentReader: vi.fn(() => ({
     read: vi.fn(async () => null),
+  })),
+  PrismaExecutionTraceStore: vi.fn().mockImplementation(() => ({
+    create: vi.fn(async () => {}),
   })),
   PrismaKnowledgeEntryStore: vi.fn().mockImplementation(() => ({
     findActive: vi.fn(async () => []),
@@ -293,5 +300,27 @@ describe("bootstrapSkillMode governance wiring", () => {
     // spec §7 requires the two governance gates be adjacent so no other hook can
     // mutate `result.response` between them.
     expect(classifierIdx).toBe(deterministicIdx + 1);
+  });
+
+  it("wires the TracePersistenceHook into the production executor (arg-8) but not the simulation executor", async () => {
+    await bootstrapSkillMode({
+      prismaClient: buildPrismaClient(),
+      intentRegistry: {} as never,
+      modeRegistry: { register } as never,
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+
+    // The telemetry recorder is constructed exactly once (production only) and
+    // passed as the 8th positional arg (index 7) — the isolated `executionTraceHook`
+    // template, NOT a member of the governance `hooks` array. The simulation
+    // executor (calls[1]) omits it so eval/sim runs carry no trace hook.
+    expect(TracePersistenceHook).toHaveBeenCalledTimes(1);
+    expect(SkillExecutorImpl.mock.calls[0]![7]).toBe(tracePersistenceInstance);
+    expect(SkillExecutorImpl.mock.calls[1]![7]).toBeUndefined();
+
+    // Guard the landmine: the recorder must NOT leak into the governance hooks
+    // array (arg index 3) — that array is what runAfterSkillHooks would activate.
+    const prodHooks = SkillExecutorImpl.mock.calls[0]![3] as Array<{ name?: string }>;
+    expect(prodHooks.some((h) => h.name === "trace-persistence")).toBe(false);
   });
 });

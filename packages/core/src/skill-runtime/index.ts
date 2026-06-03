@@ -2,6 +2,7 @@ export { loadSkill } from "./skill-loader.js";
 export { SkillExecutorImpl } from "./skill-executor.js";
 export { GovernanceHook } from "./hooks/governance-hook.js";
 export { SimulationPolicyHook } from "./hooks/simulation-policy-hook.js";
+export { TracePersistenceHook } from "./hooks/trace-persistence-hook.js";
 export { DeterministicSafetyGateHook } from "./hooks/deterministic-safety-gate.js";
 export type { DeterministicSafetyGateHookDeps } from "./hooks/deterministic-safety-gate.js";
 export { PdpaConsentGateHook } from "./hooks/pdpa-consent-gate.js";
