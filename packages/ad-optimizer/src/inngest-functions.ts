@@ -210,7 +210,12 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
                 try {
                   return await adsClient.getAccountAdSetLearningInputs!(dateRange);
                 } catch (err) {
-                  console.warn(
+                  // Error-level: a swallowed fetch failure must be visible to ops/alerting.
+                  // The audit still completes (the per-campaign analysis is independent), and
+                  // the source-reallocation rec degrades to honest abstain (lead-share). A
+                  // report-level "ad-set data unavailable" insight is a deferred enhancement;
+                  // re-throwing instead would re-run every rate-limited Graph call on a blip.
+                  console.error(
                     `[ad-optimizer] ad-set attribution fetch failed for deployment=${deployment.id}; ` +
                       `falling back to lead-share (no source reallocation this run): ${String(err)}`,
                   );
