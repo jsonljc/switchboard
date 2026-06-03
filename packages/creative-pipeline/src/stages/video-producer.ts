@@ -259,7 +259,8 @@ export async function runVideoProducer(
       if (deps.assetStorage) {
         // Deterministic per-job key: a retry of the production stage re-uploads to
         // the SAME key (overwrite, idempotent — no orphaned objects accumulate),
-        // and the cuid2 jobId keeps it unguessable. One assembled video per run.
+        // and the opaque, non-enumerable cuid jobId keeps it hard to guess. One
+        // assembled video per run.
         const baseKey = `creative-assets/${input.jobId}/assembled`;
         const uploadedVideo = await deps.assetStorage.upload({
           localPath: assembled.videoUrl,

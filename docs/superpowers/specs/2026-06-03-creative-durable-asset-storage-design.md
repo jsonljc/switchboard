@@ -92,9 +92,9 @@ step** (no spend, not claim-bearing); the governed/claim-gated moment remains pu
    AWS S3 / MinIO by changing env only. No SDK in any `@switchboard/*` package.
 
 2. **Access model = public-read object + stable URL.** The assembled object is stored under
-   an **unguessable, deterministic-per-job key** (`creative-assets/<jobId>/assembled.mp4`; the
-   cuid2 `jobId` is the secret, so a stage retry re-uploads to the SAME key — idempotent
-   overwrite, no orphaned objects) in a bucket configured for **public read** at a CDN/custom-domain base URL.
+   a **deterministic-per-job key** (`creative-assets/<jobId>/assembled.mp4`; the opaque,
+   non-enumerable cuid `jobId` is the secret, so a stage retry re-uploads to the SAME key —
+   idempotent overwrite, no orphaned objects) in a bucket configured for **public read** at a CDN/custom-domain base URL.
    The stored `durableAssetUrl` is the **permanent** `"<CREATIVE_ASSET_PUBLIC_BASE_URL>/<key>"`.
    Rationale: it never expires (robust through Meta's multi-day review window + parked human
    approval), it works with #830's existing plain-`fetch` consumer **unchanged** (PR A stays
