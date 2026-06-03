@@ -291,3 +291,32 @@ describe("token governance — query-states layer carries no literal color", () 
     }
   });
 });
+
+// ─── EL1: elevation ladder ────────────────────────────────────────────────
+// A box-shadow value carrying a literal color (NOT a var() reference).
+const LITERAL_SHADOW_COLOR = /rgba?\(\s*[\d.]|hsl\(\s*[\d.]|#[0-9a-fA-F]{3,8}\b/;
+
+describe("token governance — elevation ladder single-source (EL1)", () => {
+  it("defines one warm shadow base as a dark-overridable raw triple", () => {
+    expect(tokenValue("shadow-color")).toMatch(RAW_HSL_TRIPLE);
+  });
+
+  it("the five ladder levels exist and carry no literal color", () => {
+    for (const n of [1, 2, 3, 4, 5]) {
+      const v = tokenValue(`shadow-${n}`);
+      expect(v, `--shadow-${n}`).toContain("var(--shadow-color)");
+      expect(v, `--shadow-${n}`).not.toMatch(LITERAL_SHADOW_COLOR);
+    }
+  });
+
+  it("semantic shadow tokens repoint at ladder levels (zero-churn)", () => {
+    expect(tokenValue("shadow-card")).toBe("var(--shadow-1)");
+    expect(tokenValue("shadow-lift")).toBe("var(--shadow-3)");
+  });
+
+  it("the directional sheet shadow shares the warm base, no literal color", () => {
+    const v = tokenValue("shadow-sheet");
+    expect(v).toContain("var(--shadow-color)");
+    expect(v).not.toMatch(LITERAL_SHADOW_COLOR);
+  });
+});
