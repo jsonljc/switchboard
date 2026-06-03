@@ -320,3 +320,52 @@ describe("token governance — elevation ladder single-source (EL1)", () => {
     expect(v).not.toMatch(LITERAL_SHADOW_COLOR);
   });
 });
+
+describe("token governance — no literal-color box-shadow outside globals.css (EL1)", () => {
+  const files = collectGovernedFiles();
+  const rel = (p: string) => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
+  // Blank /* ... */ comments but PRESERVE newlines so line numbers stay stable:
+  // the shadow-allow marker lives in a comment we must still be able to read.
+  const blankComments = (s: string): string =>
+    s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+  // A single spread-only ring (0 0 0 Npx <color>) is a focus ring / status halo
+  // / pulse, never elevation; exempt after collapsing color functions to a token.
+  const isRing = (value: string): boolean => {
+    const collapsed = value.replace(/(?:rgba?|hsl)\([^)]*\)/g, "C");
+    return !collapsed.includes(",") && /^\s*(?:inset\s+)?0\s+0\s+0\s+\S/.test(collapsed);
+  };
+
+  it("the ladder is the single source — no --shadow* token defined outside globals.css", () => {
+    const offenders: string[] = [];
+    for (const { path: p, content } of files) {
+      if (p.replace(/\\/g, "/").endsWith("src/app/globals.css")) continue;
+      for (const m of content.matchAll(/(--shadow[\w-]*)\s*:/g)) {
+        offenders.push(`${rel(p)}: ${m[1]}`);
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+
+  it("every box-shadow usage resolves to a token / none / ring, never a literal color", () => {
+    const offenders: string[] = [];
+    for (const { path: p, content: raw } of files) {
+      const scan = blankComments(raw);
+      const rawLines = raw.split("\n");
+      const decls = [
+        ...scan.matchAll(/box-shadow\s*:\s*([^;]+);/g),
+        ...scan.matchAll(/boxShadow\s*:\s*["']([^"']+)["']/g),
+      ];
+      for (const m of decls) {
+        const value = m[1].trim();
+        if (!LITERAL_SHADOW_COLOR.test(value)) continue; // token / var / none → ok
+        if (isRing(value)) continue; // focus ring / halo / pulse → not elevation
+        const lineNo = scan.slice(0, m.index ?? 0).split("\n").length - 1;
+        const marked = [rawLines[lineNo], rawLines[lineNo - 1]].some(
+          (l) => l != null && /shadow-allow:/.test(l),
+        );
+        if (!marked) offenders.push(`${rel(p)}: ${value.replace(/\s+/g, " ").slice(0, 90)}`);
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+});
