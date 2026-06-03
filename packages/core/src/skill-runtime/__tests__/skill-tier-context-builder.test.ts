@@ -67,35 +67,10 @@ describe("buildTierContext", () => {
     expect(result).toEqual({
       conversationDepth: 0,
       toolCount: 1,
-      hasHighRiskTools: false,
       previousTurnUsedTools: false,
       previousTurnEscalated: false,
       modelFloor: undefined,
     });
-  });
-
-  it("flags hasHighRiskTools when external_write tool is declared", () => {
-    const result = buildTierContext({
-      conversationDepth: 1,
-      declaredToolIds: ["crm-write"],
-      tools: externalWriteTools,
-      previousTurnHadToolUse: false,
-      previousTurnEscalated: false,
-    });
-
-    expect(result.hasHighRiskTools).toBe(true);
-  });
-
-  it("flags hasHighRiskTools when destructive tool is declared", () => {
-    const result = buildTierContext({
-      conversationDepth: 1,
-      declaredToolIds: ["crm-delete"],
-      tools: destructiveTools,
-      previousTurnHadToolUse: false,
-      previousTurnEscalated: false,
-    });
-
-    expect(result.hasHighRiskTools).toBe(true);
   });
 
   it("passes previousTurnUsedTools through", () => {

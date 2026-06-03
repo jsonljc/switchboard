@@ -856,8 +856,8 @@ describe("SkillExecutorImpl", () => {
     }),
   });
 
-  // An Alex-shaped tool map: a single high-risk tool (external_mutation) so
-  // buildTierContext's hasHighRiskTools is true and toolCount > 0.
+  // An Alex-shaped tool map: a single tool (external_mutation) so the tier
+  // context's toolCount > 0 — the depth re-key needs a tool-bearing skill.
   const alexLikeTools = (): Map<string, SkillTool> =>
     new Map<string, SkillTool>([
       [

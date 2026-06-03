@@ -32,7 +32,6 @@ export interface TierContext {
    *  intra-invocation LLM-loop counter (T2.9 fix). */
   conversationDepth: number;
   toolCount: number;
-  hasHighRiskTools: boolean;
   previousTurnUsedTools: boolean;
   previousTurnEscalated: boolean;
   modelFloor?: ModelSlot;

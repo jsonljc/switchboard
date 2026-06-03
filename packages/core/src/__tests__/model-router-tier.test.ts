@@ -9,7 +9,6 @@ describe("ModelRouter.resolveTier", () => {
     return {
       conversationDepth: 5,
       toolCount: 1,
-      hasHighRiskTools: false,
       previousTurnUsedTools: false,
       previousTurnEscalated: false,
       modelFloor: undefined,
@@ -18,21 +17,15 @@ describe("ModelRouter.resolveTier", () => {
   }
 
   it("routes a first-contact greeting to default (Haiku)", () => {
-    expect(
-      router.resolveTier(ctx({ conversationDepth: 1, toolCount: 4, hasHighRiskTools: true })),
-    ).toBe("default");
+    expect(router.resolveTier(ctx({ conversationDepth: 1, toolCount: 4 }))).toBe("default");
   });
 
   it("routes a deep engaged tool-bearing turn to premium (Sonnet), NOT default", () => {
-    expect(
-      router.resolveTier(ctx({ conversationDepth: 6, toolCount: 4, hasHighRiskTools: true })),
-    ).toBe("premium");
+    expect(router.resolveTier(ctx({ conversationDepth: 6, toolCount: 4 }))).toBe("premium");
   });
 
   it("a tool-less skill stays default even when deep", () => {
-    expect(
-      router.resolveTier(ctx({ conversationDepth: 6, toolCount: 0, hasHighRiskTools: false })),
-    ).toBe("default");
+    expect(router.resolveTier(ctx({ conversationDepth: 6, toolCount: 0 }))).toBe("default");
   });
 
   it("escalation raises to critical at any depth", () => {
