@@ -398,8 +398,17 @@ export class PlatformLifecycle {
     const completedAt = new Date().toISOString();
 
     const orgId = (envelope?.proposals[0]?.parameters["_organizationId"] as string) ?? null;
+    // A "queued" outcome means the handler successfully handed the action off to async
+    // execution (e.g. an Inngest pipeline); it is a success, not a failure. Map it to the
+    // dedicated "queued" / action.queued records. Only an explicit "failed" outcome is a
+    // failure here. (Previously every non-"completed" outcome was mislabeled
+    // "failed"/action.failed, which mis-logged the spend-gated creative.job.continue path
+    // and every approved creative.job.publish.)
+    const outcome = executionResult.outcome;
+    const succeeded = outcome === "completed" || outcome === "queued";
     if (envelope) {
-      const newStatus = executionResult.outcome === "completed" ? "executed" : "failed";
+      const newStatus =
+        outcome === "queued" ? "queued" : outcome === "completed" ? "executed" : "failed";
       await envelopeStore.update(workUnitId, { status: newStatus }, orgId);
     }
 
@@ -436,7 +445,12 @@ export class PlatformLifecycle {
     }
 
     await ledger.record({
-      eventType: executionResult.outcome === "completed" ? "action.executed" : "action.failed",
+      eventType:
+        outcome === "queued"
+          ? "action.queued"
+          : outcome === "completed"
+            ? "action.executed"
+            : "action.failed",
       actorType: "system",
       actorId: "platform",
       entityType: "action",
@@ -452,7 +466,7 @@ export class PlatformLifecycle {
     });
 
     return {
-      success: executionResult.outcome === "completed",
+      success: succeeded,
       summary: executionResult.summary,
       externalRefs: (executionResult.outputs.externalRefs as Record<string, string>) ?? {},
       rollbackAvailable: false,
