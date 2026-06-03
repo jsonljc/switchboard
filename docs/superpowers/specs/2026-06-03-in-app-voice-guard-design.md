@@ -4,6 +4,8 @@ Date: 2026-06-03
 Status: design (for implementation on a separate branch)
 Source of truth: `docs/audits/2026-06-02-ui-ux-feel-audit/direction.md` §6 "The voice and copy layer", §5 "Failure and empty states", principles I ("tell the truth at the commit moment") and VII ("honest when it fails"), and Wave 1 item 5 ("write the voice spec + extend the no-banned-claims guard into the app").
 
+> Implementation update (post-adversarial-review). The shipped guard parses each corpus file with the TypeScript compiler and scans only extracted copy nodes (string literals, template-literal text, JSX text), rather than the hand-rolled comment-stripper and word-adjacency regex described in sections 3a, 5, and 9 below. An adversarial Codex review found the stripper-plus-regex approach could miss a dynamic em-dash connector built from interpolations and could misparse JSX URLs and template-interpolation comments. The compiler-based extraction resolves both at the root (so the section 9 comment-stripper risks no longer apply), and `agent-panel/open-decisions.tsx` was added to the corpus and de-em-dashed. The corpus, rules, and voice decisions below are otherwise as shipped.
+
 ## 1. Goal
 
 So much of the product's trust thesis rides on words. Today that honest voice lives implicitly in a few strong surfaces (`states.tsx`, `risk-chips.ts`, `activity-voice.ts`, `work-log.tsx`) and is re-litigated every PR. V1 does two things:
@@ -27,6 +29,7 @@ Two read-only audit subagents swept `apps/dashboard/src` (excluding the marketin
 **Attribution verbs.** Zero true "generated" attribution violations exist in user-visible copy. The honest verb convention (handled / booked / attributed / assisted) is mature and centralized in the agent-panel and Results surfaces. There are four borderline in-progress uses of the `generate` stem in Mira copy (status, not attribution) and a few acceptable uses (report timestamps, legal copy, a Meta UI instruction).
 
 **Prior art.** The repo already has the house pattern for copy guards:
+
 - `components/landing/v6/__tests__/no-banned-claims.test.ts`: per-pattern `it()` blocks scanning a corpus line by line, throwing with `file:line` offenders.
 - `__tests__/cockpit-copy-hygiene.test.ts`: walks `components/cockpit` + `lib/cockpit`, substring-scans for banned phrases.
 - `components/cockpit/__tests__/mira-copy-hygiene.test.tsx`: scans a curated SOURCES file list for forbidden regexes.
@@ -86,6 +89,7 @@ This is a narrow exemption (three specific editorial conventions), not the wide 
 The open Wave-0 stack (#814 to #827) is unmerged on `main`. The "Money at risk: —" placeholder grid is still live on `main` (Wave-0 #821 deletes it). A guard that banned em-dash placeholders would red on current `main`.
 
 Mitigations, all verified:
+
 - The guard is a brand-new test file (additive). It introduces no merge conflict with any Wave-0 PR.
 - The corpus excludes every Wave-0-touched file. Verified by `gh pr diff --name-only` for #816/#818/#821/#822/#823/#824/#827: the union is `inbox-screen.tsx`, `approval-detail-sheet.tsx`, `inbox-decision-item.tsx`, `needs-you-card.tsx`, `use-recommendation-action.ts`, `use-queue-clear-metric.ts`, `use-toast.ts`, `undo-toast.tsx`, `compose-verdict.ts`, `globals.css`, `test-center.tsx`. None are in the corpus or the copy-fix set.
 - R1 (word-adjacent em-dash) does not flag the lone `"—"` placeholder, so even if a placeholder surface were ever added to the corpus, it would not red.
