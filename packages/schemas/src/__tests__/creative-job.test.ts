@@ -157,3 +157,19 @@ describe("CreativeJobSchema meta-publish fields", () => {
     expect(job.durableAssetUrl).toBe("https://cdn.example.com/a.mp4");
   });
 });
+
+describe("VideoProducerOutput.durableAssetUrl", () => {
+  it("accepts an optional durableAssetUrl", () => {
+    const parsed = VideoProducerOutput.parse({
+      tier: "pro",
+      clips: [],
+      durableAssetUrl: "https://cdn.example.com/creative-assets/job_1/u.mp4",
+    });
+    expect(parsed.durableAssetUrl).toBe("https://cdn.example.com/creative-assets/job_1/u.mp4");
+  });
+
+  it("treats durableAssetUrl as optional", () => {
+    const parsed = VideoProducerOutput.parse({ tier: "basic", clips: [] });
+    expect(parsed.durableAssetUrl).toBeUndefined();
+  });
+});

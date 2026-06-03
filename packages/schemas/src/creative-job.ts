@@ -167,6 +167,7 @@ export const VideoProducerOutput = z.object({
       }),
     )
     .optional(),
+  durableAssetUrl: z.string().optional(),
 });
 export type VideoProducerOutput = z.infer<typeof VideoProducerOutput>;
 
