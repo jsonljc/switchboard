@@ -471,6 +471,7 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
         reasonCode: "governance_unavailable",
       }),
     );
+    expect(result.response).toBe(""); // genuine resolver error with no cached posture → fail-closed blank
   });
 
   it("uses cached posture when resolver errors", async () => {

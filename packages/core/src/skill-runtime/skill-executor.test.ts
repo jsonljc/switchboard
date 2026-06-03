@@ -1045,7 +1045,7 @@ describe("SkillExecutorImpl — afterSkill governance seam", () => {
     expect(result.response).toBe("raw reply");
   });
 
-  it("fail-open: an afterSkill hook that throws does not crash the turn or blank the reply", async () => {
+  it("fail-closed: a throwing afterSkill hook rejects the turn (skill-mode then sends the neutral fallback, never ungated text)", async () => {
     const adapter = createMockAdapter([
       { content: [{ type: "text", text: "raw reply" }], stop_reason: "end_turn" },
     ]);
@@ -1057,8 +1057,25 @@ describe("SkillExecutorImpl — afterSkill governance seam", () => {
     };
     const executor = new SkillExecutorImpl(adapter, new Map(), undefined, [throwingHook]);
 
+    // The gate throw propagates to the turn's error path; the lead never gets the raw "raw reply".
+    await expect(executor.execute(execParams)).rejects.toThrow("gate bug");
+  });
+
+  it("refreshes result.trace.responseSummary after a gate mutation (no pre-block text in the canonical trace)", async () => {
+    const adapter = createMockAdapter([
+      { content: [{ type: "text", text: "raw reply" }], stop_reason: "end_turn" },
+    ]);
+    const blockingHook = {
+      name: "blocking",
+      afterSkill: async (_ctx: SkillHookContext, result: SkillExecutionResult) => {
+        result.response = "[blocked: connecting you with our team]";
+      },
+    };
+    const executor = new SkillExecutorImpl(adapter, new Map(), undefined, [blockingHook]);
+
     const result = await executor.execute(execParams);
 
-    expect(result.response).toBe("raw reply"); // swallowed, fail-open
+    expect(result.response).toBe("[blocked: connecting you with our team]");
+    expect(result.trace.responseSummary).toBe("[blocked: connecting you with our team]");
   });
 });

@@ -465,20 +465,24 @@ export class SkillExecutorImpl implements SkillExecutor {
           // Governance afterSkill gates (banned-phrase / claim / PDPA / WhatsApp-window).
           // Wired here — AFTER result assembly, BEFORE the isolated trace recorder — so any
           // in-place result.response mutation (enforce-mode block/rewrite/handoff) is reflected
-          // in BOTH the returned reply and the persisted ExecutionTrace (the trace recorder reads
-          // `result` by reference), preserving the "trace never sees pre-block unsafe text"
-          // invariant the bootstrap relies on. Fail-OPEN on an unexpected gate throw: a governance
-          // logic bug must never crash a lead turn. Each gate already fails CLOSED internally
-          // (posture cache) for the resolver-unavailable case; this guard is for logic bugs only.
-          // With no governanceConfig seeded today, every gate early-returns → inert in prod.
-          try {
-            await runAfterSkillHooks(this.hooks, hookCtx, result);
-          } catch (e: unknown) {
-            console.warn(
-              "[SkillExecutor] afterSkill governance hook threw (swallowed, fail-open):",
-              e instanceof Error ? e.message : String(e),
-            );
-          }
+          // in the returned reply AND every downstream trace consumer, preserving the
+          // "trace never sees pre-block unsafe text" invariant the bootstrap relies on.
+          //
+          // FAIL-CLOSED: this is deliberately NOT wrapped in a swallowing try/catch. An
+          // unexpected gate throw propagates to the turn's error path (the catch below re-throws
+          // the original error), so skill-mode emits the neutral fallback and the lead NEVER
+          // receives ungated text. Swallowing here could leak pre-block text if a gate threw
+          // mid-decision in enforce mode. The gates already fail CLOSED internally (posture cache)
+          // for the resolver-unavailable case, so an escaping throw is a genuine logic bug and
+          // failing the turn is the safe response. With no governanceConfig seeded today every
+          // gate early-returns → inert in prod (byte-identical).
+          await runAfterSkillHooks(this.hooks, hookCtx, result);
+
+          // Keep the canonical WorkTrace summary consistent with any in-place gate mutation:
+          // skill-mode persists result.trace.responseSummary (stamped pre-gate above), so a
+          // blocked/rewritten turn must refresh it or the canonical trace records pre-block text.
+          // No-op when no gate mutated (it already equals result.response.slice(0, 500)).
+          result.trace.responseSummary = result.response.slice(0, 500);
 
           // Isolated telemetry recorder — a SEPARATE arg (not in the `hooks` array), invoked
           // directly AFTER the governance gates above so it records the post-gate result.
