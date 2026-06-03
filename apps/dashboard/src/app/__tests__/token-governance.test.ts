@@ -418,3 +418,68 @@ describe("token governance — Tailwind shadow utilities use the ladder (EL1)", 
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
 });
+
+describe("token governance — paper grain (GR1)", () => {
+  // First (base) body:has(.app-header) rule. The dark + reduced-motion off rules
+  // come later in source, so .match returns the base rule with the grain layer.
+  const grainRule = (): string => {
+    const m = css.match(/body:has\(\.app-header\)\s*\{([^}]*)\}/);
+    expect(m, "body:has(.app-header) rule must exist").not.toBeNull();
+    return m![1];
+  };
+
+  it("blends a warm-riso grain into the canvas via background-blend-mode multiply", () => {
+    const decl = grainRule();
+    expect(decl).toMatch(/background-blend-mode:\s*multiply/);
+    expect(decl).toMatch(/background-image:\s*url\("data:image\/svg\+xml,/);
+    expect(decl).toMatch(/background-size:\s*200px 200px/);
+  });
+
+  it("paints the exact spec grain, not an empty or placeholder layer", () => {
+    const decl = grainRule();
+    expect(decl).toContain("feTurbulence");
+    expect(decl).toContain("feColorMatrix");
+    expect(decl).toContain("baseFrequency%3D%220.88%22");
+    expect(decl).toContain("filter%3D%22url(%23g)%22");
+  });
+
+  it("bakes the grain intensity within the calibrated subtle band", () => {
+    // The feColorMatrix alpha row scalar is the grain's intensity knob. Guard a
+    // subtle band so an accidental heavy value (e.g. the spec's literal 0.85,
+    // which reads as a gray cast and dents canvas-text contrast) is caught, while
+    // fine tuning inside the calibrated 0.22 to 0.28 sweet spot stays green.
+    const m = grainRule().match(/feColorMatrix[^>]*?values%3D%22(.+?)%22%2F%3E/);
+    expect(m, "feColorMatrix values must be present in the grain data URI").not.toBeNull();
+    const nums = decodeURIComponent(m![1]).trim().split(/\s+/).map(Number);
+    expect(nums).toHaveLength(20); // a 4x5 color matrix
+    const alpha = nums[18]; // row 4 (alpha out), column 4 = coefficient on input alpha
+    expect(alpha).toBeGreaterThanOrEqual(0.12);
+    expect(alpha).toBeLessThanOrEqual(0.32);
+  });
+
+  it("keeps the canvas rule free of raw hex (ink lives in feColorMatrix decimals)", () => {
+    expect(grainRule()).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+
+  it("disables the grain in dark and under reduced motion (cream stays)", () => {
+    expect(css).toMatch(/\.dark\s+body:has\(\.app-header\)\s*\{\s*background-image:\s*none/);
+    expect(css).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*body:has\(\.app-header\)\s*\{\s*background-image:\s*none/,
+    );
+  });
+
+  it("Results money cards are opaque so grain never sits behind money data", () => {
+    const resultsCss = readFileSync(
+      path.resolve(process.cwd(), "src/components/results/results.module.css"),
+      "utf8",
+    );
+    for (const sel of ["campaignCard", "agentCard"]) {
+      const rule = resultsCss.match(new RegExp(`\\.${sel}\\s*\\{([^}]*)\\}`));
+      expect(rule, `.${sel} rule must exist`).not.toBeNull();
+      expect(rule![1], `.${sel} must not be transparent`).not.toMatch(/background:\s*transparent/);
+      expect(rule![1], `.${sel} must carry an opaque ground`).toMatch(
+        /background:\s*var\(--canvas-2\)/,
+      );
+    }
+  });
+});
