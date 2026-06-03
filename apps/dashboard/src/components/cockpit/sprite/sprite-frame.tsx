@@ -26,7 +26,7 @@ function frameStyle(size: number, accentSoft: string): CSSProperties {
     display: "grid",
     placeItems: "center",
     flexShrink: 0,
-    boxShadow: "inset 0 -8px 14px rgba(14,12,10,0.04)",
+    boxShadow: "inset 0 -8px 14px hsl(var(--shadow-color) / 0.04)",
     overflow: "hidden",
   };
 }
