@@ -121,3 +121,25 @@ export function useUpdateConnection() {
     },
   });
 }
+
+export function useSetMetaPageId() {
+  const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
+  return useMutation({
+    mutationFn: async ({ id, pageId }: { id: string; pageId: string }) => {
+      const res = await fetch(`/api/dashboard/connections/${id}/meta-page-id`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to set Facebook Page id");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      if (keys) queryClient.invalidateQueries({ queryKey: keys.connections.all() });
+    },
+  });
+}
