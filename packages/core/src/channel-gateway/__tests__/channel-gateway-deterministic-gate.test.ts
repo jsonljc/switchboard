@@ -33,6 +33,10 @@ import type { ChannelGatewayConfig, IncomingChannelMessage } from "../types.js";
 import { InMemoryGovernancePostureCache } from "../../governance/posture-cache.js";
 import type { GovernanceConfigResolver } from "../../governance/governance-config-resolver.js";
 import type { EscalationTriggerEntry } from "../../governance/escalation-triggers/types.js";
+import {
+  loadEscalationTriggers,
+  _resetEscalationTriggerCache,
+} from "../../governance/escalation-triggers/index.js";
 import type { SaveGovernanceVerdictInput } from "../../governance/governance-verdict-store/types.js";
 
 // ---------------------------------------------------------------------------
@@ -752,5 +756,86 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     expect(submitSpy).not.toHaveBeenCalled();
     // Second send was not called (no reply sent for suppressed message)
     expect(sendSpy2).not.toHaveBeenCalled();
+  });
+});
+
+describe("ChannelGateway — freeze-gate live path (real triggers)", () => {
+  let postureCache: InMemoryGovernancePostureCache;
+  let verdictStore: VerdictStoreSpy;
+  let handoffStore: HandoffStoreSpy;
+  let statusSetter: StatusSetterSpy;
+  let sendSpy: Spy;
+  let submitSpy: Spy;
+
+  beforeEach(() => {
+    _resetEscalationTriggerCache();
+    postureCache = new InMemoryGovernancePostureCache();
+    verdictStore = makeVerdictStore();
+    handoffStore = makeHandoffStore();
+    statusSetter = makeStatusSetter();
+    sendSpy = vi.fn().mockResolvedValue(undefined);
+    submitSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outcome: "completed", outputs: { response: "Hello from agent" }, summary: "ok" },
+      workUnit: { id: "wu-1", traceId: "trace-1" },
+    });
+  });
+
+  function sgEnforceConfig() {
+    const resolver: GovernanceConfigResolver = vi.fn().mockResolvedValue({
+      status: "resolved",
+      config: { jurisdiction: "SG", clinicType: "medical", deterministicGate: { mode: "enforce" } },
+    });
+    return makeGatewayConfig(
+      {
+        resolver,
+        verdictStore,
+        postureCache,
+        handoffStore,
+        statusSetter,
+        triggerLoader: (j: "SG" | "MY") => loadEscalationTriggers(j),
+      },
+      { platformIngress: { submit: submitSpy } },
+    );
+  }
+
+  it("T1.5: a self-disclosed minor escalates through the real gate", async () => {
+    const gw = new ChannelGateway(sgEnforceConfig());
+    await gw.handleIncoming(
+      {
+        channel: "web_widget",
+        token: "tok",
+        sessionId: "sess-1",
+        text: "hi I'm 16, can I get fillers?",
+      },
+      { send: sendSpy },
+    );
+    expect(submitSpy).not.toHaveBeenCalled();
+    expect(verdictStore.save).toHaveBeenCalledOnce();
+    const v = verdictStore.save.mock.calls[0]![0] as SaveGovernanceVerdictInput;
+    expect(v.action).toBe("escalate");
+    expect(v.reasonCode).toBe("sensitive_inbound");
+    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
+      channel: "web_widget",
+      principalId: "visitor-sess-1",
+    });
+    expect(handoffStore.save).toHaveBeenCalledOnce();
+    expect(sendSpy.mock.calls[0]![0]).toContain(SG_HANDOFF_SUBSTRING);
+  });
+
+  it("T1.2a: bare aesthetic anxiety does NOT escalate through the real gate", async () => {
+    const gw = new ChannelGateway(sgEnforceConfig());
+    await gw.handleIncoming(
+      {
+        channel: "web_widget",
+        token: "tok",
+        sessionId: "sess-1",
+        text: "I'm so anxious about how I'll look after",
+      },
+      { send: sendSpy },
+    );
+    expect(submitSpy).toHaveBeenCalled();
+    expect(verdictStore.save).not.toHaveBeenCalled();
+    expect(statusSetter.setConversationStatus).not.toHaveBeenCalled();
   });
 });
