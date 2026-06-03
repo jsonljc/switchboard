@@ -160,6 +160,17 @@ export const UpdateConnectionBodySchema = z.object({
   scopes: z.array(z.string().max(200)).max(50).optional(),
 });
 
+// Setter for the Facebook Page id stored in a meta-ads connection's credentials.
+// Meta ad `page_id` requires the numeric Page ID (a vanity username will not work);
+// the 5–32 digit bound rejects trivial typos. Format is a sanity check — the
+// human-gated publish step is the ultimate validator.
+export const SetMetaPageIdBodySchema = z.object({
+  pageId: z
+    .string()
+    .trim()
+    .regex(/^\d{5,32}$/, "Facebook Page id must be the numeric Page ID (digits only)."),
+});
+
 // ── Governance ──────────────────────────────────────────────────────
 
 export const SetGovernanceProfileBodySchema = z.object({
