@@ -69,13 +69,13 @@ export function ConnectionTrouble({
       role="alert"
       label="Connection problem"
       title={`I can't reach ${agentName} right now.`}
-      body="Nothing you've approved is lost — I'll keep trying."
+      body="Nothing you've approved is lost. I'll keep trying."
     >
       {onRetry ? (
         <button
           type="button"
           onClick={onRetry}
-          className="mt-2 text-[hsl(var(--action))] text-sm font-medium underline underline-offset-2"
+          className="mt-2 text-action text-sm font-medium underline underline-offset-2"
         >
           Try again
         </button>
@@ -84,17 +84,7 @@ export function ConnectionTrouble({
   );
 }
 
-/** §5: designed empty / all-clear — completion as reward, never a dead-account blank. */
+/** §5: designed empty / all-clear. Completion as reward, never a dead-account blank. */
 export function AllClear({ sub }: { sub?: string }) {
   return <StatePanel title="You're all caught up." body={sub ?? "Your team is on top of it."} />;
-}
-
-/** §5: agent halted / paused — not an empty feed that looks broken. */
-export function AgentPaused({ agentName = "Your team" }: StateProps) {
-  return (
-    <StatePanel
-      title={`${agentName} is paused.`}
-      body="Resume when you're ready — nothing new will go out until you do."
-    />
-  );
 }

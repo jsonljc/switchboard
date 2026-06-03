@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { ConnectionTrouble, AllClear, AgentPaused } from "./states";
+import { ConnectionTrouble, AllClear } from "./states";
 
 afterEach(cleanup);
 
@@ -47,14 +47,5 @@ describe("AllClear", () => {
   it("override sub-line", () => {
     render(<AllClear sub="Nothing waiting from Mira." />);
     expect(screen.getByText(/nothing waiting from mira/i)).toBeInTheDocument();
-  });
-});
-
-describe("AgentPaused", () => {
-  it("names the agent + nothing-goes-out copy", () => {
-    render(<AgentPaused agentName="Mira" />);
-    expect(screen.getByText(/Mira is paused/i)).toBeInTheDocument();
-    expect(screen.getByText(/nothing new will go out/i)).toBeInTheDocument();
-    expect(screen.getByRole("status")).toBeInTheDocument();
   });
 });

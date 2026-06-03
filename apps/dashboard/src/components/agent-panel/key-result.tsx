@@ -47,7 +47,10 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   // is skipped then. Derive "still pending" from {data, error} via
   // resolveQueryState so keys-pending (no data, no real error yet) also counts
   // as loading; only proceed to selectKeyResult once each hook has resolved
-  // data or a real error.
+  // data or a real error. We use the resolver here, NOT the <QueryStates>
+  // component, on purpose: the post-loading states below (paused / activation /
+  // proof / error) are domain-specific, not a generic empty/data split. Do not
+  // "finish the migration" by wrapping this slot in <QueryStates>.
   const stillPending =
     resolveQueryState({ data: all.data, error: all.isError ? all.error : null }).status ===
       "loading" ||
