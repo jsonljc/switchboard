@@ -535,8 +535,29 @@
    legacy pages keep their existing background. */
 @layer components {
   body:has(.app-header) {
-    background: var(--ambient-cream, hsl(40 25% 94%));
-    transition: background 1200ms cubic-bezier(0.4, 0, 0.2, 1);
+    background-color: var(--ambient-cream, hsl(40 25% 94%));
+    /* Warm-riso paper grain (spec 2026-06-04-paper-grain-canvas): a second
+       background layer multiplied into the cream. background-blend-mode blends
+       only the body's own background layers, never child content, so cards, text,
+       the masthead, and the inbox detail sheet are untouched and the grain shows
+       only on the bare canvas. Intensity is the calibrated feColorMatrix alpha
+       (0.24) baked into the data URI; no raw hex (the #filter ref is encoded %23). */
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Cfilter%20id%3D%22g%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.88%22%20numOctaves%3D%222%22%20stitchTiles%3D%22stitch%22%20seed%3D%227%22%2F%3E%3CfeColorMatrix%20type%3D%22matrix%22%20values%3D%220%200%200%200%200.16%200%200%200%200%200.13%200%200%200%200%200.09%200%200%200%200.24%200%22%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20filter%3D%22url(%23g)%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: repeat;
+    background-size: 200px 200px;
+    background-blend-mode: multiply;
+    transition: background-color 1200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  /* Grain is a light-mode-only signature: drop the grain layer, keep the cream. */
+  .dark body:has(.app-header) {
+    background-image: none;
+  }
+  /* Reduced motion strips the texture too (spec). The static texture needs its own
+     disable; the global reduced-motion block only neutralizes animation timings. */
+  @media (prefers-reduced-motion: reduce) {
+    body:has(.app-header) {
+      background-image: none;
+    }
   }
 
   /* ===== Editorial auth shell header ===== */

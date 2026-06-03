@@ -418,3 +418,39 @@ describe("token governance — Tailwind shadow utilities use the ladder (EL1)", 
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
 });
+
+describe("token governance — paper grain (GR1)", () => {
+  // First (base) body:has(.app-header) rule. The dark + reduced-motion off rules
+  // come later in source, so .match returns the base rule with the grain layer.
+  const grainRule = (): string => {
+    const m = css.match(/body:has\(\.app-header\)\s*\{([^}]*)\}/);
+    expect(m, "body:has(.app-header) rule must exist").not.toBeNull();
+    return m![1];
+  };
+
+  it("blends a warm-riso grain into the canvas via background-blend-mode multiply", () => {
+    const decl = grainRule();
+    expect(decl).toMatch(/background-blend-mode:\s*multiply/);
+    expect(decl).toMatch(/background-image:\s*url\("data:image\/svg\+xml,/);
+    expect(decl).toMatch(/background-size:\s*200px 200px/);
+  });
+
+  it("paints the exact spec grain, not an empty or placeholder layer", () => {
+    const decl = grainRule();
+    expect(decl).toContain("feTurbulence");
+    expect(decl).toContain("feColorMatrix");
+    expect(decl).toContain("baseFrequency%3D%220.88%22");
+    expect(decl).toContain("filter%3D%22url(%23g)%22");
+  });
+
+  it("keeps the canvas rule free of raw hex (ink lives in feColorMatrix decimals)", () => {
+    expect(grainRule()).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+
+  it("disables the grain in dark and under reduced motion (cream stays)", () => {
+    expect(css).toMatch(/\.dark\s+body:has\(\.app-header\)\s*\{\s*background-image:\s*none/);
+    expect(css).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*body:has\(\.app-header\)\s*\{\s*background-image:\s*none/,
+    );
+  });
+});
