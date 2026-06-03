@@ -191,6 +191,13 @@ describe("AuditRunner PR2 Gate-4 per-campaign target", () => {
     expect(deps.insightsProvider.getTargetBreachStatus).toHaveBeenCalledWith(
       expect.objectContaining({ campaignId: "c2", targetCPA: 14 }),
     );
+    // c2 fell below its booking floor (2 < 10) → any rec it produces must carry
+    // the account fallback (vacuously true if c2 produces none — never fragile).
+    expect(
+      report.recommendations
+        .filter((r) => r.campaignId === "c2")
+        .every((r) => r.targetSource === "account"),
+    ).toBe(true);
   });
 
   it("falls back to the account target (Tier-2) for a campaign below the booking floor and stamps targetSource=account", async () => {
