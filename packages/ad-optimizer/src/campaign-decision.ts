@@ -7,6 +7,7 @@ import type {
   EconomicTierSchema as EconomicTier,
   MarginBasisSchema as MarginBasis,
   TargetBreachResult,
+  TargetSourceSchema as TargetSource,
 } from "@switchboard/schemas";
 import { comparePeriods, type MetricSet } from "./period-comparator.js";
 import { diagnose } from "./metric-diagnostician.js";
@@ -83,7 +84,7 @@ export interface CampaignDecisionInput {
    * fallback ("account", Tier-2). Forwarded to applyTier so each surviving rec is
    * stamped for operator visibility. `undefined` ⇒ unstamped (back-compat).
    */
-  targetSource?: "campaign" | "account";
+  targetSource?: TargetSource;
 }
 
 export interface CampaignDecisionResult {

@@ -5,6 +5,7 @@ import type {
   RecommendationOutputSchema as RecommendationOutput,
   UrgencySchema as Urgency,
   WatchOutputSchema as WatchOutput,
+  TargetSourceSchema as TargetSource,
 } from "@switchboard/schemas";
 
 // ── Tunable thresholds (spec §5; defaults, not magic constants buried in logic) ──
@@ -92,7 +93,7 @@ export interface ApplyTierInput {
   /** PR2 Gate-4: which tier the judged target came from (campaign Tier-1 /
    * account Tier-2). Stamped onto the surviving recommendation for operator
    * visibility. `undefined` ⇒ field omitted (back-compat). */
-  targetSource?: "campaign" | "account";
+  targetSource?: TargetSource;
 }
 
 export interface TieredResult {
@@ -196,7 +197,7 @@ export interface PerCampaignEconomicTargetInput {
 }
 
 export interface PerCampaignEconomicTarget extends ResolvedEconomicTarget {
-  targetSource: "campaign" | "account";
+  targetSource: TargetSource;
 }
 
 /**

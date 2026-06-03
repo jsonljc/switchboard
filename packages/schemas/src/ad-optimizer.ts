@@ -40,6 +40,12 @@ export type EconomicTierSchema = z.infer<typeof EconomicTierSchema>;
 export const MarginBasisSchema = z.enum(["configured", "unavailable"]);
 export type MarginBasisSchema = z.infer<typeof MarginBasisSchema>;
 
+// PR2 Gate-4: which tier the judged target came from (campaign Tier-1 / account
+// Tier-2). Named like its sibling enums above so the union is defined once and
+// reused (recommendation schema + ad-optimizer types + eval), not re-inlined.
+export const TargetSourceSchema = z.enum(["campaign", "account"]);
+export type TargetSourceSchema = z.infer<typeof TargetSourceSchema>;
+
 // Structured, single-source-of-truth learning-reset class for a recommendation's
 // action (Phase-A spec §5). Derived from ACTION_RESETS_LEARNING in @switchboard/
 // ad-optimizer; replaces the free-text `learningPhaseImpact` as the governing field.
@@ -206,7 +212,7 @@ export const RecommendationOutputSchema = z.object({
   // PR2 (Gate-4): which tier the judged target came from — the campaign's own
   // booking-calibrated CAC ("campaign", Tier-1) or the account-level fallback
   // ("account", Tier-2). Optional for back-compat; stamped by applyTier.
-  targetSource: z.enum(["campaign", "account"]).optional(),
+  targetSource: TargetSourceSchema.optional(),
 });
 export type RecommendationOutputSchema = z.infer<typeof RecommendationOutputSchema>;
 
