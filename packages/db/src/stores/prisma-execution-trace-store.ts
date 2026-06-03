@@ -14,7 +14,14 @@ interface ExecutionTraceInput {
   inputParametersHash: string;
   toolCalls: unknown[];
   governanceDecisions: unknown[];
-  tokenUsage: { input: number; output: number };
+  tokenUsage: {
+    input: number;
+    output: number;
+    cacheRead?: number;
+    cacheCreation?: number;
+    costUsd?: number;
+    model?: string;
+  };
   durationMs: number;
   turnCount: number;
   status: string;

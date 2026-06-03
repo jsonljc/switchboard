@@ -173,7 +173,14 @@ export interface SkillExecutionTrace {
   inputParametersHash: string;
   toolCalls: ToolCallRecord[];
   governanceDecisions: GovernanceLogEntry[];
-  tokenUsage: { input: number; output: number };
+  tokenUsage: {
+    input: number;
+    output: number;
+    cacheRead?: number;
+    cacheCreation?: number;
+    costUsd?: number;
+    model?: string;
+  };
   durationMs: number;
   turnCount: number;
   status: "success" | "error" | "budget_exceeded" | "denied";
@@ -235,6 +242,12 @@ export interface SkillHookContext {
   sessionId: string;
   trustLevel: "supervised" | "guided" | "autonomous";
   trustScore: number;
+  /**
+   * Stable hash of the invocation's input parameters. Persisted on the execution
+   * trace by the telemetry recorder (TracePersistenceHook). Built once per
+   * `execute()` by the executor and threaded through the hook context.
+   */
+  inputParametersHash?: string;
 }
 
 export interface LlmCallContext {
