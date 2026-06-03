@@ -23,7 +23,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = join(__dirname, "fixtures");
 const SR_FIXTURES_DIR = join(FIXTURES_DIR, "source-reallocation");
 
-function main(): void {
+async function main(): Promise<void> {
   const cases = loadRileyCases(FIXTURES_DIR);
   console.warn(`Loaded ${cases.length} Riley recommendation cases from ${FIXTURES_DIR}`);
 
@@ -58,7 +58,7 @@ function main(): void {
   const srCases = loadSourceReallocationCases(SR_FIXTURES_DIR);
   console.warn(`Loaded ${srCases.length} source-reallocation cases from ${SR_FIXTURES_DIR}`);
   for (const c of srCases) {
-    const decision = decideSourceReallocationForCase(c);
+    const decision = await decideSourceReallocationForCase(c);
     if (decision.outcome !== c.expectedOutcome) {
       mismatches.push(`${c.id}: expected ${c.expectedOutcome}, got ${decision.outcome}`);
     }
@@ -80,4 +80,7 @@ function main(): void {
   );
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
