@@ -15,7 +15,7 @@ This is **PR1 of a two-PR activation**. It **arms** the dormant governance seam 
 
 1. **Wire the seam.** Call `runAfterSkillHooks(this.hooks, hookCtx, result)` in the live `SkillExecutorImpl.execute()` at the afterSkill point — immediately after the `result` is assembled and **before** the fire-and-forget execution-trace recorder, so a gate's in-place `result.response` mutation is reflected in both the returned reply and the persisted trace.
 2. **WhatsApp gate missing-safe fix (the merge-blocker).** `WhatsAppWindowGateHook` currently maps `status:"missing"` → `null` → an **unconditional `result.response = ""` blank on every channel**. Fix it to treat `missing` (and "resolved-but-no `whatsappWindow` block") as a clean no-op, matching the three sibling gates. Without this, wiring the seam blanks every Alex reply in prod.
-3. **Call-site fail-open.** Wrap the `runAfterSkillHooks` call so an unexpected gate throw cannot crash the lead turn (log-and-swallow). The gates already implement their own fail-closed semantics internally via the posture cache; this guards only against logic bugs.
+3. **Call-site fail-closed.** Do **not** swallow a gate throw: let it propagate to the turn's error path so skill-mode emits the neutral fallback (the lead never sees ungated text). Also refresh `result.trace.responseSummary` post-gate so the canonical WorkTrace summary never records pre-block text. (Both hardened per the adversarial review — see §2.)
 4. **The keystone — make the eval governance-aware.** Thread an optional governed-hooks capability into `evals/alex-conversation/run-conversation.ts` (default OFF, so the baseline is byte-identical) and add a **deterministic governed live-path integration test** in the BLOCKING eval vitest step that proves a real gate fires through the real executor — and **goes red when the seam is wired out**.
 5. **Core executor unit test** proving `execute()` now invokes `runAfterSkillHooks` (a hook's `afterSkill` runs on a successful turn).
 
@@ -63,29 +63,30 @@ Insert **between line 462 and line 464**:
 // Governance afterSkill gates (banned-phrase / claim / PDPA / WhatsApp-window).
 // Wired here — AFTER result assembly, BEFORE the isolated trace recorder — so any
 // in-place result.response mutation (enforce-mode block/rewrite/handoff) is reflected
-// in BOTH the returned reply and the persisted ExecutionTrace, preserving the
+// in the returned reply AND every downstream trace consumer, preserving the
 // "trace never sees pre-block unsafe text" invariant the bootstrap relies on.
-// Fail-OPEN on an unexpected gate throw: a governance logic bug must never crash a
-// lead turn. Each gate already fails CLOSED internally (posture cache) for the
-// resolver-unavailable case; this guard is for programming errors only. With no
-// governanceConfig seeded today, every gate early-returns, so this is inert in prod.
-try {
-  await runAfterSkillHooks(this.hooks, hookCtx, result);
-} catch (e: unknown) {
-  console.warn(
-    "[SkillExecutor] afterSkill governance hook threw (swallowed, fail-open):",
-    e instanceof Error ? e.message : String(e),
-  );
-}
+//
+// FAIL-CLOSED: deliberately NOT wrapped in a swallowing try/catch. An unexpected gate
+// throw propagates to the turn's error path (the method catch re-throws), so skill-mode
+// emits the neutral fallback and the lead NEVER receives ungated text. The gates already
+// fail CLOSED internally (posture cache) for the resolver-unavailable case, so an escaping
+// throw is a genuine logic bug and failing the turn is the safe response. Inert in prod
+// today (no governanceConfig seeded → every gate early-returns).
+await runAfterSkillHooks(this.hooks, hookCtx, result);
+
+// Keep the canonical WorkTrace summary consistent with any in-place gate mutation:
+// skill-mode persists result.trace.responseSummary (stamped pre-gate above). No-op when
+// no gate mutated.
+result.trace.responseSummary = result.response.slice(0, 500);
 ```
 
 Add `runAfterSkillHooks` to the import block at `:47-52`.
 
-**Ordering rationale.** Placing the runner before the trace recorder (which is fire-and-forget but captures `result` synchronously) preserves the bootstrap invariant documented at `skill-mode.ts:365-377` and `deterministic-safety-gate.ts:62-73` ("trace store never sees pre-block unsafe text"). #859 moved the trace recorder out of the `hooks` array into the isolated 8th constructor arg, so that invariant now depends on _call order in `execute()`_ rather than array order — this is the correct place to honour it.
+**Ordering rationale.** Placing the runner before the trace recorder (which is fire-and-forget but captures `result` synchronously) preserves the bootstrap invariant documented at `skill-mode.ts:365-377` and `deterministic-safety-gate.ts:62-73` ("trace store never sees pre-block unsafe text"). #859 moved the trace recorder out of the `hooks` array into the isolated 8th constructor arg, so that invariant now depends on _call order in `execute()`_ rather than array order — this is the correct place to honour it. The `responseSummary` refresh closes a second leak of the same invariant: `skill-mode.ts:96` persists `result.trace.responseSummary` into the canonical WorkTrace, and it was stamped from the pre-gate text (surfaced by the adversarial review).
 
-**Fail-open vs fail-closed.** PR1 ships observe/off only (no seed), so this never fires in prod. The choice (fail-open + warn) is the right default for **observe** mode: a logging gate must not degrade a lead reply on a bug. **PR2 must revisit per-gate fail-open-vs-closed for enforce** (a safety gate that throws in enforce arguably should fail to the neutral fallback). Documented as a PR2 acceptance item.
+**Fail-closed (revised per adversarial review).** The seam is **not** wrapped in a swallowing try/catch. A swallow would leak pre-block text if a gate threw mid-decision in enforce mode (e.g. after deciding to block but before mutating `result.response`). Letting the throw propagate routes it to skill-mode's neutral fallback — the lead never sees ungated text. This is byte-identical at merge (no seed → no throw) and the safe default for the PR2 observe/enforce rollout; an escaping throw is a genuine logic bug (the gates already handle expected store/resolver failures internally), so failing the turn loudly is correct.
 
-**File-size note.** `skill-executor.ts` is 660 lines with a `/* eslint-disable max-lines */` legacy-debt marker (`:1`). This change adds ~12 lines. The marker already suppresses the arch-check error; both #859 reviewers accepted the marker over a structural split. No new split here.
+**File-size note.** `skill-executor.ts` carries a `/* eslint-disable max-lines */` legacy-debt marker (`:1`); this change brings it to 679 lines. The marker suppresses both the eslint `max-lines` error and the `arch:check` raw-line error (verified `pnpm arch:check` reports no error-level issues); both #859 reviewers accepted the marker over a structural split. No new split here.
 
 ---
 
@@ -113,11 +114,11 @@ type WhatsAppConfigResolution =
 
 - `{ kind: "off" }` → `return` immediately. **No verdict, no mutation.** This is the byte-identical no-op for today's unseeded state.
 - `{ kind: "config" }` → existing logic unchanged (flag check, channel check, window logic).
-- `{ kind: "unavailable" }` → keep the existing fail-closed behaviour (emit `governance_unavailable` verdict; blank only when an enforce posture is in force — i.e. do **not** blank when there is no mode signal at all, matching the sibling gates which fail-open absent a cached enforce posture).
+- `{ kind: "unavailable" }` → **preserve the gate's existing deliberate fail-closed behaviour** (the "1c precedent"): emit a `governance_unavailable` verdict and blank `result.response`. This path now fires **only** for a genuine resolver error/throw with no cached posture — never for an unconfigured (`missing`) deployment. (This is the conservative choice: it keeps the existing fail-closed tests green and respects the WhatsApp gate author's deliberate hard-block-on-unavailable posture, while the `off` carve-out removes the never-configured blank.)
 
-**Net effect.** With no config seeded, the WhatsApp gate becomes a clean no-op exactly like the other three → wiring the seam is byte-identical across all four gates. The genuine resolver-error fail-closed path is preserved (and made consistent with the siblings: blank only under a known enforce posture).
+**Net effect.** With no config seeded, the WhatsApp gate becomes a clean no-op exactly like the other three → wiring the seam is byte-identical across all four gates. The genuine resolver-error fail-closed path is preserved unchanged.
 
-**Tests.** Unit tests asserting: (a) `status:"missing"` → `result.response` unchanged, no `verdictStore.save`; (b) resolved-without-`whatsappWindow` → unchanged, no save; (c) resolved-with-block, `enabled:false` → unchanged; (d) resolver throw with a cached enforce posture → fail-closed blank; (e) resolver throw with no cached posture → **not** blanked (fail-open). The existing enforce-mode substitution/block tests must still pass unchanged.
+**Tests.** Unit tests asserting: (a) `status:"missing"` → `result.response` unchanged, no `verdictStore.save`; (b) resolved-without-`whatsappWindow` → unchanged, no save; (c) resolver throw with a cached enforce posture → uses the cache (allow inside window); (d) resolver throw with no cached posture → **fail-closed blank** + `governance_unavailable` verdict (the existing test, strengthened to assert the blank). All existing inside/outside-window, mode/flag, and fail-closed tests pass unchanged.
 
 ---
 
@@ -165,7 +166,7 @@ Documented so the split is legible and PR2 is pre-scoped:
 1. **Seed an observe-mode `governanceConfig`** on the medspa pilot `AgentDeployment` (org `org_demo`, the `alex-conversion` listing — `seed-marketplace.ts:707-769`, both the `update` and `create` blocks). Required fields `jurisdiction` + `clinicType` (no defaults); per-gate `mode:"observe"`. **No migration** (column exists). `pnpm db:check-drift` clean (seed-only).
 2. **PDPA observe-gating:** gate the revoked-race block (`pdpa-consent-gate.ts:134-162`) on `consentConfig.mode === "enforce"` so observe is truly log-only.
 3. **Claim-classifier observe latency:** decide await-vs-fire-and-forget for observe (a log-only classification must not add Haiku latency to every lead reply). Likely: observe verdict-writes go fire-and-forget; enforce stays awaited (it mutates the reply).
-4. **Per-gate fail-open-vs-closed for enforce** (revisit §2's call-site fail-open).
+4. **Observe-mode resilience for the fail-closed seam.** The seam fails closed (§2): a gate logic-bug fails the turn to the neutral fallback. For the observe rollout, decide whether a purely-observational (log-only) gate bug should degrade a lead reply, or whether observe-mode gate execution should be isolated (e.g. per-gate try/catch that only swallows when `mode==="observe"`). The gates' expected store/resolver failures are already handled internally, so this concerns logic-bug resilience only.
 5. **Bake then ops-controlled `off → enforce`** flip, validated against #859's telemetry (`ExecutionTrace` + `switchboard_skill_llm_*`) + the `GovernanceVerdict` store, mirroring the router-flag rollout discipline.
 
 ---
