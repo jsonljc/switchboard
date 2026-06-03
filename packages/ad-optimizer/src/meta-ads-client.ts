@@ -37,6 +37,9 @@ interface AdSetInsightsParams {
   dateRange: DateRange;
   fields: string[];
   campaignId?: string;
+  /** Page size. Defaults to Meta's small (~25) page when unset; set to match the paired
+   * `/adsets` entity cap so account-level joins don't drop the ad-set tail to spend:0. */
+  limit?: number;
 }
 
 interface DraftCampaignParams {
@@ -136,6 +139,10 @@ export class MetaAdsClient {
       );
     }
 
+    if (params.limit !== undefined) {
+      queryParams.set("limit", String(params.limit));
+    }
+
     const response = await this.get(`/${this.accountId}/insights?${queryParams.toString()}`);
     const data = response.data as Record<string, string>[];
     return data.map((raw) => this.mapAdSetInsight(raw));
@@ -167,8 +174,10 @@ export class MetaAdsClient {
     campaignId?: string;
     dateRange: { since: string; until: string };
   }): Promise<AdSetLearningInput[]> {
-    // NOTE: reads Graph page 1 only (no paging.next follow). limit=200 covers typical
-    // accounts; revisit for accounts/campaigns with >200 ad sets before broad enablement.
+    // NOTE: reads Graph page 1 only (no paging.next follow) on BOTH the entity (/adsets) and
+    // the paired insights edge, each capped at 200. Covers typical accounts; for >200 ad sets
+    // the two edges truncate consistently, so the tail is simply unattributed → coverage drops
+    // → honest abstain (fail-safe). Follow paging.next before broad enablement at larger scale.
     const qpInit: Record<string, string> = {
       fields: "id,name,campaign_id,destination_type,learning_stage_info",
       limit: "200",
@@ -185,6 +194,7 @@ export class MetaAdsClient {
     const insights = await this.getAdSetInsights({
       dateRange: opts.dateRange,
       fields: ["adset_id", "spend", "conversions", "frequency", "inline_link_click_ctr"],
+      limit: 200,
       ...(opts.campaignId ? { campaignId: opts.campaignId } : {}),
     });
     const spendByAdSet = new Map<string, AdSetInsight>();

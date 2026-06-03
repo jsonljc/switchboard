@@ -152,5 +152,10 @@ describe("getAccountAdSetLearningInputs", () => {
     const adsetsUrl = String(fetchMock.mock.calls[0]![0]);
     expect(adsetsUrl).toContain("destination_type");
     expect(adsetsUrl).not.toContain("filtering");
+    // The paired ad-set INSIGHTS edge must page to at least the entity cap, else accounts
+    // with >~25 ad sets get spend:0 for the tail and coverage silently collapses.
+    const insightsUrl = String(fetchMock.mock.calls[1]![0]);
+    expect(insightsUrl).toContain("/insights");
+    expect(insightsUrl).toContain("limit=200");
   });
 });
