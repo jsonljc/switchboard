@@ -11,7 +11,7 @@ import { runHookGenerator } from "./hook-generator.js";
 import { runScriptWriter } from "./script-writer.js";
 import { runStoryboardBuilder } from "./storyboard-builder.js";
 import { runVideoProducer, createPromptOptimizer } from "./video-producer.js";
-import type { VideoProducerDeps } from "./video-producer.js";
+import type { VideoProducerDeps, AssetStorageClient } from "./video-producer.js";
 import { KlingClient } from "./kling-client.js";
 import { ElevenLabsClient } from "./elevenlabs-client.js";
 import { WhisperClient } from "./whisper-client.js";
@@ -33,6 +33,7 @@ export interface StageInput {
   generateReferenceImages?: boolean;
   imageGenerator?: ImageGenerator;
   productionTier?: string;
+  assetStorage?: AssetStorageClient;
 }
 
 type StageOutput =
@@ -135,6 +136,9 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
         klingClient,
         optimizePrompt: createPromptOptimizer(input.apiKey),
       };
+      if (input.assetStorage) {
+        deps.assetStorage = input.assetStorage;
+      }
 
       if (tier === "pro") {
         deps.elevenLabsClient = new ElevenLabsClient({
@@ -148,6 +152,7 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
 
       return runVideoProducer(
         {
+          jobId: input.jobId,
           storyboard,
           scripts,
           tier,

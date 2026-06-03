@@ -34,52 +34,66 @@ vi.mock("../video-assembler.js", () => ({
   VideoAssembler: vi.fn().mockImplementation(() => ({})),
 }));
 
+const baseProductionInput: StageInput = {
+  jobId: "job-1",
+  brief: {
+    productDescription: "Widget",
+    targetAudience: "Everyone",
+    platforms: ["meta"],
+  },
+  previousOutputs: {
+    storyboard: {
+      storyboards: [
+        {
+          scriptRef: "s0",
+          scenes: [
+            {
+              sceneNumber: 1,
+              description: "Intro",
+              visualDirection: "zoom",
+              duration: 5,
+              textOverlay: null,
+              referenceImageUrl: null,
+            },
+          ],
+        },
+      ],
+    },
+    scripts: {
+      scripts: [
+        {
+          hookRef: "h0",
+          fullScript: "Test script",
+          timing: [],
+          format: "feed_video",
+          platform: "meta",
+          productionNotes: "",
+        },
+      ],
+    },
+  },
+  apiKey: "test-key",
+  productionTier: "basic",
+};
+
 describe("runStage — production", () => {
   it("calls runVideoProducer for production stage", async () => {
-    const input: StageInput = {
-      jobId: "job-1",
-      brief: {
-        productDescription: "Widget",
-        targetAudience: "Everyone",
-        platforms: ["meta"],
-      },
-      previousOutputs: {
-        storyboard: {
-          storyboards: [
-            {
-              scriptRef: "s0",
-              scenes: [
-                {
-                  sceneNumber: 1,
-                  description: "Intro",
-                  visualDirection: "zoom",
-                  duration: 5,
-                  textOverlay: null,
-                  referenceImageUrl: null,
-                },
-              ],
-            },
-          ],
-        },
-        scripts: {
-          scripts: [
-            {
-              hookRef: "h0",
-              fullScript: "Test script",
-              timing: [],
-              format: "feed_video",
-              platform: "meta",
-              productionNotes: "",
-            },
-          ],
-        },
-      },
-      apiKey: "test-key",
-      productionTier: "basic",
-    };
-
-    const result = await runStage("production", input);
+    const result = await runStage("production", baseProductionInput);
     expect((result as Record<string, unknown>).tier).toBe("basic");
     expect((result as Record<string, unknown>).clips).toBeDefined();
+  });
+
+  it("forwards assetStorage + jobId to runVideoProducer for production", async () => {
+    const { runVideoProducer } = await import("../video-producer.js");
+    const mockProducer = runVideoProducer as ReturnType<typeof vi.fn>;
+    mockProducer.mockClear();
+
+    const assetStorage = { upload: vi.fn() };
+    await runStage("production", { ...baseProductionInput, assetStorage });
+
+    expect(mockProducer).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: "job-1" }),
+      expect.objectContaining({ assetStorage }),
+    );
   });
 });
