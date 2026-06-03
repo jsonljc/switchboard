@@ -35,12 +35,12 @@ describe("TeamPulse component", () => {
       expect(screen.getByText("Mira")).toBeInTheDocument();
     });
 
-    it("renders the correct initial for each agent in the avatar", () => {
+    it("renders each agent's full name inside their own chip", () => {
       render(<TeamPulse agents={allAgents} />);
-      // Scope each lookup to its own chip to avoid collisions with future fixture names
+      // Verify the agentChipName span carries the full name inside the correct chip
       for (const agent of allAgents) {
         const chip = screen.getByTestId(`agent-chip-${agent.key}`);
-        expect(within(chip).getByText(agent.name[0])).toBeInTheDocument();
+        expect(within(chip).getByText(agent.name)).toBeInTheDocument();
       }
     });
   });

@@ -1,66 +1,18 @@
-import { AGENT_REGISTRY, type AgentKey } from "@switchboard/schemas";
-import { SpriteChip } from "@/components/cockpit/sprite/sprite-chip";
-import type { SpriteVariantKey, VariantBundle } from "@/components/cockpit/sprite/types";
-import type { AccentTokens } from "@/components/cockpit/tokens";
-import {
-  ALEX_VARIANTS,
-  DEFAULT_ALEX_VARIANT,
-  ALEX_APPROVAL_ACCENT,
-} from "@/lib/cockpit/alex-config";
-import {
-  RILEY_ACCENT,
-  RILEY_VARIANTS,
-  DEFAULT_RILEY_VARIANT,
-} from "@/lib/cockpit/riley/riley-config";
-
-interface AgentSpriteConfig {
-  /** Sprite bundle, or null for agents without a sprite (Mira → letter disc). */
-  bundle: VariantBundle | null;
-  variant: SpriteVariantKey;
-  accent: Pick<AccentTokens, "soft" | "deep">;
-}
-
-/**
- * Mira has no cockpit sprite/accent config (day-thirty), so we derive a soft/deep
- * pair locally from her registry accent for the initial-disc fallback. Identity-only.
- */
-const MIRA_ACCENT: Pick<AccentTokens, "soft" | "deep"> = {
-  soft: "hsl(var(--agent-mira-tint))",
-  deep: "hsl(var(--agent-mira-deep))",
-};
-
-const AGENT_SPRITES: Record<AgentKey, AgentSpriteConfig> = {
-  alex: { bundle: ALEX_VARIANTS, variant: DEFAULT_ALEX_VARIANT, accent: ALEX_APPROVAL_ACCENT },
-  riley: { bundle: RILEY_VARIANTS, variant: DEFAULT_RILEY_VARIANT, accent: RILEY_ACCENT },
-  mira: { bundle: null, variant: "__none__", accent: MIRA_ACCENT },
-};
+// apps/dashboard/src/components/inbox/inbox-agent-avatar.tsx
+import type { AgentKey } from "@switchboard/schemas";
+import { PrintedPortraitAvatar } from "@/components/agent-avatar/printed-portrait-avatar";
 
 export interface InboxAgentAvatarProps {
   agentKey: AgentKey;
-  /** Pixel size of the avatar chip. Defaults to 22 (matches the cockpit chip). */
+  /** Pixel size of the avatar. Defaults to 22 (matches the cockpit chip). */
   size?: number;
 }
 
 /**
- * Identity-only agent avatar for the inbox surface. Renders the agent's pixel
- * sprite via `SpriteChip`, falling back to an initial-disc (the agent's display
- * initial) when no sprite bundle exists (Mira) or a frame is missing. NEVER used
- * to color an action control — agent color is identity only.
+ * Identity-only agent avatar for the inbox surfaces. Thin adapter over the shared
+ * `PrintedPortraitAvatar` (no live status here, so no pip). Kept as a named export
+ * so its existing call sites and test mocks are untouched. NEVER colors an action.
  */
 export function InboxAgentAvatar({ agentKey, size = 22 }: InboxAgentAvatarProps) {
-  const config = AGENT_SPRITES[agentKey];
-  const displayName = AGENT_REGISTRY[agentKey]?.displayName ?? agentKey;
-  const fallbackLetter = displayName.charAt(0).toUpperCase();
-
-  return (
-    <SpriteChip
-      bundle={config.bundle ?? {}}
-      variant={config.variant}
-      state="idle"
-      size={size}
-      accentSoft={config.accent.soft}
-      fallbackDeep={config.accent.deep}
-      fallbackLetter={fallbackLetter}
-    />
-  );
+  return <PrintedPortraitAvatar agentKey={agentKey} size={size} showPip={false} />;
 }

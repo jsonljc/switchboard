@@ -1,0 +1,96 @@
+/* apps/dashboard/src/components/agent-avatar/printed-portrait-avatar.module.css */
+/* The printed-portrait frame: identity-hue ground + 1px ink-offset "registration"
+   halo + crisp pixel plate + status pip. Fully tokenized (hsl(var(--agent-*))). */
+
+.portrait {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 22%;
+}
+/* identity ground + a hard 1px ink-offset "registration" shadow (the riso
+   through-line) + a hairline. A real box-shadow needs no z-index, so it cannot be
+   lost behind an ancestor stacking context the way a negative-z ::before can. */
+.alex {
+  background: hsl(var(--agent-alex-tint));
+  box-shadow: 1px 1px 0 0 hsl(var(--agent-alex-deep)), inset 0 0 0 1px var(--hair);
+}
+.riley {
+  background: hsl(var(--agent-riley-tint));
+  box-shadow: 1px 1px 0 0 hsl(var(--agent-riley-deep)), inset 0 0 0 1px var(--hair);
+}
+.mira {
+  background: hsl(var(--agent-mira-tint));
+  box-shadow: 1px 1px 0 0 hsl(var(--agent-mira-deep)), inset 0 0 0 1px var(--hair);
+}
+
+.plate {
+  display: grid;
+  place-items: end center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.plate :global(svg) {
+  image-rendering: pixelated;
+}
+
+.letter {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-style: normal; /* never italic */
+  line-height: 1;
+}
+.alex .letter {
+  color: hsl(var(--agent-alex-deep));
+}
+.riley .letter {
+  color: hsl(var(--agent-riley-deep));
+}
+.mira .letter {
+  color: hsl(var(--agent-mira-deep));
+}
+
+.pip {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 28%;
+  height: 28%;
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px hsl(var(--surface));
+}
+.pip[data-pip="active"] {
+  background: hsl(var(--agent-active));
+}
+.pip[data-pip="idle"] {
+  background: hsl(var(--agent-idle));
+}
+.pip[data-pip="attention"] {
+  background: hsl(var(--agent-attention));
+}
+.pip[data-pip="locked"] {
+  background: hsl(var(--agent-locked));
+}
+
+.portrait[data-playing="true"] .pip[data-pip="active"] {
+  animation: pp-pulse 2.6s ease-in-out infinite;
+}
+@keyframes pp-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portrait .pip {
+    animation: none;
+  }
+}

@@ -86,7 +86,10 @@ describe("token governance — inbox agent hues single-source (T3)", () => {
   it("the inbox avatar no longer hand-rolls a Mira hex", () => {
     expect(inboxAvatar).not.toMatch(/#4A3A66/i);
     expect(inboxAvatar).not.toMatch(/#E7E1F0/i);
-    expect(inboxAvatar).toMatch(/hsl\(var\(--agent-mira-deep\)\)/);
+    // It delegates to the shared PrintedPortraitAvatar, the single tokenized
+    // source of the agent hues (hsl(var(--agent-mira-deep)) lives in that
+    // component's CSS module, not hand-rolled here).
+    expect(inboxAvatar).toMatch(/PrintedPortraitAvatar/);
   });
 });
 
