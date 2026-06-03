@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   StoryboardOutput,
   ScriptWriterOutput,
@@ -47,11 +48,16 @@ interface AssemblerLike {
   }): Promise<{ videoUrl: string; thumbnailUrl: string; duration: number }>;
 }
 
+export interface AssetStorageClient {
+  upload(params: { localPath: string; key: string; contentType: string }): Promise<{ url: string }>;
+}
+
 export interface VideoProducerDeps {
   klingClient: KlingLike;
   elevenLabsClient?: ElevenLabsLike;
   whisperClient?: WhisperLike;
   videoAssembler?: AssemblerLike;
+  assetStorage?: AssetStorageClient;
   optimizePrompt: (scene: SceneInput, context: PromptContext) => Promise<OptimizedPrompt>;
 }
 
@@ -69,6 +75,7 @@ interface PromptContext {
 }
 
 interface VideoProducerInput {
+  jobId: string;
   storyboard: StoryboardOutput;
   scripts: ScriptWriterOutput;
   tier: "basic" | "pro" | "premium";
@@ -195,6 +202,7 @@ export async function runVideoProducer(
     hasCaptions: boolean;
     hasBackgroundMusic: boolean;
   }> = [];
+  let durableAssetUrl: string | undefined;
 
   if (clips.length > 0 && deps.videoAssembler) {
     // Collect text overlays from storyboard scenes
@@ -242,9 +250,33 @@ export async function runVideoProducer(
     }
 
     if (assembled) {
+      let videoUrl = assembled.videoUrl;
+      let thumbnailUrl = assembled.thumbnailUrl;
+
+      // Storage step (not a governed action): persist the assembled bytes durably
+      // so a completed creative is publishable. Absent storage → keep local paths
+      // and leave durableAssetUrl unset (publish fails loud downstream). A storage
+      // failure propagates (fail loud) rather than fake-succeeding with a temp path.
+      if (deps.assetStorage) {
+        const baseKey = `creative-assets/${input.jobId}/${randomUUID()}`;
+        const uploadedVideo = await deps.assetStorage.upload({
+          localPath: assembled.videoUrl,
+          key: `${baseKey}.mp4`,
+          contentType: "video/mp4",
+        });
+        const uploadedThumb = await deps.assetStorage.upload({
+          localPath: assembled.thumbnailUrl,
+          key: `${baseKey}-thumb.jpg`,
+          contentType: "image/jpeg",
+        });
+        videoUrl = uploadedVideo.url;
+        thumbnailUrl = uploadedThumb.url;
+        durableAssetUrl = uploadedVideo.url;
+      }
+
       assembledVideos.push({
-        videoUrl: assembled.videoUrl,
-        thumbnailUrl: assembled.thumbnailUrl,
+        videoUrl,
+        thumbnailUrl,
         format: aspectRatio,
         duration: assembled.duration,
         platform,
@@ -260,6 +292,7 @@ export async function runVideoProducer(
     clips,
     ...(assembledVideos.length > 0 ? { assembledVideos } : {}),
     ...(voiceover ? { voiceover } : {}),
+    ...(durableAssetUrl ? { durableAssetUrl } : {}),
     ...(errors.length > 0 ? { errors } : {}),
   };
 }
