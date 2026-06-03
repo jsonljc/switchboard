@@ -203,6 +203,10 @@ export const RecommendationOutputSchema = z.object({
   // by the audit's applyTier post-processor going forward.
   economicTier: EconomicTierSchema.optional(),
   marginBasis: MarginBasisSchema.optional(),
+  // PR2 (Gate-4): which tier the judged target came from — the campaign's own
+  // booking-calibrated CAC ("campaign", Tier-1) or the account-level fallback
+  // ("account", Tier-2). Optional for back-compat; stamped by applyTier.
+  targetSource: z.enum(["campaign", "account"]).optional(),
 });
 export type RecommendationOutputSchema = z.infer<typeof RecommendationOutputSchema>;
 
@@ -243,6 +247,24 @@ export const AuditReportSchema = z.object({
           costPerQualified: z.number().nullable(),
           costPerBooked: z.number().nullable(),
           closeRate: z.number().nullable(),
+          trueRoas: z.number().nullable(),
+        }),
+      ),
+    })
+    .optional(),
+  // PR2 (Gate-4): per-campaign economics — CPL, cost-per-booked, booked value in
+  // CENTS, and trueROAS. Mirrors sourceComparison; only present when the CRM
+  // provider returned a per-campaign funnel. trueRoas/bookedValueCents are null
+  // when no valued booked ConversionRecord was attributed (or the booked-value
+  // port is unwired) — never a fabricated 0.
+  campaignEconomics: z
+    .object({
+      rows: z.array(
+        z.object({
+          campaignId: z.string(),
+          cpl: z.number().nullable(),
+          costPerBooked: z.number().nullable(),
+          bookedValueCents: z.number().nullable(),
           trueRoas: z.number().nullable(),
         }),
       ),
