@@ -7,6 +7,7 @@ import {
   OpportunitySchema,
   LifecycleRevenueEventSchema,
   OwnerTaskSchema,
+  STAGES_AT_OR_BEYOND_BOOKED,
 } from "../lifecycle.js";
 
 describe("ContactStageSchema", () => {
@@ -188,5 +189,16 @@ describe("OwnerTaskSchema", () => {
       createdAt: new Date(),
     };
     expect(() => OwnerTaskSchema.parse(task)).not.toThrow();
+  });
+});
+
+describe("STAGES_AT_OR_BEYOND_BOOKED", () => {
+  it("contains booked and everything past it, all valid stages", () => {
+    expect(STAGES_AT_OR_BEYOND_BOOKED).toEqual(["booked", "showed", "won", "lost"]);
+    for (const s of STAGES_AT_OR_BEYOND_BOOKED) expect(OpportunityStageSchema.parse(s)).toBe(s);
+  });
+  it("excludes pre-booking stages", () => {
+    for (const s of ["interested", "qualified", "quoted", "nurturing"])
+      expect(STAGES_AT_OR_BEYOND_BOOKED).not.toContain(s);
   });
 });

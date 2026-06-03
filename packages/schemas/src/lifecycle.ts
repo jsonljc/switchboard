@@ -21,6 +21,14 @@ export type OpportunityStage = z.infer<typeof OpportunityStageSchema>;
 
 export const TERMINAL_OPPORTUNITY_STAGES: OpportunityStage[] = ["won", "lost"];
 
+/**
+ * Stages at or past "booked". A successful booking advances an opportunity to
+ * "booked" ONLY if its current stage is not already one of these — the monotonic
+ * guard that makes booking.create's stage advance idempotent and prevents a new
+ * booking from downgrading a "showed"/"won" opportunity.
+ */
+export const STAGES_AT_OR_BEYOND_BOOKED: OpportunityStage[] = ["booked", "showed", "won", "lost"];
+
 export const ThreadStatusSchema = z.enum([
   "open",
   "waiting_on_customer",
