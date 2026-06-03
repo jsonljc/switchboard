@@ -37,6 +37,9 @@ interface AdSetInsightsParams {
   dateRange: DateRange;
   fields: string[];
   campaignId?: string;
+  /** Page size. Defaults to Meta's small (~25) page when unset; set to match the paired
+   * `/adsets` entity cap so account-level joins don't drop the ad-set tail to spend:0. */
+  limit?: number;
 }
 
 interface DraftCampaignParams {
@@ -136,29 +139,63 @@ export class MetaAdsClient {
       );
     }
 
+    if (params.limit !== undefined) {
+      queryParams.set("limit", String(params.limit));
+    }
+
     const response = await this.get(`/${this.accountId}/insights?${queryParams.toString()}`);
     const data = response.data as Record<string, string>[];
     return data.map((raw) => this.mapAdSetInsight(raw));
   }
 
+  /**
+   * Per-campaign ad-set learning inputs (learning_stage_info + destination_type + spend),
+   * used by MetaCampaignInsightsProvider to derive the campaign-level learning phase.
+   */
   async getAdSetLearningInputs(campaignId: string): Promise<AdSetLearningInput[]> {
-    const filtering = JSON.stringify([
-      { field: "campaign.id", operator: "EQUAL", value: campaignId },
-    ]);
-    // NOTE: reads Graph page 1 only (no paging.next follow). limit=200 covers typical
-    // accounts; revisit for campaigns with >200 ad sets before broad enablement.
-    const qp = new URLSearchParams({
-      fields: "id,name,campaign_id,learning_stage_info",
-      filtering,
+    return this.fetchAdSetLearningInputs({ campaignId, dateRange: this.last7DayRange() });
+  }
+
+  /**
+   * Account-level ad-set learning inputs (ALL ad sets, no campaign filter). Feeds the weekly
+   * audit's per-source spend attribution: each ad set's `destination_type` maps to a funnel
+   * source (`destinationTypeToSource`) so spend can be attributed without the synthetic
+   * lead-share fallback. ADVISORY-ONLY read path: two account-level GETs (the `/adsets` config
+   * edge + ad-set insights), each behind the 60s rate limiter.
+   */
+  async getAccountAdSetLearningInputs(dateRange: {
+    since: string;
+    until: string;
+  }): Promise<AdSetLearningInput[]> {
+    return this.fetchAdSetLearningInputs({ dateRange });
+  }
+
+  private async fetchAdSetLearningInputs(opts: {
+    campaignId?: string;
+    dateRange: { since: string; until: string };
+  }): Promise<AdSetLearningInput[]> {
+    // NOTE: reads Graph page 1 only (no paging.next follow) on BOTH the entity (/adsets) and
+    // the paired insights edge, each capped at 200. Covers typical accounts; for >200 ad sets
+    // the two edges truncate consistently, so the tail is simply unattributed → coverage drops
+    // → honest abstain (fail-safe). Follow paging.next before broad enablement at larger scale.
+    const qpInit: Record<string, string> = {
+      fields: "id,name,campaign_id,destination_type,learning_stage_info",
       limit: "200",
-    });
+    };
+    if (opts.campaignId) {
+      qpInit.filtering = JSON.stringify([
+        { field: "campaign.id", operator: "EQUAL", value: opts.campaignId },
+      ]);
+    }
+    const qp = new URLSearchParams(qpInit);
     const entityResp = await this.get(`/${this.accountId}/adsets?${qp.toString()}`);
     const entities = (entityResp.data as Record<string, unknown>[]) ?? [];
 
     const insights = await this.getAdSetInsights({
-      dateRange: this.last7DayRange(),
+      dateRange: opts.dateRange,
       fields: ["adset_id", "spend", "conversions", "frequency", "inline_link_click_ctr"],
-      campaignId,
+      limit: 200,
+      ...(opts.campaignId ? { campaignId: opts.campaignId } : {}),
     });
     const spendByAdSet = new Map<string, AdSetInsight>();
     for (const ins of insights) spendByAdSet.set(ins.adSetId, ins);
@@ -174,10 +211,11 @@ export class MetaAdsClient {
       ) as AdSetLearningInput["learningStageStatus"];
       const spend = ins?.spend ?? 0;
       const conversions = ins?.conversions ?? 0;
+      const destinationType = e.destination_type ? String(e.destination_type) : undefined;
       return {
         adSetId: id,
         adSetName: String(e.name ?? ""),
-        campaignId: String(e.campaign_id ?? campaignId),
+        campaignId: String(e.campaign_id ?? opts.campaignId ?? ""),
         learningStageStatus,
         frequency: ins?.frequency ?? 0,
         spend,
@@ -185,6 +223,7 @@ export class MetaAdsClient {
         cpa: conversions > 0 ? spend / conversions : 0,
         roas: 0,
         inlineLinkClickCtr: ins?.inlineLinkClickCtr ?? 0,
+        ...(destinationType ? { destinationType } : {}),
       };
     });
   }

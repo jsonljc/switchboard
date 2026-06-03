@@ -127,9 +127,11 @@ function fmt(d: Date): string {
 // MetaCampaignInsightsProvider wired in, cost is now per-campaign (not just
 // per-deployment): each campaign adds ~4 serialized Graph calls (learning
 // inputs + daily breach window) behind the 60s RATE_LIMIT_MS, so total wall
-// time ≈ N_deployments × N_campaigns × 60s. Acceptable at current tenancy;
-// revisit (parallelize via Promise.all of step.run) if launch
-// tenancy crosses ~25 deployments or average campaign count > 5.
+// time ≈ N_deployments × N_campaigns × 60s. Per-source attribution adds 2 more
+// ACCOUNT-level Graph calls per weekly deployment (the /adsets config edge +
+// account ad-set insights), i.e. +~60s/deployment — flat, not per-campaign.
+// Acceptable at current tenancy; revisit (parallelize via Promise.all of
+// step.run) if launch tenancy crosses ~25 deployments or avg campaign count > 5.
 
 export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies): Promise<void> {
   const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
@@ -193,6 +195,35 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         crmDataProvider: deps.createCrmProvider(deployment.id),
         insightsProvider: deps.createInsightsProvider(adsClient),
         config,
+        // Per-source spend attribution: feed real account ad-set destination data so
+        // computeSpendBySource attributes spend (vs the synthetic lead-share fallback).
+        // Resilient: an ad-set fetch failure degrades to null (→ lead-share → honest abstain),
+        // never a crashed weekly run. Read-only; advisory path unchanged.
+        ...(adsClient.getAccountAdSetLearningInputs
+          ? {
+              getAdSetInsights: async ({
+                dateRange,
+              }: {
+                dateRange: { since: string; until: string };
+                fields: string[];
+              }) => {
+                try {
+                  return await adsClient.getAccountAdSetLearningInputs!(dateRange);
+                } catch (err) {
+                  // Error-level: a swallowed fetch failure must be visible to ops/alerting.
+                  // The audit still completes (the per-campaign analysis is independent), and
+                  // the source-reallocation rec degrades to honest abstain (lead-share). A
+                  // report-level "ad-set data unavailable" insight is a deferred enhancement;
+                  // re-throwing instead would re-run every rate-limited Graph call on a blip.
+                  console.error(
+                    `[ad-optimizer] ad-set attribution fetch failed for deployment=${deployment.id}; ` +
+                      `falling back to lead-share (no source reallocation this run): ${String(err)}`,
+                  );
+                  return null;
+                }
+              },
+            }
+          : {}),
         ...(signalHealthChecker ? { signalHealthChecker } : {}),
         ...(coverageValidator ? { coverageValidator } : {}),
         ...(deps.bookedValueByCampaignProvider

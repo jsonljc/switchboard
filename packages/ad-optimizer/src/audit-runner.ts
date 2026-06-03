@@ -1,4 +1,9 @@
 // packages/ad-optimizer/src/audit-runner.ts
+/* eslint-disable max-lines -- orchestrator at the 600-line cap: concurrent additions
+   (#854 riley->agent handoff + the per-source attribution wiring) tipped it over. It is
+   already heavily extracted (audit-v2-sections, analyzers/source-reallocation,
+   audit-report-builders, recommendation-handoff-dispatch); a further split of the run()
+   pipeline is the right follow-up but is out of scope for this slice. */
 import type {
   AuditReportSchema as AuditReport,
   CampaignInsightSchema as CampaignInsight,
@@ -70,6 +75,12 @@ export interface AdsClientInterface {
   /** Optional: per-ad-set learning status from `learning_stage_info`. Used by
    * MetaCampaignInsightsProvider to derive campaign-level learning phase; absent → false. */
   getAdSetLearningInputs?(campaignId: string): Promise<AdSetLearningInput[]>;
+  /** Optional: ALL account ad sets (no campaign filter) with destination_type + learning
+   * state + spend, for the weekly audit's per-source spend attribution. Read-only. */
+  getAccountAdSetLearningInputs?(dateRange: {
+    since: string;
+    until: string;
+  }): Promise<AdSetLearningInput[]>;
 }
 
 export interface AuditConfig {
@@ -93,6 +104,10 @@ export interface AuditConfig {
   /** Optional Meta Pixel ID. When present + signalHealthChecker wired, pulls a
    * signal-health report and short-circuits per-campaign diagnostics on red score. */
   pixelId?: string;
+  /** Default off. Gates surfacing of the ad-set learning-limited recommendations (the
+   * unvalidated manual-cast V2 surface). Ad-set details + learning counts are always
+   * computed from real data; only the recs are deferred until output validation + tests land. */
+  surfaceAdSetLearning?: boolean;
 }
 
 /**
@@ -120,7 +135,7 @@ export interface AuditDependencies {
   getAdSetInsights?(params: {
     dateRange: { since: string; until: string };
     fields: string[];
-  }): Promise<AdSetLearningInput[]>;
+  }): Promise<AdSetLearningInput[] | null>;
   getTrendData?(params: { accountId: string }): Promise<{
     day30: MetricSnapshot;
     day60: MetricSnapshot;
@@ -507,6 +522,7 @@ export class AuditRunner {
       currentInsights,
       learningGuardV2: this.learningGuardV2,
       targetCPA: this.config.targetCPA,
+      surfaceAdSetLearning: this.config.surfaceAdSetLearning ?? false,
     });
     const { adSetDetails, trends, budgetDistribution } = v2Sections;
     const adSetsInLearning = v2Sections.adSetsInLearning;

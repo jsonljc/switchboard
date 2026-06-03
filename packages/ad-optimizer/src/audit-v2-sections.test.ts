@@ -74,7 +74,7 @@ describe("analyzeV2Sections", () => {
     expect(out.budgetDistribution).toBeUndefined(); // only one insight
   });
 
-  it("counts learning + learning_limited ad sets and emits a learning-limited rec", () => {
+  it("counts learning + learning_limited ad sets and emits a learning-limited rec when surfacing is on", () => {
     const out = analyzeV2Sections({
       adSetData: [
         makeAdSet({ adSetId: "as-learning", learningStageStatus: "LEARNING" }),
@@ -90,6 +90,7 @@ describe("analyzeV2Sections", () => {
       currentInsights: [makeInsight()],
       learningGuardV2: guard,
       targetCPA: 100,
+      surfaceAdSetLearning: true,
     });
     expect(out.adSetDetails).toHaveLength(2);
     expect(out.adSetsInLearning).toBe(1);
@@ -97,6 +98,31 @@ describe("analyzeV2Sections", () => {
     expect(out.learningLimitedRecs).toHaveLength(1);
     expect(out.learningLimitedRecs[0]?.action).toBe("review_budget");
     expect(out.learningLimitedRecs[0]?.campaignId).toBe("camp-1");
+  });
+
+  it("gates the learning-limited recs OFF by default but keeps counts + details honest", () => {
+    // The unvalidated learning-limited recs are deferred (surfaceAdSetLearning omitted →
+    // off), but the counts and details still reflect the real ad-set data — suppressing
+    // them to 0 while learning ad sets exist would be a fabricated zero.
+    const out = analyzeV2Sections({
+      adSetData: [
+        makeAdSet({ adSetId: "as-learning", learningStageStatus: "LEARNING" }),
+        makeAdSet({
+          adSetId: "as-limited",
+          learningStageStatus: "FAIL",
+          frequency: 2,
+          spend: 5_000,
+        }),
+      ],
+      trendRawData: null,
+      currentInsights: [makeInsight()],
+      learningGuardV2: guard,
+      targetCPA: 100,
+    });
+    expect(out.learningLimitedRecs).toHaveLength(0);
+    expect(out.adSetDetails).toHaveLength(2);
+    expect(out.adSetsInLearning).toBe(1);
+    expect(out.adSetsLearningLimited).toBe(1);
   });
 
   it("builds trends when trend data is present", () => {

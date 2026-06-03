@@ -30,8 +30,8 @@ describe("Riley source-reallocation eval matrix", () => {
   });
 
   for (const c of cases) {
-    it(`${c.id} -> ${c.expectedOutcome}`, () => {
-      const decision = decideSourceReallocationForCase(c);
+    it(`${c.id} -> ${c.expectedOutcome}`, async () => {
+      const decision = await decideSourceReallocationForCase(c);
       expect(decision.outcome).toBe(c.expectedOutcome);
       if (c.expectedWatchPattern) {
         expect(decision.watchPattern).toBe(c.expectedWatchPattern);
