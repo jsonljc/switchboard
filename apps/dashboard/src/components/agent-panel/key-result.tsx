@@ -2,6 +2,7 @@
 
 import { useAgentMetrics } from "@/hooks/use-agent-metrics";
 import { useAgentMission } from "@/hooks/use-agent-mission";
+import { resolveQueryState } from "@/components/query-states";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { agentDisplay, type PanelAgentKey } from "./lib/agent-display";
 import { selectKeyResult, coreSetupIncomplete } from "./lib/key-result-state";
@@ -36,11 +37,28 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   const mission = useAgentMission(agentKey);
   const { halted } = useHalt();
 
-  // Guard: on cold mount (data undefined, isError false) the hooks are still
-  // fetching. Without this check, selectKeyResult would return { kind: "error" }
-  // and flash "Couldn't load this week's number" before any response arrives —
-  // violating the three-states-never-collapse invariant (loading ≠ error).
-  if (all.isLoading || week.isLoading || mission.isLoading) {
+  // Guard: on cold mount the hooks are still fetching. Without this check,
+  // selectKeyResult would return { kind: "error" } and flash "Couldn't load
+  // this week's number" before any response arrives — violating the
+  // three-states-never-collapse invariant (loading ≠ error).
+  //
+  // These hooks are `enabled: !!keys`, so during keys-pending isLoading is
+  // false while data/error are still undefined/null. A plain `isLoading` gate
+  // is skipped then. Derive "still pending" from {data, error} via
+  // resolveQueryState so keys-pending (no data, no real error yet) also counts
+  // as loading; only proceed to selectKeyResult once each hook has resolved
+  // data or a real error. We use the resolver here, NOT the <QueryStates>
+  // component, on purpose: the post-loading states below (paused / activation /
+  // proof / error) are domain-specific, not a generic empty/data split. Do not
+  // "finish the migration" by wrapping this slot in <QueryStates>.
+  const stillPending =
+    resolveQueryState({ data: all.data, error: all.isError ? all.error : null }).status ===
+      "loading" ||
+    resolveQueryState({ data: week.data, error: week.isError ? week.error : null }).status ===
+      "loading" ||
+    resolveQueryState({ data: mission.data, error: mission.isError ? mission.error : null })
+      .status === "loading";
+  if (stillPending) {
     return (
       <div className={styles.heroCard} data-kind="loading" aria-busy="true">
         <div className={styles.heroSkeleton} />

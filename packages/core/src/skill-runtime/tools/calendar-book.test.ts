@@ -1,4 +1,10 @@
+/* eslint-disable max-lines */
+// Legacy-debt marker: this single-factory suite (two operations, shared deps
+// scaffold) exceeds 600 lines after the PR-B booking-lifecycle tests. Splitting
+// would duplicate the large beforeEach scaffold across files; the codebase
+// convention is the eslint-disable marker over an awkward split.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { BookingSlotConflictError } from "@switchboard/schemas";
 import { setMetrics, createInMemoryMetrics } from "../../telemetry/metrics.js";
 import { createCalendarBookToolFactory } from "./calendar-book.js";
 import type { SkillRequestContext } from "../types.js";
@@ -7,6 +13,7 @@ function makeCalendarProvider() {
   return {
     listAvailableSlots: vi.fn(),
     createBooking: vi.fn(),
+    cancelBooking: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -34,6 +41,9 @@ function makeRunTransaction() {
       },
       outboxEvent: {
         create: vi.fn().mockResolvedValue({ id: "ob_1" }),
+      },
+      opportunity: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
     }),
   );
@@ -317,6 +327,82 @@ describe("createCalendarBookToolFactory", () => {
     );
   });
 
+  describe("booking.create opportunity stage advance", () => {
+    // Build a tool whose runTransaction exposes the opportunity.updateMany spy
+    // (asserts the monotonic stage-advance args / no-op) plus booking-counter
+    // spies on a fresh in-memory metrics registry.
+    function buildToolWithStageCapture(updateManyResult: { count: number }) {
+      const updateManySpy = vi.fn().mockResolvedValue(updateManyResult);
+      const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          booking: { update: vi.fn().mockResolvedValue({}) },
+          outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
+          opportunity: { updateMany: updateManySpy },
+        }),
+      );
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+      const metrics = createInMemoryMetrics();
+      const confirmedSpy = vi.spyOn(metrics.bookingConfirmed, "inc");
+      const advancedSpy = vi.spyOn(metrics.bookingStageAdvanced, "inc");
+      setMetrics(metrics);
+      const t = createCalendarBookToolFactory({
+        calendarProviderFactory: calendarProviderFactory as never,
+        isCalendarProviderConfigured: isCalendarProviderConfigured as never,
+        bookingStore: bookingStore as never,
+        opportunityStore: opportunityStore as never,
+        runTransaction: runTx as never,
+        failureHandler: failureHandler as never,
+        contactStore: contactStore as never,
+        defaultCurrency: "SGD",
+      })({ ...TRUSTED_CTX, contactId: "ct_1" });
+      return { tool: t, updateManySpy, confirmedSpy, advancedSpy };
+    }
+
+    const validInput = {
+      service: "consultation",
+      slotStart: "2026-04-20T10:00:00+08:00",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    };
+
+    it("advances opp to booked (monotonic guard) + incs confirmed & stageAdvanced", async () => {
+      const {
+        tool: t,
+        updateManySpy,
+        confirmedSpy,
+        advancedSpy,
+      } = buildToolWithStageCapture({
+        count: 1,
+      });
+
+      const result = await t.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("success");
+      expect(updateManySpy).toHaveBeenCalledWith({
+        where: {
+          id: "opp_1",
+          organizationId: "org_trusted",
+          stage: { notIn: ["booked", "showed", "won", "lost"] },
+        },
+        data: { stage: "booked" },
+      });
+      expect(confirmedSpy).toHaveBeenCalledWith({ orgId: "org_trusted" });
+      expect(advancedSpy).toHaveBeenCalledWith({ orgId: "org_trusted" });
+    });
+
+    it("does NOT surface a stage-write no-op (count 0) as a failure, and skips stageAdvanced", async () => {
+      const { tool: t, confirmedSpy, advancedSpy } = buildToolWithStageCapture({ count: 0 });
+
+      const result = await t.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("success");
+      expect(confirmedSpy).toHaveBeenCalledWith({ orgId: "org_trusted" });
+      expect(advancedSpy).not.toHaveBeenCalled();
+    });
+  });
+
   it("booking.create inputSchema omits contactId, attendeeName, attendeeEmail", () => {
     const schema = tool.operations["booking.create"]!.inputSchema as {
       properties: Record<string, unknown>;
@@ -465,6 +551,7 @@ describe("createCalendarBookToolFactory", () => {
               return { id: "ob_1" };
             }),
           },
+          opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
         }),
       );
       bookingStore.create.mockResolvedValue({ id: "bk_1" });
@@ -584,6 +671,84 @@ describe("createCalendarBookToolFactory", () => {
       expect(result.status).toBe("error");
       expect(result.error?.code).toBe("CALENDAR_PROVIDER_ERROR");
       expect(bookingStore.create).not.toHaveBeenCalled();
+    });
+
+    const slotInput = {
+      service: "consultation",
+      slotStart: "2026-04-20T10:00:00+08:00",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    };
+
+    // Install a fresh in-memory registry and return the `inc` spy for one counter.
+    function spyCounter(key: "bookingSlotConflict" | "bookingFailed") {
+      const metrics = createInMemoryMetrics();
+      const spy = vi.spyOn(metrics[key], "inc");
+      setMetrics(metrics);
+      return spy;
+    }
+
+    it("maps a BookingSlotConflictError to a retryable SLOT_TAKEN re-offer", async () => {
+      opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+      bookingStore.create.mockRejectedValue(new BookingSlotConflictError("bk-x"));
+      const conflictSpy = spyCounter("bookingSlotConflict");
+
+      const result = await tool.operations["booking.create"]!.execute(slotInput);
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("SLOT_TAKEN");
+      expect(result.error?.retryable).toBe(true);
+      expect(result.data?.failureType).toBe("slot_conflict");
+      expect(conflictSpy).toHaveBeenCalledWith({ orgId: "org_trusted" });
+      expect(calendarProvider.createBooking).not.toHaveBeenCalled();
+    });
+
+    it("best-effort cancels the created calendar event when the confirm tx fails (no orphan)", async () => {
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "evt-1" });
+      runTransaction.mockRejectedValue(new Error("DB connection lost"));
+
+      const result = await tool.operations["booking.create"]!.execute(slotInput);
+
+      expect(result.status).toBe("error");
+      expect(calendarProvider.cancelBooking).toHaveBeenCalledWith("evt-1");
+    });
+
+    // bookingFailed is stamped with a reason on each non-conflict failure leg.
+    it.each([
+      [
+        "confirmation_failed",
+        () => {
+          bookingStore.create.mockResolvedValue({ id: "bk_1" });
+          opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+          calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "evt-1" });
+          runTransaction.mockRejectedValue(new Error("DB connection lost"));
+        },
+      ],
+      [
+        "provider_error",
+        () => {
+          bookingStore.create.mockResolvedValue({ id: "bk_1" });
+          opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+          calendarProvider.createBooking.mockRejectedValue(new Error("503"));
+        },
+      ],
+      [
+        "duplicate",
+        () => {
+          bookingStore.create.mockRejectedValue(Object.assign(new Error("u"), { code: "P2002" }));
+          bookingStore.findBySlot.mockResolvedValue({ id: "bk_existing" });
+          opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+        },
+      ],
+    ])("increments bookingFailed{reason:%s}", async (reason, arrange) => {
+      arrange();
+      const failedSpy = spyCounter("bookingFailed");
+
+      await tool.operations["booking.create"]!.execute(slotInput);
+
+      expect(failedSpy).toHaveBeenCalledWith({ orgId: "org_trusted", reason });
     });
   });
 });

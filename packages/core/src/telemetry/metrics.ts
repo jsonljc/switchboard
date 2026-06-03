@@ -27,6 +27,12 @@ export interface SwitchboardMetrics {
   outcomePatternConfidence: Histogram;
   slotQueryZeroResult: Counter;
   rawErrorFallback: Counter;
+  bookingConfirmed: Counter;
+  bookingFailed: Counter;
+  bookingStageAdvanced: Counter;
+  bookingSlotConflict: Counter;
+  bookingReschedule: Counter;
+  bookingCancel: Counter;
 }
 
 export interface Counter {
@@ -94,5 +100,11 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     outcomePatternConfidence: new InMemoryHistogram(),
     slotQueryZeroResult: new InMemoryCounter(),
     rawErrorFallback: new InMemoryCounter(),
+    bookingConfirmed: new InMemoryCounter(),
+    bookingFailed: new InMemoryCounter(),
+    bookingStageAdvanced: new InMemoryCounter(),
+    bookingSlotConflict: new InMemoryCounter(),
+    bookingReschedule: new InMemoryCounter(),
+    bookingCancel: new InMemoryCounter(),
   };
 }

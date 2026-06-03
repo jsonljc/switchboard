@@ -244,3 +244,19 @@ describe("resolveEconomicTargetForCampaign (Hybrid ladder)", () => {
     expect(out.effectiveTarget).toBe(50);
   });
 });
+
+describe("applyTier targetSource stamping (PR2 Gate-4)", () => {
+  it("stamps targetSource onto the surviving recommendation when provided", () => {
+    const out = applyTier({
+      recommendation: rec(),
+      tier: "booked_cac",
+      marginBasis: "unavailable",
+      targetSource: "campaign",
+    });
+    expect(out.recommendation?.targetSource).toBe("campaign");
+  });
+  it("omits targetSource when not provided (back-compat)", () => {
+    const out = applyTier({ recommendation: rec(), tier: "cpl", marginBasis: "unavailable" });
+    expect(out.recommendation?.targetSource).toBeUndefined();
+  });
+});

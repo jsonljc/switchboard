@@ -1932,7 +1932,9 @@ model Booking {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  @@unique([organizationId, contactId, service, startsAt])
+  // Active-booking uniqueness is a PARTIAL unique index (status NOT IN failed/cancelled),
+  // which Prisma 6 cannot express in-schema. It lives in raw SQL in migration
+  // 20260603120000_booking_partial_unique_active. Keep this comment in sync.
   @@index([organizationId, startsAt])
   @@index([organizationId, createdAt])
   @@index([contactId])

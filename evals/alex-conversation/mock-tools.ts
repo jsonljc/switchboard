@@ -1,5 +1,14 @@
-import { ok } from "@switchboard/core/skill-runtime";
+import { ok, fail, pendingApproval } from "@switchboard/core/skill-runtime";
 import type { SkillTool, ToolResult } from "@switchboard/core/skill-runtime";
+
+/**
+ * Per-fixture booking behavior for the `calendar-book.booking.create` mock.
+ * "success" (default) books; "pending" parks for human approval; "slot_taken"
+ * returns a retryable SLOT_TAKEN failure (overlap). Mirrors the real tool's
+ * booked / pending_approval / SLOT_TAKEN outcomes so reschedule/cancel/slot-taken
+ * + governed-close fixtures can be driven deterministically.
+ */
+export type MockBookingBehavior = "success" | "pending" | "slot_taken";
 
 /**
  * One recorded tool invocation. The grader uses these to assert tool usage and
@@ -35,7 +44,7 @@ export interface MockTools {
   calls: RecordedToolCall[];
 }
 
-export function createMockTools(): MockTools {
+export function createMockTools(opts: { bookingBehavior?: MockBookingBehavior } = {}): MockTools {
   const calls: RecordedToolCall[] = [];
 
   const record = (toolId: string, operation: string, params: unknown): void => {
@@ -186,12 +195,12 @@ export function createMockTools(): MockTools {
           ],
         }),
       ),
-      "booking.create": recordingOp(
-        "calendar-book",
-        "booking.create",
-        "Book a calendar slot for a contact. Persists booking, creates calendar event, emits booked event via outbox.",
-        "external_mutation",
-        {
+      "booking.create": {
+        description:
+          "Book a calendar slot for a contact. Persists booking, creates calendar event, emits booked event via outbox.",
+        effectCategory: "external_mutation",
+        idempotent: true,
+        inputSchema: {
           type: "object",
           properties: {
             contactId: { type: "string" },
@@ -204,7 +213,53 @@ export function createMockTools(): MockTools {
           },
           required: ["contactId", "service", "slotStart", "slotEnd", "calendarId"],
         },
-        () => ({ bookingId: "mock-booking", status: "booked" }),
+        execute: async (params: unknown): Promise<ToolResult> => {
+          // Record the call FIRST so the oracle still sees a calendar-book call
+          // even when the booking parks for approval or the slot was taken.
+          record("calendar-book", "booking.create", params);
+          if (opts.bookingBehavior === "pending") {
+            return pendingApproval("APPROVAL_REQUIRED");
+          }
+          if (opts.bookingBehavior === "slot_taken") {
+            return fail("SLOT_TAKEN", "That time was just taken.", {
+              retryable: true,
+              data: { failureType: "slot_conflict" },
+              modelRemediation:
+                "Re-run calendar-book.slots.query and offer the next available times.",
+            });
+          }
+          return ok({ bookingId: "mock-booking", status: "confirmed" });
+        },
+      },
+      "booking.reschedule": recordingOp(
+        "calendar-book",
+        "booking.reschedule",
+        "Reschedule the contact's upcoming appointment to a new slot.",
+        "external_mutation",
+        {
+          type: "object",
+          properties: {
+            slotStart: { type: "string" },
+            slotEnd: { type: "string" },
+            calendarId: { type: "string" },
+            service: { type: "string" },
+          },
+          required: ["slotStart", "slotEnd", "calendarId"],
+        },
+        () => ({ bookingId: "mock-booking", status: "rescheduled" }),
+        false,
+      ),
+      "booking.cancel": recordingOp(
+        "calendar-book",
+        "booking.cancel",
+        "Cancel the contact's upcoming appointment.",
+        "external_mutation",
+        {
+          type: "object",
+          properties: { service: { type: "string" }, reason: { type: "string" } },
+        },
+        () => ({ bookingId: "mock-booking", status: "cancelled" }),
+        false,
       ),
     },
   };

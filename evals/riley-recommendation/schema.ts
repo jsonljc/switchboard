@@ -46,6 +46,26 @@ export const RileyCaseSchema = z.object({
   /** Optional set-membership assertion: every watch pattern listed here MUST appear
    * among the watches the engine produces (e.g. `measurement_untrusted`). */
   expectedWatchPatterns: z.array(z.string().min(1)).optional(),
+  /** PR2 Gate-4: when present, the harness resolves the per-campaign economic
+   * target through the REAL resolveEconomicTargetForCampaign (Tier-1 the campaign's
+   * own booking-calibrated CAC vs Tier-2 the account fallback) and feeds the result
+   * into decideForCampaign — the exact live audit-runner seam. The flat
+   * economicTier/effectiveTarget above then describe the resolution OUTPUT that a
+   * non-hybrid case pins directly. */
+  hybrid: z
+    .object({
+      campaignBookings: z.number(),
+      campaignConversions: z.number(),
+      targetCostPerBooked: z.number().optional(),
+      accountTarget: z.object({
+        economicTier: z.enum(["booked_cac", "cpl", "cpc"]),
+        effectiveTarget: z.number(),
+      }),
+    })
+    .optional(),
+  /** Expected resolution source when `hybrid` is present (campaign Tier-1 vs
+   * account Tier-2). */
+  expectedTargetSource: z.enum(["campaign", "account"]).optional(),
   notes: z.string().optional(),
 });
 export type RileyCase = z.infer<typeof RileyCaseSchema>;

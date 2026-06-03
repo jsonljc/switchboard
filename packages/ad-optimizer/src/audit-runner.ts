@@ -12,30 +12,27 @@ import type {
   CampaignInsightsProvider,
   AdSetLearningInput,
   MetricSnapshotSchema as MetricSnapshot,
-  AdSetDetailSchema as AdSetDetail,
   FunnelAnalysisSchema as FunnelAnalysis,
-  TrendAnalysisSchema as TrendAnalysis,
-  BudgetAnalysisSchema as BudgetAnalysis,
-  CampaignBudgetEntrySchema as CampaignBudgetEntry,
 } from "@switchboard/schemas";
 import { analyzeFunnel } from "./funnel-analyzer.js";
 import { comparePeriods, type MetricSet } from "./period-comparator.js";
 import { LearningPhaseGuard, LearningPhaseGuardV2 } from "./learning-phase-guard.js";
-import { detectFunnelShape } from "./funnel-detector.js";
-import { detectTrends } from "./trend-engine.js";
-import { analyzeBudgetDistribution } from "./budget-analyzer.js";
+import { analyzeV2Sections } from "./audit-v2-sections.js";
 import { generateSignalHealthRecommendations } from "./recommendation-engine.js";
 import {
   runRecommendationSink,
   type EmissionContext,
   type RecommendationEmitter,
 } from "./recommendation-sink.js";
-import { compareSources } from "./analyzers/source-comparator.js";
+import { compareSources, compareCampaigns } from "./analyzers/source-comparator.js";
+import type { CampaignEconomicsRow } from "./analyzers/source-comparator.js";
 import { computeSpendBySource } from "./analyzers/spend-attributor.js";
-import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
+import type { SourceFunnel, CampaignFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
-import { resolveEconomicTarget } from "./analyzers/economic-target.js";
-import { resetsLearningFor } from "./action-reset-classification.js";
+import {
+  resolveEconomicTarget,
+  resolveEconomicTargetForCampaign,
+} from "./analyzers/economic-target.js";
 import { decideForCampaign, deriveLearningPhaseActive } from "./campaign-decision.js";
 import {
   isCoverageSufficient,
@@ -92,6 +89,23 @@ export interface AuditConfig {
   pixelId?: string;
 }
 
+/**
+ * PR2 Gate-4: per-campaign booked-VALUE provider (the trueROAS numerator).
+ * Injected because the implementation (PrismaConversionRecordStore
+ * .queryBookedValueCentsByCampaign) lives in @switchboard/db (Layer 4) and
+ * ad-optimizer (Layer 2) must not import it. Values are CENTS, keyed by
+ * campaignId; an absent campaign means "no attributed booked value" (→ trueROAS
+ * null), never 0.
+ */
+export interface BookedValueByCampaignProvider {
+  queryBookedValueCentsByCampaign(query: {
+    orgId: string;
+    from: Date;
+    to: Date;
+    campaignIds?: string[];
+  }): Promise<Map<string, number>>;
+}
+
 export interface AuditDependencies {
   adsClient: AdsClientInterface;
   crmDataProvider: CrmDataProvider;
@@ -134,6 +148,10 @@ export interface AuditDependencies {
   coverageValidator?: {
     validate(query: { orgId: string; accountId: string }): Promise<CoverageReport>;
   };
+  /** Optional. Supplies per-campaign booked-VALUE (cents) for trueROAS reporting
+   * in `campaignEconomics`. Absent → trueROAS reported null (graceful). Does NOT
+   * affect the Gate-4 breach basis, which uses booking COUNTS from byCampaign. */
+  bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
 }
 
 // ── Helpers ──
@@ -212,6 +230,7 @@ export class AuditRunner {
   private readonly recommendationEmissionContext?: EmissionContext;
   private readonly signalHealthChecker?: SignalHealthReportProvider;
   private readonly coverageValidator?: AuditDependencies["coverageValidator"];
+  private readonly bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
 
   constructor(deps: AuditDependencies) {
     this.adsClient = deps.adsClient;
@@ -226,6 +245,7 @@ export class AuditRunner {
     this.recommendationEmissionContext = deps.recommendationEmissionContext;
     this.signalHealthChecker = deps.signalHealthChecker;
     this.coverageValidator = deps.coverageValidator;
+    this.bookedValueByCampaignProvider = deps.bookedValueByCampaignProvider;
 
     if (deps.recommendationEmitter && !deps.recommendationEmissionContext) {
       throw new Error(
@@ -373,6 +393,10 @@ export class AuditRunner {
     // awareness is reported unavailable, never silently satisfied (spec §3.4).
     const marginBasis: MarginBasis = "unavailable";
 
+    // PR2 Gate-4: per-campaign booking funnel (CRM real-provider only). Absent
+    // for non-real providers → every campaign falls back to the account target.
+    const byCampaign = (crmData as { byCampaign?: Record<string, CampaignFunnel> }).byCampaign;
+
     // Step 5: Per-campaign loop
     const insights: InsightOutput[] = [];
     const watches: WatchOutput[] = [];
@@ -401,6 +425,20 @@ export class AuditRunner {
       const learningPhaseActive = deriveLearningPhaseActive(learningStatus.state);
       if (learningPhaseActive) campaignsInLearning++;
 
+      // 5a-bis (PR2 Gate-4): judge THIS campaign against its own booking-
+      // calibrated CAC (Tier-1) when it clears the booking floor; otherwise the
+      // account-level target (Tier-2). The account {economicTier, effectiveTarget}
+      // resolved once above is the Tier-2 fallback. byCampaign absent → bookings 0
+      // → account fallback (graceful degradation).
+      const campaignTarget = resolveEconomicTargetForCampaign({
+        campaignBookings: byCampaign?.[insight.campaignId]?.booked ?? 0,
+        campaignConversions: insight.conversions,
+        ...(this.config.targetCostPerBooked !== undefined
+          ? { targetCostPerBooked: this.config.targetCostPerBooked }
+          : {}),
+        accountTarget: { economicTier, effectiveTarget },
+      });
+
       // 5b–5g: Pure per-campaign decision. The provider call for target-breach
       // status is the only side effect; everything downstream is deterministic
       // and lives in decideForCampaign (the model-free eval seam).
@@ -409,7 +447,7 @@ export class AuditRunner {
         orgId: this.config.orgId,
         accountId: this.config.accountId,
         campaignId: insight.campaignId,
-        targetCPA: effectiveTarget,
+        targetCPA: campaignTarget.effectiveTarget,
         startDate: new Date(dateRange.since),
         endDate: new Date(dateRange.until),
         ...(this.config.conversionActionType
@@ -426,108 +464,34 @@ export class AuditRunner {
         previousInsight: prevInsight,
         targetBreach,
         learningStatus,
-        economicTier,
-        effectiveTarget,
+        economicTier: campaignTarget.economicTier,
+        effectiveTarget: campaignTarget.effectiveTarget,
         marginBasis,
         targetROAS: this.config.targetROAS,
         nextCycleDate,
         measurementTrusted,
         learningPhaseActive,
+        targetSource: campaignTarget.targetSource,
       });
       insights.push(...decision.insights);
       watches.push(...decision.watches);
       recommendations.push(...decision.recommendations);
     }
 
-    // Step 6: V2 — Ad set level learning + details
-    let adSetsInLearning = 0;
-    let adSetsLearningLimited = 0;
-    let adSetDetails: AdSetDetail[] | undefined;
-
-    if (adSetData) {
-      adSetDetails = adSetData.map((input) => {
-        const learningStatus = this.learningGuardV2.classifyState(input);
-
-        if (learningStatus.state === "learning") {
-          adSetsInLearning++;
-        } else if (learningStatus.state === "learning_limited") {
-          adSetsLearningLimited++;
-        }
-
-        const destinationType = input.destinationType ?? "WEBSITE";
-        const funnelShape = detectFunnelShape(destinationType);
-
-        if (learningStatus.state === "learning_limited") {
-          const diagnosis = this.learningGuardV2.diagnoseLearningLimited(learningStatus, input);
-          const msg = `Ad set ${input.adSetId} is Learning Limited (${diagnosis.cause}). Recommended: ${diagnosis.recommendation}.`;
-          recommendations.push({
-            type: "recommendation",
-            campaignId: input.campaignId,
-            campaignName: input.adSetName,
-            action: diagnosis.recommendation as RecommendationOutput["action"],
-            confidence: 0.75,
-            urgency: "this_week",
-            estimatedImpact: msg,
-            steps: [msg],
-            learningPhaseImpact:
-              diagnosis.recommendation === "expand_targeting" ? "will reset learning" : "no impact",
-            resetsLearning: resetsLearningFor(
-              diagnosis.recommendation as RecommendationOutput["action"],
-            ),
-          });
-        }
-
-        return {
-          adSetId: input.adSetId,
-          adSetName: input.adSetName,
-          campaignId: input.campaignId,
-          destinationType,
-          funnelShape,
-          frequency: input.frequency,
-          learningStatus,
-          hasFrequencyCap: input.hasFrequencyCap ?? false,
-        };
-      });
-    }
-
-    // Step 7: V2 — Trends
-    let trends: TrendAnalysis | undefined;
-    if (trendRawData) {
-      const weeklyTrends = detectTrends(trendRawData.weekly);
-      trends = {
-        rollingAverages: {
-          day30: trendRawData.day30,
-          day60: trendRawData.day60,
-          day90: trendRawData.day90,
-        },
-        weeklySnapshots: trendRawData.weekly.map((w, i) => ({
-          weekStart: `week-${i}`,
-          weekEnd: `week-${i}`,
-          metrics: w,
-        })),
-        trends: weeklyTrends,
-      };
-    }
-
-    // Step 8: V2 — Budget distribution
-    let budgetDistribution: BudgetAnalysis | undefined;
-    if (currentInsights.length >= 2) {
-      const totalSpendAll = currentInsights.reduce((sum, i) => sum + i.spend, 0);
-      const budgetEntries: CampaignBudgetEntry[] = currentInsights.map((insight) => ({
-        campaignId: insight.campaignId,
-        campaignName: insight.campaignName,
-        spendShare: safeDivide(insight.spend, totalSpendAll),
-        spend: insight.spend,
-        cpa: safeDivide(insight.spend, insight.conversions),
-        roas: safeDivide(insight.revenue, insight.spend),
-        isCbo: false,
-        dailyBudget: null,
-        lifetimeBudget: null,
-        spendCap: null,
-        objective: "CONVERSIONS",
-      }));
-      budgetDistribution = analyzeBudgetDistribution(budgetEntries, this.config.targetCPA, null);
-    }
+    // Steps 6-8: V2 — ad-set learning/details, trends, budget distribution.
+    // Extracted to audit-v2-sections.ts for file headroom; the cross-source
+    // comparison (Step 8b) stays below since it pairs with campaignEconomics.
+    const v2Sections = analyzeV2Sections({
+      adSetData,
+      trendRawData,
+      currentInsights,
+      learningGuardV2: this.learningGuardV2,
+      targetCPA: this.config.targetCPA,
+    });
+    const { adSetDetails, trends, budgetDistribution } = v2Sections;
+    const adSetsInLearning = v2Sections.adSetsInLearning;
+    const adSetsLearningLimited = v2Sections.adSetsLearningLimited;
+    recommendations.push(...v2Sections.learningLimitedRecs);
 
     // Step 8b: Cross-source comparison (CTWA vs Instant Form on equal footing).
     // Only computed when the CRM data provider returned a per-source funnel.
@@ -536,6 +500,29 @@ export class AuditRunner {
     if (bySource && Object.keys(bySource).length > 0) {
       const spendBySource = computeSpendBySource(currentInsights, bySource, adSetData);
       sourceComparison = compareSources({ bySource, spendBySource });
+    }
+
+    // Per-campaign economics (PR2 Gate-4): CPL, cost-per-booked, and trueROAS.
+    // Mirrors sourceComparison; only when the provider gave a per-campaign funnel.
+    // Booked-VALUE (cents) comes from the injected port; absent → empty map →
+    // bookedValueCents/trueRoas null (graceful degradation, never a fabricated 0).
+    let campaignEconomics: { rows: CampaignEconomicsRow[] } | undefined;
+    if (byCampaign && Object.keys(byCampaign).length > 0) {
+      const spendByCampaign: Record<string, number> = {};
+      for (const i of currentInsights) spendByCampaign[i.campaignId] = i.spend;
+      const bookedValueCentsByCampaign = this.bookedValueByCampaignProvider
+        ? await this.bookedValueByCampaignProvider.queryBookedValueCentsByCampaign({
+            orgId: this.config.orgId,
+            from: new Date(dateRange.since),
+            to: new Date(dateRange.until),
+            campaignIds: currentInsights.map((i) => i.campaignId),
+          })
+        : new Map<string, number>();
+      campaignEconomics = compareCampaigns({
+        byCampaign,
+        spendByCampaign,
+        bookedValueCentsByCampaign,
+      });
     }
 
     // Step 8c: Append signal-health recommendations (non-critical breaches —
@@ -593,6 +580,7 @@ export class AuditRunner {
       ...(budgetDistribution ? { budgetDistribution } : {}),
       ...(adSetDetails ? { adSetDetails } : {}),
       ...(sourceComparison ? { sourceComparison } : {}),
+      ...(campaignEconomics ? { campaignEconomics } : {}),
     };
   }
 }

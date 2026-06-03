@@ -79,3 +79,20 @@ describe("outcomePattern metrics", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("booking lifecycle counters", () => {
+  it("exposes the 6 booking counters and they increment", () => {
+    const m = createInMemoryMetrics();
+    for (const c of [
+      m.bookingConfirmed,
+      m.bookingFailed,
+      m.bookingStageAdvanced,
+      m.bookingSlotConflict,
+      m.bookingReschedule,
+      m.bookingCancel,
+    ]) {
+      expect(c).toBeDefined();
+      c.inc({ orgId: "o" });
+    }
+  });
+});

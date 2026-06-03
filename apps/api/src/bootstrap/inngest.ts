@@ -231,6 +231,12 @@ export async function registerInngest(
     return { surface: result.surface };
   };
 
+  // PR2 Gate-4: per-campaign booked-VALUE provider for the weekly audit's
+  // trueROAS reporting. A single shared store works for all deployments (the
+  // audit passes the resolved orgId per call); structurally satisfies the
+  // ad-optimizer BookedValueByCampaignProvider port.
+  const bookedValueByCampaignStore = new PrismaConversionRecordStore(app.prisma!);
+
   const adOptimizerDeps: CronDependencies = {
     listActiveDeployments: async () => {
       const listing = await listingStore.findBySlug("ad-optimizer");
@@ -281,6 +287,7 @@ export async function registerInngest(
     getDeploymentPixelId,
     createSignalHealthChecker,
     recommendationEmitter: rileyRecommendationEmitter,
+    bookedValueByCampaignProvider: bookedValueByCampaignStore,
   };
 
   // Signal-health daily cron uses a slimmer dep set than the audit cron —

@@ -7,6 +7,7 @@ import type {
   EconomicTierSchema as EconomicTier,
   MarginBasisSchema as MarginBasis,
   TargetBreachResult,
+  TargetSourceSchema as TargetSource,
 } from "@switchboard/schemas";
 import { comparePeriods, type MetricSet } from "./period-comparator.js";
 import { diagnose } from "./metric-diagnostician.js";
@@ -77,6 +78,13 @@ export interface CampaignDecisionInput {
    * (back-compat with existing callers/tests).
    */
   learningPhaseActive?: boolean;
+  /**
+   * PR2 Gate-4: which tier the per-campaign `effectiveTarget` came from — the
+   * campaign's own booking-calibrated CAC ("campaign", Tier-1) or the account
+   * fallback ("account", Tier-2). Forwarded to applyTier so each surviving rec is
+   * stamped for operator visibility. `undefined` ⇒ unstamped (back-compat).
+   */
+  targetSource?: TargetSource;
 }
 
 export interface CampaignDecisionResult {
@@ -187,6 +195,7 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
       tier: input.economicTier,
       marginBasis: input.marginBasis,
       checkBackDate: input.nextCycleDate,
+      ...(input.targetSource ? { targetSource: input.targetSource } : {}),
     });
     if (tiered.watch) {
       watches.push(tiered.watch);
