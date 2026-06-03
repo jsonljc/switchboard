@@ -2,6 +2,7 @@ import {
   decideForCampaign,
   deriveLearningPhaseActive,
   LearningPhaseGuardV2,
+  resolveEconomicTargetForCampaign,
 } from "@switchboard/ad-optimizer";
 import type { RileyCase } from "./schema.js";
 import type { CampaignInsightSchema, LearningPhaseStatusSchema } from "@switchboard/schemas";
@@ -67,6 +68,9 @@ export interface RileyDecision {
   hasInsight: boolean;
   /** Back-compat reduced label: recommendation action > `watch` > `insight` > `none`. */
   primary: string;
+  /** PR2 Gate-4: the resolved per-campaign target source when the case carries a
+   * `hybrid` block (campaign Tier-1 vs account Tier-2); undefined otherwise. */
+  targetSource?: "campaign" | "account";
 }
 
 function sortedUnique(values: string[]): string[] {
@@ -80,6 +84,27 @@ function sortedUnique(values: string[]): string[] {
  * any decision logic.
  */
 export function decideForCase(c: RileyCase): RileyDecision {
+  // PR2 Gate-4: when a fixture carries a `hybrid` block, resolve the per-campaign
+  // economic target through the REAL resolver (Tier-1 campaign vs Tier-2 account)
+  // and feed THAT into decideForCampaign — the exact live audit-runner seam. A
+  // non-hybrid case pins the flat economicTier/effectiveTarget directly.
+  let economicTier = c.economicTier;
+  let effectiveTarget = c.effectiveTarget;
+  let targetSource: "campaign" | "account" | undefined;
+  if (c.hybrid) {
+    const resolved = resolveEconomicTargetForCampaign({
+      campaignBookings: c.hybrid.campaignBookings,
+      campaignConversions: c.hybrid.campaignConversions,
+      ...(c.hybrid.targetCostPerBooked !== undefined
+        ? { targetCostPerBooked: c.hybrid.targetCostPerBooked }
+        : {}),
+      accountTarget: c.hybrid.accountTarget,
+    });
+    economicTier = resolved.economicTier;
+    effectiveTarget = resolved.effectiveTarget;
+    targetSource = resolved.targetSource;
+  }
+
   const r = decideForCampaign({
     campaignId: "c1",
     campaignName: "C1",
@@ -87,8 +112,8 @@ export function decideForCase(c: RileyCase): RileyDecision {
     previousInsight: c.previous ? insight(c.previous) : null,
     targetBreach: { ...c.targetBreach, isApproximate: c.targetBreach.granularity === "weekly" },
     learningStatus: statusFor(c.learningState),
-    economicTier: c.economicTier,
-    effectiveTarget: c.effectiveTarget,
+    economicTier,
+    effectiveTarget,
     marginBasis: "unavailable",
     targetROAS: c.targetROAS,
     nextCycleDate: "2026-05-14",
@@ -96,6 +121,7 @@ export function decideForCase(c: RileyCase): RileyDecision {
     // Task 8 Step 4: exercise the V2 reset-class lockout via the SAME rule the live
     // runner uses (deriveLearningPhaseActive), so the eval and audit-runner never drift.
     learningPhaseActive: deriveLearningPhaseActive(c.learningState),
+    ...(targetSource ? { targetSource } : {}),
   });
 
   const actions = sortedUnique(r.recommendations.map((rec) => rec.action));
@@ -111,5 +137,5 @@ export function decideForCase(c: RileyCase): RileyDecision {
           ? "insight"
           : "none";
 
-  return { actions, watchPatterns, hasInsight, primary };
+  return { actions, watchPatterns, hasInsight, primary, targetSource };
 }

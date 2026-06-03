@@ -43,6 +43,11 @@ function main(): void {
         );
       }
     }
+    if (c.expectedTargetSource && decision.targetSource !== c.expectedTargetSource) {
+      mismatches.push(
+        `${c.id}: expected targetSource ${c.expectedTargetSource}, got ${decision.targetSource ?? "undefined"} ${ctx}`,
+      );
+    }
   }
 
   if (mismatches.length > 0) {
