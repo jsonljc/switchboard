@@ -49,6 +49,7 @@ import {
   runAfterLlmCallHooks,
   runBeforeToolCallHooks,
   runAfterToolCallHooks,
+  runAfterSkillHooks,
 } from "./hook-runner.js";
 import { IntentClassSchema, type IntentClass } from "@switchboard/schemas";
 import { parseQualificationSidecar } from "./qualification-sidecar-parser.js";
@@ -461,10 +462,28 @@ export class SkillExecutorImpl implements SkillExecutor {
               : {}),
           };
 
-          // Isolated telemetry recorder — invoked directly (NOT via runAfterSkillHooks),
-          // so the governance afterSkill gates stay dormant. FIRE-AND-FORGET: NOT
-          // awaited, so a slow ExecutionTrace DB write never delays the lead-visible
-          // response. Log-and-swallow on the floating promise; apps/api is a
+          // Governance afterSkill gates (banned-phrase / claim / PDPA / WhatsApp-window).
+          // Wired here — AFTER result assembly, BEFORE the isolated trace recorder — so any
+          // in-place result.response mutation (enforce-mode block/rewrite/handoff) is reflected
+          // in BOTH the returned reply and the persisted ExecutionTrace (the trace recorder reads
+          // `result` by reference), preserving the "trace never sees pre-block unsafe text"
+          // invariant the bootstrap relies on. Fail-OPEN on an unexpected gate throw: a governance
+          // logic bug must never crash a lead turn. Each gate already fails CLOSED internally
+          // (posture cache) for the resolver-unavailable case; this guard is for logic bugs only.
+          // With no governanceConfig seeded today, every gate early-returns → inert in prod.
+          try {
+            await runAfterSkillHooks(this.hooks, hookCtx, result);
+          } catch (e: unknown) {
+            console.warn(
+              "[SkillExecutor] afterSkill governance hook threw (swallowed, fail-open):",
+              e instanceof Error ? e.message : String(e),
+            );
+          }
+
+          // Isolated telemetry recorder — a SEPARATE arg (not in the `hooks` array), invoked
+          // directly AFTER the governance gates above so it records the post-gate result.
+          // FIRE-AND-FORGET: NOT awaited, so a slow ExecutionTrace DB write never delays the
+          // lead-visible response. Log-and-swallow on the floating promise; apps/api is a
           // long-running Fastify server, so it settles safely after we return.
           if (this.executionTraceHook?.afterSkill) {
             void this.executionTraceHook.afterSkill(hookCtx, result).catch((e: unknown) => {
