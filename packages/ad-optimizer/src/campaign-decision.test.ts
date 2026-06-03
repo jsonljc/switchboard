@@ -164,3 +164,42 @@ describe("decideForCampaign (characterization)", () => {
     expect(w?.checkBackDate).toBe("2026-05-21");
   });
 });
+
+describe("decideForCampaign targetSource (PR2 Gate-4)", () => {
+  it("stamps targetSource onto every produced recommendation when provided", () => {
+    const r = decideForCampaign({
+      campaignId: "c1",
+      campaignName: "C1",
+      currentInsight: insight({ spend: 2800, conversions: 8 }),
+      previousInsight: insight({ spend: 2800, conversions: 8 }),
+      targetBreach: { periodsAboveTarget: 8, granularity: "daily", isApproximate: false },
+      learningStatus: successStatus,
+      economicTier: "booked_cac",
+      effectiveTarget: 100,
+      marginBasis: "unavailable",
+      targetROAS: 3,
+      nextCycleDate: "2026-05-14",
+      targetSource: "campaign",
+    });
+    expect(r.recommendations.length).toBeGreaterThan(0);
+    expect(r.recommendations.every((rec) => rec.targetSource === "campaign")).toBe(true);
+  });
+
+  it("leaves targetSource unstamped when not provided (back-compat)", () => {
+    const r = decideForCampaign({
+      campaignId: "c1",
+      campaignName: "C1",
+      currentInsight: insight({ spend: 2800, conversions: 8 }),
+      previousInsight: insight({ spend: 2800, conversions: 8 }),
+      targetBreach: { periodsAboveTarget: 8, granularity: "daily", isApproximate: false },
+      learningStatus: successStatus,
+      economicTier: "booked_cac",
+      effectiveTarget: 100,
+      marginBasis: "unavailable",
+      targetROAS: 3,
+      nextCycleDate: "2026-05-14",
+    });
+    expect(r.recommendations.length).toBeGreaterThan(0);
+    expect(r.recommendations.every((rec) => rec.targetSource === undefined)).toBe(true);
+  });
+});

@@ -89,6 +89,10 @@ export interface ApplyTierInput {
   marginBasis: MarginBasis;
   confidencePenalty?: number;
   checkBackDate?: string;
+  /** PR2 Gate-4: which tier the judged target came from (campaign Tier-1 /
+   * account Tier-2). Stamped onto the surviving recommendation for operator
+   * visibility. `undefined` ⇒ field omitted (back-compat). */
+  targetSource?: "campaign" | "account";
 }
 
 export interface TieredResult {
@@ -136,6 +140,7 @@ export function applyTier(input: ApplyTierInput): TieredResult {
       urgency,
       economicTier: tier,
       marginBasis,
+      ...(input.targetSource ? { targetSource: input.targetSource } : {}),
       estimatedImpact: `${rec.estimatedImpact}. ${basisNote(tier, marginBasis)}`,
     },
   };
