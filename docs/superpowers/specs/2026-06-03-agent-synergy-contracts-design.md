@@ -131,7 +131,10 @@ budget authority.
 - **Payload:** `recommendationId`, `actionType` (`refresh_creative` | `add_creative` |
   `lead_quality`), `campaignId`, `rationale`, `evidence`. A creative action maps to a
   `creative.concept.draft`-shaped brief (reuses Contract 1's target). A `lead_quality` action
-  becomes an Alex read-note (a read surface, not an ingress mutation).
+  becomes an Alex read-note (a read surface, not an ingress mutation). Realized scope: the
+  creative routing (`refresh_creative` / `add_creative`) is built; other action types including
+  `lead_quality` are accepted but abstained as unroutable, and the Alex read-note variant is
+  specced but deferred.
 - **Approval owner:** a Mira-bound brief that will spend uses `require_approval` (never
   `system_auto_approved` on a spend path). A no-spend draft may auto. The Alex-note variant is
   read-only (no governance).
@@ -199,11 +202,17 @@ coupling over a shared schema, not a handoff.
 
 ## Appendix: realization status (point-in-time, 2026-06-03)
 
-The contract types and the net-new Contract 3 were implemented on branch
-`feat/agent-synergy-recommendation-handoff` (an autonomous-agent worktree), which was
-interrupted by a session limit and is not yet verified green or reviewed. This spec is
-independent of that branch's verification status: it freezes the contracts; the branch is one
-realization that must pass the full green gate (`build`, `typecheck`, `test`, `lint`,
-`format:check`) and an adversarial review before it is trusted or merged. Seam 2's producers
-(durable asset URL, Meta page id) are in flight separately (`feat/creative-durable-asset-storage`)
-and are out of scope here.
+The contract types and the net-new Contract 3 are implemented on branch
+`feat/agent-synergy-recommendation-handoff` in four commits (schema-anchoring; Contract 3;
+fail-closed hardening; two codex-review fixes). Verification: the scoped green gate passes
+(build, typecheck, the full `apps/api` suite plus the affected-package tests, lint with zero
+errors, format), the live-path test drives the real `GovernanceGate` with the seeded
+mandatory-approval policy and the seeded system principal, and an independent codex adversarial
+review surfaced two P2 correctness gaps that are now fixed: a top-level deployment-resolver slug
+mismatch (`adoptimizer` from the intent vs the seeded `ad-optimizer`) that would fail before
+governance, and a phantom-success when the child draft skips because Mira is disabled. The branch
+is one commit behind `origin/main` with no file overlap, so it rebases cleanly. It is PR-ready
+but unmerged (the user merges).
+
+Seam 2's producers (durable asset URL, Meta page id) are in flight separately
+(`feat/creative-durable-asset-storage`) and are out of scope here.
