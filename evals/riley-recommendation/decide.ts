@@ -5,7 +5,11 @@ import {
   resolveEconomicTargetForCampaign,
 } from "@switchboard/ad-optimizer";
 import type { RileyCase } from "./schema.js";
-import type { CampaignInsightSchema, LearningPhaseStatusSchema } from "@switchboard/schemas";
+import type {
+  CampaignInsightSchema,
+  LearningPhaseStatusSchema,
+  TargetSourceSchema as TargetSource,
+} from "@switchboard/schemas";
 
 const v2 = new LearningPhaseGuardV2();
 
@@ -70,7 +74,7 @@ export interface RileyDecision {
   primary: string;
   /** PR2 Gate-4: the resolved per-campaign target source when the case carries a
    * `hybrid` block (campaign Tier-1 vs account Tier-2); undefined otherwise. */
-  targetSource?: "campaign" | "account";
+  targetSource?: TargetSource;
 }
 
 function sortedUnique(values: string[]): string[] {
@@ -90,7 +94,7 @@ export function decideForCase(c: RileyCase): RileyDecision {
   // non-hybrid case pins the flat economicTier/effectiveTarget directly.
   let economicTier = c.economicTier;
   let effectiveTarget = c.effectiveTarget;
-  let targetSource: "campaign" | "account" | undefined;
+  let targetSource: TargetSource | undefined;
   if (c.hybrid) {
     const resolved = resolveEconomicTargetForCampaign({
       campaignBookings: c.hybrid.campaignBookings,

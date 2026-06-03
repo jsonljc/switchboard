@@ -3,6 +3,7 @@ import {
   RecommendationOutputSchema,
   EconomicTierSchema,
   MarginBasisSchema,
+  TargetSourceSchema,
   AuditReportSchema,
 } from "./ad-optimizer.js";
 
@@ -38,6 +39,7 @@ describe("RecommendationOutputSchema economic fields", () => {
   it("exposes the enums", () => {
     expect(EconomicTierSchema.options).toEqual(["booked_cac", "cpl", "cpc"]);
     expect(MarginBasisSchema.options).toEqual(["configured", "unavailable"]);
+    expect(TargetSourceSchema.options).toEqual(["campaign", "account"]);
   });
 
   it("RecommendationOutput requires a resetsLearning class", () => {
