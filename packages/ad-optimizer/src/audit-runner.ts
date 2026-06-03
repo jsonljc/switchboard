@@ -12,18 +12,12 @@ import type {
   CampaignInsightsProvider,
   AdSetLearningInput,
   MetricSnapshotSchema as MetricSnapshot,
-  AdSetDetailSchema as AdSetDetail,
   FunnelAnalysisSchema as FunnelAnalysis,
-  TrendAnalysisSchema as TrendAnalysis,
-  BudgetAnalysisSchema as BudgetAnalysis,
-  CampaignBudgetEntrySchema as CampaignBudgetEntry,
 } from "@switchboard/schemas";
 import { analyzeFunnel } from "./funnel-analyzer.js";
 import { comparePeriods, type MetricSet } from "./period-comparator.js";
 import { LearningPhaseGuard, LearningPhaseGuardV2 } from "./learning-phase-guard.js";
-import { detectFunnelShape } from "./funnel-detector.js";
-import { detectTrends } from "./trend-engine.js";
-import { analyzeBudgetDistribution } from "./budget-analyzer.js";
+import { analyzeV2Sections } from "./audit-v2-sections.js";
 import { generateSignalHealthRecommendations } from "./recommendation-engine.js";
 import {
   runRecommendationSink,
@@ -35,7 +29,6 @@ import { computeSpendBySource } from "./analyzers/spend-attributor.js";
 import type { SourceFunnel } from "./crm-data-provider/real-provider.js";
 import type { SignalHealthReportProvider, SignalHealthReport } from "./signal-health-checker.js";
 import { resolveEconomicTarget } from "./analyzers/economic-target.js";
-import { resetsLearningFor } from "./action-reset-classification.js";
 import { decideForCampaign, deriveLearningPhaseActive } from "./campaign-decision.js";
 import {
   isCoverageSufficient,
@@ -439,95 +432,20 @@ export class AuditRunner {
       recommendations.push(...decision.recommendations);
     }
 
-    // Step 6: V2 — Ad set level learning + details
-    let adSetsInLearning = 0;
-    let adSetsLearningLimited = 0;
-    let adSetDetails: AdSetDetail[] | undefined;
-
-    if (adSetData) {
-      adSetDetails = adSetData.map((input) => {
-        const learningStatus = this.learningGuardV2.classifyState(input);
-
-        if (learningStatus.state === "learning") {
-          adSetsInLearning++;
-        } else if (learningStatus.state === "learning_limited") {
-          adSetsLearningLimited++;
-        }
-
-        const destinationType = input.destinationType ?? "WEBSITE";
-        const funnelShape = detectFunnelShape(destinationType);
-
-        if (learningStatus.state === "learning_limited") {
-          const diagnosis = this.learningGuardV2.diagnoseLearningLimited(learningStatus, input);
-          const msg = `Ad set ${input.adSetId} is Learning Limited (${diagnosis.cause}). Recommended: ${diagnosis.recommendation}.`;
-          recommendations.push({
-            type: "recommendation",
-            campaignId: input.campaignId,
-            campaignName: input.adSetName,
-            action: diagnosis.recommendation as RecommendationOutput["action"],
-            confidence: 0.75,
-            urgency: "this_week",
-            estimatedImpact: msg,
-            steps: [msg],
-            learningPhaseImpact:
-              diagnosis.recommendation === "expand_targeting" ? "will reset learning" : "no impact",
-            resetsLearning: resetsLearningFor(
-              diagnosis.recommendation as RecommendationOutput["action"],
-            ),
-          });
-        }
-
-        return {
-          adSetId: input.adSetId,
-          adSetName: input.adSetName,
-          campaignId: input.campaignId,
-          destinationType,
-          funnelShape,
-          frequency: input.frequency,
-          learningStatus,
-          hasFrequencyCap: input.hasFrequencyCap ?? false,
-        };
-      });
-    }
-
-    // Step 7: V2 — Trends
-    let trends: TrendAnalysis | undefined;
-    if (trendRawData) {
-      const weeklyTrends = detectTrends(trendRawData.weekly);
-      trends = {
-        rollingAverages: {
-          day30: trendRawData.day30,
-          day60: trendRawData.day60,
-          day90: trendRawData.day90,
-        },
-        weeklySnapshots: trendRawData.weekly.map((w, i) => ({
-          weekStart: `week-${i}`,
-          weekEnd: `week-${i}`,
-          metrics: w,
-        })),
-        trends: weeklyTrends,
-      };
-    }
-
-    // Step 8: V2 — Budget distribution
-    let budgetDistribution: BudgetAnalysis | undefined;
-    if (currentInsights.length >= 2) {
-      const totalSpendAll = currentInsights.reduce((sum, i) => sum + i.spend, 0);
-      const budgetEntries: CampaignBudgetEntry[] = currentInsights.map((insight) => ({
-        campaignId: insight.campaignId,
-        campaignName: insight.campaignName,
-        spendShare: safeDivide(insight.spend, totalSpendAll),
-        spend: insight.spend,
-        cpa: safeDivide(insight.spend, insight.conversions),
-        roas: safeDivide(insight.revenue, insight.spend),
-        isCbo: false,
-        dailyBudget: null,
-        lifetimeBudget: null,
-        spendCap: null,
-        objective: "CONVERSIONS",
-      }));
-      budgetDistribution = analyzeBudgetDistribution(budgetEntries, this.config.targetCPA, null);
-    }
+    // Steps 6-8: V2 — ad-set learning/details, trends, budget distribution.
+    // Extracted to audit-v2-sections.ts for file headroom; the cross-source
+    // comparison (Step 8b) stays below since it pairs with campaignEconomics.
+    const v2Sections = analyzeV2Sections({
+      adSetData,
+      trendRawData,
+      currentInsights,
+      learningGuardV2: this.learningGuardV2,
+      targetCPA: this.config.targetCPA,
+    });
+    const { adSetDetails, trends, budgetDistribution } = v2Sections;
+    const adSetsInLearning = v2Sections.adSetsInLearning;
+    const adSetsLearningLimited = v2Sections.adSetsLearningLimited;
+    recommendations.push(...v2Sections.learningLimitedRecs);
 
     // Step 8b: Cross-source comparison (CTWA vs Instant Form on equal footing).
     // Only computed when the CRM data provider returned a per-source funnel.
