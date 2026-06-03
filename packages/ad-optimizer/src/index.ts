@@ -138,3 +138,10 @@ export type {
   HandoffAbstentionInput,
   HandoffAbstentionReason,
 } from "./recommendation-handoff-abstention.js";
+export { buildHandoffCandidate } from "./recommendation-handoff-dispatch.js";
+export type {
+  HandoffCampaignContext,
+  HandoffEmittedRecommendation,
+  RecommendationHandoffCandidate,
+  RecommendationHandoffSubmitter,
+} from "./recommendation-handoff-dispatch.js";

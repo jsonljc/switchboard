@@ -6,6 +6,11 @@ import type {
 } from "@switchboard/schemas";
 import type { RecommendationOutput } from "./recommendation-engine.js";
 import type { CampaignEconomicsRow } from "./analyzers/source-comparator.js";
+import {
+  buildHandoffCandidate,
+  type HandoffCampaignContext,
+  type RecommendationHandoffSubmitter,
+} from "./recommendation-handoff-dispatch.js";
 
 /**
  * Sink that bridges ad-optimizer's RecommendationOutput[] (audit-runner output)
@@ -38,6 +43,13 @@ import type { CampaignEconomicsRow } from "./analyzers/source-comparator.js";
  */
 export interface EmitOutcome {
   surface: RecommendationSurface;
+  /**
+   * The persisted Recommendation row id (null when the router dropped it). Surfaced
+   * so the cron can key a Riley -> agent handoff on the SAME id (the production
+   * emitter wraps emitRecommendation, which returns it). Optional for back-compat
+   * with analysis-only / test emitters that do not persist.
+   */
+  id?: string | null;
 }
 
 /**
@@ -74,6 +86,21 @@ export interface RunRecommendationSinkArgs {
    * true ROAS. Optional — absent for analysis-only callers (unchanged behavior).
    */
   campaignEconomics?: { rows: CampaignEconomicsRow[] };
+  /**
+   * Per-campaign evidence + learning-phase context the audit captured during its
+   * per-campaign loop, keyed by campaignId. Required (alongside
+   * `recommendationHandoffSubmitter`) to assemble a Riley -> agent handoff; absent
+   * for analysis-only callers (no handoff).
+   */
+  handoffContextByCampaign?: Map<string, HandoffCampaignContext>;
+  /**
+   * Optional. When provided, each EMITTED (non-dropped) creative recommendation that
+   * clears the handoff abstention is routed to a governed Mira draft (parking for
+   * mandatory human approval). The submit is the bootstrap-injected callback — the
+   * sink (Layer 2) never imports PlatformIngress. Best-effort: a handoff failure
+   * never breaks emission/routing.
+   */
+  recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
 }
 
 export interface RunRecommendationSinkResult {
@@ -460,6 +487,35 @@ export async function runRecommendationSink(
     if (result.surface === "dropped") dropped++;
     else if (result.surface === "shadow_action") routedShadow++;
     else routedQueue++;
+
+    // Riley -> agent handoff: route an emitted, evidence-met creative recommendation
+    // to a governed Mira draft. Gated on a persisted id (dropped recs return none),
+    // a captured per-campaign context, and the abstention (in buildHandoffCandidate).
+    // Best-effort: a handoff failure never breaks emission/routing — the weekly cron
+    // is retryable and the ingress idempotency key backstops a retry double-submit.
+    if (args.recommendationHandoffSubmitter && result.id) {
+      const candidate = buildHandoffCandidate({
+        emitted: {
+          recommendationId: result.id,
+          actionType: rec.action,
+          campaignId: rec.campaignId,
+          rationale: humanizeRecommendation(rec),
+          surface: result.surface,
+        },
+        context: args.handoffContextByCampaign?.get(rec.campaignId),
+        organizationId: args.orgId,
+        deploymentId: args.emissionContext.deploymentId ?? "",
+      });
+      if (candidate && candidate.deploymentId) {
+        try {
+          await args.recommendationHandoffSubmitter(candidate);
+        } catch (err) {
+          console.warn(
+            `[ad-optimizer] Riley handoff submit threw for rec=${candidate.recommendationId}: ${String(err)}`,
+          );
+        }
+      }
+    }
   }
 
   return { routedQueue, routedShadow, dropped };

@@ -676,6 +676,12 @@ export async function buildServer() {
         input: import("./services/workflows/reminder-send-request.js").ReminderSendSubmitInput,
       ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
     | undefined;
+  let submitRecommendationHandoff:
+    | ((
+        input: import("./services/workflows/recommendation-handoff-request.js").RecommendationHandoffSubmitInput,
+        deployment: { deploymentId: string; skillSlug: string },
+      ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse | null>)
+    | undefined;
   if (prismaClient) {
     const { bootstrapContainedWorkflows } = await import("./bootstrap/contained-workflows.js");
     const result = await bootstrapContainedWorkflows({
@@ -689,6 +695,7 @@ export async function buildServer() {
     instantFormAdapter = result.instantFormAdapter;
     submitScheduledFollowUp = result.submitScheduledFollowUp;
     submitScheduledReminder = result.submitScheduledReminder;
+    submitRecommendationHandoff = result.submitRecommendationHandoff;
   }
 
   // --- Phase 3b: lifecycle disqualification hook + store decoration (Wave 2 Phase 1b.3) ---
@@ -879,6 +886,7 @@ export async function buildServer() {
     operatorAlerter,
     submitScheduledFollowUp,
     submitScheduledReminder,
+    submitRecommendationHandoff,
   });
 
   // --- Phase 3b: lifecycle disqualification route deps ---
