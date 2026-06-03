@@ -92,5 +92,11 @@ export interface ToolCallingLLMAdapter {
     tools: LLMToolDefinition[];
     maxTokens?: number;
     profile?: { model: string; maxTokens: number; temperature: number; timeoutMs: number };
+    /**
+     * Optional abort signal. Threaded straight to the provider SDK request so the
+     * executor's per-call deadline can cancel an in-flight call (stop the
+     * output-token-burn leak), not just stop awaiting its result.
+     */
+    signal?: AbortSignal;
   }): Promise<LLMResponse>;
 }
