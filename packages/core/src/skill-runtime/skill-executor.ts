@@ -53,6 +53,10 @@ import {
 import { IntentClassSchema, type IntentClass } from "@switchboard/schemas";
 import { parseQualificationSidecar } from "./qualification-sidecar-parser.js";
 import type { QualificationEvaluationHook } from "../conversation-lifecycle/event-hooks/qualification-evaluation-hook.js";
+import type {
+  ExecutionTraceRecorder,
+  ExecutionTracePartial,
+} from "./hooks/trace-persistence-hook.js";
 
 // Global match — captures every <intent>...</intent> occurrence in the response.
 // Whitespace around the inner value is allowed; the tag itself must be closed.
@@ -145,9 +149,10 @@ export class SkillExecutorImpl implements SkillExecutor {
      * Optional execution-trace recorder, invoked at the success-return and on a
      * thrown turn. Mirrors `qualificationEvaluationHook`: a SEPARATE arg (not in
      * the `hooks` array) so it cannot activate the governance afterSkill gates.
-     * Failures are log-and-swallow — telemetry must never change the response.
+     * Invoked FIRE-AND-FORGET (not awaited) on both paths so a slow trace write
+     * never delays the lead-visible response; failures are log-and-swallow.
      */
-    private executionTraceHook?: Pick<SkillHook, "afterSkill" | "onError">,
+    private executionTraceHook?: ExecutionTraceRecorder,
   ) {}
 
   /**
@@ -444,10 +449,12 @@ export class SkillExecutorImpl implements SkillExecutor {
           };
 
           // Isolated telemetry recorder — invoked directly (NOT via runAfterSkillHooks),
-          // so the governance afterSkill gates stay dormant. Log-and-swallow: a failing
-          // recorder must never change the lead-visible response.
+          // so the governance afterSkill gates stay dormant. FIRE-AND-FORGET: NOT
+          // awaited, so a slow ExecutionTrace DB write never delays the lead-visible
+          // response. Log-and-swallow on the floating promise; apps/api is a
+          // long-running Fastify server, so it settles safely after we return.
           if (this.executionTraceHook?.afterSkill) {
-            await this.executionTraceHook.afterSkill(hookCtx, result).catch((e: unknown) => {
+            void this.executionTraceHook.afterSkill(hookCtx, result).catch((e: unknown) => {
               console.warn(
                 "[SkillExecutor] trace hook afterSkill failed (swallowed):",
                 e instanceof Error ? e.message : String(e),
@@ -591,12 +598,26 @@ export class SkillExecutorImpl implements SkillExecutor {
         `Exceeded maximum LLM turns (${this.policy.maxLlmTurns})`,
       );
     } catch (err) {
-      // Isolated telemetry recorder for the error path — log-and-swallow, then
-      // re-throw the original error unchanged. Mirrors the success-path afterSkill;
+      // Isolated telemetry recorder for the error path — FIRE-AND-FORGET (NOT
+      // awaited), then re-throw the ORIGINAL error immediately so a slow trace write
+      // never delays surfacing the failure. Mirrors the success-path afterSkill;
       // never via runAfterSkillHooks, so the governance afterSkill gates stay dormant.
+      // The partial threads the burned tokens/latency so a budget-busting turn is
+      // recorded with real cost, not a zero fallback.
       if (this.executionTraceHook?.onError) {
-        await this.executionTraceHook
-          .onError(hookCtx, err instanceof Error ? err : new Error(String(err)))
+        const partial: ExecutionTracePartial = {
+          tokenUsage: {
+            input: totalInputTokens,
+            output: totalOutputTokens,
+            cacheRead: totalCacheReadTokens,
+            cacheCreation: totalCacheCreationTokens,
+          },
+          durationMs: Date.now() - startTime,
+          turnCount,
+          ...(lastModel ? { model: lastModel } : {}),
+        };
+        void this.executionTraceHook
+          .onError(hookCtx, err instanceof Error ? err : new Error(String(err)), partial)
           .catch((e: unknown) => {
             console.warn(
               "[SkillExecutor] trace hook onError failed (swallowed):",

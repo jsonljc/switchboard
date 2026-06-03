@@ -19,6 +19,7 @@ import {
   DEFAULT_SKILL_RUNTIME_POLICY,
 } from "./types.js";
 import { GovernanceHook } from "./hooks/governance-hook.js";
+import type { ExecutionTracePartial } from "./hooks/trace-persistence-hook.js";
 import { ModelRouter } from "../model-router.js";
 import { ok } from "./tool-result.js";
 
@@ -730,6 +731,44 @@ describe("SkillExecutorImpl", () => {
     await expect(exec.execute(traceBaseParams())).rejects.toThrow(SkillExecutionBudgetError);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toBeInstanceOf(SkillExecutionBudgetError);
+  });
+
+  it("onError receives a partial carrying the burned tokens of the failed turn", async () => {
+    const partials: Array<ExecutionTracePartial | undefined> = [];
+    const traceHook = {
+      afterSkill: async () => {},
+      onError: async (_c: SkillHookContext, _e: Error, partial?: ExecutionTracePartial) => {
+        partials.push(partial);
+      },
+    };
+    // The turn burns 1000+1000 tokens BEFORE the maxTotalTokens:1 budget trips —
+    // the partial must reflect that real cost, not a zero fallback.
+    const budgetBustingAdapter: ToolCallingLLMAdapter = {
+      chatWithTools: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "over" }],
+        stopReason: "end_turn",
+        model: "claude-sonnet-4-6",
+        usage: { inputTokens: 1000, outputTokens: 1000, cacheReadTokens: 200 },
+      }),
+    };
+    const exec = new SkillExecutorImpl(
+      budgetBustingAdapter,
+      new Map(),
+      undefined,
+      [],
+      { ...DEFAULT_SKILL_RUNTIME_POLICY, maxLlmTurns: 1, maxTotalTokens: 1 },
+      new Map(),
+      undefined,
+      traceHook,
+    );
+    await expect(exec.execute(traceBaseParams())).rejects.toThrow(SkillExecutionBudgetError);
+    expect(partials).toHaveLength(1);
+    expect(partials[0]).toBeDefined();
+    expect(partials[0]!.tokenUsage.input).toBeGreaterThan(0);
+    expect(partials[0]!.tokenUsage.output).toBeGreaterThan(0);
+    expect(partials[0]!.tokenUsage.cacheRead).toBe(200);
+    expect(partials[0]!.turnCount).toBe(1);
+    expect(partials[0]!.model).toBe("claude-sonnet-4-6");
   });
 
   // --- C3: abort the in-flight LLM call on the per-call deadline ---

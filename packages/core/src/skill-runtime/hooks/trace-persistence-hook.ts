@@ -13,12 +13,40 @@ interface ExecutionTraceStore {
 }
 
 /**
- * Persists a per-execution telemetry row (tokens incl. cache, cost, model, latency,
- * turn count, status) and emits the per-model token counter. Invoked DIRECTLY by the
- * executor as a dedicated arg (the `qualificationEvaluationHook` template) — NOT via
- * `runAfterSkillHooks`, so it never activates the governance afterSkill gates.
+ * Accumulated execution state threaded into `onError` so a turn that burned tokens
+ * before tripping the budget (or any other error) is recorded with its REAL cost,
+ * not a zero fallback. Built by the executor from its in-scope accumulators at the
+ * catch site. Optional: when absent (legacy callers) the recorder keeps the zero
+ * fallback.
  */
-export class TracePersistenceHook implements Pick<SkillHook, "afterSkill" | "onError"> {
+export interface ExecutionTracePartial {
+  tokenUsage: { input: number; output: number; cacheRead?: number; cacheCreation?: number };
+  durationMs: number;
+  turnCount: number;
+  model?: string;
+}
+
+/**
+ * The isolated telemetry recorder contract the executor invokes (its 8th arg). A
+ * dedicated interface — NOT the full `SkillHook` — so the recorder can never be
+ * placed in the `hooks` array and activate the governance afterSkill gates. The
+ * `onError` leg accepts an optional accumulated `partial` so error traces carry
+ * real burned tokens + cost.
+ */
+export interface ExecutionTraceRecorder {
+  afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void>;
+  onError(ctx: SkillHookContext, error: Error, partial?: ExecutionTracePartial): Promise<void>;
+}
+
+/**
+ * Persists a per-execution telemetry row (tokens incl. cache, cost, model, latency,
+ * turn count, status) and emits the per-model token + cost counters. Invoked DIRECTLY
+ * by the executor as a dedicated arg (the `qualificationEvaluationHook` template) — NOT
+ * via `runAfterSkillHooks`, so it never activates the governance afterSkill gates.
+ */
+export class TracePersistenceHook
+  implements Pick<SkillHook, "afterSkill" | "onError">, ExecutionTraceRecorder
+{
   readonly name = "trace-persistence";
 
   constructor(
@@ -72,8 +100,36 @@ export class TracePersistenceHook implements Pick<SkillHook, "afterSkill" | "onE
     }
   }
 
-  async onError(ctx: SkillHookContext, error: Error): Promise<void> {
+  async onError(
+    ctx: SkillHookContext,
+    error: Error,
+    partial?: ExecutionTracePartial,
+  ): Promise<void> {
     const status = error.name === "SkillExecutionBudgetError" ? "budget_exceeded" : "error";
+    const model = partial?.model;
+    const cacheRead = partial?.tokenUsage.cacheRead ?? 0;
+    const cacheCreation = partial?.tokenUsage.cacheCreation ?? 0;
+    // When the executor threads accumulated usage, record the REAL burned tokens +
+    // cost. Absent a partial (legacy callers), keep the zero fallback.
+    const tokenUsage = partial
+      ? (() => {
+          const { totalCost } = computeExecutionCostUSD({
+            model,
+            inputTokens: partial.tokenUsage.input,
+            outputTokens: partial.tokenUsage.output,
+            cacheReadTokens: cacheRead,
+            cacheCreationTokens: cacheCreation,
+          });
+          return {
+            input: partial.tokenUsage.input,
+            output: partial.tokenUsage.output,
+            cacheRead,
+            cacheCreation,
+            costUsd: totalCost,
+            ...(model ? { model } : {}),
+          };
+        })()
+      : { input: 0, output: 0 };
     const trace: SkillExecutionTrace = {
       id: createId(),
       deploymentId: ctx.deploymentId,
@@ -85,9 +141,9 @@ export class TracePersistenceHook implements Pick<SkillHook, "afterSkill" | "onE
       inputParametersHash: ctx.inputParametersHash ?? "",
       toolCalls: [],
       governanceDecisions: [],
-      tokenUsage: { input: 0, output: 0 },
-      durationMs: 0,
-      turnCount: 0,
+      tokenUsage,
+      durationMs: partial?.durationMs ?? 0,
+      turnCount: partial?.turnCount ?? 0,
       status,
       error: error.message,
       responseSummary: "",

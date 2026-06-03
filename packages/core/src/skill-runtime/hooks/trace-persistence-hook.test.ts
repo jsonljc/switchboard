@@ -100,6 +100,36 @@ describe("TracePersistenceHook", () => {
     expect(created[0]!.inputParametersHash).toBe("h2");
   });
 
+  it("records the burned tokens + a non-zero cost when onError is given a partial", async () => {
+    const created: SkillExecutionTrace[] = [];
+    const hook = new TracePersistenceHook(
+      {
+        create: async (t: SkillExecutionTrace) => {
+          created.push(t);
+        },
+      },
+      { trigger: "chat_message" },
+    );
+    const budgetError = Object.assign(new Error("over budget"), {
+      name: "SkillExecutionBudgetError",
+    });
+    await hook.onError(baseCtx({}), budgetError, {
+      tokenUsage: { input: 1000, output: 1000, cacheRead: 200 },
+      durationMs: 1234,
+      turnCount: 1,
+      model: "claude-sonnet-4-6",
+    });
+    expect(created).toHaveLength(1);
+    expect(created[0]!.status).toBe("budget_exceeded");
+    expect(created[0]!.tokenUsage.input).toBe(1000);
+    expect(created[0]!.tokenUsage.output).toBe(1000);
+    expect(created[0]!.tokenUsage.cacheRead).toBe(200);
+    expect(created[0]!.tokenUsage.model).toBe("claude-sonnet-4-6");
+    expect(created[0]!.tokenUsage.costUsd).toBeGreaterThan(0);
+    expect(created[0]!.durationMs).toBe(1234);
+    expect(created[0]!.turnCount).toBe(1);
+  });
+
   it("never throws when the store fails", async () => {
     const hook = new TracePersistenceHook(
       {
