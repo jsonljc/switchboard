@@ -26,13 +26,9 @@
 }
 
 /* ─── Bento (desktop only) ─── */
-.bento {
-  display: contents;
-}
+.bento { display: contents; }
 .bentoMain,
-.bentoRail {
-  display: contents;
-}
+.bentoRail { display: contents; }
 @media (min-width: 1024px) {
   .column {
     max-width: none; /* fill the shell content frame instead of the 640px column */

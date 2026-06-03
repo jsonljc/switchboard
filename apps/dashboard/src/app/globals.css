@@ -14,19 +14,19 @@
        Raw color values live ONLY in this block. Semantic tokens below
        reference these via var(); .dark overrides primitives so semantics
        follow automatically (Wave 3 completes the dark palette). ═══ */
-    --palette-action: 30 58% 41%; /* AA action amber — white text ≥ 4.5:1 */
-    --palette-action-hover: 30 58% 35%; /* darker pressed/hover step */
-    --palette-action-fg: 0 0% 100%; /* pure white — required for AA on amber */
+    --palette-action: 30 58% 41%;        /* AA action amber — white text ≥ 4.5:1 */
+    --palette-action-hover: 30 58% 35%;  /* darker pressed/hover step */
+    --palette-action-fg: 0 0% 100%;      /* pure white — required for AA on amber */
     --palette-action-subtle: 32 45% 94%; /* light action tint (chips, soft fills) */
-    --palette-action-tint: 38 52% 90%; /* warmer action surface tint */
+    --palette-action-tint: 38 52% 90%;   /* warmer action surface tint */
     --palette-action-bright: 30 55% 46%; /* NON-TEXT fills/stripes/pip ONLY — spec §4.5 */
-    --palette-coral: 14 70% 58%; /* Alex identity */
+    --palette-coral: 14 70% 58%;         /* Alex identity */
     --palette-coral-deep: 14 50% 45%;
     --palette-coral-tint: 24 60% 95%;
-    --palette-teal: 180 33% 40%; /* Riley identity */
+    --palette-teal: 180 33% 40%;         /* Riley identity */
     --palette-teal-deep: 178 53% 26%;
     --palette-teal-tint: 172 34% 93%;
-    --palette-violet: 270 45% 58%; /* Mira identity */
+    --palette-violet: 270 45% 58%;       /* Mira identity */
     --palette-violet-deep: 256 31% 45%;
     --palette-violet-tint: 255 33% 95%;
     --palette-editorial-accent: 20 90% 55%; /* bright editorial orange (Mercury/reports) — NOT the action amber */
@@ -82,8 +82,8 @@
     --operator-subtle: var(--palette-action-subtle);
 
     /* ─── Canonical: warm operational editorial (§9) ─── */
-    --canvas: 40 25% 94%; /* warm cream base — same value as --mercury-cream */
-    --action: var(--palette-action); /* the ONE action amber (AA, single-source) */
+    --canvas: 40 25% 94%;          /* warm cream base — same value as --mercury-cream */
+    --action: var(--palette-action);          /* the ONE action amber (AA, single-source) */
     --action-foreground: var(--palette-action-fg);
     --action-hover: var(--palette-action-hover);
     --action-subtle: var(--palette-action-subtle);
@@ -115,18 +115,18 @@
     --font-display: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
 
     /* ─── Public website: Stone & Weight design tokens ─── */
-    --sw-base: #f5f3f0;
-    --sw-surface: #edeae5;
-    --sw-surface-raised: #f9f8f6;
-    --sw-border: #ddd9d3;
-    --sw-border-strong: #c8c3bc;
-    --sw-text-primary: #1a1714;
-    --sw-text-secondary: #6b6560;
-    --sw-text-muted: #9c958f;
-    --sw-accent: #a07850;
-    --sw-dark-surface: #1e1c1a;
-    --sw-dark-text: #ede8e1;
-    --sw-dark-muted: #7a736c;
+    --sw-base: #F5F3F0;
+    --sw-surface: #EDEAE5;
+    --sw-surface-raised: #F9F8F6;
+    --sw-border: #DDD9D3;
+    --sw-border-strong: #C8C3BC;
+    --sw-text-primary: #1A1714;
+    --sw-text-secondary: #6B6560;
+    --sw-text-muted: #9C958F;
+    --sw-accent: #A07850;
+    --sw-dark-surface: #1E1C1A;
+    --sw-dark-text: #EDE8E1;
+    --sw-dark-muted: #7A736C;
 
     /* ─── Mercury / editorial register tokens ─── */
     /* Used by /reports and the agent-home redesign. Namespaced
@@ -136,9 +136,7 @@
        will live alongside these once PR #363 merges; reports.module.css
        aliases mercury → editorial at .reportsPage so consumers don't
        care which lands first. */
-    --mercury-cream: hsl(
-      var(--canvas)
-    ); /* aliased → canonical --canvas (hsl-wrapped: consumers use it as a complete color) */
+    --mercury-cream: hsl(var(--canvas)); /* aliased → canonical --canvas (hsl-wrapped: consumers use it as a complete color) */
     --mercury-ink: var(--ink);
     --mercury-ink-2: var(--ink-2);
     --mercury-ink-3: var(--ink-3);
@@ -216,7 +214,8 @@
     --serif:
       var(--font-serif), "Source Serif 4", "Tiempos Text", "Iowan Old Style", Georgia,
       "Times New Roman", serif;
-    --mono: var(--font-mono-editorial), "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --mono:
+      var(--font-mono-editorial), "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
     /* Ambient cream — set by AmbientCream client island on a 60s interval.
        Default keeps first paint correct before JS runs. */
@@ -254,32 +253,29 @@
        single --shadow-color override in .dark below. */
     --shadow-color: 24 16% 11%; /* raw triple: hsl(var(--shadow-color) / a) */
     --shadow-1: 0 1px 0 hsl(var(--shadow-color) / 0.04), 0 1px 2px hsl(var(--shadow-color) / 0.05);
-    --shadow-2:
-      0 1px 2px hsl(var(--shadow-color) / 0.05), 0 4px 8px hsl(var(--shadow-color) / 0.06);
-    --shadow-3:
-      0 2px 6px hsl(var(--shadow-color) / 0.05), 0 10px 26px hsl(var(--shadow-color) / 0.09);
-    --shadow-4:
-      0 4px 10px hsl(var(--shadow-color) / 0.07), 0 18px 44px hsl(var(--shadow-color) / 0.12);
-    --shadow-5:
-      0 8px 18px hsl(var(--shadow-color) / 0.1), 0 30px 64px hsl(var(--shadow-color) / 0.16);
+    --shadow-2: 0 1px 2px hsl(var(--shadow-color) / 0.05), 0 4px 8px hsl(var(--shadow-color) / 0.06);
+    --shadow-3: 0 2px 6px hsl(var(--shadow-color) / 0.05), 0 10px 26px hsl(var(--shadow-color) / 0.09);
+    --shadow-4: 0 4px 10px hsl(var(--shadow-color) / 0.07), 0 18px 44px hsl(var(--shadow-color) / 0.12);
+    --shadow-5: 0 8px 18px hsl(var(--shadow-color) / 0.1), 0 30px 64px hsl(var(--shadow-color) / 0.16);
     /* Semantic aliases repoint at the ladder (consumers never change). */
     --shadow-card: var(--shadow-1);
     --shadow-lift: var(--shadow-3);
     /* Directional: bottom-docked sheets cast upward; level-4 weight, shared base. */
-    --shadow-sheet:
-      0 -10px 30px hsl(var(--shadow-color) / 0.08), 0 -1px 2px hsl(var(--shadow-color) / 0.04);
+    --shadow-sheet: 0 -10px 30px hsl(var(--shadow-color) / 0.08), 0 -1px 2px hsl(var(--shadow-color) / 0.04);
     /* Brand material for the ONE amber action button. NOT elevation. */
     --shadow-action-gloss:
-      inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(80, 40, 0, 0.2),
-      0 2px 4px rgba(168, 101, 15, 0.25), 0 6px 16px rgba(201, 123, 26, 0.18);
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -1px 0 rgba(80, 40, 0, 0.2),
+      0 2px 4px rgba(168, 101, 15, 0.25),
+      0 6px 16px rgba(201, 123, 26, 0.18);
     --ease-home: cubic-bezier(0.22, 1, 0.36, 1);
     /* Home editorial font stacks (wired in layout.tsx) */
     --font-home-sans: var(--font-hanken), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
     --font-home-serif: var(--font-newsreader), "Newsreader", "Iowan Old Style", Georgia, serif;
 
-    --app-frame: 1280px; /* desktop content frame — aligns with .app-header-row */
-    --app-sidebar-w: 216px; /* desktop nav rail (consumed in PR2) */
-    --header-h: 68px; /* approx sticky-header height at lg (tune later) */
+    --app-frame: 1280px;     /* desktop content frame — aligns with .app-header-row */
+    --app-sidebar-w: 216px;  /* desktop nav rail (consumed in PR2) */
+    --header-h: 68px;        /* approx sticky-header height at lg (tune later) */
   }
 
   .dark {
@@ -365,9 +361,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
+    *, *::before, *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
@@ -474,8 +468,7 @@
 
 /* ─── Character animations ─── */
 @keyframes character-float {
-  0%,
-  100% {
+  0%, 100% {
     transform: translateY(0px);
   }
   50% {
@@ -484,8 +477,7 @@
 }
 
 @keyframes aura-breathe {
-  0%,
-  100% {
+  0%, 100% {
     transform: scale(1);
     opacity: 0.85;
   }
@@ -496,42 +488,19 @@
 }
 
 @keyframes aura-pulse-once {
-  0% {
-    transform: scale(1);
-    opacity: 0.85;
-  }
-  30% {
-    transform: scale(1.06);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0.85;
-  }
+  0% { transform: scale(1); opacity: 0.85; }
+  30% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.85; }
 }
 
 @keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes typing-dot {
-  0%,
-  60%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.4;
-  }
-  30% {
-    transform: translateY(-4px);
-    opacity: 1;
-  }
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
 }
 
 @layer utilities {
@@ -599,9 +568,7 @@
   /* ===== Desktop app body: sidebar + content, centered in the frame =====
      The frame (max-width + centering + inset) lives on .app-body below; .app-content
      is the passthrough child that fills the main grid cell. */
-  .app-sidebar {
-    display: none;
-  }
+  .app-sidebar { display: none; }
   @media (min-width: 1024px) {
     .app-body {
       max-width: var(--app-frame, 1280px);
@@ -612,13 +579,8 @@
       gap: 40px;
       align-items: start;
     }
-    .app-content {
-      max-width: none;
-      margin-inline: 0;
-    }
-    .app-main {
-      min-width: 0;
-    }
+    .app-content { max-width: none; margin-inline: 0; }
+    .app-main { min-width: 0; }
     .app-sidebar {
       display: block;
       position: sticky;
@@ -628,14 +590,10 @@
       overflow-y: auto;
       padding-top: 8px;
     }
-    .hide-at-lg {
-      display: none;
-    }
+    .hide-at-lg { display: none; }
   }
   @media (min-width: 1280px) {
-    .app-body {
-      padding-inline: 56px;
-    } /* matches .app-header-row at >=1280 */
+    .app-body { padding-inline: 56px; } /* matches .app-header-row at >=1280 */
   }
 
   .brand-cluster {

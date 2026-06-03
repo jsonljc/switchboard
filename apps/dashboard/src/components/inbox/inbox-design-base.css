@@ -191,9 +191,7 @@
 }
 
 /* placeholder is desktop-only */
-.inbox-detail-empty {
-  display: none;
-}
+.inbox-detail-empty { display: none; }
 
 /* ─── Desktop master-detail two-pane (additive at lg) ─── */
 /* Scoped under .app-main (the shell wrapper) so specificity (0,2,0) beats
@@ -207,15 +205,10 @@
     align-items: start;
     padding-bottom: 32px;
   }
-  .app-main .inbox-list {
-    grid-column: 1;
-    min-width: 0;
-  }
+  .app-main .inbox-list { grid-column: 1; min-width: 0; }
   /* dock the detail sheet (and the empty placeholder) into the right column */
   .sheet,
-  .inbox-detail-empty {
-    grid-column: 2;
-  }
+  .inbox-detail-empty { grid-column: 2; }
   .sheet {
     position: sticky;
     top: calc(var(--header-h, 68px) + 16px);
@@ -231,9 +224,7 @@
     border-radius: var(--r-lg);
     box-shadow: var(--shadow-sheet);
   }
-  .sheet[data-open="true"] {
-    transform: none;
-  }
+  .sheet[data-open="true"] { transform: none; }
   /* Re-cap the docked pane height: `.sheet.ds { max-height: 92% }` (0,2,0) wins over a
      bare `.sheet`, and 92% resolves to `none` (auto-height ancestors), so scope to 0,3,0
      here — the pane caps at the viewport and `.sheet-body` (flex:1; overflow-y:auto)
@@ -242,9 +233,7 @@
     max-height: calc(100dvh - var(--header-h, 68px) - 48px);
   }
   /* no dimming overlay in two-pane mode */
-  .scrim {
-    display: none;
-  }
+  .scrim { display: none; }
   .inbox-detail-empty {
     display: flex;
     align-items: center;
