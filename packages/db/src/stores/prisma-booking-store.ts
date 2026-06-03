@@ -1,5 +1,6 @@
+import type { PrismaClient } from "@prisma/client";
 import { StaleVersionError } from "@switchboard/core";
-import type { PrismaDbClient } from "../prisma-db.js";
+import { BookingSlotConflictError } from "@switchboard/schemas";
 
 interface CreateBookingInput {
   organizationId: string;
@@ -17,27 +18,48 @@ interface CreateBookingInput {
   workTraceId?: string | null;
 }
 
+// Advisory-lock namespace for per-org booking serialization. Distinct from the
+// audit-chain ledger lock (900_001). Two-int pg_advisory_xact_lock form.
+const BOOKING_LOCK_NS = 920_001;
+
 export class PrismaBookingStore {
-  constructor(private prisma: PrismaDbClient) {}
+  constructor(private prisma: PrismaClient) {}
 
   async create(input: CreateBookingInput) {
-    return this.prisma.booking.create({
-      data: {
-        organizationId: input.organizationId,
-        contactId: input.contactId,
-        opportunityId: input.opportunityId ?? null,
-        service: input.service,
-        startsAt: input.startsAt,
-        endsAt: input.endsAt,
-        timezone: input.timezone ?? "Asia/Singapore",
-        status: "pending_confirmation",
-        attendeeName: input.attendeeName ?? null,
-        attendeeEmail: input.attendeeEmail ?? null,
-        connectionId: input.connectionId ?? null,
-        createdByType: input.createdByType ?? "agent",
-        sourceChannel: input.sourceChannel ?? null,
-        workTraceId: input.workTraceId ?? null,
-      },
+    // Serialize check-then-insert per org so two concurrent leads cannot both pass the
+    // overlap check and double-book the same physical slot (T2.7). Advisory lock is held
+    // until commit; half-open interval test mirrors the Local provider guard but on the
+    // LIVE write path.
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}, hashtext(${input.organizationId}))`;
+      const overlap = await tx.booking.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          status: { notIn: ["failed", "cancelled"] },
+          startsAt: { lt: input.endsAt },
+          endsAt: { gt: input.startsAt },
+        },
+        select: { id: true },
+      });
+      if (overlap) throw new BookingSlotConflictError(overlap.id);
+      return tx.booking.create({
+        data: {
+          organizationId: input.organizationId,
+          contactId: input.contactId,
+          opportunityId: input.opportunityId ?? null,
+          service: input.service,
+          startsAt: input.startsAt,
+          endsAt: input.endsAt,
+          timezone: input.timezone ?? "Asia/Singapore",
+          status: "pending_confirmation",
+          attendeeName: input.attendeeName ?? null,
+          attendeeEmail: input.attendeeEmail ?? null,
+          connectionId: input.connectionId ?? null,
+          createdByType: input.createdByType ?? "agent",
+          sourceChannel: input.sourceChannel ?? null,
+          workTraceId: input.workTraceId ?? null,
+        },
+      });
     });
   }
 
