@@ -1,4 +1,9 @@
 // packages/ad-optimizer/src/audit-runner.ts
+/* eslint-disable max-lines -- orchestrator at the 600-line cap: concurrent additions
+   (#854 riley->agent handoff + the per-source attribution wiring) tipped it over. It is
+   already heavily extracted (audit-v2-sections, analyzers/source-reallocation,
+   audit-report-builders, recommendation-handoff-dispatch); a further split of the run()
+   pipeline is the right follow-up but is out of scope for this slice. */
 import type {
   AuditReportSchema as AuditReport,
   CampaignInsightSchema as CampaignInsight,
