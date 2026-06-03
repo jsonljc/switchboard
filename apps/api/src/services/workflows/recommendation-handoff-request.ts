@@ -23,6 +23,15 @@ export interface RecommendationHandoffSubmitInput {
  * Cron-initiated work is a TRACE ROOT, so it carries the seeded `system` principal
  * VERBATIM ({ id: "system", type: "system" } -> the "default" IdentitySpec). A
  * bespoke `system:<x>` id has no IdentitySpec and hard-denies with empty outputs.
+ *
+ * NOTE on `deployment`: the handoff intent's governance matches on `actionType`
+ * (the intent string), NOT on a skillSlug, so this intent does NOT need a Riley
+ * deployment to be gated correctly. When `deployment` is null the intent's own
+ * deployment resolves to the "api-direct" fallback (the resolver derives slug from
+ * the intent prefix "adoptimizer", which intentionally does not match Riley's
+ * seeded "ad-optimizer" slug). That is harmless here. The child draft
+ * (creative.concept.draft) resolves the "creative" deployment on its own. Pass a
+ * resolved Riley deployment only as a provenance/targeting hint.
  */
 export function buildRecommendationHandoffSubmitRequest(
   input: RecommendationHandoffSubmitInput,

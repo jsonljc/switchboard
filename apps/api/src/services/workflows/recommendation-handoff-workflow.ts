@@ -33,10 +33,13 @@ export function buildRecommendationHandoffWorkflow(): WorkflowHandler {
       const input = parsed.data;
 
       // learningPhaseActive rides on the parameters (the cron stamps what it knew
-      // at submit time). Default false when absent.
-      const learningPhaseActive = Boolean(
-        (workUnit.parameters as { learningPhaseActive?: boolean }).learningPhaseActive,
-      );
+      // at submit time). FAIL CLOSED on absence: a missing signal must NOT let a
+      // learning-resetting action through, so default to "assume learning is
+      // active" (the abstention then blocks any resetsLearning:"yes" action). Only
+      // an explicit `false` opts out of the learning lockout.
+      const rawLearningFlag = (workUnit.parameters as { learningPhaseActive?: unknown })
+        .learningPhaseActive;
+      const learningPhaseActive = rawLearningFlag === false ? false : true;
 
       const abstention = shouldAbstainFromHandoff({
         actionType: input.actionType,
@@ -84,12 +87,31 @@ export function buildRecommendationHandoffWorkflow(): WorkflowHandler {
         },
       });
 
+      // Fail closed on EITHER arm: an ingress-level failure (ok:false) OR a child
+      // that executed-but-failed (ok:true with result.outcome:"failed", e.g. the
+      // draft handler's DEPLOYMENT_NOT_FOUND). Only "completed"/"queued" is success;
+      // a parked child ("pending_approval") is not a created draft either. Never
+      // report a phantom success.
       if (!child.ok) {
         return {
           outcome: "failed",
           summary: "Creative draft child submit failed",
           outputs: { recommendationId: input.recommendationId },
           error: { code: "CHILD_DRAFT_FAILED", message: child.error.message },
+        };
+      }
+      const childOutcome = child.result.outcome;
+      if (childOutcome !== "completed" && childOutcome !== "queued") {
+        return {
+          outcome: "failed",
+          summary: "Creative draft child did not complete",
+          outputs: { recommendationId: input.recommendationId, childOutcome },
+          error: {
+            code: "CHILD_DRAFT_FAILED",
+            message:
+              child.result.error?.message ??
+              `Child draft outcome was "${childOutcome}", not completed.`,
+          },
         };
       }
 
