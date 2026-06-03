@@ -291,3 +291,127 @@ describe("token governance — query-states layer carries no literal color", () 
     }
   });
 });
+
+// ─── EL1: elevation ladder ────────────────────────────────────────────────
+// A box-shadow value carrying a literal color (NOT a var() reference).
+const LITERAL_SHADOW_COLOR = /rgba?\(\s*[\d.]|hsl\(\s*[\d.]|#[0-9a-fA-F]{3,8}\b/;
+
+describe("token governance — elevation ladder single-source (EL1)", () => {
+  it("defines one warm shadow base as a dark-overridable raw triple", () => {
+    expect(tokenValue("shadow-color")).toMatch(RAW_HSL_TRIPLE);
+  });
+
+  it("the five ladder levels exist and carry no literal color", () => {
+    for (const n of [1, 2, 3, 4, 5]) {
+      const v = tokenValue(`shadow-${n}`);
+      expect(v, `--shadow-${n}`).toContain("var(--shadow-color)");
+      expect(v, `--shadow-${n}`).not.toMatch(LITERAL_SHADOW_COLOR);
+    }
+  });
+
+  it("semantic shadow tokens repoint at ladder levels (zero-churn)", () => {
+    expect(tokenValue("shadow-card")).toBe("var(--shadow-1)");
+    expect(tokenValue("shadow-lift")).toBe("var(--shadow-3)");
+  });
+
+  it("the directional sheet shadow shares the warm base, no literal color", () => {
+    const v = tokenValue("shadow-sheet");
+    expect(v).toContain("var(--shadow-color)");
+    expect(v).not.toMatch(LITERAL_SHADOW_COLOR);
+  });
+});
+
+describe("token governance — no literal-color box-shadow outside globals.css (EL1)", () => {
+  const files = collectGovernedFiles();
+  const rel = (p: string) => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
+  // Blank /* ... */ comments (newlines preserved) so a commented-out box-shadow
+  // never false-positives.
+  const blankComments = (s: string): string =>
+    s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+  // A single spread-only ring (0 0 0 Npx <color>) is a focus ring / status halo
+  // / pulse, never elevation; exempt after collapsing color functions to a token.
+  const isRing = (value: string): boolean => {
+    const collapsed = value.replace(/(?:rgba?|hsl)\([^)]*\)/g, "C");
+    return !collapsed.includes(",") && /^\s*(?:inset\s+)?0\s+0\s+0\s+\S/.test(collapsed);
+  };
+
+  it("the ladder is the single source — no --shadow* token defined outside globals.css", () => {
+    const offenders: string[] = [];
+    for (const { path: p, content } of files) {
+      if (p.replace(/\\/g, "/").endsWith("src/app/globals.css")) continue;
+      for (const m of content.matchAll(/(--shadow[\w-]*)\s*:/g)) {
+        offenders.push(`${rel(p)}: ${m[1]}`);
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+
+  it("every box-shadow usage resolves to a token / none / ring, never a literal color", () => {
+    const offenders: string[] = [];
+    for (const { path: p, content: raw } of files) {
+      const scan = blankComments(raw);
+      // CSS `box-shadow:`, plus JSX `boxShadow:` / imperative `boxShadow =` in
+      // quotes or backticks — every value form a literal color can hide in.
+      const decls = [
+        ...scan.matchAll(/box-shadow\s*:\s*([^;]+);/g),
+        ...scan.matchAll(/boxShadow\s*[:=]\s*["'`]([^"'`]+)["'`]/g),
+      ];
+      for (const m of decls) {
+        const value = m[1].trim();
+        if (!LITERAL_SHADOW_COLOR.test(value)) continue; // token / var / none → ok
+        if (isRing(value)) continue; // focus ring / halo / pulse → not elevation
+        offenders.push(`${rel(p)}: ${value.replace(/\s+/g, " ").slice(0, 90)}`);
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+});
+
+// Tailwind shadow utilities are a literal-color vector the CSS sweep cannot see
+// (they are class names, not `box-shadow:` declarations). Govern them too.
+describe("token governance — Tailwind shadow utilities use the ladder (EL1)", () => {
+  const tsxFiles = collectGovernedFiles().filter((f) => /\.tsx?$/.test(f.path));
+  const relTsx = (p: string) => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
+
+  // Built-in Tailwind elevation utilities default to cool rgb(0 0 0). They are a
+  // documented EL1 residual on these out-of-scope surfaces ONLY (marketing
+  // landing, the flag-hidden operator-chat widget #825, settings #826, the
+  // dev-only panel, and small non-overlay primitives). New authed surfaces must
+  // use the ladder via shadow-[var(--shadow-N)].
+  const BUILTIN_RESIDUALS = [
+    "components/landing/",
+    "components/onboarding/",
+    "components/dev/",
+    "app/(auth)/settings/",
+    "components/operator-chat/",
+    "components/ui/switch.tsx",
+    "components/ui/tabs.tsx",
+  ];
+  const LANDING = "components/landing/";
+  const BUILTIN = /(?<![\w-])shadow-(?:sm|md|lg|xl|2xl)(?![\w-])/;
+  const ARBITRARY = /(?<![\w-])shadow-\[([^\]]*)\]/g;
+
+  it("no built-in Tailwind elevation shadow outside the documented residuals", () => {
+    const offenders: string[] = [];
+    for (const { path: p, content } of tsxFiles) {
+      const r = relTsx(p);
+      if (BUILTIN_RESIDUALS.some((a) => r.includes(a))) continue;
+      if (BUILTIN.test(content)) offenders.push(r);
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+
+  it("no arbitrary shadow-[...] carries a literal color outside marketing landing", () => {
+    const offenders: string[] = [];
+    for (const { path: p, content } of tsxFiles) {
+      const r = relTsx(p);
+      if (r.includes(LANDING)) continue;
+      for (const m of content.matchAll(ARBITRARY)) {
+        if (LITERAL_SHADOW_COLOR.test(m[1])) {
+          offenders.push(`${r}: shadow-[${m[1].slice(0, 50)}]`);
+        }
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+});

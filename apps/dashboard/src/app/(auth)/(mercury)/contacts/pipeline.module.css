@@ -339,7 +339,7 @@
   color: inherit;
   transition: border-color 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
 }
-.card:hover { border-color: var(--mercury-ink-4); box-shadow: 0 1px 0 rgba(14, 12, 10, 0.04); }
+.card:hover { border-color: var(--mercury-ink-4); box-shadow: var(--shadow-2); }
 .card[data-dragging] { opacity: 0.35; }
 .cardRow1 { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .cardServiceName {
@@ -544,7 +544,7 @@
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
-  box-shadow: 0 6px 24px rgba(14, 12, 10, 0.18);
+  box-shadow: var(--shadow-3);
   z-index: 100;
   max-width: 440px;
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;

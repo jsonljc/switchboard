@@ -245,10 +245,32 @@
     --agent-riley-tint: var(--palette-teal-tint);
     --agent-mira-deep: var(--palette-violet-deep);
     --agent-mira-tint: var(--palette-violet-tint);
-    /* shadows (complete values, consumed bare) */
-    --shadow-card: 0 1px 0 rgba(40, 30, 20, 0.04), 0 1px 2px rgba(40, 30, 20, 0.05);
-    --shadow-lift: 0 12px 28px rgba(40, 30, 20, 0.1), 0 2px 6px rgba(40, 30, 20, 0.06);
-    --shadow-sheet: 0 -10px 30px rgba(40, 30, 20, 0.08), 0 -1px 2px rgba(40, 30, 20, 0.04);
+    /* ─── Elevation ladder (EL1) ───
+       ONE warm shadow base (derived from the editorial ink), five downward
+       levels at incrementing offset/blur/opacity, z-index-mapped:
+       1 card-rest, 2 hover, 3 dropdown/popover/toast, 4 sheet, 5 modal.
+       Consumed bare: box-shadow: var(--shadow-3). Dark-overridable via the
+       single --shadow-color override in .dark below. */
+    --shadow-color: 24 16% 11%; /* raw triple: hsl(var(--shadow-color) / a) */
+    --shadow-1: 0 1px 0 hsl(var(--shadow-color) / 0.04), 0 1px 2px hsl(var(--shadow-color) / 0.05);
+    --shadow-2: 0 1px 2px hsl(var(--shadow-color) / 0.05), 0 4px 8px hsl(var(--shadow-color) / 0.06);
+    --shadow-3: 0 2px 6px hsl(var(--shadow-color) / 0.05), 0 10px 26px hsl(var(--shadow-color) / 0.09);
+    --shadow-4: 0 4px 10px hsl(var(--shadow-color) / 0.07), 0 18px 44px hsl(var(--shadow-color) / 0.12);
+    --shadow-5: 0 8px 18px hsl(var(--shadow-color) / 0.1), 0 30px 64px hsl(var(--shadow-color) / 0.16);
+    /* Semantic aliases repoint at the ladder (consumers never change). */
+    --shadow-card: var(--shadow-1);
+    --shadow-lift: var(--shadow-3);
+    /* Directional: bottom-docked sheets cast upward; level-4 weight, shared base. */
+    --shadow-sheet: 0 -10px 30px hsl(var(--shadow-color) / 0.08), 0 -1px 2px hsl(var(--shadow-color) / 0.04);
+    /* Brand material for the ONE amber action button. NOT elevation. */
+    --shadow-action-gloss:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -1px 0 rgba(80, 40, 0, 0.2),
+      0 2px 4px rgba(168, 101, 15, 0.25),
+      0 6px 16px rgba(201, 123, 26, 0.18);
+    /* Static base layers for the armed-button arm-pulse keyframe (amber brand
+       material, composed with a live var() ring in swipe-decision-card). */
+    --shadow-arm-base: 0 1px 0 rgba(80, 40, 0, 0.18), 0 2px 8px rgba(201, 123, 26, 0.25);
     --ease-home: cubic-bezier(0.22, 1, 0.36, 1);
     /* Home editorial font stacks (wired in layout.tsx) */
     --font-home-sans: var(--font-hanken), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
@@ -318,6 +340,10 @@
     --char-body: hsl(30 8% 58%);
     --char-aura: hsl(30 8% 42%);
     /* --char-accent inherits hsl(var(--action)) → dark amber via --palette-action */
+    /* Elevation: dark swaps the warm base for near-black. Wave 3 replaces
+       shadow-based elevation with tonal surface steps (audit section 6).
+       The dark toggle remains hidden until then. */
+    --shadow-color: 0 0% 0%;
   }
 }
 
@@ -1326,7 +1352,7 @@
     font-family: var(--font-sans);
     font-size: 13px;
     color: var(--ink-2);
-    box-shadow: 0 8px 24px hsl(20 10% 12% / 0.08);
+    box-shadow: var(--shadow-3);
   }
 }
 

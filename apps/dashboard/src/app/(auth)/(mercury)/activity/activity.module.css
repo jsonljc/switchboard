@@ -409,7 +409,7 @@
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--ink-3);
-  box-shadow: 0 6px 18px rgba(14, 12, 10, 0.06);
+  box-shadow: var(--shadow-3);
 }
 .stalePillAge {
   color: var(--ink-2);
@@ -611,7 +611,7 @@
   background: var(--paper-raised);
   border: 1px solid var(--hair-strong);
   border-radius: 2px;
-  box-shadow: 0 8px 24px rgba(14, 12, 10, 0.08);
+  box-shadow: var(--shadow-3);
   max-height: 22rem;
   overflow: auto;
   z-index: 50;
