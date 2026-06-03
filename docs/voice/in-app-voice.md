@@ -55,9 +55,9 @@ The letter sign-off dash itself is dropped per rule 5; the quote-attribution byl
 
 ## How this is enforced
 
-`apps/dashboard/src/__tests__/in-app-voice.test.ts` scans a bounded, curated corpus of agent-voice copy surfaces (the files that speak as Alex, Riley, or Mira, plus the shared honest-voice primitives). It strips comments first, so an em-dash inside a comment never false-positives, then flags two things in the surviving copy:
+`apps/dashboard/src/__tests__/in-app-voice.test.ts` scans a bounded, curated corpus of agent-voice copy surfaces (the files that speak as Alex, Riley, or Mira, plus the shared honest-voice primitives). It parses each file with the TypeScript compiler and extracts only the real copy (string literals, template-literal text, and JSX text), so comments and code are never scanned, and a dynamic connector built from interpolations is caught because the text between them is real copy. It then flags two things:
 
-1. a prose em-dash (an em-dash adjacent to a word character, which leaves the lone no-data glyph alone), and
+1. an em-dash anywhere in copy, except the lone no-data glyph, and
 2. the "generate" verb stem.
 
 The corpus is a V1 seed. Grow it surface by surface as more copy is brought onto the honest voice. Rules 1, 3, and 4 stay review-enforced until a robust check exists; widening them, and adding a CSS generated-content scan, are documented growth paths.

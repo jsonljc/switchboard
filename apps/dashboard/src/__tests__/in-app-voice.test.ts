@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 /**
  * CI guard: the in-app honest voice (see docs/voice/in-app-voice.md).
@@ -9,12 +10,14 @@ import { fileURLToPath } from "node:url";
  * Extends the marketing no-banned-claims pattern into the app, scoped to a
  * bounded, curated corpus of agent-voice copy surfaces. Two rules are enforced
  * here (the rest of the voice spec is review-enforced for now):
- *   R1  no prose em-dash (the AI tell) in functional copy
+ *   R1  no em-dash (the AI tell) in functional copy, except the lone "—" glyph
  *   R2  no "generate" attribution verb (agents draft / render / handle / book)
  *
- * Comments are stripped before scanning, because code comments are full of
- * em-dashes and would otherwise false-positive. A lone "—" no-data glyph is
- * deliberately NOT flagged (only the em-dash used AS prose is).
+ * Copy is extracted with the TypeScript compiler, NOT a hand-rolled scanner, so
+ * comments are never scanned (they are trivia), and template interpolation, JSX
+ * text, URLs, nested templates, and regex literals are all parsed correctly. A
+ * dynamic connector like `${name} — ${summary}` is caught because the " — "
+ * between interpolations is a real template text span.
  *
  * GROW THE CORPUS as more surfaces are brought onto the honest voice.
  */
@@ -22,104 +25,60 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DASHBOARD_SRC = join(HERE, ".."); // apps/dashboard/src
 
-/**
- * Remove // line comments and block comments while preserving string literals,
- * template literals, and JSX text (so an em-dash in a comment is dropped but an
- * em-dash in copy survives). Newlines are preserved so reported line numbers
- * match the original file. Fails open: any unhandled construct without an
- * em-dash is a harmless no-op.
- */
-export function stripComments(src: string): string {
-  type Mode = "normal" | "line" | "block" | "sq" | "dq" | "tpl";
-  let mode: Mode = "normal";
-  let out = "";
-  for (let i = 0; i < src.length; i++) {
-    const c = src[i];
-    const c2 = i + 1 < src.length ? src[i + 1] : "";
-    if (mode === "normal") {
-      if (c === "/" && c2 === "/") {
-        mode = "line";
-        i++;
-        continue;
-      }
-      if (c === "/" && c2 === "*") {
-        mode = "block";
-        i++;
-        continue;
-      }
-      if (c === "'") {
-        mode = "sq";
-        out += c;
-        continue;
-      }
-      if (c === '"') {
-        mode = "dq";
-        out += c;
-        continue;
-      }
-      if (c === "`") {
-        mode = "tpl";
-        out += c;
-        continue;
-      }
-      out += c;
-      continue;
-    }
-    if (mode === "line") {
-      if (c === "\n") {
-        mode = "normal";
-        out += c;
-      }
-      continue;
-    }
-    if (mode === "block") {
-      if (c === "*" && c2 === "/") {
-        mode = "normal";
-        i++;
-        continue;
-      }
-      if (c === "\n") out += c;
-      continue;
-    }
-    // string / template modes: copy through, honoring escapes
-    if (c === "\\") {
-      out += c;
-      if (i + 1 < src.length) out += src[i + 1];
-      i++;
-      continue;
-    }
-    if (mode === "sq" && c === "'") {
-      mode = "normal";
-      out += c;
-      continue;
-    }
-    if (mode === "dq" && c === '"') {
-      mode = "normal";
-      out += c;
-      continue;
-    }
-    if (mode === "tpl" && c === "`") {
-      mode = "normal";
-      out += c;
-      continue;
-    }
-    out += c;
-  }
-  return out;
+interface CopySpan {
+  line: number;
+  text: string;
 }
 
 /**
- * True if the text uses an em-dash (U+2014) as inline prose punctuation, i.e.
- * adjacent (across optional spaces) to a word character on either side. A lone
- * "—" no-data glyph (no adjacent word character) is intentionally NOT flagged.
+ * Parse a TS/TSX source and return every user-facing copy span: string
+ * literals, template-literal text (the head and the text between `${...}`
+ * interpolations), and JSX text. Comments are trivia and are never returned, so
+ * a comment em-dash cannot false-positive; code tokens are not returned either.
  */
-const PROSE_EM_DASH = /[A-Za-z0-9]\s*—|—\s*[A-Za-z0-9]/;
-export function containsProseEmDash(text: string): boolean {
-  return PROSE_EM_DASH.test(text);
+export function extractCopySpans(source: string, fileName: string): CopySpan[] {
+  const sf = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ true,
+    fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const spans: CopySpan[] = [];
+  const add = (text: string, pos: number) => {
+    spans.push({ line: sf.getLineAndCharacterOfPosition(pos).line + 1, text });
+  };
+  const visit = (node: ts.Node) => {
+    if (ts.isStringLiteralLike(node)) {
+      // string literal or no-substitution template literal
+      add(node.text, node.getStart(sf));
+    } else if (ts.isTemplateExpression(node)) {
+      add(node.head.text, node.head.getStart(sf));
+      for (const span of node.templateSpans) add(span.literal.text, span.literal.getStart(sf));
+    } else if (ts.isJsxText(node)) {
+      add(node.text, node.getStart(sf));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return spans;
+}
+
+/**
+ * R1: an em-dash (U+2014) used in copy. A span whose entire text is exactly the
+ * lone "—" no-data glyph is allowed; everything else (prose dashes, the
+ * space-padded " — " connector, the text between `${...}` interpolations) is a
+ * violation.
+ */
+export function isEmDashViolation(text: string): boolean {
+  return text.includes("—") && text !== "—";
 }
 
 /** R2: the "generate" attribution verb family (not the noun "generation"). */
 const GENERATE_VERB = /\bgenerat(e|ed|es|ing)\b/i;
+export function isGenerateViolation(text: string): boolean {
+  return GENERATE_VERB.test(text);
+}
 
 /**
  * V1 seed corpus: agent-voice copy surfaces (paths relative to apps/dashboard/src).
@@ -136,6 +95,7 @@ const CORPUS = [
   "components/results/states.tsx",
   "components/agent-panel/lib/activity-voice.ts",
   "components/agent-panel/work-log.tsx",
+  "components/agent-panel/open-decisions.tsx",
   "components/cockpit/mira/mira-creative-feed.tsx",
   "components/cockpit/mira/mira-brief-box.tsx",
   "components/cockpit/mira/mira-clip-actions.tsx",
@@ -148,65 +108,77 @@ interface Offense {
   text: string;
 }
 
-/** Scan every corpus file's comment-stripped lines with `predicate`. */
-function scanCorpus(predicate: (strippedLine: string) => boolean): Offense[] {
+/** Scan every corpus file's extracted copy spans with `predicate`. */
+function scanCorpus(predicate: (text: string) => boolean): Offense[] {
   const offenses: Offense[] = [];
   for (const rel of CORPUS) {
-    const raw = readFileSync(join(DASHBOARD_SRC, rel), "utf8");
-    const original = raw.split("\n");
-    const stripped = stripComments(raw).split("\n");
-    stripped.forEach((line, idx) => {
-      if (predicate(line)) {
-        offenses.push({ file: rel, line: idx + 1, text: (original[idx] ?? line).trim() });
+    const abs = join(DASHBOARD_SRC, rel);
+    const spans = extractCopySpans(readFileSync(abs, "utf8"), abs);
+    for (const span of spans) {
+      if (predicate(span.text)) {
+        offenses.push({ file: rel, line: span.line, text: span.text.trim() });
       }
-    });
+    }
   }
   return offenses;
 }
 
 function format(offenses: Offense[]): string {
-  return offenses.map((o) => `  ${o.file}:${o.line}  →  ${o.text}`).join("\n");
+  return offenses.map((o) => `  ${o.file}:${o.line}  →  ${JSON.stringify(o.text)}`).join("\n");
 }
 
-describe("stripComments", () => {
-  it("returns plain code unchanged", () => {
-    expect(stripComments("const a = 1;")).toBe("const a = 1;");
+describe("extractCopySpans", () => {
+  it("ignores line and block comments", () => {
+    const spans = extractCopySpans("// note — x\n/* block — y */\nconst a = 1;", "f.ts");
+    expect(spans.some((s) => s.text.includes("—"))).toBe(false);
   });
-  it("drops a line comment but keeps the newline", () => {
-    expect(stripComments("a;// note — x\nb;")).toBe("a;\nb;");
+  it("extracts a string literal's text", () => {
+    const spans = extractCopySpans('const s = "save — try";', "f.ts");
+    expect(spans.map((s) => s.text)).toContain("save — try");
   });
-  it("drops a block comment and preserves line count", () => {
-    expect(stripComments("a;/* note —\nmore — */b;")).toBe("a;\nb;");
+  it("extracts JSX text including a URL with // (not treated as a comment)", () => {
+    const spans = extractCopySpans("<p>See https://x.ai — then retry</p>", "f.tsx");
+    expect(spans.some((s) => s.text.includes("https://x.ai — then retry"))).toBe(true);
   });
-  it("keeps an em-dash inside a string literal", () => {
-    expect(stripComments('const s = "save — try";')).toContain("save — try");
+  it("extracts the text between template interpolations", () => {
+    const spans = extractCopySpans("const g = `${a} — ${b}`;", "f.ts");
+    expect(spans.map((s) => s.text)).toContain(" — ");
   });
-  it("keeps an em-dash inside JSX text (normal mode)", () => {
-    expect(stripComments("<p>save — try</p>")).toContain("save — try");
+  it("does NOT leak a comment inside a template interpolation", () => {
+    const spans = extractCopySpans("const g = `Ready ${x /* note — c */}`;", "f.ts");
+    expect(spans.some((s) => s.text.includes("—"))).toBe(false);
   });
-  it("does not treat // inside a string as a comment", () => {
-    expect(stripComments('const u = "https://x — y";')).toContain("x — y");
+  it("extracts a lone em-dash literal as exactly '—'", () => {
+    const spans = extractCopySpans('const x = cond ? v : "—";', "f.ts");
+    expect(spans.map((s) => s.text)).toContain("—");
   });
 });
 
-describe("containsProseEmDash", () => {
+describe("isEmDashViolation", () => {
   it("flags an em-dash between words", () => {
-    expect(containsProseEmDash("Couldn't save — try again")).toBe(true);
+    expect(isEmDashViolation("Couldn't save — try again")).toBe(true);
   });
   it("flags an em-dash with no surrounding spaces", () => {
-    expect(containsProseEmDash("save—try")).toBe(true);
+    expect(isEmDashViolation("save—try")).toBe(true);
   });
-  it("flags a leading byline em-dash", () => {
-    expect(containsProseEmDash("— Riley")).toBe(true);
+  it("flags the space-padded connector literal (concatenation / interpolation)", () => {
+    expect(isEmDashViolation(" — ")).toBe(true);
   });
-  it("does NOT flag a lone em-dash glyph", () => {
-    expect(containsProseEmDash("—")).toBe(false);
-  });
-  it("does NOT flag a space-padded standalone connective literal", () => {
-    expect(containsProseEmDash(' " — " ')).toBe(false);
+  it("does NOT flag the lone em-dash no-data glyph", () => {
+    expect(isEmDashViolation("—")).toBe(false);
   });
   it("does NOT flag a CSS custom-property hyphen string", () => {
-    expect(containsProseEmDash("hsl(var(--agent-mira))")).toBe(false);
+    expect(isEmDashViolation("hsl(var(--agent-mira))")).toBe(false);
+  });
+});
+
+describe("isGenerateViolation", () => {
+  it("flags the verb forms", () => {
+    expect(isGenerateViolation("Generating draft")).toBe(true);
+    expect(isGenerateViolation("as they generate")).toBe(true);
+  });
+  it("does NOT flag the noun 'generation'", () => {
+    expect(isGenerateViolation("the next generation step")).toBe(false);
   });
 });
 
@@ -219,14 +191,14 @@ describe("in-app voice guard — corpus", () => {
   });
 });
 
-describe("in-app voice guard — R1 no prose em-dash", () => {
-  it("agent-voice copy uses no em-dash as prose punctuation", () => {
-    const offenses = scanCorpus(containsProseEmDash);
+describe("in-app voice guard — R1 no em-dash in copy", () => {
+  it("agent-voice copy uses no em-dash (the lone '—' glyph excepted)", () => {
+    const offenses = scanCorpus(isEmDashViolation);
     if (offenses.length > 0) {
       throw new Error(
-        `Found ${offenses.length} prose em-dash(es) in agent-voice copy. ` +
+        `Found ${offenses.length} em-dash(es) in agent-voice copy. ` +
           `Use a comma, colon, period, or restructure (see docs/voice/in-app-voice.md). ` +
-          `A lone "—" no-data glyph is allowed; this is the em-dash AS PROSE.\n${format(offenses)}`,
+          `Only a lone "—" no-data glyph is allowed.\n${format(offenses)}`,
       );
     }
     expect(offenses).toEqual([]);
@@ -235,7 +207,7 @@ describe("in-app voice guard — R1 no prose em-dash", () => {
 
 describe("in-app voice guard — R2 no 'generate' verb", () => {
   it("agent-voice copy uses draft/render voice, never 'generate'", () => {
-    const offenses = scanCorpus((line) => GENERATE_VERB.test(line));
+    const offenses = scanCorpus(isGenerateViolation);
     if (offenses.length > 0) {
       throw new Error(
         `Found ${offenses.length} use(s) of the 'generate' verb in agent-voice copy. ` +
