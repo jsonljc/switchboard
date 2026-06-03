@@ -565,4 +565,30 @@ describe("PrismaCreativeJobStore", () => {
       );
     });
   });
+
+  describe("setDurableAsset", () => {
+    it("org-scopes the updateMany with durableAssetUrl and returns the refreshed row", async () => {
+      const url = "https://cdn.example.com/creative-assets/cj_1/u.mp4";
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue({ id: "cj_1", durableAssetUrl: url });
+
+      const result = await store.setDurableAsset("org_1", "cj_1", url);
+
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+        data: { durableAssetUrl: url },
+      });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+      });
+      expect((result as { durableAssetUrl?: string }).durableAssetUrl).toBe(url);
+    });
+
+    it("throws StaleVersionError when count=0 (cross-org / missing)", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+      await expect(store.setDurableAsset("org_other", "cj_1", "https://x")).rejects.toThrow(
+        StaleVersionError,
+      );
+    });
+  });
 });

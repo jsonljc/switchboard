@@ -171,6 +171,21 @@ export class PrismaCreativeJobStore {
     return row as unknown as CreativeJob;
   }
 
+  /**
+   * Persist the durable assembled-creative URL (PR A producer write). Org-scoped
+   * updateMany (doctrine #12); count===0 ⇒ missing/cross-org ⇒ throw. Consumed by
+   * the creative.job.publish precondition (assertPublishable).
+   */
+  async setDurableAsset(organizationId: string, id: string, url: string): Promise<CreativeJob> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: { durableAssetUrl: url },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
+  }
+
   // ── UGC methods ──
 
   async createUgc(

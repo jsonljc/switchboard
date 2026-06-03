@@ -120,6 +120,22 @@ services:
       # Creative-pipeline SSRF allow-list (comma-separated host regexes).
       - key: CREATIVE_PIPELINE_ALLOWED_HOSTS
         sync: false
+      # Creative-pipeline durable asset storage (S3-compatible; R2 by default).
+      # Absent => rendered creatives are not durable and creative.job.publish
+      # fails loud CREATIVE_ASSET_NOT_DURABLE. Bucket must be public-read at
+      # CREATIVE_ASSET_PUBLIC_BASE_URL (objects use unguessable keys).
+      - key: CREATIVE_ASSET_BUCKET
+        sync: false
+      - key: CREATIVE_ASSET_S3_ENDPOINT
+        sync: false
+      - key: CREATIVE_ASSET_REGION
+        sync: false
+      - key: CREATIVE_ASSET_ACCESS_KEY_ID
+        sync: false
+      - key: CREATIVE_ASSET_SECRET_ACCESS_KEY
+        sync: false
+      - key: CREATIVE_ASSET_PUBLIC_BASE_URL
+        sync: false
       # Comma-separated allowed CORS origins; MUST include the Vercel dashboard URL
       # or all dashboard->API calls are rejected in prod (origin:false fail-closed).
       - key: CORS_ORIGIN

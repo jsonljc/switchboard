@@ -90,6 +90,7 @@ describe("runVideoProducer", () => {
     const deps = makeMockDeps();
     const result = await runVideoProducer(
       {
+        jobId: "job_1",
         storyboard,
         scripts,
         tier: "basic",
@@ -111,6 +112,7 @@ describe("runVideoProducer", () => {
     const deps = makeMockDeps();
     const result = await runVideoProducer(
       {
+        jobId: "job_1",
         storyboard,
         scripts,
         tier: "pro",
@@ -139,6 +141,7 @@ describe("runVideoProducer", () => {
 
     const result = await runVideoProducer(
       {
+        jobId: "job_1",
         storyboard,
         scripts,
         tier: "basic",
@@ -161,6 +164,7 @@ describe("runVideoProducer", () => {
 
     const result = await runVideoProducer(
       {
+        jobId: "job_1",
         storyboard,
         scripts,
         tier: "pro",
@@ -176,5 +180,84 @@ describe("runVideoProducer", () => {
     expect(result.assembledVideos ?? []).toHaveLength(0);
     expect(result.errors).toBeDefined();
     expect(result.errors!.some((e) => e.stage === "assembly")).toBe(true);
+  });
+
+  it("uploads the assembled video + thumbnail and sets durableAssetUrl (pro tier)", async () => {
+    const deps = makeMockDeps();
+    const upload = vi
+      .fn()
+      .mockResolvedValueOnce({ url: "https://cdn.example.com/creative-assets/job_1/u.mp4" })
+      .mockResolvedValueOnce({ url: "https://cdn.example.com/creative-assets/job_1/u-thumb.jpg" });
+    deps.assetStorage = { upload };
+
+    const result = await runVideoProducer(
+      {
+        jobId: "job_1",
+        storyboard,
+        scripts,
+        tier: "pro",
+        platforms: ["meta"],
+        productDescription: "A widget",
+      },
+      deps,
+    );
+
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(upload).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        key: "creative-assets/job_1/assembled.mp4",
+        contentType: "video/mp4",
+      }),
+    );
+    expect(upload).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        key: "creative-assets/job_1/assembled-thumb.jpg",
+        contentType: "image/jpeg",
+      }),
+    );
+    expect(result.assembledVideos?.[0]?.videoUrl).toBe(
+      "https://cdn.example.com/creative-assets/job_1/u.mp4",
+    );
+    expect(result.assembledVideos?.[0]?.thumbnailUrl).toBe(
+      "https://cdn.example.com/creative-assets/job_1/u-thumb.jpg",
+    );
+    expect(result.durableAssetUrl).toBe("https://cdn.example.com/creative-assets/job_1/u.mp4");
+  });
+
+  it("leaves assembled URLs local and durableAssetUrl undefined when no assetStorage", async () => {
+    const deps = makeMockDeps();
+    const result = await runVideoProducer(
+      {
+        jobId: "job_1",
+        storyboard,
+        scripts,
+        tier: "pro",
+        platforms: ["meta"],
+        productDescription: "A widget",
+      },
+      deps,
+    );
+    expect(result.durableAssetUrl).toBeUndefined();
+    expect(result.assembledVideos?.[0]?.videoUrl).toBe("https://r2.example.com/assembled.mp4");
+  });
+
+  it("propagates storage upload errors (fail loud, no fake success)", async () => {
+    const deps = makeMockDeps();
+    deps.assetStorage = { upload: vi.fn().mockRejectedValue(new Error("S3 unavailable")) };
+    await expect(
+      runVideoProducer(
+        {
+          jobId: "job_1",
+          storyboard,
+          scripts,
+          tier: "pro",
+          platforms: ["meta"],
+          productDescription: "A widget",
+        },
+        deps,
+      ),
+    ).rejects.toThrow("S3 unavailable");
   });
 });

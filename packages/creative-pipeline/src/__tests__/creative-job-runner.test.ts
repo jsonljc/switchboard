@@ -44,6 +44,7 @@ function createMockJobStore() {
     findById: vi.fn(),
     updateStage: vi.fn(),
     stop: vi.fn(),
+    setDurableAsset: vi.fn(),
   };
 }
 
@@ -179,6 +180,36 @@ describe("executeCreativePipeline", () => {
     const firstCall = mockRunStage.mock.calls[0];
     expect(firstCall?.[1]?.imageGenerator).toBeUndefined();
   });
+
+  it("persists durableAssetUrl after production when the output carries one", async () => {
+    const { runStage } = await import("../stages/run-stage.js");
+    const mockRunStage = runStage as ReturnType<typeof vi.fn>;
+    try {
+      mockRunStage.mockImplementation((stage: string) =>
+        stage === "production"
+          ? { durableAssetUrl: "https://cdn.example.com/creative-assets/job_1/u.mp4" }
+          : { placeholder: true },
+      );
+
+      await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
+
+      expect(jobStore.setDurableAsset).toHaveBeenCalledTimes(1);
+      expect(jobStore.setDurableAsset).toHaveBeenCalledWith(
+        "org_1",
+        "job_1",
+        "https://cdn.example.com/creative-assets/job_1/u.mp4",
+      );
+    } finally {
+      // Restore the shared module-level mock so later tests see the default.
+      mockRunStage.mockReset();
+      mockRunStage.mockResolvedValue({ placeholder: true });
+    }
+  });
+
+  it("does not persist durableAssetUrl when production output lacks one", async () => {
+    await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
+    expect(jobStore.setDurableAsset).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -186,13 +217,18 @@ describe("executeCreativePipeline", () => {
 // ---------------------------------------------------------------------------
 
 describe("createCreativeJobRunner — onFailure wiring", () => {
-  const mockJobStore = { findById: vi.fn(), updateStage: vi.fn(), stop: vi.fn() };
+  const mockJobStore = {
+    findById: vi.fn(),
+    updateStage: vi.fn(),
+    stop: vi.fn(),
+    setDurableAsset: vi.fn(),
+  };
   const llmConf = { apiKey: "test-key" };
 
   it("passes onFailure into createFunction config when provided", () => {
     createFunctionSpy.mockClear();
     const onFailure = async (_arg: unknown) => {};
-    createCreativeJobRunner(mockJobStore as never, llmConf, undefined, onFailure);
+    createCreativeJobRunner(mockJobStore as never, llmConf, undefined, undefined, onFailure);
 
     const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(typeof config?.["onFailure"]).toBe("function");

@@ -101,6 +101,7 @@ import {
   bindRileyOutcomeOrchestrator,
 } from "../services/cron/riley-outcome-attribution.js";
 import { createMetaInsightsProviderForOrg } from "../services/cron/meta-insights-adapter.js";
+import { buildCreativeAssetStorage } from "../lib/creative-asset-storage.js";
 
 function requireInstantFormAdapter(adapter: InstantFormAdapter | undefined): InstantFormAdapter {
   if (!adapter) {
@@ -166,6 +167,9 @@ export async function registerInngest(
   const assetStore = new PrismaAssetRecordStore(app.prisma);
   const klingApiKey = process.env["KLING_API_KEY"] ?? "";
   const klingClient = klingApiKey ? new KlingClient({ apiKey: klingApiKey }) : undefined;
+  // Durable storage for assembled creatives (NOT the PrismaAssetRecordStore above).
+  // Injected into the polished runner; undefined when CREATIVE_ASSET_* env is unset.
+  const assetStorage = buildCreativeAssetStorage(app.log);
 
   // Ad Optimizer cron dependencies
   const deploymentStore = new PrismaDeploymentStore(app.prisma);
@@ -776,6 +780,7 @@ export async function registerInngest(
         jobStore,
         { apiKey },
         openaiApiKey ? { openaiApiKey } : undefined,
+        assetStorage,
         makeOnFailureHandler(
           {
             functionId: "creative-job-runner",
