@@ -104,9 +104,24 @@ export function buildRescheduleOperations(
             endsAt: new Date(input.slotEnd),
           });
         } catch (err) {
-          // The store's overlap guard rejected the move: another LIVE booking
-          // already holds the new slot. Recoverable — re-offer alternatives
-          // instead of claiming the move failed for an unknown reason.
+          // The provider may have already moved the calendar event to the new slot before
+          // the durable write rejected. Best-effort revert it to the original slot so the
+          // calendar and DB don't diverge — symmetric with booking.create's orphan
+          // compensation; idempotent if the provider never actually moved it.
+          if (target.calendarEventId) {
+            try {
+              await provider.rescheduleBooking(target.calendarEventId, {
+                start: target.startsAt.toISOString(),
+                end: target.endsAt.toISOString(),
+                calendarId: input.calendarId,
+                available: true,
+              });
+            } catch (revertErr) {
+              console.warn("[calendar-reschedule] revert-on-failure failed", revertErr);
+            }
+          }
+          // The store's overlap guard rejected the move: another LIVE booking already holds
+          // the new slot. Recoverable — re-offer alternatives.
           if (isBookingSlotConflictError(err)) {
             getMetrics().bookingSlotConflict.inc({ orgId });
             return fail("SLOT_TAKEN", "That new time was just taken.", {
@@ -163,8 +178,11 @@ export function buildRescheduleOperations(
         const resolved = await resolveProviderOrFail(deps, orgId);
         if ("failure" in resolved) return resolved.failure;
         const provider = resolved.provider;
+        // Cancel the durable booking FIRST: the DB is the source of truth for reminders
+        // (findUpcomingConfirmed) and slot availability, so a provider failure must never
+        // leave a "confirmed" row that fires a reminder for a deleted event. Deleting a
+        // calendar event is not reversible, so it runs best-effort AFTER the DB cancel.
         try {
-          if (target.calendarEventId) await provider.cancelBooking(target.calendarEventId);
           await deps.bookingStore.cancel(orgId, target.id);
         } catch (err) {
           console.warn("[calendar-reschedule] cancel failed", err);
@@ -172,6 +190,18 @@ export function buildRescheduleOperations(
             retryable: false,
             modelRemediation: "Apologize and escalate so a human can cancel the appointment.",
           });
+        }
+        if (target.calendarEventId) {
+          try {
+            await provider.cancelBooking(target.calendarEventId);
+          } catch (err) {
+            // Booking is already cancelled in the DB (no reminder will fire); the calendar
+            // event lingers until a human/cron cleans it up. Don't fail the cancel.
+            console.warn(
+              "[calendar-reschedule] calendar event delete failed (booking already cancelled in DB)",
+              err,
+            );
+          }
         }
         getMetrics().bookingCancel.inc({ orgId });
         return ok({ bookingId: target.id, status: "cancelled", service: target.service });
