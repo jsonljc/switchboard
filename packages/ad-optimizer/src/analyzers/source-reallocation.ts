@@ -7,7 +7,7 @@ import type {
 import type { SourceComparisonRow, CampaignEconomicsRow } from "./source-comparator.js";
 import type { SourceFunnel, CampaignFunnel } from "../crm-data-provider/real-provider.js";
 import { compareSources, compareCampaigns } from "./source-comparator.js";
-import { computeSpendBySource } from "./spend-attributor.js";
+import { computeSpendBySource, destinationTypeToSource } from "./spend-attributor.js";
 import { resetsLearningFor, learningPhaseImpactText } from "../action-reset-classification.js";
 import { meetsEvidenceFloor } from "../evidence-floor.js";
 
@@ -80,6 +80,12 @@ export interface SourceReallocationInput {
   bySource: Record<string, SourceFunnel>;
   /** Account-wide window evidence for the scale-family floor. */
   accountEvidence: { clicks: number; conversions: number; days: number };
+  /**
+   * False ⇒ per-source spend came from the lead-share fallback (no ad-set destination
+   * attribution), so the trueROAS comparison rests on synthetic spend and is too
+   * approximate to drive a budget decision. Derived by the orchestrator from `adSetData`.
+   */
+  spendAttributionTrusted: boolean;
   /** Phase-A Gate 1: false ⇒ a suspected account-wide conversion-denominator step-change. */
   measurementTrusted: boolean;
   nextCycleDate: string;
@@ -113,10 +119,12 @@ function sourceHasEvidence(funnel: SourceFunnel | undefined): boolean {
  *
  * Gates, in order (each pinned by an eval fixture):
  *   1. no clear winner (≥2 eligible, ≥2x trueRoas, winner closeRate ≥5%) → null
- *   2. measurementTrusted === false → measurement_untrusted watch
- *   3. either side under the per-source floor → insufficient_evidence watch
- *   4. account-wide under the scale floor → insufficient_evidence watch
- *   5. else → shift_budget_to_source recommendation
+ *   2. winner itself unprofitable (trueRoas < 1) → null
+ *   3. per-source spend not ad-set-attributed (lead-share fallback) → null
+ *   4. measurementTrusted === false → measurement_untrusted watch
+ *   5. either side under the per-source floor → insufficient_evidence watch
+ *   6. account-wide under the scale floor → insufficient_evidence watch
+ *   7. else → shift_budget_to_source recommendation
  *
  * Units: trueRoas is already a major ratio; it is compared and formatted, never re-divided.
  */
@@ -133,6 +141,11 @@ export function decideSourceReallocation(
 
   // Absolute winner-profitability floor — the relative 2x ratio is not enough alone.
   if (toRoas < SHIFT_MIN_WINNER_TRUE_ROAS) return null;
+
+  // Per-source spend must come from ad-set destination attribution, not the lead-share
+  // fallback (synthetic). Without it the trueROAS comparison is too approximate to drive a
+  // budget decision -> no signal (the economics still reach the report's display).
+  if (!input.spendAttributionTrusted) return null;
 
   if (input.measurementTrusted === false) {
     return abstain(
@@ -235,9 +248,18 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
   if (bySource && Object.keys(bySource).length > 0) {
     const spendBySource = computeSpendBySource(input.currentInsights, bySource, input.adSetData);
     sourceComparison = compareSources({ bySource, spendBySource });
+    // Per-source spend is trustworthy only when ad-set destination data attributes it;
+    // otherwise computeSpendBySource allocated it by lead share (synthetic). Gate the
+    // DECISION on real attribution (the comparison still feeds the report). The current
+    // weekly cron does not wire getAdSetInsights, so this abstains in production until
+    // ad-set attribution is wired; a coverage threshold (vs mere presence) is a refinement
+    // to land WITH that wiring.
+    const spendAttributionTrusted =
+      input.adSetData?.some((a) => destinationTypeToSource(a.destinationType) !== null) ?? false;
     reallocation = decideSourceReallocation({
       sourceComparison,
       bySource,
+      spendAttributionTrusted,
       accountEvidence: {
         clicks: input.currentInsights.reduce((s, i) => s + i.inlineLinkClicks, 0),
         conversions: input.currentInsights.reduce((s, i) => s + i.conversions, 0),

@@ -33,6 +33,7 @@ const goodEvidence = { clicks: 200, conversions: 20, days: 7 };
 const base = {
   bySource: { ctwa: funnel({}), instant_form: funnel({}) } as Record<string, SourceFunnel>,
   accountEvidence: goodEvidence,
+  spendAttributionTrusted: true,
   measurementTrusted: true,
   nextCycleDate: "2026-05-14",
 };
@@ -76,6 +77,15 @@ describe("decideSourceReallocation", () => {
     const r = decideSourceReallocation({
       ...base,
       sourceComparison: { rows: [row("ctwa", 0.05, 0.2), row("instant_form", 0.01, 0.1)] },
+    });
+    expect(r).toBeNull();
+  });
+
+  it("returns null when per-source spend is not ad-set-attributed (lead-share fallback)", () => {
+    const r = decideSourceReallocation({
+      ...base,
+      spendAttributionTrusted: false,
+      sourceComparison: { rows: [row("ctwa", 3.8, 0.2), row("instant_form", 1.5, 0.07)] },
     });
     expect(r).toBeNull();
   });
@@ -151,7 +161,10 @@ describe("computeAuditEconomicsSections", () => {
     expect(out.campaignEconomics).toBeUndefined();
   });
 
-  it("computes sourceComparison and a shift rec from a clear-winner per-source funnel", async () => {
+  it("abstains from the reallocation when spend attribution is lead-share-only (no ad-set data)", async () => {
+    // sectionBase has adSetData: null, so computeSpendBySource uses the lead-share
+    // fallback. The per-source comparison still reaches the report, but the synthetic
+    // per-source spend must NOT drive a budget decision (the production cron path today).
     const out = await computeAuditEconomicsSections({
       ...sectionBase,
       currentInsights: [insight({ spend: 100, inlineLinkClicks: 200, conversions: 20 })],
@@ -162,9 +175,6 @@ describe("computeAuditEconomicsSections", () => {
       byCampaign: undefined,
     });
     expect(out.sourceComparison?.rows.length).toBe(2);
-    expect(out.reallocation?.type).toBe("recommendation");
-    expect(out.reallocation && "action" in out.reallocation && out.reallocation.action).toBe(
-      "shift_budget_to_source",
-    );
+    expect(out.reallocation).toBeNull();
   });
 });

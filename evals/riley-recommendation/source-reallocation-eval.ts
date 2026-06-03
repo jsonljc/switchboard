@@ -33,6 +33,8 @@ export const SourceReallocationCaseSchema = z.object({
   }),
   /** Phase-A Gate 1: false models a suspected account-wide step-change. Omit ⇒ trusted. */
   measurementTrusted: z.boolean().optional(),
+  /** False ⇒ per-source spend is the lead-share fallback (no ad-set attribution). Omit ⇒ trusted. */
+  spendAttributionTrusted: z.boolean().optional(),
   expectedOutcome: z.enum(["shift_budget_to_source", "watch", "none"]),
   expectedWatchPattern: z.enum(["measurement_untrusted", "insufficient_evidence"]).optional(),
   notes: z.string().optional(),
@@ -69,6 +71,7 @@ export function decideSourceReallocationForCase(
     sourceComparison,
     bySource,
     accountEvidence: c.accountEvidence,
+    spendAttributionTrusted: c.spendAttributionTrusted ?? true,
     measurementTrusted: c.measurementTrusted ?? true,
     nextCycleDate: "2026-05-14",
   });

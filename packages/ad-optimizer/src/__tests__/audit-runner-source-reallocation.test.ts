@@ -144,7 +144,38 @@ function buildDeps(): AuditDependencies {
     targetROAS: 3.0,
     mediaBenchmarks: makeMediaBenchmarks(),
   };
-  return { adsClient, crmDataProvider, insightsProvider, config };
+  // Ad-set destination data fully attributes camp-1's $5,000 spend to its sources
+  // (WHATSAPP -> ctwa $2,000, ON_AD -> instant_form $3,000), so per-source spend is real
+  // (not the lead-share fallback) and the reallocation's spend-attribution gate passes.
+  const getAdSetInsights = vi.fn().mockResolvedValue([
+    {
+      adSetId: "as-ctwa",
+      adSetName: "CTWA ad set",
+      campaignId: "camp-1",
+      learningStageStatus: "SUCCESS",
+      frequency: 1.2,
+      spend: 2000,
+      conversions: 30,
+      cpa: 66,
+      roas: 10,
+      inlineLinkClickCtr: 2.0,
+      destinationType: "WHATSAPP",
+    },
+    {
+      adSetId: "as-if",
+      adSetName: "Instant Form ad set",
+      campaignId: "camp-1",
+      learningStageStatus: "SUCCESS",
+      frequency: 1.2,
+      spend: 3000,
+      conversions: 20,
+      cpa: 150,
+      roas: 0.67,
+      inlineLinkClickCtr: 2.0,
+      destinationType: "ON_AD",
+    },
+  ]);
+  return { adsClient, crmDataProvider, insightsProvider, config, getAdSetInsights };
 }
 
 describe("AuditRunner — account-level source reallocation", () => {
