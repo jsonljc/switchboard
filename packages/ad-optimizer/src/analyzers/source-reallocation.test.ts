@@ -49,8 +49,8 @@ describe("decideSourceReallocation", () => {
     expect(r && "params" in r && r.params).toMatchObject({ from: "instant_form", to: "ctwa" });
     // honest economic basis carried for the approval card (read by the sink helper)
     expect(r && "params" in r && r.params).toMatchObject({
-      fromTrueRoas: "1.5",
-      toTrueRoas: "3.8",
+      fromTrueRoas: "1.50",
+      toTrueRoas: "3.80",
     });
     // advisory-only: not swipe-approvable handling lives downstream; here just the action contract
     expect(r && "resetsLearning" in r && r.resetsLearning).toBe("conditional");
@@ -68,6 +68,14 @@ describe("decideSourceReallocation", () => {
     const r = decideSourceReallocation({
       ...base,
       sourceComparison: { rows: [row("ctwa", 3.8, 0.2), row("instant_form", null, null)] },
+    });
+    expect(r).toBeNull();
+  });
+
+  it("returns null when the relatively-better source is itself unprofitable (trueRoas < 1)", () => {
+    const r = decideSourceReallocation({
+      ...base,
+      sourceComparison: { rows: [row("ctwa", 0.05, 0.2), row("instant_form", 0.01, 0.1)] },
     });
     expect(r).toBeNull();
   });

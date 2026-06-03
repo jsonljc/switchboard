@@ -26,6 +26,16 @@ const SHIFT_TRUE_ROAS_RATIO = 2;
 const SHIFT_MIN_CLOSE_RATE = 0.05;
 
 /**
+ * Absolute profitability floor on the WINNER source. The 2x ratio is RELATIVE, so
+ * without this a "from 0.05x -> to 0.10x" pair (both losing ~90%) would clear it and
+ * Riley would confidently advise "shift toward the winner" when that winner is itself
+ * deeply unprofitable. A trueROAS below 1 means the source does not even return its
+ * spend; there is no honest "shift toward it" signal, so we abstain to null (the
+ * account-wide unprofitability surfaces through the per-campaign recs, not here).
+ */
+const SHIFT_MIN_WINNER_TRUE_ROAS = 1;
+
+/**
  * Per-source evidence floor: the Phase-A "sufficient evidence on BOTH sides"
  * requirement. Named config, not magic numbers (evidence-floor.ts §11 convention).
  * `booked` is the trueRoas revenue denominator, so it carries the floor;
@@ -116,6 +126,13 @@ export function decideSourceReallocation(
   const candidate = findShiftCandidates(input.sourceComparison.rows);
   if (!candidate) return null;
   const { from, to } = candidate;
+  // findShiftCandidates guarantees both trueRoas are non-null and worst > 0; the `?? 0`
+  // only satisfies the type, so fromRoas is always > 0 (a safe ratio denominator).
+  const fromRoas = from.trueRoas ?? 0;
+  const toRoas = to.trueRoas ?? 0;
+
+  // Absolute winner-profitability floor — the relative 2x ratio is not enough alone.
+  if (toRoas < SHIFT_MIN_WINNER_TRUE_ROAS) return null;
 
   if (input.measurementTrusted === false) {
     return abstain(
@@ -143,7 +160,7 @@ export function decideSourceReallocation(
     );
   }
 
-  const ratio = ((to.trueRoas ?? 0) / (from.trueRoas ?? 1)).toFixed(1);
+  const ratio = (toRoas / fromRoas).toFixed(1);
   return {
     type: "recommendation",
     action: "shift_budget_to_source",
@@ -153,8 +170,8 @@ export function decideSourceReallocation(
     urgency: "this_week",
     estimatedImpact: `${to.source} trueRoas is ${ratio}x ${from.source}. Consider shifting budget toward ${to.source}.`,
     steps: [
-      `Reduce budget on ${from.source} (trueRoas ${from.trueRoas?.toFixed(2)})`,
-      `Increase budget on ${to.source} (trueRoas ${to.trueRoas?.toFixed(2)})`,
+      `Reduce budget on ${from.source} (trueRoas ${fromRoas.toFixed(2)})`,
+      `Increase budget on ${to.source} (trueRoas ${toRoas.toFixed(2)})`,
       "Source attribution is heuristic; operator should validate before large reallocations.",
     ],
     learningPhaseImpact: learningPhaseImpactText("shift_budget_to_source"),
@@ -162,8 +179,8 @@ export function decideSourceReallocation(
     params: {
       from: from.source,
       to: to.source,
-      fromTrueRoas: String(from.trueRoas),
-      toTrueRoas: String(to.trueRoas),
+      fromTrueRoas: fromRoas.toFixed(2),
+      toTrueRoas: toRoas.toFixed(2),
     },
   };
 }
@@ -224,6 +241,8 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
       accountEvidence: {
         clicks: input.currentInsights.reduce((s, i) => s + i.inlineLinkClicks, 0),
         conversions: input.currentInsights.reduce((s, i) => s + i.conversions, 0),
+        // Weekly audit cadence. Only clicks/conversions actually gate the scale floor
+        // (the `days` floor is 7 and a weekly audit always satisfies it).
         days: 7,
       },
       measurementTrusted: input.measurementTrusted,
