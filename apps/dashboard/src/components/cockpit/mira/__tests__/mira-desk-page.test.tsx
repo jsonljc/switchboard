@@ -53,10 +53,16 @@ describe("MiraDeskPage", () => {
     expect(screen.getByText(/generating draft/i)).toBeInTheDocument();
   });
 
-  it("shows a loading state while keys are pending (data undefined, no error)", () => {
+  it("shows the skeleton while keys are pending (data undefined, no error)", () => {
+    // Keys-pending query is disabled (isLoading false, data undefined); QueryStates
+    // derives "loading" from {data,error} only. See feedback_react_query_enabled_false_isloading.
     deskMock.mockReturnValue({ data: undefined, isLoading: false, isError: false, error: null });
     render(<MiraDeskPage />);
-    expect(screen.getByText(/loading/i)).toBeInTheDocument(); // gated on !data && !error, not isLoading
+    expect(screen.getByRole("status", { name: /loading mira/i })).toBeInTheDocument();
+    // Not the data modules, not an error.
+    expect(screen.queryByText(/drafts ready/i)).toBeNull();
+    expect(screen.queryByText(/generating draft/i)).toBeNull();
+    expect(screen.queryByText(/can't reach mira/i)).toBeNull();
   });
 
   it("never renders a forbidden Phase-4/5 word", () => {

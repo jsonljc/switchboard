@@ -9,10 +9,12 @@ import { useMiraDesk } from "@/hooks/use-mira-desk";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { MIRA_ACCENT, MIRA_MISSION_SUBTITLE } from "@/lib/cockpit/mira/mira-config";
 import { T } from "@/components/cockpit/tokens";
+import { QueryStates, ConnectionTrouble, AllClear, AgentPaused } from "@/components/query-states";
 import { MiraReadyToReview } from "./mira-ready-to-review";
 import { MiraInProductionTray } from "./mira-in-production-tray";
 import { MiraBriefBox } from "./mira-brief-box";
 import { MiraKeptShelf } from "./mira-kept-shelf";
+import { MiraDeskSkeleton } from "./mira-desk-skeleton";
 
 // Phase-2 Director's Desk. Module order (Decision 3): brief box (PR3) · the one
 // hero Ready-to-review CTA · calm In-production tray · Kept-drafts shelf (PR4).
@@ -28,10 +30,6 @@ export function MiraDeskPage() {
       ?.map((s) => s.text)
       .join(" ")
       .trim() || null;
-  const desk = deskQ.data;
-  // Gate on (!data && !error) — NOT isLoading — because a keys-pending query is
-  // disabled (isLoading false, data undefined). See [[feedback_react_query_enabled_false_isloading]].
-  const pending = !desk && !deskQ.error;
 
   return (
     <div
@@ -65,20 +63,30 @@ export function MiraDeskPage() {
       </div>
 
       <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-        {pending ? (
-          <p style={{ color: T.ink3, fontSize: 14 }}>Loading Mira&apos;s desk…</p>
-        ) : deskQ.error ? (
-          <p style={{ color: T.red, fontSize: 14 }}>
-            Couldn&apos;t load Mira&apos;s desk. Try again.
-          </p>
-        ) : (
-          <>
-            <MiraBriefBox />
-            <MiraReadyToReview count={desk!.readyToReviewCount} />
-            <MiraInProductionTray items={desk!.inProduction} />
-            <MiraKeptShelf items={desk!.keptDrafts} />
-          </>
-        )}
+        <QueryStates
+          query={deskQ}
+          loading={<MiraDeskSkeleton />}
+          error={<ConnectionTrouble agentName="Mira" onRetry={deskQ.refetch} />}
+          empty={
+            haltCtx.halted ? (
+              <AgentPaused agentName="Mira" />
+            ) : (
+              <AllClear sub="Mira has nothing waiting for you." />
+            )
+          }
+          isEmpty={(d) =>
+            d.readyToReviewCount === 0 && d.inProduction.length === 0 && d.keptDrafts.length === 0
+          }
+        >
+          {(desk) => (
+            <>
+              <MiraBriefBox />
+              <MiraReadyToReview count={desk.readyToReviewCount} />
+              <MiraInProductionTray items={desk.inProduction} />
+              <MiraKeptShelf items={desk.keptDrafts} />
+            </>
+          )}
+        </QueryStates>
       </div>
     </div>
   );
