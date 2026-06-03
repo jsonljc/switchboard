@@ -3,6 +3,7 @@ import {
   runRecommendationSink,
   economicBasisLine,
   economicsCells,
+  sourceReallocationCells,
 } from "../recommendation-sink.js";
 import type { EmitOutcome, RecommendationEmitter } from "../recommendation-sink.js";
 import type { RecommendationOutput } from "../recommendation-engine.js";
@@ -381,6 +382,27 @@ describe("economicsCells", () => {
   });
 });
 
+describe("sourceReallocationCells", () => {
+  it("renders the winner-first source economics from a shift rec's params", () => {
+    expect(
+      sourceReallocationCells({
+        from: "instant_form",
+        to: "ctwa",
+        fromTrueRoas: "1.5",
+        toTrueRoas: "3.8",
+      }),
+    ).toEqual(["ctwa 3.8x true ROAS", "instant_form 1.5x true ROAS"]);
+  });
+
+  it("honest-null: returns [] when params are absent or carry no source economics", () => {
+    expect(sourceReallocationCells(undefined)).toEqual([]);
+    expect(sourceReallocationCells({ from: "a", to: "b" })).toEqual([]);
+    expect(
+      sourceReallocationCells({ from: "a", to: "b", fromTrueRoas: "x", toTrueRoas: "y" }),
+    ).toEqual([]);
+  });
+});
+
 describe("runRecommendationSink — economic basis + per-campaign economics in dataLines", () => {
   it("attaches the matching campaign's basis + economics lines to the emitted presentation", async () => {
     const captured: RecommendationInput[] = [];
@@ -432,5 +454,33 @@ describe("runRecommendationSink — economic basis + per-campaign economics in d
     });
     const lines = captured[0]!.presentation.dataLines as unknown as string[][];
     expect(lines).toEqual([["saves $40/day"], ["Learning phase: no impact"]]);
+  });
+
+  it("renders the source economics on a shift_budget_to_source rec's dataLines", async () => {
+    const captured: RecommendationInput[] = [];
+    const emit: RecommendationEmitter = vi.fn(async (input) => {
+      captured.push(input);
+      return { surface: "queue" as const };
+    });
+    await runRecommendationSink({
+      orgId: "org-1",
+      auditRunId: "audit-shift",
+      recommendations: [
+        baseRec({
+          campaignId: "account",
+          campaignName: "instant_form to ctwa",
+          action: "shift_budget_to_source",
+          estimatedImpact:
+            "ctwa trueRoas is 2.5x instant_form. Consider shifting budget toward ctwa.",
+          params: { from: "instant_form", to: "ctwa", fromTrueRoas: "1.5", toTrueRoas: "3.8" },
+        }),
+      ],
+      emit,
+      emissionContext: { cronId: "cron" },
+    });
+    const flat = (captured[0]!.presentation.dataLines as unknown as string[][]).map((l) =>
+      l.join(" · "),
+    );
+    expect(flat).toContain("ctwa 3.8x true ROAS · instant_form 1.5x true ROAS");
   });
 });
