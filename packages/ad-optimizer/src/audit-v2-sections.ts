@@ -29,6 +29,15 @@ export interface V2SectionsInput {
   currentInsights: CampaignInsight[];
   learningGuardV2: LearningPhaseGuardV2;
   targetCPA: number;
+  /**
+   * Gate for surfacing the learning-limited recommendations. Default off (fail-safe): those
+   * recs are produced by a manual `as RecommendationOutput["action"]` cast with no Zod
+   * validation and are not yet covered end-to-end, so they stay deferred until a follow-up
+   * adds output validation + tests. The ad-set DETAILS and learning COUNTS are NOT gated —
+   * they are Zod-typed and test-covered, and reporting 0 while real learning ad sets exist
+   * would be a fabricated zero.
+   */
+  surfaceAdSetLearning?: boolean;
 }
 
 export interface V2SectionsResult {
@@ -50,7 +59,14 @@ export interface V2SectionsResult {
  * the per-ad-set classifier is injected so the runner keeps a single instance.
  */
 export function analyzeV2Sections(input: V2SectionsInput): V2SectionsResult {
-  const { adSetData, trendRawData, currentInsights, learningGuardV2, targetCPA } = input;
+  const {
+    adSetData,
+    trendRawData,
+    currentInsights,
+    learningGuardV2,
+    targetCPA,
+    surfaceAdSetLearning = false,
+  } = input;
   const learningLimitedRecs: RecommendationOutput[] = [];
 
   // Step 6: V2 — Ad set level learning + details
@@ -71,7 +87,9 @@ export function analyzeV2Sections(input: V2SectionsInput): V2SectionsResult {
       const destinationType = adSetInput.destinationType ?? "WEBSITE";
       const funnelShape = detectFunnelShape(destinationType);
 
-      if (learningStatus.state === "learning_limited") {
+      // Gate ONLY the learning-limited recs (unvalidated manual cast, deferred). The counts
+      // above and the adSetDetails below compute unconditionally so the report stays honest.
+      if (surfaceAdSetLearning && learningStatus.state === "learning_limited") {
         const diagnosis = learningGuardV2.diagnoseLearningLimited(learningStatus, adSetInput);
         const msg = `Ad set ${adSetInput.adSetId} is Learning Limited (${diagnosis.cause}). Recommended: ${diagnosis.recommendation}.`;
         learningLimitedRecs.push({

@@ -93,6 +93,10 @@ export interface AuditConfig {
   /** Optional Meta Pixel ID. When present + signalHealthChecker wired, pulls a
    * signal-health report and short-circuits per-campaign diagnostics on red score. */
   pixelId?: string;
+  /** Default off. Gates surfacing of the ad-set learning-limited recommendations (the
+   * unvalidated manual-cast V2 surface). Ad-set details + learning counts are always
+   * computed from real data; only the recs are deferred until output validation + tests land. */
+  surfaceAdSetLearning?: boolean;
 }
 
 /**
@@ -507,6 +511,7 @@ export class AuditRunner {
       currentInsights,
       learningGuardV2: this.learningGuardV2,
       targetCPA: this.config.targetCPA,
+      surfaceAdSetLearning: this.config.surfaceAdSetLearning ?? false,
     });
     const { adSetDetails, trends, budgetDistribution } = v2Sections;
     const adSetsInLearning = v2Sections.adSetsInLearning;
