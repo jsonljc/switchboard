@@ -45,6 +45,11 @@ export type {
   ChannelApprovalRespondDeps,
 } from "./respond-to-channel-approval.js";
 export type { InProcessApprovalResponseConfig, TransportApprovalResponseConfig } from "./types.js";
+export {
+  HttpApprovalRespondTransport,
+  BridgeTransportError,
+} from "./http-approval-respond-transport.js";
+export type { HttpApprovalRespondTransportOptions } from "./http-approval-respond-transport.js";
 export { ConversationLifecycleTracker } from "./conversation-lifecycle.js";
 export type {
   ConversationEndEvent,
