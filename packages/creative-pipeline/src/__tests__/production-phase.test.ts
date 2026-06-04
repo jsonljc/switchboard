@@ -1,9 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { executeProductionPhase, type ProductionInput } from "../ugc/phases/production.js";
+import { buildFrameQaDeps } from "../ugc/frame-qa-deps.js";
 
-// NOTE: realism QA no longer calls an LLM (it cannot see the video), so there is
-// no `call-claude` mock here. `evaluateRealism` returns `requires_human_review`
-// for every generated asset; retry/fallback now keys on generation *errors* only.
+// The frame-QA deps factory is module-mocked: by default it returns undefined,
+// so evaluateRealism stays the honest stub (requires_human_review) and the
+// legacy tests keep their no-QA semantics. Slice-3 tests program it per case.
+vi.mock("../ugc/frame-qa-deps.js", () => ({
+  buildFrameQaDeps: vi.fn(),
+}));
+
+function fakeQaDeps(visionResults: Array<Record<string, unknown>>) {
+  let call = 0;
+  return {
+    frameExtractor: {
+      extract: vi
+        .fn()
+        .mockResolvedValue({ frames: ["QUJD"], localVideoPath: "/tmp/src.mp4", workDir: "/tmp" }),
+    },
+    vision: vi.fn().mockImplementation(async () => {
+      const result = visionResults[Math.min(call, visionResults.length - 1)]!;
+      call++;
+      return result;
+    }),
+  };
+}
+
+const CLEAN_VISION = {
+  artifactFlags: [],
+  humanPresent: true,
+  softScores: { visualRealism: 0.8, behavioralRealism: 0.8, ugcAuthenticity: 0.8 },
+};
+const BROKEN_VISION = {
+  artifactFlags: ["broken_frame"],
+  humanPresent: true,
+  softScores: { visualRealism: 0.2, behavioralRealism: 0.2, ugcAuthenticity: 0.2 },
+};
 
 function createMockDeps() {
   return {
@@ -153,5 +184,93 @@ describe("executeProductionPhase", () => {
     expect(deps.assetStore.upsertByKey).toHaveBeenCalled();
     const firstCall = deps.assetStore.upsertByKey.mock.calls[0]![0];
     expect(firstCall).toMatchObject({ specId: "spec_1", attemptNumber: 1 });
+  });
+
+  // ── Slice-3 frame QA (spec 3.1): live wiring, retry-on-fail, budget ──
+
+  it("wires frame-qa deps from the phase apiKey into the evaluator (never silently the stub)", async () => {
+    const qa = fakeQaDeps([CLEAN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(buildFrameQaDeps).toHaveBeenCalledWith("test-key");
+    expect(qa.vision).toHaveBeenCalledTimes(1);
+    // evaluated + pass auto-approves through deriveApprovalState
+    expect(result.assets[0]!.approvalState).toBe("approved");
+  });
+
+  it("retries a qa-fail verdict and persists EVERY attempt row", async () => {
+    const qa = fakeQaDeps([BROKEN_VISION, CLEAN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+
+    expect(deps.providerClients.klingClient.generateVideo).toHaveBeenCalledTimes(2);
+    expect(deps.assetStore.upsertByKey).toHaveBeenCalledTimes(2);
+    const persisted = deps.assetStore.upsertByKey.mock.calls.map((c) => c[0]);
+    expect(persisted[0]).toMatchObject({ attemptNumber: 1, approvalState: "rejected" });
+    expect(persisted[1]).toMatchObject({ attemptNumber: 2, approvalState: "approved" });
+    expect(result.assets).toHaveLength(1);
+    expect(result.assets[0]!.approvalState).toBe("approved");
+    expect(result.failedSpecs).toHaveLength(0);
+    expect(result.qaResults["spec_1"]).toHaveLength(2);
+  });
+
+  it("exhausted qa-fails return the LAST rejected asset plus a qa_failed entry", async () => {
+    const qa = fakeQaDeps([BROKEN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 2, maxProviderFallbacks: 0 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+
+    expect(deps.assetStore.upsertByKey).toHaveBeenCalledTimes(2);
+    expect(result.assets).toHaveLength(1);
+    expect(result.assets[0]!.approvalState).toBe("rejected");
+    expect(result.assets[0]!.attemptNumber).toBe(2);
+    expect(result.failedSpecs).toEqual([{ specId: "spec_1", reason: "qa_failed" }]);
+    // garbage renders never fall back to unrelated reuse assets
+    expect(deps.assetStore.findLockedByCreator).not.toHaveBeenCalled();
+  });
+
+  it("budget accounting is attempt-accurate: qa-fail retries spend against the job budget", async () => {
+    const qa = fakeQaDeps([BROKEN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+
+    // spec_1 burns 3 failing attempts (3 x 0.5 estimated kling cost = 1.5),
+    // crossing the 1.0 budget BEFORE spec_2 starts.
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1"), makeSpec("spec_2")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 0 },
+      budget: { totalJobBudget: 1.0, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+
+    const reasons = result.failedSpecs.map((f) => `${f.specId}:${f.reason}`);
+    expect(reasons).toContain("spec_1:qa_failed");
+    expect(reasons).toContain("spec_2:budget exceeded");
+    // spec_2 never generated
+    expect(deps.providerClients.klingClient.generateVideo).toHaveBeenCalledTimes(3);
   });
 });

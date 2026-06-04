@@ -5,7 +5,8 @@ import {
   getDefaultProviderRegistry,
   type RankedProvider,
 } from "../provider-router.js";
-import { deriveApprovalState, evaluateRealism } from "../realism-scorer.js";
+import { deriveApprovalState, evaluateRealism, type RealismScorerDeps } from "../realism-scorer.js";
+import { buildFrameQaDeps } from "../frame-qa-deps.js";
 import { createVideoProvider, type ProviderClients } from "../video-provider.js";
 import type { ProviderPerformanceHistory } from "../provider-performance.js";
 
@@ -85,6 +86,8 @@ async function processSpec(
   rankedProviders: RankedProvider[],
   retryConfig: { maxAttempts: number },
   deps: ProductionDeps,
+  costTracker: { total: number },
+  qaDeps: RealismScorerDeps | undefined,
 ): Promise<{
   asset?: AssetRecordOutput;
   qaHistory: Array<{ attempt: number; provider: string; score: RealismScore }>;
@@ -92,6 +95,7 @@ async function processSpec(
 }> {
   const qaHistory: Array<{ attempt: number; provider: string; score: RealismScore }> = [];
   let totalAttempts = 0;
+  let lastFailedAsset: AssetRecordOutput | undefined;
 
   for (const provider of rankedProviders) {
     for (let attempt = 0; attempt < retryConfig.maxAttempts; attempt++) {
@@ -107,12 +111,22 @@ async function processSpec(
           aspectRatio: spec.renderTargets.aspect,
         });
 
-        // Realism scorer
-        const qaScore = await evaluateRealism({
-          videoUrl: result.videoUrl,
-          specDescription: `${spec.format} ${spec.structureId} ad`,
-          apiKey: deps.apiKey,
-        });
+        // Attempt-accurate budget (slice-3 spec 3.1): a successful generation
+        // is paid render spend whether or not its QA verdict survives, so it
+        // accrues here, not on the returned asset.
+        costTracker.total += provider.estimatedCost;
+
+        // Frame QA (real when qaDeps wired; honest stub otherwise)
+        const qaScore = await evaluateRealism(
+          {
+            videoUrl: result.videoUrl,
+            specDescription: `${spec.format} ${spec.structureId} ad`,
+            apiKey: deps.apiKey,
+            format: spec.format,
+            durationSec: spec.renderTargets.durationSec,
+          },
+          qaDeps,
+        );
 
         qaHistory.push({
           attempt: totalAttempts,
@@ -122,7 +136,8 @@ async function processSpec(
 
         const latencyMs = Date.now() - startMs;
 
-        // Persist asset regardless of QA result (write-once-then-enrich)
+        // Persist EVERY generated attempt (write-once-then-enrich, per-attempt:
+        // the AssetRecord unique axis is (specId, attemptNumber, provider)).
         const assetData: AssetRecordOutput = {
           specId: spec.specId,
           creatorId: spec.creatorId,
@@ -133,9 +148,8 @@ async function processSpec(
           outputs: { videoUrl: result.videoUrl, checksums: {} },
           qaMetrics: qaScore as unknown as Record<string, unknown>,
           qaHistory: qaHistory as unknown as Array<Record<string, unknown>>,
-          // Safety: an un-evaluated/fabricated QA score can never auto-approve.
-          // `deriveApprovalState` routes freshly generated assets to human review
-          // until real frame-based QA sets qaStatus:"evaluated".
+          // Safety: an un-evaluated/fabricated QA score can never auto-approve;
+          // `deriveApprovalState` gates on qaStatus === "evaluated".
           approvalState: deriveApprovalState(qaScore),
           latencyMs,
           costEstimate: provider.estimatedCost,
@@ -146,15 +160,32 @@ async function processSpec(
           ...assetData,
         });
 
-        // QA does not (yet) inspect the video, so it cannot fail or auto-approve
-        // it — the asset is persisted for human review. Retry/fallback below
-        // handles generation *errors* only, not quality verdicts.
+        // A real evaluated FAIL (critical artifact / hard-check breach) does
+        // not return: it re-enters the retry/fallback loop. `review` and
+        // `pass` persist and return exactly as before.
+        if (qaScore.qaStatus === "evaluated" && qaScore.overallDecision === "fail") {
+          lastFailedAsset = assetData;
+          continue;
+        }
+
         return { asset: assetData, qaHistory };
       } catch {
         // Generation error — try next attempt/provider
         if (attempt === retryConfig.maxAttempts - 1) break;
       }
     }
+  }
+
+  // All attempts exhausted with only failing QA verdicts: the LAST rejected
+  // asset is the spec's final output (persisted above; nothing silently
+  // dropped) and the spec is reported failed. Garbage renders never fall
+  // back to unrelated reuse assets.
+  if (lastFailedAsset) {
+    return {
+      asset: lastFailedAsset,
+      qaHistory,
+      failed: { specId: spec.specId, reason: "qa_failed" },
+    };
   }
 
   // Final fallback: asset reuse
@@ -198,12 +229,20 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
   const qaResults: ProductionOutput["qaResults"] = {};
   const failedSpecs: ProductionOutput["failedSpecs"] = [];
 
-  // Process specs sequentially — add p-limit parallelism when concurrent provider calls are needed
-  let totalCost = 0;
+  // Live frame-QA wiring (slice-3 spec 3.1): self-constructed once per phase
+  // from the api key the phase already holds; undefined (unconfigured) keeps
+  // the honest stub. The factory lives in its own module so tests pin that
+  // the evaluator actually receives deps in this path.
+  const qaDeps = buildFrameQaDeps(deps.apiKey);
+
+  // Process specs sequentially — add p-limit parallelism when concurrent provider calls are needed.
+  // The tracker accrues per ATTEMPT inside processSpec (qa-fail retries spend
+  // real money), so the budget guard caps worst-case retry spend.
+  const costTracker = { total: 0 };
 
   for (const spec of specs) {
     // Budget guard
-    if (totalCost > input.budget.totalJobBudget) {
+    if (costTracker.total > input.budget.totalJobBudget) {
       failedSpecs.push({ specId: spec.specId, reason: "budget exceeded" });
       continue;
     }
@@ -214,13 +253,12 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
       input.providerHistory,
     ).slice(0, retryConfig.maxProviderFallbacks + 1);
 
-    const result = await processSpec(spec, ranked, retryConfig, deps);
+    const result = await processSpec(spec, ranked, retryConfig, deps, costTracker, qaDeps);
 
     qaResults[spec.specId] = result.qaHistory;
 
     if (result.asset) {
       assets.push(result.asset);
-      totalCost += result.asset.costEstimate;
     }
     if (result.failed) {
       failedSpecs.push(result.failed);
