@@ -135,17 +135,25 @@ export async function registerRoutes(
   // Only registered when Prisma is available; deps wrap Prisma to fetch org-scoped audit
   // entries (×4 over-fetch for the in-TS agent filter) and batch ConversationMessage previews.
   if (app.prisma) {
-    const cockpitActivityDeps = buildCockpitActivityDeps(app.prisma);
+    // Riley outcome store backs both the dedicated outcomes route and the
+    // slice-3 activity-feed merge. Store filters cockpitRenderable=true at
+    // the SQL layer.
+    const { PrismaRecommendationOutcomeStore } = await import("@switchboard/db");
+    const recommendationOutcomeStore = new PrismaRecommendationOutcomeStore(app.prisma);
+    const listRenderableOutcomes = ({ orgId, limit }: { orgId: string; limit: number }) =>
+      recommendationOutcomeStore.listRenderableForOrg({ orgId, agentRole: "riley", limit });
+
+    const cockpitActivityDeps = {
+      ...buildCockpitActivityDeps(app.prisma),
+      listRenderableOutcomes,
+    };
     await app.register(cockpitActivityRoutes(cockpitActivityDeps), {
       prefix: "/api/dashboard",
     });
-    // Riley outcomes route: GET /api/cockpit/riley/outcomes
-    // Gated on Prisma; store filters cockpitRenderable=true at the SQL layer.
-    const { PrismaRecommendationOutcomeStore } = await import("@switchboard/db");
-    const recommendationOutcomeStore = new PrismaRecommendationOutcomeStore(app.prisma);
+    // Riley outcomes route: GET /api/cockpit/riley/outcomes (legacy/debug;
+    // the operator surface is the activity feed above)
     await registerRileyOutcomesRoute(app, {
-      listRenderable: ({ orgId, limit }) =>
-        recommendationOutcomeStore.listRenderableForOrg({ orgId, agentRole: "riley", limit }),
+      listRenderable: listRenderableOutcomes,
     });
   }
   // greetingRoutes: GET /api/dashboard/agents/:agentKey/greeting — agent-home greeting block
