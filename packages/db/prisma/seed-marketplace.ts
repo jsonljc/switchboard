@@ -4,6 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { BusinessFactsSchema } from "@switchboard/schemas";
 import { DEMO_CONVERSATIONS } from "./fixtures/demo-conversations.js";
 import { seedDemoKnowledge } from "./fixtures/demo-knowledge.js";
+import { MEDSPA_PILOT_GOVERNANCE_CONFIG } from "../src/seed/medspa-governance-config.js";
 
 const GLOW_BUSINESS_FACTS = BusinessFactsSchema.parse({
   businessName: "Glow Aesthetics",
@@ -737,6 +738,10 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
         // writes, bookings) without per-action approval. trustScore still rises
         // as earned confidence; this override only sets day-one friction.
         governanceSettings: { trustLevelOverride: "autonomous" },
+        // Staged governance rollout: all four afterSkill gates + the pre-input
+        // scanner run in observe (strictly log-only). Enforce is a deliberate
+        // per-gate ops config update gated on the observe bake.
+        governanceConfig: MEDSPA_PILOT_GOVERNANCE_CONFIG,
         connectionIds: [],
       },
       create: {
@@ -764,6 +769,8 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
           },
         },
         governanceSettings: { trustLevelOverride: "autonomous" },
+        // Same staged observe posture as the update branch above.
+        governanceConfig: MEDSPA_PILOT_GOVERNANCE_CONFIG,
         connectionIds: [],
       },
     });

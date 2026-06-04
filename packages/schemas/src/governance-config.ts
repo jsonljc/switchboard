@@ -156,7 +156,9 @@ export interface ObserveGovernanceConfigInput {
   clinicType: "medical" | "nonMedical";
 }
 
-export interface ObserveGovernanceConfig {
+// A type alias (not an interface) so the value stays assignable to JSON-column
+// input types that use index signatures (e.g. Prisma's InputJsonValue).
+export type ObserveGovernanceConfig = {
   jurisdiction: "SG" | "MY";
   clinicType: "medical" | "nonMedical";
   deterministicGate: { mode: "observe" };
@@ -171,7 +173,7 @@ export interface ObserveGovernanceConfig {
     mechanical: { mode: "off" };
     qualification: { mode: "off" };
   };
-}
+};
 
 /**
  * Canonical all-gates-observe posture for staged governance rollout: every
