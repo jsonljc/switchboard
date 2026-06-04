@@ -117,6 +117,7 @@ export async function executeCreativePipeline(
         },
         previousOutputs: stageOutputs,
         apiKey: llmConfig.apiKey,
+        openaiApiKey: imageConfig?.openaiApiKey,
         generateReferenceImages: job.generateReferenceImages,
         imageGenerator,
         productionTier: job.productionTier ?? "basic",
