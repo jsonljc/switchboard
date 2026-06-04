@@ -7,6 +7,7 @@
 // gates (the approval-response-fixtures.ts pattern).
 
 import { expect } from "vitest";
+import { createApprovalState } from "@switchboard/core";
 import type { OperatorChannelBindingStore, ReplySink } from "@switchboard/core";
 import { executeWeeklyAudit } from "@switchboard/ad-optimizer";
 import { ORG, buildCronDeps, step, type ParkedHandoff } from "./recommendation-handoff-harness.js";
@@ -37,7 +38,6 @@ export async function seedLegacyApprovalRow(
   w: ReturnType<typeof buildLifecycleWorld>,
   parked: { workUnitId: string; bindingHash: string },
 ): Promise<string> {
-  const { createApprovalState } = await import("@switchboard/core");
   const approvalId = "appr_chat_1";
   const expiresAt = new Date(Date.now() + 3_600_000);
   const request = {
