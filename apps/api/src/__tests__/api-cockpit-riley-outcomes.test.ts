@@ -28,6 +28,9 @@ const SAMPLE_ROWS: RecommendationOutcomeReadModel[] = [
     copyValues: { deltaPct: -92, windowDays: 7 },
     campaignId: "camp-A",
     campaignName: "Campaign A",
+    causalStrength: "directional",
+    businessContextStable: "unknown",
+    trustDelta: "up",
   },
   {
     id: "outcome-2",
@@ -38,6 +41,9 @@ const SAMPLE_ROWS: RecommendationOutcomeReadModel[] = [
     copyValues: { deltaPct: 12.3, windowDays: 14 },
     campaignId: "camp-B",
     campaignName: null,
+    causalStrength: "directional",
+    businessContextStable: "unknown",
+    trustDelta: null,
   },
 ];
 
@@ -79,9 +85,11 @@ describe("GET /api/cockpit/riley/outcomes", () => {
     expect(body.rows[0]).toMatchObject({
       id: "outcome:outcome-1",
       kind: "observed",
-      head: "Spend fell 92.0% in 7d after pause.",
+      head: "Spend fell 92.0% in 7d after pause. This outcome is a positive signal for this action.",
       body: "after pause · Campaign A",
     });
+    // SAMPLE_ROWS[1] keeps trustDelta: null — the legacy-row pin at the
+    // route level: pre-slice-3 rows render byte-identically to before.
     expect(body.rows[1]).toMatchObject({
       id: "outcome:outcome-2",
       kind: "observed",

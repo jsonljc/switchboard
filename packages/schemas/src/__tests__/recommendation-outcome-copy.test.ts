@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { ALLOWLISTED_TEMPLATES, renderOutcomeCopy } from "../recommendation-outcome-copy.js";
+import {
+  ALLOWLISTED_TEMPLATES,
+  TRUST_DELTA_COPY,
+  renderOutcomeCopy,
+  renderTrustDeltaCopy,
+} from "../recommendation-outcome-copy.js";
 
 describe("ALLOWLISTED_TEMPLATES", () => {
   it("contains exactly the four v1 templates", () => {
@@ -52,6 +57,35 @@ describe("renderOutcomeCopy", () => {
     // fails CI immediately. Keep this list in sync with the B.2 prohibited list.
     expect(JSON.stringify(ALLOWLISTED_TEMPLATES)).not.toMatch(
       /\b(saved|caused|recovered|improved|prevented)\b/i,
+    );
+  });
+});
+
+describe("renderTrustDeltaCopy", () => {
+  it("renders up copy (signal language, not trust-state language)", () => {
+    expect(renderTrustDeltaCopy("up")).toBe("This outcome is a positive signal for this action.");
+  });
+
+  it("renders down copy", () => {
+    expect(renderTrustDeltaCopy("down")).toBe("This outcome is a negative signal for this action.");
+  });
+
+  it("returns null for none (recorded, not displayed: nothing moved, nothing claimed)", () => {
+    expect(renderTrustDeltaCopy("none")).toBeNull();
+  });
+
+  it("returns null for null/undefined (legacy rows render unchanged)", () => {
+    expect(renderTrustDeltaCopy(null)).toBeNull();
+    expect(renderTrustDeltaCopy(undefined)).toBeNull();
+  });
+
+  it("returns null for unknown strings (fail-closed)", () => {
+    expect(renderTrustDeltaCopy("sideways")).toBeNull();
+  });
+
+  it("contains no causal or trust-state language (extended B.2 tripwire)", () => {
+    expect(JSON.stringify(TRUST_DELTA_COPY)).not.toMatch(
+      /\b(caused|because|led to|resulted|drove|fixed|saved|prevented|proved|recovered|improved|trust)\b/i,
     );
   });
 });
