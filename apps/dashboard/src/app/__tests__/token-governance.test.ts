@@ -572,3 +572,45 @@ describe("token governance — hero poster label contrast (AA)", () => {
     expect(contrastRatio(tokenValue("palette-ink-700"), SURFACE)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TY2: the type voice. The authed app speaks Fraunces upright; italics are
+// banned from governed surfaces (locked direction, section 3 non-negotiables).
+// Mercury and the marketing landing keep their own registers until retired.
+// ─────────────────────────────────────────────────────────────────────────────
+const TYPE_VOICE_EXEMPT = ["(mercury)/", "components/landing/"];
+const typeVoiceGoverned = (p: string): boolean => !TYPE_VOICE_EXEMPT.some((ex) => p.includes(ex));
+
+describe("token governance: type voice (TY2)", () => {
+  const files = collectGovernedFiles().filter((f) => typeVoiceGoverned(f.path));
+
+  it("no font-style italic in governed CSS", () => {
+    const offenders = files
+      .filter((f) => f.path.endsWith(".css"))
+      .filter((f) => /font-style:\s*italic/.test(f.content))
+      .map((f) => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("no <em> or <i> elements in governed TSX (decorative italics are banned; use ink or weight)", () => {
+    const offenders = files
+      .filter((f) => f.path.endsWith(".tsx"))
+      .filter((f) => /<(em|i)[\s>]/.test(f.content))
+      .map((f) => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("the display voice aliases the loaded Fraunces primitive", () => {
+    expect(css).toMatch(/--font-home-serif:\s*var\(--font-fraunces\)/);
+    const inboxBase = files.find((f) => f.path.endsWith("inbox-design-base.css"));
+    expect(inboxBase).toBeDefined();
+    expect(inboxBase!.content).toMatch(/--serif:\s*var\(--font-fraunces\)/);
+  });
+
+  it("layout.tsx loads Fraunces upright only (no italic style requested)", () => {
+    const layout = readFileSync(path.resolve(process.cwd(), "src/app/layout.tsx"), "utf8");
+    expect(layout).toMatch(/Fraunces\(/);
+    const frauncesBlock = layout.slice(layout.indexOf("Fraunces("));
+    expect(frauncesBlock.slice(0, frauncesBlock.indexOf("})"))).toMatch(/style:\s*\["normal"\]/);
+  });
+});
