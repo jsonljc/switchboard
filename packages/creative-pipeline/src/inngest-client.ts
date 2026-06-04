@@ -27,6 +27,11 @@ export type CreativePipelineEvents = {
       organizationId: string;
     };
   };
+  "creative-pipeline/attribution.refresh": {
+    data: {
+      orgId: string;
+    };
+  };
   "creative-pipeline/polished.submitted": {
     data: {
       jobId: string;
