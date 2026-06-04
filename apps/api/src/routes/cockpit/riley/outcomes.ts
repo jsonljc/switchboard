@@ -1,20 +1,19 @@
 // @route-class: read-only
+// Legacy/debug endpoint. The operator-visible surface for outcome rows is
+// GET /api/dashboard/agents/riley/activity (the agent-panel work log feed);
+// this route remains as the dedicated outcomes contract for debugging and
+// compatibility. Both render through lib/outcome-activity-row.ts.
 import type { FastifyInstance } from "fastify";
-import { renderOutcomeCopy } from "@switchboard/schemas";
 import type { ActivityRow } from "@switchboard/schemas";
 import type { RecommendationOutcomeReadModel } from "@switchboard/db";
 import { requireOrganizationScope } from "../../../utils/require-org.js";
+import { translateOutcomeToActivityRow } from "../../../lib/outcome-activity-row.js";
 
 export interface OutcomesRouteDeps {
   listRenderable(args: { orgId: string; limit: number }): Promise<RecommendationOutcomeReadModel[]>;
 }
 
 const DEFAULT_LIMIT = 100;
-
-const ACTION_LABEL: Record<string, string> = {
-  pause: "pause",
-  refresh_creative: "creative refresh",
-};
 
 export async function registerRileyOutcomesRoute(
   app: FastifyInstance,
@@ -37,30 +36,8 @@ export async function registerRileyOutcomesRoute(
     const orgId = requireOrganizationScope(req, reply);
     if (!orgId) return;
     const rows = await deps.listRenderable({ orgId, limit: DEFAULT_LIMIT });
-    return { rows: rows.map(translateRow).filter((r): r is ActivityRow => r !== null) };
+    return {
+      rows: rows.map(translateOutcomeToActivityRow).filter((r): r is ActivityRow => r !== null),
+    };
   });
-}
-
-function translateRow(row: RecommendationOutcomeReadModel): ActivityRow | null {
-  if (!row.copyTemplate || !row.copyValues) return null;
-  const head = renderOutcomeCopy(row.copyTemplate, row.copyValues);
-  if (head === null) return null; // fail-closed on off-allowlist template
-
-  const label = ACTION_LABEL[row.actionKind] ?? row.actionKind;
-  const body = row.campaignName ? `after ${label} · ${row.campaignName}` : `after ${label}`;
-
-  return {
-    id: `outcome:${row.id}`,
-    time: formatTime(row.windowEndedAt),
-    timestampIso: row.windowEndedAt.toISOString(),
-    kind: "observed",
-    head,
-    body,
-  };
-}
-
-function formatTime(d: Date): string {
-  const hh = String(d.getUTCHours()).padStart(2, "0");
-  const mm = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
 }

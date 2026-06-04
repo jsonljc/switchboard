@@ -208,6 +208,148 @@ describe("attributeOneRecommendation — metricSummary always populated", () => 
   });
 });
 
+describe("attributeOneRecommendation — slice-3 enrichments (honesty floors)", () => {
+  it("emits directional + trustDelta up for a clean favorable pause delta", () => {
+    const row = attributeOneRecommendation({
+      candidate: REC,
+      preWindow: w(10000, 0.02),
+      postWindow: w(800, 0.02),
+      overlaps: [],
+    });
+    expect(row.causalStrength).toBe("directional");
+    expect(row.trustDelta).toBe("up");
+  });
+
+  it("emits directional + trustDelta down for a clean unfavorable pause delta", () => {
+    const row = attributeOneRecommendation({
+      candidate: REC,
+      preWindow: w(10000, 0.02),
+      postWindow: w(11000, 0.02), // spend rose 10% after pause
+      overlaps: [],
+    });
+    expect(row.causalStrength).toBe("directional");
+    expect(row.trustDelta).toBe("down");
+  });
+
+  it("emits directional + trustDelta up for a clean favorable refresh delta", () => {
+    const refreshRec: AttributableRecommendation = { ...REC, actionKind: "refresh_creative" };
+    const row = attributeOneRecommendation({
+      candidate: refreshRec,
+      preWindow: w(50000, 0.02, 14),
+      postWindow: w(50000, 0.024, 14), // CTR +20%
+      overlaps: [],
+    });
+    expect(row.causalStrength).toBe("directional");
+    expect(row.trustDelta).toBe("up");
+  });
+
+  it("emits directional + trustDelta down for a clean unfavorable refresh delta", () => {
+    const refreshRec: AttributableRecommendation = { ...REC, actionKind: "refresh_creative" };
+    const row = attributeOneRecommendation({
+      candidate: refreshRec,
+      preWindow: w(50000, 0.02, 14),
+      postWindow: w(50000, 0.017, 14), // CTR -15%
+      overlaps: [],
+    });
+    expect(row.causalStrength).toBe("directional");
+    expect(row.trustDelta).toBe("down");
+  });
+
+  it("emits inconclusive + trustDelta none under every confidence-subtracting signal", () => {
+    const flagged: Array<{ name: string; row: ReturnType<typeof attributeOneRecommendation> }> = [
+      {
+        name: "meta_data_missing (null window)",
+        row: attributeOneRecommendation({
+          candidate: REC,
+          preWindow: null,
+          postWindow: w(800, 0.02),
+          overlaps: [],
+        }),
+      },
+      {
+        name: "meta_data_missing (sparse dailyRowCount)",
+        row: attributeOneRecommendation({
+          candidate: REC,
+          preWindow: w(10000, 0.02, 7),
+          postWindow: w(800, 0.02, 3),
+          overlaps: [],
+        }),
+      },
+      {
+        name: "zero_pre_baseline",
+        row: attributeOneRecommendation({
+          candidate: REC,
+          preWindow: w(0, 0.02),
+          postWindow: w(800, 0.02),
+          overlaps: [],
+        }),
+      },
+      {
+        name: "below_noise_floor",
+        row: attributeOneRecommendation({
+          candidate: REC,
+          preWindow: w(10000, 0.02),
+          postWindow: w(9700, 0.02),
+          overlaps: [],
+        }),
+      },
+      {
+        name: "same_campaign_overlap / same_kind_retry",
+        row: attributeOneRecommendation({
+          candidate: REC,
+          preWindow: w(10000, 0.02),
+          postWindow: w(800, 0.02),
+          overlaps: [{ id: "rec-2", actionKind: "pause" }],
+        }),
+      },
+    ];
+    for (const { name, row } of flagged) {
+      expect(row.causalStrength, name).toBe("inconclusive");
+      expect(row.trustDelta, name).toBe("none");
+    }
+  });
+
+  it("records businessContextStable as unknown on every row across kinds and window states (slice-4 gate, never fabricated)", () => {
+    const kinds = ["pause", "refresh_creative"] as const;
+    for (const actionKind of kinds) {
+      const candidate: AttributableRecommendation = { ...REC, actionKind };
+      const clean = attributeOneRecommendation({
+        candidate,
+        preWindow: w(10000, 0.02, 14),
+        postWindow: w(800, 0.024, 14),
+        overlaps: [],
+      });
+      const contaminated = attributeOneRecommendation({
+        candidate,
+        preWindow: null,
+        postWindow: null,
+        overlaps: [{ id: "rec-2", actionKind }],
+      });
+      expect(clean.businessContextStable, `${actionKind} clean`).toBe("unknown");
+      expect(contaminated.businessContextStable, `${actionKind} contaminated`).toBe("unknown");
+    }
+  });
+
+  it("never emits corroborated (reserved for the slice-4 corroboration signal)", () => {
+    const fixtures = [
+      { preWindow: w(10000, 0.02), postWindow: w(800, 0.02), overlaps: [] },
+      { preWindow: w(10000, 0.02), postWindow: w(11000, 0.02), overlaps: [] },
+      { preWindow: null, postWindow: w(800, 0.02), overlaps: [] },
+      { preWindow: w(0, 0.02), postWindow: w(800, 0.02), overlaps: [] },
+      { preWindow: w(10000, 0.02), postWindow: w(9700, 0.02), overlaps: [] },
+      {
+        preWindow: w(10000, 0.02),
+        postWindow: w(800, 0.02),
+        overlaps: [{ id: "rec-2", actionKind: "pause" as const }],
+      },
+    ];
+    for (const f of fixtures) {
+      const row = attributeOneRecommendation({ candidate: REC, ...f });
+      expect(["directional", "inconclusive"]).toContain(row.causalStrength);
+    }
+  });
+});
+
 describe("runRileyOutcomeAttribution — orchestration", () => {
   function buildDeps() {
     const recommendationStore: AttributableRecommendationStore = {

@@ -201,7 +201,9 @@ export * from "./policy-overrides-config.js";
 // PR-3: Allowlisted directional copy for "observed" activity rows
 export {
   ALLOWLISTED_TEMPLATES,
+  TRUST_DELTA_COPY,
   renderOutcomeCopy,
+  renderTrustDeltaCopy,
   type OutcomeCopyTemplate,
   type OutcomeCopyValues,
 } from "./recommendation-outcome-copy.js";
