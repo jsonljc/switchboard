@@ -150,3 +150,55 @@ export function resolveLifecycleQualificationConfig(
   const raw = lifecycleTagging?.qualification;
   return LifecycleTaggingQualificationConfigSchema.parse(raw ?? {});
 }
+
+export interface ObserveGovernanceConfigInput {
+  jurisdiction: "SG" | "MY";
+  clinicType: "medical" | "nonMedical";
+}
+
+export interface ObserveGovernanceConfig {
+  jurisdiction: "SG" | "MY";
+  clinicType: "medical" | "nonMedical";
+  deterministicGate: { mode: "observe" };
+  claimClassifier: { mode: "observe" };
+  consentState: { mode: "observe" };
+  whatsappWindow: {
+    enabled: boolean;
+    mode: "observe";
+    allowMarketingTemplateSubstitution: boolean;
+  };
+  lifecycleTagging: {
+    mechanical: { mode: "off" };
+    qualification: { mode: "off" };
+  };
+}
+
+/**
+ * Canonical all-gates-observe posture for staged governance rollout: every
+ * mode-bearing gate (the shared pre-input/output deterministic gate, the claim
+ * classifier, the consent gate, the WhatsApp window gate) runs telemetry-only;
+ * lifecycle tagging stays off. Seeds and tests consume THIS factory so the
+ * seeded posture, the parity test, and the eval can never drift apart.
+ * The off->enforce flip is a deliberate per-gate ops config update on the
+ * observe bake, never a default.
+ */
+export function buildObserveGovernanceConfig(
+  input: ObserveGovernanceConfigInput,
+): ObserveGovernanceConfig {
+  return {
+    jurisdiction: input.jurisdiction,
+    clinicType: input.clinicType,
+    deterministicGate: { mode: "observe" },
+    claimClassifier: { mode: "observe" },
+    consentState: { mode: "observe" },
+    whatsappWindow: {
+      enabled: true,
+      mode: "observe",
+      allowMarketingTemplateSubstitution: false,
+    },
+    lifecycleTagging: {
+      mechanical: { mode: "off" },
+      qualification: { mode: "off" },
+    },
+  };
+}
