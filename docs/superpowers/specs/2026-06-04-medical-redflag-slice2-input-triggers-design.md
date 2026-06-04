@@ -1,7 +1,7 @@
 # Medical Red-Flag Slice 2: Deterministic Input-Layer Triggers (Design Spec)
 
 - **Date:** 2026-06-04
-- **Status:** Draft (pending user review at check-in #1)
+- **Status:** Approved at check-in #1 (2026-06-04, "ship with minor edits"; edits folded into the plan)
 - **Branch:** `feat/alex-medical-redflag-slice2` (spec + plan + code in one branch, per session directive)
 - **Verified against:** `origin/main` @ `81f0325f`
 - **Predecessors:** #791/#793 (Slice 1, prompt-only), #843 (freeze-gate trigger narrowing), #870 (observe-mode activation + medspa pilot seed)
