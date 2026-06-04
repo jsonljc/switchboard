@@ -300,6 +300,11 @@ describe("executeCreativeAttributionWorker", () => {
     expect(call.fields).toEqual([...ATTRIBUTION_INSIGHT_FIELDS]);
     expect(call.dateRange.since).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(call.dateRange.until).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // Server-side scope to the published campaigns: keeps them inside the
+    // first response page (the client reads page 1 only) on accounts that also
+    // run non-Mira campaigns, where an unfiltered read could silently drop a
+    // delivering campaign and misclassify it no_delivery.
+    expect(call.filtering).toEqual([{ field: "campaign.id", operator: "IN", value: ["camp-1"] }]);
     const written = deps.jobStore.setPastPerformance.mock.calls[0]!;
     expect(written[0]).toBe("org-1");
     expect(written[1]).toBe("job-1");

@@ -97,6 +97,7 @@ export interface InsightsClientLike {
   getCampaignInsights(params: {
     dateRange: { since: string; until: string };
     fields: string[];
+    filtering?: Array<{ field: string; operator: string; value: unknown }>;
   }): Promise<CampaignInsightSchema[]>;
 }
 
@@ -251,18 +252,24 @@ export async function executeCreativeAttributionWorker(
   const from = new Date(Math.max(earliestMs, now.getTime() - WINDOW_CLAMP_DAYS * DAY_MS));
   const window = { from, to: now };
 
+  const campaignIds = jobs
+    .map((j) => j.metaCampaignId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+
   // Meta boundary: YYYY-MM-DD, until-inclusive (meta-insights-adapter convention).
+  // Server-side filter to the published campaigns: keeps them inside the first
+  // response page (the client reads page 1 only) on accounts that also run
+  // non-Mira campaigns, where an unfiltered read could silently drop a
+  // delivering campaign and misclassify it no_delivery.
   const ymd = (d: Date) => d.toISOString().split("T")[0]!;
   const ads = deps.makeAdsClient(creds);
   const insights = await ads.getCampaignInsights({
     dateRange: { since: ymd(from), until: ymd(now) },
     fields: [...ATTRIBUTION_INSIGHT_FIELDS],
+    filtering: [{ field: "campaign.id", operator: "IN", value: campaignIds }],
   });
   const insightByCampaign = new Map(insights.map((i) => [i.campaignId, i]));
 
-  const campaignIds = jobs
-    .map((j) => j.metaCampaignId)
-    .filter((id): id is string => typeof id === "string" && id.length > 0);
   const bookedStats = await deps.conversionStore.queryBookedStatsByCampaign({
     orgId,
     from,

@@ -31,6 +31,14 @@ interface CampaignInsightsParams {
    * conversions denominator (per `conversionActionType`) is stable across runs.
    */
   actionAttributionWindows?: string[];
+  /**
+   * Meta `filtering` clauses (e.g. `[{field:"campaign.id", operator:"IN",
+   * value:[...]}]`). Scoping the account-level read server-side keeps campaigns
+   * of interest inside the first response page (this client does not follow
+   * `paging.next`) and shrinks the payload. Used by the creative-attribution
+   * sweep to scope to published Mira campaigns.
+   */
+  filtering?: Array<{ field: string; operator: string; value: unknown }>;
 }
 
 interface AdSetInsightsParams {
@@ -118,6 +126,10 @@ export class MetaAdsClient {
         "action_attribution_windows",
         JSON.stringify(params.actionAttributionWindows),
       );
+    }
+
+    if (params.filtering) {
+      queryParams.set("filtering", JSON.stringify(params.filtering));
     }
 
     const response = await this.get(`/${this.accountId}/insights?${queryParams.toString()}`);

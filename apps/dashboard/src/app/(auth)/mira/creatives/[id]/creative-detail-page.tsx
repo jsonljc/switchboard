@@ -106,10 +106,21 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                   : ""}
                 {` · $${(job.performance.bookedValueCents / 100).toFixed(2)} booked (${job.performance.bookedCount})`}
               </span>
-              <span style={{ fontSize: 12, color: T.ink3 }}>
-                {`${job.performance.metaConversions} Meta-reported conversions`}
-                {job.performance.trueRoas === null ? " · no booked revenue attributed yet" : ""}
-              </span>
+              {/* Meta's generic `conversions` field is often empty without an
+                  actions breakdown; a literal "0" would mislead, so the line
+                  only renders when Meta actually reported something. */}
+              {(job.performance.metaConversions > 0 || job.performance.trueRoas === null) && (
+                <span style={{ fontSize: 12, color: T.ink3 }}>
+                  {[
+                    job.performance.metaConversions > 0
+                      ? `${job.performance.metaConversions} Meta-reported conversions`
+                      : null,
+                    job.performance.trueRoas === null ? "no booked revenue attributed yet" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              )}
             </>
           )}
           {/* A measured number must never read as live truth: the sweep freezes

@@ -90,6 +90,34 @@ describe("MetaAdsClient", () => {
         dateStop: "2024-01-31",
       });
     });
+
+    it("serializes a filtering clause when provided (campaign-scoped insights)", async () => {
+      fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) });
+
+      await client.getCampaignInsights({
+        dateRange: { since: "2024-01-01", until: "2024-01-31" },
+        fields: ["spend"],
+        filtering: [{ field: "campaign.id", operator: "IN", value: ["camp_1", "camp_2"] }],
+      });
+
+      const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      const url = new URL(callUrl);
+      expect(url.searchParams.get("filtering")).toBe(
+        JSON.stringify([{ field: "campaign.id", operator: "IN", value: ["camp_1", "camp_2"] }]),
+      );
+    });
+
+    it("omits the filtering param when not provided", async () => {
+      fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) });
+
+      await client.getCampaignInsights({
+        dateRange: { since: "2024-01-01", until: "2024-01-31" },
+        fields: ["spend"],
+      });
+
+      const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(new URL(callUrl).searchParams.has("filtering")).toBe(false);
+    });
   });
 
   describe("getAdSetInsights", () => {

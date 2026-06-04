@@ -251,7 +251,31 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
       render(<MiraCreativeDetailPage id="j" />);
       expect(screen.getByText(/\$12\.50 spent/)).toBeInTheDocument();
       expect(screen.getByText(/no booked revenue attributed yet/i)).toBeInTheDocument();
+      expect(screen.getByText(/1 Meta-reported conversion/)).toBeInTheDocument();
       expect(screen.queryByText(/0\.0x trueROAS/)).toBeNull();
+      expect(screen.getByText(/as of Jun 4, 2026/)).toBeInTheDocument();
+    });
+
+    it("suppresses the Meta-conversions line at zero (generic field is often empty) but keeps the booked-revenue hint", () => {
+      mockCreative.mockReturnValue({
+        data: summary({
+          draft: { videoUrl: "https://x/p.mp4" },
+          performance: {
+            asOf: "2026-06-04T06:30:00.000Z",
+            delivery: "measured",
+            spend: 20,
+            trueRoas: null,
+            bookedValueCents: 0,
+            bookedCount: 0,
+            metaConversions: 0,
+          },
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.queryByText(/Meta-reported conversion/)).toBeNull();
+      expect(screen.getByText(/no booked revenue attributed yet/i)).toBeInTheDocument();
       expect(screen.getByText(/as of Jun 4, 2026/)).toBeInTheDocument();
     });
   });
