@@ -2,6 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import {
+  assembleRevenueState,
+  withSpendAttributionCoverage,
   compareSources,
   decideSourceReallocation,
   computeAuditEconomicsSections,
@@ -159,7 +161,7 @@ export async function decideSourceReallocationForCase(
       byCampaign: undefined,
       currentInsights: c.campaigns.map(buildInsight),
       adSetData: c.adSetData.map(buildAdSet),
-      measurementTrusted: c.measurementTrusted ?? true,
+      revenueState: assembleRevenueState({ measurementTrusted: c.measurementTrusted ?? true }),
       nextCycleDate: "2026-05-14",
       orgId: "eval",
       dateRange: { since: "2026-05-01", until: "2026-05-07" },
@@ -183,8 +185,10 @@ export async function decideSourceReallocationForCase(
     sourceComparison,
     bySource,
     accountEvidence: c.accountEvidence,
-    spendAttributionCoverageBySource,
-    measurementTrusted: c.measurementTrusted ?? true,
+    revenueState: withSpendAttributionCoverage(
+      assembleRevenueState({ measurementTrusted: c.measurementTrusted ?? true }),
+      spendAttributionCoverageBySource,
+    ),
     nextCycleDate: "2026-05-14",
   });
   if (result === null) return { outcome: "none" };

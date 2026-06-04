@@ -1,4 +1,5 @@
 import {
+  assembleRevenueState,
   decideForCampaign,
   deriveLearningPhaseActive,
   LearningPhaseGuardV2,
@@ -118,10 +119,16 @@ export function decideForCase(c: RileyCase): RileyDecision {
     learningStatus: statusFor(c.learningState),
     economicTier,
     effectiveTarget,
-    marginBasis: "unavailable",
+    // Account-level pre-flight signals (Riley v3 slice 1). The per-campaign economicTier/
+    // effectiveTarget above stay separate (resolved per-campaign for hybrid cases).
+    revenueState: assembleRevenueState({
+      measurementTrusted: c.measurementTrusted ?? true,
+      marginBasis: "unavailable",
+      economicTier,
+      effectiveTarget,
+    }),
     targetROAS: c.targetROAS,
     nextCycleDate: "2026-05-14",
-    measurementTrusted: c.measurementTrusted ?? true,
     // Task 8 Step 4: exercise the V2 reset-class lockout via the SAME rule the live
     // runner uses (deriveLearningPhaseActive), so the eval and audit-runner never drift.
     learningPhaseActive: deriveLearningPhaseActive(c.learningState),
