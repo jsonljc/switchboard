@@ -73,15 +73,15 @@ export function IdentityStatus({ agentKey }: IdentityStatusProps) {
         </div>
       )}
 
-      {/* Verdict: all segments joined, accent → <em> */}
+      {/* Verdict: all segments joined, accent in a weighted span (no italics) */}
       <div className={styles.verdictBlock}>
         {segments.length > 0 ? (
           <p className={styles.verdictText}>
             {segments.map((seg, i) =>
               seg.kind === "accent" ? (
-                <em key={i} className={styles.verdictAccent}>
+                <span key={i} className={styles.verdictAccent}>
                   {seg.text}
-                </em>
+                </span>
               ) : (
                 <span key={i}>{seg.text}</span>
               ),
