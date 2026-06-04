@@ -104,7 +104,7 @@ export function LiveSignalPopover() {
       >
         <header className="live-popover-head">
           <span className={`status-dot${halted ? " halted" : ""}`} aria-hidden="true" />
-          <span className="status-label font-display">System {stateLabel.toLowerCase()}</span>
+          <span className="status-label">System {stateLabel.toLowerCase()}</span>
           <button type="button" className="halt-action" onClick={toggleHalt} aria-pressed={halted}>
             {halted ? "Resume" : "Halt"}
           </button>

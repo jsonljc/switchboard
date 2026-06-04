@@ -469,7 +469,10 @@
     color: hsl(var(--tertiary-foreground));
   }
 
-  /* Display type — uses the display font */
+  /* LEGACY display utility: DM Sans via --font-display (layout.tsx binding).
+     Remaining consumers are legacy registers (onboarding attribution-coverage,
+     pre-auth, Mercury, landing). Authed surfaces use --font-display-app.
+     Retires with those registers. */
   .font-display {
     font-family: var(--font-display);
   }
