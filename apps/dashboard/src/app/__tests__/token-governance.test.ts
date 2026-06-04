@@ -600,6 +600,14 @@ describe("token governance: type voice (TY2)", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("no inline fontStyle italic in governed TS/TSX (the element ban's escape hatch)", () => {
+    const offenders = files
+      .filter((f) => /\.tsx?$/.test(f.path))
+      .filter((f) => /fontStyle:\s*["']italic/.test(f.content))
+      .map((f) => f.path);
+    expect(offenders).toEqual([]);
+  });
+
   it("the display voice aliases the loaded Fraunces primitive", () => {
     expect(css).toMatch(/--font-home-serif:\s*var\(--font-fraunces\)/);
     const inboxBase = files.find((f) => f.path.endsWith("inbox-design-base.css"));
