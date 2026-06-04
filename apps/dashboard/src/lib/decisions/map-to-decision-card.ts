@@ -31,6 +31,8 @@ function kindToFolioLabel(kind: DecisionKind): string {
       return "DECISION";
     case "handoff":
       return "HANDOFF";
+    case "workflow_approval":
+      return "APPROVAL";
   }
 }
 

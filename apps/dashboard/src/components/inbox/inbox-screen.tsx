@@ -7,6 +7,7 @@ import { AGENT_REGISTRY } from "@switchboard/schemas";
 import type { AgentKey } from "@switchboard/schemas";
 import { useDecisionFeed } from "@/hooks/use-decision-feed";
 import { useRecommendationAction } from "@/hooks/use-recommendation-action";
+import { useWorkflowApprovalAction } from "@/hooks/use-workflow-approval-action";
 import { useEscalationReply } from "@/hooks/use-escalation-reply";
 import { useEscalationResolve } from "@/hooks/use-escalation-resolve";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
@@ -16,6 +17,7 @@ import { InboxFilterRow } from "@/components/inbox/inbox-filter-row";
 import { InboxEmptyState } from "@/components/inbox/inbox-empty-state";
 import { InboxErrorState } from "@/components/inbox/inbox-error-state";
 import { InboxDecisionItem } from "@/components/inbox/inbox-decision-item";
+import { InboxWorkflowApprovalItem } from "@/components/inbox/inbox-workflow-approval-item";
 import { ApprovalDetailSheet } from "@/components/inbox/approval-detail-sheet";
 import { AgentPanel } from "@/components/agent-panel/agent-panel";
 import type { PanelAgentKey } from "@/components/agent-panel/lib/agent-display";
@@ -83,6 +85,86 @@ function ApprovalDetailItem({ decision, onClose }: ApprovalDetailItemProps) {
       onCommit={handleCommit}
       onSecondary={handleSecondary}
       onDismiss={handleDismiss}
+    />
+  );
+}
+
+// ── WorkflowApprovalDetailItem ────────────────────────────────────────────────
+// Parked governed-workflow approvals (ApprovalLifecycle units). Approve rides
+// the REAL lifecycle respond path and dispatches real governed work, so there
+// is NO undo offer. A missing bindingHash refuses locally (the degraded-card
+// case); a dispatch failure comes back as a Retry card on the next refetch.
+
+function WorkflowApprovalDetailItem({ decision, onClose }: ApprovalDetailItemProps) {
+  const { toast } = useToast();
+  const action = useWorkflowApprovalAction(decision.sourceRef.sourceId);
+  const agentName = AGENT_REGISTRY[decision.agentKey]?.displayName ?? decision.agentKey;
+  const retrying = decision.meta.dispatchFailed === true;
+
+  const handleCommit = (note?: string) => {
+    if (action.isPending) return;
+    const bindingHash = decision.meta.bindingHash;
+    if (!bindingHash) {
+      toast({
+        title: "Can't approve from here",
+        description: "This approval is missing its integrity record. You can still reject it.",
+      });
+      return;
+    }
+    void action
+      .approve(bindingHash, note)
+      .then((result: unknown) => {
+        onClose();
+        if (result && typeof result === "object" && "silent" in result) return;
+        if (result && typeof result === "object" && "staleBinding" in result) {
+          toast({ title: "This approval changed.", description: "Refreshing the inbox." });
+          return;
+        }
+        const ok =
+          result && typeof result === "object" && "executionResult" in result
+            ? (result as { executionResult?: { success?: boolean } }).executionResult?.success !==
+              false
+            : true;
+        toast(
+          ok
+            ? { title: retrying ? "Retried" : "Approved", description: `${agentName} is on it.` }
+            : {
+                title: "Approved, but it didn't run",
+                description: "It's back in your inbox with a Retry.",
+              },
+        );
+      })
+      .catch((err: unknown) => {
+        toast({
+          title: "Couldn't approve",
+          description: err instanceof Error ? err.message : "Try again from the inbox.",
+        });
+      });
+  };
+
+  const handleReject = () => {
+    if (action.isPending) return;
+    void action
+      .reject()
+      .then(() => {
+        onClose();
+        toast({ title: "Rejected", description: `${agentName} won't run this.` });
+      })
+      .catch((err: unknown) => {
+        toast({
+          title: "Couldn't reject",
+          description: err instanceof Error ? err.message : "Try again from the inbox.",
+        });
+      });
+  };
+
+  return (
+    <ApprovalDetailSheet
+      decision={decision}
+      onClose={onClose}
+      onCommit={handleCommit}
+      onSecondary={onClose}
+      onDismiss={handleReject}
     />
   );
 }
@@ -204,14 +286,23 @@ export function InboxScreen() {
           />
         ) : (
           <div className="inbox-queue">
-            {decisions.map((d) => (
-              <InboxDecisionItem
-                key={d.id}
-                decision={d}
-                onOpenDetail={(dec) => setOpen({ decision: dec, kind: dec.kind })}
-                onOpenAgent={setPanelAgent}
-              />
-            ))}
+            {decisions.map((d) =>
+              d.kind === "workflow_approval" ? (
+                <InboxWorkflowApprovalItem
+                  key={d.id}
+                  decision={d}
+                  onOpenDetail={(dec) => setOpen({ decision: dec, kind: dec.kind })}
+                  onOpenAgent={setPanelAgent}
+                />
+              ) : (
+                <InboxDecisionItem
+                  key={d.id}
+                  decision={d}
+                  onOpenDetail={(dec) => setOpen({ decision: dec, kind: dec.kind })}
+                  onOpenAgent={setPanelAgent}
+                />
+              ),
+            )}
           </div>
         )}
       </div>
@@ -229,6 +320,9 @@ export function InboxScreen() {
       )}
       {open?.kind === "approval" && (
         <ApprovalDetailItem decision={open.decision} onClose={() => setOpen(null)} />
+      )}
+      {open?.kind === "workflow_approval" && (
+        <WorkflowApprovalDetailItem decision={open.decision} onClose={() => setOpen(null)} />
       )}
       {open?.kind === "handoff" && (
         <HandoffDetailItem decision={open.decision} onClose={() => setOpen(null)} />

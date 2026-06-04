@@ -36,7 +36,14 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
 
   async respondToApproval(
     id: string,
-    body: { action: string; respondedBy: string; bindingHash: string; patchValue?: unknown },
+    body: {
+      action: string;
+      /** Omit on the dashboard: the API derives the responder from the authenticated principal. */
+      respondedBy?: string;
+      bindingHash?: string;
+      note?: string;
+      patchValue?: unknown;
+    },
   ) {
     return this.request<{ envelope: unknown; approvalState: unknown; executionResult: unknown }>(
       `/api/approvals/${id}/respond`,
