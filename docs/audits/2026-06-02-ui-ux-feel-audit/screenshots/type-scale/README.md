@@ -35,9 +35,11 @@ The one FAIL is recorded pre-existing: the count's color (ink-3) and inherited w
 
 No new wrap deltas at the new weights. (The known 48px-desktop late-swap residual predates this slice.)
 
-## Legacy negative proof
+## Legacy negative proof, with one measured exception
 
-`git diff origin/main...HEAD --name-only` intersected with mercury/landing/onboarding/login/forgot/reset = empty. Visual backstop: `before/reports-1280.png` vs `after/reports-1280.png` (Mercury register) are identical. The /login spot-shot redirects to Home under DEV_BYPASS_AUTH; the file-diff proof covers the pre-auth register.
+`git diff origin/main...HEAD --name-only` intersected with mercury/landing/onboarding/login/forgot/reset = empty (no legacy file is touched). The /login spot-shot redirects to Home under DEV_BYPASS_AUTH; the file-diff proof covers the pre-auth register.
+
+**The one rendering delta outside scope, found in review and accepted: Mercury mono weight fidelity.** reports.module.css declares `font-weight: 600`/`700` on `var(--mono)` in 27 blocks (no other Mercury module does). Loading the real JetBrains 600 cut means those declarations now render the cut they always requested instead of browser-synthesized bold (and the 700s synthesize from a 600 base instead of 500). Pixel-diff of `before/reports-1280.png` vs `after/reports-1280.png`: 0.459% of pixels (23,386 of 5.1M), all in mono numerals/labels, direction = closer to the declared weight. This is weight fidelity for a declaration Mercury itself makes, not register drift; the alternative was keeping the Results money numbers on synthetic bold to preserve a retiring register's misrendering. Recorded here and in the spec addendum.
 
 ## What changed on each surface (the before/after pairs)
 

@@ -229,9 +229,11 @@ function collectGovernedFiles(): Array<{ path: string; content: string }> {
   return out;
 }
 
+/** Path relative to src/ for readable failure messages. */
+const rel = (p: string): string => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
+
 describe("token governance — governed-source drift sweep (generalized)", () => {
   const files = collectGovernedFiles();
-  const rel = (p: string) => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
 
   it("scans a meaningful slice of governed source", () => {
     expect(files.length).toBeGreaterThan(20);
@@ -335,7 +337,6 @@ describe("token governance — elevation ladder single-source (EL1)", () => {
 
 describe("token governance — no literal-color box-shadow outside globals.css (EL1)", () => {
   const files = collectGovernedFiles();
-  const rel = (p: string) => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
   // Blank /* ... */ comments (newlines preserved) so a commented-out box-shadow
   // never false-positives.
   const blankComments = (s: string): string =>
@@ -638,8 +639,6 @@ describe("token governance: type voice (TY2)", () => {
   });
 });
 
-const rel2 = (p: string): string => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
-
 // ─────────────────────────────────────────────────────────────────────────────
 // TY3: type scale + display-token consolidation (spec 2026-06-04).
 // The canonical display semantic, mono honesty (face + loaded weights), and
@@ -667,29 +666,31 @@ describe("token governance: type scale + display consolidation (TY3)", () => {
       for (const block of content.split("}")) {
         if (!block.includes("var(--mono)")) continue;
         const w = block.match(/font-weight:\s*(\d+)/);
-        if (w && !loaded.has(w[1])) offenders.push(`${rel2(p)}: mono weight ${w[1]} not loaded`);
+        if (w && !loaded.has(w[1])) offenders.push(`${rel(p)}: mono weight ${w[1]} not loaded`);
       }
     }
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
 
-  it("the legacy --font-display never reaches governed authed TSX (sweep + legacy allowlist)", () => {
+  it("the legacy --font-display never reaches governed authed TSX or CSS (sweep + legacy allowlist)", () => {
     // The allowlist is the explicit statement of which registers may still hold
     // the legacy token (DM Sans). It shrinks as those registers retire.
-    // layout.tsx is the loader (the binding site of the legacy token), not a
-    // consumer; it keeps the binding until the legacy registers retire.
+    // layout.tsx is the loader (the binding site of the legacy token) and
+    // globals.css is the definition site (the :root fallback value plus the
+    // sanctioned legacy .font-display utility); neither is a consumer.
     const LEGACY_ALLOWED = [
-      "app/layout.tsx",
+      "src/app/layout.tsx",
+      "src/app/globals.css",
       "app/login/",
       "app/forgot-password/",
       "app/reset-password/",
       "components/onboarding/",
     ];
     const offenders = governed
-      .filter((f) => f.path.endsWith(".tsx"))
+      .filter((f) => f.path.endsWith(".tsx") || f.path.endsWith(".css"))
       .filter((f) => !LEGACY_ALLOWED.some((a) => f.path.includes(a)))
-      .filter((f) => /font-display(?!-app)/.test(f.content))
-      .map((f) => rel2(f.path));
+      .filter((f) => /font-display(?!-app\b)/.test(f.content))
+      .map((f) => rel(f.path));
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
 });

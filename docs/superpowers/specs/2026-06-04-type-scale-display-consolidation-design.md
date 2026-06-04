@@ -13,14 +13,14 @@ The type-voice slice shipped the display FACE (Fraunces, upright only, self-host
 - The authed app therefore has TWO live display tokens (`--font-home-serif`, inbox `--serif`, both Fraunces) plus a third legacy one (`--font-display`, DM Sans) that four authed shell headings still ride.
 - Scale reality vs the locked section 4 rows (all verified in the live tree):
 
-| Spec row (px/weight/tracking) | Current state | Element |
-|---|---|---|
-| inbox title 30/700/-.025 | Fraunces 36 to 44px / 500 / -.022 (opsz 48) | `.inbox-pagehead h1` (inbox.css:26) |
-| sheet proposal 22/600/-.018 | Fraunces 26 to 28px / 500 / -.014 (opsz 36) | `.ds-summary` (inbox.css:659) |
-| value numerics 26/600/-.02 display tabular | JetBrains MONO 40/28/18px, 600/500, tabular | `.heroRevenueNum` `.heroStatNum` `.worthItNum` `.heroAdSpendNum` (results.module.css) |
-| greeting 18/500/-.01 display | Inter 14px/500/-.005 | `.hello` (home.module.css:80), the "Good evening, {name}" salutation |
-| meta/label 10.5-12/600/.08-.16 UPPER | mono 10.5/500/.08-.1 (eyebrows, pagehead count) + Inter 11/500/.07 (`.section-label`) | various |
-| verdict hero 32/600 | DONE in the type-voice slice (36/48, 600) | `.line` |
+| Spec row (px/weight/tracking)              | Current state                                                                         | Element                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| inbox title 30/700/-.025                   | Fraunces 36 to 44px / 500 / -.022 (opsz 48)                                           | `.inbox-pagehead h1` (inbox.css:26)                                                   |
+| sheet proposal 22/600/-.018                | Fraunces 26 to 28px / 500 / -.014 (opsz 36)                                           | `.ds-summary` (inbox.css:659)                                                         |
+| value numerics 26/600/-.02 display tabular | JetBrains MONO 40/28/18px, 600/500, tabular                                           | `.heroRevenueNum` `.heroStatNum` `.worthItNum` `.heroAdSpendNum` (results.module.css) |
+| greeting 18/500/-.01 display               | Inter 14px/500/-.005                                                                  | `.hello` (home.module.css:80), the "Good evening, {name}" salutation                  |
+| meta/label 10.5-12/600/.08-.16 UPPER       | mono 10.5/500/.08-.1 (eyebrows, pagehead count) + Inter 11/500/.07 (`.section-label`) | various                                                                               |
+| verdict hero 32/600                        | DONE in the type-voice slice (36/48, 600)                                             | `.line`                                                                               |
 
 Correction to the mission brief, verified twice: the approval sheet proposal headline does NOT render sans today. `.ds-summary` and `.ds-head-name` already wear Fraunces via the inbox-local `--serif` (the type-voice repoint upgraded them for free). The sheet work in this slice is metric alignment (weight/tracking), not a face change.
 
@@ -73,12 +73,12 @@ Rejected alternative: repoint `--font-display` itself to Fraunces and hand DM Sa
 
 Decided per-surface, pressure-tested against what each heading IS:
 
-| Surface | Decision | Treatment |
-|---|---|---|
-| inbox-drawer SheetTitle "Inbox" (inbox-drawer.tsx:129) | ADOPT display | Fraunces 22/600/-.018 (opsz 28) via a `drawer-title` class in inbox-drawer.css; drop `.font-display`. The drawer is the mini-inbox; its big sibling (the inbox h1) is already Fraunces. |
-| help-overlay h2 "Quick reference" (help-overlay.tsx:68) | ADOPT display, CONDITIONAL | The legacy `.font-display` class strips, the copy em-dash dies, and the file joins the corpus UNCONDITIONALLY (the consolidation sweep guard and the voice rule are not gated on this overlay's pre-existing styling gap; the h2 falls to the body face meanwhile). The display-voice rule itself (22/600/-.018 via a new co-located help-overlay.css) lands only if the live render shows a usable card; if the overlay is structurally broken, styling one heading on it is lipstick, so the rule waits for the overlay's own follow-up and the shot records the gap. |
-| settings/identity h1 (agent displayName, identity/page.tsx:285) | ADOPT display | The strongest claim in the app: an agent NAME at hero scale above the sprite is the printed-portrait poster pattern. Keep the tuned text-5xl/md:text-6xl sizes and tracking-tight; swap `font-display font-light` + inline DM Sans for `--font-display-app` at weight 600 (700 reads too heavy at 60px; 600 matches the poster names' register at hero scale). |
-| live-signal status-label "System {state}" (live-signal-popover.tsx:107) | STAYS SANS | It is a status sentence, not display copy (the mission's instinct, confirmed). Drop `.font-display`; it inherits the Inter body face and gains weight 600 in live-signal-popover.css so the popover head still leads. No uppercase (an uppercase "SYSTEM NORMAL" reads like an alarm; this surface is calm). |
+| Surface                                                                 | Decision                   | Treatment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| inbox-drawer SheetTitle "Inbox" (inbox-drawer.tsx:129)                  | ADOPT display              | Fraunces 22/600/-.018 (opsz 28) via a `drawer-title` class in inbox-drawer.css; drop `.font-display`. The drawer is the mini-inbox; its big sibling (the inbox h1) is already Fraunces.                                                                                                                                                                                                                                                                                                                                                                                 |
+| help-overlay h2 "Quick reference" (help-overlay.tsx:68)                 | ADOPT display, CONDITIONAL | The legacy `.font-display` class strips, the copy em-dash dies, and the file joins the corpus UNCONDITIONALLY (the consolidation sweep guard and the voice rule are not gated on this overlay's pre-existing styling gap; the h2 falls to the body face meanwhile). The display-voice rule itself (22/600/-.018 via a new co-located help-overlay.css) lands only if the live render shows a usable card; if the overlay is structurally broken, styling one heading on it is lipstick, so the rule waits for the overlay's own follow-up and the shot records the gap. |
+| settings/identity h1 (agent displayName, identity/page.tsx:285)         | ADOPT display              | The strongest claim in the app: an agent NAME at hero scale above the sprite is the printed-portrait poster pattern. Keep the tuned text-5xl/md:text-6xl sizes and tracking-tight; swap `font-display font-light` + inline DM Sans for `--font-display-app` at weight 600 (700 reads too heavy at 60px; 600 matches the poster names' register at hero scale).                                                                                                                                                                                                          |
+| live-signal status-label "System {state}" (live-signal-popover.tsx:107) | STAYS SANS                 | It is a status sentence, not display copy (the mission's instinct, confirmed). Drop `.font-display`; it inherits the Inter body face and gains weight 600 in live-signal-popover.css so the popover head still leads. No uppercase (an uppercase "SYSTEM NORMAL" reads like an alarm; this surface is calm).                                                                                                                                                                                                                                                            |
 
 After this, zero authed-shell consumers reference the legacy token.
 
@@ -134,18 +134,18 @@ arch-check note, verified: `scripts/arch-check.ts` excludes `*.test.ts` from the
 
 ## 5. What changes visually (screenshot matrix, 390px and 1280px)
 
-| Surface | What to verify |
-|---|---|
-| Inbox pagehead + cards | h1 at 700/-.025 (or recorded 650); meta rows now real JetBrains (was system mono); cards otherwise UNCHANGED |
-| Approval sheet, real HIGH-RISK item | `.ds-summary` at 600/-.018; eyebrows real JetBrains; head line unchanged; risk chips unchanged |
-| Handoff sheet | regression only (shares `.ds-head`/`.ds-eyebrow`; no own summary) |
-| Results | hero numerics face (if 3.4 lands) + digit alignment; all mono 600s render the real SemiBold cut (synthetic-bold fix); labels otherwise unchanged |
-| Home + week-note | greeting at Fraunces 18/500; verdict/eyebrow regression; week-note signature name at real 600; FOUT line-count re-run |
-| Inbox drawer open | SheetTitle in Fraunces 22/600 |
-| Live-signal popover open | status-label sans 600, popover otherwise unchanged |
-| Help overlay | conditional decision evidence (usable card or pre-existing gap) |
-| Settings/identity | h1 in Fraunces 600 at tuned sizes |
-| Login + one onboarding step + Mercury reports + landing | NEGATIVE checks: pixel-identical (legacy token untouched) |
+| Surface                                                 | What to verify                                                                                                                                   |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Inbox pagehead + cards                                  | h1 at 700/-.025 (or recorded 650); meta rows now real JetBrains (was system mono); cards otherwise UNCHANGED                                     |
+| Approval sheet, real HIGH-RISK item                     | `.ds-summary` at 600/-.018; eyebrows real JetBrains; head line unchanged; risk chips unchanged                                                   |
+| Handoff sheet                                           | regression only (shares `.ds-head`/`.ds-eyebrow`; no own summary)                                                                                |
+| Results                                                 | hero numerics face (if 3.4 lands) + digit alignment; all mono 600s render the real SemiBold cut (synthetic-bold fix); labels otherwise unchanged |
+| Home + week-note                                        | greeting at Fraunces 18/500; verdict/eyebrow regression; week-note signature name at real 600; FOUT line-count re-run                            |
+| Inbox drawer open                                       | SheetTitle in Fraunces 22/600                                                                                                                    |
+| Live-signal popover open                                | status-label sans 600, popover otherwise unchanged                                                                                               |
+| Help overlay                                            | conditional decision evidence (usable card or pre-existing gap)                                                                                  |
+| Settings/identity                                       | h1 in Fraunces 600 at tuned sizes                                                                                                                |
+| Login + one onboarding step + Mercury reports + landing | NEGATIVE checks: pixel-identical (legacy token untouched)                                                                                        |
 
 ## 6. AA and FOUT verification
 
@@ -169,6 +169,14 @@ arch-check note, verified: `scripts/arch-check.ts` excludes `*.test.ts` from the
 - Greeting 14 to 18px pushes the verdict down ~6px on Home: acceptable, verified against the fold at 390px.
 - Parallel sessions move main under this slice (Riley/Mira/api): re-verify the touched files against main at execution start; inbox.css is the hottest shared file.
 - The #821 one-line conflict (3.6): accepted, documented here.
+
+## 8.1 Execution addenda (recorded outcomes, 2026-06-04 impl PR)
+
+1. **Tabular-figures gate (3.4): FAIL.** Live digit-column measurement on the running app (ten 1s 173.98px vs ten 0s 256.13px at 40px, identical under `font-variant-numeric` and raw `font-feature-settings "tnum"`): the served Fraunces has no functioning tabular figures. The numerics re-face did not land; the mono value family renders the real SemiBold cut instead (3.5). Full numbers in the evidence README.
+2. **Help overlay (3.2): structurally broken live** (no stylesheet exists; renders in-flow, unstyled). The class strip, copy fix, and corpus membership landed; the display-voice rule waits for the overlay's own styling pass.
+3. **Inbox h1 weight: 700 stands** at 36/44px on the live shots; the 650 fallback was not needed.
+4. **Mercury mono weight fidelity (3.5 side effect, found in review, accepted):** reports.module.css declares mono 600/700 in 27 blocks, and Mercury's `--font-mono-mercury` aliases the same JetBrains primitive, so the real 600 cut changes /reports rendering from synthesized bold to the declared cut (measured 0.459% pixel delta, direction = closer to declared intent; the 700s now synthesize from a 600 base). Accepted as weight fidelity for declarations Mercury itself makes, not register drift; recorded in the evidence README with the measured numbers.
+5. **Lone-glyph bullet mechanics changed in flight:** prettier re-expands single-line JSX text on commit, so the bullet became a string-literal expression (`{"`&#8212;`"}`): the corpus scanner sees the exact glyph regardless of formatting, and the exemption itself is untouched.
 
 ## 9. Follow-ups this slice creates
 

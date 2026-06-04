@@ -10,7 +10,8 @@
 
 /* Drawer title: the mini-inbox shares the inbox page's display voice
    (sheet-title scale row: 22/600/-.018, opsz pinned for display character).
-   Two-class specificity beats the shadcn SheetTitle utility classes. */
+   This unlayered component rule beats the shadcn SheetTitle utilities
+   (@layer utilities) by cascade-layer order; specificity is the fallback. */
 .inbox-drawer .drawer-title {
   font-family: var(--font-display-app);
   font-variation-settings: "opsz" 28;

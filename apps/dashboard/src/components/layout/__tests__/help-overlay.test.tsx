@@ -7,7 +7,8 @@ import { HelpOverlay } from "../help-overlay";
 describe("HelpOverlay (editorial)", () => {
   it("renders an editorial title", () => {
     render(<HelpOverlay onClose={() => {}} />);
-    // Title is editorial-register; matches the heading element with role="heading"
+    // Structural contract only: the title's display-voice styling waits on the
+    // overlay's own styling pass (pre-existing gap, recorded in the type-scale slice).
     expect(screen.getByRole("heading", { level: 2 })).toBeInTheDocument();
   });
 
