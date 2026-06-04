@@ -235,6 +235,10 @@ export const CreativeJobSchema = z.object({
   ugcFailure: z.record(z.unknown()).nullable().optional(),
   reviewDecision: z.enum(["kept", "passed"]).nullable().optional(),
   reviewDecidedAt: z.coerce.date().nullable().optional(),
+  // Slice-2 taste-sweep idempotency watermark: the OBSERVED reviewDecidedAt
+  // last captured (never wall-clock now), so a re-decision during a sweep
+  // stays strictly newer and is re-observed next run.
+  tasteCapturedAt: z.coerce.date().nullable().optional(),
   // Meta publish (P2 parked draft package). All nullable/optional — populated only
   // by the creative.job.publish handler (and durableAssetUrl by PR A).
   metaVideoId: z.string().nullable().optional(),
@@ -299,3 +303,30 @@ export const CreativePastPerformanceSchema = z.object({
   }),
 });
 export type CreativePastPerformance = z.infer<typeof CreativePastPerformanceSchema>;
+
+/**
+ * Brief-enrichment shape written at submit when the caller passed no explicit
+ * pastPerformance: the deployment's top measured creatives, aggregated for the
+ * NEXT brief (slice-2 spec 3.8). Shares the CreativeJob.pastPerformance column
+ * with CreativePastPerformanceSchema; the disjoint `kind` literals make
+ * cross-validation structurally impossible (mutual-rejection test).
+ */
+export const CreativePerformanceHistorySchema = z.object({
+  kind: z.literal("performance_history"),
+  version: z.literal(1),
+  generatedAt: z.string(),
+  topPerformers: z
+    .array(
+      z.object({
+        jobId: z.string(),
+        descriptor: z.string(), // "polished:question" vocabulary (spec 3.5)
+        trueRoas: z.number().nullable(),
+        spend: z.number(),
+        bookedValueCents: z.number().int(),
+        window: z.object({ from: z.string(), to: z.string() }),
+      }),
+    )
+    .max(3),
+  summary: z.string(),
+});
+export type CreativePerformanceHistory = z.infer<typeof CreativePerformanceHistorySchema>;
