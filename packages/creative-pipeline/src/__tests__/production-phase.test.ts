@@ -85,6 +85,10 @@ describe("executeProductionPhase", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks clears CALLS, not implementations: a prior test's
+    // mockReturnValue(qaDeps) would otherwise leak across tests. Default to
+    // the no-deps honest stub; QA tests override per case.
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReset();
     deps = createMockDeps();
   });
 
@@ -250,6 +254,82 @@ describe("executeProductionPhase", () => {
     expect(result.failedSpecs).toEqual([{ specId: "spec_1", reason: "qa_failed" }]);
     // garbage renders never fall back to unrelated reuse assets
     expect(deps.assetStore.findLockedByCreator).not.toHaveBeenCalled();
+  });
+
+  // ── Slice-3 prompt fidelity + providersAllowed (spec 3.2) ──
+
+  it("generates with the composed direction-faithful request, not raw script text", async () => {
+    const styled = makeSpec("spec_1", {
+      style: {
+        lighting: "golden_hour",
+        cameraAngle: "selfie",
+        cameraMovement: "slow_pan",
+        environment: "bright clinic interior",
+        wardrobeSelection: ["soft neutrals"],
+        hairState: "natural",
+        props: [],
+      },
+      direction: {
+        hookType: "direct_camera",
+        eyeContact: "camera",
+        energyLevel: "medium",
+        pacingNotes: "Match conversational delivery style",
+        imperfections: {
+          hesitationDensity: 0.15,
+          sentenceRestartRate: 0.1,
+          microPauseDensity: 0.2,
+          fillerDensityTarget: 0.2,
+          fragmentationTarget: 0.3,
+        },
+        adLibPermissions: [],
+        forbiddenFraming: ["no studio lighting"],
+      },
+    });
+    const input: ProductionInput = {
+      specs: [styled],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    await executeProductionPhase(input);
+    const req = deps.providerClients.klingClient.generateVideo.mock.calls[0]![0];
+    expect(req.prompt).toContain("Hey so...");
+    expect(req.prompt).toContain("golden hour lighting");
+    expect(req.negativePrompt).toContain("no studio lighting");
+    expect(req.cameraMotion).toBe("pan_right");
+  });
+
+  it("honors providersAllowed: a kling-only talking_head spec never burns heygen attempts", async () => {
+    // talking_head ranks heygen above kling (audio-driven bonus); the filter
+    // must keep the throwing heygen adapter out entirely.
+    const spec = makeSpec("spec_1", { format: "talking_head" });
+    const input: ProductionInput = {
+      specs: [spec],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(result.assets).toHaveLength(1);
+    expect(result.assets[0]!.attemptNumber).toBe(1);
+    expect(result.assets[0]!.provider).toBe("kling");
+  });
+
+  it("fails a spec loudly when no ranked provider is allowed", async () => {
+    const spec = makeSpec("spec_1", { providersAllowed: ["nonexistent"] });
+    const input: ProductionInput = {
+      specs: [spec],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(result.assets).toHaveLength(0);
+    expect(result.failedSpecs).toEqual([{ specId: "spec_1", reason: "no_allowed_provider" }]);
+    expect(deps.providerClients.klingClient.generateVideo).not.toHaveBeenCalled();
   });
 
   it("budget accounting is attempt-accurate: qa-fail retries spend against the job budget", async () => {

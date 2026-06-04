@@ -142,6 +142,7 @@ async function executePhase(
           creatorPoolIds: brief.creatorPoolIds ?? [],
           ugcFormat: brief.ugcFormat ?? "talking_head",
           brandVoice: brief.brandVoice ?? null,
+          productImages: brief.productImages ?? [],
         },
         creatorPool: ctx.context.creatorPool as CreatorIdentity[],
         creativeWeights: (ctx.context.creativeWeights as {

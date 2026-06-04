@@ -7,6 +7,7 @@ import {
 } from "../provider-router.js";
 import { deriveApprovalState, evaluateRealism, type RealismScorerDeps } from "../realism-scorer.js";
 import { buildFrameQaDeps } from "../frame-qa-deps.js";
+import { buildUgcVideoRequest } from "../video-prompt.js";
 import { createVideoProvider, type ProviderClients } from "../video-provider.js";
 import type { ProviderPerformanceHistory } from "../provider-performance.js";
 
@@ -20,6 +21,12 @@ interface CreativeSpecInput {
   structureId: string;
   platform: string;
   script: { text: string; language: string };
+  /** SceneStyle from scripting (slice-3 spec 3.2); parsed in the prompt builder. */
+  style?: unknown;
+  /** UgcDirection from scripting; parsed in the prompt builder. */
+  direction?: unknown;
+  /** Product grounding image (product_in_hand format only; set at scripting). */
+  referenceImageUrl?: string;
   format: string;
   identityConstraints: { strategy: string; maxIdentityDrift?: number };
   renderTargets: { aspect: string; durationSec: number };
@@ -103,13 +110,11 @@ async function processSpec(
       const startMs = Date.now();
 
       try {
-        // Generate video
+        // Generate video with the direction-faithful request (slice-3 spec
+        // 3.2): SceneStyle/UgcDirection compose into prompt + negative +
+        // camera motion; absent/unparseable falls back to raw script text.
         const videoProvider = createVideoProvider(provider.profile.provider, deps.providerClients);
-        const result = await videoProvider.generate({
-          prompt: spec.script.text,
-          durationSec: spec.renderTargets.durationSec,
-          aspectRatio: spec.renderTargets.aspect,
-        });
+        const result = await videoProvider.generate(buildUgcVideoRequest(spec));
 
         // Attempt-accurate budget (slice-3 spec 3.1): a successful generation
         // is paid render spend whether or not its QA verdict survives, so it
@@ -252,11 +257,22 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
       continue;
     }
 
+    // providersAllowed is honored (slice-3 spec 3.2): rank, FILTER to the
+    // spec's allowlist, then slice fallbacks. Without the filter, heygen's
+    // talking-head bonus ranks its throwing stub adapter first and burns
+    // maxAttempts before kling ever runs.
     const ranked = rankProviders(
       { format: spec.format, identityConstraints: spec.identityConstraints },
       registry,
       input.providerHistory,
-    ).slice(0, retryConfig.maxProviderFallbacks + 1);
+    )
+      .filter((r) => spec.providersAllowed.includes(r.profile.provider))
+      .slice(0, retryConfig.maxProviderFallbacks + 1);
+
+    if (ranked.length === 0) {
+      failedSpecs.push({ specId: spec.specId, reason: "no_allowed_provider" });
+      continue;
+    }
 
     const result = await processSpec(spec, ranked, retryConfig, deps, costTracker, qaDeps);
 

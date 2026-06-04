@@ -15,6 +15,7 @@ interface UgcBriefInput {
   creatorPoolIds: string[];
   ugcFormat: string;
   brandVoice?: string | null;
+  productImages?: string[];
 }
 
 interface PlanningOutputInput {
@@ -42,6 +43,8 @@ interface CreativeSpecOutput {
   script: { text: string; language: string; claimsPolicyTag?: string };
   style: Record<string, unknown>;
   direction: Record<string, unknown>;
+  /** Product grounding image for image2video (product_in_hand only; spec 3.2). */
+  referenceImageUrl?: string;
   format: string;
   identityConstraints: Record<string, unknown>;
   continuityConstraints?: Record<string, unknown>;
@@ -170,6 +173,12 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
       },
       style: sceneStyle as unknown as Record<string, unknown>,
       direction: ugcDirection as unknown as Record<string, unknown>,
+      // image2video uses the reference as the FIRST FRAME: grounding a
+      // talking-head video on a product still would hijack the scene, so the
+      // image rides product_in_hand specs only (slice-3 spec 3.2).
+      ...(brief.ugcFormat === "product_in_hand" && brief.productImages?.[0]
+        ? { referenceImageUrl: brief.productImages[0] }
+        : {}),
       format: brief.ugcFormat,
       identityConstraints: identityPlan
         ? {
