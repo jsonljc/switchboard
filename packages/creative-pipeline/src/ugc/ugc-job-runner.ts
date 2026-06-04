@@ -44,6 +44,8 @@ interface UgcJobStore {
     phase: string,
     error: Record<string, unknown>,
   ): Promise<CreativeJob>;
+  /** Mirrors the polished runner's durable-asset persist (slice-3 spec 3.3f). */
+  setDurableAsset(organizationId: string, id: string, url: string): Promise<CreativeJob>;
 }
 
 interface CreatorStore {
@@ -61,6 +63,8 @@ interface UgcPipelineDeps {
   llmConfig?: { apiKey: string };
   klingClient?: unknown;
   assetStore?: unknown;
+  /** Durable storage for final assets (slice-3 spec 3.3f); injected from bootstrap. */
+  assetStorage?: AssetStorageClient;
 }
 
 interface UgcPipelineContext {
@@ -98,6 +102,9 @@ async function executePhase(
     context: UgcPipelineContext;
     previousPhaseOutputs: Record<string, unknown>;
   },
+  // Live client objects ride DEPS, never the step-memoized context (step
+  // output is JSON; class instances would not survive a replay).
+  deps?: UgcPipelineDeps,
 ): Promise<Record<string, unknown>> {
   switch (phase) {
     case "planning": {
@@ -186,6 +193,7 @@ async function executePhase(
           },
           assetStore: ctx.context.assetStore as ProductionInput["deps"]["assetStore"],
           apiKey: ctx.context.apiKey,
+          assetStorage: deps?.assetStorage,
         },
       };
       return (await executeProductionPhase(productionInput)) as unknown as Record<string, unknown>;
@@ -257,7 +265,7 @@ export async function executeUgcPipeline(
     let output: Record<string, unknown>;
     try {
       output = await step.run(`phase-${phase}`, () =>
-        executePhase(phase as UgcPhase, { job, context, previousPhaseOutputs: phaseOutputs }),
+        executePhase(phase as UgcPhase, { job, context, previousPhaseOutputs: phaseOutputs }, deps),
       );
     } catch (err) {
       // Terminal error — persist failure and emit event
@@ -287,6 +295,20 @@ export async function executeUgcPipeline(
     await step.run(`save-${phase}`, () =>
       deps.jobStore.updateUgcPhase(eventData.organizationId, job.id, nextPhase, phaseOutputs),
     );
+
+    // After production, promote the first non-rejected asset's durable URL to
+    // the job (slice-3 spec 3.3f; mirrors the polished save-durable-asset
+    // step) so assertPublishable can find it for a kept UGC creative.
+    if (phase === "production") {
+      const assets = (output as { assets?: Array<Record<string, unknown>> }).assets ?? [];
+      const chosen = assets.find((a) => a.approvalState !== "rejected");
+      const durableAssetUrl = chosen?.durableAssetUrl;
+      if (typeof durableAssetUrl === "string" && durableAssetUrl.length > 0) {
+        await step.run("save-ugc-durable-asset", () =>
+          deps.jobStore.setDurableAsset(eventData.organizationId, job.id, durableAssetUrl),
+        );
+      }
+    }
 
     // Emit phase completion event
     await step.sendEvent(`emit-${phase}-complete`, {

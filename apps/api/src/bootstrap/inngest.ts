@@ -965,6 +965,10 @@ export async function registerInngest(
           llmConfig: { apiKey },
           klingClient,
           assetStore,
+          // Durable storage for final UGC assets (slice-3 spec 3.3f): the SAME
+          // S3 client the polished runner receives, so kept UGC creatives gain
+          // a durableAssetUrl and become publishable.
+          assetStorage,
         },
         makeOnFailureHandler(
           {

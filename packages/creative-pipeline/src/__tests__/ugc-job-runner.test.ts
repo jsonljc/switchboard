@@ -15,6 +15,18 @@ vi.mock("../inngest-client.js", () => ({
   },
 }));
 
+// Programmable production phase: the default (zero assets) matches what the
+// real phase produces with this file's empty creator pool; durable-asset
+// tests override per case.
+const { executeProductionPhaseMock } = vi.hoisted(() => ({
+  executeProductionPhaseMock: vi
+    .fn()
+    .mockResolvedValue({ assets: [], qaResults: {}, failedSpecs: [] }),
+}));
+vi.mock("../ugc/phases/production.js", () => ({
+  executeProductionPhase: executeProductionPhaseMock,
+}));
+
 function createMockStep() {
   return {
     run: vi.fn((_name: string, fn: () => unknown) => fn()),
@@ -30,6 +42,7 @@ function createMockDeps() {
       updateUgcPhase: vi.fn(),
       stopUgc: vi.fn(),
       failUgc: vi.fn(),
+      setDurableAsset: vi.fn(),
     },
     creatorStore: { findByDeployment: vi.fn().mockResolvedValue([]) },
     deploymentStore: {
@@ -175,6 +188,37 @@ describe("executeUgcPipeline", () => {
       });
       expect(opts.if).toBeUndefined();
     }
+  });
+
+  it("promotes the first non-rejected asset's durable url to the job (slice-3 spec 3.3f)", async () => {
+    executeProductionPhaseMock.mockResolvedValueOnce({
+      assets: [
+        { approvalState: "rejected", durableAssetUrl: undefined, outputs: {} },
+        {
+          approvalState: "approved",
+          durableAssetUrl: "https://durable.example.com/creative-assets/job_1/ugc-s2.mp4",
+          outputs: {},
+        },
+      ],
+      qaResults: {},
+      failedSpecs: [],
+    });
+    await executeUgcPipeline(eventData, step as never, deps as never);
+    expect(deps.jobStore.setDurableAsset).toHaveBeenCalledWith(
+      "org_1",
+      "job_1",
+      "https://durable.example.com/creative-assets/job_1/ugc-s2.mp4",
+    );
+  });
+
+  it("does not set a durable url when no non-rejected asset carries one", async () => {
+    executeProductionPhaseMock.mockResolvedValueOnce({
+      assets: [{ approvalState: "rejected", durableAssetUrl: undefined, outputs: {} }],
+      qaResults: {},
+      failedSpecs: [{ specId: "s1", reason: "qa_failed" }],
+    });
+    await executeUgcPipeline(eventData, step as never, deps as never);
+    expect(deps.jobStore.setDurableAsset).not.toHaveBeenCalled();
   });
 
   it("a decision-workflow-shaped emit (persisted NEXT phase) resumes the wait", async () => {

@@ -24,6 +24,12 @@ export const AssetOutputsSchema = z.object({
   videoUrl: z.string().optional(),
   imageUrl: z.string().optional(),
   audioUrl: z.string().optional(),
+  /**
+   * Provider CDN URL when `videoUrl` was replaced by a durable upload
+   * (slice-3 spec 3.3f). Provider URLs expire; durable ones feed review
+   * playback and publish.
+   */
+  sourceUrl: z.string().optional(),
   checksums: z.record(z.string()),
 });
 export type AssetOutputs = z.infer<typeof AssetOutputsSchema>;

@@ -9,6 +9,17 @@ vi.mock("../ugc/frame-qa-deps.js", () => ({
   buildFrameQaDeps: vi.fn(),
 }));
 
+// Durable upload's download seam (slice-3 spec 3.3f): module-mocked so no test
+// touches the network; returns a fake local file + cleanup spy.
+const downloadCleanup = vi.fn();
+vi.mock("../ugc/video-download.js", () => ({
+  downloadVideoToTmp: vi.fn(async (url: string) => ({
+    localPath: `/tmp/fake-${url.split("/").pop()}`,
+    cleanup: downloadCleanup,
+  })),
+}));
+import { downloadVideoToTmp } from "../ugc/video-download.js";
+
 function fakeQaDeps(visionResults: Array<Record<string, unknown>>) {
   let call = 0;
   return {
@@ -330,6 +341,87 @@ describe("executeProductionPhase", () => {
     expect(result.assets).toHaveLength(0);
     expect(result.failedSpecs).toEqual([{ specId: "spec_1", reason: "no_allowed_provider" }]);
     expect(deps.providerClients.klingClient.generateVideo).not.toHaveBeenCalled();
+  });
+
+  // ── Slice-3 durable UGC assets (spec 3.3f) ──
+
+  function depsWithStorage() {
+    const upload = vi.fn(async ({ key }: { key: string }) => ({
+      url: `https://durable.example.com/${key}`,
+    }));
+    return { ...deps, assetStorage: { upload } };
+  }
+
+  it("uploads ONLY the final returned asset to the deterministic per-spec key", async () => {
+    const qa = fakeQaDeps([BROKEN_VISION, CLEAN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+    const d = depsWithStorage();
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1", { jobId: "job-1" })],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: d as never,
+    };
+    const result = await executeProductionPhase(input);
+
+    // one upload (the passing attempt 2), never the rejected attempt 1
+    expect(d.assetStorage.upload).toHaveBeenCalledTimes(1);
+    expect(d.assetStorage.upload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "creative-assets/job-1/ugc-spec_1.mp4",
+        contentType: "video/mp4",
+      }),
+    );
+    const finalAsset = result.assets[0]!;
+    expect(finalAsset.durableAssetUrl).toBe(
+      "https://durable.example.com/creative-assets/job-1/ugc-spec_1.mp4",
+    );
+    expect((finalAsset.outputs as Record<string, unknown>).videoUrl).toBe(
+      finalAsset.durableAssetUrl,
+    );
+    expect((finalAsset.outputs as Record<string, unknown>).sourceUrl).toBe(
+      "https://cdn.example.com/generated.mp4",
+    );
+    // the persisted row carries the durable outputs too
+    const lastUpsert = deps.assetStore.upsertByKey.mock.calls.at(-1)![0];
+    expect(lastUpsert.outputs.videoUrl).toBe(finalAsset.durableAssetUrl);
+    // the temp download is cleaned up
+    expect(downloadCleanup).toHaveBeenCalled();
+  });
+
+  it("never uploads an exhausted all-rejected asset", async () => {
+    const qa = fakeQaDeps([BROKEN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+    const d = depsWithStorage();
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 2, maxProviderFallbacks: 0 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: d as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(d.assetStorage.upload).not.toHaveBeenCalled();
+    expect(result.assets[0]!.durableAssetUrl).toBeUndefined();
+  });
+
+  it("without storage configured, provider URLs persist and no durable url appears", async () => {
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(downloadVideoToTmp).not.toHaveBeenCalled();
+    expect(result.assets[0]!.durableAssetUrl).toBeUndefined();
+    expect((result.assets[0]!.outputs as Record<string, unknown>).videoUrl).toBe(
+      "https://cdn.example.com/generated.mp4",
+    );
   });
 
   it("budget accounting is attempt-accurate: qa-fail retries spend against the job budget", async () => {

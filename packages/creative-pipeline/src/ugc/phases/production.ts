@@ -8,8 +8,10 @@ import {
 import { deriveApprovalState, evaluateRealism, type RealismScorerDeps } from "../realism-scorer.js";
 import { buildFrameQaDeps } from "../frame-qa-deps.js";
 import { buildUgcVideoRequest } from "../video-prompt.js";
+import { downloadVideoToTmp } from "../video-download.js";
 import { createVideoProvider, type ProviderClients } from "../video-provider.js";
 import type { ProviderPerformanceHistory } from "../provider-performance.js";
+import type { AssetStorageClient } from "../../stages/video-producer.js";
 
 // ── Types ──
 
@@ -48,6 +50,12 @@ interface AssetRecordOutput {
   latencyMs: number;
   costEstimate: number;
   lockedDerivativeOf?: string | null;
+  /**
+   * Set when the asset's bytes were durably uploaded (slice-3 spec 3.3f);
+   * the runner promotes the first non-rejected asset's value to
+   * CreativeJob.durableAssetUrl so a kept UGC creative is publishable.
+   */
+  durableAssetUrl?: string;
 }
 
 interface AssetStoreLike {
@@ -59,6 +67,12 @@ interface ProductionDeps {
   providerClients: ProviderClients;
   assetStore: AssetStoreLike;
   apiKey: string;
+  /**
+   * Durable storage for final assets (slice-3 spec 3.3f). The exact polished
+   * layering: interface owned here, S3 impl injected from bootstrap. Absent =
+   * provider URLs persist as-is and publish stays loud-blocked downstream.
+   */
+  assetStorage?: AssetStorageClient;
 }
 
 export interface ProductionInput {
@@ -174,6 +188,39 @@ async function processSpec(
         if (qaScore.qaStatus === "evaluated" && qaScore.overallDecision === "fail") {
           lastFailedAsset = assetData;
           continue;
+        }
+
+        // Durable upload, FINAL asset only (slice-3 spec 3.3f): one storage
+        // key per spec, so only the asset that survives QA may own it (an
+        // earlier rejected attempt uploading too would let later bytes
+        // silently replace what its persisted row points at). Upload failure
+        // propagates (the UGC dead-letter contract: failUgc + ugc.failed),
+        // never a fake success with a temp path.
+        if (deps.assetStorage) {
+          const providerUrl = result.videoUrl;
+          const download = await downloadVideoToTmp(providerUrl);
+          try {
+            const key = `creative-assets/${spec.jobId ?? "unknown"}/ugc-${spec.specId}.mp4`;
+            const uploaded = await deps.assetStorage.upload({
+              localPath: download.localPath,
+              key,
+              contentType: "video/mp4",
+            });
+            assetData.durableAssetUrl = uploaded.url;
+            assetData.outputs = {
+              ...assetData.outputs,
+              videoUrl: uploaded.url,
+              sourceUrl: providerUrl,
+            };
+            // Re-persist the final row with the durable outputs (idempotent:
+            // same (specId, attemptNumber, provider) key).
+            await deps.assetStore.upsertByKey({
+              jobId: spec.jobId ?? "unknown",
+              ...assetData,
+            });
+          } finally {
+            download.cleanup();
+          }
         }
 
         return { asset: assetData, qaHistory };
