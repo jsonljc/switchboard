@@ -332,4 +332,108 @@ describe("PdpaConsentGateHook", () => {
     expect(saved.jurisdiction).toBe("SG");
     expect(saved.clinicType).toBe("medical");
   });
+
+  it("observe mode logs the revoked-race instead of blocking", async () => {
+    const { deps, verdictStore, handoffStore, conversationStore } = buildDeps({
+      resolution: {
+        status: "resolved",
+        config: { ...SG_CFG, consentState: { mode: "observe" } },
+      },
+      consent: {
+        pdpaJurisdiction: "SG",
+        consentGrantedAt: null,
+        consentRevokedAt: "2026-05-10T00:00:00.000Z",
+        consentSource: "inbound_keyword_revocation",
+        aiDisclosureVersionShown: null,
+        aiDisclosureShownAt: null,
+        consentUpdatedBy: null,
+        consentNotes: null,
+      },
+    });
+    const hook = new PdpaConsentGateHook(deps);
+    const result = {
+      response: "original reply",
+      toolCalls: [],
+      tokenUsage: {},
+      trace: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+
+    await hook.afterSkill(ctx, result);
+
+    // Strictly log-only: nothing lead-visible changes in observe.
+    expect(result.response).toBe("original reply");
+    expect(conversationStore.setConversationStatus).not.toHaveBeenCalled();
+    expect(handoffStore.save).not.toHaveBeenCalled();
+    expect(verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "allow",
+        auditLevel: "warning",
+        reasonCode: "consent_revoked",
+        details: expect.objectContaining({
+          event: "defense_in_depth_revoked_race",
+          wouldBlock: true,
+        }),
+      }),
+    );
+  });
+
+  it("observe mode persists the disclosure_not_shown verdict", async () => {
+    const { deps, verdictStore } = buildDeps({
+      resolution: {
+        status: "resolved",
+        config: { ...SG_CFG, consentState: { mode: "observe" } },
+      },
+    });
+    const hook = new PdpaConsentGateHook(deps);
+    // Response WITHOUT the SG disclosure text; consent fixture defaults to never-disclosed.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = { response: "hi there!", toolCalls: [], tokenUsage: {}, trace: [] } as any;
+
+    await hook.afterSkill(ctx, result);
+
+    expect(result.response).toBe("hi there!");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const saved = (verdictStore.save as any).mock.calls.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (c: any[]) => c[0].reasonCode === "disclosure_not_shown",
+    );
+    expect(saved).toBeDefined();
+    expect(saved![0].action).toBe("allow");
+    expect(saved![0].auditLevel).toBe("warning");
+  });
+
+  it("observe mode persists the disclosure_version_outdated verdict", async () => {
+    const { deps, verdictStore } = buildDeps({
+      resolution: {
+        status: "resolved",
+        config: { ...SG_CFG, consentState: { mode: "observe" } },
+      },
+      consent: {
+        pdpaJurisdiction: "SG",
+        consentGrantedAt: null,
+        consentRevokedAt: null,
+        consentSource: null,
+        aiDisclosureVersionShown: "sg-disclosure@0.9.0",
+        aiDisclosureShownAt: "2026-05-01T00:00:00.000Z",
+        consentUpdatedBy: null,
+        consentNotes: null,
+      },
+    });
+    const hook = new PdpaConsentGateHook(deps);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = { response: "hi there!", toolCalls: [], tokenUsage: {}, trace: [] } as any;
+
+    await hook.afterSkill(ctx, result);
+
+    expect(result.response).toBe("hi there!");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const saved = (verdictStore.save as any).mock.calls.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (c: any[]) => c[0].reasonCode === "disclosure_version_outdated",
+    );
+    expect(saved).toBeDefined();
+    expect(saved![0].action).toBe("allow");
+    expect(saved![0].auditLevel).toBe("warning");
+  });
 });

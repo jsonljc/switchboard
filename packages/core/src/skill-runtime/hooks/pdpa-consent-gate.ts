@@ -133,6 +133,22 @@ export class PdpaConsentGateHook implements SkillHook {
 
     if (decision.action === "block") {
       // Defense-in-depth: revoked-race block (gateway scanner should have caught this already).
+      // Observe is telemetry-only: record what enforce WOULD have blocked, mutate nothing
+      // lead-visible (no response rewrite, no status flip, no handoff).
+      if (consentConfig.mode !== "enforce") {
+        await this.saveVerdict({
+          reasonCode: "consent_revoked",
+          action: "allow",
+          auditLevel: "warning",
+          jurisdiction: config.jurisdiction,
+          clinicType: config.clinicType,
+          conversationId: ctx.sessionId,
+          originalText: result.response,
+          details: { event: "defense_in_depth_revoked_race", wouldBlock: true },
+          deploymentId: ctx.deploymentId,
+        });
+        return;
+      }
       const originalText = result.response;
       result.response = renderHandoffTemplate({
         jurisdiction: config.jurisdiction as "SG" | "MY",
@@ -183,7 +199,9 @@ export class PdpaConsentGateHook implements SkillHook {
           // the read above and this write).
           console.error("[pdpa-consent-gate] disclosure recording failed", err);
         }
-      } else if (consentConfig.mode === "enforce") {
+      } else {
+        // Mode is observe or enforce here ("off" early-returns above): both persist the
+        // disclosure-miss signal so the observe bake sees exactly what enforce would see.
         await this.saveVerdict({
           reasonCode: "disclosure_not_shown",
           action: "allow",
@@ -213,7 +231,8 @@ export class PdpaConsentGateHook implements SkillHook {
           // the read above and this write).
           console.error("[pdpa-consent-gate] disclosure recording failed", err);
         }
-      } else if (consentConfig.mode === "enforce") {
+      } else {
+        // Same observe+enforce persistence rationale as disclosure_not_shown above.
         await this.saveVerdict({
           reasonCode: "disclosure_version_outdated",
           action: "allow",
