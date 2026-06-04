@@ -28,6 +28,26 @@ const baseStructure = {
 };
 
 describe("generateDirection", () => {
+  it("falls back to neutral defaults on empty creator arrays instead of throwing (slice-3 spec 3.3e)", () => {
+    // The PCD backfill's placeholder stock creator carries empty arrays;
+    // pickFrom on an empty array crashed the scripting phase.
+    const result = generateDirection({
+      creator: {
+        personality: { energy: "conversational", deliveryStyle: "natural" },
+        appearanceRules: { hairStates: [], wardrobePalette: [] },
+        environmentSet: [],
+      },
+      structure: baseStructure,
+      platform: "meta_feed",
+      ugcFormat: "talking_head",
+    });
+    expect(result.sceneStyle.environment).toBe("bright clinic interior");
+    expect(result.sceneStyle.hairState).toBe("natural");
+    expect(result.sceneStyle.wardrobeSelection).toEqual([]);
+    // lighting still picks from the UGC-native set (never empty)
+    expect(["natural", "ambient", "golden_hour", "overcast"]).toContain(result.sceneStyle.lighting);
+  });
+
   it("returns sceneStyle and ugcDirection", () => {
     const result = generateDirection({
       creator: baseCreator,

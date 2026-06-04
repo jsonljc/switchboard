@@ -40,10 +40,17 @@ interface PolicyUpsertArgs {
  * policy.upsert record each call. Mirrors seed-alex-skill-pack.test.ts (CI has no
  * Postgres).
  */
-function buildMockPrisma(opts: { listingExists?: boolean; listingId?: string } = {}) {
-  const { listingExists = true, listingId = "listing_creative_1" } = opts;
+function buildMockPrisma(
+  opts: {
+    listingExists?: boolean;
+    listingId?: string;
+    existingCreator?: { id: string } | null;
+  } = {},
+) {
+  const { listingExists = true, listingId = "listing_creative_1", existingCreator = null } = opts;
   const deploymentUpserts: DeploymentUpsertArgs[] = [];
   const policyUpserts: PolicyUpsertArgs[] = [];
+  const creatorCreates: Array<Record<string, unknown>> = [];
 
   const mock = {
     agentListing: {
@@ -63,12 +70,21 @@ function buildMockPrisma(opts: { listingExists?: boolean; listingId?: string } =
         return { id: args.where.id };
       }),
     },
+    creatorIdentity: {
+      findFirst: vi.fn(async () => existingCreator),
+      create: vi.fn(async (args: { data: Record<string, unknown> }) => {
+        creatorCreates.push(args.data);
+        return { id: "creator_1", ...args.data };
+      }),
+    },
     _deploymentUpserts: deploymentUpserts,
     _policyUpserts: policyUpserts,
+    _creatorCreates: creatorCreates,
   };
   return mock as unknown as PrismaClient & {
     _deploymentUpserts: DeploymentUpsertArgs[];
     _policyUpserts: PolicyUpsertArgs[];
+    _creatorCreates: Array<Record<string, unknown>>;
   };
 }
 
@@ -220,5 +236,34 @@ describe("seedMiraCreativeDeployment", () => {
     );
     // Must fail loudly BEFORE attempting any deployment write.
     expect(noListing._deploymentUpserts).toHaveLength(0);
+  });
+
+  // ── Slice-3 default creator (spec 3.3e) ──────────────────────────────────────
+
+  it("seeds one synthetic House Creator with non-empty appearance arrays", async () => {
+    await seedMiraCreativeDeployment(prisma, "org_dev");
+    expect(prisma._creatorCreates).toHaveLength(1);
+    const creator = prisma._creatorCreates[0]!;
+    expect(creator.deploymentId).toBe("deploy_1");
+    expect(creator.name).toBe("House Creator");
+    expect(creator.qualityTier).toBe("stock");
+    // Non-empty arrays: empty ones used to crash generateDirection, and even
+    // with the defensive fallback the seeded persona should be real.
+    expect((creator.environmentSet as string[]).length).toBeGreaterThan(0);
+    const appearance = creator.appearanceRules as {
+      hairStates: string[];
+      wardrobePalette: string[];
+    };
+    expect(appearance.hairStates.length).toBeGreaterThan(0);
+    expect(appearance.wardrobePalette.length).toBeGreaterThan(0);
+    // No avatar refs: HeyGen routing (PR-4) must never pick up the synthetic
+    // stock creator accidentally.
+    expect(creator.identityRefIds).toEqual([]);
+  });
+
+  it("is idempotent: an existing House Creator is not duplicated", async () => {
+    const withCreator = buildMockPrisma({ existingCreator: { id: "creator_existing" } });
+    await seedMiraCreativeDeployment(withCreator, "org_dev");
+    expect(withCreator._creatorCreates).toHaveLength(0);
   });
 });
