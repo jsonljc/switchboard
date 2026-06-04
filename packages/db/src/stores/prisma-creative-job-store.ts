@@ -190,7 +190,7 @@ export class PrismaCreativeJobStore {
    * Persist the attribution sweep's measured-performance snapshot (slice 2).
    * Org-scoped updateMany (doctrine #12); count===0 ⇒ missing/cross-org ⇒
    * throw StaleVersionError (the sweep treats it as a benign vanished-job
-   * skip). Returns void — the daily sweep writes every published job and never
+   * skip). Returns void: the daily sweep writes every published job and never
    * needs the row back (unlike the publish checkpoints above).
    */
   async setPastPerformance(

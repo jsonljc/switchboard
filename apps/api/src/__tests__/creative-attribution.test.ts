@@ -91,7 +91,7 @@ describe("computePastPerformance", () => {
       delivery: "measured",
       meta: { spend: 50, conversions: 3, impressions: 1000 },
       booked: { valueCents: 25000, count: 2 },
-      trueRoas: 5, // 25000 cents = $250 over $50 spend — cents normalized exactly once
+      trueRoas: 5, // 25000 cents = $250 over $50 spend; cents normalized exactly once
       join: { metaCampaignId: "camp-1", metaAdId: "ad-1", metaVideoId: "vid-1" },
       source: { insights: "meta_campaign_insights", conversions: "conversion_records" },
     });

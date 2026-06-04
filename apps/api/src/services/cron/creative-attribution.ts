@@ -13,7 +13,7 @@ import {
 import { trueRoasFromCents } from "@switchboard/ad-optimizer";
 
 // Local Inngest client. All function registrations in apps/api share the same
-// switchboard id — they fan out to the single serve handler in bootstrap/inngest.ts.
+// switchboard id; they fan out to the single serve handler in bootstrap/inngest.ts.
 const inngestClient = new Inngest({ id: "switchboard" });
 
 /** Per-creative history older than this is truncated (slice-2 spec 3.3 window clamp). */
@@ -153,10 +153,10 @@ export interface ComputePastPerformanceInput {
  * One job's pastPerformance row, or null when the NO-DOWNGRADE rule applies:
  * an absent insight row also occurs when an operator DELETES a formerly-
  * delivering campaign in Ads Manager, and overwriting a prior `measured` row
- * with zeros would erase earned history — the prior snapshot stays, its asOf
+ * with zeros would erase earned history: the prior snapshot stays, its asOf
  * honestly aging. (1:1 campaign:creative is load-bearing for this join; if a
  * future slice consolidates creatives into shared campaigns, the join MUST
- * move to ad-level insights on join.metaAdId — spec 3.1.)
+ * move to ad-level insights on join.metaAdId (spec 3.1).)
  */
 export function computePastPerformance(
   input: ComputePastPerformanceInput,
@@ -291,7 +291,7 @@ export async function executeCreativeAttributionWorker(
       written += 1;
     } catch (err) {
       // The job was read from this org moments ago; a count===0 write means it
-      // vanished mid-run (deleted). Benign — skip and count it. Anything else
+      // vanished mid-run (deleted). Benign: skip and count it. Anything else
       // is a real failure owned by retries + the dead-letter contract.
       if (err instanceof StaleVersionError) {
         vanishedSkips += 1;
@@ -313,7 +313,7 @@ export async function executeCreativeAttributionWorker(
 }
 
 /**
- * Class-E failure contract (spec 3.2) — a DELIBERATE divergence from the Riley
+ * Class-E failure contract (spec 3.2), a DELIBERATE divergence from the Riley
  * worker's medium+emits: this worker writes a refreshable projection the next
  * daily run rebuilds, and a `creative.attribution.failed` event would have
  * zero consumers. The `infrastructure.job.retry_exhausted` audit entry is
@@ -330,7 +330,7 @@ export const CREATIVE_ATTRIBUTION_WORKER_FAILURE_PARAMS = {
 /**
  * Per-org attribution worker. Triggered by "creative-pipeline/attribution.refresh"
  * events from the dispatch cron. Kill-switch: readEnabledFlag() false short-
- * circuits immediately — no job reads, no Meta calls, no DB writes.
+ * circuits immediately: no job reads, no Meta calls, no DB writes.
  */
 export function createCreativeAttributionWorker(deps: CreativeAttributionWorkerDeps) {
   return inngestClient.createFunction(
@@ -351,7 +351,7 @@ export function createCreativeAttributionWorker(deps: CreativeAttributionWorkerD
 /**
  * Credentials-only resolver on the org's Meta Ads Connection (serviceId
  * "meta-ads"): org-scoped findFirst, decrypt, extract accessToken/accountId
- * (externalAccountId fallback). Deliberately NOT assertPublishable — that is
+ * (externalAccountId fallback). Deliberately NOT assertPublishable, which is
  * publish-specific (kept-status, page-id), neither of which attribution needs.
  * Returns null (graceful no-op) instead of failing when the connection or
  * fields are missing.

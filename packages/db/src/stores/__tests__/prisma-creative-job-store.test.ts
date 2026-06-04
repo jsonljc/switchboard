@@ -604,7 +604,7 @@ describe("PrismaCreativeJobStore", () => {
         where: { id: "cj_1", organizationId: "org_1" },
         data: { pastPerformance: { kind: "measured_performance" } },
       });
-      // The daily sweep never needs the row back — no read-back query.
+      // The daily sweep never needs the row back; no read-back query.
       expect(prisma.creativeJob.findFirstOrThrow).not.toHaveBeenCalled();
     });
 
