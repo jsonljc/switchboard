@@ -48,8 +48,10 @@ const ROLE_FOR_AGENT: Record<AgentKey, string> = {
  * 112px capped) as printed portraits on one tri-radial identity-tint ground
  * under the lighter poster grain, with serif identity names, role lines, and
  * honest live status. One breathing focal avatar (the first genuinely-working
- * agent) which also steps forward (the featured lift); reduced motion strips
- * both, plus the grain. Each cell opens the agent panel. Agent hues are
+ * agent) which also steps forward (the featured lift). Reduced motion strips
+ * the breathing, the hover movement, and the grain; the featured lift remains
+ * as a static position (it never animates there). Each cell opens the agent
+ * panel. Agent hues are
  * identity-only (grounds, name and role inks, status accents), never on an
  * action surface; the focus ring stays amber.
  */

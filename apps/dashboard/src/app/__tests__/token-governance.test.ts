@@ -526,6 +526,12 @@ describe("token governance — team poster grain (GR2)", () => {
     );
   });
 
+  it("reduced motion strips the hover movement (the featured offset stays static)", () => {
+    expect(bandCss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.mate:hover\s+\.portraitBox\s*\{\s*transform:\s*none/,
+    );
+  });
+
   it("the poster ground is built only from tokens (no raw color literals)", () => {
     // The data URI carries decimal channels only; outside it, every color is
     // hsl(var(--token)) / var(--token). The generalized hex sweep also covers

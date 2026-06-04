@@ -117,6 +117,15 @@
   .portraitBox {
     transition: none;
   }
+  /* Hover movement is decorative motion: strip it. The featured offset stays
+     as a STATIC position (it never animates here), so the working agent keeps
+     its place in the composition without any movement. */
+  .mate:hover .portraitBox {
+    transform: none;
+  }
+  .mate[data-featured="true"]:hover .portraitBox {
+    transform: translateY(-6px);
+  }
 }
 
 .mateName {
