@@ -274,7 +274,13 @@
     --ease-home: cubic-bezier(0.22, 1, 0.36, 1);
     /* Home editorial font stacks (wired in layout.tsx) */
     --font-home-sans: var(--font-hanken), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
-    --font-home-serif: var(--font-fraunces), "Fraunces", "Iowan Old Style", Georgia, serif;
+    /* The ONE authed display semantic (TY3). Consumers reference this token
+       (or one of the legacy aliases beneath it, kept so zero consumers churn).
+       --font-display (DM Sans, bound in layout.tsx) is the LEGACY register
+       token for Mercury, landing, onboarding, and pre-auth surfaces only;
+       it retires when those registers do. */
+    --font-display-app: var(--font-fraunces), "Fraunces", "Iowan Old Style", Georgia, serif;
+    --font-home-serif: var(--font-display-app);
 
     --app-frame: 1280px;     /* desktop content frame — aligns with .app-header-row */
     --app-sidebar-w: 216px;  /* desktop nav rail (consumed in PR2) */

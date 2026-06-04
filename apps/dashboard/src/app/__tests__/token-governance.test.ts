@@ -608,11 +608,12 @@ describe("token governance: type voice (TY2)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("the display voice aliases the loaded Fraunces primitive", () => {
-    expect(css).toMatch(/--font-home-serif:\s*var\(--font-fraunces\)/);
+  it("the display voice aliases the loaded Fraunces primitive through the canonical token", () => {
+    expect(css).toMatch(/--font-display-app:\s*var\(--font-fraunces\)/);
+    expect(css).toMatch(/--font-home-serif:\s*var\(--font-display-app\)/);
     const inboxBase = files.find((f) => f.path.endsWith("inbox-design-base.css"));
     expect(inboxBase).toBeDefined();
-    expect(inboxBase!.content).toMatch(/--serif:\s*var\(--font-fraunces\)/);
+    expect(inboxBase!.content).toMatch(/--serif:\s*var\(--font-display-app\)/);
   });
 
   it("layout.tsx loads Fraunces upright only (no italic style requested)", () => {
