@@ -23,7 +23,7 @@ export class EditorialShellBoundary extends Component<{ children: ReactNode }, S
         <>
           <header className="app-header">
             <div className="app-header-row">
-              <span>Switchboard — temporarily unavailable</span>
+              <span>Switchboard is temporarily unavailable</span>
             </div>
           </header>
           <main>

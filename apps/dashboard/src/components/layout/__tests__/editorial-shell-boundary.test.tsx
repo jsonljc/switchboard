@@ -14,7 +14,7 @@ describe("EditorialShellBoundary", () => {
         <Boom />
       </EditorialShellBoundary>,
     );
-    expect(screen.getByText(/Switchboard — temporarily unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/Switchboard is temporarily unavailable/i)).toBeInTheDocument();
     spy.mockRestore();
   });
 

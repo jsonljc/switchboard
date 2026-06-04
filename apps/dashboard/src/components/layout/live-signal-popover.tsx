@@ -87,7 +87,7 @@ export function LiveSignalPopover() {
         <button
           type="button"
           className={`live-pip${halted ? " halted" : ""}`}
-          aria-label={`System ${stateLabel.toLowerCase()} — open live signal`}
+          aria-label={`System ${stateLabel.toLowerCase()}. Open live signal`}
           aria-expanded={open}
         >
           <span className="pulse" aria-hidden="true" />

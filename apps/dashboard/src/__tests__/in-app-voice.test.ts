@@ -102,6 +102,10 @@ const CORPUS = [
   "app/(auth)/mira/creatives/[id]/creative-detail-page.tsx",
   "components/home/this-week.tsx",
   "components/home/team-band.tsx",
+  "components/home/compose-verdict.ts",
+  "components/layout/editorial-shell-boundary.tsx",
+  "components/layout/inbox-drawer.tsx",
+  "components/layout/live-signal-popover.tsx",
 ] as const;
 
 interface Offense {
