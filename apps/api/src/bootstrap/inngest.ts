@@ -110,6 +110,11 @@ import {
   bindRileyOutcomeOrchestrator,
 } from "../services/cron/riley-outcome-attribution.js";
 import { createMetaInsightsProviderForOrg } from "../services/cron/meta-insights-adapter.js";
+import {
+  createCreativeAttributionDispatch,
+  createCreativeAttributionWorker,
+  resolveMetaAdsConnectionCredentials,
+} from "../services/cron/creative-attribution.js";
 import { buildCreativeAssetStorage } from "../lib/creative-asset-storage.js";
 
 function requireInstantFormAdapter(adapter: InstantFormAdapter | undefined): InstantFormAdapter {
@@ -847,6 +852,53 @@ export async function registerInngest(
     logger: app.log,
   });
 
+  // ---------------------------------------------------------------------------
+  // Mira slice 2: per-creative attribution dispatch + per-org worker
+  // ---------------------------------------------------------------------------
+  // Dispatch fires daily at 06:30 UTC and emits one
+  // "creative-pipeline/attribution.refresh" event per org that has published
+  // creatives (metaCampaignId set by the slice-1 publish path). The per-org
+  // worker joins ONE account-level campaign-insights call to internal booked
+  // conversions (the 1:1 dedicated-campaign join) and persists a typed
+  // pastPerformance row per published job.
+  // Kill-switch: set CREATIVE_ATTRIBUTION_ENABLED=true to enable; default off
+  // so the deploy is dark until deliberately enabled (the Riley bake pattern).
+  // Both halves carry the Class-E failure contract (audit always, no domain
+  // event): the projection is rebuilt by the next daily run and a
+  // creative.attribution.*.failed event would have zero consumers.
+  const creativeAttributionDispatch = createCreativeAttributionDispatch(
+    {
+      listPublishedCreativeOrgs: () => listPublishedCreativeOrgs(app.prisma!),
+      sendEvent: (event: { name: string; data: Record<string, unknown> }) =>
+        inngestClient.send(event),
+    },
+    makeOnFailureHandler(
+      {
+        functionId: "creative-attribution-dispatch",
+        eventDomain: "creative.attribution.dispatch",
+        riskCategory: "low",
+        alert: false,
+        emitEvent: false,
+      },
+      asyncFailure,
+    ) as (arg: unknown) => Promise<void>,
+  );
+
+  const creativeAttributionWorker = createCreativeAttributionWorker({
+    failure: asyncFailure,
+    readEnabledFlag: () => process.env["CREATIVE_ATTRIBUTION_ENABLED"] === "true",
+    jobStore,
+    conversionStore: bookedValueByCampaignStore,
+    resolveMetaCredentials: (orgId) =>
+      resolveMetaAdsConnectionCredentials(
+        app.prisma!,
+        (encrypted) => decryptCredentials(encrypted as string),
+        orgId,
+      ),
+    makeAdsClient: (creds) => new MetaAdsClient(creds),
+    logger: app.log,
+  });
+
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
@@ -959,6 +1011,8 @@ export async function registerInngest(
       }),
       rileyOutcomeDispatch,
       rileyOutcomeWorker,
+      creativeAttributionDispatch,
+      creativeAttributionWorker,
     ],
   });
 
@@ -994,6 +1048,28 @@ async function listRileyActiveOrgs(prisma: {
       intent: { startsWith: "recommendation." },
       status: "acted",
     },
+    distinct: ["organizationId"],
+    select: { organizationId: true },
+  });
+  return rows.map((r) => r.organizationId);
+}
+
+/**
+ * Enumerates distinct organizationIds that have at least one published
+ * creative (metaCampaignId set by the slice-1 publish path). Used by the
+ * creative-attribution dispatch cron to fan out per-org refresh events.
+ */
+async function listPublishedCreativeOrgs(prisma: {
+  creativeJob: {
+    findMany: (args: {
+      where: { metaCampaignId: { not: null } };
+      distinct: ["organizationId"];
+      select: { organizationId: true };
+    }) => Promise<{ organizationId: string }[]>;
+  };
+}): Promise<string[]> {
+  const rows = await prisma.creativeJob.findMany({
+    where: { metaCampaignId: { not: null } },
     distinct: ["organizationId"],
     select: { organizationId: true },
   });
