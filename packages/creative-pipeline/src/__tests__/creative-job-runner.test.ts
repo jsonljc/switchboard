@@ -155,6 +155,10 @@ describe("executeCreativePipeline", () => {
     expect(firstCall?.[1]).toMatchObject({
       generateReferenceImages: true,
       imageGenerator: expect.objectContaining({ generate: expect.any(Function) }),
+      // Pins the runner-layer threading for whisper: production captions need
+      // the OPENAI key on the StageInput (toMatchObject elsewhere would let a
+      // dropped thread pass silently).
+      openaiApiKey: "test-openai-key",
     });
   });
 

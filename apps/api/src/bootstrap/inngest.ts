@@ -185,7 +185,9 @@ export async function registerInngest(
 
   const openaiApiKey = process.env["OPENAI_API_KEY"] ?? "";
   if (!openaiApiKey) {
-    app.log.warn("Inngest: OPENAI_API_KEY not set — storyboard image generation will be skipped");
+    app.log.warn(
+      "Inngest: OPENAI_API_KEY not set; storyboard image generation and pro-tier whisper captions will be skipped",
+    );
   }
 
   const jobStore = new PrismaCreativeJobStore(app.prisma);

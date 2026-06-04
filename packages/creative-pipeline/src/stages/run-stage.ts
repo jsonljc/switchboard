@@ -156,7 +156,7 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
         });
         // Whisper is an OpenAI API: it must get the OpenAI key, never the
         // Anthropic one (which 401s). Absent key = captions degrade, the same
-        // contract as the image-generator skip above.
+        // contract as the runner's image-generator skip (creative-job-runner.ts).
         if (input.openaiApiKey) {
           deps.whisperClient = new WhisperClient({
             apiKey: input.openaiApiKey,
