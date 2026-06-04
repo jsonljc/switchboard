@@ -591,4 +591,41 @@ describe("PrismaCreativeJobStore", () => {
       );
     });
   });
+
+  describe("setPastPerformance", () => {
+    it("writes org-scoped via updateMany and resolves void", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+
+      await expect(
+        store.setPastPerformance("org_1", "cj_1", { kind: "measured_performance" }),
+      ).resolves.toBeUndefined();
+
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+        data: { pastPerformance: { kind: "measured_performance" } },
+      });
+      // The daily sweep never needs the row back — no read-back query.
+      expect(prisma.creativeJob.findFirstOrThrow).not.toHaveBeenCalled();
+    });
+
+    it("throws StaleVersionError when count=0 (cross-org / missing)", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+      await expect(store.setPastPerformance("org_other", "cj_1", {})).rejects.toThrow(
+        StaleVersionError,
+      );
+    });
+  });
+
+  describe("listPublished", () => {
+    it("filters to non-null metaCampaignId for the org, oldest first", async () => {
+      prisma.creativeJob.findMany.mockResolvedValue([]);
+
+      await store.listPublished("org_1");
+
+      expect(prisma.creativeJob.findMany).toHaveBeenCalledWith({
+        where: { organizationId: "org_1", metaCampaignId: { not: null } },
+        orderBy: { createdAt: "asc" },
+      });
+    });
+  });
 });

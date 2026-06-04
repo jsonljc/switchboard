@@ -186,6 +186,37 @@ export class PrismaCreativeJobStore {
     return row as unknown as CreativeJob;
   }
 
+  /**
+   * Persist the attribution sweep's measured-performance snapshot (slice 2).
+   * Org-scoped updateMany (doctrine #12); count===0 ⇒ missing/cross-org ⇒
+   * throw StaleVersionError (the sweep treats it as a benign vanished-job
+   * skip). Returns void — the daily sweep writes every published job and never
+   * needs the row back (unlike the publish checkpoints above).
+   */
+  async setPastPerformance(
+    organizationId: string,
+    id: string,
+    performance: Record<string, unknown>,
+  ): Promise<void> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: { pastPerformance: performance as object },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+  }
+
+  /**
+   * Published jobs = those with a Meta campaign checkpoint (set by the slice-1
+   * publish path). The attribution sweep's working set; oldest first so window
+   * derivation reads the earliest createdAt naturally.
+   */
+  async listPublished(organizationId: string): Promise<CreativeJob[]> {
+    return this.prisma.creativeJob.findMany({
+      where: { organizationId, metaCampaignId: { not: null } },
+      orderBy: { createdAt: "asc" },
+    }) as unknown as CreativeJob[];
+  }
+
   // ── UGC methods ──
 
   async createUgc(
