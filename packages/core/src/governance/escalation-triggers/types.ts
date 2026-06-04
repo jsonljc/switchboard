@@ -5,6 +5,7 @@ export type EscalationTriggerCategory =
   | "prior_adverse_reaction"
   | "anticoagulant_use"
   | "suspicious_lesion"
+  | "recent_procedure"
   | "prior_complaint"
   | "competitor_negative"
   | "multi_treatment_combo"
@@ -23,6 +24,7 @@ export const REASON_CODE_BY_TRIGGER: Record<EscalationTriggerCategory, Governanc
   prior_adverse_reaction: "medical_safety_trigger",
   anticoagulant_use: "medical_safety_trigger",
   suspicious_lesion: "medical_safety_trigger",
+  recent_procedure: "medical_safety_trigger",
   prior_complaint: "compliance_concern",
   competitor_negative: "compliance_concern",
   multi_treatment_combo: "sensitive_inbound",

@@ -204,3 +204,45 @@ describe("COMMON_ESCALATION_TRIGGERS - suspicious_lesion (medical red-flag slice
     expect(matchedIds("my mum has a weird mole")).not.toContain("suspicious_lesion");
   });
 });
+
+describe("COMMON_ESCALATION_TRIGGERS - recent_procedure (medical red-flag slice 2)", () => {
+  it("fires on just/recently + surgical noun", () => {
+    expect(matchedIds("I just had a facelift, is HIFU ok?")).toContain("recent_procedure");
+    expect(matchedIds("recently underwent surgery on my jaw")).toContain("recent_procedure");
+    expect(matchedIds("i just got a nose job")).toContain("recent_procedure");
+  });
+
+  it("fires on surgical noun + recency marker", () => {
+    expect(matchedIds("I had liposuction 3 weeks ago")).toContain("recent_procedure");
+    expect(matchedIds("rhinoplasty last month, can I do laser?")).toContain("recent_procedure");
+    expect(matchedIds("I had an operation on my nose two weeks ago")).toContain("recent_procedure");
+    expect(matchedIds("had surgery yesterday")).toContain("recent_procedure");
+  });
+
+  it("fires on healing-state disclosures", () => {
+    expect(matchedIds("I'm two weeks post-op")).toContain("recent_procedure");
+    expect(matchedIds("still have stitches from my tummy tuck")).toContain("recent_procedure");
+    expect(matchedIds("I'm still recovering from surgery")).toContain("recent_procedure");
+  });
+
+  it("stays silent on future/desire phrasing", () => {
+    expect(matchedIds("I want a nose job")).not.toContain("recent_procedure");
+    expect(matchedIds("thinking about a facelift next year")).not.toContain("recent_procedure");
+    expect(matchedIds("I'm considering surgery next month")).not.toContain("recent_procedure");
+  });
+
+  it("stays silent on routine clinic treatments and old surgery", () => {
+    expect(matchedIds("I had botox 2 weeks ago, want a top-up")).not.toContain("recent_procedure");
+    expect(matchedIds("I had a facial last week")).not.toContain("recent_procedure");
+    expect(matchedIds("I had surgery in 2019")).not.toContain("recent_procedure");
+    expect(matchedIds("my surgery was ten years ago")).not.toContain("recent_procedure");
+  });
+
+  it("suppresses negations and third-party surgery", () => {
+    expect(matchedIds("I haven't had any surgery, just botox last week")).not.toContain(
+      "recent_procedure",
+    );
+    expect(matchedIds("no surgery last month, only facials")).not.toContain("recent_procedure");
+    expect(matchedIds("my sister had a facelift last month")).not.toContain("recent_procedure");
+  });
+});

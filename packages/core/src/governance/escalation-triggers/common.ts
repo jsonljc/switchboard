@@ -78,6 +78,29 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
       /\b(?:my|her|his|their|our)\s+(?:mum|mom|mother|father|dad|sister|brother|aunt|uncle|grand(?:ma|pa|mother|father)|cousin|friend|partner|husband|wife|parent|relative)(?:['’]s)?\b[^.!?]{0,24}\b(?:moles?|spots?|patch(?:es)?|lesions?|growths?|melanomas?|birthmarks?)\b/i,
     ],
   },
+  // Recent surgery near a treatment area + energy device is the locked red
+  // flag; the deterministic net fires on the recent-surgery disclosure alone
+  // (in-area-ness is conversational context a regex cannot adjudicate, and
+  // the product stance is that recent surgical-recovery language leaves
+  // automation). Surgical nouns only: "I had botox/a facial last week" is a
+  // returning customer, not a red flag, so routine clinic treatments and the
+  // bare word "procedure" are deliberately excluded.
+  {
+    id: "recent_procedure",
+    category: "recent_procedure",
+    patterns: [
+      /\b(?:just|recently)\s+(?:had|got|underwent|finished)\b[^.!?]{0,30}\b(?:surgery|operation|facelift|face[ -]lift|liposuction|lipo|rhinoplasty|nose job|blepharoplasty|eyelid surgery|tummy tuck|abdominoplasty|implants?|thread[ -]?lift)\b/i,
+      /\b(?:surgery|operation|facelift|face[ -]lift|liposuction|rhinoplasty|nose job|blepharoplasty|eyelid surgery|tummy tuck|abdominoplasty|thread[ -]?lift)\b[^.!?]{0,30}\b(?:(?:a|one|two|three|four|five|six|couple of|few|\d{1,2})\s+(?:days?|weeks?)\s+ago|(?:a|one|two|three|four|five|six|couple of|few)\s+months?\s+ago|last\s+(?:week|month)|this\s+(?:week|month)|yesterday)\b/i,
+      /\b(?:had|got|underwent)\b[^.!?]{0,16}\b(?:surgery|operation|facelift|liposuction|rhinoplasty|blepharoplasty|tummy tuck|thread[ -]?lift)\b[^.!?]{0,30}\b(?:(?:a|one|two|three|four|five|six|couple of|few|\d{1,2})\s+(?:days?|weeks?)\s+ago|(?:a|one|two|three|four|five|six|couple of|few)\s+months?\s+ago|last\s+(?:week|month)|this\s+(?:week|month)|yesterday)\b/i,
+      /\bpost[ -]?op(?:erative)?\b/i,
+      /\b(?:recover(?:ing|y)|healing)\s+from\b[^.!?]{0,20}\b(?:surgery|operation|facelift|liposuction|rhinoplasty|blepharoplasty|tummy tuck|thread[ -]?lift)\b/i,
+      /\b(?:still\s+have|got)\s+(?:stitches|sutures)\b|\b(?:stitches|sutures)\s+(?:from|out|removed)\b/i,
+    ],
+    negations: [
+      /\b(?:no|never|haven['’]?t|not|didn['’]?t)\b[^.!?]{0,16}\b(?:surgery|operation|surgical)\b/i,
+      /\b(?:my|her|his|their|our)\s+(?:mum|mom|mother|father|dad|sister|brother|aunt|uncle|grand(?:ma|pa|mother|father)|cousin|friend|partner|husband|wife|parent|relative)\b[^.!?]{0,20}\b(?:surgery|operation|facelift|liposuction|rhinoplasty|blepharoplasty|tummy tuck)\b/i,
+    ],
+  },
   {
     id: "prior_complaint",
     category: "prior_complaint",
