@@ -57,7 +57,15 @@ export const ExecuteBodySchema = z.object({
 
 export const ApprovalRespondBodySchema = z.object({
   action: z.enum(["approve", "reject", "patch"]),
-  respondedBy: z.string().min(1).max(500),
+  /**
+   * Optional since the lifecycle-native leg: the route derives the responder
+   * from the authenticated principal. When both are present they must match
+   * (403 otherwise). Body fallback is honored only when auth is disabled
+   * (dev/test).
+   */
+  respondedBy: z.string().min(1).max(500).optional(),
+  /** Optional operator note recorded in the audit ledger snapshot. */
+  note: z.string().max(2000).optional(),
   patchValue: z
     .record(z.string().max(200), z.unknown())
     .refine((obj) => JSON.stringify(obj).length <= 100_000, {

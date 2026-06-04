@@ -1,7 +1,15 @@
 // @route-class: lifecycle
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { StaleVersionError, respondToApproval } from "@switchboard/core";
+import {
+  StaleVersionError,
+  DispatchAdmissionError,
+  respondToApproval,
+  respondToParkedLifecycle,
+  ParkedLifecycleNotFoundError,
+  ParkedLifecycleAlreadyRespondedError,
+  ParkedLifecycleExpiredError,
+} from "@switchboard/core";
 import { ApprovalRespondBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 import { assertOrgAccess } from "../utils/org-access.js";
@@ -21,6 +29,132 @@ const APPROVAL_HTTP_RATE_LIMIT_WINDOW_MS = parseInt(
   10,
 );
 
+/**
+ * Lifecycle-native respond leg: the :id is an ApprovalLifecycle id (exactly
+ * what routes/actions.ts returns as approvalRequest.id when lifecycleService
+ * is wired). No legacy ApprovalRequest row exists for these units. The
+ * transition + dispatch logic lives in core respondToParkedLifecycle; this
+ * helper only does surface work (org access, structured error mapping).
+ */
+async function respondViaParkedLifecycle(
+  app: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  input: {
+    lifecycleId: string;
+    action: "approve" | "reject" | "patch";
+    respondedBy: string;
+    bindingHash?: string;
+    note?: string;
+    selfApprovalAllowed: boolean;
+  },
+) {
+  if (!app.lifecycleService || !app.workTraceStore) {
+    return reply
+      .code(404)
+      .send({ error: "Approval not found", code: "not_found", statusCode: 404 });
+  }
+  // Lookup failures (e.g. DB outage) keep the structured error contract: a
+  // 503 with a code, never a code-less 400 from the legacy catch upstream.
+  let lifecycle;
+  try {
+    lifecycle = await app.lifecycleService.getLifecycleById(input.lifecycleId);
+  } catch (err) {
+    app.log.error(
+      { err, lifecycleId: input.lifecycleId },
+      "Parked lifecycle lookup failed during respond",
+    );
+    return reply.code(503).send({
+      error: "Approval lookup failed; try again shortly",
+      code: "lookup_failed",
+      statusCode: 503,
+    });
+  }
+  if (!lifecycle) {
+    return reply
+      .code(404)
+      .send({ error: "Approval not found", code: "not_found", statusCode: 404 });
+  }
+  if (!assertOrgAccess(request, lifecycle.organizationId, reply)) return;
+  if (input.action === "patch") {
+    return reply.code(400).send({
+      error: "patch is not supported for lifecycle-native approvals",
+      code: "patch_unsupported",
+      statusCode: 400,
+    });
+  }
+  if (input.action === "approve" && !input.bindingHash) {
+    return reply.code(400).send({
+      error: "bindingHash is required for approve actions",
+      code: "binding_hash_required",
+      statusCode: 400,
+    });
+  }
+  try {
+    const result = await respondToParkedLifecycle(
+      {
+        lifecycleService: app.lifecycleService,
+        workTraceStore: app.workTraceStore,
+        platformLifecycle: app.platformLifecycle,
+        auditLedger: app.auditLedger,
+        logger: app.log,
+        selfApprovalAllowed: input.selfApprovalAllowed,
+      },
+      {
+        lifecycleId: input.lifecycleId,
+        action: input.action,
+        respondedBy: input.respondedBy,
+        bindingHash: input.bindingHash,
+        note: input.note,
+      },
+    );
+    return reply.code(200).send({
+      envelope: null,
+      approvalState: result.approvalState,
+      executionResult: result.executionResult,
+    });
+  } catch (err) {
+    if (err instanceof ParkedLifecycleNotFoundError) {
+      return reply
+        .code(404)
+        .send({ error: "Approval not found", code: "not_found", statusCode: 404 });
+    }
+    if (err instanceof ParkedLifecycleAlreadyRespondedError) {
+      return reply.code(409).send({
+        error: sanitizeErrorMessage(err, 409),
+        code: "already_responded",
+        statusCode: 409,
+      });
+    }
+    if (err instanceof ParkedLifecycleExpiredError) {
+      return reply
+        .code(409)
+        .send({ error: sanitizeErrorMessage(err, 409), code: "expired", statusCode: 409 });
+    }
+    if (err instanceof StaleVersionError) {
+      return reply.code(409).send({
+        error: "Conflict: approval is being responded to concurrently",
+        code: "conflict",
+        statusCode: 409,
+      });
+    }
+    if (err instanceof DispatchAdmissionError) {
+      return reply.code(409).send({
+        error: sanitizeErrorMessage(err, 409),
+        code: "admission_failed",
+        statusCode: 409,
+      });
+    }
+    const message = err instanceof Error ? err.message : "Approval response failed";
+    const code = /stale binding/i.test(message)
+      ? "stale_binding"
+      : /self-approval/i.test(message)
+        ? "self_approval"
+        : "respond_failed";
+    return reply.code(400).send({ error: sanitizeErrorMessage(err, 400), code, statusCode: 400 });
+  }
+}
+
 export const approvalsRoutes: FastifyPluginAsync = async (app) => {
   // Self-approval is prevented on the lifecycle approval path unless explicitly
   // allowed (e.g. solo-operator deployments) via ALLOW_SELF_APPROVAL — the same
@@ -33,7 +167,10 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     "/:id/respond",
     {
       schema: {
-        description: "Respond to a pending approval request (approve, reject, or patch).",
+        description:
+          "Respond to a pending approval request (approve, reject, or patch). " +
+          "The id is either a legacy approval id or an ApprovalLifecycle id " +
+          "(the value propose returns as approvalRequest.id).",
         tags: ["Approvals"],
         params: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
         body: respondJsonSchema,
@@ -56,23 +193,47 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
       }
       const body = parsed.data;
 
+      // Identity: respondedBy is SERVER-derived. When an authenticated
+      // principal exists it IS the responder; a differing body value is a 403
+      // (never silently reassigned). The body fallback is honored only when
+      // auth is disabled (dev/test). Never respond as an unbound principal.
+      const authPrincipal = request.principalIdFromAuth;
+      let respondedBy: string;
+      if (authPrincipal) {
+        if (body.respondedBy && body.respondedBy !== authPrincipal) {
+          return reply.code(403).send({
+            error: `Forbidden: authenticated principal '${authPrincipal}' cannot respond as '${body.respondedBy}'`,
+            code: "principal_mismatch",
+            statusCode: 403,
+          });
+        }
+        respondedBy = authPrincipal;
+      } else if (app.authDisabled === true) {
+        respondedBy = body.respondedBy ?? "default";
+      } else {
+        return reply.code(403).send({
+          error: "Forbidden: authenticated request has no principal binding",
+          code: "no_principal",
+          statusCode: 403,
+        });
+      }
+
       try {
         // Org access check for the approval resource
         const approval = await app.storageContext.approvals.getById(id);
         if (!approval) {
-          return reply.code(404).send({ error: "Approval not found", statusCode: 404 });
-        }
-        if (!assertOrgAccess(request, approval.organizationId, reply)) return;
-
-        // Verify that respondedBy matches the authenticated principal when auth is configured.
-        // This prevents approval spoofing where a user claims to be a different principal.
-        const authenticatedPrincipal = request.principalIdFromAuth;
-        if (authenticatedPrincipal && authenticatedPrincipal !== body.respondedBy) {
-          return reply.code(403).send({
-            error: `Forbidden: authenticated principal '${authenticatedPrincipal}' cannot respond as '${body.respondedBy}'`,
-            statusCode: 403,
+          // Lifecycle-native fallback: parked WorkUnits have no ApprovalRequest
+          // row; the id propose handed out is the lifecycle id.
+          return respondViaParkedLifecycle(app, request, reply, {
+            lifecycleId: id,
+            action: body.action,
+            respondedBy,
+            bindingHash: body.bindingHash,
+            note: body.note,
+            selfApprovalAllowed,
           });
         }
+        if (!assertOrgAccess(request, approval.organizationId, reply)) return;
 
         // Require bindingHash for approve/patch to ensure integrity verification
         if ((body.action === "approve" || body.action === "patch") && !body.bindingHash) {
@@ -96,7 +257,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
           {
             approvalId: id,
             action: body.action,
-            respondedBy: body.respondedBy,
+            respondedBy,
             bindingHash: body.bindingHash ?? "",
             patchValue: body.patchValue,
           },
@@ -125,11 +286,19 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
   );
 
   // GET /api/approvals/pending - List pending approval requests
+  //
+  // DEPRECATED (2026-06-04): reads the legacy in-memory ApprovalStore, which is
+  // EMPTY for lifecycle-parked units (the production shape). The operator
+  // surface for parked approvals is the decisions feed
+  // (GET /api/dashboard/decisions). Kept for the dev-no-DB legacy path until
+  // migrated to lifecycleService.listPendingLifecycles() or retired.
   app.get(
     "/pending",
     {
       schema: {
-        description: "List all pending approval requests.",
+        description:
+          "DEPRECATED: superseded by the decisions feed (GET /api/dashboard/decisions). " +
+          "List all pending approval requests from the legacy in-memory store.",
         tags: ["Approvals"],
       },
     },
