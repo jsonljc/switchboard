@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { CreativeJob } from "@switchboard/schemas";
-import { mapCreativeJobToMiraStatus, deriveReviewAction, deriveDraft } from "../status-mapper.js";
+import {
+  mapCreativeJobToMiraStatus,
+  deriveReviewAction,
+  deriveDraft,
+  deriveQa,
+} from "../status-mapper.js";
 
 function job(overrides: Partial<CreativeJob>): CreativeJob {
   return {
@@ -185,6 +190,192 @@ describe("deriveDraft — UGC lifecycle", () => {
 
   it("ugc with no outputs → returns undefined", () => {
     expect(deriveDraft(ugcJob({ ugcPhaseOutputs: null }))).toBeUndefined();
+  });
+
+  // ── Slice-3 frame QA (spec 3.1 consumers) ──
+
+  it("prefers the first non-rejected asset for the draft", () => {
+    const draft = deriveDraft(
+      ugcJob({
+        ugcPhase: "complete",
+        ugcPhaseOutputs: {
+          production: {
+            assets: [
+              { approvalState: "rejected", outputs: { videoUrl: "https://c.example/bad.mp4" } },
+              { approvalState: "approved", outputs: { videoUrl: "https://c.example/good.mp4" } },
+            ],
+            failedSpecs: [],
+          },
+        },
+      }),
+    );
+    expect(draft?.videoUrl).toBe("https://c.example/good.mp4");
+  });
+
+  it("falls back to assets[0] when every asset is rejected (operator can see what failed)", () => {
+    const draft = deriveDraft(
+      ugcJob({
+        ugcPhase: "complete",
+        ugcPhaseOutputs: {
+          production: {
+            assets: [
+              { approvalState: "rejected", outputs: { videoUrl: "https://c.example/bad1.mp4" } },
+              { approvalState: "rejected", outputs: { videoUrl: "https://c.example/bad2.mp4" } },
+            ],
+            failedSpecs: [],
+          },
+        },
+      }),
+    );
+    expect(draft?.videoUrl).toBe("https://c.example/bad1.mp4");
+  });
+});
+
+describe("slice-3 all-rejected status rule", () => {
+  const allRejectedOutputs = {
+    production: {
+      assets: [
+        { approvalState: "rejected", outputs: { videoUrl: "https://c.example/bad1.mp4" } },
+        { approvalState: "rejected", outputs: { videoUrl: "https://c.example/bad2.mp4" } },
+      ],
+      failedSpecs: [{ specId: "s1", reason: "qa_failed" }],
+    },
+  };
+
+  it("ugc complete with every asset rejected → failed, not draft_ready", () => {
+    expect(
+      mapCreativeJobToMiraStatus(
+        ugcJob({ ugcPhase: "complete", ugcPhaseOutputs: allRejectedOutputs }),
+      ),
+    ).toBe("failed");
+  });
+
+  it("fires at the production gate too (ugcPhase delivery): the approve is pre-empted", () => {
+    expect(
+      mapCreativeJobToMiraStatus(
+        ugcJob({ ugcPhase: "delivery", ugcPhaseOutputs: allRejectedOutputs }),
+      ),
+    ).toBe("failed");
+  });
+
+  it("one rejected one approved → unchanged (draft_ready when complete)", () => {
+    expect(
+      mapCreativeJobToMiraStatus(
+        ugcJob({
+          ugcPhase: "complete",
+          ugcPhaseOutputs: {
+            production: {
+              assets: [
+                { approvalState: "rejected", outputs: { videoUrl: "https://c.example/b.mp4" } },
+                { approvalState: "approved", outputs: { videoUrl: "https://c.example/g.mp4" } },
+              ],
+              failedSpecs: [],
+            },
+          },
+        }),
+      ),
+    ).toBe("draft_ready");
+  });
+
+  it("no production output yet → untouched (awaiting_review path)", () => {
+    expect(
+      mapCreativeJobToMiraStatus(
+        ugcJob({ ugcPhase: "scripting", ugcPhaseOutputs: { planning: { structures: [] } } }),
+      ),
+    ).toBe("awaiting_review");
+  });
+
+  it("failed beats a later stop (rule sits with the failure rules)", () => {
+    expect(
+      mapCreativeJobToMiraStatus(
+        ugcJob({
+          ugcPhase: "complete",
+          ugcPhaseOutputs: allRejectedOutputs,
+          stoppedAt: "production",
+        }),
+      ),
+    ).toBe("failed");
+  });
+});
+
+describe("deriveQa (slice-3 desk verdict)", () => {
+  const evaluatedPass = {
+    hardChecks: { artifactFlags: [] },
+    softScores: { visualRealism: 0.8 },
+    overallDecision: "pass",
+    qaStatus: "evaluated",
+  };
+
+  it("projects the draft-chosen asset's qa verdict", () => {
+    const qa = deriveQa(
+      ugcJob({
+        ugcPhase: "complete",
+        ugcPhaseOutputs: {
+          production: {
+            assets: [
+              {
+                approvalState: "approved",
+                qaMetrics: evaluatedPass,
+                outputs: { videoUrl: "https://c.example/g.mp4" },
+              },
+            ],
+            failedSpecs: [],
+          },
+        },
+      }),
+    );
+    expect(qa).toEqual({ status: "evaluated", decision: "pass" });
+  });
+
+  it("follows the first-non-rejected preference, not assets[0]", () => {
+    const qa = deriveQa(
+      ugcJob({
+        ugcPhase: "complete",
+        ugcPhaseOutputs: {
+          production: {
+            assets: [
+              {
+                approvalState: "rejected",
+                qaMetrics: { ...evaluatedPass, overallDecision: "fail" },
+                outputs: { videoUrl: "https://c.example/b.mp4" },
+              },
+              {
+                approvalState: "approved",
+                qaMetrics: evaluatedPass,
+                outputs: { videoUrl: "https://c.example/g.mp4" },
+              },
+            ],
+            failedSpecs: [],
+          },
+        },
+      }),
+    );
+    expect(qa).toEqual({ status: "evaluated", decision: "pass" });
+  });
+
+  it("absent for polished jobs", () => {
+    expect(deriveQa(job({ currentStage: "complete" }))).toBeUndefined();
+  });
+
+  it("absent when qaMetrics is unparseable", () => {
+    const qa = deriveQa(
+      ugcJob({
+        ugcPhase: "complete",
+        ugcPhaseOutputs: {
+          production: {
+            assets: [
+              {
+                approvalState: "approved",
+                qaMetrics: { garbage: true },
+                outputs: { videoUrl: "https://c.example/g.mp4" },
+              },
+            ],
+            failedSpecs: [],
+          },
+        },
+      }),
+    );
+    expect(qa).toBeUndefined();
   });
 });
 
