@@ -137,20 +137,28 @@ pattern; this is the calibration intent):
 - class terms, fire alone: `blood thinner(s)/thinning`, `anticoagulant(s)`, `antiplatelet(s)`
 - named drugs, fire alone: warfarin, coumadin, heparin, apixaban/Eliquis,
   rivaroxaban/Xarelto, dabigatran/Pradaxa, edoxaban, clopidogrel/Plavix
-- aspirin ONLY in therapy phrasing ("on/taking/prescribed (daily|low-dose|baby) aspirin",
-  "aspirin daily/everyday/therapy/regimen"); a casual "took an aspirin for my headache"
-  stays silent
+- aspirin ONLY in therapy phrasing: state verbs ("on/prescribed (daily|low-dose|baby)
+  aspirin") fire alone, the take/taking verb REQUIRES a dose qualifier ("take low-dose
+  aspirin"), and "aspirin daily/everyday/therapy/regimen" fires; casual mentions ("took
+  an aspirin for my headache") and pre/post-care questions ("can I take aspirin after
+  the treatment?") stay silent (review fix: question forms are not therapy disclosures)
 - negations: not/never/don't/do not/haven't + term (window ~16 chars); third-party
   relative + term
+- accepted limitation (review finding, safe direction): the negation window can reach a
+  later DIFFERENT drug in a comma-joined clause ("not on aspirin, on clopidogrel
+  instead" stays silent); rare phrasing, same shape as the #843 medical-condition
+  windows, and the dominant per-match win holds ("not on warfarin but I take eliquis"
+  fires)
 
 `suspicious_lesion`:
 
 - lesion noun (mole/spot/patch/birthmark/freckle/lesion/growth/lump/bump) + change or
   concern qualifier in the same clause, both orders ("mole that's been darkening",
   "suspicious mole"); qualifier list: changing/changed, growing/grown, darker/darkening,
-  bigger, bleeding/bled, itchy/itching, crusty/crusting, scabbing, flaky, painful/hurts,
-  raised, irregular, asymmetric, uneven, jagged, suspicious, concerning, worrying,
-  weird/strange/odd, newly appeared
+  bigger, bleeding/bled, itchy/itching, crusty/crusting, scabbing, painful/hurts,
+  raised, irregular, asymmetric, jagged, suspicious, concerning, worrying,
+  weird/strange/odd, newly appeared, won't go away / not healing (review fix: flaky and
+  uneven dropped; with the patch noun they catch routine dry-skin/eczema complaints)
 - `new mole/lesion/growth` (tight adjacency only; "new spot" excluded because acne/
   pigmentation "new dark spots" are routine medspa requests)
 - `melanoma(s)` fires alone ("skin cancer" already fires today via the `cancer` pattern
@@ -165,11 +173,14 @@ pattern; this is the calibration intent):
 
 - "just/recently had|got|underwent" + surgical noun (surgery, operation, facelift,
   liposuction/lipo, rhinoplasty/nose job, blepharoplasty/eyelid surgery,
-  tummy tuck/abdominoplasty, implants, thread lift). Surgical nouns ONLY: routine
-  clinic treatments ("I had botox last month" is a returning customer) and the bare
-  word "procedure" are deliberately excluded, both over-fire on routine traffic
-- surgical noun + recency marker ("3 weeks ago", "last month", "this week"); months
-  bounded to ~six ("14 months ago" is not "recent")
+  tummy tuck/abdominoplasty, implants, thread lift, breast augmentation/boob job,
+  c-section). Surgical nouns ONLY: routine clinic treatments ("I had botox last month"
+  is a returning customer) and the bare word "procedure" are deliberately excluded,
+  both over-fire on routine traffic
+- surgical noun + recency marker ("3 weeks ago", "a couple weeks ago", "last month",
+  "this week"); months bounded to ~six ("14 months ago" is not "recent"); a TRAILING
+  "recently" ("I had surgery recently") counts only on the verb-anchored pattern so
+  desire phrasing ("thinking about surgery recently") stays silent (review fix)
 - healing-state disclosures: "post-op", "recovering/healing from <surgical noun>",
   "still have stitches/sutures", "stitches from"
 - future/desire phrasing never fires ("want a nose job", "surgery next month": no

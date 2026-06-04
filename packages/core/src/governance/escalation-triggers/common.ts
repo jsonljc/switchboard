@@ -35,8 +35,12 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
       // Named anticoagulant/antiplatelet drugs: high-precision, fire alone.
       /\b(?:warfarin|coumadin|heparin|apixaban|eliquis|rivaroxaban|xarelto|dabigatran|pradaxa|edoxaban|clopidogrel|plavix)\b/i,
       // Aspirin only in possession/therapy phrasing; a casual one-off mention
-      // ("took an aspirin for my headache") stays silent.
-      /\b(?:on|taking|take|prescribed)\s+(?:daily\s+|low[ -]dose\s+|baby\s+)?aspirin\b/i,
+      // ("took an aspirin for my headache") and pre/post-care questions
+      // ("can I take aspirin after the treatment?") stay silent. The bare
+      // take/taking verb therefore REQUIRES a dose qualifier; the state verbs
+      // (on/prescribed) do not.
+      /\b(?:on|prescribed)\s+(?:daily\s+|low[ -]dose\s+|baby\s+)?aspirin\b/i,
+      /\b(?:take|taking)\s+(?:daily\s+|low[ -]dose\s+|baby\s+)aspirin\b/i,
       /\baspirin\s+(?:daily|every ?day|therapy|regimen)\b/i,
     ],
     // Self-negation + third-party family attribution. Deliberately NOT
@@ -56,9 +60,12 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
     category: "suspicious_lesion",
     patterns: [
       // Lesion noun followed by a change/concern qualifier in the same clause.
-      /\b(?:moles?|spots?|patch(?:es)?|birthmarks?|freckles?|lesions?|growths?|lumps?|bumps?|sores?)\b[^.!?]{0,40}\b(?:chang(?:ing|ed|es)|grow(?:ing|n|s)|bigger|darker|darken(?:ing|ed)|bleed(?:ing|s)?|bled|itch(?:y|ing|es)?|crust(?:y|ing|ed)?|scab(?:by|bing|bed)?|flak(?:y|ing)|painful|hurts?|raised|irregular|asymmetric(?:al)?|uneven|jagged|suspicious|concerning|worrying|weird|strange|odd|newly appeared|won['’]?t (?:go away|heal)|doesn['’]?t (?:go away|heal)|not healing)\b/i,
+      // (Review fix: flaky/uneven dropped as qualifiers; with the patch noun
+      // they catch routine dry-skin/eczema/pigmentation complaints. Surface
+      // change stays covered by crusting/scabbing/bleeding.)
+      /\b(?:moles?|spots?|patch(?:es)?|birthmarks?|freckles?|lesions?|growths?|lumps?|bumps?|sores?)\b[^.!?]{0,40}\b(?:chang(?:ing|ed|es)|grow(?:ing|n|s)|bigger|darker|darken(?:ing|ed)|bleed(?:ing|s)?|bled|itch(?:y|ing|es)?|crust(?:y|ing|ed)?|scab(?:by|bing|bed)?|painful|hurts?|raised|irregular|asymmetric(?:al)?|jagged|suspicious|concerning|worrying|weird|strange|odd|newly appeared|won['’]?t (?:go away|heal)|doesn['’]?t (?:go away|heal)|not healing)\b/i,
       // Qualifier-first order: "a changing/darkening/suspicious mole".
-      /\b(?:chang(?:ing|ed)|grow(?:ing)|darken(?:ing|ed)|darker|bleeding|itchy|crusty|scabby|flaky|painful|irregular|asymmetric(?:al)?|uneven|jagged|suspicious|concerning|worrying|weird|strange|odd)\b[^.!?]{0,24}\b(?:moles?|spots?|patch(?:es)?|birthmarks?|freckles?|lesions?|growths?|lumps?|bumps?|sores?)\b/i,
+      /\b(?:chang(?:ing|ed)|grow(?:ing)|darken(?:ing|ed)|darker|bleeding|itchy|crusty|scabby|painful|irregular|asymmetric(?:al)?|jagged|suspicious|concerning|worrying|weird|strange|odd)\b[^.!?]{0,24}\b(?:moles?|spots?|patch(?:es)?|birthmarks?|freckles?|lesions?|growths?|lumps?|bumps?|sores?)\b/i,
       // A NEW mole/lesion/growth (tight adjacency; "new spot" excluded as
       // routine acne/pigmentation phrasing).
       /\bnew\s+(?:moles?|lesions?|growths?)\b/i,
@@ -89,16 +96,19 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
     id: "recent_procedure",
     category: "recent_procedure",
     patterns: [
-      /\b(?:just|recently)\s+(?:had|got|underwent|finished)\b[^.!?]{0,30}\b(?:surgery|operation|facelift|face[ -]lift|liposuction|lipo|rhinoplasty|nose job|blepharoplasty|eyelid surgery|tummy tuck|abdominoplasty|implants?|thread[ -]?lift)\b/i,
-      /\b(?:surgery|operation|facelift|face[ -]lift|liposuction|rhinoplasty|nose job|blepharoplasty|eyelid surgery|tummy tuck|abdominoplasty|thread[ -]?lift)\b[^.!?]{0,30}\b(?:(?:a|one|two|three|four|five|six|couple of|few|\d{1,2})\s+(?:days?|weeks?)\s+ago|(?:a|one|two|three|four|five|six|couple of|few)\s+months?\s+ago|last\s+(?:week|month)|this\s+(?:week|month)|yesterday)\b/i,
-      /\b(?:had|got|underwent)\b[^.!?]{0,16}\b(?:surgery|operation|facelift|liposuction|rhinoplasty|blepharoplasty|tummy tuck|thread[ -]?lift)\b[^.!?]{0,30}\b(?:(?:a|one|two|three|four|five|six|couple of|few|\d{1,2})\s+(?:days?|weeks?)\s+ago|(?:a|one|two|three|four|five|six|couple of|few)\s+months?\s+ago|last\s+(?:week|month)|this\s+(?:week|month)|yesterday)\b/i,
+      /\b(?:just|recently)\s+(?:had|got|underwent|finished)\b[^.!?]{0,30}\b(?:surgery|operation|facelift|face[ -]lift|liposuction|lipo|rhinoplasty|nose job|blepharoplasty|eyelid surgery|tummy tuck|abdominoplasty|implants?|thread[ -]?lift|breast augmentation|boob job|c[ -]?section)\b/i,
+      /\b(?:surgery|operation|facelift|face[ -]lift|liposuction|lipo|rhinoplasty|nose job|blepharoplasty|eyelid surgery|tummy tuck|abdominoplasty|thread[ -]?lift|breast augmentation|boob job|c[ -]?section)\b[^.!?]{0,30}\b(?:(?:a|one|two|three|four|five|six|couple(?:\s+of)?|few|\d{1,2})\s+(?:days?|weeks?)\s+ago|(?:a|one|two|three|four|five|six|couple(?:\s+of)?|few)\s+months?\s+ago|last\s+(?:week|month)|this\s+(?:week|month)|yesterday)\b/i,
+      // Verb-led recency; "recently" as a TRAILING marker is only valid here
+      // (anchored on had/got/underwent) so desire phrasing ("thinking about
+      // surgery recently") stays silent.
+      /\b(?:had|got|underwent)\b[^.!?]{0,16}\b(?:surgery|operation|facelift|face[ -]lift|liposuction|lipo|rhinoplasty|nose job|blepharoplasty|eyelid surgery|tummy tuck|abdominoplasty|thread[ -]?lift|breast augmentation|boob job|c[ -]?section)\b[^.!?]{0,30}\b(?:(?:a|one|two|three|four|five|six|couple(?:\s+of)?|few|\d{1,2})\s+(?:days?|weeks?)\s+ago|(?:a|one|two|three|four|five|six|couple(?:\s+of)?|few)\s+months?\s+ago|last\s+(?:week|month)|this\s+(?:week|month)|yesterday|recently)\b/i,
       /\bpost[ -]?op(?:erative)?\b/i,
       /\b(?:recover(?:ing|y)|healing)\s+from\b[^.!?]{0,20}\b(?:surgery|operation|facelift|liposuction|rhinoplasty|blepharoplasty|tummy tuck|thread[ -]?lift)\b/i,
       /\b(?:still\s+have|got)\s+(?:stitches|sutures)\b|\b(?:stitches|sutures)\s+(?:from|out|removed)\b/i,
     ],
     negations: [
       /\b(?:no|never|haven['’]?t|not|didn['’]?t)\b[^.!?]{0,16}\b(?:surgery|operation|surgical)\b/i,
-      /\b(?:my|her|his|their|our)\s+(?:mum|mom|mother|father|dad|sister|brother|aunt|uncle|grand(?:ma|pa|mother|father)|cousin|friend|partner|husband|wife|parent|relative)\b[^.!?]{0,20}\b(?:surgery|operation|facelift|liposuction|rhinoplasty|blepharoplasty|tummy tuck)\b/i,
+      /\b(?:my|her|his|their|our)\s+(?:mum|mom|mother|father|dad|sister|brother|aunt|uncle|grand(?:ma|pa|mother|father)|cousin|friend|partner|husband|wife|parent|relative)\b[^.!?]{0,20}\b(?:surgery|operation|facelift|face[ -]lift|liposuction|lipo|rhinoplasty|nose job|blepharoplasty|eyelid surgery|tummy tuck|abdominoplasty|thread[ -]?lift|breast augmentation|boob job|c[ -]?section)\b/i,
     ],
   },
   {

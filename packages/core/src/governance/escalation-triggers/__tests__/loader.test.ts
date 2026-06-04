@@ -58,14 +58,16 @@ describe("loadEscalationTriggers", () => {
     }
   });
 
-  // Tripwire against accidental entry deletion (12 common + 1 jurisdiction as
-  // of medical red-flag slice 2); the category-coverage test below is the
-  // load-bearing one.
-  it("merged tables meet total entry floor (≥13 per jurisdiction)", () => {
+  // Tripwire against accidental entry deletion; tracks the common table so it
+  // never silently desyncs on the next entry add. The category-coverage test
+  // below is the load-bearing one.
+  it("merged tables include every common entry plus the jurisdiction table", () => {
     for (const j of ["SG", "MY"] as const) {
       _resetEscalationTriggerCache();
       const entries = loadEscalationTriggers(j);
-      expect(entries.length, `${j} total escalation-trigger entries`).toBeGreaterThanOrEqual(13);
+      expect(entries.length, `${j} total escalation-trigger entries`).toBeGreaterThanOrEqual(
+        COMMON_ESCALATION_TRIGGERS.length + 1,
+      );
     }
   });
 

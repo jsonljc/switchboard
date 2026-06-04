@@ -28,7 +28,12 @@ import type { SaveGovernanceVerdictInput } from "../../governance/governance-ver
 
 const SG_HANDOFF_SUBSTRING = "I'll get them";
 
-/** The real seeded pilot posture (see packages/db/src/seed/medspa-governance-config.ts). */
+/**
+ * The real seeded pilot posture (see packages/db/src/seed/medspa-governance-config.ts).
+ * The SG/medical ARGUMENTS are themselves load-bearing: they mirror the seed's
+ * arguments, and this suite (not the db parity test) is what reds if the two
+ * ever diverge in jurisdiction/clinicType.
+ */
 const OBSERVE_PILOT_CONFIG = buildObserveGovernanceConfig({
   jurisdiction: "SG",
   clinicType: "medical",

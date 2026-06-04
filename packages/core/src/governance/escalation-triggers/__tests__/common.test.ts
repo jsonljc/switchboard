@@ -138,6 +138,16 @@ describe("COMMON_ESCALATION_TRIGGERS - anticoagulant_use (medical red-flag slice
     expect(matchedIds("do you sell aspirin?")).not.toContain("anticoagulant_use");
   });
 
+  it("stays silent on aspirin pre/post-care questions (review fix: not therapy disclosures)", () => {
+    expect(matchedIds("can I take aspirin after the treatment?")).not.toContain(
+      "anticoagulant_use",
+    );
+    expect(matchedIds("should I take aspirin before my appointment?")).not.toContain(
+      "anticoagulant_use",
+    );
+    expect(matchedIds("is it ok to take aspirin with this?")).not.toContain("anticoagulant_use");
+  });
+
   it("suppresses self-negations (incl. curly apostrophe)", () => {
     expect(matchedIds("I'm not on blood thinners")).not.toContain("anticoagulant_use");
     expect(matchedIds("I don't take warfarin")).not.toContain("anticoagulant_use");
@@ -199,6 +209,13 @@ describe("COMMON_ESCALATION_TRIGGERS - suspicious_lesion (medical red-flag slice
     expect(matchedIds("I have a weird spot from a pimple")).not.toContain("suspicious_lesion");
   });
 
+  it("stays silent on routine dry-skin / eczema phrasing (review fix: weak-signal qualifiers)", () => {
+    expect(matchedIds("dry flaky patches on my face")).not.toContain("suspicious_lesion");
+    expect(matchedIds("I have an uneven patch of pigmentation")).not.toContain("suspicious_lesion");
+    expect(matchedIds("eczema patches that are flaky")).not.toContain("suspicious_lesion");
+    expect(matchedIds("flaky dry skin patches in winter")).not.toContain("suspicious_lesion");
+  });
+
   it("suppresses stable/unchanged disclosures and third-party lesions", () => {
     expect(matchedIds("my mole hasn't changed in years")).not.toContain("suspicious_lesion");
     expect(matchedIds("my mum has a weird mole")).not.toContain("suspicious_lesion");
@@ -225,6 +242,25 @@ describe("COMMON_ESCALATION_TRIGGERS - recent_procedure (medical red-flag slice 
     expect(matchedIds("I'm still recovering from surgery")).toContain("recent_procedure");
   });
 
+  it("fires on common recency phrasings (review fix: trailing recently, bare couple, common nouns)", () => {
+    expect(matchedIds("I had surgery recently")).toContain("recent_procedure");
+    expect(matchedIds("underwent liposuction recently")).toContain("recent_procedure");
+    expect(matchedIds("I had a nose job recently")).toContain("recent_procedure");
+    expect(matchedIds("had a facelift a couple weeks ago")).toContain("recent_procedure");
+    expect(matchedIds("I had a c-section six weeks ago")).toContain("recent_procedure");
+    expect(matchedIds("just got a boob job")).toContain("recent_procedure");
+    expect(matchedIds("I had breast augmentation last month")).toContain("recent_procedure");
+  });
+
+  it("trailing 'recently' stays verb-anchored: desire phrasing is silent", () => {
+    expect(matchedIds("I've been thinking about surgery recently")).not.toContain(
+      "recent_procedure",
+    );
+    expect(matchedIds("been thinking about getting surgery recently")).not.toContain(
+      "recent_procedure",
+    );
+  });
+
   it("stays silent on future/desire phrasing", () => {
     expect(matchedIds("I want a nose job")).not.toContain("recent_procedure");
     expect(matchedIds("thinking about a facelift next year")).not.toContain("recent_procedure");
@@ -244,5 +280,7 @@ describe("COMMON_ESCALATION_TRIGGERS - recent_procedure (medical red-flag slice 
     );
     expect(matchedIds("no surgery last month, only facials")).not.toContain("recent_procedure");
     expect(matchedIds("my sister had a facelift last month")).not.toContain("recent_procedure");
+    expect(matchedIds("my sister had a nose job last month")).not.toContain("recent_procedure");
+    expect(matchedIds("my friend got a boob job recently")).not.toContain("recent_procedure");
   });
 });
