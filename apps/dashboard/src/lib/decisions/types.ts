@@ -1,7 +1,8 @@
 import type { AgentKey } from "@switchboard/schemas";
 
-// Slice A: 2 kinds (matches the backend type — see spec §1).
-export type DecisionKind = "approval" | "handoff";
+// Matches the backend type: Slice A shipped 2 kinds; "workflow_approval"
+// (parked ApprovalLifecycle units) joined 2026-06-04.
+export type DecisionKind = "approval" | "handoff" | "workflow_approval";
 
 /**
  * Five-field risk contract — mirrors core Decision.meta.riskContract exactly.
@@ -51,5 +52,12 @@ export interface Decision {
     replyPreview?: string;
     /** Enrichment (P1-C.2) — rendered if present, absent on current backend. */
     channel?: string;
+    /**
+     * Workflow approvals only: the current ApprovalRevision bindingHash; the
+     * client echoes it on approve so a patched/raced revision is refused.
+     */
+    bindingHash?: string;
+    /** Workflow approvals only: approved but dispatch failed; primary action is Retry. */
+    dispatchFailed?: boolean;
   };
 }
