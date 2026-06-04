@@ -42,6 +42,9 @@ const SAMPLE_ROW: RileyOutcomeRow = {
   copyTemplate: "pause.spend.fell",
   copyValues: { deltaPct: -92, windowDays: 7 },
   visibilityFlags: [],
+  causalStrength: "directional",
+  businessContextStable: "unknown",
+  trustDelta: "up",
 };
 
 describe("PrismaRecommendationOutcomeStore.insert", () => {
@@ -58,6 +61,9 @@ describe("PrismaRecommendationOutcomeStore.insert", () => {
         cockpitRenderable: true,
         copyTemplate: "pause.spend.fell",
         visibilityFlags: [],
+        causalStrength: "directional",
+        businessContextStable: "unknown",
+        trustDelta: "up",
       }),
     });
   });

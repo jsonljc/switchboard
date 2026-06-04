@@ -2,9 +2,12 @@ import { KIND_CONFIG, type AttributableKind } from "./outcome-attribution-config
 import type {
   AttributableRecommendation,
   AttributableRecommendationStore,
+  BusinessContextStability,
+  CausalStrength,
   MetaInsightsProvider,
   RecommendationOutcomeStore,
   RileyOutcomeRow,
+  TrustDelta,
   VisibilityFlag,
   WindowMetrics,
 } from "./outcome-attribution-types.js";
@@ -91,13 +94,28 @@ export function attributeOneRecommendation(input: AttributeOneInput): RileyOutco
   const cockpitRenderable = flags.length === 0 && deltaPct !== null;
   const confidence: "low" | "medium" = cockpitRenderable ? config.confidence : "low";
 
+  // 7. Slice-3 enrichments (advisory; spec sections 2.5, 7.4, 7.5).
+  // causalStrength is derived from the flags/delta directly, not from
+  // cockpitRenderable, so a future renderability change cannot silently
+  // change causal semantics. "corroborated" requires the slice-4
+  // CRM/booking-agreement signal and is never emitted here.
+  const causalStrength: CausalStrength =
+    flags.length === 0 && deltaPct !== null ? "directional" : "inconclusive";
+  // Always "unknown" until the slice-4 operational-state source exists.
+  const businessContextStable: BusinessContextStability = "unknown";
+
   let copyTemplate: string | null = null;
   let copyValues: { deltaPct: number; windowDays: number } | null = null;
+  let trustDelta: TrustDelta = "none";
 
   if (cockpitRenderable && deltaPct !== null) {
     const direction = Math.sign(deltaPct);
     const favorableSign = config.favorableDirection === "down" ? -1 : 1;
     const isFavorable = direction === favorableSign;
+
+    // The noise floor guarantees |deltaPct| >= noiseFloorPct on a clean row,
+    // so a directional outcome always has a definite direction.
+    trustDelta = isFavorable ? "up" : "down";
 
     if (candidate.actionKind === "pause") {
       copyTemplate = isFavorable ? "pause.spend.fell" : "pause.spend.changed";
@@ -129,6 +147,9 @@ export function attributeOneRecommendation(input: AttributeOneInput): RileyOutco
     copyTemplate,
     copyValues,
     visibilityFlags: flags,
+    causalStrength,
+    businessContextStable,
+    trustDelta,
   };
 }
 

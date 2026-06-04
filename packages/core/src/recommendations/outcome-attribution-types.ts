@@ -12,6 +12,29 @@ export type VisibilityFlag =
   | "same_kind_retry";
 
 /**
+ * Slice-3 enrichment enums (Riley v3 OutcomeLedger, spec section 2.5).
+ *
+ * causalStrength: "corroborated" is RESERVED for the slice-4 CRM/booking
+ * agreement signal; the attribution engine must never emit it before that
+ * signal exists (honesty floor, spec section 7.5).
+ */
+export type CausalStrength = "directional" | "corroborated" | "inconclusive";
+
+/**
+ * "unknown" until the slice-4 operational-state source exists; never a
+ * fabricated "stable" (spec section 7.4).
+ */
+export type BusinessContextStability = "stable" | "unstable" | "unknown";
+
+/**
+ * Advisory display signal: should trust in this action class move, given
+ * the outcome direction and its causal strength. Recorded and rendered on
+ * the cockpit outcome feed; never fed back into recommendation scoring
+ * (that switch is Phase-C, spec section 2.5).
+ */
+export type TrustDelta = "up" | "none" | "down";
+
+/**
  * Aggregated metrics for a single attribution window. Implementations must
  * return null when the window has no data; sparse data (<50% of window days)
  * is the provider's call to count as "sparse" via the dailyRowCount field.
@@ -110,6 +133,10 @@ export interface RileyOutcomeRow {
   copyTemplate: string | null;
   copyValues: { deltaPct: number; windowDays: number } | null;
   visibilityFlags: VisibilityFlag[];
+  /** Slice-3 enrichments: always present on engine output; NULL on legacy DB rows. */
+  causalStrength: CausalStrength;
+  businessContextStable: BusinessContextStability;
+  trustDelta: TrustDelta;
 }
 
 export interface RecommendationOutcomeStore {

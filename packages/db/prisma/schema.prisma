@@ -614,6 +614,22 @@ model RecommendationOutcome {
 
   cockpitRenderable Boolean @default(false)
 
+  // Slice-3 OutcomeLedger enrichments. Nullable: rows predating the fields
+  // stay NULL (honest absence); new rows always carry values. Value sets are
+  // enforced by CHECK constraints in raw SQL (migration
+  // 20260604200000_recommendation_outcome_enrichment); Prisma cannot express
+  // CHECK constraints in-schema. Keep this comment in sync.
+  // causalStrength: "directional" | "corroborated" | "inconclusive".
+  // The engine emits only directional|inconclusive until slice 4 wires the
+  // CRM/booking corroboration signal; "corroborated" is reserved.
+  causalStrength String?
+  // businessContextStable: "stable" | "unstable" | "unknown". Records
+  // "unknown" until the slice-4 operational-state source exists.
+  businessContextStable String?
+  // trustDelta: "up" | "none" | "down". Advisory display signal; rendered
+  // on the cockpit outcome feed, never auto-applied into scoring.
+  trustDelta String?
+
   metricSummary    Json
   copyTemplate     String?
   copyValues       Json?

@@ -111,6 +111,9 @@ export class PrismaRecommendationOutcomeStore implements RecommendationOutcomeSt
           copyValues:
             row.copyValues === null ? Prisma.JsonNull : (row.copyValues as Prisma.InputJsonValue),
           visibilityFlags: row.visibilityFlags as Prisma.InputJsonValue,
+          causalStrength: row.causalStrength,
+          businessContextStable: row.businessContextStable,
+          trustDelta: row.trustDelta,
         },
       });
     } catch (err) {

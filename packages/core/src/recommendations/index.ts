@@ -46,6 +46,9 @@ export type {
   AttributableRecommendationStore,
   RileyOutcomeRow,
   RecommendationOutcomeStore,
+  CausalStrength,
+  BusinessContextStability,
+  TrustDelta,
 } from "./outcome-attribution-types.js";
 export {
   attributeOneRecommendation,
