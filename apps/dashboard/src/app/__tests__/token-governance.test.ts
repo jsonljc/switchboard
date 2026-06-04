@@ -483,3 +483,88 @@ describe("token governance — paper grain (GR1)", () => {
     }
   });
 });
+
+describe("token governance — team poster grain (GR2)", () => {
+  const bandCss = readFileSync(
+    path.resolve(process.cwd(), "src/components/home/team-band.module.css"),
+    "utf8",
+  );
+  /** The .poster rule body (first match; the off rules come later in source). */
+  const posterRule = (): string => {
+    const m = bandCss.match(/\.poster\s*\{([^}]*)\}/);
+    expect(m, ".poster rule must exist in team-band.module.css").not.toBeNull();
+    return m![1];
+  };
+
+  it("carries the grain as a layer of the poster's own background, blended multiply", () => {
+    const decl = posterRule();
+    expect(decl).toMatch(/--_grain:\s*url\("data:image\/svg\+xml,/);
+    expect(decl).toMatch(/background-image:\s*var\(--_grain\),/);
+    expect(decl).toMatch(/background-blend-mode:\s*multiply,/);
+    expect(decl).toContain("feTurbulence");
+    expect(decl).toContain("baseFrequency%3D%220.88%22");
+  });
+
+  it("bakes the poster grain LIGHTER than the canvas grain (spec .34 vs .42)", () => {
+    const alphaOf = (decl: string): number => {
+      const m = decl.match(/feColorMatrix[^>]*?values%3D%22(.+?)%22%2F%3E/);
+      expect(m, "feColorMatrix values must be present").not.toBeNull();
+      const nums = decodeURIComponent(m![1]).trim().split(/\s+/).map(Number);
+      expect(nums).toHaveLength(20);
+      return nums[18];
+    };
+    const canvasRule = css.match(/body:has\(\.app-header\)\s*\{([^}]*)\}/);
+    expect(canvasRule).not.toBeNull();
+    const posterAlpha = alphaOf(posterRule());
+    const canvasAlpha = alphaOf(canvasRule![1]);
+    expect(posterAlpha).toBeLessThan(canvasAlpha);
+    expect(posterAlpha).toBeGreaterThanOrEqual(0.12);
+  });
+
+  it("strips the poster grain in dark and under reduced motion (ground stays)", () => {
+    expect(bandCss).toMatch(/:global\(\.dark\)\s+\.poster\s*\{\s*--_grain:\s*none/);
+    expect(bandCss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.poster\s*\{\s*--_grain:\s*none/,
+    );
+  });
+
+  it("the poster ground is built only from tokens (no raw color literals)", () => {
+    // The data URI carries decimal channels only; outside it, every color is
+    // hsl(var(--token)) / var(--token). The generalized hex sweep also covers
+    // this file; this is the targeted assertion.
+    const outsideUri = posterRule().replace(/url\("data:image\/svg\+xml,[^"]*"\)/g, "");
+    expect(outsideUri).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    expect(outsideUri).not.toMatch(/rgb\(/);
+  });
+});
+
+describe("token governance — hero poster label contrast (AA)", () => {
+  // Names and roles render in the agent deep inks on the poster ground, whose
+  // text zone ranges from --surface (white wash) to the agent tints (worst
+  // case: a label directly over its column's tint). The grain multiplies
+  // (darkens) the ground, which only raises dark-text contrast, so the
+  // ungrained ground is the conservative bound. Status renders in the ink-2
+  // ramp value on the same ground.
+  const SURFACE = tokenValue("surface");
+  const cases: Array<[string, string]> = [
+    ["palette-coral-deep", "palette-coral-tint"],
+    ["palette-teal-deep", "palette-teal-tint"],
+    ["palette-violet-deep", "palette-violet-tint"],
+  ];
+
+  it("every agent deep ink is AA on the surface wash and on its own tint", () => {
+    for (const [deep, tint] of cases) {
+      expect(contrastRatio(tokenValue(deep), SURFACE), `${deep} on surface`).toBeGreaterThanOrEqual(
+        4.5,
+      );
+      expect(
+        contrastRatio(tokenValue(deep), tokenValue(tint)),
+        `${deep} on ${tint}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("the status ink (ink-2 ramp) is AA on the surface wash", () => {
+    expect(contrastRatio(tokenValue("palette-ink-700"), SURFACE)).toBeGreaterThanOrEqual(4.5);
+  });
+});
