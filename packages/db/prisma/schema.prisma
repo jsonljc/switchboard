@@ -589,6 +589,56 @@ model ConfigVersion {
   @@index([status])
 }
 
+// ── Operational State (Riley v3 slice 4a) ──
+
+// Append-only operator confirmations of business operational state
+// (open/closed, promo windows, staffing, inventory). A row is NEVER updated:
+// every operator confirm INSERTs a new row, so confirmedAt (the spec-7.4
+// freshness anchor) is structurally immune to unrelated writes. A
+// confirmation's validity interval is DERIVED as
+// [confirmedAt, next row's confirmedAt), with same-instant ties broken by
+// createdAt then id (the later row supersedes; a zero-length prior interval
+// is acceptable). That derivation is what lets the slice-4c outcome path
+// check overlap against a PAST attribution window. Zero rows for an org =
+// honest absence (unknown); no backfill ever fabricates confirmations for
+// existing orgs. No FK to an organization: no Organization model exists in
+// this schema; org scoping is enforced at the store/route layer like every
+// other org-scoped table (BusinessConfig, RecommendationOutcome).
+model OperationalStateConfirmation {
+  id             String @id @default(cuid())
+  organizationId String
+
+  // Scalar dimensions: NULL = the operator did not confirm that dimension
+  // (never a fabricated "open"/"normal"). Value sets are pinned by raw-SQL
+  // CHECK constraints (Prisma cannot express CHECKs in-schema; same pattern
+  // as 20260604200000_recommendation_outcome_enrichment). Keep in sync:
+  // operatingStatus: "open" | "temporarily_closed"
+  // staffing:        "normal" | "shortfall"
+  // inventory:       "normal" | "outage"
+  operatingStatus String?
+  staffing        String?
+  inventory       String?
+
+  // Bounded conditions with operator-known dates, arrays of
+  // { start, end?, label? } ISO instants validated by OperationalStateSchema
+  // at the store boundary. NULL = unconfirmed; [] = operator confirmed none.
+  promoWindows Json?
+  closures     Json?
+
+  // note is 4b display context only: it NEVER satisfies the nonempty-state
+  // floor (see the nonempty_state CHECK), so a free-text note alone cannot
+  // create a freshness anchor.
+  note        String?
+  confirmedBy String?
+  // Required, no DB default, and a required store parameter: a writer must
+  // supply the operator confirmation moment consciously; nothing fabricates
+  // one.
+  confirmedAt DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([organizationId, confirmedAt])
+}
+
 // ── AI Agent System: Outcome Tracking ──
 
 model RecommendationOutcome {
