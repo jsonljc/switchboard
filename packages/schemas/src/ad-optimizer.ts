@@ -276,5 +276,39 @@ export const AuditReportSchema = z.object({
       ),
     })
     .optional(),
+  // Riley v3 slice 2: cross-campaign arbitration — ADDITIVE ranking metadata over
+  // recommendations[]; it never filters emission or handoff. Entries reference
+  // recommendations[] by array index (recs carry no id at report time, and
+  // campaignId+action alone is not unique, e.g. per-breach fix_signal_health recs)
+  // plus campaignId+action for human legibility. primary is absent exactly when the
+  // cycle produced no mutating candidate; measurementFix is the at-most-one
+  // non-mutating measurement-integrity fix (it bypasses the mutating cap).
+  arbitration: z
+    .object({
+      primary: z
+        .object({
+          campaignId: z.string(),
+          action: AdRecommendationActionSchema,
+          index: z.number().int().nonnegative(),
+          score: z.number(),
+        })
+        .optional(),
+      secondary: z.array(
+        z.object({
+          campaignId: z.string(),
+          action: AdRecommendationActionSchema,
+          index: z.number().int().nonnegative(),
+          score: z.number(),
+        }),
+      ),
+      measurementFix: z
+        .object({
+          campaignId: z.string(),
+          action: AdRecommendationActionSchema,
+          index: z.number().int().nonnegative(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 export type AuditReportSchema = z.infer<typeof AuditReportSchema>;
