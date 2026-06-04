@@ -409,6 +409,9 @@ describe("COMMON_ESCALATION_TRIGGERS - suspicious_lesion (medical red-flag slice
     expect(matchedIds("melasma patches on my cheeks")).not.toContain("suspicious_lesion");
     expect(matchedIds("price for pigmentation removal?")).not.toContain("suspicious_lesion");
     expect(matchedIds("I have a new spot from a breakout")).not.toContain("suspicious_lesion");
+    // Review pin: "weird" qualifier + pimple context must stay suppressed by the
+    // acne/breakout negation (the negation span overlaps the "weird spot" occurrence).
+    expect(matchedIds("I have a weird spot from a pimple")).not.toContain("suspicious_lesion");
   });
 
   it("suppresses stable/unchanged disclosures and third-party lesions", () => {
@@ -624,7 +627,9 @@ const allCategories = [
 ```
 
 In the entry-floor test, raise the floor from 10 to 13 (12 common + 1 jurisdiction
-entry) so accidental entry deletion bites:
+entry as of this slice) so accidental entry deletion bites. The category-coverage test
+above is the load-bearing one; the floor is just a tripwire, so keep its comment honest
+about that:
 
 ```ts
 expect(entries.length, `${j} total escalation-trigger entries`).toBeGreaterThanOrEqual(13);
@@ -758,6 +763,12 @@ await handoffStore.save(
   ),
 );
 ```
+
+Verified: `firstEntry` is already in scope at BOTH sites (main path computes it at
+`pre-input-gate.ts:105-107`; the fail-closed branch computes its own at `:263-264` for
+the verdict reasonCode). Derive the handoff reason from that same first matched entry;
+do NOT infer medical safety from raw text or reason strings, and do NOT hardcode
+`"medical_safety"` at either site.
 
 4. Update the existing pin in `channel-gateway-deterministic-gate.test.ts` (~line 377,
    Test 4, which matches a pregnancy fixture):
@@ -941,10 +952,12 @@ describe("medical red-flag triggers through the real gate (seeded observe postur
 
       await gw.handleIncoming(makeMessage(flag.text), { send: deps.sendSpy });
 
-      // Submit proceeds with the UNCHANGED inbound text.
+      // Submit proceeds with the UNCHANGED inbound text (field-level assertion:
+      // the gateway submits the raw text as parameters.message,
+      // channel-gateway.ts:314-315).
       expect(deps.submitSpy).toHaveBeenCalledOnce();
       const submitted = deps.submitSpy.mock.calls[0]![0];
-      expect(JSON.stringify(submitted)).toContain(flag.text.slice(0, 24));
+      expect(submitted.parameters.message).toBe(flag.text);
 
       // Normal AI reply reaches the lead; no handoff text.
       expect(deps.sendSpy).toHaveBeenCalledWith("Hello from agent");
