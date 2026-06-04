@@ -249,13 +249,19 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // Shares computeCreativeEstimates with the spend-signal producer so the readback
-    // and the governed amount can never disagree.
+    // and the governed amount can never disagree. `mode` lets the dashboard
+    // suppress the tier picker for untiered ugc estimates (slice-3 spec 3.3b;
+    // both tier slots carry the single ugc estimate).
     const estimates = await computeCreativeEstimates(job);
     if (!estimates) {
-      return reply.send({ estimates: null, reason: "Storyboard not yet complete" });
+      return reply.send({
+        estimates: null,
+        reason: job.mode === "ugc" ? "Scripts not yet complete" : "Storyboard not yet complete",
+        mode: job.mode === "ugc" ? "ugc" : "polished",
+      });
     }
 
-    return reply.send({ estimates });
+    return reply.send({ estimates, mode: job.mode === "ugc" ? "ugc" : "polished" });
   });
 
   // POST /creative-jobs/:id/publish — create a self-contained PAUSED Meta draft

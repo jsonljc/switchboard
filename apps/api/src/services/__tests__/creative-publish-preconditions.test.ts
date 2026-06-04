@@ -52,6 +52,62 @@ describe("assertPublishable", () => {
     }
   });
 
+  it("a completed, kept UGC job with a durable asset is publishable (slice-3 spec 3.3f)", async () => {
+    // UGC jobs never advance currentStage (stays the "trends" column default);
+    // completeness keys off ugcPhase for them. Without the mode-aware check,
+    // 3.3f's durable URL was unreachable through publish.
+    const r = await assertPublishable(
+      deps({
+        job: {
+          ...KEPT_JOB,
+          mode: "ugc",
+          currentStage: "trends",
+          ugcPhase: "complete",
+          ugcFailure: null,
+        },
+      }),
+      "org_1",
+      "j1",
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("an in-flight UGC job is not publishable", async () => {
+    const r = await assertPublishable(
+      deps({
+        job: {
+          ...KEPT_JOB,
+          mode: "ugc",
+          currentStage: "trends",
+          ugcPhase: "production",
+          ugcFailure: null,
+        },
+      }),
+      "org_1",
+      "j1",
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("CREATIVE_NOT_PUBLISHABLE");
+  });
+
+  it("a failed UGC job is not publishable even at ugcPhase complete-adjacent states", async () => {
+    const r = await assertPublishable(
+      deps({
+        job: {
+          ...KEPT_JOB,
+          mode: "ugc",
+          currentStage: "trends",
+          ugcPhase: "complete",
+          ugcFailure: { code: "PHASE_EXECUTION_FAILED" },
+        },
+      }),
+      "org_1",
+      "j1",
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("CREATIVE_NOT_PUBLISHABLE");
+  });
+
   it("CREATIVE_JOB_NOT_FOUND for a missing job", async () => {
     const r = await assertPublishable(deps({ job: null }), "org_1", "j1");
     expect(r).toMatchObject({ ok: false, code: "CREATIVE_JOB_NOT_FOUND" });

@@ -14,11 +14,12 @@ export { runScriptWriter, buildScriptPrompt } from "./stages/script-writer.js";
 export { runStoryboardBuilder, buildStoryboardPrompt } from "./stages/storyboard-builder.js";
 export { DalleImageGenerator } from "./stages/image-generator.js";
 export type { ImageGenerator } from "./stages/image-generator.js";
-export { estimateCost } from "./stages/cost-estimator.js";
+export { estimateCost, estimateUgcCost } from "./stages/cost-estimator.js";
 export type {
   CostEstimates,
   TierEstimate,
   StoryboardForEstimate,
+  UgcSpecForEstimate,
 } from "./stages/cost-estimator.js";
 export { createModeDispatcher, executeModeDispatch } from "./mode-dispatcher.js";
 export { createUgcJobRunner, executeUgcPipeline } from "./ugc/ugc-job-runner.js";

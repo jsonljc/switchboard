@@ -25,7 +25,15 @@ export function buildCreativeJobDecisionWorkflow(
         };
       }
 
-      if (job.currentStage === "complete" || job.stoppedAt) {
+      // Mode-aware not-awaiting guard (slice-3 spec 3.3c). UGC jobs never
+      // advance currentStage (it stays at the column default), so they key
+      // off ugcPhase; ugcFailure is terminal too (failUgc sets it but never
+      // stoppedAt, and the runner already returned: an approve OR stop on a
+      // failed job would emit an event no wait hears and report a misleading
+      // success).
+      const ugcDone = job.mode === "ugc" && (job.ugcPhase === "complete" || job.ugcFailure != null);
+      const polishedDone = job.mode !== "ugc" && job.currentStage === "complete";
+      if (ugcDone || polishedDone || job.stoppedAt) {
         return {
           outcome: "failed",
           summary: "Job is not awaiting approval",

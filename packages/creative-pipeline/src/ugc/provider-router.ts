@@ -1,5 +1,6 @@
 // packages/core/src/creative-pipeline/ugc/provider-router.ts
 import type { ProviderCapabilityProfile } from "@switchboard/schemas";
+import { KLING_COST_PER_5S } from "../stages/cost-estimator.js";
 import type { ProviderPerformanceHistory } from "./provider-performance.js";
 
 // ── Types ──
@@ -86,10 +87,15 @@ export function getDefaultProviderRegistry(): ProviderCapabilityProfile[] {
   ];
 }
 
-// ── Cost estimates (placeholder — SP7 adds real cost tracking) ──
+// ── Cost estimates ──
+// kling is ALIGNED to the cost-estimator constants (slice-3 spec 3.3b): the
+// production budget accumulator counts these per attempt, and the governance
+// spend estimate uses the estimator rates; the two must not disagree.
+// EXPORTED for the parity test. Non-kling entries stay placeholders until
+// their providers are real (heygen aligns in PR-4).
 
-const ESTIMATED_COST: Record<string, number> = {
-  kling: 0.5,
+export const ESTIMATED_COST: Record<string, number> = {
+  kling: KLING_COST_PER_5S,
   heygen: 1.0,
   seedance: 0.6,
   runway: 0.8,

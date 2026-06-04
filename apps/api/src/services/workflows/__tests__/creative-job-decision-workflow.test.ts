@@ -128,6 +128,75 @@ describe("creative.job.continue / stop workflow", () => {
     expect(updateProductionTier).not.toHaveBeenCalled();
   });
 
+  // ── Slice-3 mode-aware guard (spec 3.3c) ────────────────────────────────────
+  it("completed UGC job (ugcPhase complete) → CREATIVE_JOB_NOT_AWAITING_APPROVAL", async () => {
+    // UGC jobs never advance currentStage (stays "trends" default); the guard
+    // must key off ugcPhase for them.
+    findById.mockResolvedValue(
+      makeJob({ mode: "ugc", currentStage: "trends", ugcPhase: "complete" }),
+    );
+    const res = await buildCreativeJobDecisionWorkflow({}, "continue").execute(
+      workUnit({ jobId: JOB_ID }),
+      services,
+    );
+    expect(res.outcome).toBe("failed");
+    expect(res.error?.code).toBe("CREATIVE_JOB_NOT_AWAITING_APPROVAL");
+    expect(inngestSend).not.toHaveBeenCalled();
+  });
+
+  it("failed UGC job (ugcFailure set) rejects approve: no event, no misleading success", async () => {
+    // failUgc sets ugcFailure + ugcPhase but never stoppedAt; without this
+    // condition an approve passes the guard, emits an event no wait hears,
+    // and returns approved for a dead job.
+    findById.mockResolvedValue(
+      makeJob({
+        mode: "ugc",
+        currentStage: "trends",
+        ugcPhase: "production",
+        ugcFailure: { code: "PHASE_EXECUTION_FAILED" },
+      }),
+    );
+    const res = await buildCreativeJobDecisionWorkflow({}, "continue").execute(
+      workUnit({ jobId: JOB_ID }),
+      services,
+    );
+    expect(res.outcome).toBe("failed");
+    expect(res.error?.code).toBe("CREATIVE_JOB_NOT_AWAITING_APPROVAL");
+    expect(inngestSend).not.toHaveBeenCalled();
+  });
+
+  it("failed UGC job rejects stop too (job already terminal)", async () => {
+    findById.mockResolvedValue(
+      makeJob({
+        mode: "ugc",
+        currentStage: "trends",
+        ugcPhase: "scripting",
+        ugcFailure: { code: "PHASE_EXECUTION_FAILED" },
+      }),
+    );
+    const res = await buildCreativeJobDecisionWorkflow({}, "stop").execute(
+      workUnit({ jobId: JOB_ID }),
+      services,
+    );
+    expect(res.outcome).toBe("failed");
+    expect(res.error?.code).toBe("CREATIVE_JOB_NOT_AWAITING_APPROVAL");
+    expect(stopUgc).not.toHaveBeenCalled();
+  });
+
+  it("in-flight UGC job (no failure, not complete) passes the guard", async () => {
+    findById.mockResolvedValue(
+      makeJob({ mode: "ugc", currentStage: "trends", ugcPhase: "production", ugcFailure: null }),
+    );
+    const res = await buildCreativeJobDecisionWorkflow({}, "continue").execute(
+      workUnit({ jobId: JOB_ID }),
+      services,
+    );
+    expect(res.outcome).toBe("queued");
+    expect(inngestSend).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "creative-pipeline/ugc-phase.approved" }),
+    );
+  });
+
   // ── Owner happy paths ───────────────────────────────────────────────────────
   it("owner continue at storyboard → persists productionTier, fires stage.approved continue, queued/approved", async () => {
     findById.mockResolvedValue(makeJob({ currentStage: "storyboard" }));

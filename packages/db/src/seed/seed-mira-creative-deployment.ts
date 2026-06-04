@@ -50,7 +50,7 @@ export async function seedMiraCreativeDeployment(
     );
   }
 
-  await prisma.agentDeployment.upsert({
+  const deployment = await prisma.agentDeployment.upsert({
     where: {
       organizationId_listingId: { organizationId: orgId, listingId: listing.id },
     },
@@ -117,5 +117,60 @@ export async function seedMiraCreativeDeployment(
     where: { id: handoffApprovalId },
     create: { id: handoffApprovalId, ...handoffApprovalData },
     update: handoffApprovalData,
+  });
+
+  await seedDefaultCreator(prisma, deployment.id);
+}
+
+/**
+ * Seeds ONE synthetic default creator on the creative deployment (slice-3
+ * spec 3.3e): without a creator, `castCreators` returns `[]`, scripting emits
+ * zero specs, and a UGC job completes with nothing, silently. Synthetic
+ * persona (no real-person likeness), `qualityTier: "stock"`, non-empty
+ * appearance/environment arrays (empty ones used to crash the scripting
+ * phase), the pipeline's default ElevenLabs voice, and NO `identityRefIds`,
+ * so avatar routing (PR-4's `heygen:` refs) can never pick it up by accident.
+ * Kling t2v consumes no identity fields, so the synthetic creator is safe by
+ * construction. Idempotent: find-by-deployment-and-name before create.
+ *
+ * NOTE on enablement (same as the governance note in creative-governance.ts):
+ * this rides the per-org install function, which only `org_dev` runs today;
+ * real-pilot-org provisioning is the separate pending workstream, and this
+ * creator arrives WITH governance + spend posture when that lands.
+ */
+const HOUSE_CREATOR_NAME = "House Creator";
+
+async function seedDefaultCreator(prisma: PrismaClient, deploymentId: string): Promise<void> {
+  const existing = await prisma.creatorIdentity.findFirst({
+    where: { deploymentId, name: HOUSE_CREATOR_NAME },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  await prisma.creatorIdentity.create({
+    data: {
+      deploymentId,
+      name: HOUSE_CREATOR_NAME,
+      identityRefIds: [],
+      heroImageAssetId: "house_creator_placeholder",
+      identityDescription:
+        "Synthetic house creator: a friendly aesthetician persona for UGC-style clips. " +
+        "Not a real person; no likeness rights involved.",
+      voice: {
+        // The pipeline's default ElevenLabs voice (elevenlabs-client.ts).
+        voiceId: "21m00Tcm4TlvDq8ikWAM",
+        provider: "elevenlabs",
+        tone: "warm",
+        pace: "moderate",
+        sampleUrl: "",
+      },
+      personality: { energy: "conversational", deliveryStyle: "natural and reassuring" },
+      appearanceRules: {
+        hairStates: ["natural", "tied back"],
+        wardrobePalette: ["soft neutrals", "clinical white"],
+      },
+      environmentSet: ["bright clinic interior", "front-desk welcome area"],
+      qualityTier: "stock",
+    },
   });
 }

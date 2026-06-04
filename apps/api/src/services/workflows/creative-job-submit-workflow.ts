@@ -68,13 +68,25 @@ export function buildCreativeJobSubmitWorkflow(_prisma: unknown): WorkflowHandle
         generateReferenceImages: brief.generateReferenceImages,
       };
 
-      const job =
-        input.mode === "ugc"
-          ? await jobStore.createUgc({
-              ...jobFields,
-              ugcConfig: brief as unknown as Record<string, unknown>,
-            })
-          : await jobStore.create(jobFields);
+      let job;
+      if (input.mode === "ugc") {
+        // Construct the VALID UgcConfig shape the runner reads (slice-3 spec
+        // 3.3d): the runner reads `ugcConfig.brief`, so storing the raw brief
+        // unwrapped ran every phase on an EMPTY brief. ugcFormat is a v1
+        // constant at this single construction site (surfacing it as an
+        // operator choice is a named follow-on); budget/retryConfig stay
+        // absent so the runner defaults apply (budget 50; retries hardcoded).
+        const { UgcConfigSchema } = await import("@switchboard/schemas");
+        const ugcConfig = UgcConfigSchema.parse({
+          brief: { ...brief, ugcFormat: "talking_head", creatorPoolIds: [] },
+        });
+        job = await jobStore.createUgc({
+          ...jobFields,
+          ugcConfig: ugcConfig as unknown as Record<string, unknown>,
+        });
+      } else {
+        job = await jobStore.create(jobFields);
+      }
 
       const { inngestClient } = await import("@switchboard/creative-pipeline");
       await inngestClient.send({
