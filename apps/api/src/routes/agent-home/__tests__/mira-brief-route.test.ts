@@ -125,6 +125,12 @@ describe("POST /agents/mira/brief → PlatformIngress (creative.job.submit)", ()
     expect(prismaMock.agentTask.create).not.toHaveBeenCalled();
   });
 
+  it("threads mode ugc from the brief into the ingress params (slice-3 spec 3.4)", async () => {
+    await post(PILOT, { promoting: "Summer Botox special", mode: "ugc" });
+    const arg = submit.mock.calls[0]![0];
+    expect(arg.parameters.mode).toBe("ugc");
+  });
+
   it("maps the submit outputs back to the open-brief contract (201)", async () => {
     const res = await post(PILOT, { promoting: "Summer Botox special" });
     expect(res.statusCode).toBe(201);

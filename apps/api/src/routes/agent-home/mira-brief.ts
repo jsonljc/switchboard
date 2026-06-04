@@ -129,7 +129,9 @@ export const miraBriefRoute: FastifyPluginAsync = async (app) => {
         deploymentId: deployment.deploymentId,
         listingId: deployment.listingId,
         brief,
-        mode: "polished",
+        // Operator-chosen format (slice-3 spec 3.4): the desk's
+        // Polished/Real-talk toggle, defaulted polished by the schema.
+        mode: parsed.data.mode,
       },
       actor: { id: actorId, type: "user" },
       organizationId: orgId,
