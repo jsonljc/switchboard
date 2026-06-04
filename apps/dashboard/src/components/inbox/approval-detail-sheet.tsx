@@ -52,13 +52,13 @@ function ConfirmInline({
       <div className="ds-confirm-head">
         <span aria-hidden="true" />
         <span>
-          One last check — {agentName}&apos;s {primaryLabel.toLowerCase()}.
+          One last check: {agentName}&apos;s {primaryLabel.toLowerCase()}.
         </span>
       </div>
       <textarea
         className="ds-confirm-note"
         rows={2}
-        placeholder="Optional — leave a note for the audit log"
+        placeholder="Optional: leave a note for the audit log"
         value={note}
         onChange={(e) => onNote(e.target.value)}
       />
@@ -188,8 +188,11 @@ export function ApprovalDetailSheet({
             <ul className="ds-datalines">
               {dataLines.map((line, i) => (
                 <li key={i}>
+                  {/* The lone no-data glyph as a string-literal expression: the
+                      voice-corpus exemption matches the exact glyph, and prettier
+                      cannot pad a string literal with JSX whitespace. */}
                   <span className="ds-datalines-bullet" aria-hidden="true">
-                    —
+                    {"—"}
                   </span>{" "}
                   {Array.isArray(line) ? line.join(" · ") : String(line)}
                 </li>
@@ -233,8 +236,7 @@ export function ApprovalDetailSheet({
             </div>
           </div>
           <p className="ds-pending-caption">
-            We&apos;re saving a slot here for live before-and-after numbers — wiring it up next
-            week.
+            We&apos;re saving a slot here for live before-and-after numbers, wiring it up next week.
           </p>
         </section>
 
@@ -244,7 +246,7 @@ export function ApprovalDetailSheet({
             <div className="ds-risk-missing">
               <span aria-hidden="true" />
               <span>
-                Needs review before this can run — this item was logged before risk-tracking was on.
+                Needs review before this can run. This item was logged before risk-tracking was on.
               </span>
             </div>
           ) : (

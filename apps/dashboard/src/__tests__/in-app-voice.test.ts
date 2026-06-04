@@ -106,6 +106,8 @@ const CORPUS = [
   "components/layout/editorial-shell-boundary.tsx",
   "components/layout/inbox-drawer.tsx",
   "components/layout/live-signal-popover.tsx",
+  "components/layout/help-overlay.tsx",
+  "components/inbox/approval-detail-sheet.tsx",
 ] as const;
 
 interface Offense {
