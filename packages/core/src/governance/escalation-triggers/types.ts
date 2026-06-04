@@ -1,4 +1,4 @@
-import type { GovernanceVerdictReason } from "@switchboard/schemas";
+import type { GovernanceVerdictReason, HandoffReason } from "@switchboard/schemas";
 
 export type EscalationTriggerCategory =
   | "pregnancy_breastfeeding"
@@ -30,3 +30,17 @@ export const REASON_CODE_BY_TRIGGER: Record<EscalationTriggerCategory, Governanc
   multi_treatment_combo: "sensitive_inbound",
   sensitive_keyword: "sensitive_inbound",
 };
+
+/**
+ * Handoff reason for an enforce-mode input-gate block, derived from the
+ * verdict reason so the two taxonomies stay deliberately mapped (#791
+ * seam-reuse finding): a trigger category is medical iff its verdict reason
+ * is medical_safety_trigger.
+ */
+export function handoffReasonForTriggerCategory(
+  category: EscalationTriggerCategory,
+): HandoffReason {
+  return REASON_CODE_BY_TRIGGER[category] === "medical_safety_trigger"
+    ? "medical_safety"
+    : "compliance_concern";
+}

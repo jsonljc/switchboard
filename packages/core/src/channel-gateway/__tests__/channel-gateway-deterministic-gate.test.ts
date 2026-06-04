@@ -371,10 +371,12 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
       principalId: "visitor-sess-1",
     });
 
-    // Handoff saved
+    // Handoff saved. pregnancy_breastfeeding is a medical category: handoff
+    // reason routes to medical_safety (slice 2); non-medical categories keep
+    // compliance_concern.
     expect(handoffStore.save).toHaveBeenCalledOnce();
     const handoffPkg = handoffStore.save.mock.calls[0]![0];
-    expect(handoffPkg.reason).toBe("compliance_concern");
+    expect(handoffPkg.reason).toBe("medical_safety");
     expect(handoffPkg.status).toBe("pending");
 
     // SG handoff text sent
