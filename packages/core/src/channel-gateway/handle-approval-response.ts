@@ -75,7 +75,19 @@ export function replyForChannelOutcome(outcome: ChannelApprovalRespondOutcome): 
       return ADMISSION_FAILED_MSG;
     case "execution_error":
       return APPROVAL_EXECUTION_ERROR_MSG;
+    default:
+      return unreachableRefusal(outcome.code);
   }
+}
+
+/**
+ * Compile-time exhaustiveness: adding a ChannelApprovalRefusalCode member
+ * without a switch case above fails to type-check here. The runtime fallback
+ * covers non-TS callers (an unknown code renders the honest non-executing
+ * lookup-error copy instead of an undefined reply).
+ */
+function unreachableRefusal(_code: never): string {
+  return APPROVAL_LOOKUP_ERROR_MSG;
 }
 
 export async function handleApprovalResponse(params: {
