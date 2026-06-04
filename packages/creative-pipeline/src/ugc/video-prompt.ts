@@ -82,8 +82,9 @@ export function buildUgcVideoRequest(spec: SpecForPrompt): VideoGenerationReques
       `Delivery: ${d.energyLevel} energy, ${EYE_CONTACT_TEXT[d.eyeContact] ?? words(d.eyeContact)}. ` +
         `${d.pacingNotes}.`,
     );
-    // Terse authenticity cue derived from the imperfection profile: real UGC
-    // reads unpolished; the exact densities stay a scripting concern.
+    // Fixed authenticity cue, emitted whenever an imperfection profile is
+    // present: real UGC reads unpolished. The exact densities stay a
+    // scripting concern; the prompt never varies by them.
     parts.push("Authentic creator feel: natural pauses and small restarts, unpolished delivery.");
   }
 

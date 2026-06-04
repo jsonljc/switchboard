@@ -35,6 +35,32 @@ describe("createVideoProvider", () => {
     expect(result.videoUrl).toBe("https://cdn.example.com/kling.mp4");
   });
 
+  it("kling adapter threads referenceImageUrl as imageUrl (image2video grounding)", async () => {
+    const mockKling = {
+      generateVideo: vi
+        .fn()
+        .mockResolvedValue({ videoUrl: "https://cdn.example.com/kling.mp4", duration: 10 }),
+    };
+    const provider = createVideoProvider("kling", { klingClient: mockKling as never });
+
+    await provider.generate({
+      prompt: "Hold the product",
+      durationSec: 8,
+      aspectRatio: "9:16",
+      referenceImageUrl: "https://cdn.example.com/product.jpg",
+      negativePrompt: "no studio lighting",
+      cameraMotion: "pan_right",
+    });
+
+    expect(mockKling.generateVideo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageUrl: "https://cdn.example.com/product.jpg",
+        negativePrompt: "no studio lighting",
+        cameraMotion: "pan_right",
+      }),
+    );
+  });
+
   it("creates a seedance provider adapter (stub)", () => {
     const provider = createVideoProvider("seedance", {});
     expect(provider).toBeDefined();

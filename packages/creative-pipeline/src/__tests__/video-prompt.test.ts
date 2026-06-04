@@ -104,6 +104,50 @@ describe("buildUgcVideoRequest", () => {
     expect(garbage.prompt).toBe("Hey, so I have to tell you about this.");
   });
 
+  it("round-trips REAL generateDirection output (guards the interface-vs-schema contract)", async () => {
+    // The wire shape comes from ugc-director's hand-maintained TS interface,
+    // not the zod schema the builder parses with. If the two ever drift, the
+    // builder silently falls back to raw script: this test pins the contract
+    // against the REAL producer.
+    const { generateDirection } = await import("../ugc/ugc-director.js");
+    const { sceneStyle, ugcDirection } = generateDirection({
+      creator: {
+        personality: { energy: "conversational", deliveryStyle: "natural" },
+        appearanceRules: { hairStates: ["natural"], wardrobePalette: ["soft neutrals"] },
+        environmentSet: ["bright clinic interior"],
+      },
+      structure: {
+        id: "confession",
+        name: "Confession",
+        sections: [{ name: "hook", purposeGuide: "Open", durationRange: [2, 4] }],
+      },
+      platform: "meta_feed",
+      ugcFormat: "talking_head",
+    });
+    const req = buildUgcVideoRequest(makeSpec({ style: sceneStyle, direction: ugcDirection }));
+    // The composed branch fired (not the raw-script fallback)
+    expect(req.prompt).not.toBe("Hey, so I have to tell you about this.");
+    expect(req.prompt).toContain("Scene:");
+    expect(req.prompt).toContain("Delivery:");
+    expect(req.negativePrompt).toContain("no studio lighting");
+  });
+
+  it("composes the parsed half when only style parses (graceful gradation)", () => {
+    const req = buildUgcVideoRequest(makeSpec({ direction: { hookType: [] } }));
+    expect(req.prompt).toContain("Scene:");
+    expect(req.prompt).not.toContain("Delivery:");
+    // standard negative only: forbiddenFraming lives on the unparsed half
+    expect(req.negativePrompt).toBe("blurry, low quality, distorted, watermark, text artifacts");
+  });
+
+  it("composes the parsed half when only direction parses", () => {
+    const req = buildUgcVideoRequest(makeSpec({ style: { lighting: 42 } }));
+    expect(req.prompt).not.toContain("Scene:");
+    expect(req.prompt).toContain("Delivery:");
+    expect(req.negativePrompt).toContain("no studio lighting");
+    expect(req.cameraMotion).toBeUndefined();
+  });
+
   it("threads referenceImageUrl through only when the spec carries one", () => {
     const withRef = buildUgcVideoRequest(
       makeSpec({ referenceImageUrl: "https://cdn.example.com/product.jpg" }),
