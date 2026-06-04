@@ -111,6 +111,7 @@ export {
   type BusinessFactsStatus,
   type BusinessFactsResult,
 } from "./stores/prisma-business-facts-store.js";
+export { PrismaOperationalStateStore } from "./stores/prisma-operational-state-store.js";
 export { PrismaManagedChannelStore } from "./stores/prisma-managed-channel-store.js";
 export { PrismaCrmDataProvider } from "./stores/prisma-crm-data-provider.js";
 export { PrismaCrmFunnelStore } from "./stores/crm-funnel-store.js";
