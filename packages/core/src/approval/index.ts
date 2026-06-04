@@ -30,3 +30,15 @@ export {
   type SessionManagerLike,
   type RespondToApprovalLogger,
 } from "./respond-to-approval.js";
+export { InMemoryLifecycleStore } from "./in-memory-lifecycle-store.js";
+export {
+  respondToParkedLifecycle,
+  ParkedLifecycleNotFoundError,
+  ParkedLifecycleAlreadyRespondedError,
+  ParkedLifecycleExpiredError,
+  type ExecuteApprovedLike,
+  type RespondToParkedLifecycleDeps,
+  type RespondToParkedLifecycleParams,
+  type RespondToParkedLifecycleResult,
+  type ParkedApprovalState,
+} from "./respond-to-parked-lifecycle.js";
