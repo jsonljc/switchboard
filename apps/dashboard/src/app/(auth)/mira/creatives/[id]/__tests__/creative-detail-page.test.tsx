@@ -171,4 +171,88 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     expect(screen.getByText(/load this draft/i)).toBeTruthy();
     expect(screen.queryByText(/Draft not found/i)).toBeNull();
   });
+
+  describe("performance block (slice-2 measured attribution)", () => {
+    it("renders nothing when the summary has no performance projection", () => {
+      mockCreative.mockReturnValue({
+        data: summary({ draft: { videoUrl: "https://x/p.mp4" } }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.queryByText("Performance")).toBeNull();
+    });
+
+    it("renders 'No delivery yet' for a published-but-parked creative", () => {
+      mockCreative.mockReturnValue({
+        data: summary({
+          draft: { videoUrl: "https://x/p.mp4" },
+          performance: {
+            asOf: "2026-06-04T06:30:00.000Z",
+            delivery: "no_delivery",
+            spend: 0,
+            trueRoas: null,
+            bookedValueCents: 0,
+            bookedCount: 0,
+            metaConversions: 0,
+          },
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.getByText("Performance")).toBeInTheDocument();
+      expect(screen.getByText(/No delivery yet/i)).toBeInTheDocument();
+    });
+
+    it("renders measured numbers WITH the as-of date (never an undated number)", () => {
+      mockCreative.mockReturnValue({
+        data: summary({
+          draft: { videoUrl: "https://x/p.mp4" },
+          performance: {
+            asOf: "2026-06-04T06:30:00.000Z",
+            delivery: "measured",
+            spend: 50,
+            trueRoas: 5,
+            bookedValueCents: 25000,
+            bookedCount: 2,
+            metaConversions: 3,
+          },
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.getByText("Performance")).toBeInTheDocument();
+      expect(screen.getByText(/\$50\.00 spent/)).toBeInTheDocument();
+      expect(screen.getByText(/5\.0x trueROAS/)).toBeInTheDocument();
+      expect(screen.getByText(/\$250\.00 booked \(2\)/)).toBeInTheDocument();
+      expect(screen.getByText(/3 Meta-reported conversions/)).toBeInTheDocument();
+      expect(screen.getByText(/as of Jun 4, 2026/)).toBeInTheDocument();
+    });
+
+    it("renders measured-with-no-bookings honestly (no fabricated 0x)", () => {
+      mockCreative.mockReturnValue({
+        data: summary({
+          draft: { videoUrl: "https://x/p.mp4" },
+          performance: {
+            asOf: "2026-06-04T06:30:00.000Z",
+            delivery: "measured",
+            spend: 12.5,
+            trueRoas: null,
+            bookedValueCents: 0,
+            bookedCount: 0,
+            metaConversions: 1,
+          },
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.getByText(/\$12\.50 spent/)).toBeInTheDocument();
+      expect(screen.getByText(/no booked revenue attributed yet/i)).toBeInTheDocument();
+      expect(screen.queryByText(/0\.0x trueROAS/)).toBeNull();
+      expect(screen.getByText(/as of Jun 4, 2026/)).toBeInTheDocument();
+    });
+  });
 });
