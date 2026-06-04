@@ -105,3 +105,61 @@ describe("COMMON_ESCALATION_TRIGGERS — T1.5 self-disclosed minor", () => {
     expect(matchedIds("I just turned 18 yesterday")).not.toContain("sensitive_keyword_minor");
   });
 });
+
+describe("COMMON_ESCALATION_TRIGGERS - anticoagulant_use (medical red-flag slice 2)", () => {
+  it("fires on blood-thinner class terms alone (qualification-answer flow)", () => {
+    expect(matchedIds("I'm on blood thinners, can I still get filler?")).toContain(
+      "anticoagulant_use",
+    );
+    expect(matchedIds("im on blood thinners can i still get filler")).toContain(
+      "anticoagulant_use",
+    );
+    expect(matchedIds("I take a blood-thinning medication")).toContain("anticoagulant_use");
+    expect(matchedIds("I'm on anticoagulants")).toContain("anticoagulant_use");
+  });
+
+  it("fires on named anticoagulant drugs alone", () => {
+    expect(matchedIds("yes, warfarin")).toContain("anticoagulant_use");
+    expect(matchedIds("I'm on Eliquis for my heart")).toContain("anticoagulant_use");
+    expect(matchedIds("taking Xarelto since my surgery in 2019")).toContain("anticoagulant_use");
+    expect(matchedIds("I take clopidogrel")).toContain("anticoagulant_use");
+  });
+
+  it("fires on aspirin only in therapy phrasing", () => {
+    expect(matchedIds("I'm on aspirin")).toContain("anticoagulant_use");
+    expect(matchedIds("I take low-dose aspirin every morning")).toContain("anticoagulant_use");
+    expect(matchedIds("I was prescribed baby aspirin")).toContain("anticoagulant_use");
+  });
+
+  it("stays silent on casual aspirin mentions", () => {
+    expect(matchedIds("I took an aspirin for my headache yesterday")).not.toContain(
+      "anticoagulant_use",
+    );
+    expect(matchedIds("do you sell aspirin?")).not.toContain("anticoagulant_use");
+  });
+
+  it("suppresses self-negations (incl. curly apostrophe)", () => {
+    expect(matchedIds("I'm not on blood thinners")).not.toContain("anticoagulant_use");
+    expect(matchedIds("I don't take warfarin")).not.toContain("anticoagulant_use");
+    expect(matchedIds("I don’t take blood thinners")).not.toContain("anticoagulant_use");
+    expect(matchedIds("never been on anticoagulants")).not.toContain("anticoagulant_use");
+  });
+
+  it("suppresses third-party attribution", () => {
+    expect(matchedIds("my dad is on warfarin")).not.toContain("anticoagulant_use");
+    expect(matchedIds("my mum takes blood thinners")).not.toContain("anticoagulant_use");
+  });
+
+  it("still fires on a genuine disclosure beside a negated one (per-match)", () => {
+    expect(matchedIds("I'm not on aspirin but I do take warfarin daily")).toContain(
+      "anticoagulant_use",
+    );
+  });
+
+  it("does NOT suppress cessation (recent stop is still a clinician question)", () => {
+    expect(matchedIds("I stopped warfarin last month")).toContain("anticoagulant_use");
+    expect(matchedIds("my doctor took me off blood thinners recently")).toContain(
+      "anticoagulant_use",
+    );
+  });
+});

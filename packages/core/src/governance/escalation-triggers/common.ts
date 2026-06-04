@@ -22,6 +22,32 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
     ],
     negations: [/\b(no|never|no history of)\b[^.!?]*\b(reaction|allergy)\b/i],
   },
+  // Medical red-flag slice 2: the three deterministic gaps verified 2026-06-01.
+  // Calibration: the disclosure alone fires (Alex asks "any medications?" and
+  // the lead answers bare "warfarin"; the conversation supplies the treatment
+  // context). High precision comes from unambiguous terms, not co-occurrence.
+  {
+    id: "anticoagulant_use",
+    category: "anticoagulant_use",
+    patterns: [
+      // Drug-class terms: unambiguous therapy disclosures, fire alone.
+      /\b(?:blood[ -]?thinn(?:er|ers|ing)|anti[ -]?coagulants?|anti[ -]?platelets?)\b/i,
+      // Named anticoagulant/antiplatelet drugs: high-precision, fire alone.
+      /\b(?:warfarin|coumadin|heparin|apixaban|eliquis|rivaroxaban|xarelto|dabigatran|pradaxa|edoxaban|clopidogrel|plavix)\b/i,
+      // Aspirin only in possession/therapy phrasing; a casual one-off mention
+      // ("took an aspirin for my headache") stays silent.
+      /\b(?:on|taking|take|prescribed)\s+(?:daily\s+|low[ -]dose\s+|baby\s+)?aspirin\b/i,
+      /\baspirin\s+(?:daily|every ?day|therapy|regimen)\b/i,
+    ],
+    // Self-negation + third-party family attribution. Deliberately NOT
+    // suppressed: cessation ("stopped/off warfarin"); recent cessation before
+    // a procedure is itself a clinician question (asymmetric with pregnancy's
+    // "no longer pregnant", which is a resolved state).
+    negations: [
+      /\b(?:not|never|don['’]?t|do not|haven['’]?t|am not|isn['’]?t)\b[^.!?]{0,16}\b(?:blood[ -]?thinn\w*|anti[ -]?coagulants?|anti[ -]?platelets?|warfarin|coumadin|heparin|apixaban|eliquis|rivaroxaban|xarelto|dabigatran|pradaxa|edoxaban|clopidogrel|plavix|aspirin)\b/i,
+      /\b(?:my|her|his|their|our)\s+(?:mum|mom|mother|father|dad|sister|brother|aunt|uncle|grand(?:ma|pa|mother|father)|cousin|friend|partner|husband|wife|parent|relative)\b[^.!?]{0,20}\b(?:blood[ -]?thinn\w*|anti[ -]?coagulants?|anti[ -]?platelets?|warfarin|coumadin|heparin|apixaban|eliquis|rivaroxaban|xarelto|dabigatran|pradaxa|edoxaban|clopidogrel|plavix|aspirin)\b/i,
+    ],
+  },
   {
     id: "prior_complaint",
     category: "prior_complaint",
