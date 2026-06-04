@@ -104,6 +104,7 @@ vi.mock("@switchboard/core", () => ({
     clearConsent: vi.fn(),
   })),
   loadRevocationKeywords: vi.fn(() => []),
+  recordGovernanceVerdictMetric: vi.fn(),
   ModelRouter: class ModelRouter {},
 }));
 

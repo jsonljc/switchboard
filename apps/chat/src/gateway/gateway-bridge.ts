@@ -18,6 +18,7 @@ import {
   ConversationLifecycleTracker,
   createConsentService,
   loadRevocationKeywords,
+  recordGovernanceVerdictMetric,
 } from "@switchboard/core";
 import { createAnthropicAdapter } from "@switchboard/core/agent-runtime";
 import {
@@ -135,7 +136,12 @@ export function createGatewayBridge(
   // ---------------------------------------------------------------------------
   const deploymentStore = new PrismaDeploymentStore(prisma);
   const gatewayGovernanceResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
-  const gatewayGovernanceVerdictStore = new PrismaGovernanceVerdictStore(prisma);
+  // onWrite mirrors every persisted verdict into the dual-prom counter
+  // (switchboard_governance_verdicts_total) — the observe-bake read surface.
+  // NOTE: single-callback slot; compose if a second onWrite consumer lands.
+  const gatewayGovernanceVerdictStore = new PrismaGovernanceVerdictStore(prisma, {
+    onWrite: recordGovernanceVerdictMetric,
+  });
   const gatewayPostureCache = new InMemoryGovernancePostureCache();
   const gatewayHandoffStore = new PrismaHandoffStore(prisma);
   // Adapter: GatewayConversationStatusSetter → upsert when context available,
