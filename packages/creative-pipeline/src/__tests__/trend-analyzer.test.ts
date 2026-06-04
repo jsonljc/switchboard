@@ -23,6 +23,63 @@ describe("buildTrendPrompt", () => {
     expect(userMessage).toContain("meta");
     expect(userMessage).toContain("tiktok");
   });
+
+  it("renders neither feed-back block when no data exists (degrade-gracefully)", () => {
+    const { userMessage } = buildTrendPrompt({
+      productDescription: "P",
+      targetAudience: "A",
+      platforms: ["meta"],
+    });
+    expect(userMessage).not.toContain("PAST PERFORMANCE (measured)");
+    expect(userMessage).not.toContain("OPERATOR TASTE");
+  });
+
+  it("renders the measured block from a typed performance history", () => {
+    const { userMessage } = buildTrendPrompt({
+      productDescription: "P",
+      targetAudience: "A",
+      platforms: ["meta"],
+      pastPerformance: {
+        kind: "performance_history",
+        version: 1,
+        generatedAt: "2026-06-04T12:00:00.000Z",
+        topPerformers: [
+          {
+            jobId: "job-1",
+            descriptor: "polished:question",
+            trueRoas: 5,
+            spend: 50,
+            bookedValueCents: 25000,
+            window: { from: "2026-05-05T00:00:00.000Z", to: "2026-06-04T06:30:00.000Z" },
+          },
+          {
+            jobId: "job-2",
+            descriptor: "polished:bold_statement",
+            trueRoas: null,
+            spend: 20,
+            bookedValueCents: 0,
+            window: { from: "2026-05-05T00:00:00.000Z", to: "2026-06-04T06:30:00.000Z" },
+          },
+        ],
+        summary: "2 measured creative(s) on this deployment; top by trueROAS listed.",
+      },
+    });
+    expect(userMessage).toContain("PAST PERFORMANCE (measured)");
+    expect(userMessage).toContain("polished:question: 5.0x trueROAS, $50.00 spent, $250.00 booked");
+    expect(userMessage).toContain("polished:bold_statement: trueROAS unknown");
+    expect(userMessage).toContain("2 measured creative(s)");
+  });
+
+  it("renders the taste block under a clearly subjective heading", () => {
+    const { userMessage } = buildTrendPrompt({
+      productDescription: "P",
+      targetAudience: "A",
+      platforms: ["meta"],
+      tasteContext: ["consistently keeps question hooks in polished mode (4 keeps)"],
+    });
+    expect(userMessage).toContain("OPERATOR TASTE (subjective, from review gestures):");
+    expect(userMessage).toContain("- consistently keeps question hooks in polished mode (4 keeps)");
+  });
 });
 
 describe("runTrendAnalyzer", () => {

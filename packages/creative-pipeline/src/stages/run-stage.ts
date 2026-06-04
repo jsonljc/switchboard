@@ -5,7 +5,7 @@ import {
   ScriptWriterOutput,
   StoryboardOutput,
 } from "@switchboard/schemas";
-import type { VideoProducerOutput } from "@switchboard/schemas";
+import type { VideoProducerOutput, CreativePerformanceHistory } from "@switchboard/schemas";
 import { runTrendAnalyzer } from "./trend-analyzer.js";
 import { runHookGenerator } from "./hook-generator.js";
 import { runScriptWriter } from "./script-writer.js";
@@ -27,6 +27,10 @@ export interface StageInput {
     brandVoice?: string | null;
     references?: string[];
     productImages?: string[];
+    /** Slice-2 measured channel: typed attribution history (spec 3.8). */
+    pastPerformance?: CreativePerformanceHistory | null;
+    /** Slice-2 taste channel: rendered subjective lines from review gestures. */
+    tasteContext?: string[];
   };
   previousOutputs: Record<string, unknown>;
   apiKey: string;
@@ -65,6 +69,8 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
           targetAudience: input.brief.targetAudience,
           platforms: input.brief.platforms,
           references: input.brief.references,
+          pastPerformance: input.brief.pastPerformance,
+          tasteContext: input.brief.tasteContext,
         },
         input.apiKey,
       );
@@ -78,6 +84,8 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
           productDescription: input.brief.productDescription,
           targetAudience: input.brief.targetAudience,
           platforms: input.brief.platforms,
+          pastPerformance: input.brief.pastPerformance,
+          tasteContext: input.brief.tasteContext,
         },
         trendsOutput,
         input.apiKey,

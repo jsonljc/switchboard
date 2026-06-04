@@ -1,10 +1,12 @@
-// packages/core/src/creative-pipeline/creative-job-runner.ts
+// packages/creative-pipeline/src/creative-job-runner.ts
 import { inngestClient } from "./inngest-client.js";
 import { runStage, getNextStage, STAGE_ORDER } from "./stages/run-stage.js";
+import { CreativePerformanceHistorySchema } from "@switchboard/schemas";
 import type { CreativeJob, VideoProducerOutput } from "@switchboard/schemas";
 import { DalleImageGenerator } from "./stages/image-generator.js";
 import type { ImageGenerator } from "./stages/image-generator.js";
 import type { AssetStorageClient } from "./stages/video-producer.js";
+import type { CreativeMemoryProvider } from "./creative-memory.js";
 
 // 24-hour timeout for buyer approval between stages
 const APPROVAL_TIMEOUT = "24h";
@@ -56,6 +58,7 @@ export async function executeCreativePipeline(
   llmConfig: LLMConfig,
   imageConfig?: ImageConfig,
   assetStorage?: AssetStorageClient,
+  creativeMemoryProvider?: CreativeMemoryProvider,
 ): Promise<void> {
   const job = await step.run("load-job", () => jobStore.findById(eventData.jobId));
 
@@ -67,6 +70,30 @@ export async function executeCreativePipeline(
   let imageGenerator: ImageGenerator | undefined;
   if (imageConfig?.openaiApiKey && job.generateReferenceImages) {
     imageGenerator = new DalleImageGenerator(imageConfig.openaiApiKey);
+  }
+
+  // Slice-2 feed-back (spec 3.8). Measured channel: a performance_history row
+  // (written by submit enrichment) parses and threads into the stage brief; a
+  // measured_performance row or legacy payload fails the parse and feeds
+  // nothing (parse-don't-cast). Taste channel: resolved once per pipeline via
+  // the injected provider; a memory read must never fail a render, so errors
+  // degrade to no block.
+  const historyParse = CreativePerformanceHistorySchema.safeParse(job.pastPerformance);
+  const pastPerformance = historyParse.success ? historyParse.data : undefined;
+  let tasteContext: string[] | undefined;
+  if (creativeMemoryProvider) {
+    tasteContext = await step.run("load-taste-context", async () => {
+      try {
+        const lines = await creativeMemoryProvider.getTasteContext(
+          eventData.organizationId,
+          eventData.deploymentId,
+        );
+        return lines.length > 0 ? lines : undefined;
+      } catch (err) {
+        console.warn(`creative taste context unavailable for job ${eventData.jobId}:`, err);
+        return undefined;
+      }
+    });
   }
 
   let stageOutputs: Record<string, unknown> = (job.stageOutputs ?? {}) as Record<string, unknown>;
@@ -83,6 +110,8 @@ export async function executeCreativePipeline(
           brandVoice: job.brandVoice,
           references: job.references,
           productImages: job.productImages,
+          pastPerformance,
+          tasteContext,
         },
         previousOutputs: stageOutputs,
         apiKey: llmConfig.apiKey,
@@ -142,6 +171,7 @@ export function createCreativeJobRunner(
   imageConfig?: ImageConfig,
   assetStorage?: AssetStorageClient,
   onFailure?: (arg: unknown) => Promise<void>,
+  creativeMemoryProvider?: CreativeMemoryProvider,
 ) {
   return inngestClient.createFunction(
     {
@@ -159,6 +189,7 @@ export function createCreativeJobRunner(
         llmConfig,
         imageConfig,
         assetStorage,
+        creativeMemoryProvider,
       );
     },
   );
