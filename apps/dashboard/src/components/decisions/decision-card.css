@@ -151,7 +151,6 @@
 
 .dc-resolved-line {
   font-family: var(--serif);
-  font-style: italic;
   font-size: 18px;
   color: var(--ink-2);
   display: flex;
