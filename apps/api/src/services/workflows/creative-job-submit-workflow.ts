@@ -34,6 +34,26 @@ export function buildCreativeJobSubmitWorkflow(_prisma: unknown): WorkflowHandle
         input: brief as unknown as Record<string, unknown>,
       });
 
+      // Slice-2 measured channel (spec 3.8): when the caller passed no explicit
+      // pastPerformance, aggregate this deployment's attributed history into the
+      // typed performance_history shape the new job carries. Explicit briefs
+      // win; enrichment is best-effort (a brief must never fail because the
+      // history read did); zero measured rows leave it null (no fabrication).
+      let enrichedPastPerformance: Record<string, unknown> | null = brief.pastPerformance ?? null;
+      if (enrichedPastPerformance == null) {
+        try {
+          const published = await jobStore.listPublished(workUnit.organizationId);
+          const { buildPerformanceHistory } = await import("./creative-performance-history.js");
+          const history = buildPerformanceHistory(
+            published.filter((j) => j.deploymentId === input.deploymentId),
+            new Date(),
+          );
+          if (history) enrichedPastPerformance = history as unknown as Record<string, unknown>;
+        } catch (err) {
+          console.warn("creative.job.submit: measured-history enrichment skipped:", err);
+        }
+      }
+
       const jobFields = {
         taskId: task.id,
         organizationId: workUnit.organizationId,
@@ -44,7 +64,7 @@ export function buildCreativeJobSubmitWorkflow(_prisma: unknown): WorkflowHandle
         brandVoice: brief.brandVoice ?? null,
         productImages: brief.productImages,
         references: brief.references,
-        pastPerformance: brief.pastPerformance ?? null,
+        pastPerformance: enrichedPastPerformance,
         generateReferenceImages: brief.generateReferenceImages,
       };
 
