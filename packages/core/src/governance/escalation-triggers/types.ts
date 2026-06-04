@@ -4,6 +4,7 @@ export type EscalationTriggerCategory =
   | "pregnancy_breastfeeding"
   | "prior_adverse_reaction"
   | "anticoagulant_use"
+  | "suspicious_lesion"
   | "prior_complaint"
   | "competitor_negative"
   | "multi_treatment_combo"
@@ -21,6 +22,7 @@ export const REASON_CODE_BY_TRIGGER: Record<EscalationTriggerCategory, Governanc
   pregnancy_breastfeeding: "medical_safety_trigger",
   prior_adverse_reaction: "medical_safety_trigger",
   anticoagulant_use: "medical_safety_trigger",
+  suspicious_lesion: "medical_safety_trigger",
   prior_complaint: "compliance_concern",
   competitor_negative: "compliance_concern",
   multi_treatment_combo: "sensitive_inbound",

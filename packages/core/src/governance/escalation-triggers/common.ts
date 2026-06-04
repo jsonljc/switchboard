@@ -48,6 +48,36 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
       /\b(?:my|her|his|their|our)\s+(?:mum|mom|mother|father|dad|sister|brother|aunt|uncle|grand(?:ma|pa|mother|father)|cousin|friend|partner|husband|wife|parent|relative)\b[^.!?]{0,20}\b(?:blood[ -]?thinn\w*|anti[ -]?coagulants?|anti[ -]?platelets?|warfarin|coumadin|heparin|apixaban|eliquis|rivaroxaban|xarelto|dabigatran|pradaxa|edoxaban|clopidogrel|plavix|aspirin)\b/i,
     ],
   },
+  // The change/concern qualifier is the red flag (evolving lesion = melanoma
+  // warning). A stable lesion or a routine pigmentation/melasma/acne request
+  // is a normal service inquiry and must stay silent.
+  {
+    id: "suspicious_lesion",
+    category: "suspicious_lesion",
+    patterns: [
+      // Lesion noun followed by a change/concern qualifier in the same clause.
+      /\b(?:moles?|spots?|patch(?:es)?|birthmarks?|freckles?|lesions?|growths?|lumps?|bumps?|sores?)\b[^.!?]{0,40}\b(?:chang(?:ing|ed|es)|grow(?:ing|n|s)|bigger|darker|darken(?:ing|ed)|bleed(?:ing|s)?|bled|itch(?:y|ing|es)?|crust(?:y|ing|ed)?|scab(?:by|bing|bed)?|flak(?:y|ing)|painful|hurts?|raised|irregular|asymmetric(?:al)?|uneven|jagged|suspicious|concerning|worrying|weird|strange|odd|newly appeared|won['’]?t (?:go away|heal)|doesn['’]?t (?:go away|heal)|not healing)\b/i,
+      // Qualifier-first order: "a changing/darkening/suspicious mole".
+      /\b(?:chang(?:ing|ed)|grow(?:ing)|darken(?:ing|ed)|darker|bleeding|itchy|crusty|scabby|flaky|painful|irregular|asymmetric(?:al)?|uneven|jagged|suspicious|concerning|worrying|weird|strange|odd)\b[^.!?]{0,24}\b(?:moles?|spots?|patch(?:es)?|birthmarks?|freckles?|lesions?|growths?|lumps?|bumps?|sores?)\b/i,
+      // A NEW mole/lesion/growth (tight adjacency; "new spot" excluded as
+      // routine acne/pigmentation phrasing).
+      /\bnew\s+(?:moles?|lesions?|growths?)\b/i,
+      // Explicit melanoma mention ("skin cancer" already fires via the
+      // medical-condition entry's cancer pattern).
+      /\bmelanomas?\b/i,
+    ],
+    negations: [
+      // Stable/unchanged disclosures: "my mole hasn't changed".
+      /\b(?:hasn['’]?t|haven['’]?t|not|never|no)\b[^.!?]{0,12}\b(?:chang(?:ed|ing)|grow(?:n|ing)|darken(?:ed|ing)|bigger|bleeding|itchy)\b/i,
+      // Routine acne/melasma pigmentation contexts.
+      /\bacne\s+(?:spots?|scars?|marks?|patch(?:es)?)\b/i,
+      /\b(?:spots?|scars?|marks?|patch(?:es)?)\s+(?:from|after|left by)\s+(?:my\s+|a\s+)?(?:acne|breakouts?|pimples?)\b/i,
+      /\bmelasma\b[^.!?]{0,12}\b(?:patch(?:es)?|spots?)\b/i,
+      /\b(?:patch(?:es)?|spots?)\b[^.!?]{0,12}\bmelasma\b/i,
+      // Third-party attribution.
+      /\b(?:my|her|his|their|our)\s+(?:mum|mom|mother|father|dad|sister|brother|aunt|uncle|grand(?:ma|pa|mother|father)|cousin|friend|partner|husband|wife|parent|relative)(?:['’]s)?\b[^.!?]{0,24}\b(?:moles?|spots?|patch(?:es)?|lesions?|growths?|melanomas?|birthmarks?)\b/i,
+    ],
+  },
   {
     id: "prior_complaint",
     category: "prior_complaint",

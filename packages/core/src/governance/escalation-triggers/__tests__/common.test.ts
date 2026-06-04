@@ -163,3 +163,44 @@ describe("COMMON_ESCALATION_TRIGGERS - anticoagulant_use (medical red-flag slice
     );
   });
 });
+
+describe("COMMON_ESCALATION_TRIGGERS - suspicious_lesion (medical red-flag slice 2)", () => {
+  it("fires on lesion noun + change qualifier (both orders)", () => {
+    expect(matchedIds("I have a mole that's been getting darker")).toContain("suspicious_lesion");
+    expect(matchedIds("my mole is changing")).toContain("suspicious_lesion");
+    expect(matchedIds("there's a dark patch that keeps growing")).toContain("suspicious_lesion");
+    expect(matchedIds("a suspicious mole on my cheek")).toContain("suspicious_lesion");
+    expect(matchedIds("I'm worried about a changing mole")).toContain("suspicious_lesion");
+    expect(matchedIds("my mole started bleeding")).toContain("suspicious_lesion");
+    expect(matchedIds("ive got a weird looking mole can you laser it off")).toContain(
+      "suspicious_lesion",
+    );
+  });
+
+  it("fires on a new mole and non-healing sores", () => {
+    expect(matchedIds("a new mole appeared on my arm")).toContain("suspicious_lesion");
+    expect(matchedIds("I have a sore that won't heal")).toContain("suspicious_lesion");
+  });
+
+  it("fires on explicit melanoma worry", () => {
+    expect(matchedIds("could this be melanoma?")).toContain("suspicious_lesion");
+  });
+
+  it("stays silent on routine mole-removal and pigmentation requests", () => {
+    expect(matchedIds("can you remove a mole?")).not.toContain("suspicious_lesion");
+    expect(matchedIds("I want my moles removed")).not.toContain("suspicious_lesion");
+    expect(matchedIds("do you treat dark spots from acne?")).not.toContain("suspicious_lesion");
+    expect(matchedIds("my acne marks are getting darker")).not.toContain("suspicious_lesion");
+    expect(matchedIds("melasma patches on my cheeks")).not.toContain("suspicious_lesion");
+    expect(matchedIds("price for pigmentation removal?")).not.toContain("suspicious_lesion");
+    expect(matchedIds("I have a new spot from a breakout")).not.toContain("suspicious_lesion");
+    // Review pin: "weird" qualifier + pimple context must stay suppressed by the
+    // acne/breakout negation (the negation span overlaps the "weird spot" occurrence).
+    expect(matchedIds("I have a weird spot from a pimple")).not.toContain("suspicious_lesion");
+  });
+
+  it("suppresses stable/unchanged disclosures and third-party lesions", () => {
+    expect(matchedIds("my mole hasn't changed in years")).not.toContain("suspicious_lesion");
+    expect(matchedIds("my mum has a weird mole")).not.toContain("suspicious_lesion");
+  });
+});
