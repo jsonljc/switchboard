@@ -105,6 +105,11 @@ async function main() {
     // exist. If an approval-shaped payload arrives, the gateway intercepts it and
     // getById returns null → the caller receives a NOT_FOUND_MSG and the message is
     // dropped before reaching PlatformIngress.submit() or the LLM.
+    // approvalResponseConfig stays DELIBERATELY unwired here: without a database
+    // there are no orgs, no OperatorChannelBindings, and no real approvals, and
+    // this path's only channel is Telegram, whose outbound approve buttons are
+    // undeliverable anyway (callback_data 64-byte cap). See the chat-approval
+    // bridge spec (2026-06-05), section 5.
     approvalStore: {
       save: async () => {},
       getById: async () => null,
