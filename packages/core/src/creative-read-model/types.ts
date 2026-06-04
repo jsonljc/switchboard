@@ -20,6 +20,22 @@ export interface MiraReviewAction {
   label: "continue_draft" | "review_draft" | "none";
 }
 
+/**
+ * Measured performance projection (slice-2 attribution). Source-labeled:
+ * `metaConversions` is Meta-attributed; `bookedCount`/`bookedValueCents` are
+ * internal conversion records (cents, never pre-normalized). Absent until the
+ * attribution sweep has written a parseable measured_performance row.
+ */
+export interface MiraCreativePerformance {
+  asOf: string;
+  delivery: "no_delivery" | "measured";
+  spend: number;
+  trueRoas: number | null;
+  bookedValueCents: number;
+  bookedCount: number;
+  metaConversions: number;
+}
+
 export interface MiraCreativeJobSummary {
   id: string;
   title: string;
@@ -32,6 +48,8 @@ export interface MiraCreativeJobSummary {
   updatedAt: string;
   /** Phase-2 Keep/Pass review decision. null/undefined = undecided (in the feed). */
   reviewDecision?: "kept" | "passed" | null;
+  /** Slice-2 measured performance; absent until an attribution row parses. */
+  performance?: MiraCreativePerformance;
 }
 
 export interface MiraCreativeCounts {

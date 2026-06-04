@@ -3,6 +3,7 @@ import type { CreativeJob } from "@switchboard/schemas";
 import {
   buildMiraCreativeReadModel,
   buildWeekContext,
+  type MiraCreativeJobSummary,
   type MiraCreativeReadModel,
   type MiraCreativeReadModelReader,
 } from "@switchboard/core";
@@ -36,5 +37,31 @@ export class PrismaMiraCreativeReadModelReader implements MiraCreativeReadModelR
       prevWeekStart: week.prevWeekStart,
       ...(opts.visibleLimit !== undefined ? { visibleLimit: opts.visibleLimit } : {}),
     });
+  }
+
+  /**
+   * Single-job summary for ids outside the feed window: FETCH_CAP most-recent
+   * ages out exactly the published creatives old enough to have earned
+   * something (slice 2). Org-scoped findFirst (cross-org ids resolve null,
+   * route maps that to 404), built through the same mapper as read() so the
+   * summary shape stays identical.
+   */
+  async readOne(
+    orgId: string,
+    id: string,
+    opts: { now: Date; timezone: string },
+  ): Promise<MiraCreativeJobSummary | null> {
+    const row = (await this.prisma.creativeJob.findFirst({
+      where: { id, organizationId: orgId },
+    })) as unknown as CreativeJob | null;
+    if (!row) return null;
+    const week = buildWeekContext(opts.now, opts.timezone);
+    const rm = buildMiraCreativeReadModel([row], {
+      now: opts.now,
+      weekStart: week.weekStart,
+      prevWeekStart: week.prevWeekStart,
+      visibleLimit: 1,
+    });
+    return rm.jobs[0] ?? null;
   }
 }

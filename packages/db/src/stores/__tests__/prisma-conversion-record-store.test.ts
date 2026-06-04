@@ -194,4 +194,51 @@ describe("PrismaConversionRecordStore", () => {
       expect(result.size).toBe(0);
     });
   });
+
+  describe("queryBookedStatsByCampaign", () => {
+    const window = {
+      from: new Date("2026-05-01T00:00:00Z"),
+      to: new Date("2026-06-04T00:00:00Z"),
+    };
+
+    it("aggregates sum AND count over the same value-positive booked predicate", async () => {
+      (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { sourceCampaignId: "camp_1", _sum: { value: 25000 }, _count: { _all: 2 } },
+        { sourceCampaignId: null, _sum: { value: 100 }, _count: { _all: 1 } },
+      ]);
+
+      const out = await store.queryBookedStatsByCampaign({
+        orgId: "org_1",
+        ...window,
+        campaignIds: ["camp_1"],
+      });
+
+      expect(prisma.conversionRecord.groupBy).toHaveBeenCalledWith({
+        by: ["sourceCampaignId"],
+        where: {
+          organizationId: "org_1",
+          type: "booked",
+          value: { gt: 0 },
+          occurredAt: { gte: window.from, lte: window.to },
+          sourceCampaignId: { in: ["camp_1"] },
+        },
+        _sum: { value: true },
+        _count: { _all: true },
+      });
+      expect(out.get("camp_1")).toEqual({ valueCents: 25000, count: 2 });
+      expect(out.size).toBe(1); // null sourceCampaignId row dropped
+    });
+
+    it("omits the campaignIds filter (any non-null campaign) when not provided", async () => {
+      (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      await store.queryBookedStatsByCampaign({ orgId: "org_1", ...window });
+
+      expect(prisma.conversionRecord.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ sourceCampaignId: { not: null } }),
+        }),
+      );
+    });
+  });
 });
