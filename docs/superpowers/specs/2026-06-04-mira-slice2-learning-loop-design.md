@@ -20,9 +20,9 @@ Two legs, per the roadmap:
    performance, where Riley owns promotion (Mira never self-certifies that a creative "worked").
 
 No Mira ad has served yet (pilot is blocked on Meta gates), so attribution lands as plumbing
-proven by TDD against the real interfaces with seeded/mocked insights. Section 9 states exactly
-what flips it live (nothing: the moment an operator activates a parked ad in Ads Manager, the
-sweep starts measuring).
+proven by TDD against the real interfaces with seeded/mocked insights. Section 7 states exactly
+what flips it live: the `CREATIVE_ATTRIBUTION_ENABLED` kill-switch (Riley bake pattern) plus an
+operator activating a parked ad in Ads Manager.
 
 ## 2. Verified current state (grounded against origin/main @ 055a2100, 2026-06-04)
 
@@ -81,7 +81,11 @@ Mirrors `riley-outcome-attribution-dispatch` / `-worker`:
   organizations having at least one `metaCampaignId != null` CreativeJob, then one
   `creative-pipeline/attribution.refresh` event per org. Read-only.
 - `creative-attribution-worker` (event `creative-pipeline/attribution.refresh`): per-org. Loads
-  that org's published jobs, resolves the org `meta-ads` Connection credentials exactly the way
+  that org's published jobs, resolves the org `meta-ads` Connection credentials with a
+  credentials-only resolver (the connection-decrypt pattern: org-scoped findFirst on serviceId
+  "meta-ads", decrypt, extract accessToken/accountId; NOT `assertPublishable`, which is
+  publish-specific and fails on missing page-id / kept-status, neither of which attribution
+  needs), re-resolved fresh per invocation the way
   `creative-publish-function.ts` does (decrypt at run time, never serialized into step state),
   makes the single insights call, the booked aggregates, computes one `PastPerformance` object
   per job, persists via the new org-scoped setter.
@@ -97,8 +101,9 @@ riskCategory: "low", alert: false, emitEvent: false }`. This DIVERGES from the R
   audit record is unconditional).
 - Kill-switch, mirroring the Riley bake pattern (`bootstrap/inngest.ts:820-821,846`):
   `CREATIVE_ATTRIBUTION_ENABLED === "true"` read per invocation; default off, the worker
-  short-circuits before any Meta call or DB write. New env var: allowlist +
-  `.env.example` in the same PR.
+  short-circuits before any Meta call or DB write. New env var:
+  `scripts/env-allowlist.local-readiness.json` (`required_in_env_example`, where
+  `RILEY_OUTCOME_ATTRIBUTION_ENABLED` lives) + `.env.example` in the same PR.
 - Missing credentials, no published jobs, or no insights rows are graceful no-ops, not failures.
 
 **Rejected: one serial cron over all orgs** (the weekly-audit shape): no per-org failure
@@ -116,6 +121,7 @@ New in `packages/schemas/src/creative-job.ts` (L1):
 
 ```ts
 export const CreativePastPerformanceSchema = z.object({
+  kind: z.literal("measured_performance"), // discriminant vs CreativePerformanceHistorySchema (3.8); the two shapes share one column and must NEVER cross-validate
   version: z.literal(1),
   asOf: z.string(), // ISO timestamp of the sweep
   window: z.object({ from: z.string(), to: z.string(), days: z.number().int() }),
@@ -135,7 +141,9 @@ export const CreativePastPerformanceSchema = z.object({
     cpm: z.number(),
   }),
   booked: z.object({
-    // internal source of truth
+    // internal source of truth; BOTH fields aggregate over the SAME predicate
+    // (type "booked" AND value > 0), matching queryBookedValueCentsByCampaign,
+    // so the count can never be satisfied by zero-value bookings the sum excludes
     valueCents: z.number().int(), // CENTS, never pre-normalized
     count: z.number().int(),
   }),
@@ -157,12 +165,16 @@ Rules:
   when `booked.count === 0`: absence of attributed records is not proof the creative earned
   zero (conversions can exist unattributed). `booked.valueCents` itself stays a non-negative
   int (0 when no records). Cents convert to major units ONLY inside that function.
-- EVERY published job gets a `pastPerformance` row on every sweep. Meta omits zero-delivery
-  campaigns from insights responses, so `delivery` derives from the ABSENCE of the campaign's
-  insight row (left-join semantics): absent row means a zeroed `meta` block and
-  `delivery: "no_delivery"`; a present row with activity means `"measured"`. `no_delivery` is
-  the expected state for every parked ad until an operator activates it in Ads Manager; writing
-  it is honest and makes the cockpit story true ("published, not yet delivering").
+- EVERY published job gets a `pastPerformance` row on every sweep, with ONE exception. Meta
+  omits zero-delivery campaigns from insights responses, so `delivery` derives from the ABSENCE
+  of the campaign's insight row (left-join semantics): absent row means a zeroed `meta` block
+  and `delivery: "no_delivery"`; a present row with activity means `"measured"`. `no_delivery`
+  is the expected state for every parked ad until an operator activates it in Ads Manager;
+  writing it is honest and makes the cockpit story true ("published, not yet delivering").
+  The exception is a NO-DOWNGRADE rule: an absent insight row also occurs when an operator
+  DELETES a formerly-delivering campaign in Ads Manager, and overwriting a prior `measured` row
+  with zeros would erase earned history. The sweep therefore never replaces an existing
+  `measured` row with a `no_delivery` row; the prior snapshot stays, its `asOf` honestly aging.
 - Window: from the earliest published job's `createdAt` (clamped to the last 90 days) to now, one
   window per org so the insights call stays single. Pilot-correct; the clamp is documented and
   revisited when any creative has more than 90 days of delivery history. At the Meta boundary
@@ -228,11 +240,18 @@ available today is the creative's mode and leading hook archetype:
   leading hook = `stageOutputs.scripts.scripts[0].hookRef` resolved against
   `stageOutputs.hooks.hooks[]`; fallback chain `topCombos[0].hookRef`, then `hooks[0]`; if no hook
   stage output exists (e.g. UGC mode v1), the hookType segment becomes the literal `none`
-  (`taste:kept:ugc:none`). The assembled video is a composite of all scripts; the LEADING hook is
+  (`taste:kept_ugc_none`). The assembled video is a composite of all scripts; the LEADING hook is
   the one that opens the video, which is the gesture's strongest signal. Documented limitation,
   acceptable for v1.
-- **Content** (human-readable, for the memory surfaces and future prompt rendering):
-  `Operator kept a polished creative with a question hook ("<hook text, truncated>")`.
+- **Content is a PURE FUNCTION of the bucket**, never of the individual job:
+  `Operator kept polished creatives with question-style hooks` (bucket-level statement, no
+  per-job hook text). This is load-bearing, not cosmetic: the DB unique constraint is
+  `(organizationId, deploymentId, category, CONTENT)`, while the sweep dedups by canonicalKey.
+  With per-job text in content, two overlapping runs observing different jobs in the same bucket
+  would create two different-content rows for one canonicalKey with NO unique violation,
+  silently splitting `sourceCount` so the 3-source surfacing threshold might never trip.
+  Deterministic content makes content equivalent to the bucket, so the constraint enforces
+  one row per bucket and a concurrent duplicate create surfaces as a catchable unique violation.
 - **Confidence:** the standard curve. First observation creates at 0.5; each repeat observation of
   the same canonicalKey goes through
   `incrementConfidence(orgId, id, computeConfidenceScore(sourceCount + 1, false))` (the second
@@ -256,15 +275,18 @@ for each job (org-scoped writes; per-job try/catch so one bad job skips, never a
   observedDecidedAt = job.reviewDecidedAt        // capture BEFORE any write
   descriptor = extractCreativeDescriptor(stageOutputs, mode)
   upsert memory on the job's deploymentId:
-    existing = findByCategoryAndCanonicalKey(org, deployment, "taste", key)
-    existing
-      ? incrementConfidence(org, existing.id, computeConfidenceScore(existing.sourceCount + 1, false))
-      : create({category: "taste", canonicalKey: key, confidence: computeConfidenceScore(1, false)})
+    rows = findByCategoryAndCanonicalKey(org, deployment, "taste", key)   // findMany: an ARRAY
+    bucket = rows[0]   // deterministic content (3.5) makes >1 row impossible on the steady
+                       // state; defensively pick the highest-sourceCount row if ever plural
+    bucket
+      ? incrementConfidence(org, bucket.id, computeConfidenceScore(bucket.sourceCount + 1, false))
+      : create({category: "taste", canonicalKey: key, content: bucketContent(key),
+                confidence: computeConfidenceScore(1, false)})
     (respect the 500-entry cap exactly like compounding-service: countByDeployment +
-     findEvictionCandidate, evict only if the newcomer beats the candidate. The DB unique
-     constraint is on (org, deployment, category, CONTENT), not canonicalKey: a concurrent
-     duplicate create surfaces as a unique violation, which the sweep catches and resolves by
-     re-finding the bucket and incrementing instead.)
+     findEvictionCandidate, evict only if the newcomer beats the candidate. Because content is a
+     pure function of the bucket, the (org, deployment, category, content) unique constraint IS
+     a per-bucket constraint: a concurrent duplicate create throws a unique violation (P2002),
+     which the sweep catches, re-finds the bucket, and increments instead.)
   setTasteCapturedAt(org, job.id, observedDecidedAt)   // the idempotency watermark
 ```
 
@@ -304,16 +326,25 @@ Why a sweep:
 
 **Design (binding for the future PR):**
 
-- **Writer location:** Riley-owned code only. The promotion check runs inside the existing
-  `riley-outcome-attribution-worker` per-org pass (Riley's cron already owns outcome attribution).
-  Mira-side code never writes `revenue_proven`; the spec-level invariant is that the only call
-  site of a `revenue_proven` create/increment lives in Riley-owned modules, with a test pinning
-  it.
+- **Writer location:** Riley-owned code only. The promotion check rides the
+  `riley-outcome-attribution` per-org cron pass, but NOT as a drop-in to the core orchestrator:
+  `runRileyOutcomeAttribution` (`packages/core`, Layer 3) cannot import db stores, so promotion
+  lands as a new injected seam wired in the Layer-5 cron wrapper
+  (`apps/api/src/services/cron/riley-outcome-attribution.ts`), receiving the creative-job and
+  deployment-memory store interfaces by injection. Mira-side code never writes `revenue_proven`.
+  **Enforcement is a test, not a convention:** the promotion PR ships a source-scanning test
+  (mirroring `apps/api/src/__tests__/ingress-boundary.test.ts`) asserting that `"revenue_proven"`
+  appears as a create/incrementConfidence category argument ONLY within the named Riley-owned
+  promotion module path; any other call site fails the suite.
 - **Promotion criteria (evidence floors, all required):** the creative's `pastPerformance` has
   `delivery: "measured"`, `meta.spend >= 50` (USD major units), `booked.count >= 2`, and
   `trueRoas >= 1.5`, AND Riley's account substrate does not abstain (`measurementTrusted` true and
   signal health not red, read from the same RevenueState producers the audit uses). Floors are
-  constants reviewed when the first real cohort exists.
+  constants reviewed when the first real cohort exists. Two floor caveats the promotion PR must
+  honor: (a) `trueRoas` is WINDOWED (the 90-day clamp, 3.3), so a long-running winner's ratio is
+  computed on truncated history; the floor applies to the windowed value knowingly. (b)
+  `booked.count` counts only value-positive booked records (3.3), so the count floor cannot be
+  satisfied by zero-value bookings while trueRoas stays null.
 - **canonicalKey:** `revenue_proven:{mode}_{hookType}` (single-colon grammar, same descriptor
   vocabulary as taste, WITHOUT polarity: only wins are promoted; losses are Riley recommendation
   territory, not memory).
@@ -340,8 +371,37 @@ Two consumer legs, one per channel, never conflated:
 it; the concept-draft workflow is draft-only and fires no pipeline) enriches at job creation:
 when `brief.pastPerformance` is null, aggregate the deployment's attributed history (top
 performing measured creatives by trueRoas, capped at 3, plus a one-line summary) into the typed
-shape's sibling `CreativePerformanceHistorySchema` and persist it as the new job's
-`pastPerformance`. The runner then passes `job.pastPerformance` into the stage brief
+shape's sibling and persist it as the new job's `pastPerformance`:
+
+```ts
+export const CreativePerformanceHistorySchema = z.object({
+  kind: z.literal("performance_history"), // discriminant: a history row must FAIL
+  // CreativePastPerformanceSchema.safeParse and vice versa (kind literals are disjoint);
+  // a test asserts the mutual rejection in both directions
+  version: z.literal(1),
+  generatedAt: z.string(),
+  topPerformers: z
+    .array(
+      z.object({
+        jobId: z.string(),
+        descriptor: z.string(), // "polished:question" vocabulary from 3.5
+        trueRoas: z.number().nullable(),
+        spend: z.number(),
+        bookedValueCents: z.number().int(),
+        window: z.object({ from: z.string(), to: z.string() }),
+      }),
+    )
+    .max(3),
+  summary: z.string(),
+});
+```
+
+The two shapes share one column (`CreativeJob.pastPerformance`): published jobs carry
+`measured_performance` rows written by the sweep; enriched NEW jobs carry `performance_history`
+rows written at submit. Every reader parses with the schema it expects and projects nothing on
+failure, so the disjoint `kind` literals make cross-contamination structurally impossible
+rather than probabilistically unlikely. The runner then passes `job.pastPerformance` into the
+stage brief
 (`creative-job-runner.ts` brief assembly) and `buildTrendPrompt` / hook-generator render a
 "PAST PERFORMANCE (measured)" block when present. Callers that already pass explicit
 `pastPerformance` win over enrichment.
@@ -363,14 +423,21 @@ them into one structure.
 
 `MiraCreativeJobSummary` gains an optional `performance` projection (asOf, delivery, spend,
 trueRoas, bookedValueCents, conversions source-labeled), populated by parsing
-`CreativeJob.pastPerformance` with the typed schema (parse failures project nothing). Surfaced on
-the detail projection (`GET /agents/mira/creatives/:id`) and rendered in the existing /mira
-detail surface as a compact "Performance" block ("No delivery yet" for `no_delivery`). The feed
-stays light. Known bound: the detail route resolves ids inside the read-model fetch window
-(FEED_WINDOW/FETCH_CAP = 200 most recent jobs), so a published job older than the window 404s
-and shows no block; acceptable at pilot scale, inherited from M1, documented here. This is the
-"answerable" leg: the operator can see what a published creative earned without leaving the
-desk.
+`CreativeJob.pastPerformance` with the typed schema (parse failures, including a NEW job's
+`performance_history` row, project nothing). Surfaced on the detail projection
+(`GET /agents/mira/creatives/:id`) and rendered in the existing /mira detail surface as a
+compact "Performance" block. Two rendering rules are part of the contract: `no_delivery`
+renders "No delivery yet", and a `measured` block ALWAYS renders its `asOf` date ("as of
+<date>"), because the numbers freeze when the kill-switch is off or a campaign is deleted; an
+undated number would read as live truth.
+
+The detail route resolves ids inside the read-model fetch window (FEED_WINDOW/FETCH_CAP = 200
+most recent jobs), which structurally ages out exactly the published creatives old enough to
+have earned something. PR-A therefore adds a published-job fallback: when the id is not in the
+window, the route does one org-scoped `findById` and, if the job exists for that org, builds the
+single-job summary through the same mapper (cross-org ids stay 404). This keeps the
+"answerable" leg honest where it matters most: the operator can see what any published creative
+earned without leaving the desk.
 
 ## 4. PR plan (each producer ships with its live consumer)
 
@@ -389,10 +456,14 @@ desk.
   (kill-switch, default off; allowlist + `.env.example` in the same PR). No governance change
   (no new intents).
 - Tests: worker unit tests with mocked step tools + mocked ads client (real interfaces);
+  kill-switch disabled short-circuits (returns skipped, zero Meta calls, zero DB writes);
   store tests mirroring `prisma-workflow-store.test.ts` mocked-Prisma style; cents/major boundary
-  test (trueRoas from cents fixtures); no_delivery classification; idempotent re-sweep
-  (overwrite, not append); org isolation (cross-org rows never touched); read-model projection
-  parse-failure tolerance.
+  test (trueRoas from cents fixtures); `booked.count === 0` yields trueRoas null, never 0;
+  no_delivery classification from an ABSENT insight row; no-downgrade (a prior `measured` row
+  survives a sweep whose insight row is absent); idempotent re-sweep (overwrite, not append);
+  org isolation (cross-org rows never touched); read-model projection parse-failure tolerance,
+  including a `performance_history` row projecting nothing; detail-route published-job fallback
+  (in-window, out-of-window found, cross-org 404).
 
 **PR-B: `feat(api): taste memory from Keep/Pass + brief feed-back loop`**
 
@@ -405,11 +476,15 @@ desk.
 - L5: `creative-taste-sweep` cron (dead-lettered) writing taste memories with cap/eviction
   semantics; submit-workflow enrichment producing measured history for new jobs; provider
   implementation injected from bootstrap.
-- Tests: sweep idempotency via watermark; re-decision and un-keep semantics; descriptor fallback
-  chain; cap eviction parity with compounding-service; enrichment aggregation (skips unparseable
-  rows, caps at 3, explicit-brief wins); prompt rendering includes the blocks only when data
-  exists; the cross-deployment regression test from section 3.4; conversation-extractor prompt
-  unchanged.
+- Tests: sweep idempotency via watermark, including the strict-equality boundary
+  (`reviewDecidedAt == tasteCapturedAt` skips); re-decision and un-keep semantics; descriptor
+  fallback chain; deterministic bucket content (same bucket, different jobs, ONE row) and the
+  unique-violation (P2002) catch path re-finding then incrementing; cap eviction parity with
+  compounding-service; mutual schema rejection (a `performance_history` row fails
+  `CreativePastPerformanceSchema.safeParse` and vice versa); enrichment aggregation (skips
+  unparseable rows, caps at 3, explicit-brief wins); prompt rendering includes the blocks only
+  when data exists; the cross-deployment regression test from section 3.4;
+  conversation-extractor prompt unchanged.
 
 Sequencing: PR-A merges first (PR-B's enrichment aggregates PR-A's rows; PR-B degrades to
 no-blocks when zero attributed rows exist, so it is not hard-blocked, but review is cleaner in
@@ -438,7 +513,7 @@ this order). Both PRs are focused branches off main, not a stacked pair.
 | New enum values swallowed by downstream binaries (the #860 class)                                  | Consumer sweep done (3.4); regression tests in PR-B; extractor prompt pinned unchanged                                                                                              |
 | Insights call rate-limit contention with Riley's crons (shared 60s client self-limit per instance) | Separate client instances per function run (the client is constructed per run, limit is per-instance); daily cadence; one call per org                                              |
 | Parked ads produce all-zero metrics forever if never activated                                     | `delivery: "no_delivery"` is a first-class honest state surfaced in the cockpit, not an error                                                                                       |
-| Taste sweep writes on a deployment at the 500-entry memory cap could evict conversation facts      | Taste uses the same cap-admission policy as compounding-service (evict only when the newcomer beats the lowest-confidence candidate); at most 12 taste buckets exist per deployment |
+| Taste sweep writes on a deployment at the 500-entry memory cap could evict conversation facts      | Taste uses the same cap-admission policy as compounding-service (evict only when the newcomer beats the lowest-confidence candidate); at most 16 taste buckets exist per deployment |
 | `pastPerformance` rows written by older sweeps with a future schema v2                             | `version` literal + parse-do-not-cast at every reader; unparseable rows project nothing                                                                                             |
 
 ## 7. What flips it live
@@ -452,6 +527,17 @@ Two switches, both explicit:
 2. The day an operator activates a parked Mira ad in Ads Manager (the human-gated step outside
    this system), the next daily run records real delivery, `delivery` flips to `measured`, the
    detail block shows earned dollars and trueROAS, and enrichment starts citing it.
+
+One precondition on the BOOKED side, stated so nobody mistakes silence for failure: internal
+booked attribution (`booked.*`, trueRoas, and therefore the 3.7 promotion floors) flows only
+when conversions carry `ConversionRecord.sourceCampaignId`, which today is populated by the
+lead-intake path (CTWA / instant-form, `meta-lead-record-inquiry-workflow.ts`). The published
+draft ships with a placeholder link the operator finalizes in Ads Manager; if the finalized
+destination is not one the lead-intake path covers, the creative will read
+`delivery: "measured"` with Meta-side conversions but a permanently empty booked leg (trueRoas
+null). That is the dual-source design being honest, not a bug, but the pilot runbook must say:
+point the activated ad at a conversion-attributed destination, or revenue-proven promotion can
+never trigger for it.
 
 The Riley promotion PR (3.7) is the only deferred build, with its trigger defined.
 
