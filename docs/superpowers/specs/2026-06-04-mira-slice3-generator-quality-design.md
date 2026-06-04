@@ -83,8 +83,12 @@ aesthetic correlation under 0.35): frame-QA gates whether the video is technical
 whether it is creatively good. The QA prompt is pinned to:
 
 - **Artifact flags** from a bounded vocabulary: `face_drift`, `product_warp`, `hand_warp` (the
-  existing critical set) plus `garbled_text`, `broken_frame`, `anatomical_error`. Anything else
-  the model wants to flag goes into a free-text notes field that gates nothing.
+  existing critical set) plus `garbled_text`, `broken_frame`, `anatomical_error`. The three new
+  flags JOIN `DEFAULT_QA_THRESHOLDS.criticalArtifacts` (a config-list extension; the
+  `computeDecision` LOGIC is unchanged), because a broken frame or garbled anatomy is exactly
+  the objective integrity breach the fail gate exists for; without the config extension the new
+  vocabulary would set flags that gate nothing. Anything else the model wants to flag goes into
+  a free-text notes field that gates nothing.
 - **Presence checks**: a human subject is visible when the format expects one (`talking_head`);
   legible overlay text matches the expected overlay when one was requested (`ocrAccuracy`,
   populated only when expected text is provided; otherwise left undefined and the threshold
@@ -138,10 +142,13 @@ evaluator with no consumer would be built-but-unwired):
    returns success on first generation. With a real evaluator: a `fail` decision (critical
    artifact / hard-check breach) does NOT return; it records the attempt in `qaHistory` and
    continues the existing retry/fallback loop (same bounds: `maxAttempts` per provider,
-   `maxProviderFallbacks`). If all attempts exhaust with only failing assets, persist the LAST
-   asset with `approvalState: "rejected"` (write-once-then-enrich preserved; nothing silently
-   dropped) AND record a `failedSpecs` entry with reason `qa_failed`. `review` and `pass`
-   verdicts persist and return as today.
+   `maxProviderFallbacks`). Persistence is pinned per-attempt: EVERY generated attempt persists
+   its own AssetRecord row via `upsertByKey` (the store's unique axis is already
+   `(specId, attemptNumber, provider)`, `prisma-asset-record-store.ts:52`), failing attempts
+   with `approvalState: "rejected"`; nothing is silently dropped. The phase OUTPUT's `assets`
+   array carries one FINAL asset per spec (the returned one: the first `pass`/`review`, or the
+   last `rejected` when all attempts exhaust, which also records a `failedSpecs` entry with
+   reason `qa_failed`). `review` and `pass` verdicts persist and return as today.
 2. **Attempt-accurate budget accounting.** Each `generate` attempt (not each persisted asset)
    accrues the provider's estimated per-clip cost into the production budget accumulator, so
    `totalJobBudget` actually bounds worst-case retry spend. (Today only persisted assets count,
@@ -153,12 +160,17 @@ evaluator with no consumer would be built-but-unwired):
    defensively from the persisted `qaMetrics`), and the /mira detail surface renders one line:
    "Frame QA: passed (evaluated)" / "Frame QA: needs your eyes" / nothing when absent. Taste
    stays the human's job; the line is labeled as technical QA.
-4. **All-rejected jobs read as failed, not reviewable.** A completed UGC job whose production
-   assets are ALL `rejected` maps to status `failed` in the status-mapper (rule guarded on the
-   production output existing; assets parsed defensively), so it never enters the review feed
-   as a clean draft; the detail page still shows the fallback asset and the QA line for
-   transparency. Such a job also gets no `durableAssetUrl` (3.3e takes the first non-rejected
-   asset), so even a manual Keep leaves publish loud-blocked: designed, stated behavior.
+4. **All-rejected jobs read as failed, not reviewable.** A UGC job whose production output
+   exists and whose final assets are ALL `rejected` maps to status `failed` in the
+   status-mapper (assets parsed defensively; the rule sits with the existing failure rules, so
+   `failed` wins over a later timeout-stop). This INCLUDES a job still waiting at the
+   production gate: the production-to-delivery approve is intentionally pre-empted, because an
+   all-rejected batch has nothing worth advancing (the read model says `canContinue: false`;
+   the governed route would still accept a raw-API approve, which harmlessly resumes into the
+   no-op delivery phase and the job reads `failed` either way). The detail page still shows the
+   fallback asset and the QA line for transparency. Such a job also gets no `durableAssetUrl`
+   (3.3f takes the first non-rejected asset), so even a manual Keep leaves publish loud-blocked:
+   designed, stated behavior.
 
 **Cost and model.** One vision call per generated asset (8 frames, maxTokens small), roughly
 cents per evaluation vs dollars per render. Model: the existing `DEFAULT_MODEL` in
@@ -263,9 +275,14 @@ governance signal must not disagree with it from day one (PR-4 then only adds th
 constant plus a parity test).
 
 `computeRenderSpend` becomes mode-aware, and the UGC leg is gated on the EXACT spend-commit
-approve: spend attaches only when `job.ugcPhase === "production"` (the runner persists the
-NEXT phase before each wait, so `ugcPhase === "production"` uniquely identifies "the operator
-is approving INTO production"). Deriving from spec presence alone would be wrong twice over:
+approve: spend attaches only when `job.ugcPhase === "production"` AND `ugcFailure == null` AND
+`stoppedAt == null` (the runner persists the NEXT phase before each wait, so
+`ugcPhase === "production"` identifies "the operator is approving INTO production"; the two
+extra conditions exclude the other states that carry the same phase value: a job that FAILED
+at production, `failUgc` persists the failed phase itself, and a job stopped while waiting at
+the scripting gate. Without them, a raw-API approve on such a job would attach `spendAmount`
+and could falsely park before the workflow guard rejects it). Deriving from spec presence
+alone would be wrong twice over:
 before scripting completes there are no specs (null, fine), but AFTER production runs the specs
 are still present while the job waits at the production gate (`ugcPhase === "delivery"`), and
 attaching `spendAmount` there would park the operator for money ALREADY spent (a false park
@@ -282,8 +299,10 @@ NO spendAmount).
 Note on bounds honesty: the governance estimate is the 1x expected cost (same epistemics as the
 polished estimate, which also models zero retries). The worst-case retry spend is bounded
 inside production by the attempt-accurate budget accumulator from 3.1 against
-`ugcConfig.budget.totalJobBudget`. The spec records this division: governance parks the expected
-spend; the job budget caps the tail.
+`ugcConfig.budget.totalJobBudget`. An Inngest replay that re-runs the production step re-spends
+against that same budget, never against governance (the park already happened at the scripting
+gate); that replay cost is the pre-existing step-granularity contract from 3.1. The spec
+records this division: governance parks the expected spend; the job budget caps the tail.
 
 **(c) The guard.** `creative-job-decision-workflow`'s not-awaiting check becomes mode-aware: a
 UGC job is not awaiting approval when `ugcPhase === "complete"`, `stoppedAt` is set, OR
@@ -291,7 +310,9 @@ UGC job is not awaiting approval when `ugcPhase === "complete"`, `stoppedAt` is 
 `failUgc` sets `ugcFailure` + `ugcPhase` but never `stoppedAt`, so without the third condition
 an approve on a FAILED job passes the guard, emits an event no wait is listening for, and
 returns a misleading `approved` success. The Mira UI never offers it (`failed` status maps to
-`canContinue: false`) but the raw governed route would accept it.
+`canContinue: false`) but the raw governed route would accept it. A side effect, intentional:
+STOP on a failed job is also rejected (the job is already terminal; the runner returned after
+emitting `ugc.failed`, there is no wait to resolve and nothing `stoppedAt` would change).
 
 **(d) The submit workflow constructs a VALID `UgcConfig`.** Today it stores the RAW brief as
 `ugcConfig` (`ugcConfig: brief`, `creative-job-submit-workflow.ts:73-76`), while the runner
@@ -299,9 +320,12 @@ reads `ugcConfig.brief`: always undefined, so every phase would run on an EMPTY 
 (productDescription "", platforms []). The workflow's ugc branch builds and
 `UgcConfigSchema.parse`-validates the intended shape:
 `{ brief: { ...rawBrief, ugcFormat: "talking_head", creatorPoolIds: [] }, budget: undefined,
-retryConfig: undefined }` (runner defaults then apply: budget 50, retries 3/2). `ugcFormat` is
-a v1 constant at this single construction site; surfacing it as an operator choice is a named
-follow-on once a second format earns its place. A regression test pins that the brief the
+retryConfig: undefined }`. Defaults, stated precisely: the runner reads
+`ugcConfig.budget.totalJobBudget ?? 50` (a real config-with-fallback), but `retryConfig` is
+HARDCODED in the runner (`{maxAttempts: 3, maxProviderFallbacks: 2}`; `ugcConfig.retryConfig`
+is never read today, so setting it changes nothing until a later change wires it). `ugcFormat`
+is a v1 constant at this single construction site; surfacing it as an operator choice is a
+named follow-on once a second format earns its place. A regression test pins that the brief the
 PLANNING phase actually receives carries the submitted productDescription (the empty-brief bug
 class).
 
@@ -314,7 +338,13 @@ class).
   ElevenLabs voice id the pipeline already uses. Kling t2v consumes no identity fields, so a
   synthetic stock creator is safe by construction; HeyGen (3.5) requires an explicit
   `identityRefIds` entry the seeded creator does not have, so avatar routing cannot pick it up
-  accidentally.
+  accidentally. Honest scope on WHO gets this: `seedMiraCreativeDeployment` runs only for
+  `org_dev` today; real-pilot-org provisioning is the documented pending workstream
+  (`creative-governance.ts:18-24`: `seedMiraPilotOrgs` only flips enablement, and until the
+  per-org install runs, `creative.job.*` default-denies anyway). The creator joins the SAME
+  per-org install function, so when that workstream wires real-org provisioning, governance,
+  spend posture, and the creator arrive together. This spec does NOT claim pilot-org UGC
+  reachability; it makes the install function complete.
 - `generateDirection` stops throwing on empty creator arrays: `pickFrom` falls back to neutral
   constants (environment "bright clinic interior", hair "natural", wardrobe selection empty)
   instead of crashing the scripting phase. The PCD backfill's placeholder creator stops being a
@@ -330,11 +360,15 @@ bootstrap). The wiring is enumerated because the names collide: `UgcPipelineDeps
 threaded `preloadContext` to context to `ProductionDeps`, and the bootstrap UGC runner deps
 block passes the SAME `buildCreativeAssetStorage(app.log)` instance the polished runner already
 receives (`bootstrap/inngest.ts:936` vs the ugc block at `:948-966`, which today lacks it).
-After QA, the already-downloaded local file (3.1 returns it) uploads to the
-deterministic key `creative-assets/<jobId>/ugc-<specId>.mp4` (specId is created at scripting
-and stable across production retries, so a retry overwrites idempotently);
-`outputs.videoUrl` becomes the durable URL (provider URL kept as `outputs.sourceUrl`, additive
-optional field on `AssetOutputsSchema`). After the production phase, the runner sets
+Upload happens ONLY for the FINAL returned asset per spec (after the QA retry loop resolves),
+to the deterministic key `creative-assets/<jobId>/ugc-<specId>.mp4` (specId is created at
+scripting, memoized by the scripting step, and stable across production retries, so a re-run
+overwrites idempotently). Intermediate failed-QA attempts keep their PROVIDER URL only: with
+one storage key per spec, uploading every attempt would let a later attempt's bytes silently
+replace what an earlier persisted `rejected` row points at (the AssetRecord axis is
+per-attempt; the storage key is per-spec; only the final asset may own the key). For the final
+asset, `outputs.videoUrl` becomes the durable URL (provider URL kept as `outputs.sourceUrl`,
+additive optional field on `AssetOutputsSchema`). After the production phase, the runner sets
 `CreativeJob.durableAssetUrl` to the first non-rejected asset's durable URL via the existing
 `setDurableAsset` store method (mirroring the polished `save-durable-asset` step; the runner's
 `UgcJobStore` interface gains the method), making a kept UGC creative publishable through the
@@ -363,29 +397,39 @@ A separate, smaller PR once the engine PR is merged:
   format toggle (product copy: "Polished" / "Real-talk", default Polished), posted as `mode`.
 - **The pre-video gates get a navigation path.** The detail page ALREADY renders Continue/Stop
   for any `awaiting_review` job (read-model `reviewAction.canContinue`, video not required);
-  what is missing is the way there. The in-production tray items become links to
-  `/mira/creatives/<id>` with a "waiting for your go-ahead" state when the job is
-  `awaiting_review`, and the detail page gets a no-video header treatment (phase progress +
+  what is missing is the way there, and mode-honest labels once there. Three concrete pieces:
+  (1) `MiraCreativeJobSummary` gains `ugcPhase` (`build-read-model.ts` exposes only
+  `stage: job.currentStage`, which for UGC is frozen at the "trends" column default, so the
+  tray would caption every UGC job "Writing concept" forever); the tray and detail derive
+  their progress label from `ugcPhase` when `mode === "ugc"`. (2) The in-production tray items
+  become links to `/mira/creatives/<id>` with a "waiting for your go-ahead" state when the job
+  is `awaiting_review`; the detail page gets a no-video header treatment (phase progress +
   what Mira finished) plus the UGC cost-confirm rendering (single estimate, tier picker
-  suppressed). This closes the same gap for POLISHED briefs (their four pre-video stage gates
-  have the identical tray-invisible problem today, masked by demo seeds). Operator cost is
-  stated honestly: a trust-0 UGC job takes four approve round-trips (planning, scripting which
-  carries the spend park, production, delivery), the same weight as polished's four stage
-  gates; threshold tuning is a named follow-on, not smuggled into this slice (raising trust
-  would also silently bypass the spend gate, which rides the scripting approve).
-- **UGC taste vocabulary.** Three coupled edit points, enumerated because the key is built in
-  the sweep, not the descriptor: (1) `extractCreativeDescriptor` returns
-  `{ mode, hookType, structureId? }`, reading the leading spec's `structureId` from
-  ugc outputs passed by the caller; (2) the taste sweep passes mode-correct outputs
-  (`job.ugcPhaseOutputs` for ugc) and builds the third canonicalKey segment from
+  suppressed). (3) The detail status line gains a `failed` branch ("This draft could not be
+  completed"): today `failed` falls through to "Still drafting.", which would misread forever
+  on an all-rejected UGC job opened via the readOne fallback. This closes the same navigation
+  gap for POLISHED briefs (their four pre-video stage gates have the identical tray-invisible
+  problem today, masked by demo seeds). Operator cost is stated honestly: a trust-0 UGC job
+  takes four approve round-trips (planning, scripting which carries the spend park, production,
+  delivery), the same weight as polished's four stage gates; threshold tuning is a named
+  follow-on, not smuggled into this slice (raising trust would also silently bypass the spend
+  gate, which rides the scripting approve).
+- **UGC taste vocabulary.** Three coupled descriptor/sweep edits PLUS both
+  `extractCreativeDescriptor` call sites, enumerated because the key is built in the sweep,
+  not the descriptor: (1) `extractCreativeDescriptor` returns `{ mode, hookType, structureId? }`,
+  reading the leading spec's `structureId` from ugc outputs passed by the caller, and for
+  `mode === "polished"` it OMITS the `structureId` key entirely (the existing descriptor tests
+  assert exact `toEqual` shapes; an always-present or null key would fail them, an absent one
+  keeps them byte-identical); (2) the sweep builds the third canonicalKey segment from
   `structureId ?? hookType` for ugc (`taste:kept_ugc_demo_first`; fallback stays `none`);
   (3) `bucketContent` extends to render the structure vocabulary ("Operator kept ugc creatives
   with demo_first structure"), staying a pure function of the bucket (dedup axis preserved).
+  Call sites: BOTH the taste sweep AND `buildPerformanceHistory` switch to mode-correct outputs
+  (`job.ugcPhaseOutputs` for ugc; both pass `job.stageOutputs` unconditionally today; missing
+  the second site would leave UGC performance-history descriptors `ugc:none` forever).
   The structure ids (confession, demo_first, myth_buster, ...) are bounded by the
   structure-engine template table and snake_case-conformant to `CANONICAL_KEY_PATTERN`.
-  Polished extraction is pinned byte-identical by the existing tests. The
-  `buildPerformanceHistory` call site gets the same mode-correct outputs in this PR (its UGC
-  descriptors otherwise read `ugc:none` forever). Honest framing of the window: UGC gestures
+  Honest framing of the window: UGC gestures
   made between the engine PR and this PR write `taste:kept_ugc_none` buckets via the old
   descriptor; those are valid coarse observations that simply stay (memories record history;
   nothing migrates), and the structure-keyed buckets accumulate from this PR on.
@@ -398,11 +442,25 @@ the wiring point (`runUgcScriptWriter`'s constraints) is named for the follow-on
 ### 3.5 Real avatar UGC: implement the HeyGen seam, route organically
 
 **The client.** `stages/heygen-client.ts` becomes a real submit-and-poll client, structurally
-mirroring `KlingClient` (timeouts, transient-status retries, poll interval): create via HeyGen's
+mirroring `KlingClient` (transient-status retries, poll interval): create via HeyGen's
 v2 generate endpoint (avatar character + voice input + dimension from aspect ratio), poll the
-status endpoint until `completed`, return `{videoUrl, duration}`. New env `HEYGEN_API_KEY`
+status endpoint until `completed`, return `{videoUrl, duration}`. Retry posture is
+deliberately TIGHTER than Kling's: a 5-minute poll timeout and ONE production attempt before
+provider fallback (the spec's `processSpec` loop runs `maxAttempts` per provider; HeyGen ranks
+FIRST for avatar talking-head specs, so Kling's 3-attempts-at-10-minute-timeout posture would
+let a HeyGen outage burn up to 30 minutes per spec inside the single production step before
+Kling fallback even starts; the burn path is transient 5xx/timeouts, not clean 4xx). The
+per-provider attempt count therefore becomes part of the ranked-provider entry (HeyGen 1,
+Kling keeps 3) rather than one global constant. New env `HEYGEN_API_KEY`
 (allowlist `required_in_env_example` + `.env.example`, same PR; the key is read in bootstrap and
 the client injected, so the env var IS visible to `check-env-completeness`'s apps-only scan).
+The injection seam, enumerated (today nothing constructs a HeyGen client anywhere):
+`ProviderClients` gains `heygenClient?`; `createHeyGenAdapter(heygenClient)` consumes it
+(throwing a typed not-configured error when absent, caught by the fallback loop);
+`UgcPipelineDeps` gains `heygenClient?`, threaded `preloadContext` to context to the
+production deps exactly like `klingClient`; bootstrap constructs
+`new HeyGenClient({ apiKey: process.env.HEYGEN_API_KEY })` when the key is set and passes it
+into the UGC runner deps block.
 API version pinning and the exact field names are implementation-time details verified against
 HeyGen's current docs; the spec binds the SHAPE (submit/poll, avatar id + voice id in, video URL
 out), not the field spelling.
@@ -423,10 +481,13 @@ explicitly deferred: it requires durable audio upload first (the named R2 TODO a
 heygen ref AND the format is `talking_head` (HeyGen renders speaking avatars, not lifestyle
 b-roll). Production passes the creator block through `VideoGenerationRequest` (new optional
 `avatar` field); the HeyGen adapter throws a typed error when the block is absent (caught by the
-existing retry/fallback loop, falling to Kling). Routing needs NO new infrastructure: with the
-adapter real and `providersAllowed` honored (3.2), `rankProviders` already prefers HeyGen for
-talking-head specs whose creator has an avatar (its `supportsAudioDrivenTalkingHead` bonus), and
-the existing per-provider fallback covers HeyGen outages.
+existing retry/fallback loop, falling to Kling). The adapter consumes the avatar block + script
+text and IGNORES the PR-2 prompt-composition fields (`negativePrompt`, `cameraMotion`,
+`referenceImageUrl` mean nothing to an avatar renderer; documented in the adapter). Routing
+needs NO new infrastructure: `rankProviders` ranks HeyGen above Kling for ANY talking-head spec
+via its `supportsAudioDrivenTalkingHead` bonus (1.95 vs 1.9, creator-agnostic); it is the
+capability-aware `providersAllowed` that restricts HeyGen to avatar-bearing creators, and the
+existing per-provider fallback covers HeyGen outages.
 
 **Cost, same PR (the producer rule).** `estimateUgcCost` gains a provider-aware leg: per spec,
 the MAX per-clip cost across its allowed providers (conservative parking; HeyGen per-clip
@@ -467,7 +528,7 @@ no schema, no behavior change beyond captions starting to actually work where co
 | 1 | `feat(creative-pipeline,core,dashboard): real frame-QA on UGC assets` | 3.1: FrameExtractor, `callClaudeWithImages`, real `evaluateRealism` with deps injection + honest degrade, renormalized soft score, production retry-on-fail + attempt-accurate budget, read-model `qa` projection (core status-mapper) + desk detail line | Production gating + the desk QA line |
 | 2 | `feat(creative-pipeline): UGC prompts honor SceneStyle/UgcDirection` | 3.2: `buildUgcVideoRequest`, production threads style/direction/negative/camera/reference-by-format, `providersAllowed` honored | Production generate calls |
 | 3a | `feat(api,creative-pipeline,db,schemas): UGC pipeline reachable end to end` | 3.3: jobId-only approval resume, mode-aware guard (incl. `ugcFailure`), valid `UgcConfig` construction at submit, `estimateUgcCost` + spend producer gated on `ugcPhase === "production"` + estimate readback + router cost alignment, seeded default creator + defensive `generateDirection`, durable UGC assets (`AssetOutputsSchema.sourceUrl` additive, bootstrap `assetStorage` injection) + `durableAssetUrl`, all-rejected-reads-failed status rule | The existing governed `/creative-jobs` route, proven by the loop-closing test |
-| 3b | `feat(api,dashboard,schemas,creative-pipeline): UGC briefs from the Mira desk` | 3.4: `MiraBriefRequestSchema.mode`, route threading, brief-box toggle, in-production tray links + no-video detail treatment (closes the polished gap too), UGC cost-confirm rendering (single estimate, no tier picker), structure-aware UGC taste descriptor (three edit points incl. `buildPerformanceHistory`) | Operators on /mira; the taste sweep |
+| 3b | `feat(api,dashboard,schemas,creative-pipeline,core): UGC briefs from the Mira desk` | 3.4: `MiraBriefRequestSchema.mode`, route threading, brief-box toggle, `ugcPhase` on the read-model summary + mode-honest tray/detail labels, in-production tray links + no-video detail treatment (closes the polished gap too), detail `failed` status copy, UGC cost-confirm rendering (single estimate, no tier picker), structure-aware UGC taste descriptor (descriptor/sweep/content edits + both call sites) | Operators on /mira; the taste sweep |
 | 4 | `feat(creative-pipeline,api): real HeyGen avatar provider` | 3.5: real client, adapter + `VideoGenerationRequest.avatar`, scripting creator refs + capability-aware `providersAllowed`, provider-aware costs, `HEYGEN_API_KEY` | Talking-head UGC specs with avatar-bearing creators |
 
 Sequencing rationale: 0 is independent truth; 1 and 2 harden quality on the pipeline BEFORE it
@@ -513,7 +574,7 @@ surfaces a needed migration it lands in the same commit per house rules.
 | Kling CDN host missing from `CREATIVE_PIPELINE_ALLOWED_HOSTS` in a deployed env | QA degrades to `requires_human_review` and production proceeds (honest degrade); runbook note pins the host; the same policy already gates pro-tier assembly downloads, so a misconfig is already visible today |
 | jobId-only approval matching resumes a wait the operator did not mean | Identical to the polished contract in production for months; waits are sequential per job; approve is org-scoped + governed; the phase payload stays in the event for audit |
 | Seeded default creator surprises operators ("who is this person?") | Synthetic persona, clearly named (e.g. "House Creator"), stock tier, no real-person likeness; UGC drafts pass the same human review as everything else |
-| HeyGen API drift vs the spec's shape assumptions | The spec binds submit/poll shape only; the client pins the API version, mirrors KlingClient's retry/timeout posture, and any 4xx surfaces as a generation error that falls back to Kling |
+| HeyGen API drift or outage burning the production step | The spec binds submit/poll shape only; the client pins the API version with a TIGHTER posture than Kling (5-minute poll timeout, ONE attempt before fallback), because the burn path is transient 5xx/timeouts on a first-ranked provider, not clean 4xx; any error falls back to Kling |
 | UGC spend estimate understates retry tails | Documented division of labor: governance parks expected (1x) spend; `totalJobBudget` + attempt accounting bound the tail inside production |
 | Renormalized soft score changes existing verdicts | An explicit, stated contract change for partial inputs (the `handles partial scores` unit test updates with it, 3.1); full-set scores are arithmetically identical; the safety gate is `deriveApprovalState`'s `qaStatus` check, untouched |
 | Structure-aware taste keys split historical buckets | Additive keys only; `_ugc_none` rows remain valid history; content stays a pure function of the bucket (dedup axis preserved) |
