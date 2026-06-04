@@ -59,8 +59,10 @@ function usePrefersReducedMotion(): boolean {
 
 export interface PrintedPortraitAvatarProps {
   agentKey: AgentKey;
-  /** Box size in px. Small (chip) ~22-44, hero ~96-120. Default 28. */
-  size?: number;
+  /** Box size in px (chip ~22-44) or "fill" (fluid, parent-controlled; hero poster). Default 28. */
+  size?: number | "fill";
+  /** Hero frame variant: heavier 2px halo offset + 1.5px edge + capped pip (spec section 4). */
+  hero?: boolean;
   /** Live activity. Default "idle" (static). */
   status?: AgentActivity;
   /** Workspace halt. Overrides status -> sleeping. Default false. */
@@ -87,6 +89,7 @@ export interface PrintedPortraitAvatarProps {
 export function PrintedPortraitAvatar({
   agentKey,
   size = 28,
+  hero = false,
   status = "idle",
   halted = false,
   showPip = true,
@@ -104,27 +107,44 @@ export function PrintedPortraitAvatar({
     ? { frames: def.states[visual.spriteState] ?? def.states.idle, palette: def.palette }
     : null;
   const playing = allowMotion && visual.playing && !reduced;
-  const inner = Math.round(size * 0.82); // ~9% identity ground showing around the inset plate
-  const letterSize = Math.round(size * 0.4); // ~0.4 cap-height for the fallback identity letter
+  const fill = size === "fill";
+  // Sprite box: 82% of the frame (the identity ground shows around the inset
+  // plate). In fill mode the 82% lives in CSS (.fillInner); in number mode it
+  // is the rounded px size.
+  const spriteSize = fill ? ("fill" as const) : Math.round(size * 0.82);
+  // Fallback letter (unreached today; every agent ships a sprite). In fill mode
+  // there is no px box to derive from; 40px reads correctly at hero scale.
+  const letterSize = fill ? 40 : Math.round(size * 0.4);
+  const spriteNode = sprite && (
+    <AnimatedSprite
+      frames={sprite.frames}
+      palette={sprite.palette}
+      size={spriteSize}
+      playing={playing}
+    />
+  );
 
   return (
     <span
-      className={`${styles.portrait} ${AGENT_CLASS[agentKey]}${className ? ` ${className}` : ""}`}
-      style={{ width: size, height: size }}
+      className={`${styles.portrait} ${AGENT_CLASS[agentKey]}${fill ? ` ${styles.fill}` : ""}${
+        hero ? ` ${styles.hero}` : ""
+      }${className ? ` ${className}` : ""}`}
+      style={fill ? undefined : { width: size, height: size }}
       data-agent={agentKey}
       data-sprite-state={visual.spriteState}
       data-pip={visual.pip}
       data-playing={playing ? "true" : "false"}
+      data-size={fill ? "fill" : undefined}
+      data-hero={hero ? "true" : undefined}
       aria-hidden="true"
     >
       <span className={styles.plate}>
-        {sprite ? (
-          <AnimatedSprite
-            frames={sprite.frames}
-            palette={sprite.palette}
-            size={inner}
-            playing={playing}
-          />
+        {spriteNode ? (
+          fill ? (
+            <span className={styles.fillInner}>{spriteNode}</span>
+          ) : (
+            spriteNode
+          )
         ) : (
           <span className={styles.letter} style={{ fontSize: letterSize }}>
             {AGENT_LETTER[agentKey]}

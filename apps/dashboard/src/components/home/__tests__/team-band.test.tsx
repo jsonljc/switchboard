@@ -104,4 +104,39 @@ describe("<TeamBand>", () => {
     const { container } = render(<TeamBand agents={[]} />);
     expect(container.querySelectorAll("[data-testid^='team-mate-']").length).toBe(0);
   });
+
+  it("renders the poster surface with one cell per agent", () => {
+    render(<TeamBand agents={AGENTS} />);
+    expect(screen.getByTestId("team-poster")).toBeInTheDocument();
+  });
+
+  it("celebrates each agent with an honest role line", () => {
+    render(<TeamBand agents={AGENTS} />);
+    expect(screen.getByText("Front desk")).toBeInTheDocument();
+    expect(screen.getByText("Ad analyst")).toBeInTheDocument();
+    expect(screen.getByText("The maker")).toBeInTheDocument();
+  });
+
+  it("features exactly the focal working agent (the same one that breathes)", () => {
+    const two: TeamBandAgent[] = [
+      { key: "alex", name: "Alex", setUp: true, status: "working", halted: false },
+      { key: "riley", name: "Riley", setUp: true, status: "working", halted: false },
+      { key: "mira", name: "Mira", setUp: true, status: "idle", halted: false },
+    ];
+    render(<TeamBand agents={two} />);
+    expect(screen.getByTestId("team-mate-alex").dataset.featured).toBe("true");
+    expect(screen.getByTestId("team-mate-riley").dataset.featured).toBe("false");
+    expect(screen.getByTestId("team-mate-mira").dataset.featured).toBe("false");
+  });
+
+  it("features nobody when nobody is genuinely working (positive evidence only)", () => {
+    render(<TeamBand agents={AGENTS.map((a) => ({ ...a, status: "idle" as const }))} />);
+    expect(document.querySelectorAll('[data-featured="true"]')).toHaveLength(0);
+  });
+
+  it("renders the portraits in fluid hero mode", () => {
+    const { container } = render(<TeamBand agents={AGENTS} />);
+    const heroAvatars = container.querySelectorAll('[data-hero="true"][data-size="fill"]');
+    expect(heroAvatars).toHaveLength(3);
+  });
 });

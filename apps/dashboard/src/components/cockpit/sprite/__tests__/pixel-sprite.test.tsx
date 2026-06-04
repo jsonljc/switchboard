@@ -43,4 +43,13 @@ describe("<PixelSprite>", () => {
     const svg = container.querySelector("svg");
     expect(svg?.getAttribute("aria-hidden")).toBe("true");
   });
+
+  it('renders percentage dimensions in "fill" mode (fluid hero scale)', () => {
+    const { container } = render(<PixelSprite rows={makeFrame()} palette={PAL} size="fill" />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("width")).toBe("100%");
+    expect(svg?.getAttribute("height")).toBe("100%");
+    // The viewBox still pins the 24x24 grid so pixels scale crisply.
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 24 24");
+  });
 });

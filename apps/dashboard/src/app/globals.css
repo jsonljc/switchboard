@@ -21,7 +21,7 @@
     --palette-action-tint: 38 52% 90%;   /* warmer action surface tint */
     --palette-action-bright: 30 55% 46%; /* NON-TEXT fills/stripes/pip ONLY — spec §4.5 */
     --palette-coral: 14 70% 58%;         /* Alex identity */
-    --palette-coral-deep: 14 50% 45%;
+    --palette-coral-deep: 14 52% 43%; /* AA with real margin on the hero poster wash (live-sampled); spec intent ~4.9:1 */
     --palette-coral-tint: 24 60% 95%;
     --palette-teal: 180 33% 40%;         /* Riley identity */
     --palette-teal-deep: 178 53% 26%;
