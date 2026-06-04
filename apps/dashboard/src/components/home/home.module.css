@@ -77,9 +77,11 @@
   max-width: 80px;
 }
 .hello {
-  font-size: 14px;
+  font-family: var(--font-display-app);
+  font-variation-settings: "opsz" 24;
+  font-size: 18px;
   color: var(--ink-2);
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
   font-weight: 500;
 }
 .line {

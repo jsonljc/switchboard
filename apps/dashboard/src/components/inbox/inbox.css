@@ -28,8 +28,8 @@
   font-variation-settings: "opsz" 48;
   font-size: 36px;
   line-height: 1;
-  letter-spacing: -0.022em;
-  font-weight: 500;
+  letter-spacing: -0.025em;
+  font-weight: 700;
   color: var(--ink-1);
 }
 @media (min-width: 768px) {
@@ -661,9 +661,9 @@
   font-variation-settings: "opsz" 36;
   font-size: 26px;
   line-height: 1.22;
-  letter-spacing: -0.014em;
+  letter-spacing: -0.018em;
   color: var(--ink-1);
-  font-weight: 500;
+  font-weight: 600;
   text-wrap: pretty;
 }
 @media (min-width: 768px) {
