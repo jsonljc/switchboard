@@ -37,7 +37,20 @@ export const DEFAULT_QA_THRESHOLDS: QaThresholdConfig = {
     faceSimilarityMin: 0.7,
     ocrAccuracyMin: 0.8,
     voiceSimilarityMin: 0.75,
-    criticalArtifacts: ["face_drift", "product_warp", "hand_warp"],
+    // Slice-3 (spec 3.1): the frame evaluator's bounded vocabulary joins the
+    // critical set (config extension; decision LOGIC unchanged). A broken
+    // frame or garbled anatomy is exactly the objective integrity breach the
+    // fail gate exists for. `missing_subject` is the presence-check vehicle
+    // (human absent in a talking_head clip).
+    criticalArtifacts: [
+      "face_drift",
+      "product_warp",
+      "hand_warp",
+      "garbled_text",
+      "broken_frame",
+      "anatomical_error",
+      "missing_subject",
+    ],
   },
   softScoreDefaults: {
     reviewThreshold: 0.5,
@@ -64,16 +77,33 @@ export interface RealismScorerInput {
 
 // ── Weighted soft score ──
 
+/**
+ * Weighted soft score, RENORMALIZED over the dimensions actually present
+ * (slice-3 contract change, spec 3.1): a frame evaluator cannot honestly
+ * score every dimension (frames carry no audio), and absent-as-0 would make
+ * `pass` unreachable or arbitrarily harder depending on which dimensions an
+ * evaluator can see. All-absent returns 0 (review). The safety gate against
+ * fabricated scores is deriveApprovalState's qaStatus check, not this curve.
+ */
 export function computeWeightedSoftScore(
   softScores: Partial<RealismSoftScores>,
   weights = DEFAULT_QA_THRESHOLDS.softScoreDefaults.weights,
 ): number {
-  return (
-    weights.visualRealism * (softScores.visualRealism ?? 0) +
-    weights.behavioralRealism * (softScores.behavioralRealism ?? 0) +
-    weights.ugcAuthenticity * (softScores.ugcAuthenticity ?? 0) +
-    weights.audioNaturalness * (softScores.audioNaturalness ?? 0)
-  );
+  const dims: Array<[keyof RealismSoftScores & keyof typeof weights, number | undefined]> = [
+    ["visualRealism", softScores.visualRealism],
+    ["behavioralRealism", softScores.behavioralRealism],
+    ["ugcAuthenticity", softScores.ugcAuthenticity],
+    ["audioNaturalness", softScores.audioNaturalness],
+  ];
+  let weighted = 0;
+  let presentWeight = 0;
+  for (const [dim, value] of dims) {
+    if (value !== undefined) {
+      weighted += weights[dim] * value;
+      presentWeight += weights[dim];
+    }
+  }
+  return presentWeight > 0 ? weighted / presentWeight : 0;
 }
 
 // ── Decision logic (applies once a real evaluator has produced scores) ──
