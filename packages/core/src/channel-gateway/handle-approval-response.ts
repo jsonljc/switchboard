@@ -11,6 +11,7 @@ import {
   ParkedLifecycleAlreadyRespondedError,
   ParkedLifecycleExpiredError,
 } from "../approval/respond-to-parked-lifecycle.js";
+import { DispatchAdmissionError } from "../approval/dispatch-admission.js";
 import { StaleVersionError } from "../approval/state-machine.js";
 
 export const NOT_FOUND_MSG =
@@ -42,6 +43,9 @@ export const PARTIAL_APPROVAL_MSG =
 
 export const SELF_APPROVAL_MSG =
   "You cannot approve an action you initiated. Another operator must respond.";
+
+export const ADMISSION_FAILED_MSG =
+  "Approved, but execution could not start. Open the dashboard to see its current state.";
 
 export const APPROVAL_EXECUTION_ERROR_MSG =
   "I verified your authority but couldn't apply your response. The action remains pending. Please try the dashboard.";
@@ -120,6 +124,11 @@ function replyForError(err: unknown): string {
   if (err instanceof ParkedLifecycleNotFoundError) return NOT_FOUND_MSG;
   if (err instanceof ParkedLifecycleAlreadyRespondedError) return ALREADY_RESPONDED_MSG;
   if (err instanceof ParkedLifecycleExpiredError) return STALE_MSG;
+  if (err instanceof DispatchAdmissionError) {
+    // Raced/expired admission between approve and execute: the action is
+    // approved but did not start. "Remains pending" would be a lie here.
+    return ADMISSION_FAILED_MSG;
+  }
   if (err instanceof Error && /lifecycle status is "/.test(err.message)) {
     // Race: another responder mutated state between our pre-check and the
     // lifecycle call ("Cannot approve: lifecycle status is ...").
@@ -243,7 +252,10 @@ async function respondViaLifecycleFallback(params: {
   }
 
   // Approve commits to the CURRENT revision; refuse a button whose hash no
-  // longer matches it (e.g. after a patch) before any mutation.
+  // longer matches it (e.g. after a patch) before any mutation. Reject
+  // deliberately skips this pre-check: the parked contract (and the API
+  // route) accept a reject without a binding hash; authority comes from the
+  // binding + role, not from hash possession.
   if (payload.action === "approve") {
     let revision;
     try {

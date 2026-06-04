@@ -33,6 +33,7 @@ export {
   APPROVE_DISPATCH_FAILED_MSG,
   PARTIAL_APPROVAL_MSG,
   SELF_APPROVAL_MSG,
+  ADMISSION_FAILED_MSG,
 } from "./handle-approval-response.js";
 export { ConversationLifecycleTracker } from "./conversation-lifecycle.js";
 export type {

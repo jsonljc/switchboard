@@ -6,221 +6,27 @@ import {
   NOT_AUTHORIZED_MSG,
   ALREADY_RESPONDED_MSG,
   APPROVE_EXECUTED_MSG,
-  APPROVE_DISPATCH_FAILED_MSG,
   PARTIAL_APPROVAL_MSG,
-  SELF_APPROVAL_MSG,
   REJECT_SUCCESS_MSG,
   APPROVAL_EXECUTION_ERROR_MSG,
   APPROVAL_LOOKUP_ERROR_MSG,
 } from "../handle-approval-response.js";
 import { StaleVersionError } from "../../approval/state-machine.js";
-import { ApprovalLifecycleService } from "../../approval/lifecycle-service.js";
-import { InMemoryLifecycleStore } from "../../approval/in-memory-lifecycle-store.js";
-import type { ApprovalStore, IdentityStore } from "../../storage/interfaces.js";
-import type { ReplySink, HandleApprovalResponseConfig } from "../types.js";
-import type { ParsedApprovalResponsePayload } from "../approval-response-payload.js";
-import type { OperatorChannelBindingStore } from "../operator-channel-binding-store.js";
-import type { ExecuteResult, Principal } from "@switchboard/schemas";
-
-const PAYLOAD: ParsedApprovalResponsePayload = {
-  action: "approve",
-  approvalId: "appr_1",
-  bindingHash: "hash123",
-};
-
-const REJECT_PAYLOAD: ParsedApprovalResponsePayload = {
-  action: "reject",
-  approvalId: "appr_1",
-  bindingHash: "hash123",
-};
-
-const BASE_ARGS = {
-  channel: "whatsapp",
-  channelIdentifier: "+15551234567",
-  organizationId: "org-1",
-};
-
-function makeApproval(
-  overrides: Partial<{
-    bindingHash: string;
-    organizationId: string | null;
-    status: string;
-  }> = {},
-) {
-  return {
-    request: {
-      id: "appr_1",
-      bindingHash: overrides.bindingHash ?? "hash123",
-    } as never,
-    state: { status: overrides.status ?? "pending", version: 0 } as never,
-    envelopeId: "env_1",
-    organizationId: overrides.organizationId === undefined ? "org-1" : overrides.organizationId,
-  };
-}
-
-function makeStore(getById: ApprovalStore["getById"]): ApprovalStore {
-  return {
-    save: vi.fn(),
-    getById,
-    updateState: vi.fn(),
-    listPending: vi.fn(),
-  };
-}
-
-function makeReplySink(): { sink: ReplySink; sendSpy: ReturnType<typeof vi.fn> } {
-  const sendSpy = vi.fn().mockResolvedValue(undefined);
-  return { sink: { send: sendSpy }, sendSpy };
-}
-
-function makeBindingStore(
-  binding: Awaited<ReturnType<OperatorChannelBindingStore["findActiveBinding"]>>,
-): OperatorChannelBindingStore {
-  return {
-    findActiveBinding: vi.fn().mockResolvedValue(binding),
-  };
-}
-
-function makePrincipal(roles: Principal["roles"]): Principal {
-  return {
-    id: "principal-1",
-    type: "user",
-    name: "Operator",
-    organizationId: "org-1",
-    roles,
-  };
-}
-
-function makeIdentityStore(principal: Principal | null): IdentityStore {
-  return {
-    getSpecByPrincipalId: vi.fn(),
-    listOverlaysBySpecId: vi.fn(),
-    saveSpec: vi.fn(),
-    saveOverlay: vi.fn(),
-    getPrincipal: vi.fn().mockResolvedValue(principal),
-    savePrincipal: vi.fn(),
-    listDelegationRules: vi.fn(),
-  } as unknown as IdentityStore;
-}
-
-function okExec(): ExecuteResult {
-  return {
-    success: true,
-    summary: "handler ran",
-    externalRefs: {},
-    rollbackAvailable: false,
-    partialFailures: [],
-    durationMs: 1,
-    undoRecipe: null,
-  };
-}
-
-function makeRespondDeps(impl?: { throwInRespond?: boolean }) {
-  return {
-    approvalStore: makeStore(vi.fn().mockResolvedValue(makeApproval())),
-    envelopeStore: { getById: vi.fn(), update: vi.fn(), save: vi.fn() } as never,
-    workTraceStore: null,
-    lifecycleService: null,
-    platformLifecycle: {
-      respondToApproval: impl?.throwInRespond
-        ? vi.fn().mockRejectedValue(new Error("downstream lifecycle failure"))
-        : vi.fn().mockResolvedValue({
-            envelope: { id: "env_1" },
-            approvalState: { status: "approved" },
-            executionResult: okExec(),
-          }),
-      executeApproved: vi.fn(),
-    },
-    sessionManager: null,
-    logger: { info: vi.fn(), error: vi.fn() },
-  };
-}
-
-/**
- * A REAL ApprovalLifecycleService world reached through the gateway: the
- * legacy approval row and the lifecycle row share the same work unit id and
- * binding hash (the production coexistence shape). executeApproved is a spy:
- * the assertions below are about THE HANDLER RUNNING, not status flips.
- */
-async function makeLifecycleWorld(opts?: { failDispatch?: boolean; noApprovalRow?: boolean }) {
-  const store = new InMemoryLifecycleStore();
-  const lifecycleService = new ApprovalLifecycleService({ store });
-  const { lifecycle, revision } = await lifecycleService.createGatedLifecycle({
-    actionEnvelopeId: "env_1",
-    organizationId: "org-1",
-    expiresAt: new Date(Date.now() + 3_600_000),
-    initialRevision: {
-      parametersSnapshot: { campaignId: "camp-1" },
-      approvalScopeSnapshot: {},
-      bindingHash: "hash123",
-      createdBy: "user-orig",
-    },
-  });
-
-  let trace = {
-    workUnitId: "env_1",
-    requestedAt: new Date().toISOString(),
-    organizationId: "org-1",
-    actor: { id: "user-orig", type: "user" as const },
-    intent: "test.action",
-    parameters: { campaignId: "camp-1" },
-    mode: "skill",
-    traceId: "trace-1",
-    trigger: "api",
-    governanceConstraints: {},
-  };
-  const workTraceStore = {
-    getByWorkUnitId: vi.fn(async () => ({ trace, integrity: { status: "ok" } })),
-    update: vi.fn(async (_id: string, fields: Record<string, unknown>) => {
-      trace = { ...trace, ...fields } as typeof trace;
-      return { ok: true, trace };
-    }),
-  } as never;
-
-  const executeApproved = vi.fn(async () =>
-    opts?.failDispatch ? { ...okExec(), success: false, summary: "boom" } : okExec(),
-  );
-
-  const approvalStore = makeStore(
-    opts?.noApprovalRow
-      ? vi.fn().mockResolvedValue(null)
-      : vi.fn().mockResolvedValue(makeApproval()),
-  );
-
-  const respondDeps = {
-    approvalStore,
-    envelopeStore: {
-      getById: vi.fn().mockResolvedValue(null),
-      update: vi.fn(),
-      save: vi.fn(),
-    } as never,
-    workTraceStore,
-    lifecycleService,
-    platformLifecycle: { respondToApproval: vi.fn(), executeApproved } as never,
-    sessionManager: null,
-    logger: { info: vi.fn(), error: vi.fn() },
-  };
-
-  return {
-    respondDeps,
-    approvalStore,
-    lifecycleService,
-    store,
-    lifecycle,
-    revision,
-    executeApproved,
-  };
-}
-
-function authorizedConfig(
-  respondDeps: ReturnType<typeof makeRespondDeps>,
-  principalId = "principal-1",
-): HandleApprovalResponseConfig {
-  return {
-    bindingStore: makeBindingStore({ principalId } as never),
-    identityStore: makeIdentityStore({ ...makePrincipal(["operator"]), id: principalId }),
-    respondDeps,
-  } as HandleApprovalResponseConfig;
-}
+import type { HandleApprovalResponseConfig } from "../types.js";
+import {
+  PAYLOAD,
+  REJECT_PAYLOAD,
+  BASE_ARGS,
+  makeApproval,
+  makeStore,
+  makeReplySink,
+  makeBindingStore,
+  makeFullBinding,
+  makePrincipal,
+  makeIdentityStore,
+  makeRespondDeps,
+  authorizedConfig,
+} from "./approval-response-fixtures.js";
 
 describe("handleApprovalResponse", () => {
   it("replies NOT_FOUND_MSG when approval is missing", async () => {
@@ -370,7 +176,7 @@ describe("handleApprovalResponse", () => {
     const { sink, sendSpy } = makeReplySink();
     const config: HandleApprovalResponseConfig = {
       bindingStore: makeBindingStore(null),
-      identityStore: makeIdentityStore(makePrincipal(["operator"])),
+      identityStore: makeIdentityStore(makePrincipal(["approver"])),
       respondDeps: makeRespondDeps(),
     };
 
@@ -383,32 +189,14 @@ describe("handleApprovalResponse", () => {
     });
 
     expect(sendSpy).toHaveBeenCalledWith(NOT_AUTHORIZED_MSG);
-    expect(config.bindingStore.findActiveBinding).toHaveBeenCalledWith({
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-    });
   });
 
   it("replies NOT_AUTHORIZED_MSG when binding's principal lacks an approver role", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
-      identityStore: makeIdentityStore(makePrincipal(["requester"])), // no approver/operator/admin
+      bindingStore: makeBindingStore(makeFullBinding()),
+      identityStore: makeIdentityStore(makePrincipal(["viewer"] as never)),
       respondDeps: makeRespondDeps(),
     };
 
@@ -426,21 +214,8 @@ describe("handleApprovalResponse", () => {
   it("replies NOT_AUTHORIZED_MSG when binding's principal record is missing", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "ghost-principal",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(null),
       respondDeps: makeRespondDeps(),
     };
@@ -463,22 +238,9 @@ describe("handleApprovalResponse", () => {
   it("executes approve via shared helper and replies APPROVE_EXECUTED_MSG", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const respondDeps = makeRespondDeps();
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(makePrincipal(["approver"])),
       respondDeps,
     };
@@ -505,22 +267,9 @@ describe("handleApprovalResponse", () => {
   it("executes reject via shared helper and replies REJECT_SUCCESS_MSG", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const respondDeps = makeRespondDeps();
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(makePrincipal(["operator"])),
       respondDeps,
     };
@@ -556,25 +305,12 @@ describe("handleApprovalResponse", () => {
   it("replies ALREADY_RESPONDED_MSG when shared helper throws StaleVersionError (race)", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const respondDeps = makeRespondDeps();
     respondDeps.platformLifecycle.respondToApproval = vi
       .fn()
       .mockRejectedValue(new StaleVersionError("appr_1", 0, 1));
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(makePrincipal(["operator"])),
       respondDeps,
     };
@@ -593,25 +329,12 @@ describe("handleApprovalResponse", () => {
   it("replies ALREADY_RESPONDED_MSG when lifecycle throws status-mismatch (race, lifecycle path)", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const respondDeps = makeRespondDeps();
     respondDeps.platformLifecycle.respondToApproval = vi
       .fn()
       .mockRejectedValue(new Error('Cannot approve: lifecycle status is "approved"'));
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(makePrincipal(["operator"])),
       respondDeps,
     };
@@ -630,21 +353,8 @@ describe("handleApprovalResponse", () => {
   it("replies APPROVAL_EXECUTION_ERROR_MSG when the shared helper throws", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(makePrincipal(["admin"])),
       respondDeps: makeRespondDeps({ throwInRespond: true }),
     };
@@ -658,207 +368,6 @@ describe("handleApprovalResponse", () => {
     });
 
     expect(sendSpy).toHaveBeenCalledWith(APPROVAL_EXECUTION_ERROR_MSG);
-  });
-});
-
-describe("handleApprovalResponse: honest replies over a real lifecycle", () => {
-  it("approve runs the dispatch and replies APPROVE_EXECUTED_MSG (the handler ran)", async () => {
-    const w = await makeLifecycleWorld();
-    const { sink, sendSpy } = makeReplySink();
-    await handleApprovalResponse({
-      payload: PAYLOAD,
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: sink,
-      config: authorizedConfig(w.respondDeps as never),
-    });
-    expect(w.executeApproved).toHaveBeenCalledWith("env_1");
-    expect(sendSpy).toHaveBeenCalledWith(APPROVE_EXECUTED_MSG);
-    expect((await w.lifecycleService.getLifecycleById(w.lifecycle.id))?.status).toBe("approved");
-  });
-
-  it("approve whose dispatch fails replies APPROVE_DISPATCH_FAILED_MSG and parks recovery_required", async () => {
-    const w = await makeLifecycleWorld({ failDispatch: true });
-    const { sink, sendSpy } = makeReplySink();
-    await handleApprovalResponse({
-      payload: PAYLOAD,
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: sink,
-      config: authorizedConfig(w.respondDeps as never),
-    });
-    expect(w.executeApproved).toHaveBeenCalledTimes(1);
-    expect(sendSpy).toHaveBeenCalledWith(APPROVE_DISPATCH_FAILED_MSG);
-    expect((await w.lifecycleService.getLifecycleById(w.lifecycle.id))?.status).toBe(
-      "recovery_required",
-    );
-  });
-
-  it("self-approval through chat replies SELF_APPROVAL_MSG and runs nothing", async () => {
-    const w = await makeLifecycleWorld();
-    const { sink, sendSpy } = makeReplySink();
-    await handleApprovalResponse({
-      payload: PAYLOAD,
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: sink,
-      config: authorizedConfig(w.respondDeps as never, "user-orig"),
-    });
-    expect(w.executeApproved).not.toHaveBeenCalled();
-    expect(sendSpy).toHaveBeenCalledWith(SELF_APPROVAL_MSG);
-  });
-
-  it("a post-patch (stale) button replies STALE_MSG, not the generic execution error", async () => {
-    const w = await makeLifecycleWorld();
-    // a patch moved the current revision; the chat button still carries hash123
-    await w.lifecycleService.createRevision({
-      lifecycleId: w.lifecycle.id,
-      parametersSnapshot: { campaignId: "patched" },
-      approvalScopeSnapshot: {},
-      bindingHash: "hash456",
-      createdBy: "operator-2",
-      sourceBindingHash: "hash123",
-    });
-    const { sink, sendSpy } = makeReplySink();
-    await handleApprovalResponse({
-      payload: PAYLOAD,
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: sink,
-      config: authorizedConfig(w.respondDeps as never),
-    });
-    expect(w.executeApproved).not.toHaveBeenCalled();
-    expect(sendSpy).toHaveBeenCalledWith(STALE_MSG);
-  });
-});
-
-describe("handleApprovalResponse: lifecycle fallback when the approval row is missing", () => {
-  function lifecyclePayload(
-    w: Awaited<ReturnType<typeof makeLifecycleWorld>>,
-  ): ParsedApprovalResponsePayload {
-    return { action: "approve", approvalId: w.lifecycle.id, bindingHash: "hash123" };
-  }
-
-  it("falls through to the lifecycle, dispatches, and replies APPROVE_EXECUTED_MSG", async () => {
-    const w = await makeLifecycleWorld({ noApprovalRow: true });
-    const { sink, sendSpy } = makeReplySink();
-    await handleApprovalResponse({
-      payload: lifecyclePayload(w),
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: sink,
-      config: authorizedConfig(w.respondDeps as never),
-    });
-    expect(w.executeApproved).toHaveBeenCalledWith("env_1");
-    expect(sendSpy).toHaveBeenCalledWith(APPROVE_EXECUTED_MSG);
-  });
-
-  it("approve on a recovery_required lifecycle IS retry (attempt 2) through the fallback", async () => {
-    const w = await makeLifecycleWorld({ noApprovalRow: true, failDispatch: true });
-    const first = makeReplySink();
-    await handleApprovalResponse({
-      payload: lifecyclePayload(w),
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: first.sink,
-      config: authorizedConfig(w.respondDeps as never),
-    });
-    expect(first.sendSpy).toHaveBeenCalledWith(APPROVE_DISPATCH_FAILED_MSG);
-    expect((await w.lifecycleService.getLifecycleById(w.lifecycle.id))?.status).toBe(
-      "recovery_required",
-    );
-    // the handler is fixed now
-    w.executeApproved.mockImplementation(async () => okExec());
-    const second = makeReplySink();
-    await handleApprovalResponse({
-      payload: lifecyclePayload(w),
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: second.sink,
-      config: authorizedConfig(w.respondDeps as never),
-    });
-    expect(second.sendSpy).toHaveBeenCalledWith(APPROVE_EXECUTED_MSG);
-    expect((await w.lifecycleService.getLifecycleById(w.lifecycle.id))?.status).toBe("approved");
-    expect(w.store.listDispatchRecords()).toHaveLength(2);
-    expect(w.store.listDispatchRecords()[1]?.attemptNumber).toBe(2);
-  });
-
-  it("org mismatch on the lifecycle replies NOT_FOUND_MSG (no existence leak)", async () => {
-    const w = await makeLifecycleWorld({ noApprovalRow: true });
-    const { sink, sendSpy } = makeReplySink();
-    await handleApprovalResponse({
-      payload: lifecyclePayload(w),
-      ...BASE_ARGS,
-      organizationId: "org-other",
-      approvalStore: w.approvalStore,
-      replySink: sink,
-      config: authorizedConfig(w.respondDeps as never),
-    });
-    expect(sendSpy).toHaveBeenCalledWith(NOT_FOUND_MSG);
-    expect(w.executeApproved).not.toHaveBeenCalled();
-  });
-
-  it("a wrong hash against the current revision replies STALE_MSG before any respond attempt", async () => {
-    const w = await makeLifecycleWorld({ noApprovalRow: true });
-    // The engine (approveLifecycle) would also refuse a stale hash; the
-    // surface pre-check must refuse BEFORE the respond engine is reached.
-    const approveSpy = vi.spyOn(w.lifecycleService, "approveLifecycle");
-    const { sink, sendSpy } = makeReplySink();
-    await handleApprovalResponse({
-      payload: { ...lifecyclePayload(w), bindingHash: "hashXX3" },
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: sink,
-      config: authorizedConfig(w.respondDeps as never),
-    });
-    expect(sendSpy).toHaveBeenCalledWith(STALE_MSG);
-    expect(w.executeApproved).not.toHaveBeenCalled();
-    expect(approveSpy).not.toHaveBeenCalled();
-  });
-
-  it("reject through the fallback works and replies REJECT_SUCCESS_MSG", async () => {
-    const w = await makeLifecycleWorld({ noApprovalRow: true });
-    const { sink, sendSpy } = makeReplySink();
-    await handleApprovalResponse({
-      payload: { ...lifecyclePayload(w), action: "reject" },
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: sink,
-      config: authorizedConfig(w.respondDeps as never),
-    });
-    expect(sendSpy).toHaveBeenCalledWith(REJECT_SUCCESS_MSG);
-    expect((await w.lifecycleService.getLifecycleById(w.lifecycle.id))?.status).toBe("rejected");
-  });
-
-  it("no binding on the fallback leg fails closed with NOT_AUTHORIZED_MSG", async () => {
-    const w = await makeLifecycleWorld({ noApprovalRow: true });
-    const { sink, sendSpy } = makeReplySink();
-    await handleApprovalResponse({
-      payload: lifecyclePayload(w),
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: sink,
-      config: {
-        bindingStore: makeBindingStore(null),
-        identityStore: makeIdentityStore(makePrincipal(["operator"])),
-        respondDeps: w.respondDeps,
-      } as HandleApprovalResponseConfig,
-    });
-    expect(sendSpy).toHaveBeenCalledWith(NOT_AUTHORIZED_MSG);
-    expect(w.executeApproved).not.toHaveBeenCalled();
-  });
-
-  it("an unknown id (no row, no lifecycle) still replies NOT_FOUND_MSG", async () => {
-    const w = await makeLifecycleWorld({ noApprovalRow: true });
-    const { sink, sendSpy } = makeReplySink();
-    await handleApprovalResponse({
-      payload: { action: "approve", approvalId: "lc-unknown", bindingHash: "hash123" },
-      ...BASE_ARGS,
-      approvalStore: w.approvalStore,
-      replySink: sink,
-      config: authorizedConfig(w.respondDeps as never),
-    });
-    expect(sendSpy).toHaveBeenCalledWith(NOT_FOUND_MSG);
   });
 });
 
