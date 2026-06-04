@@ -126,7 +126,7 @@ export function InboxDrawer() {
         </SheetTrigger>
         <SheetContent side="right" className="inbox-drawer sm:max-w-[28rem]">
           <SheetHeader>
-            <SheetTitle className="font-display">Inbox</SheetTitle>
+            <SheetTitle className="drawer-title">Inbox</SheetTitle>
             <SheetDescription>{describeTotal(total, data != null, isError)}</SheetDescription>
           </SheetHeader>
           <QueryStates

@@ -229,9 +229,11 @@ function collectGovernedFiles(): Array<{ path: string; content: string }> {
   return out;
 }
 
+/** Path relative to src/ for readable failure messages. */
+const rel = (p: string): string => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
+
 describe("token governance — governed-source drift sweep (generalized)", () => {
   const files = collectGovernedFiles();
-  const rel = (p: string) => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
 
   it("scans a meaningful slice of governed source", () => {
     expect(files.length).toBeGreaterThan(20);
@@ -335,7 +337,6 @@ describe("token governance — elevation ladder single-source (EL1)", () => {
 
 describe("token governance — no literal-color box-shadow outside globals.css (EL1)", () => {
   const files = collectGovernedFiles();
-  const rel = (p: string) => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
   // Blank /* ... */ comments (newlines preserved) so a commented-out box-shadow
   // never false-positives.
   const blankComments = (s: string): string =>
@@ -608,11 +609,12 @@ describe("token governance: type voice (TY2)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("the display voice aliases the loaded Fraunces primitive", () => {
-    expect(css).toMatch(/--font-home-serif:\s*var\(--font-fraunces\)/);
+  it("the display voice aliases the loaded Fraunces primitive through the canonical token", () => {
+    expect(css).toMatch(/--font-display-app:\s*var\(--font-fraunces\)/);
+    expect(css).toMatch(/--font-home-serif:\s*var\(--font-display-app\)/);
     const inboxBase = files.find((f) => f.path.endsWith("inbox-design-base.css"));
     expect(inboxBase).toBeDefined();
-    expect(inboxBase!.content).toMatch(/--serif:\s*var\(--font-fraunces\)/);
+    expect(inboxBase!.content).toMatch(/--serif:\s*var\(--font-display-app\)/);
   });
 
   it("layout.tsx loads Fraunces upright only (no italic style requested)", () => {
@@ -634,5 +636,61 @@ describe("token governance: type voice (TY2)", () => {
         3.5,
       );
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TY3: type scale + display-token consolidation (spec 2026-06-04).
+// The canonical display semantic, mono honesty (face + loaded weights), and
+// the legacy --font-display demotion for governed authed surfaces.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("token governance: type scale + display consolidation (TY3)", () => {
+  const governed = collectGovernedFiles().filter((f) => typeVoiceGoverned(f.path));
+
+  it("the inbox mono aliases the loaded JetBrains primitive (no raw-family lie)", () => {
+    const inboxBase = governed.find((f) => f.path.endsWith("inbox-design-base.css"));
+    expect(inboxBase).toBeDefined();
+    expect(inboxBase!.content).toMatch(/--mono:\s*var\(--font-mono-editorial\)/);
+  });
+
+  it("every mono font-weight declared in governed CSS is a loaded JetBrains cut", () => {
+    const layout = readFileSync(path.resolve(process.cwd(), "src/app/layout.tsx"), "utf8");
+    const jb = layout.slice(layout.indexOf("JetBrains_Mono("));
+    const jbBlock = jb.slice(0, jb.indexOf("})"));
+    const weightList = jbBlock.match(/weight:\s*\[([^\]]+)\]/)?.[1] ?? "";
+    const loaded = new Set((weightList.match(/"(\d+)"/g) ?? []).map((w) => w.replaceAll('"', "")));
+    expect(loaded.size).toBeGreaterThan(0);
+    const offenders: string[] = [];
+    for (const { path: p, content } of governed) {
+      if (!p.endsWith(".css")) continue;
+      for (const block of content.split("}")) {
+        if (!block.includes("var(--mono)")) continue;
+        const w = block.match(/font-weight:\s*(\d+)/);
+        if (w && !loaded.has(w[1])) offenders.push(`${rel(p)}: mono weight ${w[1]} not loaded`);
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+
+  it("the legacy --font-display never reaches governed authed TSX or CSS (sweep + legacy allowlist)", () => {
+    // The allowlist is the explicit statement of which registers may still hold
+    // the legacy token (DM Sans). It shrinks as those registers retire.
+    // layout.tsx is the loader (the binding site of the legacy token) and
+    // globals.css is the definition site (the :root fallback value plus the
+    // sanctioned legacy .font-display utility); neither is a consumer.
+    const LEGACY_ALLOWED = [
+      "src/app/layout.tsx",
+      "src/app/globals.css",
+      "app/login/",
+      "app/forgot-password/",
+      "app/reset-password/",
+      "components/onboarding/",
+    ];
+    const offenders = governed
+      .filter((f) => f.path.endsWith(".tsx") || f.path.endsWith(".css"))
+      .filter((f) => !LEGACY_ALLOWED.some((a) => f.path.includes(a)))
+      .filter((f) => /font-display(?!-app\b)/.test(f.content))
+      .map((f) => rel(f.path));
+    expect(offenders, offenders.join("\n")).toEqual([]);
   });
 });

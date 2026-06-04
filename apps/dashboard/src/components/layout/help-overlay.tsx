@@ -65,17 +65,15 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="head-row">
-          <h2 id="help-overlay-title" className="font-display">
-            Quick reference
-          </h2>
+          <h2 id="help-overlay-title">Quick reference</h2>
           <button type="button" className="close" onClick={onClose}>
             Close ✕
           </button>
         </div>
         <p>
           Three agents work on your behalf. The <b>Inbox</b> shows decisions that need you. Each
-          agent has a home page with their own work. <b>Live</b> in the header is the system pulse —
-          open it to halt or resume everyone, or to glance at recent activity.
+          agent has a home page with their own work. <b>Live</b> in the header is the system pulse.
+          Open it to halt or resume everyone, or to glance at recent activity.
         </p>
         <div className="keys">
           <kbd>?</kbd>
