@@ -126,7 +126,7 @@
   font-weight: 650;
   letter-spacing: -0.012em;
   line-height: 1.2;
-  color: var(--ink);
+  color: var(--_ink, var(--ink));
 }
 .mateRole {
   font-size: 10.5px;
@@ -134,22 +134,20 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-top: 1px;
-  color: var(--ink-2);
+  color: var(--_ink, var(--ink-2));
 }
 /* Identity inks on name and role (full opacity: faded identity ink would
    dip below AA). The deeps are AA on both the surface wash and the tints
-   (gate-asserted in token-governance). */
-.mate[data-agent="alex"] .mateName,
-.mate[data-agent="alex"] .mateRole {
-  color: hsl(var(--agent-alex-deep));
+   (gate-asserted in token-governance). Each agent binds one custom prop;
+   the color rules are defined once above. */
+.mate[data-agent="alex"] {
+  --_ink: hsl(var(--agent-alex-deep));
 }
-.mate[data-agent="riley"] .mateName,
-.mate[data-agent="riley"] .mateRole {
-  color: hsl(var(--agent-riley-deep));
+.mate[data-agent="riley"] {
+  --_ink: hsl(var(--agent-riley-deep));
 }
-.mate[data-agent="mira"] .mateName,
-.mate[data-agent="mira"] .mateRole {
-  color: hsl(var(--agent-mira-deep));
+.mate[data-agent="mira"] {
+  --_ink: hsl(var(--agent-mira-deep));
 }
 .mateStatus {
   font-size: 12px;

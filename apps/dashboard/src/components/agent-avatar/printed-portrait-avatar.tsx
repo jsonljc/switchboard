@@ -108,10 +108,21 @@ export function PrintedPortraitAvatar({
     : null;
   const playing = allowMotion && visual.playing && !reduced;
   const fill = size === "fill";
-  const inner = fill ? 0 : Math.round(size * 0.82); // ~9% identity ground showing around the inset plate
+  // Sprite box: 82% of the frame (the identity ground shows around the inset
+  // plate). In fill mode the 82% lives in CSS (.fillInner); in number mode it
+  // is the rounded px size.
+  const spriteSize = fill ? ("fill" as const) : Math.round(size * 0.82);
   // Fallback letter (unreached today; every agent ships a sprite). In fill mode
   // there is no px box to derive from; 40px reads correctly at hero scale.
   const letterSize = fill ? 40 : Math.round(size * 0.4);
+  const spriteNode = sprite && (
+    <AnimatedSprite
+      frames={sprite.frames}
+      palette={sprite.palette}
+      size={spriteSize}
+      playing={playing}
+    />
+  );
 
   return (
     <span
@@ -123,28 +134,16 @@ export function PrintedPortraitAvatar({
       data-sprite-state={visual.spriteState}
       data-pip={visual.pip}
       data-playing={playing ? "true" : "false"}
-      {...(fill ? { "data-size": "fill" } : {})}
-      {...(hero ? { "data-hero": "true" } : {})}
+      data-size={fill ? "fill" : undefined}
+      data-hero={hero ? "true" : undefined}
       aria-hidden="true"
     >
       <span className={styles.plate}>
-        {sprite ? (
+        {spriteNode ? (
           fill ? (
-            <span className={styles.fillInner}>
-              <AnimatedSprite
-                frames={sprite.frames}
-                palette={sprite.palette}
-                size="fill"
-                playing={playing}
-              />
-            </span>
+            <span className={styles.fillInner}>{spriteNode}</span>
           ) : (
-            <AnimatedSprite
-              frames={sprite.frames}
-              palette={sprite.palette}
-              size={inner}
-              playing={playing}
-            />
+            spriteNode
           )
         ) : (
           <span className={styles.letter} style={{ fontSize: letterSize }}>

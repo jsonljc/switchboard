@@ -22,6 +22,15 @@ function tokenValue(name: string): string {
 
 const RAW_HSL_TRIPLE = /^-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?%\s+-?\d+(?:\.\d+)?%$/;
 
+/** The feColorMatrix alpha scalar baked into a grain data URI (its intensity knob). */
+function grainAlpha(decl: string): number {
+  const m = decl.match(/feColorMatrix[^>]*?values%3D%22(.+?)%22%2F%3E/);
+  expect(m, "feColorMatrix values must be present in the grain data URI").not.toBeNull();
+  const nums = decodeURIComponent(m![1]).trim().split(/\s+/).map(Number);
+  expect(nums, "a 4x5 color matrix").toHaveLength(20);
+  return nums[18]; // row 4 (alpha out), column 4 = coefficient on input alpha
+}
+
 describe("token governance — action amber single-source (T1)", () => {
   it("defines the AA action amber primitive", () => {
     expect(tokenValue("palette-action")).toBe("30 58% 41%");
@@ -448,11 +457,7 @@ describe("token governance — paper grain (GR1)", () => {
     // subtle band so an accidental heavy value (e.g. the spec's literal 0.85,
     // which reads as a gray cast and dents canvas-text contrast) is caught, while
     // fine tuning inside the calibrated 0.22 to 0.28 sweet spot stays green.
-    const m = grainRule().match(/feColorMatrix[^>]*?values%3D%22(.+?)%22%2F%3E/);
-    expect(m, "feColorMatrix values must be present in the grain data URI").not.toBeNull();
-    const nums = decodeURIComponent(m![1]).trim().split(/\s+/).map(Number);
-    expect(nums).toHaveLength(20); // a 4x5 color matrix
-    const alpha = nums[18]; // row 4 (alpha out), column 4 = coefficient on input alpha
+    const alpha = grainAlpha(grainRule());
     expect(alpha).toBeGreaterThanOrEqual(0.12);
     expect(alpha).toBeLessThanOrEqual(0.32);
   });
@@ -506,17 +511,10 @@ describe("token governance — team poster grain (GR2)", () => {
   });
 
   it("bakes the poster grain LIGHTER than the canvas grain (spec .34 vs .42)", () => {
-    const alphaOf = (decl: string): number => {
-      const m = decl.match(/feColorMatrix[^>]*?values%3D%22(.+?)%22%2F%3E/);
-      expect(m, "feColorMatrix values must be present").not.toBeNull();
-      const nums = decodeURIComponent(m![1]).trim().split(/\s+/).map(Number);
-      expect(nums).toHaveLength(20);
-      return nums[18];
-    };
     const canvasRule = css.match(/body:has\(\.app-header\)\s*\{([^}]*)\}/);
     expect(canvasRule).not.toBeNull();
-    const posterAlpha = alphaOf(posterRule());
-    const canvasAlpha = alphaOf(canvasRule![1]);
+    const posterAlpha = grainAlpha(posterRule());
+    const canvasAlpha = grainAlpha(canvasRule![1]);
     expect(posterAlpha).toBeLessThan(canvasAlpha);
     expect(posterAlpha).toBeGreaterThanOrEqual(0.12);
   });

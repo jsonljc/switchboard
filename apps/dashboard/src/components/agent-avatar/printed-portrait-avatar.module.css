@@ -2,27 +2,34 @@
 /* The printed-portrait frame: identity-hue ground + 1px ink-offset "registration"
    halo + crisp pixel plate + status pip. Fully tokenized (hsl(var(--agent-*))). */
 
+/* Identity hue selection: each agent class only binds the two custom props;
+   the frame geometry below is defined ONCE per weight (base / hero). */
+.alex {
+  --_ground: var(--agent-alex-tint);
+  --_deep: var(--agent-alex-deep);
+}
+.riley {
+  --_ground: var(--agent-riley-tint);
+  --_deep: var(--agent-riley-deep);
+}
+.mira {
+  --_ground: var(--agent-mira-tint);
+  --_deep: var(--agent-mira-deep);
+}
+
+/* identity ground + a hard 1px ink-offset "registration" shadow (the riso
+   through-line) + a hairline. A real box-shadow needs no z-index, so it cannot be
+   lost behind an ancestor stacking context the way a negative-z ::before can. */
 .portrait {
   position: relative;
   display: inline-grid;
   place-items: center;
   flex-shrink: 0;
   border-radius: 22%;
-}
-/* identity ground + a hard 1px ink-offset "registration" shadow (the riso
-   through-line) + a hairline. A real box-shadow needs no z-index, so it cannot be
-   lost behind an ancestor stacking context the way a negative-z ::before can. */
-.alex {
-  background: hsl(var(--agent-alex-tint));
-  box-shadow: 1px 1px 0 0 hsl(var(--agent-alex-deep)), inset 0 0 0 1px var(--hair);
-}
-.riley {
-  background: hsl(var(--agent-riley-tint));
-  box-shadow: 1px 1px 0 0 hsl(var(--agent-riley-deep)), inset 0 0 0 1px var(--hair);
-}
-.mira {
-  background: hsl(var(--agent-mira-tint));
-  box-shadow: 1px 1px 0 0 hsl(var(--agent-mira-deep)), inset 0 0 0 1px var(--hair);
+  background: hsl(var(--_ground));
+  box-shadow:
+    1px 1px 0 0 hsl(var(--_deep)),
+    inset 0 0 0 1px var(--hair);
 }
 
 .plate {
@@ -42,15 +49,7 @@
   font-weight: 600;
   font-style: normal; /* never italic */
   line-height: 1;
-}
-.alex .letter {
-  color: hsl(var(--agent-alex-deep));
-}
-.riley .letter {
-  color: hsl(var(--agent-riley-deep));
-}
-.mira .letter {
-  color: hsl(var(--agent-mira-deep));
+  color: hsl(var(--_deep));
 }
 
 .pip {
@@ -89,19 +88,9 @@
 }
 
 /* ---- hero frame: the spec's poster weights (2px halo offset, 1.5px edge) ---- */
-.hero.alex {
+.hero {
   box-shadow:
-    2px 2px 0 0 hsl(var(--agent-alex-deep)),
-    inset 0 0 0 1.5px var(--hair);
-}
-.hero.riley {
-  box-shadow:
-    2px 2px 0 0 hsl(var(--agent-riley-deep)),
-    inset 0 0 0 1.5px var(--hair);
-}
-.hero.mira {
-  box-shadow:
-    2px 2px 0 0 hsl(var(--agent-mira-deep)),
+    2px 2px 0 0 hsl(var(--_deep)),
     inset 0 0 0 1.5px var(--hair);
 }
 /* The 28% pip is tuned for 22-44px chips; at 80-112px it would dominate.
