@@ -110,20 +110,10 @@ export function LiveSignalPopover() {
           </button>
         </header>
         <section className="recent-events" aria-label="Recent activity">
-          {isLoading && (
-            <p className="muted-state">
-              <em>Reading the trail…</em>
-            </p>
-          )}
-          {!isLoading && showError && (
-            <p className="muted-state">
-              <em>Couldn&apos;t load activity.</em>
-            </p>
-          )}
+          {isLoading && <p className="muted-state">Reading the trail…</p>}
+          {!isLoading && showError && <p className="muted-state">Couldn&apos;t load activity.</p>}
           {!isLoading && !showError && entries.length === 0 && (
-            <p className="muted-state">
-              <em>Nothing to report.</em>
-            </p>
+            <p className="muted-state">Nothing to report.</p>
           )}
           {!isLoading && !showError && entries.length > 0 && (
             <ul className="event-list">

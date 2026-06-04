@@ -243,7 +243,6 @@
     min-height: 240px;
     color: var(--ink-3);
     font-family: var(--serif);
-    font-style: italic;
     border: 1px dashed var(--hair);
     border-radius: var(--r-lg);
   }

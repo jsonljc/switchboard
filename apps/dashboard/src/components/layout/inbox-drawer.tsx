@@ -132,22 +132,12 @@ export function InboxDrawer() {
           <QueryStates
             query={feedQuery}
             isEmpty={(d) => d.counts.total === 0}
-            loading={
-              <p className="empty-state">
-                <em>Reading your inbox…</em>
-              </p>
-            }
-            error={
-              <p className="empty-state">
-                <em>Couldn&apos;t load your inbox.</em>
-              </p>
-            }
+            loading={<p className="empty-state">Reading your inbox…</p>}
+            error={<p className="empty-state">Couldn&apos;t load your inbox.</p>}
             empty={
               <p className="empty-state">
-                <em>
-                  You&apos;re caught up across your team. I&apos;ll write again when something needs
-                  you.
-                </em>
+                You&apos;re caught up across your team. I&apos;ll write again when something needs
+                you.
               </p>
             }
           >

@@ -887,7 +887,6 @@
   }
   .dc-resolved-line {
     font-family: var(--serif);
-    font-style: italic;
     font-size: 18px;
     color: var(--ink-2);
     display: flex;
@@ -1224,7 +1223,6 @@
   .tile-ctx {
     font-family: var(--font-sans);
     font-size: 12.5px;
-    font-style: italic;
     color: var(--ink-3);
     line-height: 1.4;
     display: -webkit-box;
@@ -1272,14 +1270,12 @@
   /* ===== Empty + freshness states ===== */
   .empty-state {
     font-family: var(--serif);
-    font-style: italic;
     font-size: 18px;
     color: var(--ink-2);
     text-wrap: pretty;
   }
   .freshness-note {
     font-family: var(--serif);
-    font-style: italic;
     font-size: 13px;
     color: var(--ink-3);
     margin-top: 8px;
