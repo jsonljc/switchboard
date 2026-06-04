@@ -48,9 +48,13 @@ export function estimateUgcCost(specs: UgcSpecForEstimate[]): TierEstimate {
   if (specs.length === 0) {
     return { cost: 0, description: "No clips to produce" };
   }
+  // Boundary matches the kling adapter's mapDuration (video-provider.ts):
+  // <=7s specs RENDER as 5s clips, so they must be BILLED as 5s clips, or the
+  // governance estimate over-states 2x for the 5-7s range scripting's
+  // midpoint durations commonly produce.
   const cost = specs.reduce(
     (sum, spec) =>
-      sum + (spec.renderTargets.durationSec > 5 ? KLING_COST_PER_10S : KLING_COST_PER_5S),
+      sum + (spec.renderTargets.durationSec > 7 ? KLING_COST_PER_10S : KLING_COST_PER_5S),
     0,
   );
   const providers = [...new Set(specs.flatMap((s) => s.providersAllowed))].sort().join(", ");

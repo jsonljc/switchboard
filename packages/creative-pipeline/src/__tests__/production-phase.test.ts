@@ -391,6 +391,27 @@ describe("executeProductionPhase", () => {
     expect(downloadCleanup).toHaveBeenCalled();
   });
 
+  it("a durable-upload failure PROPAGATES (fail loud), never re-generates or fakes success", async () => {
+    const qa = fakeQaDeps([CLEAN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+    const d = {
+      ...deps,
+      assetStorage: { upload: vi.fn().mockRejectedValue(new Error("s3 outage")) },
+    };
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1", { jobId: "job-1" })],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: d as never,
+    };
+    await expect(executeProductionPhase(input)).rejects.toThrow("s3 outage");
+    // the QA-passed render must NOT be re-generated (re-billed) by the
+    // generation retry loop swallowing the storage error
+    expect(d.providerClients.klingClient.generateVideo).toHaveBeenCalledTimes(1);
+  });
+
   it("never uploads an exhausted all-rejected asset", async () => {
     const qa = fakeQaDeps([BROKEN_VISION]);
     (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);

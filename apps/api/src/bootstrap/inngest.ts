@@ -737,7 +737,11 @@ export async function registerInngest(
             select: { id: true },
           });
           if (existing) return existing;
-          // Placeholder values are safe because Tier-1 stock avatars are gated to scripts/storyboards only — never reach video generation that would require a real heroImageAssetId or voice sample.
+          // Placeholder values are safe: Kling t2v consumes no identity fields, and
+          // since slice-3 generateDirection falls back to neutral defaults on empty
+          // arrays (no longer crashes), a placeholder reaching video generation
+          // produces a neutral-direction clip. Identity-requiring providers (PR-4
+          // HeyGen) gate on explicit identityRefIds this placeholder never has.
           const created = await creatorStore.create({
             deploymentId,
             name: "Stock Avatar (backfill)",

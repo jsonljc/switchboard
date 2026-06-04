@@ -190,39 +190,6 @@ async function processSpec(
           continue;
         }
 
-        // Durable upload, FINAL asset only (slice-3 spec 3.3f): one storage
-        // key per spec, so only the asset that survives QA may own it (an
-        // earlier rejected attempt uploading too would let later bytes
-        // silently replace what its persisted row points at). Upload failure
-        // propagates (the UGC dead-letter contract: failUgc + ugc.failed),
-        // never a fake success with a temp path.
-        if (deps.assetStorage) {
-          const providerUrl = result.videoUrl;
-          const download = await downloadVideoToTmp(providerUrl);
-          try {
-            const key = `creative-assets/${spec.jobId ?? "unknown"}/ugc-${spec.specId}.mp4`;
-            const uploaded = await deps.assetStorage.upload({
-              localPath: download.localPath,
-              key,
-              contentType: "video/mp4",
-            });
-            assetData.durableAssetUrl = uploaded.url;
-            assetData.outputs = {
-              ...assetData.outputs,
-              videoUrl: uploaded.url,
-              sourceUrl: providerUrl,
-            };
-            // Re-persist the final row with the durable outputs (idempotent:
-            // same (specId, attemptNumber, provider) key).
-            await deps.assetStore.upsertByKey({
-              jobId: spec.jobId ?? "unknown",
-              ...assetData,
-            });
-          } finally {
-            download.cleanup();
-          }
-        }
-
         return { asset: assetData, qaHistory };
       } catch {
         // Generation error — try next attempt/provider
@@ -326,6 +293,15 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
     qaResults[spec.specId] = result.qaHistory;
 
     if (result.asset) {
+      // Durable upload, FINAL non-rejected asset only (slice-3 spec 3.3f):
+      // one storage key per spec, so only the asset that survives QA may own
+      // it. DELIBERATELY OUTSIDE processSpec's generation try/catch: a
+      // storage failure must PROPAGATE (the UGC dead-letter contract:
+      // failUgc + ugc.failed), never be swallowed as a generation error that
+      // re-bills a QA-passed render or silently drops it.
+      if (deps.assetStorage && result.asset.approvalState !== "rejected") {
+        await uploadFinalAsset(spec, result.asset, deps);
+      }
       assets.push(result.asset);
     }
     if (result.failed) {
@@ -334,4 +310,31 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
   }
 
   return { assets, qaResults, failedSpecs };
+}
+
+/** Download the provider bytes (SSRF-gated) and replace them with a durable URL. */
+async function uploadFinalAsset(
+  spec: CreativeSpecInput,
+  asset: AssetRecordOutput,
+  deps: ProductionDeps,
+): Promise<void> {
+  const providerUrl = (asset.outputs as { videoUrl?: string }).videoUrl;
+  if (typeof providerUrl !== "string" || providerUrl.length === 0) return;
+
+  const download = await downloadVideoToTmp(providerUrl);
+  try {
+    const key = `creative-assets/${spec.jobId ?? "unknown"}/ugc-${spec.specId}.mp4`;
+    const uploaded = await deps.assetStorage!.upload({
+      localPath: download.localPath,
+      key,
+      contentType: "video/mp4",
+    });
+    asset.durableAssetUrl = uploaded.url;
+    asset.outputs = { ...asset.outputs, videoUrl: uploaded.url, sourceUrl: providerUrl };
+    // Re-persist the final row with the durable outputs (idempotent: same
+    // (specId, attemptNumber, provider) key).
+    await deps.assetStore.upsertByKey({ jobId: spec.jobId ?? "unknown", ...asset });
+  } finally {
+    download.cleanup();
+  }
 }

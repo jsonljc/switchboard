@@ -32,6 +32,16 @@ describe("estimateUgcCost (slice-3 spec 3.3b)", () => {
     expect(est.description).toBe("2 UGC clips via kling");
   });
 
+  it("uses the SAME duration boundary the kling adapter renders with (<=7s renders 5s)", () => {
+    // mapDuration in video-provider.ts renders <=7s specs as 5s clips; the
+    // estimate must bill the same bucket or governance over-states 2x for
+    // 5-7s clips (scripting's midpoint sums commonly land there).
+    const est = estimateUgcCost([
+      { renderTargets: { durationSec: 6 }, providersAllowed: ["kling"] },
+    ]);
+    expect(est.cost).toBeCloseTo(KLING_COST_PER_5S, 2);
+  });
+
   it("returns a zero estimate for zero specs", () => {
     const est = estimateUgcCost([]);
     expect(est.cost).toBe(0);

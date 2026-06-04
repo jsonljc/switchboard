@@ -55,7 +55,13 @@ export async function assertPublishable(
     return fail("CREATIVE_JOB_NOT_FOUND", "Creative job not found for this organization.");
   }
 
-  const isComplete = job.currentStage === "complete" && !job.stoppedAt;
+  // Mode-aware completeness (slice-3 spec 3.3f): UGC jobs never advance
+  // currentStage (it stays the polished column default), they complete via
+  // ugcPhase; a failed UGC job is terminal regardless of phase value.
+  const isComplete =
+    job.mode === "ugc"
+      ? job.ugcPhase === "complete" && job.ugcFailure == null && !job.stoppedAt
+      : job.currentStage === "complete" && !job.stoppedAt;
   const isKept = job.reviewDecision === "kept";
   if (!isComplete || !isKept) {
     return fail(
