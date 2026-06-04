@@ -336,7 +336,7 @@ describe("executeProductionPhase", () => {
     const qa = fakeQaDeps([BROKEN_VISION]);
     (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
 
-    // spec_1 burns 3 failing attempts (3 x 0.5 estimated kling cost = 1.5),
+    // spec_1 burns 3 failing attempts (3 x 0.35 estimated kling cost = 1.05),
     // crossing the 1.0 budget BEFORE spec_2 starts.
     const input: ProductionInput = {
       specs: [makeSpec("spec_1"), makeSpec("spec_2")],

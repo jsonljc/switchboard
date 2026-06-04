@@ -218,4 +218,64 @@ describe("creative spend gate (real GovernanceGate + real producer)", () => {
     );
     expect(decision.outcome).toBe("execute");
   });
+
+  // ── Slice-3: the UGC leg of the SAME producer drives the SAME gate (3.3b) ──
+
+  const ugcSpec = (durationSec: number) => ({
+    renderTargets: { durationSec },
+    providersAllowed: ["kling"],
+  });
+  // 50 ten-second clips = 50 x $0.70 = $35, over the $15 seeded threshold;
+  // 2 short clips = $0.70, well under.
+  const LARGE_UGC_JOB = {
+    mode: "ugc",
+    ugcPhase: "production",
+    ugcFailure: null,
+    stoppedAt: null,
+    stageOutputs: {},
+    ugcPhaseOutputs: { scripting: { specs: Array.from({ length: 50 }, () => ugcSpec(10)) } },
+  };
+  const SMALL_UGC_JOB = {
+    ...LARGE_UGC_JOB,
+    ugcPhaseOutputs: { scripting: { specs: [ugcSpec(5), ugcSpec(5)] } },
+  };
+
+  it("parks a real over-threshold UGC render at the approve-into-production gate", async () => {
+    const cost = await computeRenderSpend(LARGE_UGC_JOB, undefined);
+    expect(cost).not.toBeNull();
+    expect(cost!).toBeGreaterThan(CREATIVE_SPEND_APPROVAL_THRESHOLD);
+    const gate = buildGate([creativeAllowPolicy()]);
+    const decision = await gate.evaluate(
+      makeWorkUnit({ jobId: "j1", spendAmount: cost }, SEEDED),
+      continueRegistration(),
+    );
+    expect(decision.outcome).toBe("require_approval");
+    expect(decision.matchedPolicies).toContain("SPEND_APPROVAL_THRESHOLD");
+  });
+
+  it("executes an under-threshold UGC render", async () => {
+    const cost = await computeRenderSpend(SMALL_UGC_JOB, undefined);
+    expect(cost).not.toBeNull();
+    expect(cost!).toBeLessThan(CREATIVE_SPEND_APPROVAL_THRESHOLD);
+    const gate = buildGate([creativeAllowPolicy()]);
+    const decision = await gate.evaluate(
+      makeWorkUnit({ jobId: "j1", spendAmount: cost }, SEEDED),
+      continueRegistration(),
+    );
+    expect(decision.outcome).toBe("execute");
+  });
+
+  it("the delivery-gate approve carries NO spend (negative case): money already spent", async () => {
+    // After production runs, ugcPhase is "delivery" and specs are still
+    // present; the producer must return null so the route omits spendAmount
+    // and the lever no-ops (no false park for spent money).
+    const cost = await computeRenderSpend({ ...LARGE_UGC_JOB, ugcPhase: "delivery" }, undefined);
+    expect(cost).toBeNull();
+    const gate = buildGate([creativeAllowPolicy()]);
+    const decision = await gate.evaluate(
+      makeWorkUnit({ jobId: "j1" }, SEEDED), // no spendAmount param at all
+      continueRegistration(),
+    );
+    expect(decision.outcome).toBe("execute");
+  });
 });
