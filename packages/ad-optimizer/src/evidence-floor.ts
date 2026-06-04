@@ -1,34 +1,13 @@
 import type { AdRecommendationActionSchema as AdRecommendationAction } from "@switchboard/schemas";
+import { ACTION_CONTRACT, type EvidenceFamily } from "./action-contract.js";
+
+export type { EvidenceFamily } from "./action-contract.js";
 
 export interface Evidence {
   clicks: number;
   conversions: number;
   days: number;
 }
-
-export type EvidenceFamily =
-  | "destructive" // pause / cut — highest floor
-  | "scale" // moderate-high
-  | "structural" // restructure/consolidate/expand — requires learning-limited + volume (Phase D); destructive-grade floor here
-  | "diagnostic" // hold / diagnose-only — low floor
-  | "measurement"; // signal/CAPI fixes — account-level, bypass campaign-volume floor
-
-const FAMILY: Record<AdRecommendationAction, EvidenceFamily> = {
-  pause: "destructive",
-  add_creative: "destructive",
-  scale: "scale",
-  review_budget: "scale",
-  shift_budget_to_source: "scale",
-  refresh_creative: "diagnostic",
-  restructure: "structural",
-  consolidate: "structural",
-  expand_targeting: "structural",
-  switch_optimization_event: "scale",
-  hold: "diagnostic",
-  test: "diagnostic",
-  harden_capi_attribution: "measurement",
-  fix_signal_health: "measurement",
-};
 
 /** Floors are small-budget-calibrated; named config, not magic numbers (Phase-A spec §11).
  * Tune via the eval, never silently. */
@@ -40,8 +19,9 @@ export const EVIDENCE_FLOORS: Record<EvidenceFamily, Evidence> = {
   measurement: { clicks: 0, conversions: 0, days: 0 },
 };
 
+/** Derived from the consolidated ACTION_CONTRACT (Riley v3 slice 2). API unchanged. */
 export function evidenceFamilyFor(action: AdRecommendationAction): EvidenceFamily {
-  return FAMILY[action];
+  return ACTION_CONTRACT[action].evidenceFamily;
 }
 
 export function meetsEvidenceFloor(action: AdRecommendationAction, e: Evidence): boolean {

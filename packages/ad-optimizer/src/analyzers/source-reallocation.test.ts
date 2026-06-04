@@ -293,4 +293,36 @@ describe("computeAuditEconomicsSections", () => {
     });
     expect(out.reallocation).toBeNull();
   });
+
+  it("returns the producer-6-enriched revenueState and spendBySource when per-source data exists", async () => {
+    // Riley v3 slice 2: the arbitrator reads both (enriched state for truthConfidence,
+    // per-source spend for the account-scoped shift candidate's structured magnitude).
+    const out = await computeAuditEconomicsSections({
+      ...sectionBase,
+      currentInsights: [
+        insight({ campaignId: "c_ctwa", spend: 100, inlineLinkClicks: 200, conversions: 20 }),
+        insight({ campaignId: "c_if", spend: 100, inlineLinkClicks: 200, conversions: 20 }),
+      ],
+      adSetData: [
+        adSet("c_ctwa", "as_ctwa", "WHATSAPP", 100),
+        adSet("c_if", "as_if", "ON_AD", 100),
+      ],
+      bySource: winnerBySource,
+      byCampaign: undefined,
+    });
+    expect(out.spendBySource).toBeDefined();
+    expect(out.spendBySource?.ctwa).toBeCloseTo(100, 6);
+    expect(out.revenueState.spendAttributionCoverageBySource).toBeDefined();
+    expect(out.revenueState.spendAttributionCoverageBySource?.ctwa).toBeCloseTo(1, 6);
+  });
+
+  it("passes the input revenueState through untouched when no per-source data exists", async () => {
+    const out = await computeAuditEconomicsSections({
+      ...sectionBase,
+      bySource: undefined,
+      byCampaign: undefined,
+    });
+    expect(out.spendBySource).toBeUndefined();
+    expect(out.revenueState).toBe(sectionBase.revenueState);
+  });
 });

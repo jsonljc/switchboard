@@ -18,7 +18,7 @@ import { withSpendAttributionCoverage, type RevenueState } from "../revenue-stat
  * `"account"` sentinel the audit-runner coverage insight uses rather than a real
  * Meta campaign id.
  */
-const ACCOUNT_CAMPAIGN_ID = "account";
+export const ACCOUNT_CAMPAIGN_ID = "account";
 
 // Meaningful-difference + winner-quality thresholds. Relocated verbatim from the
 // former (never-reached) per-campaign shift branch in recommendation-engine.ts;
@@ -256,10 +256,18 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
   sourceComparison?: { rows: SourceComparisonRow[] };
   campaignEconomics?: { rows: CampaignEconomicsRow[] };
   reallocation: RecommendationOutput | WatchOutput | null;
+  /** Riley v3 slice 2: the input RevenueState completed with producer 6 when per-source
+   * data was available (passthrough otherwise); the arbitrator reads it. */
+  revenueState: RevenueState;
+  /** Riley v3 slice 2: per-source attributed spend (dollars) when computed; keys the
+   * account-scoped shift candidate's structured materiality. */
+  spendBySource?: Record<string, number>;
 }> {
   // Per-source comparison + the account-level reallocation advisory.
   let sourceComparison: { rows: SourceComparisonRow[] } | undefined;
   let reallocation: RecommendationOutput | WatchOutput | null = null;
+  let enrichedRevenueState = input.revenueState;
+  let spendBySourceOut: Record<string, number> | undefined;
   const { bySource } = input;
   if (bySource && Object.keys(bySource).length > 0) {
     const { spendBySource, coverageBySource } = computeSpendBySource(
@@ -268,6 +276,10 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
       input.adSetData,
     );
     sourceComparison = compareSources({ bySource, spendBySource });
+    spendBySourceOut = spendBySource;
+    // Progressive assembly: complete the late per-source spend-attribution coverage field
+    // (producer 6) on the account RevenueState just before the reallocation reads it.
+    enrichedRevenueState = withSpendAttributionCoverage(input.revenueState, coverageBySource);
     // Gate the DECISION on per-source attribution coverage: each compared source's spend must
     // be (mostly) real ad-set attribution, not the synthetic lead-share fallback (the
     // comparison still feeds the report's display). With ad-set attribution wired into the
@@ -283,9 +295,7 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
         // (the `days` floor is 7 and a weekly audit always satisfies it).
         days: 7,
       },
-      // Progressive assembly: complete the late per-source spend-attribution coverage field
-      // (producer 6) on the account RevenueState just before the reallocation reads it.
-      revenueState: withSpendAttributionCoverage(input.revenueState, coverageBySource),
+      revenueState: enrichedRevenueState,
       nextCycleDate: input.nextCycleDate,
     });
   }
@@ -312,5 +322,11 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
     });
   }
 
-  return { sourceComparison, campaignEconomics, reallocation };
+  return {
+    sourceComparison,
+    campaignEconomics,
+    reallocation,
+    revenueState: enrichedRevenueState,
+    ...(spendBySourceOut !== undefined ? { spendBySource: spendBySourceOut } : {}),
+  };
 }

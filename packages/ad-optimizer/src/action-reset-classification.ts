@@ -2,41 +2,26 @@ import type {
   AdRecommendationActionSchema as AdRecommendationAction,
   ResetsLearningSchema as ResetsLearning,
 } from "@switchboard/schemas";
+import { ACTION_CONTRACT } from "./action-contract.js";
 
 /**
- * Canonical, single-source-of-truth classification of whether each Riley action
- * resets Meta's learning phase, per Meta mechanics (see the Phase-A spec §5).
- *
- *  - "yes": adding/removing creative, targeting/structure change, or optimization-
- *    event change — Meta re-enters learning.
- *  - "conditional": budget moves that reset ONLY past the ~20% significant-edit
- *    threshold. Riley's `scale` is capped at 20% so it is "no"; generic budget
- *    reviews/shifts can exceed it, so "conditional".
- *  - "no": pause (a <7d pause does not reset; Riley's pause is immediate, not a
- *    timed >=7d pause), hold, and pixel/CAPI hygiene.
+ * Learning-phase reset classification, now DERIVED from the consolidated
+ * ACTION_CONTRACT (Riley v3 slice 2); see action-contract.ts for the rationale
+ * per action (Meta mechanics, Phase-A spec section 5). Public API unchanged.
  *
  * INVARIANT (enforced in recommendation-sink): any action classified "yes" is
  * never swipe-approvable, regardless of its financial classification.
  */
-export const ACTION_RESETS_LEARNING: Record<AdRecommendationAction, ResetsLearning> = {
-  scale: "no",
-  pause: "no",
-  refresh_creative: "yes",
-  restructure: "yes",
-  hold: "no",
-  test: "no",
-  review_budget: "conditional",
-  add_creative: "yes",
-  expand_targeting: "yes",
-  consolidate: "yes",
-  shift_budget_to_source: "conditional",
-  switch_optimization_event: "yes",
-  harden_capi_attribution: "no",
-  fix_signal_health: "no",
-};
+export const ACTION_RESETS_LEARNING: Record<AdRecommendationAction, ResetsLearning> = (() => {
+  const out = {} as Record<AdRecommendationAction, ResetsLearning>;
+  for (const action of Object.keys(ACTION_CONTRACT) as AdRecommendationAction[]) {
+    out[action] = ACTION_CONTRACT[action].resetsLearning;
+  }
+  return out;
+})();
 
 export function resetsLearningFor(action: AdRecommendationAction): ResetsLearning {
-  return ACTION_RESETS_LEARNING[action];
+  return ACTION_CONTRACT[action].resetsLearning;
 }
 
 /**

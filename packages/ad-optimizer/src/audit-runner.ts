@@ -35,6 +35,7 @@ import {
   type RecommendationHandoffSubmitter,
 } from "./recommendation-handoff-dispatch.js";
 import { computeAuditEconomicsSections } from "./analyzers/source-reallocation.js";
+import { arbitrate } from "./analyzers/opportunity-arbitrator.js";
 import type {
   CampaignFunnel,
   CrmFunnelDataWithSources,
@@ -551,18 +552,23 @@ export class AuditRunner {
     // advisory, computed in a focused module to keep this file under the 600-line cap.
     // The per-source economics (previously computed-then-discarded) now drive one
     // advisory shift_budget_to_source rec; campaignEconomics is unchanged.
-    const { sourceComparison, campaignEconomics, reallocation } =
-      await computeAuditEconomicsSections({
-        bySource: (crmData as CrmFunnelDataWithSources).bySource,
-        byCampaign,
-        currentInsights,
-        adSetData,
-        revenueState,
-        nextCycleDate,
-        orgId: this.config.orgId,
-        dateRange,
-        bookedValueProvider: this.bookedValueByCampaignProvider,
-      });
+    const {
+      sourceComparison,
+      campaignEconomics,
+      reallocation,
+      revenueState: economicsRevenueState,
+      spendBySource,
+    } = await computeAuditEconomicsSections({
+      bySource: (crmData as CrmFunnelDataWithSources).bySource,
+      byCampaign,
+      currentInsights,
+      adSetData,
+      revenueState,
+      nextCycleDate,
+      orgId: this.config.orgId,
+      dateRange,
+      bookedValueProvider: this.bookedValueByCampaignProvider,
+    });
     if (reallocation?.type === "recommendation") recommendations.push(reallocation);
     else if (reallocation?.type === "watch") watches.push(reallocation);
 
@@ -571,6 +577,21 @@ export class AuditRunner {
     if (signalHealthRecs.length > 0) {
       recommendations.push(...signalHealthRecs);
     }
+
+    // Step 8d (Riley v3 slice 2): cross-campaign arbitration, ADDITIVE ranking
+    // metadata over the final candidate set. Pure annotation: Step 9 emission and
+    // the handoff consume `recommendations` unchanged; only the report carries the
+    // ranking. Reads the economics-enriched RevenueState (producer 6 present when
+    // per-source data existed).
+    const arbitration =
+      recommendations.length > 0
+        ? arbitrate({
+            candidates: recommendations,
+            revenueState: economicsRevenueState,
+            currentInsights,
+            ...(spendBySource ? { spendBySource } : {}),
+          })
+        : undefined;
 
     // Step 9: Emit recommendations to the v1 pipeline (queue / shadow / dropped).
     // Graceful degradation: skipped when no emitter is wired so existing
@@ -628,6 +649,7 @@ export class AuditRunner {
       ...(adSetDetails ? { adSetDetails } : {}),
       ...(sourceComparison ? { sourceComparison } : {}),
       ...(campaignEconomics ? { campaignEconomics } : {}),
+      ...(arbitration ? { arbitration } : {}),
     };
   }
 }

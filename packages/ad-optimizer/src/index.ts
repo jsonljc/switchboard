@@ -12,7 +12,10 @@ export type {
 } from "./learning-phase-guard.js";
 export { diagnose } from "./metric-diagnostician.js";
 export type { Diagnosis } from "./metric-diagnostician.js";
-export { generateRecommendations } from "./recommendation-engine.js";
+export {
+  generateRecommendations,
+  generateSignalHealthRecommendations,
+} from "./recommendation-engine.js";
 export type { RecommendationInput } from "./recommendation-engine.js";
 export {
   decideForCampaign,
@@ -126,6 +129,26 @@ export type {
 // (the decision layer + eval seam construct it; per-campaign tier stays separate).
 export { assembleRevenueState, withSpendAttributionCoverage } from "./revenue-state.js";
 export type { RevenueState, AssembleRevenueStateInput } from "./revenue-state.js";
+
+// Riley v3 slice 2: the consolidated per-action contract (single source for the
+// sink booleans + reset class + evidence family), the mutating-ness question, and
+// the cross-campaign arbitrator (the eval harness drives it through the barrel).
+export { ACTION_CONTRACT, isMutating } from "./action-contract.js";
+export type { ActionContract } from "./action-contract.js";
+export {
+  arbitrate,
+  PROXIMITY_BY_TIER,
+  MEASUREMENT_UNTRUSTED_FACTOR,
+  SIGNAL_YELLOW_FACTOR,
+  LEARNING_RESET_PENALTY,
+  ATTRIBUTION_CONFLICT_PENALTY,
+} from "./analyzers/opportunity-arbitrator.js";
+export type {
+  ArbitrateInput,
+  ArbitrationResult,
+  RankedOpportunity,
+  MeasurementFixRef,
+} from "./analyzers/opportunity-arbitrator.js";
 
 // Abstention helpers (consumed by the Riley->agent recommendation-handoff seam).
 export { meetsEvidenceFloor, evidenceFamilyFor, EVIDENCE_FLOORS } from "./evidence-floor.js";
