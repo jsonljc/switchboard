@@ -122,7 +122,7 @@ All files well under the 600-line arch-check ceiling. ESM with `.js` relative im
 
 - Create: `docs/superpowers/plans/2026-06-04-riley-v3-slice4a-operational-state.md` (this document)
 
-- [ ] **Step 0.1: Verify branch context, then commit the plan doc**
+- [x] **Step 0.1: Verify branch context, then commit the plan doc**
 
 ```bash
 git branch --show-current   # expect: worktree-riley-v3-slice-4a
@@ -144,7 +144,7 @@ Note: lint-staged may reformat the markdown on commit; if the commit fails with 
 - Modify: `packages/schemas/src/index.ts` (after the `export * from "./marketplace.js";` line)
 - Modify: `packages/schemas/src/__tests__/index-exports.test.ts`
 
-- [ ] **Step 1.1: Write the failing schema test**
+- [x] **Step 1.1: Write the failing schema test**
 
 Create `packages/schemas/src/__tests__/operational-state.test.ts`:
 
@@ -281,7 +281,7 @@ describe("OperationalStateConfirmationSchema", () => {
 });
 ```
 
-- [ ] **Step 1.2: Run the test, verify it fails on the missing module**
+- [x] **Step 1.2: Run the test, verify it fails on the missing module**
 
 ```bash
 pnpm --filter @switchboard/schemas test -- operational-state
@@ -289,7 +289,7 @@ pnpm --filter @switchboard/schemas test -- operational-state
 
 Expected: FAIL with `Cannot find module '../operational-state.js'` (or equivalent resolve error).
 
-- [ ] **Step 1.3: Write the schema module**
+- [x] **Step 1.3: Write the schema module**
 
 Create `packages/schemas/src/operational-state.ts`:
 
@@ -406,7 +406,7 @@ it("exports operational-state primitives (riley v3 slice 4a)", () => {
 });
 ```
 
-- [ ] **Step 1.4: Run schemas tests + typecheck, verify green**
+- [x] **Step 1.4: Run schemas tests + typecheck, verify green**
 
 ```bash
 pnpm --filter @switchboard/schemas test
@@ -415,7 +415,7 @@ pnpm --filter @switchboard/schemas typecheck 2>/dev/null || pnpm typecheck
 
 Expected: all schemas tests PASS (735 baseline + ~12 new), typecheck clean.
 
-- [ ] **Step 1.5: Build schemas (so db sees the new exports), commit**
+- [x] **Step 1.5: Build schemas (so db sees the new exports), commit**
 
 ```bash
 pnpm --filter @switchboard/schemas build
@@ -438,7 +438,7 @@ git commit -m "feat(schemas): operational-state confirmation schemas (riley v3 s
 - Create: `packages/db/src/stores/prisma-operational-state-store.ts`
 - Modify: `packages/db/src/index.ts` (next to the business-facts store export block, ~line 113)
 
-- [ ] **Step 2.1: Write the failing store test**
+- [x] **Step 2.1: Write the failing store test**
 
 Create `packages/db/src/stores/__tests__/prisma-operational-state-store.test.ts`:
 
@@ -699,7 +699,7 @@ describe("PrismaOperationalStateStore", () => {
 });
 ```
 
-- [ ] **Step 2.2: Run the store test, verify it fails on the missing module**
+- [x] **Step 2.2: Run the store test, verify it fails on the missing module**
 
 ```bash
 pnpm --filter @switchboard/db test -- prisma-operational-state-store
@@ -707,7 +707,7 @@ pnpm --filter @switchboard/db test -- prisma-operational-state-store
 
 Expected: FAIL with `Cannot find module '../prisma-operational-state-store.js'`.
 
-- [ ] **Step 2.3: Add the Prisma model and hand-write the migration**
+- [x] **Step 2.3: Add the Prisma model and hand-write the migration**
 
 In `packages/db/prisma/schema.prisma`, insert between the `ConfigVersion` model and the `// ── AI Agent System: Outcome Tracking ──` banner:
 
@@ -832,7 +832,7 @@ Then regenerate the client so the `operationalStateConfirmation` delegate exists
 pnpm db:generate
 ```
 
-- [ ] **Step 2.4: Implement the store**
+- [x] **Step 2.4: Implement the store**
 
 Create `packages/db/src/stores/prisma-operational-state-store.ts`:
 
@@ -1028,7 +1028,7 @@ Do NOT add it to any client-safe surface (`dashboard-client-surface` exports); t
 
 **Drift gate for the mocked-test blind spot:** the store must compile against the GENERATED Prisma client with zero casts. The constructor takes the real `PrismaClient`; `rowToConfirmation` receives the generated row type by structural assignability (its `promoWindows`/`closures` are typed `unknown` in `ConfirmationRow`, which the generated `JsonValue` satisfies); there is no `as any`/`as never` anywhere in the store source (the only `as never` lives in tests for mock injection). `pnpm db:generate` followed by `pnpm typecheck` therefore catches delegate-name and column-name drift that mocked tests cannot; `pnpm db:check-drift` + local `migrate deploy` catch model-vs-migration drift on the real engine.
 
-- [ ] **Step 2.5: Run the store tests, verify green**
+- [x] **Step 2.5: Run the store tests, verify green**
 
 ```bash
 pnpm --filter @switchboard/db test -- prisma-operational-state-store
@@ -1036,7 +1036,7 @@ pnpm --filter @switchboard/db test -- prisma-operational-state-store
 
 Expected: PASS (all ~11 new tests).
 
-- [ ] **Step 2.6: Drift check + apply the migration locally**
+- [x] **Step 2.6: Drift check + apply the migration locally**
 
 ```bash
 pnpm db:check-drift
@@ -1052,7 +1052,7 @@ cd ../..
 
 Expected: `1 migration applied: 20260604233000_operational_state_confirmation`. (Do NOT use `pnpm db:migrate`; it runs `prisma migrate dev`, which needs a TTY. Do NOT `source .env`; the URL contains `&`.)
 
-- [ ] **Step 2.7: Full db + schemas + core test pass, typecheck**
+- [x] **Step 2.7: Full db + schemas + core test pass, typecheck**
 
 ```bash
 pnpm --filter @switchboard/db build
@@ -1062,7 +1062,7 @@ pnpm typecheck
 
 Expected: schemas + core green; db green except the pre-existing PG trio (work-trace/ledger/greeting, 9 tests); typecheck clean. Gate = no NEW db failures.
 
-- [ ] **Step 2.8: Commit (model + migration + store + tests, one commit per doctrine)**
+- [x] **Step 2.8: Commit (model + migration + store + tests, one commit per doctrine)**
 
 ```bash
 git add packages/db/prisma/schema.prisma \
@@ -1081,7 +1081,7 @@ git commit -m "feat(db): append-only operational-state confirmation store + migr
 
 - Modify: `docs/superpowers/plans/2026-06-04-riley-v3-slice4a-operational-state.md` (tick checkboxes, record evidence below)
 
-- [ ] **Step 3.1: Full build + typecheck from clean state**
+- [x] **Step 3.1: Full build + typecheck from clean state**
 
 ```bash
 pnpm build && pnpm typecheck
@@ -1089,7 +1089,7 @@ pnpm build && pnpm typecheck
 
 Expected: all tasks green.
 
-- [ ] **Step 3.2: Full test sweep (schemas, db, core, api as insurance)**
+- [x] **Step 3.2: Full test sweep (schemas, db, core, api as insurance)**
 
 ```bash
 pnpm --filter @switchboard/schemas test
@@ -1100,7 +1100,7 @@ pnpm --filter @switchboard/api test
 
 Expected: green everywhere except the known db PG trio. The api run is insurance per the store-tightening lesson (no api test knows this store yet, but the suite must stay green against rebuilt schemas/db dists).
 
-- [ ] **Step 3.3: Eval gates, byte-comparison against baseline**
+- [x] **Step 3.3: Eval gates, byte-comparison against baseline**
 
 ```bash
 pnpm eval:riley > /tmp/post-eval-riley.txt 2>&1; echo "exit: $?"
@@ -1115,7 +1115,7 @@ Expected: both exit 0, both diffs empty (12+10+6 and 26 cases). Then attempt the
 ANTHROPIC_API_KEY=$(grep '^ANTHROPIC_API_KEY=' .env | cut -d= -f2-) pnpm eval:alex-conversation > /tmp/post-eval-alex.txt 2>&1; echo "exit: $?"; tail -5 /tmp/post-eval-alex.txt
 ```
 
-- [ ] **Step 3.4: Scope-fence grep proofs (record output in the PR body)**
+- [x] **Step 3.4: Scope-fence grep proofs (record output in the PR body)**
 
 ```bash
 git fetch origin main
@@ -1134,7 +1134,7 @@ grep -v '^--' packages/db/prisma/migrations/20260604233000_operational_state_con
 grep -rn "PrismaOperationalStateStore" apps/ packages/core packages/ad-optimizer --include="*.ts" --include="*.tsx" | grep -v node_modules   # expect no matches
 ```
 
-- [ ] **Step 3.5: Lint, format, arch-check (separate CI jobs; local lint covers neither)**
+- [x] **Step 3.5: Lint, format, arch-check (separate CI jobs; local lint covers neither)**
 
 ```bash
 pnpm lint
@@ -1144,7 +1144,7 @@ pnpm arch:check
 
 Expected: all green.
 
-- [ ] **Step 3.6: Commit the evidence (ticked checkboxes + recorded outputs)**
+- [x] **Step 3.6: Commit the evidence (ticked checkboxes + recorded outputs)**
 
 ```bash
 git add docs/superpowers/plans/2026-06-04-riley-v3-slice4a-operational-state.md
@@ -1185,6 +1185,17 @@ git commit -m "docs(plans): record slice-4a verification evidence"
 - Review hardening (2026-06-04 plan review): same-instant tie rule defined (`confirmedAt`, `createdAt`, `id`) and test-pinned; DB-level nonempty CHECK added; note-only confirmations rejected at Zod AND DB; interval `end > start` refine + tests; FK decision documented (no Organization model exists; bare `organizationId` is the repo-wide convention); `confirmedAt` made a required store parameter; malformed-row asymmetry pinned (governing-malformed keeps valid in-window rows; latest-malformed does not fall back, single-query pinned); identifier lengths verified by `wc -c` at execution.
 - Placeholder scan: no TBDs; all code complete. Type consistency: `getConfirmationsOverlappingWindow`, `recordConfirmation`, `getLatest` used identically in store, tests, and prose; `OperationalState`/`OperationalStateConfirmation` names consistent across schemas/db.
 
-## Verification evidence (filled during Task 3)
+## Verification evidence (recorded 2026-06-04, branch HEAD d1e59cca, base dc949b2e)
 
-_To be recorded at execution time._
+- Full build green (10 turbo tasks); `pnpm typecheck` green (21 tasks, FULL TURBO on re-run).
+- schemas: 749 passed (735 baseline + 14 new). db: 924 passed, 9 failed in exactly the pre-existing PG trio (ledger 2, greeting 1, work-trace 6), identical to the clean-baseline failure set. core: 3719 passed (identical to baseline). api: 1447 passed.
+- `pnpm eval:riley` exit 0, output BYTE-IDENTICAL to the pre-change baseline (12 + 10 + 6). `pnpm eval:governance` exit 0, BYTE-IDENTICAL (26).
+- alex-conversation eval re-attempted post-change: still environmentally blocked (HTTP 400 "credit balance is too low", auth OK). Mitigation chain holds: BusinessFactsSchema / PrismaBusinessFactsStore / alex builder / evals/ all byte-untouched (diff-proven below), core suite green, eval harness compiles against rebuilt dists.
+- Diff surface = exactly the 10 planned files, 1959 insertions, 0 deletions. Zero diff under packages/ad-optimizer, packages/core, apps/, evals/. marketplace.ts, playbook.ts, prisma-business-facts-store.ts byte-untouched.
+- PlatformIngress: zero imports/calls in the diff; the only code-file occurrence is the store doc-comment's negative assertion ("never through PlatformIngress"), all other matches are this plan's own prose.
+- Migration: zero INSERT/UPDATE statements (comments stripped); structure only.
+- `pnpm db:check-drift`: "OK: no Prisma schema drift detected" (shadow-DB replay of the hand-written SQL). `prisma migrate deploy` applied cleanly to local PG 17.9.
+- Real-engine CHECK smoke test: contentless row REJECTED (nonempty_state_check), note-only row REJECTED (nonempty_state_check), bad enum REJECTED (operatingStatus_check), valid row accepted; smoke rows deleted.
+- Identifier lengths via `wc -c`: index 59, nonempty CHECK 49, operatingStatus CHECK 50 (cap 63; plan's expectation comment said 50 for nonempty, actual 49).
+- `PrismaOperationalStateStore` constructed nowhere in apps/, packages/core, packages/ad-optimizer (0 matches): capability only.
+- `pnpm lint` green; `pnpm format:check` green; `pnpm arch:check` green (no error-level issues; 50 pre-existing warnings).
