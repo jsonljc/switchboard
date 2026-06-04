@@ -97,4 +97,30 @@ describe("<PrintedPortraitAvatar>", () => {
     const root = container.firstElementChild as HTMLElement;
     expect(root.getAttribute("aria-hidden")).toBe("true");
   });
+
+  it('size="fill" makes the box fluid (data contract; sizing lives in CSS)', () => {
+    const { container } = render(<PrintedPortraitAvatar agentKey="alex" size="fill" />);
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.dataset.size).toBe("fill");
+    // No fixed inline px box in fill mode.
+    expect(root.style.width).toBe("");
+    expect(root.style.height).toBe("");
+    // Sprite still renders, scaled to the box.
+    expect(container.querySelector("svg")?.getAttribute("width")).toBe("100%");
+  });
+
+  it("number mode is unchanged (no data-size, fixed px box)", () => {
+    const { container } = render(<PrintedPortraitAvatar agentKey="alex" size={44} />);
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.dataset.size).toBeUndefined();
+    expect(root.style.width).toBe("44px");
+  });
+
+  it("hero prop applies the hero frame variant (data contract)", () => {
+    const { container } = render(<PrintedPortraitAvatar agentKey="riley" size="fill" hero />);
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.dataset.hero).toBe("true");
+    const chip = render(<PrintedPortraitAvatar agentKey="riley" size={28} />);
+    expect((chip.container.firstElementChild as HTMLElement).dataset.hero).toBeUndefined();
+  });
 });

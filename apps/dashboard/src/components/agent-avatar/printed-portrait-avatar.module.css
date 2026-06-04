@@ -77,6 +77,40 @@
   background: hsl(var(--agent-locked));
 }
 
+/* ---- fill mode: fluid, parent-controlled box (the hero poster) ---- */
+.fill {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+.fillInner {
+  display: block;
+  width: 82%; /* same ground reveal as the number path (inner = 0.82 * size) */
+  aspect-ratio: 1 / 1;
+}
+
+/* ---- hero frame: the spec's poster weights (2px halo offset, 1.5px edge) ---- */
+.hero.alex {
+  box-shadow:
+    2px 2px 0 0 hsl(var(--agent-alex-deep)),
+    inset 0 0 0 1.5px var(--hair);
+}
+.hero.riley {
+  box-shadow:
+    2px 2px 0 0 hsl(var(--agent-riley-deep)),
+    inset 0 0 0 1.5px var(--hair);
+}
+.hero.mira {
+  box-shadow:
+    2px 2px 0 0 hsl(var(--agent-mira-deep)),
+    inset 0 0 0 1.5px var(--hair);
+}
+/* The 28% pip is tuned for 22-44px chips; at 80-112px it would dominate.
+   17% reads as the same calm dot at hero scale (13-19px across the fluid range). */
+.hero .pip {
+  width: 17%;
+  height: 17%;
+}
+
 .portrait[data-playing="true"] .pip[data-pip="active"] {
   animation: pp-pulse 2.6s ease-in-out infinite;
 }
