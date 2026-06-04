@@ -48,10 +48,14 @@ function toRecord(row: Row): GovernanceVerdictRecord {
 export interface PrismaGovernanceVerdictStoreOptions {
   /**
    * Optional post-write callback. Fires AFTER a verdict row is successfully
-   * persisted. Used by Phase 3a conversation-lifecycle wiring to escalate
-   * threads on `action: "escalate"` verdicts. Errors propagate to the caller
-   * — the row has already been persisted, but the caller learns the side
-   * effect failed.
+   * persisted. Errors propagate to the caller — the row has already been
+   * persisted, but the caller learns the side effect failed.
+   *
+   * SINGLE-CALLBACK SLOT, currently occupied: both app bootstraps pass
+   * `recordGovernanceVerdictMetric` (the switchboard_governance_verdicts_total
+   * counter). A future consumer (e.g. the deferred Phase 3a lifecycle
+   * escalation, which today uses its own registrar in bootstrap/lifecycle.ts)
+   * must COMPOSE with the metric callback, not replace it.
    */
   onWrite?: (record: GovernanceVerdictRecord) => Promise<void>;
 }

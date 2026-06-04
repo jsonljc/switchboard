@@ -211,6 +211,13 @@ auditLevel`; `switchboard_governance_verdicts_total` in metrics; verdict `modelL
   distribution for the classifier; `switchboard_skill_llm_*` + reply latency must be unmoved by
   observe. Classifier token spend rides key-level Anthropic monitoring (its calls do not flow
   through the executor adapter counters).
+- READ CAVEAT (pre-existing gate convention divergence, surfaced by the counter): the WhatsApp
+  gate encodes its would-fire signal as the literal action (`block` / `template_required`,
+  `auditLevel:"critical"`) EVEN IN OBSERVE, while safety/claim/pdpa/pre-input encode observe as
+  `allow` + `warning`. Read WhatsApp verdict rows and counter labels with the deployment's
+  posture in mind; nothing was mutated while the posture is observe. Normalizing the WhatsApp
+  gate to the `allow`+`warning` observe convention is a candidate follow-up BEFORE its enforce
+  flip (deliberately out of this slice, which changes no WhatsApp gate code).
 - Flip (post-bake, ops-controlled, per gate, config-only): update the deployment's
   `governanceConfig` sub-block mode to `enforce`. Recommended order: `deterministicGate` ->
   `whatsappWindow` -> `consentState` -> `claimClassifier` (regex first, LLM judgment last).
