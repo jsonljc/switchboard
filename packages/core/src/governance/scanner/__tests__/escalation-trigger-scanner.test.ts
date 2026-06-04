@@ -71,3 +71,65 @@ describe("scanForEscalationTriggers", () => {
     expect(text.slice(matches[0]?.index ?? 0)).toContain("pregnant");
   });
 });
+
+describe("scanForEscalationTriggers - per-match negation suppression", () => {
+  const CONDITION_ENTRY: EscalationTriggerEntry = {
+    id: "test_condition",
+    category: "sensitive_keyword",
+    patterns: [/\b(?:diabetes|warfarin|aspirin)\b/i],
+    negations: [
+      /\b(?:not|never)\b[^.!?]{0,12}\b(?:diabetes|warfarin|aspirin)\b/i,
+      /\bmy\s+(?:mum|mother)\b[^.!?]{0,16}\b(?:diabetes|warfarin|aspirin)\b/i,
+    ],
+  };
+
+  it("still suppresses an occurrence overlapped by a negation span", () => {
+    expect(scanForEscalationTriggers("I'm not on warfarin", [CONDITION_ENTRY])).toHaveLength(0);
+  });
+
+  it("fires on a genuine disclosure beside a negated one in the same sentence", () => {
+    const ms = scanForEscalationTriggers("I'm not on aspirin but I do take warfarin daily", [
+      CONDITION_ENTRY,
+    ]);
+    expect(ms).toHaveLength(1);
+    expect(ms[0]!.matched.toLowerCase()).toBe("warfarin");
+  });
+
+  it("fires on a first-person condition after a third-party clause (the #843 run-on)", () => {
+    const ms = scanForEscalationTriggers("my mum had diabetes and I have diabetes too", [
+      CONDITION_ENTRY,
+    ]);
+    expect(ms).toHaveLength(1);
+    // The first occurrence (mum's) is suppressed; the reported match is the second.
+    expect(ms[0]!.index).toBeGreaterThan("my mum had diabetes".length - 1);
+  });
+
+  it("keeps suppressing when the negation span overlaps the start of a wider match", () => {
+    const combo: EscalationTriggerEntry = {
+      id: "test_combo",
+      category: "multi_treatment_combo",
+      patterns: [/\bcombine\b[^.!?]*\b(?:botox|filler)\b/i],
+      negations: [/\b(?:rather not|not)\b[^.!?]{0,20}\bcombine\b/i],
+    };
+    expect(
+      scanForEscalationTriggers("I'd rather not combine botox and filler", [combo]),
+    ).toHaveLength(0);
+  });
+
+  it("applies per-occurrence logic to string patterns too", () => {
+    const e: EscalationTriggerEntry = {
+      id: "test_str",
+      category: "sensitive_keyword",
+      patterns: ["warfarin"],
+      negations: [/\bnot\b[^.!?]{0,12}\bwarfarin\b/i],
+    };
+    const ms = scanForEscalationTriggers("not warfarin but warfarin anyway", [e]);
+    expect(ms).toHaveLength(1);
+    expect(ms[0]!.index).toBeGreaterThan("not warfarin".length - 1);
+  });
+
+  it("reports at most one match per entry per sentence", () => {
+    const ms = scanForEscalationTriggers("I take warfarin and more warfarin", [CONDITION_ENTRY]);
+    expect(ms).toHaveLength(1);
+  });
+});

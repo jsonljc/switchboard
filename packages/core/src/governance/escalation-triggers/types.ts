@@ -12,7 +12,7 @@ export interface EscalationTriggerEntry {
   id: string;
   category: EscalationTriggerCategory;
   patterns: ReadonlyArray<string | RegExp>;
-  /** If any negation matches in the same sentence as a pattern, the entry is suppressed. */
+  /** A pattern occurrence is suppressed when a negation match span overlaps it (same sentence). */
   negations?: ReadonlyArray<string | RegExp>;
 }
 
