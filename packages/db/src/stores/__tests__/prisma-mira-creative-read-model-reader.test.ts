@@ -63,4 +63,40 @@ describe("PrismaMiraCreativeReadModelReader", () => {
     expect(rm.jobs).toEqual([]);
     expect(rm.counts.inFlight).toBe(0);
   });
+
+  describe("readOne", () => {
+    it("returns null for a cross-org or missing id (org-scoped findFirst)", async () => {
+      const prisma = { creativeJob: { findFirst: vi.fn().mockResolvedValue(null) } } as any;
+      const reader = new PrismaMiraCreativeReadModelReader(prisma);
+      const out = await reader.readOne("org1", "job-x", {
+        now: new Date("2026-05-28T12:00:00Z"),
+        timezone: "UTC",
+      });
+      expect(out).toBeNull();
+      expect(prisma.creativeJob.findFirst).toHaveBeenCalledWith({
+        where: { id: "job-x", organizationId: "org1" },
+      });
+    });
+
+    it("builds a single-job summary through the same mapper", async () => {
+      const prisma = {
+        creativeJob: {
+          findFirst: vi.fn().mockResolvedValue({
+            ...base,
+            id: "old-published",
+            organizationId: "org1",
+            currentStage: "complete",
+          }),
+        },
+      } as any;
+      const reader = new PrismaMiraCreativeReadModelReader(prisma);
+      const out = await reader.readOne("org1", "old-published", {
+        now: new Date("2026-05-28T12:00:00Z"),
+        timezone: "UTC",
+      });
+      expect(out?.id).toBe("old-published");
+      expect(out?.status).toBe("draft_ready");
+      expect(out?.reviewAction).toBeDefined();
+    });
+  });
 });

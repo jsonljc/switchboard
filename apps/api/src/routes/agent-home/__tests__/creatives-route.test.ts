@@ -79,11 +79,51 @@ const PILOT_ROWS = [
   }), // stopped — exercises the reviewed_stopped desk bucket
 ];
 
+// An old published creative OUTSIDE the feed window: findMany (the windowed
+// read) never returns it; only the detail fallback's org-scoped findFirst can.
+const OUT_OF_WINDOW_PUBLISHED = baseJob({
+  id: "old-published",
+  createdAt: new Date("2026-01-05"),
+  currentStage: "complete",
+  reviewDecision: "kept",
+  metaCampaignId: "camp-old",
+  pastPerformance: {
+    kind: "measured_performance",
+    version: 1,
+    asOf: "2026-06-04T06:30:00.000Z",
+    window: { from: "2026-03-06T00:00:00.000Z", to: "2026-06-04T06:30:00.000Z", days: 90 },
+    delivery: "measured",
+    join: { metaCampaignId: "camp-old", metaAdId: null, metaVideoId: null },
+    meta: {
+      spend: 40,
+      impressions: 900,
+      inlineLinkClicks: 30,
+      inlineLinkClickCtr: 3.3,
+      conversions: 2,
+      cpm: 44,
+    },
+    booked: { valueCents: 20000, count: 2 },
+    trueRoas: 5,
+    source: { insights: "meta_campaign_insights", conversions: "conversion_records" },
+  },
+  stageOutputs: {
+    production: { assembledVideos: [{ videoUrl: "https://x/old.mp4", thumbnailUrl: "t" }] },
+  },
+});
+
 function buildPrismaMock() {
+  const all = [...PILOT_ROWS, OUT_OF_WINDOW_PUBLISHED];
   return {
     creativeJob: {
       findMany: async (args: { where?: { organizationId?: string } }) =>
         args?.where?.organizationId === PILOT ? PILOT_ROWS : [],
+      // Detail-fallback read: org-scoped single-row lookup (slice 2).
+      findFirst: async (args: { where?: { id?: string; organizationId?: string } }) =>
+        all.find(
+          (r) =>
+            (r as { id: string }).id === args?.where?.id &&
+            (r as { organizationId: string }).organizationId === args?.where?.organizationId,
+        ) ?? null,
     },
     organizationConfig: { findFirst: async () => null },
   };
@@ -161,6 +201,36 @@ describe("GET /agents/mira/creatives", () => {
     } finally {
       await ctx.app.orgAgentEnablementStore!.setStatus(OTHER, "mira", "disabled");
     }
+  });
+
+  it("single: out-of-window published id resolves via the org-scoped fallback", async () => {
+    // old-published is NOT in the windowed findMany rows; only the slice-2
+    // detail fallback (org-scoped findFirst -> same mapper) can resolve it.
+    const res = await get(PILOT, "/api/dashboard/agents/mira/creatives/old-published");
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      job: { id: string; performance?: { delivery: string; spend: number; asOf: string } };
+    };
+    expect(body.job.id).toBe("old-published");
+    // The fallback path flows through the same mapper, so the slice-2
+    // performance projection rides along.
+    expect(body.job.performance).toMatchObject({ delivery: "measured", spend: 40 });
+    expect(body.job.performance?.asOf).toBe("2026-06-04T06:30:00.000Z");
+  });
+
+  it("single: out-of-window id from another org stays 404 through the fallback", async () => {
+    await ctx.app.orgAgentEnablementStore!.enable(OTHER, "mira");
+    try {
+      const res = await get(OTHER, "/api/dashboard/agents/mira/creatives/old-published");
+      expect(res.statusCode).toBe(404);
+    } finally {
+      await ctx.app.orgAgentEnablementStore!.setStatus(OTHER, "mira", "disabled");
+    }
+  });
+
+  it("single: unknown id stays 404 (fallback finds nothing)", async () => {
+    const res = await get(PILOT, "/api/dashboard/agents/mira/creatives/never-existed");
+    expect(res.statusCode).toBe(404);
   });
 });
 
