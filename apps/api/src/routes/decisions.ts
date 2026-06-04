@@ -4,11 +4,55 @@ import {
   type Decision,
   adaptRecommendation,
   adaptHandoff,
+  adaptParkedApproval,
+  adaptDegradedParkedApproval,
   decisionSortComparator,
 } from "@switchboard/core";
 import { type AgentKey, isAgentKey } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { dashboardRouteTemplates } from "../lib/route-templates.js";
+import { summarizeParkedIntent } from "../services/workflows/parked-approval-cards.js";
+
+// Defensive bound on the parked-approval leg; sorted by expiry FIRST so the
+// most urgent approvals are never hidden by the cap (truncation is logged).
+const PARKED_FEED_CAP = 25;
+
+async function listParkedApprovals(app: FastifyInstance, orgId: string): Promise<Decision[]> {
+  if (!app.lifecycleService || !app.workTraceStore) return [];
+  const actionable = await app.lifecycleService.listOperatorActionableLifecycles(orgId);
+  actionable.sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime());
+  if (actionable.length > PARKED_FEED_CAP) {
+    app.log.warn(
+      {
+        orgId,
+        actionable: actionable.length,
+        hidden: actionable.length - PARKED_FEED_CAP,
+        cap: PARKED_FEED_CAP,
+      },
+      "Parked approval feed truncated",
+    );
+  }
+  const decisions: Decision[] = [];
+  for (const lifecycle of actionable.slice(0, PARKED_FEED_CAP)) {
+    const [traceResult, revision] = await Promise.all([
+      app.workTraceStore.getByWorkUnitId(lifecycle.actionEnvelopeId),
+      app.lifecycleService.getCurrentRevision(lifecycle.id),
+    ]);
+    if (!traceResult?.trace || !revision) {
+      // Governed work must never silently vanish from the operator surface.
+      app.log.error(
+        { lifecycleId: lifecycle.id, hasTrace: !!traceResult, hasRevision: !!revision },
+        "Parked lifecycle integrity failure: rendering degraded card",
+      );
+      decisions.push(adaptDegradedParkedApproval(lifecycle));
+      continue;
+    }
+    decisions.push(
+      adaptParkedApproval(lifecycle, revision, traceResult.trace, summarizeParkedIntent),
+    );
+  }
+  return decisions;
+}
 
 async function listDecisions(
   app: FastifyInstance,
@@ -21,7 +65,7 @@ async function listDecisions(
   if (!app.recommendationStore || !app.handoffStore || !app.contactStore || !app.threadStore) {
     throw new Error("Decision feed dependencies not wired");
   }
-  const [recs, handoffs] = await Promise.all([
+  const [recs, handoffs, parked] = await Promise.all([
     app.recommendationStore.listBySurface({
       orgId,
       surface: "queue",
@@ -29,6 +73,7 @@ async function listDecisions(
       limit: 50,
     }),
     app.handoffStore.listPending(orgId),
+    listParkedApprovals(app, orgId),
   ]);
 
   // Handoff stores the lead identifier in leadSnapshot.leadId, not at the top level.
@@ -51,6 +96,7 @@ async function listDecisions(
         { routeTemplates: dashboardRouteTemplates },
       );
     }),
+    ...parked,
   ];
 
   const filtered = agentKey ? decisions.filter((d) => d.agentKey === agentKey) : decisions;
@@ -58,7 +104,9 @@ async function listDecisions(
 
   const counts = {
     total: filtered.length,
-    approval: filtered.filter((d) => d.kind === "approval").length,
+    // Workflow approvals are approvals to the operator; no new count key.
+    approval: filtered.filter((d) => d.kind === "approval" || d.kind === "workflow_approval")
+      .length,
     handoff: filtered.filter((d) => d.kind === "handoff").length,
   };
   return { decisions: filtered, counts };
