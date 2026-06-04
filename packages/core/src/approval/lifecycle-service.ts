@@ -3,7 +3,11 @@ import type {
   LifecycleRecord,
   CreateLifecycleInput,
 } from "./lifecycle-types.js";
-import type { ApprovalRevision, ExecutableWorkUnit } from "@switchboard/schemas";
+import type {
+  ApprovalRevision,
+  ApprovalLifecycleStatus,
+  ExecutableWorkUnit,
+} from "@switchboard/schemas";
 import type { WorkUnit } from "../platform/work-unit.js";
 import type { WorkTraceStore } from "../platform/work-trace-recorder.js";
 import { buildMaterializationInput } from "./executable-materializer.js";
@@ -24,6 +28,43 @@ export class ApprovalLifecycleService {
 
   async findByEnvelopeId(envelopeId: string): Promise<LifecycleRecord | null> {
     return this.store.getLifecycleByEnvelopeId(envelopeId);
+  }
+
+  async getLifecycleById(id: string): Promise<LifecycleRecord | null> {
+    return this.store.getLifecycleById(id);
+  }
+
+  async getCurrentRevision(lifecycleId: string): Promise<ApprovalRevision | null> {
+    return this.store.getCurrentRevision(lifecycleId);
+  }
+
+  async countDispatchAttempts(executableWorkUnitId: string): Promise<number> {
+    return this.store.countDispatchRecords(executableWorkUnitId);
+  }
+
+  /** Version-checked status transition (used by the dispatch-recovery path). */
+  async transitionStatus(
+    lifecycle: LifecycleRecord,
+    status: ApprovalLifecycleStatus,
+  ): Promise<LifecycleRecord> {
+    return this.store.updateLifecycleStatus(
+      lifecycle.id,
+      status,
+      lifecycle.version,
+      lifecycle.organizationId,
+    );
+  }
+
+  /**
+   * Pending (expiry-filtered) plus recovery_required (approved, dispatch
+   * failed; expiry no longer applies) — everything an operator can act on.
+   */
+  async listOperatorActionableLifecycles(organizationId?: string): Promise<LifecycleRecord[]> {
+    const [pending, recovery] = await Promise.all([
+      this.listPendingLifecycles(organizationId),
+      this.store.listRecoveryRequiredLifecycles(organizationId),
+    ]);
+    return [...pending, ...recovery];
   }
 
   async createGatedLifecycle(
@@ -225,6 +266,8 @@ export class ApprovalLifecycleService {
     lifecycleId: string;
     executableWorkUnitId: string;
     idempotencyKey: string;
+    /** Retry support: 1 for the first dispatch, incremented per re-attempt. */
+    attemptNumber?: number;
   }): Promise<{
     lifecycle: LifecycleRecord;
     workUnit: ExecutableWorkUnit;
@@ -240,7 +283,7 @@ export class ApprovalLifecycleService {
 
     const dispatchRecord = await this.store.createDispatchRecord({
       executableWorkUnitId: workUnit.id,
-      attemptNumber: 1,
+      attemptNumber: params.attemptNumber ?? 1,
       idempotencyKey: params.idempotencyKey,
     });
 
