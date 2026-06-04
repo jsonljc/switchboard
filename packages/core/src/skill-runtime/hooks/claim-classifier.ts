@@ -101,8 +101,9 @@ export class ClaimClassifierHook implements SkillHook {
     if (classifierConfig.mode === "observe") {
       // Observe is telemetry-only: run the classification pipeline fire-and-forget so
       // the lead-visible reply pays zero added latency (precedent: the #859 trace
-      // recorder on this same path). The pipeline gets a DETACHED result clone, so even
-      // a regression in the apply helpers cannot touch the live reply.
+      // recorder on this same path). The pipeline gets a DETACHED shallow clone, so even
+      // a regression in the apply helpers cannot touch the live reply STRING (trace/
+      // toolCalls stay shared by reference; observe paths never write them).
       const detached: SkillExecutionResult = { ...result };
       const run = this.classifyAndApply({
         ctx,

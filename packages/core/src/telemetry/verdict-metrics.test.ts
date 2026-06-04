@@ -39,4 +39,20 @@ describe("recordGovernanceVerdictMetric", () => {
       audit_level: "warning",
     });
   });
+
+  it("never throws even when the counter increment does", async () => {
+    // The store's onWrite contract propagates errors to save() callers, and the
+    // whatsapp gate awaits save() bare inside the fail-closed afterSkill seam —
+    // a metric failure must never be able to degrade a lead reply.
+    setMetrics({
+      ...createInMemoryMetrics(),
+      governanceVerdictsRecorded: {
+        inc: () => {
+          throw new Error("registry exploded");
+        },
+      },
+    });
+
+    await expect(recordGovernanceVerdictMetric(record)).resolves.toBeUndefined();
+  });
 });

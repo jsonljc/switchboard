@@ -138,6 +138,7 @@ export function createGatewayBridge(
   const gatewayGovernanceResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
   // onWrite mirrors every persisted verdict into the dual-prom counter
   // (switchboard_governance_verdicts_total) — the observe-bake read surface.
+  // NOTE: single-callback slot; compose if a second onWrite consumer lands.
   const gatewayGovernanceVerdictStore = new PrismaGovernanceVerdictStore(prisma, {
     onWrite: recordGovernanceVerdictMetric,
   });

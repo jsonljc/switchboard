@@ -155,6 +155,8 @@ export async function bootstrapSkillMode(
   const governanceConfigResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
   // onWrite mirrors every persisted verdict into the dual-prom counter
   // (switchboard_governance_verdicts_total) — the observe-bake read surface.
+  // NOTE: the slot is single-callback; the deferred lifecycle escalation hook
+  // (bootstrap/lifecycle.ts) plans to consume onWrite too — compose when it lands.
   const governanceVerdictStore = new PrismaGovernanceVerdictStore(prismaClient, {
     onWrite: recordGovernanceVerdictMetric,
   });
