@@ -73,6 +73,9 @@ export * from "./event-types.js";
 // Marketplace types (Agent Listings, Deployments, Tasks, Trust Scores)
 export * from "./marketplace.js";
 
+// Operational state (operator-confirmed business conditions; Riley v3 slice 4a)
+export * from "./operational-state.js";
+
 // Reference metadata (skill reference YAML frontmatter contract)
 export * from "./reference-metadata.js";
 

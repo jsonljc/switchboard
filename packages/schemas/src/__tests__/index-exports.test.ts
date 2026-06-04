@@ -9,4 +9,10 @@ describe("schemas index exports", () => {
     expect(schemas.ScanResultSchema).toBeDefined();
     expect(schemas.OperatorOverviewSchema).toBeDefined();
   });
+
+  it("exports operational-state primitives (riley v3 slice 4a)", () => {
+    expect(schemas.OperationalStateSchema).toBeDefined();
+    expect(schemas.OperationalStateConfirmationSchema).toBeDefined();
+    expect(schemas.OperationalIntervalSchema).toBeDefined();
+  });
 });
