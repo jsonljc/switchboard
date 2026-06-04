@@ -127,6 +127,11 @@ export type {
 export { assembleRevenueState, withSpendAttributionCoverage } from "./revenue-state.js";
 export type { RevenueState, AssembleRevenueStateInput } from "./revenue-state.js";
 
+// Riley v3 slice 2: the consolidated per-action contract (single source for the
+// sink booleans + reset class + evidence family) and the mutating-ness question.
+export { ACTION_CONTRACT, isMutating } from "./action-contract.js";
+export type { ActionContract } from "./action-contract.js";
+
 // Abstention helpers (consumed by the Riley->agent recommendation-handoff seam).
 export { meetsEvidenceFloor, evidenceFamilyFor, EVIDENCE_FLOORS } from "./evidence-floor.js";
 export type { Evidence, EvidenceFamily } from "./evidence-floor.js";
