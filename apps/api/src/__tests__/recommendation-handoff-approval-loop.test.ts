@@ -16,60 +16,18 @@
  * card (recovery_required), and retrying through the SAME respond leg recovers.
  */
 import { describe, it, expect } from "vitest";
-import {
-  ApprovalLifecycleService,
-  InMemoryLifecycleStore,
-  respondToParkedLifecycle,
-  adaptParkedApproval,
-  createInMemoryStorage,
-  AuditLedger,
-  InMemoryLedgerStorage,
-} from "@switchboard/core";
-import { PlatformLifecycle } from "@switchboard/core/platform";
+import { respondToParkedLifecycle, adaptParkedApproval } from "@switchboard/core";
 import { executeWeeklyAudit } from "@switchboard/ad-optimizer";
 import { synthesizeCreativeBrief } from "../services/workflows/creative-brief-synthesis.js";
 import { summarizeParkedIntent } from "../services/workflows/parked-approval-cards.js";
 import {
   ORG,
-  buildHarness,
   buildCronDeps,
-  allowPolicy,
-  approvalPolicy,
   readerFor,
   step,
   type ParkedHandoff,
 } from "./recommendation-handoff-harness.js";
-
-function buildLifecycleWorld() {
-  const store = new InMemoryLifecycleStore();
-  const lifecycleService = new ApprovalLifecycleService({ store });
-  const harness = buildHarness([allowPolicy(), approvalPolicy()], { lifecycleService });
-  const storage = createInMemoryStorage();
-  const ledger = new AuditLedger(new InMemoryLedgerStorage());
-  const platformLifecycle = new PlatformLifecycle({
-    approvalStore: storage.approvals,
-    envelopeStore: storage.envelopes,
-    identityStore: storage.identity,
-    modeRegistry: harness.modeRegistry,
-    traceStore: harness.traceStore,
-    ledger,
-    trustAdapter: null,
-    selfApprovalAllowed: false,
-    approvalRateLimit: null,
-  });
-  const logger = {
-    info: () => {},
-    error: () => {},
-  };
-  const deps = {
-    lifecycleService,
-    workTraceStore: harness.traceStore,
-    platformLifecycle,
-    auditLedger: ledger,
-    logger,
-  };
-  return { store, lifecycleService, harness, platformLifecycle, ledger, deps };
-}
+import { buildLifecycleWorld } from "./recommendation-handoff-lifecycle-world.js";
 
 async function parkViaCron(w: ReturnType<typeof buildLifecycleWorld>) {
   const parked: ParkedHandoff[] = [];
