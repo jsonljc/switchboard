@@ -109,8 +109,9 @@ function makeRespondDeps(impl?: { throwInRespond?: boolean }) {
         : vi.fn().mockResolvedValue({
             envelope: { id: "env_1" },
             approvalState: { status: "approved" },
-            executionResult: { ok: true },
+            executionResult: null,
           }),
+      executeApproved: vi.fn(),
     },
     sessionManager: null,
     logger: { info: vi.fn(), error: vi.fn() },

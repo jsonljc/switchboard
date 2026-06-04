@@ -251,6 +251,7 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
             lifecycleService: app.lifecycleService,
             platformLifecycle: app.platformLifecycle,
             sessionManager: app.sessionManager,
+            auditLedger: app.auditLedger,
             logger: app.log,
             selfApprovalAllowed,
           },
