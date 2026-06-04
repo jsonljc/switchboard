@@ -249,33 +249,58 @@ export class PrismaCreativeJobStore {
 
   /**
    * Decided jobs whose gesture is not yet captured: tasteCapturedAt null OR
-   * reviewDecidedAt strictly newer. The column-to-column comparison is not
-   * expressible in a Prisma where, so the query fetches decided rows (narrow
-   * select, FETCH-capped, oldest decisions first) and filters in JS; the
-   * decided set is small (spec 3.6) and the cap is the caller's. Cross-org by
-   * design (system cron read); every WRITE stays org-scoped per row.
+   * reviewDecidedAt strictly newer. Two legs so the SQL cap bounds PENDING
+   * work, never history (an oldest-first cap over ALL decided rows would fill
+   * with already-captured rows once lifetime decisions exceed it and silently
+   * starve new gestures forever):
+   *
+   *   leg 1: never-captured rows (tasteCapturedAt null), oldest decision
+   *          first — the dominant case, fully SQL-bounded.
+   *   leg 2: captured rows, NEWEST decision first — a pending re-decision has
+   *          a fresh reviewDecidedAt by construction (the route stamps now()
+   *          on every decision write), so it always sorts into the window;
+   *          the column-to-column watermark compare (not expressible in a
+   *          Prisma where) runs in JS on this bounded set.
+   *
+   * Merged oldest-decision-first. Cross-org by design (system cron read);
+   * every WRITE stays org-scoped per row.
    */
   async listTasteCandidates(limit: number): Promise<TasteCandidate[]> {
-    const rows = await this.prisma.creativeJob.findMany({
-      where: { reviewDecision: { not: null } },
-      select: {
-        id: true,
-        organizationId: true,
-        deploymentId: true,
-        mode: true,
-        stageOutputs: true,
-        reviewDecision: true,
-        reviewDecidedAt: true,
-        tasteCapturedAt: true,
-      },
+    const select = {
+      id: true,
+      organizationId: true,
+      deploymentId: true,
+      mode: true,
+      stageOutputs: true,
+      reviewDecision: true,
+      reviewDecidedAt: true,
+      tasteCapturedAt: true,
+    } as const;
+
+    const uncaptured = (await this.prisma.creativeJob.findMany({
+      where: { reviewDecision: { not: null }, tasteCapturedAt: null },
+      select,
       orderBy: { reviewDecidedAt: "asc" },
       take: limit,
-    });
-    return (rows as TasteCandidate[]).filter(
+    })) as TasteCandidate[];
+
+    const captured = (await this.prisma.creativeJob.findMany({
+      where: { reviewDecision: { not: null }, tasteCapturedAt: { not: null } },
+      select,
+      orderBy: { reviewDecidedAt: "desc" },
+      take: limit,
+    })) as TasteCandidate[];
+
+    const redecided = captured.filter(
       (r) =>
         r.reviewDecidedAt != null &&
-        (r.tasteCapturedAt == null || r.reviewDecidedAt.getTime() > r.tasteCapturedAt.getTime()),
+        r.tasteCapturedAt != null &&
+        r.reviewDecidedAt.getTime() > r.tasteCapturedAt.getTime(),
     );
+
+    return [...uncaptured.filter((r) => r.reviewDecidedAt != null), ...redecided]
+      .sort((a, b) => a.reviewDecidedAt!.getTime() - b.reviewDecidedAt!.getTime())
+      .slice(0, limit);
   }
 
   // ── UGC methods ──

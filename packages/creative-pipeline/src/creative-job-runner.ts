@@ -82,18 +82,20 @@ export async function executeCreativePipeline(
   const pastPerformance = historyParse.success ? historyParse.data : undefined;
   let tasteContext: string[] | undefined;
   if (creativeMemoryProvider) {
-    tasteContext = await step.run("load-taste-context", async () => {
+    // The step returns [] (never undefined): step output is JSON-memoized for
+    // replay and undefined does not round-trip. Normalized after the step.
+    const lines = await step.run("load-taste-context", async () => {
       try {
-        const lines = await creativeMemoryProvider.getTasteContext(
+        return await creativeMemoryProvider.getTasteContext(
           eventData.organizationId,
           eventData.deploymentId,
         );
-        return lines.length > 0 ? lines : undefined;
       } catch (err) {
         console.warn(`creative taste context unavailable for job ${eventData.jobId}:`, err);
-        return undefined;
+        return [];
       }
     });
+    tasteContext = lines.length > 0 ? lines : undefined;
   }
 
   let stageOutputs: Record<string, unknown> = (job.stageOutputs ?? {}) as Record<string, unknown>;
