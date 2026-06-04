@@ -122,6 +122,11 @@ export type {
   EmitOutcome,
 } from "./recommendation-sink.js";
 
+// Riley v3 slice 1: the consolidated account-level RevenueState pre-flight object
+// (the decision layer + eval seam construct it; per-campaign tier stays separate).
+export { assembleRevenueState, withSpendAttributionCoverage } from "./revenue-state.js";
+export type { RevenueState, AssembleRevenueStateInput } from "./revenue-state.js";
+
 // Abstention helpers (consumed by the Riley->agent recommendation-handoff seam).
 export { meetsEvidenceFloor, evidenceFamilyFor, EVIDENCE_FLOORS } from "./evidence-floor.js";
 export type { Evidence, EvidenceFamily } from "./evidence-floor.js";
