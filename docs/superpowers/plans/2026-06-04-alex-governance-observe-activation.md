@@ -29,7 +29,7 @@
 - Modify: `packages/schemas/src/governance-config.ts` (append at end)
 - Create: `packages/schemas/src/governance-config.test.ts`
 
-- [ ] **Step 1.1: Write the failing test**
+- [x] **Step 1.1: Write the failing test**
 
 Create `packages/schemas/src/governance-config.test.ts`:
 
@@ -92,12 +92,12 @@ describe("buildObserveGovernanceConfig", () => {
 });
 ```
 
-- [ ] **Step 1.2: Run it, verify it fails**
+- [x] **Step 1.2: Run it, verify it fails**
 
 Run: `pnpm --filter @switchboard/schemas test -- governance-config`
 Expected: FAIL (`buildObserveGovernanceConfig` is not exported).
 
-- [ ] **Step 1.3: Implement the factory**
+- [x] **Step 1.3: Implement the factory**
 
 Append to `packages/schemas/src/governance-config.ts`:
 
@@ -155,12 +155,12 @@ export function buildObserveGovernanceConfig(
 }
 ```
 
-- [ ] **Step 1.4: Run tests, verify pass; rebuild schemas dist**
+- [x] **Step 1.4: Run tests, verify pass; rebuild schemas dist**
 
 Run: `pnpm --filter @switchboard/schemas test -- governance-config && pnpm --filter @switchboard/schemas build`
 Expected: PASS, build clean.
 
-- [ ] **Step 1.5: Commit**
+- [x] **Step 1.5: Commit**
 
 ```bash
 git add packages/schemas/src/governance-config.ts packages/schemas/src/governance-config.test.ts
@@ -176,7 +176,7 @@ git commit -m "feat(schemas): add buildObserveGovernanceConfig posture factory"
 - Modify: `packages/core/src/skill-runtime/hooks/pdpa-consent-gate.ts` (the `decision.action === "block"` branch and the two `else if (consentConfig.mode === "enforce")` disclosure branches)
 - Modify: `packages/core/src/skill-runtime/hooks/__tests__/pdpa-consent-gate.test.ts` (extend; reuse `buildDeps`/`SG_CFG`/`ctx` already in the file)
 
-- [ ] **Step 2.1: Write the failing tests**
+- [x] **Step 2.1: Write the failing tests**
 
 Add to `pdpa-consent-gate.test.ts` (inside the existing `describe("PdpaConsentGateHook")`; mirror the existing revoked/blocked test's consent fixture for `consentRevokedAt`):
 
@@ -282,12 +282,12 @@ it("observe mode persists the disclosure_version_outdated verdict", async () => 
 
 Adjust the `details`/version literals to the file's actual fixtures if they differ (read the existing enforce-mode revoked test first; the enforce expectations must stay untouched).
 
-- [ ] **Step 2.2: Run, verify the new tests fail**
+- [x] **Step 2.2: Run, verify the new tests fail**
 
 Run: `pnpm --filter @switchboard/core test -- pdpa-consent-gate`
 Expected: the revoked-race observe test FAILS (response was mutated; handoff saved); the two disclosure tests FAIL (no verdict saved in observe).
 
-- [ ] **Step 2.3: Implement**
+- [x] **Step 2.3: Implement**
 
 In `pdpa-consent-gate.ts`, replace the start of the `if (decision.action === "block") {` branch so observe records and returns before any mutation:
 
@@ -315,12 +315,12 @@ In `pdpa-consent-gate.ts`, replace the start of the `if (decision.action === "bl
 
 Then change BOTH disclosure verdict branches from `} else if (consentConfig.mode === "enforce") {` to `} else {` (mode is never "off" past the early return, so observe and enforce both persist the verdict; neither branch mutates).
 
-- [ ] **Step 2.4: Run the gate suite, verify all pass (enforce behavior unchanged)**
+- [x] **Step 2.4: Run the gate suite, verify all pass (enforce behavior unchanged)**
 
 Run: `pnpm --filter @switchboard/core test -- pdpa-consent-gate`
 Expected: PASS, including all pre-existing enforce/missing/error tests.
 
-- [ ] **Step 2.5: Commit**
+- [x] **Step 2.5: Commit**
 
 ```bash
 git add packages/core/src/skill-runtime/hooks/pdpa-consent-gate.ts packages/core/src/skill-runtime/hooks/__tests__/pdpa-consent-gate.test.ts
@@ -336,7 +336,7 @@ git commit -m "fix(core): make pdpa consent gate observe mode strictly log-only"
 - Modify: `packages/core/src/skill-runtime/hooks/claim-classifier.ts` (refactor `afterSkill`, add `classifyAndApply` + `flushObserveRuns`)
 - Modify: `packages/core/src/skill-runtime/hooks/__tests__/claim-classifier.test.ts` (new fire-and-forget tests; add `flushObserveRuns()` to existing observe tests)
 
-- [ ] **Step 3.1: Write the failing tests**
+- [x] **Step 3.1: Write the failing tests**
 
 Add helpers + tests to `claim-classifier.test.ts` (reuse the file's existing `fakeResolver`, `fakePostureCache`, verdict/handoff/conversation fakes, `ctx`, and result builders; the code below names them per the file's conventions, adjust identifiers to match when editing):
 
@@ -410,12 +410,12 @@ it("observe mode swallows a pipeline failure without touching the reply", async 
 
 Also UPDATE every existing observe-mode test in this file to call `await hook.flushObserveRuns();` after `await hook.afterSkill(...)` and before asserting persisted verdicts (fire-and-forget means persistence completes off the awaited path). Enforce-mode tests stay untouched.
 
-- [ ] **Step 3.2: Run, verify failures**
+- [x] **Step 3.2: Run, verify failures**
 
 Run: `pnpm --filter @switchboard/core test -- claim-classifier`
 Expected: new tests FAIL (`flushObserveRuns` not a function; observe currently awaits so `saved` is 1 before release).
 
-- [ ] **Step 3.3: Implement the fork**
+- [x] **Step 3.3: Implement the fork**
 
 In `claim-classifier.ts`, add to the class:
 
@@ -522,12 +522,12 @@ Replace the tail of `afterSkill` (everything from `const outcomes = await runCla
 
 Import `type ClaimClassifierConfig` from `@switchboard/schemas` (extend the existing import line). `runClassifier`'s `sentences` parameter type may need `[...sentences]` if it requires a mutable array; match the existing call.
 
-- [ ] **Step 3.4: Run the suite**
+- [x] **Step 3.4: Run the suite**
 
 Run: `pnpm --filter @switchboard/core test -- claim-classifier`
 Expected: PASS (all enforce tests untouched and green; observe tests green with flush).
 
-- [ ] **Step 3.5: Commit**
+- [x] **Step 3.5: Commit**
 
 ```bash
 git add packages/core/src/skill-runtime/hooks/claim-classifier.ts packages/core/src/skill-runtime/hooks/__tests__/claim-classifier.test.ts
@@ -544,7 +544,7 @@ git commit -m "feat(core): claim classifier observe mode runs off the hot path"
 - Create: `packages/db/src/seed/__tests__/medspa-governance-config.test.ts`
 - Modify: `packages/db/prisma/seed-marketplace.ts` (import + the Alex `agentDeployment.upsert` update AND create branches)
 
-- [ ] **Step 4.1: Write the failing parity test**
+- [x] **Step 4.1: Write the failing parity test**
 
 Create `packages/db/src/seed/__tests__/medspa-governance-config.test.ts`:
 
@@ -602,12 +602,12 @@ describe("MEDSPA_PILOT_GOVERNANCE_CONFIG (the literal seeded blob)", () => {
 
 (`WhatsAppWindowGateConfig` is exported from the core barrel via skill-runtime. If `@switchboard/core` root does not re-export it, import from `@switchboard/core/skill-runtime`.)
 
-- [ ] **Step 4.2: Run, verify it fails**
+- [x] **Step 4.2: Run, verify it fails**
 
 Run: `pnpm --filter @switchboard/db test -- medspa-governance-config`
 Expected: FAIL (module does not exist).
 
-- [ ] **Step 4.3: Create the constant**
+- [x] **Step 4.3: Create the constant**
 
 Create `packages/db/src/seed/medspa-governance-config.ts`:
 
@@ -627,12 +627,12 @@ export const MEDSPA_PILOT_GOVERNANCE_CONFIG = buildObserveGovernanceConfig({
 });
 ```
 
-- [ ] **Step 4.4: Run, verify pass**
+- [x] **Step 4.4: Run, verify pass**
 
 Run: `pnpm --filter @switchboard/db test -- medspa-governance-config`
 Expected: PASS. (If `@switchboard/schemas` dist is stale, `pnpm --filter @switchboard/schemas build` first.)
 
-- [ ] **Step 4.5: Wire the seed**
+- [x] **Step 4.5: Wire the seed**
 
 In `packages/db/prisma/seed-marketplace.ts`:
 
@@ -659,12 +659,12 @@ import { MEDSPA_PILOT_GOVERNANCE_CONFIG } from "../src/seed/medspa-governance-co
 
 (The `update` branch carries the existing comment; in `create` add the same `governanceConfig` line. Only the Alex upsert changes; sales-pipeline/Riley/Mira deployments are untouched.)
 
-- [ ] **Step 4.6: Typecheck the seed wiring**
+- [x] **Step 4.6: Typecheck the seed wiring**
 
 Run: `pnpm --filter @switchboard/db typecheck && pnpm --filter @switchboard/db test`
 Expected: PASS (Prisma `Json` columns accept the typed literal; db suite has pre-existing pg_advisory/ledger/greeting failures ONLY when Postgres is down: those are documented flakes, everything else green).
 
-- [ ] **Step 4.7: Commit**
+- [x] **Step 4.7: Commit**
 
 ```bash
 git add packages/db/src/seed/medspa-governance-config.ts packages/db/src/seed/__tests__/medspa-governance-config.test.ts packages/db/prisma/seed-marketplace.ts
@@ -684,7 +684,7 @@ git commit -m "feat(db): seed observe-mode governanceConfig on the medspa pilot"
 - Modify: `apps/api/src/metrics.ts` and `apps/chat/src/bootstrap/metrics.ts` (register the counter)
 - Modify: `apps/api/src/bootstrap/skill-mode.ts:152` and `apps/chat/src/gateway/gateway-bridge.ts:138` (pass `onWrite`)
 
-- [ ] **Step 5.1: Write the failing test**
+- [x] **Step 5.1: Write the failing test**
 
 Create `packages/core/src/telemetry/verdict-metrics.test.ts`:
 
@@ -735,12 +735,12 @@ describe("recordGovernanceVerdictMetric", () => {
 
 (Adjust the `GovernanceVerdictRecord` literal to the exact interface fields if any are missing; read `governance-verdict-store/types.ts` when editing.)
 
-- [ ] **Step 5.2: Run, verify failures**
+- [x] **Step 5.2: Run, verify failures**
 
 Run: `pnpm --filter @switchboard/core test -- verdict-metrics`
 Expected: FAIL (module missing; then interface missing the counter).
 
-- [ ] **Step 5.3: Implement**
+- [x] **Step 5.3: Implement**
 
 1. `packages/core/src/telemetry/metrics.ts`: add to `SwitchboardMetrics` after `skillLlmCostUsdTotal`:
 
@@ -816,12 +816,12 @@ Add `recordGovernanceVerdictMetric` to each file's `@switchboard/core` import.
 Run: `grep -rln "skillLlmCostUsdTotal" --include="*.ts" packages apps | grep -v dist`
 Fix any full-literal constructions (known candidate: `trace-persistence-hook.test.ts`) by adding `governanceVerdictsRecorded` or spreading `createInMemoryMetrics()`.
 
-- [ ] **Step 5.4: Run core + both app suites**
+- [x] **Step 5.4: Run core + both app suites**
 
 Run: `pnpm --filter @switchboard/core build && pnpm --filter @switchboard/core test -- verdict-metrics && pnpm --filter @switchboard/api test && pnpm --filter @switchboard/chat test`
 Expected: PASS (chat `gateway-bridge-attribution` may flake under load: pre-existing; rerun isolated if hit).
 
-- [ ] **Step 5.5: Commit**
+- [x] **Step 5.5: Commit**
 
 ```bash
 git add packages/core/src/telemetry/ apps/api/src/metrics.ts apps/api/src/bootstrap/skill-mode.ts apps/chat/src/bootstrap/metrics.ts apps/chat/src/gateway/gateway-bridge.ts
@@ -836,11 +836,11 @@ git commit -m "feat(governance): count persisted verdicts dual-prom via the stor
 
 - Modify: `evals/alex-conversation/__tests__/governed-live-path.test.ts` (new describe block; keep the existing enforce FIRES/BITES block untouched)
 
-- [ ] **Step 6.1: Rebuild core dist (eval imports dist, not src)**
+- [x] **Step 6.1: Rebuild core dist (eval imports dist, not src)**
 
 Run: `pnpm --filter @switchboard/schemas build && pnpm --filter @switchboard/core build`
 
-- [ ] **Step 6.2: Write the failing-then-green observe test**
+- [x] **Step 6.2: Write the failing-then-green observe test**
 
 Append to `governed-live-path.test.ts`:
 
@@ -1024,19 +1024,19 @@ describe("governed live-path: observe posture is strictly log-only", () => {
 
 Merge the imports into the file's existing import statements (one import block per module). Adjust stub literal types to satisfy the dist type surface; the `as never` constructor convention is established in this file.
 
-- [ ] **Step 6.3: Run the eval unit suite**
+- [x] **Step 6.3: Run the eval unit suite**
 
 Run: `pnpm exec vitest run --config evals/vitest.config.ts -t "observe posture"`
 Expected: PASS. Then run the whole config: `pnpm exec vitest run --config evals/vitest.config.ts`
 Expected: PASS (all suites; deterministic, no API key).
 
-- [ ] **Step 6.4: Adversarial bite demonstrations (NOT committed)**
+- [x] **Step 6.4: Adversarial bite demonstrations (NOT committed)**
 
 1. In `pdpa-consent-gate.ts`, temporarily revert the observe guard (make the revoked-race block unconditional again), `pnpm --filter @switchboard/core build`, rerun Step 6.3.
    Expected: the observe test REDS (response mutated to handoff text). Restore the guard, rebuild, rerun green. Record the red output for the PR body.
 2. In `claim-classifier.ts`, temporarily change the observe branch to `await` the pipeline with a hanging classifier... (skip: the unit test in Task 3 already proves non-awaiting deterministically; the PDPA demonstration is the live-path bite). Record outputs.
 
-- [ ] **Step 6.5: Commit**
+- [x] **Step 6.5: Commit**
 
 ```bash
 git add evals/alex-conversation/__tests__/governed-live-path.test.ts
@@ -1049,12 +1049,12 @@ git commit -m "test(evals): observe-posture live-path proof for the four governa
 
 **Files:** none new (verification + possible small fixes)
 
-- [ ] **Step 7.1: Classifier eval invariance check**
+- [x] **Step 7.1: Classifier eval invariance check**
 
 Run: `git diff --stat origin/main -- packages/core/src/governance/classifier/ evals/claim-classifier/`
 Expected: EMPTY (no classifier-layer or classifier-eval edits; prompt-hash and locked baseline cannot have shifted).
 
-- [ ] **Step 7.2: Full local gate**
+- [x] **Step 7.2: Full local gate**
 
 Run, in order, from the worktree root:
 
@@ -1070,17 +1070,17 @@ pnpm exec vitest run --config evals/vitest.config.ts
 
 Expected: all green. Known pre-existing failures that do NOT block (document in PR if hit): chat `gateway-bridge-attribution` under full-suite load (passes isolated); db `pg_advisory`/ledger/greeting tests without local Postgres (CI mocks Prisma).
 
-- [ ] **Step 7.3: Optional Postgres smoke (only if reachable)**
+- [x] **Step 7.3: Optional Postgres smoke (only if reachable)**
 
 Run: `pg_isready -h localhost 2>/dev/null && pnpm db:seed && node -e "/* select governanceConfig from AgentDeployment for org_demo alex and print */"`
 Expected (if Postgres up): seed completes; the Alex deployment row shows the observe blob. Skip silently if Postgres is down (parity test is the gate).
 
-- [ ] **Step 7.4: File-size + import-extension sweep on touched files**
+- [x] **Step 7.4: File-size + import-extension sweep on touched files**
 
 Run: `wc -l packages/core/src/skill-runtime/hooks/claim-classifier.ts packages/core/src/skill-runtime/hooks/pdpa-consent-gate.ts`
 Expected: both under 600 raw lines (claim-classifier lands ~460; acceptable, error threshold is 600).
 
-- [ ] **Step 7.5: Commit any sweep fixes, then push**
+- [x] **Step 7.5: Commit any sweep fixes, then push**
 
 ```bash
 git push -u origin feat/alex-governance-observe-activation
