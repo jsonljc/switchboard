@@ -42,9 +42,12 @@ const sourceSerif = Source_Serif_4({
   display: "swap",
 });
 
+// 600 is loaded because governed CSS declares mono SemiBold on the Results
+// value family and the week-note signature; without the real cut the browser
+// synthesizes a faux-bold (TY3 mono-weight guard enforces the pairing).
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400", "500", "600"],
   variable: "--font-mono-editorial",
   display: "swap",
 });

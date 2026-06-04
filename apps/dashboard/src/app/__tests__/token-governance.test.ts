@@ -637,3 +637,59 @@ describe("token governance: type voice (TY2)", () => {
     }
   });
 });
+
+const rel2 = (p: string): string => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TY3: type scale + display-token consolidation (spec 2026-06-04).
+// The canonical display semantic, mono honesty (face + loaded weights), and
+// the legacy --font-display demotion for governed authed surfaces.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("token governance: type scale + display consolidation (TY3)", () => {
+  const governed = collectGovernedFiles().filter((f) => typeVoiceGoverned(f.path));
+
+  it("the inbox mono aliases the loaded JetBrains primitive (no raw-family lie)", () => {
+    const inboxBase = governed.find((f) => f.path.endsWith("inbox-design-base.css"));
+    expect(inboxBase).toBeDefined();
+    expect(inboxBase!.content).toMatch(/--mono:\s*var\(--font-mono-editorial\)/);
+  });
+
+  it("every mono font-weight declared in governed CSS is a loaded JetBrains cut", () => {
+    const layout = readFileSync(path.resolve(process.cwd(), "src/app/layout.tsx"), "utf8");
+    const jb = layout.slice(layout.indexOf("JetBrains_Mono("));
+    const jbBlock = jb.slice(0, jb.indexOf("})"));
+    const weightList = jbBlock.match(/weight:\s*\[([^\]]+)\]/)?.[1] ?? "";
+    const loaded = new Set((weightList.match(/"(\d+)"/g) ?? []).map((w) => w.replaceAll('"', "")));
+    expect(loaded.size).toBeGreaterThan(0);
+    const offenders: string[] = [];
+    for (const { path: p, content } of governed) {
+      if (!p.endsWith(".css")) continue;
+      for (const block of content.split("}")) {
+        if (!block.includes("var(--mono)")) continue;
+        const w = block.match(/font-weight:\s*(\d+)/);
+        if (w && !loaded.has(w[1])) offenders.push(`${rel2(p)}: mono weight ${w[1]} not loaded`);
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+
+  it("the legacy --font-display never reaches governed authed TSX (sweep + legacy allowlist)", () => {
+    // The allowlist is the explicit statement of which registers may still hold
+    // the legacy token (DM Sans). It shrinks as those registers retire.
+    // layout.tsx is the loader (the binding site of the legacy token), not a
+    // consumer; it keeps the binding until the legacy registers retire.
+    const LEGACY_ALLOWED = [
+      "app/layout.tsx",
+      "app/login/",
+      "app/forgot-password/",
+      "app/reset-password/",
+      "components/onboarding/",
+    ];
+    const offenders = governed
+      .filter((f) => f.path.endsWith(".tsx"))
+      .filter((f) => !LEGACY_ALLOWED.some((a) => f.path.includes(a)))
+      .filter((f) => /font-display(?!-app)/.test(f.content))
+      .map((f) => rel2(f.path));
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+});

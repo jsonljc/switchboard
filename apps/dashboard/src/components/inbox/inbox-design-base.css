@@ -53,7 +53,7 @@
   /* type */
   --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --serif: var(--font-display-app);
-  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --mono: var(--font-mono-editorial), "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* radii */
   --r-sm: 8px;
