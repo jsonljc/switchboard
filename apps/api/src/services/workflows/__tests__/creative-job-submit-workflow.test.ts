@@ -126,6 +126,22 @@ describe("creative.job.submit workflow", () => {
     expect(res.outputs).toMatchObject({ job: { id: "job-ugc-1" } });
   });
 
+  it("ugc → persists a VALID UgcConfig the runner can actually read (slice-3 spec 3.3d)", async () => {
+    // The empty-brief bug class: the workflow stored the RAW brief as
+    // ugcConfig while the runner reads ugcConfig.brief, so every phase ran on
+    // an empty brief. Pin the runner's exact read path AND schema validity.
+    const { UgcConfigSchema } = await import("@switchboard/schemas");
+    await buildCreativeJobSubmitWorkflow({}).execute(workUnit("ugc"), services);
+
+    const persisted = jobCreateUgc.mock.calls[0]![0].ugcConfig;
+    expect(() => UgcConfigSchema.parse(persisted)).not.toThrow();
+    // the runner reads ugcConfig.brief: it must carry the submitted brief
+    expect(persisted.brief.productDescription).toBe("Botox first-timer offer");
+    expect(persisted.brief.ugcFormat).toBe("talking_head");
+    expect(persisted.brief.creatorPoolIds).toEqual([]);
+    expect(persisted.brief.platforms).toEqual(["meta"]);
+  });
+
   describe("slice-2 measured-history enrichment", () => {
     const MEASURED = {
       kind: "measured_performance",
