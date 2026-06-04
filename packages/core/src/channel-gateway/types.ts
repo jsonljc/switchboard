@@ -12,6 +12,7 @@ import type { RevocationKeywordEntry } from "../consent/revocation-keywords/type
 import type { PdpaJurisdiction } from "@switchboard/schemas";
 import type { OperatorChannelBindingStore } from "./operator-channel-binding-store.js";
 import type { RespondToApprovalDeps } from "../approval/respond-to-approval.js";
+import type { ApprovalRespondTransport } from "./respond-to-channel-approval.js";
 import type { ConversationStatusUpsertContext } from "./conversation-status-types.js";
 import type { ConsentStateStore } from "../consent/consent-store.js";
 
@@ -52,17 +53,34 @@ export interface GatewayConversationStatusSetter {
 }
 
 /**
- * Configuration to enable chat approval execution. When provided, hash-match success
- * triggers an OperatorChannelBinding lookup → role check → shared respondToApproval call,
- * mutating the approval lifecycle the same way the API route does. When omitted (e.g.,
- * tests, misconfiguration), hash-match succeeds but the response is "not authorized" —
- * we MUST NOT execute on hash match alone (channel-possession ≠ authority).
+ * Configuration to enable chat approval execution. Two shapes:
+ *
+ * In-process (tests, integration proofs, single-process deployments): the
+ * authority stack + engine deps live in this process; hash-match success
+ * triggers an OperatorChannelBinding lookup → role check → shared
+ * respondToApproval call.
+ *
+ * Transport (production two-process topology): the gateway thin-forwards the
+ * webhook-authenticated channel identity to the API internal route, which
+ * re-derives the operator principal server-side and runs the same engine.
+ *
+ * When omitted (e.g., tests, misconfiguration), hash-match succeeds but the
+ * response is "not authorized" — we MUST NOT execute on hash match alone
+ * (channel-possession ≠ authority).
  */
-export interface HandleApprovalResponseConfig {
+export interface InProcessApprovalResponseConfig {
   bindingStore: OperatorChannelBindingStore;
   identityStore: IdentityStore;
   respondDeps: RespondToApprovalDeps;
 }
+
+export interface TransportApprovalResponseConfig {
+  transport: ApprovalRespondTransport;
+}
+
+export type HandleApprovalResponseConfig =
+  | InProcessApprovalResponseConfig
+  | TransportApprovalResponseConfig;
 
 export interface ChannelGatewayConfig {
   conversationStore: GatewayConversationStore;

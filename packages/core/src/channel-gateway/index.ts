@@ -22,6 +22,7 @@ export type { HandleApprovalResponseConfig } from "./types.js";
 export {
   APPROVER_ROLES,
   handleApprovalResponse,
+  replyForChannelOutcome,
   NOT_FOUND_MSG,
   STALE_MSG,
   NOT_AUTHORIZED_MSG,
@@ -35,6 +36,15 @@ export {
   SELF_APPROVAL_MSG,
   ADMISSION_FAILED_MSG,
 } from "./handle-approval-response.js";
+export { respondToChannelApproval, refusalCodeForError } from "./respond-to-channel-approval.js";
+export type {
+  ChannelApprovalRespondRequest,
+  ChannelApprovalRespondOutcome,
+  ChannelApprovalRefusalCode,
+  ApprovalRespondTransport,
+  ChannelApprovalRespondDeps,
+} from "./respond-to-channel-approval.js";
+export type { InProcessApprovalResponseConfig, TransportApprovalResponseConfig } from "./types.js";
 export { ConversationLifecycleTracker } from "./conversation-lifecycle.js";
 export type {
   ConversationEndEvent,
