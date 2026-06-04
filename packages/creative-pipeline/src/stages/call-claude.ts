@@ -1,4 +1,4 @@
-// packages/core/src/creative-pipeline/stages/call-claude.ts
+// packages/creative-pipeline/src/stages/call-claude.ts
 import Anthropic from "@anthropic-ai/sdk";
 import type { z } from "zod";
 

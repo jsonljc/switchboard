@@ -94,6 +94,16 @@ describe("FfmpegFrameExtractor", () => {
     expect(result.localVideoPath).toMatch(/\.mp4$/);
   });
 
+  it("never follows redirects (a 302 off an allowlisted host would bypass the allowlist)", async () => {
+    const extractor = new FfmpegFrameExtractor({
+      safeUrlPolicy: allowAllPolicy,
+      execFileImpl: fakeExec,
+      fetchImpl: fakeFetch as unknown as typeof fetch,
+    });
+    await extractor.extract("https://cdn.example.com/clip.mp4", 10);
+    expect(fakeFetch).toHaveBeenCalledWith(expect.anything(), { redirect: "error" });
+  });
+
   it("treats a bare path as local: no fetch, frames extracted from it directly", async () => {
     const localPath = join(workRoot, "local.mp4");
     writeFileSync(localPath, "bytes");

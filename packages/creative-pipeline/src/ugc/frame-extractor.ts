@@ -104,7 +104,11 @@ export class FfmpegFrameExtractor implements FrameExtractor {
       if (!verdict.ok) {
         throw new SsrfRejectedError(videoUrlOrPath, verdict.reason);
       }
-      const res = await this.fetchImpl(verdict.url);
+      // redirect:"error": following a redirect would bypass the allowlist
+      // check (an allowlisted host 302ing to a private address is the classic
+      // SSRF escape). Provider CDN URLs are direct object URLs; no legitimate
+      // redirect exists on this path.
+      const res = await this.fetchImpl(verdict.url, { redirect: "error" });
       if (!res.ok) throw new Error(`Failed to download video for frame QA: ${res.status}`);
       const buffer = await readBodyWithLimit(res, this.safeUrlPolicy.maxResponseBytes);
       localVideoPath = join(workDir, "source.mp4");

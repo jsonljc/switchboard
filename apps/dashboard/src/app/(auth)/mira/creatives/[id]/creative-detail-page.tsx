@@ -58,9 +58,11 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
           ? "Draft completed. Ready for your review."
           : job.status === "stopped"
             ? "This draft was stopped."
-            : job.status === "awaiting_review"
-              ? "Awaiting your review."
-              : "Still drafting."}
+            : job.status === "failed"
+              ? "This draft could not be completed."
+              : job.status === "awaiting_review"
+                ? "Awaiting your review."
+                : "Still drafting."}
       </div>
 
       {job.qa && (

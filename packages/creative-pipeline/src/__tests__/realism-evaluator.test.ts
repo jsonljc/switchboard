@@ -4,6 +4,9 @@
 // vision failure, schema-invalid reply) it returns the honest-stub result so
 // the pipeline routes to a human and never blocks on QA infrastructure.
 import { describe, it, expect, vi } from "vitest";
+import { mkdtempSync, existsSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 import { evaluateRealism, buildQaPrompt, type RealismScorerDeps } from "../ugc/realism-scorer.js";
 import type { ExtractedFrames } from "../ugc/frame-extractor.js";
 
@@ -78,13 +81,16 @@ describe("evaluateRealism (real path)", () => {
     expect(score.overallDecision).toBe("pass");
   });
 
-  it("degrades to the honest stub when the extractor throws", async () => {
+  it("degrades to the honest stub when the extractor throws, recording the reason", async () => {
     const deps = makeDeps({
       frameExtractor: { extract: vi.fn().mockRejectedValue(new Error("ssrf rejected")) },
     });
     const score = await evaluateRealism(input, deps);
     expect(score.qaStatus).toBe("requires_human_review");
     expect(score.overallDecision).toBe("review");
+    // The degrade reason rides the persisted score (operator can tell an
+    // outage from a genuinely ambiguous clip).
+    expect(score.notes).toBe("qa unavailable: ssrf rejected");
   });
 
   it("degrades to the honest stub when the vision call throws", async () => {
@@ -93,6 +99,51 @@ describe("evaluateRealism (real path)", () => {
     });
     const score = await evaluateRealism(input, deps);
     expect(score.qaStatus).toBe("requires_human_review");
+    expect(score.notes).toContain("schema validation failed");
+  });
+
+  it("carries the model's notes on evaluated scores", async () => {
+    const deps = makeDeps({
+      vision: vi.fn().mockResolvedValue({
+        artifactFlags: [],
+        humanPresent: true,
+        softScores: { visualRealism: 0.8, behavioralRealism: 0.8, ugcAuthenticity: 0.8 },
+        notes: "slight motion blur in frame 5",
+      }),
+    });
+    const score = await evaluateRealism(input, deps);
+    expect(score.notes).toBe("slight motion blur in frame 5");
+  });
+
+  it("cleans up the extractor work dir after evaluation (retry loops must not fill disk)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "qa-workdir-"));
+    const deps = makeDeps({
+      frameExtractor: {
+        extract: vi.fn().mockResolvedValue({
+          frames: ["QUJD"],
+          localVideoPath: join(dir, "s.mp4"),
+          workDir: dir,
+        }),
+      },
+    });
+    await evaluateRealism(input, deps);
+    expect(existsSync(dir)).toBe(false);
+  });
+
+  it("cleans up the work dir even when the vision call throws", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "qa-workdir-fail-"));
+    const deps = makeDeps({
+      frameExtractor: {
+        extract: vi.fn().mockResolvedValue({
+          frames: ["QUJD"],
+          localVideoPath: join(dir, "s.mp4"),
+          workDir: dir,
+        }),
+      },
+      vision: vi.fn().mockRejectedValue(new Error("boom")),
+    });
+    await evaluateRealism(input, deps);
+    expect(existsSync(dir)).toBe(false);
   });
 });
 

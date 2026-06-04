@@ -9,17 +9,12 @@ import {
 } from "../ugc/realism-scorer.js";
 import { AssetApprovalState, type RealismScore } from "@switchboard/schemas";
 
-// Mock Claude for the LLM-based scorer
+// Spy-only mock: pins that the deps-less evaluator NEVER reaches a model call
+// (the honest stub). The real evaluator path (injected deps) is covered in
+// realism-evaluator.test.ts.
 vi.mock("../stages/call-claude.js", () => ({
-  callClaude: vi.fn().mockResolvedValue({
-    faceSimilarity: 0.85,
-    ocrAccuracy: 0.9,
-    artifactFlags: [],
-    visualRealism: 0.8,
-    behavioralRealism: 0.75,
-    ugcAuthenticity: 0.9,
-    audioNaturalness: 0.7,
-  }),
+  callClaude: vi.fn(),
+  callClaudeWithImages: vi.fn(),
 }));
 
 describe("computeWeightedSoftScore", () => {

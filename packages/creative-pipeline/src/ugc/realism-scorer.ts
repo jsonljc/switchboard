@@ -1,13 +1,16 @@
 // packages/creative-pipeline/src/ugc/realism-scorer.ts
 // Realism QA for generated UGC video.
 //
-// Frame-based realism QA is NOT yet implemented: the model cannot see the
-// generated video, so `evaluateRealism` does not fabricate scores from a URL.
-// It returns `qaStatus: "requires_human_review"`, so an un-evaluated asset can
-// never be auto-approved for spend. The pure helpers below (computeDecision /
-// computeWeightedSoftScore / deriveApprovalState) are the decision logic for
-// when a real frame-sampling evaluator lands and sets `qaStatus: "evaluated"`.
+// Frame-based realism QA is REAL when deps are injected (slice-3 spec 3.1):
+// frames are extracted via ffmpeg and sent to the vision model as image
+// content blocks; the score carries `qaStatus: "evaluated"` and a
+// `computeDecision` verdict. Without deps, or on ANY infrastructure
+// shortfall, `evaluateRealism` returns the honest stub
+// (`qaStatus: "requires_human_review"`) so an un-evaluated asset can never
+// be auto-approved for spend. The QA prompt gates OBJECTIVE INTEGRITY only;
+// aesthetic judgment stays human.
 
+import { rmSync } from "fs";
 import { z } from "zod";
 import type { RealismScore, RealismSoftScores } from "@switchboard/schemas";
 import type { FrameExtractor } from "./frame-extractor.js";
@@ -263,11 +266,13 @@ export async function evaluateRealism(
 ): Promise<RealismScore> {
   if (!deps) return { ...HONEST_STUB };
 
+  let workDir: string | undefined;
   try {
     const extracted = await deps.frameExtractor.extract(
       input.videoUrl,
       input.durationSec ?? 0, // extractor applies its own default clip length
     );
+    workDir = extracted.workDir;
     const result = await deps.vision({
       images: extracted.frames,
       userMessage: buildQaPrompt(input),
@@ -285,13 +290,26 @@ export async function evaluateRealism(
       softScores: result.softScores,
       overallDecision: "review",
       qaStatus: "evaluated",
+      // Model observations; persisted operator context that gates nothing.
+      ...(result.notes ? { notes: result.notes } : {}),
     };
     return { ...score, overallDecision: computeDecision(score, input.thresholds) };
   } catch (err) {
-    console.warn(
-      `frame QA unavailable for ${input.videoUrl} (routing to human review):`,
-      err instanceof Error ? err.message : err,
-    );
-    return { ...HONEST_STUB };
+    const reason = err instanceof Error ? err.message : String(err);
+    console.warn(`frame QA unavailable for ${input.videoUrl} (routing to human review):`, reason);
+    // The degrade reason rides the persisted score so an operator can tell a
+    // vision/extraction outage from a genuinely ambiguous clip.
+    return { ...HONEST_STUB, notes: `qa unavailable: ${reason}` };
+  } finally {
+    // The extractor's temp dir (downloaded source + frames, up to the size
+    // cap) is consumed entirely within this call; a retry loop without
+    // cleanup would fill the host disk. Best-effort, never throws.
+    if (workDir) {
+      try {
+        rmSync(workDir, { recursive: true, force: true });
+      } catch {
+        // best-effort cleanup only
+      }
+    }
   }
 }

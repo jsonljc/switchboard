@@ -113,7 +113,8 @@ async function processSpec(
 
         // Attempt-accurate budget (slice-3 spec 3.1): a successful generation
         // is paid render spend whether or not its QA verdict survives, so it
-        // accrues here, not on the returned asset.
+        // accrues here, not on the returned asset. Generation ERRORS do not
+        // bill (no clip was produced) and do not accrue.
         costTracker.total += provider.estimatedCost;
 
         // Frame QA (real when qaDeps wired; honest stub otherwise)
@@ -147,7 +148,9 @@ async function processSpec(
           inputHashes: hashInputs(spec),
           outputs: { videoUrl: result.videoUrl, checksums: {} },
           qaMetrics: qaScore as unknown as Record<string, unknown>,
-          qaHistory: qaHistory as unknown as Array<Record<string, unknown>>,
+          // Snapshot copy: each row records the history SO FAR; persisting the
+          // live array by reference would alias every row to the final state.
+          qaHistory: [...qaHistory] as unknown as Array<Record<string, unknown>>,
           // Safety: an un-evaluated/fabricated QA score can never auto-approve;
           // `deriveApprovalState` gates on qaStatus === "evaluated".
           approvalState: deriveApprovalState(qaScore),
@@ -179,7 +182,9 @@ async function processSpec(
   // All attempts exhausted with only failing QA verdicts: the LAST rejected
   // asset is the spec's final output (persisted above; nothing silently
   // dropped) and the spec is reported failed. Garbage renders never fall
-  // back to unrelated reuse assets.
+  // back to unrelated reuse assets; qa_failed wins here even when LATER
+  // attempts threw generation errors (lastFailedAsset may have been set
+  // attempts ago, on a different provider).
   if (lastFailedAsset) {
     return {
       asset: lastFailedAsset,

@@ -64,6 +64,24 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     }
   });
 
+  it("renders honest failed copy for an all-rejected job (never 'Still drafting')", () => {
+    mockCreative.mockReturnValue({
+      data: summary({
+        source: { engine: "legacy_creative_job", mode: "ugc" },
+        status: "failed",
+        reviewAction: { canContinue: false, canStop: false, label: "none" },
+        draft: { videoUrl: "https://x/rejected.mp4" },
+        qa: { status: "evaluated", decision: "fail" },
+      }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.getByText(/could not be completed/i)).toBeTruthy();
+    expect(screen.queryByText(/Still drafting/i)).toBeNull();
+    expect(screen.getByText(/Frame QA: rejected/i)).toBeTruthy();
+  });
+
   it("renders no frame-QA line when qa is absent", () => {
     mockCreative.mockReturnValue({
       data: summary({ draft: { videoUrl: "https://x/p.mp4" } }),

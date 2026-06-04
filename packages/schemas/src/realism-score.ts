@@ -35,5 +35,12 @@ export const RealismScoreSchema = z.object({
   softScores: RealismSoftScores,
   overallDecision: RealismDecision,
   qaStatus: QaStatus,
+  /**
+   * Free-text context that gates nothing: the vision model's observations on
+   * an evaluated score, or the degrade reason ("qa unavailable: ...") when
+   * infrastructure failed and the honest stub was returned. Operator signal,
+   * never an input to computeDecision/deriveApprovalState.
+   */
+  notes: z.string().optional(),
 });
 export type RealismScore = z.infer<typeof RealismScoreSchema>;
