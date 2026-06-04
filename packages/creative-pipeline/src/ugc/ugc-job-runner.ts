@@ -308,11 +308,17 @@ export async function executeUgcPipeline(
         deploymentType: context.deploymentType,
       })
     ) {
+      // jobId-only match (slice-3 spec 3.3a; polished parity). The decision
+      // workflow emits phase = the PERSISTED ugcPhase, which is the NEXT
+      // phase (saved above before this wait), so a phase `if` filter could
+      // never match a governed approve: every continue timed out into
+      // stopUgc. Waits are sequential (one active wait per job), so
+      // jobId-only matching cannot skip a later gate; the event's phase
+      // field stays in the payload for observability only.
       const approval = await step.waitForEvent(`wait-approval-${phase}`, {
         event: "creative-pipeline/ugc-phase.approved",
         timeout: APPROVAL_TIMEOUT,
         match: "data.jobId",
-        if: `async.data.phase == '${phase}'`,
       });
 
       if (!approval || approval.data.action === "stop") {

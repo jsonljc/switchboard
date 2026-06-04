@@ -159,16 +159,35 @@ describe("executeUgcPipeline", () => {
     expect(phaseCompleteEvents[3]![1].data.phase).toBe("delivery");
   });
 
-  it("matches approval event on both jobId and phase", async () => {
+  it("matches approval events on jobId ONLY (polished parity; slice-3 spec 3.3a)", async () => {
     await executeUgcPipeline(eventData, step as never, deps as never);
 
-    const firstWait = step.waitForEvent.mock.calls[0]!;
-    expect((firstWait as unknown[])[1]).toMatchObject({
-      event: "creative-pipeline/ugc-phase.approved",
-      match: "data.jobId",
-    });
-    // The `if` clause should filter by phase
-    expect(((firstWait as unknown[])[1] as Record<string, unknown>).if).toContain("planning");
+    // The decision workflow emits phase = the PERSISTED ugcPhase, which the
+    // runner sets to the NEXT phase before waiting; a phase `if` filter can
+    // therefore never match a governed approve (the latent bug this pins
+    // against). Waits are sequential (one active wait per job), so jobId-only
+    // matching cannot skip a later gate.
+    for (const call of step.waitForEvent.mock.calls) {
+      const opts = (call as unknown[])[1] as Record<string, unknown>;
+      expect(opts).toMatchObject({
+        event: "creative-pipeline/ugc-phase.approved",
+        match: "data.jobId",
+      });
+      expect(opts.if).toBeUndefined();
+    }
+  });
+
+  it("a decision-workflow-shaped emit (persisted NEXT phase) resumes the wait", async () => {
+    // Simulate exactly what creative-job-decision-workflow sends after the
+    // planning gate: phase carries the persisted value ("scripting"), not the
+    // awaited phase. With jobId-only matching this resumes; with the old
+    // phase filter it timed out into stopUgc after 24h.
+    step.waitForEvent.mockResolvedValue({
+      data: { action: "continue", phase: "scripting" },
+    } as never);
+    await executeUgcPipeline(eventData, step as never, deps as never);
+    expect(deps.jobStore.stopUgc).not.toHaveBeenCalled();
+    expect(deps.jobStore.updateUgcPhase).toHaveBeenCalled();
   });
 });
 
