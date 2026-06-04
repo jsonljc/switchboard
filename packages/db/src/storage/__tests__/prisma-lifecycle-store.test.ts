@@ -8,6 +8,7 @@ function createMockPrisma() {
     approvalLifecycle: {
       updateMany: vi.fn(),
       findUniqueOrThrow: vi.fn(),
+      findMany: vi.fn(),
     },
     approvalRevision: {
       create: vi.fn(),
@@ -15,6 +16,9 @@ function createMockPrisma() {
     },
     executableWorkUnit: {
       create: vi.fn(),
+    },
+    dispatchRecord: {
+      count: vi.fn(),
     },
     $transaction: vi.fn(),
   };
@@ -259,6 +263,45 @@ describe("PrismaLifecycleStore", () => {
       expect(result.id).toBe("rev_new");
       expect(result.revisionNumber).toBe(2);
       expect(result.bindingHash).toBe("hash-new");
+    });
+  });
+
+  describe("listRecoveryRequiredLifecycles", () => {
+    it("queries recovery_required scoped to the org and maps rows", async () => {
+      prisma.approvalLifecycle.findMany.mockResolvedValue([
+        { ...LIFECYCLE_DB_ROW, status: "recovery_required" },
+      ]);
+
+      const result = await store.listRecoveryRequiredLifecycles("org_1");
+
+      expect(prisma.approvalLifecycle.findMany).toHaveBeenCalledWith({
+        where: { status: "recovery_required", organizationId: "org_1" },
+      });
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ id: "lc_1", status: "recovery_required" });
+    });
+
+    it("queries across orgs when organizationId is omitted", async () => {
+      prisma.approvalLifecycle.findMany.mockResolvedValue([]);
+
+      await store.listRecoveryRequiredLifecycles();
+
+      expect(prisma.approvalLifecycle.findMany).toHaveBeenCalledWith({
+        where: { status: "recovery_required" },
+      });
+    });
+  });
+
+  describe("countDispatchRecords", () => {
+    it("counts records for one executable work unit", async () => {
+      prisma.dispatchRecord.count.mockResolvedValue(2);
+
+      const result = await store.countDispatchRecords("wu_1");
+
+      expect(prisma.dispatchRecord.count).toHaveBeenCalledWith({
+        where: { executableWorkUnitId: "wu_1" },
+      });
+      expect(result).toBe(2);
     });
   });
 });
