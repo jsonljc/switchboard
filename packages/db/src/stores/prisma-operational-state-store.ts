@@ -60,6 +60,11 @@ function rowToConfirmation(row: ConfirmationRow): OperationalStateConfirmation |
   if (row.operatingStatus !== null) state.operatingStatus = row.operatingStatus;
   if (row.staffing !== null) state.staffing = row.staffing;
   if (row.inventory !== null) state.inventory = row.inventory;
+  // Only the Json columns also guard undefined: they are typed `unknown` in
+  // ConfirmationRow (Prisma surfaces SQL NULL as plain null, but the wider
+  // type makes undefined reachable in principle), while the scalar columns
+  // are `string | null` where undefined cannot occur. Do not "normalize" the
+  // scalar guards to match.
   if (row.promoWindows !== null && row.promoWindows !== undefined) {
     state.promoWindows = row.promoWindows;
   }

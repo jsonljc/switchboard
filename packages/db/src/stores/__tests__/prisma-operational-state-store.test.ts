@@ -99,6 +99,31 @@ describe("PrismaOperationalStateStore", () => {
       ).rejects.toThrow();
       expect(prisma.operationalStateConfirmation.create).not.toHaveBeenCalled();
     });
+
+    it("writes an explicit empty array (operator confirmed none), distinct from omitting the column", async () => {
+      const confirmedAt = new Date("2026-06-04T09:00:00.000Z");
+      prisma.operationalStateConfirmation.create.mockResolvedValue(
+        makeRow({
+          id: "osc_10",
+          operatingStatus: null,
+          promoWindows: [],
+          confirmedAt,
+          createdAt: confirmedAt,
+        }),
+      );
+      const got = await store.recordConfirmation("org_1", { promoWindows: [] }, { confirmedAt });
+      // [] is a confirmation ("no promos running"); it must reach the insert
+      // as [] (a NOT NULL jsonb that satisfies the nonempty-state CHECK),
+      // never be dropped to an omitted/NULL column (= unconfirmed).
+      expect(prisma.operationalStateConfirmation.create).toHaveBeenCalledWith({
+        data: {
+          organizationId: "org_1",
+          promoWindows: [],
+          confirmedAt,
+        },
+      });
+      expect(got.state).toEqual({ promoWindows: [] });
+    });
   });
 
   describe("getLatest", () => {
@@ -126,6 +151,20 @@ describe("PrismaOperationalStateStore", () => {
         promoWindows: [{ start: "2026-06-01T00:00:00.000Z", end: "2026-06-15T00:00:00.000Z" }],
       });
       expect(Object.prototype.hasOwnProperty.call(got?.state ?? {}, "staffing")).toBe(false);
+    });
+
+    it("degrades a note-only row (all operational dimensions NULL) to absence on read", async () => {
+      // Defense-in-depth: the DB nonempty_state CHECK forbids inserting such
+      // a row, but if one ever reached the table (constraint dropped, dump
+      // restore), the read path must still refuse to surface it as a
+      // freshness anchor.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      prisma.operationalStateConfirmation.findFirst.mockResolvedValue(
+        makeRow({ operatingStatus: null, note: "sneaky note" }),
+      );
+      expect(await store.getLatest("org_1")).toBeNull();
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
     });
 
     it("degrades a malformed latest row to absence with a warning and does NOT fall back to an older row", async () => {
