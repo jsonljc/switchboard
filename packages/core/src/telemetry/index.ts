@@ -2,6 +2,7 @@ export { getTracer, setTracer, createOTelTracer, NoopTracer } from "./tracing.js
 export type { Tracer, Span } from "./tracing.js";
 export { getMetrics, setMetrics, createInMemoryMetrics } from "./metrics.js";
 export type { SwitchboardMetrics, Counter, Histogram } from "./metrics.js";
+export { recordGovernanceVerdictMetric } from "./verdict-metrics.js";
 export {
   LLM_COST_TABLE,
   DEFAULT_MODEL_ID,

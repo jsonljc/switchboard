@@ -95,8 +95,12 @@ export async function bootstrapSkillMode(
     renderHandoffTemplate,
   } = await import("@switchboard/core/skill-runtime");
   const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
-  const { HandoffPackageAssembler, HandoffNotifier, createConsentService } =
-    await import("@switchboard/core");
+  const {
+    HandoffPackageAssembler,
+    HandoffNotifier,
+    createConsentService,
+    recordGovernanceVerdictMetric,
+  } = await import("@switchboard/core");
   const {
     PrismaContactStore,
     PrismaOpportunityStore,
@@ -149,7 +153,11 @@ export async function bootstrapSkillMode(
   // ---------------------------------------------------------------------------
   const deploymentStore = new PrismaDeploymentStore(prismaClient);
   const governanceConfigResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
-  const governanceVerdictStore = new PrismaGovernanceVerdictStore(prismaClient);
+  // onWrite mirrors every persisted verdict into the dual-prom counter
+  // (switchboard_governance_verdicts_total) — the observe-bake read surface.
+  const governanceVerdictStore = new PrismaGovernanceVerdictStore(prismaClient, {
+    onWrite: recordGovernanceVerdictMetric,
+  });
   // Single shared posture cache — warm on first resolve, reused across both gates.
   const governancePostureCache = new InMemoryGovernancePostureCache();
   // Adapter: ConversationStatusSetter → direct conversationState updateMany.

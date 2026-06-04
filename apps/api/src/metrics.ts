@@ -203,6 +203,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "Per-execution LLM cost in USD, by model",
       ["model"],
     ),
+    governanceVerdictsRecorded: new PromCounter(
+      "switchboard_governance_verdicts_total",
+      "Governance gate verdicts persisted, by deployment, source guard, action, and audit level",
+      ["deployment_id", "source_guard", "action", "audit_level"],
+    ),
   };
 }
 
