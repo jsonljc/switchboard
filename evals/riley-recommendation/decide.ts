@@ -14,10 +14,14 @@ import type {
 
 const v2 = new LearningPhaseGuardV2();
 
-function insight(m: RileyCase["current"]): CampaignInsightSchema {
+function insight(
+  m: RileyCase["current"],
+  campaignId = "c1",
+  campaignName = "C1",
+): CampaignInsightSchema {
   return {
-    campaignId: "c1",
-    campaignName: "C1",
+    campaignId,
+    campaignName,
     status: "ACTIVE",
     effectiveStatus: "ACTIVE",
     impressions: m.impressions,
@@ -82,13 +86,41 @@ function sortedUnique(values: string[]): string[] {
   return [...new Set(values)].sort();
 }
 
+/** The decision-relevant subset of a fixture case (the arbitration eval reuses it
+ * with eval-only fields stripped). */
+export type RileyDecisionInputCase = Pick<
+  RileyCase,
+  | "current"
+  | "previous"
+  | "targetBreach"
+  | "learningState"
+  | "economicTier"
+  | "effectiveTarget"
+  | "targetROAS"
+  | "measurementTrusted"
+  | "hybrid"
+>;
+
+export interface RileyRawDecision {
+  recommendations: ReturnType<typeof decideForCampaign>["recommendations"];
+  watches: ReturnType<typeof decideForCampaign>["watches"];
+  insights: ReturnType<typeof decideForCampaign>["insights"];
+  targetSource?: TargetSource;
+}
+
 /**
- * Resolve a fixture case through the REAL `decideForCampaign` pipeline and expose
- * both the full action/watch surfaces and the single reduced label. Deterministic,
- * model-free, DB-free — the engine is the source of truth; this never re-implements
- * any decision logic.
+ * Resolve a case through the REAL decideForCampaign pipeline and return the RAW
+ * outputs (the arbitration eval feeds them to arbitrate(); decideForCase reduces
+ * them to the per-campaign assertion surfaces). campaignId/campaignName are
+ * parameterizable because a multi-campaign arbitration account needs distinct ids.
+ * Deterministic, model-free, DB-free — the engine is the source of truth; this
+ * never re-implements any decision logic.
  */
-export function decideForCase(c: RileyCase): RileyDecision {
+export function decideRawForCase(
+  c: RileyDecisionInputCase,
+  campaignId = "c1",
+  campaignName = "C1",
+): RileyRawDecision {
   // PR2 Gate-4: when a fixture carries a `hybrid` block, resolve the per-campaign
   // economic target through the REAL resolver (Tier-1 campaign vs Tier-2 account)
   // and feed THAT into decideForCampaign — the exact live audit-runner seam. A
@@ -111,10 +143,10 @@ export function decideForCase(c: RileyCase): RileyDecision {
   }
 
   const r = decideForCampaign({
-    campaignId: "c1",
-    campaignName: "C1",
-    currentInsight: insight(c.current),
-    previousInsight: c.previous ? insight(c.previous) : null,
+    campaignId,
+    campaignName,
+    currentInsight: insight(c.current, campaignId, campaignName),
+    previousInsight: c.previous ? insight(c.previous, campaignId, campaignName) : null,
     targetBreach: { ...c.targetBreach, isApproximate: c.targetBreach.granularity === "weekly" },
     learningStatus: statusFor(c.learningState),
     economicTier,
@@ -135,18 +167,34 @@ export function decideForCase(c: RileyCase): RileyDecision {
     ...(targetSource ? { targetSource } : {}),
   });
 
-  const actions = sortedUnique(r.recommendations.map((rec) => rec.action));
-  const watchPatterns = sortedUnique(r.watches.map((w) => w.pattern));
-  const hasInsight = r.insights.length > 0;
+  return {
+    recommendations: r.recommendations,
+    watches: r.watches,
+    insights: r.insights,
+    ...(targetSource ? { targetSource } : {}),
+  };
+}
+
+/**
+ * Resolve a fixture case through the REAL `decideForCampaign` pipeline and expose
+ * both the full action/watch surfaces and the single reduced label (delegates to
+ * decideRawForCase; behavior unchanged).
+ */
+export function decideForCase(c: RileyCase): RileyDecision {
+  const raw = decideRawForCase(c);
+
+  const actions = sortedUnique(raw.recommendations.map((rec) => rec.action));
+  const watchPatterns = sortedUnique(raw.watches.map((w) => w.pattern));
+  const hasInsight = raw.insights.length > 0;
 
   const primary =
-    r.recommendations.length > 0
-      ? r.recommendations[0]!.action
-      : r.watches.length > 0
+    raw.recommendations.length > 0
+      ? raw.recommendations[0]!.action
+      : raw.watches.length > 0
         ? "watch"
-        : r.insights.length > 0
+        : raw.insights.length > 0
           ? "insight"
           : "none";
 
-  return { actions, watchPatterns, hasInsight, primary, targetSource };
+  return { actions, watchPatterns, hasInsight, primary, targetSource: raw.targetSource };
 }

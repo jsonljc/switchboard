@@ -7,6 +7,7 @@ import {
   loadSourceReallocationCases,
   decideSourceReallocationForCase,
 } from "./source-reallocation-eval.js";
+import { loadArbitrationCases, runArbitrationCase } from "./arbitration-eval.js";
 
 /**
  * Riley-recommendation eval runner.
@@ -22,6 +23,7 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = join(__dirname, "fixtures");
 const SR_FIXTURES_DIR = join(FIXTURES_DIR, "source-reallocation");
+const ARB_FIXTURES_DIR = join(FIXTURES_DIR, "arbitration");
 
 async function main(): Promise<void> {
   const cases = loadRileyCases(FIXTURES_DIR);
@@ -69,6 +71,34 @@ async function main(): Promise<void> {
     }
   }
 
+  // Riley v3 slice 2: cross-campaign arbitration (the per-campaign harness above is
+  // structurally blind to a cross-campaign selection; expectedPrimary pins it here).
+  const arbCases = loadArbitrationCases(ARB_FIXTURES_DIR);
+  console.warn(`Loaded ${arbCases.length} arbitration cases from ${ARB_FIXTURES_DIR}`);
+  for (const c of arbCases) {
+    const decision = runArbitrationCase(c);
+    if (JSON.stringify(decision.primary) !== JSON.stringify(c.expectedPrimary)) {
+      mismatches.push(
+        `${c.id}: expected primary ${JSON.stringify(c.expectedPrimary)}, got ${JSON.stringify(decision.primary)}`,
+      );
+    }
+    for (const action of c.expectedSecondaryActions ?? []) {
+      if (!decision.secondaryActions.includes(action)) {
+        mismatches.push(
+          `${c.id}: expected secondary action "${action}" among [${decision.secondaryActions.join(", ")}]`,
+        );
+      }
+    }
+    if (
+      c.expectedMeasurementFixAction !== undefined &&
+      decision.measurementFixAction !== c.expectedMeasurementFixAction
+    ) {
+      mismatches.push(
+        `${c.id}: expected measurement fix ${c.expectedMeasurementFixAction}, got ${decision.measurementFixAction ?? "none"}`,
+      );
+    }
+  }
+
   if (mismatches.length > 0) {
     console.error(`\n${mismatches.length} MISMATCH(es):`);
     for (const m of mismatches) console.error(`  - ${m}`);
@@ -76,7 +106,7 @@ async function main(): Promise<void> {
   }
 
   console.warn(
-    `\nAll ${cases.length} decideForCampaign + ${srCases.length} source-reallocation cases match.`,
+    `\nAll ${cases.length} decideForCampaign + ${srCases.length} source-reallocation + ${arbCases.length} arbitration cases match.`,
   );
 }
 
