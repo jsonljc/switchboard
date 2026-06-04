@@ -58,12 +58,14 @@ export async function respondViaLifecycle(args: {
 
   // PURE compute: throws on a non-pending legacy row (already-responded guard).
   // Persisted only AFTER the lifecycle authority commit (or immediately for a
-  // quorum partial, which never touches the lifecycle).
+  // quorum partial, which never touches the lifecycle). The bindingHash rides
+  // along as the quorum approval hash so partial approvals are attributable.
   const newState = transitionApproval(
     approval.state,
     params.action,
     params.respondedBy,
     params.patchValue,
+    params.bindingHash,
   );
 
   // Quorum short-circuit: a partial approval is recorded on the legacy row
@@ -153,13 +155,25 @@ export async function respondViaLifecycle(args: {
   }
 
   // executeAfterApproval refuses to dispatch unless the envelope (when one
-  // exists) is approved; flip it before dispatch.
-  const envelope = await deps.envelopeStore.getById(approval.envelopeId);
-  if (envelope) {
-    await deps.envelopeStore.update(
-      envelope.id,
-      { status: "approved" },
-      approval.organizationId ?? null,
+  // exists) is approved; flip it before dispatch. BEST-EFFORT (review #1): a
+  // failure here must not strand the approved lifecycle with neither a
+  // dispatch attempt nor a recovery transition. Proceeding lets the dispatch
+  // leg convert an un-flipped envelope into a durable failed DispatchRecord
+  // plus recovery_required, which is the honest operator-facing state.
+  let envelope: Awaited<ReturnType<EnvelopeStore["getById"]>> = null;
+  try {
+    envelope = await deps.envelopeStore.getById(approval.envelopeId);
+    if (envelope) {
+      await deps.envelopeStore.update(
+        envelope.id,
+        { status: "approved" },
+        approval.organizationId ?? null,
+      );
+    }
+  } catch (err) {
+    deps.logger.error(
+      { err, envelopeId: approval.envelopeId, lifecycleId: lifecycle.id },
+      "Envelope approve-flip failed after lifecycle approve; continuing to dispatch",
     );
   }
 
@@ -183,7 +197,6 @@ export async function respondViaLifecycle(args: {
   const executionResult = await runDispatch(
     {
       lifecycleService: deps.lifecycleService,
-      workTraceStore: deps.workTraceStore as WorkTraceStore,
       platformLifecycle: deps.platformLifecycle,
       logger: deps.logger,
     },
@@ -192,7 +205,16 @@ export async function respondViaLifecycle(args: {
     executableWorkUnit.approvalRevisionId,
   );
 
-  await recordLedger(deps.auditLedger, params, lifecycle, trace);
+  // Best-effort: the action already ran (or is in recovery); a ledger-write
+  // failure must not report the respond itself as failed.
+  try {
+    await recordLedger(deps.auditLedger, params, lifecycle, trace);
+  } catch (err) {
+    deps.logger.error(
+      { err, lifecycleId: lifecycle.id },
+      "Audit ledger write failed after dispatch; result unaffected",
+    );
+  }
   deps.logger.info(
     {
       lifecycleId: lifecycle.id,
@@ -202,9 +224,14 @@ export async function respondViaLifecycle(args: {
     "Lifecycle-backed approval dispatched",
   );
 
-  const updatedEnvelope = envelope
-    ? ((await deps.envelopeStore.getById(envelope.id)) ?? envelope)
-    : null;
+  let updatedEnvelope: unknown = envelope ?? null;
+  if (envelope) {
+    try {
+      updatedEnvelope = (await deps.envelopeStore.getById(envelope.id)) ?? envelope;
+    } catch {
+      updatedEnvelope = envelope; // post-dispatch read is cosmetic; never mask the result
+    }
+  }
   return {
     envelope: updatedEnvelope,
     approvalState: patchedBindingHash ? { ...newState, bindingHash: patchedBindingHash } : newState,

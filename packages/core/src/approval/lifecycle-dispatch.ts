@@ -31,7 +31,6 @@ export interface ExecuteApprovedLike {
 
 export interface LifecycleDispatchDeps {
   lifecycleService: ApprovalLifecycleService;
-  workTraceStore: WorkTraceStore;
   platformLifecycle: ExecuteApprovedLike;
   logger: {
     info(obj: Record<string, unknown>, msg: string): void;
@@ -46,7 +45,7 @@ export interface LifecycleDispatchDeps {
  * the store's own audit + operator alert is the operator-facing record.
  */
 export async function writeApprovedPayloadToTrace(args: {
-  deps: Pick<LifecycleDispatchDeps, "workTraceStore">;
+  deps: { workTraceStore: WorkTraceStore };
   lifecycle: LifecycleRecord;
   executableWorkUnit: ExecutableWorkUnit;
   fallbackParameters: Record<string, unknown>;
@@ -125,7 +124,7 @@ export async function runDispatch(
  * Review #3 (parked spec): an approved action whose dispatch failed must come
  * BACK to the operator (as a Retry card), never vanish into logs.
  */
-export async function markRecoveryRequired(
+async function markRecoveryRequired(
   deps: Pick<LifecycleDispatchDeps, "lifecycleService" | "logger">,
   lifecycleId: string,
 ): Promise<void> {

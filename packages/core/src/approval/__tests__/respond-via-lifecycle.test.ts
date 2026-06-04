@@ -110,11 +110,13 @@ async function makeWorld(opts?: {
   };
 
   const approvalUpdates: Array<{ status: string; version: number }> = [];
+  const persistedStates: Array<Record<string, unknown>> = [];
   const approvalStore = {
     save: vi.fn(),
     getById: vi.fn(),
     updateState: vi.fn(async (_id: string, newState: { status: string; version: number }) => {
       approvalUpdates.push({ status: newState.status, version: newState.version });
+      persistedStates.push(newState as unknown as Record<string, unknown>);
     }),
     listPending: vi.fn(),
   };
@@ -172,6 +174,7 @@ async function makeWorld(opts?: {
     workTraceStore,
     approvalStore,
     approvalUpdates,
+    persistedStates,
     traceUpdates,
     envelopeStore,
     getEnvelope: () => envelope,
@@ -274,6 +277,13 @@ describe("respondToApproval lifecycle fork: unified dispatch chain", () => {
     expect((await w.lifecycleService.getLifecycleById(w.lifecycle.id))?.status).toBe("pending");
     expect(w.approvalUpdates).toHaveLength(1);
     expect(w.store.listDispatchRecords()).toHaveLength(0);
+    // The partial approval is attributable: approver + binding hash recorded
+    const quorum = w.persistedStates[0]?.["quorum"] as {
+      approvalHashes: Array<{ approverId: string; hash: string }>;
+    };
+    expect(quorum.approvalHashes).toEqual([
+      expect.objectContaining({ approverId: "operator-jane", hash: w.revision.bindingHash }),
+    ]);
   });
 
   it("a stale binding hash refuses the approve and mutates nothing", async () => {
@@ -299,6 +309,25 @@ describe("respondToApproval lifecycle fork: unified dispatch chain", () => {
     );
     expect(result.executionResult).toMatchObject({ success: true });
     expect(w.executeApproved).toHaveBeenCalledTimes(1);
+  });
+
+  it("envelope approve-flip failure after the authority commit does NOT prevent dispatch (review #1)", async () => {
+    const w = await makeWorld();
+    (w.envelopeStore.update as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("envelope updateMany matched 0 rows"),
+    );
+    const result = await respondToApproval(
+      w.deps,
+      approveParams(w.revision.bindingHash),
+      w.approval,
+    );
+    // The dispatch leg owns the failure semantics from here: a real
+    // executeAfterApproval would refuse the un-flipped envelope and the
+    // engine would transition to recovery_required. What must NEVER happen
+    // is an abort between approveLifecycle and the dispatch attempt.
+    expect(w.executeApproved).toHaveBeenCalledTimes(1);
+    expect(result.executionResult).toMatchObject({ success: true });
+    expect(w.store.listDispatchRecords()).toHaveLength(1);
   });
 
   it("patch creates a new revision and dispatches the PATCHED payload (payload authority on the patch path)", async () => {
