@@ -4,7 +4,10 @@ import type { ChannelGatewayConfig, ConversationStatusUpsertContext, ReplySink }
 import type { GatewayConversationStatusSetter } from "./types.js";
 import { scanForEscalationTriggers } from "../governance/scanner/escalation-trigger-scanner.js";
 import { renderHandoffTemplate } from "../governance/handoff-template.js";
-import { REASON_CODE_BY_TRIGGER } from "../governance/escalation-triggers/types.js";
+import {
+  REASON_CODE_BY_TRIGGER,
+  handoffReasonForTriggerCategory,
+} from "../governance/escalation-triggers/types.js";
 import type {
   GovernanceVerdictStore,
   SaveGovernanceVerdictInput,
@@ -173,7 +176,12 @@ export async function runPreInputGate(
   if (handoffStore) {
     try {
       await handoffStore.save(
-        buildInputHandoffPackage(sessionId, organizationId, () => new Date()),
+        buildInputHandoffPackage(
+          sessionId,
+          organizationId,
+          handoffReasonForTriggerCategory(firstEntry.category),
+          () => new Date(),
+        ),
       );
     } catch (err) {
       console.error(
@@ -325,7 +333,12 @@ async function handleInputGateResolverError(
   if (handoffStore) {
     try {
       await handoffStore.save(
-        buildInputHandoffPackage(sessionId, organizationId, () => new Date()),
+        buildInputHandoffPackage(
+          sessionId,
+          organizationId,
+          handoffReasonForTriggerCategory(firstEntry.category),
+          () => new Date(),
+        ),
       );
     } catch (err) {
       console.error(
@@ -339,12 +352,17 @@ async function handleInputGateResolverError(
   return true; // Short-circuit submit.
 }
 
-function buildInputHandoffPackage(sessionId: string, orgId: string, clock: () => Date): Handoff {
+function buildInputHandoffPackage(
+  sessionId: string,
+  orgId: string,
+  reason: Handoff["reason"],
+  clock: () => Date,
+): Handoff {
   return {
     id: createId(),
     sessionId,
     organizationId: orgId,
-    reason: "compliance_concern",
+    reason,
     status: "pending",
     leadSnapshot: { channel: "channel" },
     qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },

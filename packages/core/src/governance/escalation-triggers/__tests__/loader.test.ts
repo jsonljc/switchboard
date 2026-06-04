@@ -58,18 +58,26 @@ describe("loadEscalationTriggers", () => {
     }
   });
 
-  it("merged tables meet total entry floor per spec §10 (≥10 per jurisdiction)", () => {
+  // Tripwire against accidental entry deletion; tracks the common table so it
+  // never silently desyncs on the next entry add. The category-coverage test
+  // below is the load-bearing one.
+  it("merged tables include every common entry plus the jurisdiction table", () => {
     for (const j of ["SG", "MY"] as const) {
       _resetEscalationTriggerCache();
       const entries = loadEscalationTriggers(j);
-      expect(entries.length, `${j} total escalation-trigger entries`).toBeGreaterThanOrEqual(10);
+      expect(entries.length, `${j} total escalation-trigger entries`).toBeGreaterThanOrEqual(
+        COMMON_ESCALATION_TRIGGERS.length + 1,
+      );
     }
   });
 
-  it("merged tables cover all six trigger categories per spec §10", () => {
+  it("merged tables cover all nine trigger categories", () => {
     const allCategories = [
       "pregnancy_breastfeeding",
       "prior_adverse_reaction",
+      "anticoagulant_use",
+      "suspicious_lesion",
+      "recent_procedure",
       "prior_complaint",
       "competitor_negative",
       "multi_treatment_combo",
