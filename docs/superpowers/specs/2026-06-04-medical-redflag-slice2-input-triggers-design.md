@@ -36,14 +36,14 @@ change it already is.
 
 ## 2. Verify-first findings (what moved under the 2026-06-01 snapshot)
 
-| Claim from task framing | Current reality on `origin/main` @ `81f0325f` | Consequence |
-|---|---|---|
-| 3 trigger gaps exist in `common.ts` | **Still true.** Last taxonomy touch is #843 (`e8bf6712`); no anticoagulant/lesion/surgery patterns | Core scope stands |
-| `claim-boundaries.md:31` counter-instructs escalation | **Stale.** #791 already replaced the closing line with the red-flag carve-out ("a genuine medical red flag ... is not a claims question: escalate it") | **Dropped from scope** |
-| SKILL.md needs defense-in-depth wording | **Done.** #791 shipped the full tool-call-first block (`skills/alex/SKILL.md:283-333`) listing all four red flags, negative examples, consult-redirect carve-outs | **Dropped from scope** |
+| Claim from task framing                                   | Current reality on `origin/main` @ `81f0325f`                                                                                                                                                                                                            | Consequence                                           |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 3 trigger gaps exist in `common.ts`                       | **Still true.** Last taxonomy touch is #843 (`e8bf6712`); no anticoagulant/lesion/surgery patterns                                                                                                                                                       | Core scope stands                                     |
+| `claim-boundaries.md:31` counter-instructs escalation     | **Stale.** #791 already replaced the closing line with the red-flag carve-out ("a genuine medical red flag ... is not a claims question: escalate it")                                                                                                   | **Dropped from scope**                                |
+| SKILL.md needs defense-in-depth wording                   | **Done.** #791 shipped the full tool-call-first block (`skills/alex/SKILL.md:283-333`) listing all four red flags, negative examples, consult-redirect carve-outs                                                                                        | **Dropped from scope**                                |
 | Deterministic-gate handoffs hardcode `compliance_concern` | **True**, but in the input gate's own inline builder (`pre-input-gate.ts:342-360`, two call sites at `:176` and `:328`), not the shared `handoff/build-handoff-package.ts` (that one serves the four OUTPUT gates + consent service and stays untouched) | Reason mapping is surgically scoped to the input gate |
-| #870 observe seed + verdict counter on main | **Confirmed.** `packages/db/src/seed/medspa-governance-config.ts:10-13` (SG/medical via `buildObserveGovernanceConfig`), counter wired via `PrismaGovernanceVerdictStore` `onWrite` at both bootstraps (`gateway-bridge.ts:142-144`) | Telemetry-first rollout rides existing machinery |
-| `medical_safety` needs a dashboard label | **Already labeled** ("Medical red flag", `handoff-detail-sheet.tsx:15-26`, exhaustive `Record<HandoffReason, string>`) | No dashboard change; full `pnpm typecheck` confirms |
+| #870 observe seed + verdict counter on main               | **Confirmed.** `packages/db/src/seed/medspa-governance-config.ts:10-13` (SG/medical via `buildObserveGovernanceConfig`), counter wired via `PrismaGovernanceVerdictStore` `onWrite` at both bootstraps (`gateway-bridge.ts:142-144`)                     | Telemetry-first rollout rides existing machinery      |
+| `medical_safety` needs a dashboard label                  | **Already labeled** ("Medical red flag", `handoff-detail-sheet.tsx:15-26`, exhaustive `Record<HandoffReason, string>`)                                                                                                                                   | No dashboard change; full `pnpm typecheck` confirms   |
 
 **Slice ranking sanity (task d):** still the highest-leverage shippable slice. It is the
 only candidate that is simultaneously (a) a bright-line patient-safety gap, (b) made
@@ -89,11 +89,11 @@ Extend `EscalationTriggerCategory` with three members and add one `common.ts` en
 category (these are universal medical-safety concerns, not jurisdiction-specific, so they
 belong in the COMMON table; SG/MY tables untouched):
 
-| Category | Entry id | Verdict reason (`REASON_CODE_BY_TRIGGER`) |
-|---|---|---|
-| `anticoagulant_use` | `anticoagulant_use` | `medical_safety_trigger` |
-| `suspicious_lesion` | `suspicious_lesion` | `medical_safety_trigger` |
-| `recent_procedure` | `recent_procedure` | `medical_safety_trigger` |
+| Category            | Entry id            | Verdict reason (`REASON_CODE_BY_TRIGGER`) |
+| ------------------- | ------------------- | ----------------------------------------- |
+| `anticoagulant_use` | `anticoagulant_use` | `medical_safety_trigger`                  |
+| `suspicious_lesion` | `suspicious_lesion` | `medical_safety_trigger`                  |
+| `recent_procedure`  | `recent_procedure`  | `medical_safety_trigger`                  |
 
 `REASON_CODE_BY_TRIGGER` is an exhaustive `Record`, so the compiler forces the mapping
 (one of the adversarial bites). `GovernanceVerdictReason.medical_safety_trigger` already
@@ -133,6 +133,7 @@ exists (the #791 seam-reuse finding); **no schemas change anywhere in this slice
 pattern; this is the calibration intent):
 
 `anticoagulant_use`:
+
 - class terms, fire alone: `blood thinner(s)/thinning`, `anticoagulant(s)`, `antiplatelet(s)`
 - named drugs, fire alone: warfarin, coumadin, heparin, apixaban/Eliquis,
   rivaroxaban/Xarelto, dabigatran/Pradaxa, edoxaban, clopidogrel/Plavix
@@ -143,6 +144,7 @@ pattern; this is the calibration intent):
   relative + term
 
 `suspicious_lesion`:
+
 - lesion noun (mole/spot/patch/birthmark/freckle/lesion/growth/lump/bump) + change or
   concern qualifier in the same clause, both orders ("mole that's been darkening",
   "suspicious mole"); qualifier list: changing/changed, growing/grown, darker/darkening,
@@ -153,15 +155,19 @@ pattern; this is the calibration intent):
   pigmentation "new dark spots" are routine medspa requests)
 - `melanoma(s)` fires alone ("skin cancer" already fires today via the `cancer` pattern
   in `sensitive_keyword_medical_condition`)
-- negations: stable/unchanged disclosures ("hasn't changed"); third-party relative +
-  lesion noun
+- negations: stable/unchanged disclosures ("hasn't changed"); routine acne/melasma
+  pigmentation contexts ("acne marks getting darker", "spots from acne"); third-party
+  relative + lesion noun
 - routine pigmentation/melasma/"dark spots" requests stay silent by construction (no
-  change qualifier)
+  change qualifier, plus the acne/melasma negation guards)
 
 `recent_procedure`:
-- "just/recently had|got|underwent" + surgical noun (surgery, operation, procedure,
-  facelift, liposuction/lipo, rhinoplasty/nose job, blepharoplasty/eyelid surgery,
-  tummy tuck/abdominoplasty, implants, thread lift)
+
+- "just/recently had|got|underwent" + surgical noun (surgery, operation, facelift,
+  liposuction/lipo, rhinoplasty/nose job, blepharoplasty/eyelid surgery,
+  tummy tuck/abdominoplasty, implants, thread lift). Surgical nouns ONLY: routine
+  clinic treatments ("I had botox last month" is a returning customer) and the bare
+  word "procedure" are deliberately excluded, both over-fire on routine traffic
 - surgical noun + recency marker ("3 weeks ago", "last month", "this week"); months
   bounded to ~six ("14 months ago" is not "recent")
 - healing-state disclosures: "post-op", "recovering/healing from <surgical noun>",
@@ -178,7 +184,9 @@ category instead, derived from the single source of truth:
 
 ```ts
 // escalation-triggers/types.ts
-export function handoffReasonForTriggerCategory(category: EscalationTriggerCategory): HandoffReason {
+export function handoffReasonForTriggerCategory(
+  category: EscalationTriggerCategory,
+): HandoffReason {
   return REASON_CODE_BY_TRIGGER[category] === "medical_safety_trigger"
     ? "medical_safety"
     : "compliance_concern";
@@ -264,13 +272,13 @@ lead message between identity resolution and `platformIngress.submit()`, wired l
 `apps/chat` with a startup assertion on all six deps (the 2026-06-01 finding: "the gate
 EXISTS, do not build a Slice-2 hook"). Evidence-based comparison:
 
-| | Pre-input gate (extend) | ContraindicationGateHook (build) |
-|---|---|---|
-| Sees inbound lead text | Yes, raw, pre-submit | Needs `afterSkill(ctx, result, messages)` contract extension across executor + all hooks |
-| Enforcement point | Before Alex generates (lead never gets an un-flagged reply) | After generation (intercepts the reply) |
-| Detection granularity | Single message | Single message (identical; "latest lead message(s)") |
-| New surface | 3 enum members + entries | New hook + contract change + idempotency guard + wiring |
-| Rollout | Rides #870 observe -> bake -> enforce | New activation path to design |
+|                        | Pre-input gate (extend)                                     | ContraindicationGateHook (build)                                                         |
+| ---------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Sees inbound lead text | Yes, raw, pre-submit                                        | Needs `afterSkill(ctx, result, messages)` contract extension across executor + all hooks |
+| Enforcement point      | Before Alex generates (lead never gets an un-flagged reply) | After generation (intercepts the reply)                                                  |
+| Detection granularity  | Single message                                              | Single message (identical; "latest lead message(s)")                                     |
+| New surface            | 3 enum members + entries                                    | New hook + contract change + idempotency guard + wiring                                  |
+| Rollout                | Rides #870 observe -> bake -> enforce                       | New activation path to design                                                            |
 
 The hook adds no detection capability (same single-message granularity), enforces at a
 weaker point, and requires a contract change; the gate extension is strictly cheaper and
@@ -302,10 +310,10 @@ layers, all blocking vitest:
    describe block following the existing "freeze-gate live path" pattern): drives
    `ChannelGateway.handleIncoming` with the REAL `loadEscalationTriggers` and a resolver
    returning the REAL seeded posture `buildObserveGovernanceConfig({jurisdiction: "SG",
-   clinicType: "medical"})` (the same factory call the #870 seed pins via its
+clinicType: "medical"})` (the same factory call the #870 seed pins via its
    producer-parity test, so the test posture IS the seeded posture by construction):
    - observe + each of the 3 red-flag messages: verdict `{action: "allow", auditLevel:
-     "warning", reasonCode: "medical_safety_trigger", sourceGuard: "escalation_trigger"}`
+"warning", reasonCode: "medical_safety_trigger", sourceGuard: "escalation_trigger"}`
      persisted, `details.matchCategory` correct, **submit called with the unchanged
      text, normal AI reply sent, no handoff, no status flip** (proves log-only +
      byte-identical lead behavior under the seeded posture)
@@ -334,7 +342,7 @@ layers, all blocking vitest:
    under `governance/classifier/**`, no eval fixtures/harness changes).
 6. Full local gate green modulo documented flakes (chat gateway-bridge-attribution under
    full-suite load; db pg_advisory/ledger/greeting without local Postgres; `Eval - Claim
-   Classifier` red on main = #631 bake, not ours).
+Classifier` red on main = #631 bake, not ours).
 7. This spec records the ContraindicationGateHook build-vs-skip decision with evidence
    (§4.5).
 8. PR open to `main`, NO auto-merge; spec + plan + code in one branch.
