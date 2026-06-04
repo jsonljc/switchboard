@@ -1,0 +1,7 @@
+poster-name-0 "Alex" ink=rgb(167, 79, 53) ground=rgb(241,240,239) ratio=4.85 floor=4.5 PASS
+poster-name-1 "Riley" ink=rgb(31, 101, 99) ground=rgb(241,240,239) ratio=5.97 floor=4.5 PASS
+poster-name-2 "Mira" ink=rgb(98, 79, 150) ground=rgb(241,240,239) ratio=6.01 floor=4.5 PASS
+poster-role-0 "Front desk" ink=rgb(167, 79, 53) ground=rgb(241,240,239) ratio=4.85 floor=4.5 PASS
+poster-role-1 "Ad analyst" ink=rgb(31, 101, 99) ground=rgb(241,240,239) ratio=5.97 floor=4.5 PASS
+poster-role-2 "The maker" ink=rgb(98, 79, 150) ground=rgb(241,240,239) ratio=6.01 floor=4.5 PASS
+verdict-accent "Alex" ink=rgb(167, 79, 53) ground=rgb(224,218,210) ratio=3.96 floor=3 PASS (48px/700 = WCAG large-scale text, AA floor 3:1)
