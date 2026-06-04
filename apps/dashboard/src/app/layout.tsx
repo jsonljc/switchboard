@@ -6,7 +6,7 @@ import {
   Source_Serif_4,
   JetBrains_Mono,
   Hanken_Grotesk,
-  Newsreader,
+  Fraunces,
 } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
@@ -49,9 +49,9 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-// Home "warm operational editorial" register (P1-A) — Hanken Grotesk UI sans +
-// Newsreader editorial serif (with optical-size axis). Scoped to Home via the
-// --font-home-* stacks in globals.css; other surfaces keep Inter/Source Serif 4.
+// Home "warm operational editorial" register (P1-A): Hanken Grotesk UI sans +
+// the Fraunces display serif below. Scoped to Home via the --font-home-*
+// stacks in globals.css; other surfaces keep Inter/Source Serif 4.
 const hanken = Hanken_Grotesk({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -59,14 +59,18 @@ const hanken = Hanken_Grotesk({
   display: "swap",
 });
 
-// Newsreader is loaded as a variable font so the optical-size (opsz) axis is
-// available to the Home serif. next/font/google forbids a fixed `weight` array
-// alongside `axes` — the variable weight axis covers 400–600 used by home.module.css.
-const newsreader = Newsreader({
+// Fraunces is the authed app's display face (locked aesthetic direction,
+// section 4 TYPE): upright optical only, no italics. next/font self-hosts the
+// files at build time, so a font-load failure degrades to the serif fallback
+// stack instead of flattening to system sans. Variable font: next/font/google
+// forbids a fixed `weight` array alongside `axes`; the variable weight axis
+// covers every display weight, and `opsz` carries the optical sizing. SOFT and
+// WONK pin at their defaults (0, 0): the sharp, non-wonky cut.
+const fraunces = Fraunces({
   subsets: ["latin"],
-  style: ["normal", "italic"],
+  style: ["normal"],
   axes: ["opsz"],
-  variable: "--font-newsreader",
+  variable: "--font-fraunces",
   display: "swap",
 });
 
@@ -83,7 +87,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${hanken.variable} ${newsreader.variable}`}
+      className={`${inter.variable} ${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${hanken.variable} ${fraunces.variable}`}
       suppressHydrationWarning
     >
       <body className={inter.className}>

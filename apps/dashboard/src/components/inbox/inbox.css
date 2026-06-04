@@ -299,7 +299,7 @@
 .decision-sla[data-due="soon"]    { color: var(--ink-1); font-weight: 700; }
 .decision-sla[data-due="overdue"] { color: var(--ink-1); font-weight: 700; font-style: italic; }
 
-/* The lede — Newsreader humanSummary */
+/* The lede: Fraunces humanSummary */
 .decision-title {
   font-family: var(--serif);
   font-variation-settings: "opsz" 24;

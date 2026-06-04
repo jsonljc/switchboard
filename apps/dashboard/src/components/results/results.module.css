@@ -202,7 +202,7 @@
 
 /* ─── Verdict line ─── */
 
-/* Serif prose container (Newsreader via --font-home-serif, a complete stack value) */
+/* Serif prose container (Fraunces via --font-home-serif, a complete stack value) */
 .verdictLine {
   font-family: var(--font-home-serif);
   font-size: 1.25rem;
