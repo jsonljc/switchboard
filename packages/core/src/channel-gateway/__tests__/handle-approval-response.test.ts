@@ -798,8 +798,11 @@ describe("handleApprovalResponse: lifecycle fallback when the approval row is mi
     expect(w.executeApproved).not.toHaveBeenCalled();
   });
 
-  it("a wrong hash against the current revision replies STALE_MSG without responding", async () => {
+  it("a wrong hash against the current revision replies STALE_MSG before any respond attempt", async () => {
     const w = await makeLifecycleWorld({ noApprovalRow: true });
+    // The engine (approveLifecycle) would also refuse a stale hash; the
+    // surface pre-check must refuse BEFORE the respond engine is reached.
+    const approveSpy = vi.spyOn(w.lifecycleService, "approveLifecycle");
     const { sink, sendSpy } = makeReplySink();
     await handleApprovalResponse({
       payload: { ...lifecyclePayload(w), bindingHash: "hashXX3" },
@@ -810,6 +813,7 @@ describe("handleApprovalResponse: lifecycle fallback when the approval row is mi
     });
     expect(sendSpy).toHaveBeenCalledWith(STALE_MSG);
     expect(w.executeApproved).not.toHaveBeenCalled();
+    expect(approveSpy).not.toHaveBeenCalled();
   });
 
   it("reject through the fallback works and replies REJECT_SUCCESS_MSG", async () => {
