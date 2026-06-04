@@ -112,7 +112,7 @@ const OUT_OF_WINDOW_PUBLISHED = baseJob({
 });
 
 function buildPrismaMock() {
-  const all = [...PILOT_ROWS, OUT_OF_WINDOW_PUBLISHED];
+  const all: Array<Record<string, unknown>> = [...PILOT_ROWS, OUT_OF_WINDOW_PUBLISHED];
   return {
     creativeJob: {
       findMany: async (args: { where?: { organizationId?: string } }) =>
@@ -120,9 +120,7 @@ function buildPrismaMock() {
       // Detail-fallback read: org-scoped single-row lookup (slice 2).
       findFirst: async (args: { where?: { id?: string; organizationId?: string } }) =>
         all.find(
-          (r) =>
-            (r as { id: string }).id === args?.where?.id &&
-            (r as { organizationId: string }).organizationId === args?.where?.organizationId,
+          (r) => r.id === args?.where?.id && r.organizationId === args?.where?.organizationId,
         ) ?? null,
     },
     organizationConfig: { findFirst: async () => null },
