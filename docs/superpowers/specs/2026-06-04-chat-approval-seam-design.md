@@ -212,6 +212,7 @@ remains the detail surface; no deep-link URLs, core has no canonical dashboard U
 | retry via fallback leg succeeds / fails                  | same two approve replies above                                                                                      |
 | self-approval refused                                    | "You cannot approve an action you initiated. Another operator must respond."                                        |
 | stale binding (approveLifecycle/createRevision refusal)  | existing STALE_MSG                                                                                                  |
+| dispatch admission refusal (raced/expired, post-approve) | "Approved, but execution could not start. Open the dashboard to see its current state." (review amendment)          |
 | already responded / expired / not found / not authorized | existing messages                                                                                                   |
 
 The success reply does not distinguish completed from queued: `ExecuteResult` does not
@@ -354,6 +355,15 @@ proven so that wiring becomes configuration, not surgery.
   `approveLifecycle`, the respond throws with the lifecycle approved but undispatched
   and not in recovery (pre-existing #874 behavior, now shared). The integrity-lock
   audit + operator alert inside the trace store is the operator-facing record.
+- **Approved-then-admission-refused** (review amendment, same family): a
+  `DispatchAdmissionError` from `prepareDispatch` (raced transition, expired
+  executable) propagates with the lifecycle approved and no recovery transition.
+  Routing it to `markRecoveryRequired` naively is WRONG: a lost double-dispatch
+  lock would mark recovery while the racing winner is mid-dispatch, stranding a
+  succeeded dispatch in `recovery_required`. The chat surface replies honestly
+  ("Approved, but execution could not start"); the engine-side fix needs
+  admission-cause-aware handling and is deferred. Pre-existing and shared with
+  `respondToParkedLifecycle` and the API route.
 - **Quorum races** keep today's semantics (optimistic-lock loser gets
   already-responded); quorum is a policy-gated edge flow.
 - The legacy approval row becomes formally a side record on lifecycle-backed units;
