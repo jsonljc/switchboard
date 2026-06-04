@@ -1,5 +1,9 @@
 import type { GovernanceVerdict, GovernanceVerdictReason } from "@switchboard/schemas";
-import { resolveClaimClassifierConfig, type ClaimType } from "@switchboard/schemas";
+import {
+  resolveClaimClassifierConfig,
+  type ClaimClassifierConfig,
+  type ClaimType,
+} from "@switchboard/schemas";
 import type { SkillHook, SkillHookContext, SkillExecutionResult } from "../types.js";
 import type { AnthropicClaimClassifier } from "../../governance/classifier/anthropic-classifier.js";
 import type { SubstantiationResolver } from "../../governance/classifier/substantiation-resolver.js";
@@ -93,6 +97,57 @@ export class ClaimClassifierHook implements SkillHook {
 
     const sentences = this.deps.splitSentences(result.response);
     if (sentences.length === 0) return;
+
+    if (classifierConfig.mode === "observe") {
+      // Observe is telemetry-only: run the classification pipeline fire-and-forget so
+      // the lead-visible reply pays zero added latency (precedent: the #859 trace
+      // recorder on this same path). The pipeline gets a DETACHED result clone, so even
+      // a regression in the apply helpers cannot touch the live reply.
+      const detached: SkillExecutionResult = { ...result };
+      const run = this.classifyAndApply({
+        ctx,
+        result: detached,
+        sentences,
+        classifierConfig,
+        jurisdiction,
+        clinicType,
+      }).catch((err) => {
+        console.error("[claim-classifier] observe pipeline failed", err);
+      });
+      this.pendingObserveRuns.add(run);
+      void run.finally(() => this.pendingObserveRuns.delete(run));
+      return;
+    }
+
+    await this.classifyAndApply({
+      ctx,
+      result,
+      sentences,
+      classifierConfig,
+      jurisdiction,
+      clinicType,
+    });
+  }
+
+  private readonly pendingObserveRuns = new Set<Promise<void>>();
+
+  /**
+   * Awaits any in-flight observe-mode classification pipelines. Tests use this
+   * for determinism; production never needs to await it (observe is telemetry).
+   */
+  async flushObserveRuns(): Promise<void> {
+    await Promise.allSettled([...this.pendingObserveRuns]);
+  }
+
+  private async classifyAndApply(args: {
+    ctx: SkillHookContext;
+    result: SkillExecutionResult;
+    sentences: readonly string[];
+    classifierConfig: ClaimClassifierConfig;
+    jurisdiction: "SG" | "MY";
+    clinicType: "medical" | "nonMedical";
+  }): Promise<void> {
+    const { ctx, result, sentences, classifierConfig, jurisdiction, clinicType } = args;
 
     const outcomes = await runClassifier({
       sentences,

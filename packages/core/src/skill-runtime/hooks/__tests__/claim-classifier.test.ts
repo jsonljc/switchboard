@@ -169,6 +169,7 @@ function makeHook(
     classifier: AnthropicClaimClassifier;
     classifierOutcomes: Record<string, ClaimType>;
     substantiation: "matched" | "stale" | "missing";
+    substantiationResolver: SubstantiationResolver;
     posture: { mode: "off" | "observe" | "enforce" } | undefined;
     rewrites: ReadonlyArray<RewriteTemplateEntry>;
     latencyBudgetMs: number;
@@ -177,7 +178,8 @@ function makeHook(
 ) {
   const mode = overrides.configMode ?? "enforce";
   const classifier = overrides.classifier ?? fakeClassifier(overrides.classifierOutcomes ?? {});
-  const substantiation = fakeResolverSubst(overrides.substantiation ?? "missing");
+  const substantiation =
+    overrides.substantiationResolver ?? fakeResolverSubst(overrides.substantiation ?? "missing");
   const verdictStore = fakeVerdictStore();
   const handoffStore = fakeHandoffStore();
   const conversationStore = fakeConversationStore();
@@ -263,6 +265,8 @@ describe("ClaimClassifierHook — name + config + mode matrix", () => {
     });
     const result = makeResult("Visible slimming after one session.");
     await hook.afterSkill!(HOOK_CTX, result);
+    // Observe runs fire-and-forget: persistence completes off the awaited path.
+    await hook.flushObserveRuns();
     expect(verdictStore.saved).toHaveLength(1);
     expect(result.response).toBe("Visible slimming after one session.");
     expect(handoffStore.saved).toHaveLength(0);
@@ -536,5 +540,93 @@ describe("ClaimClassifierHook — confidence floor (T1.1)", () => {
     const result = makeResult("Visible slimming after one session.");
     await hook.afterSkill!(HOOK_CTX, result);
     expect(verdictStore.saved).toHaveLength(1);
+  });
+});
+
+// Classifier gated on a manually released promise: classify() does not resolve
+// until release() is called. Proves observe never awaits the pipeline.
+function gatedClassifier(claimType: ClaimType): {
+  classifier: AnthropicClaimClassifier;
+  release: () => void;
+} {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const classifier: AnthropicClaimClassifier = {
+    classify: async ({ sentence, model }) => {
+      await gate;
+      return {
+        result: { sentence, claimType, confidence: 0.95 },
+        promptVersion: "claim-classifier@1.0.0",
+        promptHash: "0123456789abcdef",
+        schemaVersion: "1.0.0",
+        model,
+      };
+    },
+  };
+  return { classifier, release };
+}
+
+describe("ClaimClassifierHook — observe mode is fire-and-forget (zero hot-path latency)", () => {
+  it("resolves afterSkill without awaiting the classifier, then persists off-path", async () => {
+    const { classifier, release } = gatedClassifier("medical-advice");
+    const { hook, verdictStore, handoffStore } = makeHook({
+      configMode: "observe",
+      classifier,
+    });
+    const result = makeResult("This will cure your acne.");
+
+    await hook.afterSkill!(HOOK_CTX, result);
+
+    // afterSkill returned while classify() is still gated: nothing persisted yet,
+    // response untouched. THIS is the zero-added-latency guarantee for observe.
+    expect(result.response).toBe("This will cure your acne.");
+    expect(verdictStore.saved).toHaveLength(0);
+
+    release();
+    await hook.flushObserveRuns();
+
+    expect(verdictStore.saved).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = verdictStore.saved[0] as any;
+    expect(v.action).toBe("allow");
+    expect(v.auditLevel).toBe("warning");
+    expect(result.response).toBe("This will cure your acne.");
+    expect(handoffStore.saved).toHaveLength(0);
+  });
+
+  it("swallows a pipeline failure without touching the reply", async () => {
+    // An efficacy claim routes through the substantiation resolver; making it throw
+    // rejects the pipeline itself (classifier errors are absorbed earlier as outcomes).
+    const { hook, handoffStore, conversationStore } = makeHook({
+      configMode: "observe",
+      classifierOutcomes: { "Visible slimming after one session": "efficacy" },
+      substantiationResolver: {
+        resolve: async () => {
+          throw new Error("substantiation backend down");
+        },
+      },
+    });
+    const result = makeResult("Visible slimming after one session.");
+
+    await hook.afterSkill!(HOOK_CTX, result);
+    await hook.flushObserveRuns(); // must not throw
+
+    expect(result.response).toBe("Visible slimming after one session.");
+    expect(handoffStore.saved).toHaveLength(0);
+    expect(conversationStore.getStatus("sess_1")).toBeUndefined();
+  });
+
+  it("enforce mode still awaits the pipeline inline (mutation visible at return)", async () => {
+    const { hook, verdictStore } = makeHook({
+      classifierOutcomes: { "Visible slimming after one session": "efficacy" },
+      substantiation: "missing",
+    });
+    const result = makeResult("Visible slimming after one session.");
+    await hook.afterSkill!(HOOK_CTX, result);
+    // No flush needed: enforce is synchronous on the hot path by design.
+    expect(verdictStore.saved).toHaveLength(1);
+    expect(result.response).toContain("Results vary between individuals");
   });
 });
