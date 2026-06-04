@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { decideForCampaign } from "./campaign-decision.js";
+import { assembleRevenueState } from "./revenue-state.js";
 import { LearningPhaseGuard } from "./learning-phase-guard.js";
 import type { CampaignInsightSchema as CampaignInsight } from "@switchboard/schemas";
 
@@ -43,7 +44,7 @@ describe("decideForCampaign (characterization)", () => {
       learningStatus: successStatus,
       economicTier: "cpl",
       effectiveTarget: 100,
-      marginBasis: "unavailable",
+      revenueState: assembleRevenueState({ measurementTrusted: true, marginBasis: "unavailable" }),
       targetROAS: 3,
       nextCycleDate: "2026-05-14",
     });
@@ -64,7 +65,7 @@ describe("decideForCampaign (characterization)", () => {
       learningStatus: successStatus,
       economicTier: "booked_cac",
       effectiveTarget: 100,
-      marginBasis: "unavailable",
+      revenueState: assembleRevenueState({ measurementTrusted: true, marginBasis: "unavailable" }),
       targetROAS: 3,
       nextCycleDate: "2026-05-14",
     });
@@ -85,10 +86,9 @@ describe("decideForCampaign (characterization)", () => {
       learningStatus: successStatus,
       economicTier: "booked_cac",
       effectiveTarget: 100,
-      marginBasis: "unavailable",
+      revenueState: assembleRevenueState({ measurementTrusted: false, marginBasis: "unavailable" }),
       targetROAS: 3,
       nextCycleDate: "2026-05-14",
-      measurementTrusted: false,
     });
     expect(r.recommendations.some((x) => x.action === "pause")).toBe(false);
     expect(r.watches.some((w) => w.pattern === "measurement_untrusted")).toBe(true);
@@ -109,7 +109,7 @@ describe("decideForCampaign (characterization)", () => {
       learningStatus: successStatus,
       economicTier: "cpl" as const,
       effectiveTarget: 100,
-      marginBasis: "unavailable" as const,
+      revenueState: assembleRevenueState({ measurementTrusted: true, marginBasis: "unavailable" }),
       targetROAS: 3,
       nextCycleDate: "2026-05-14",
     };
@@ -155,7 +155,7 @@ describe("decideForCampaign (characterization)", () => {
       learningStatus: successStatus,
       economicTier: "cpl",
       effectiveTarget: 100,
-      marginBasis: "unavailable",
+      revenueState: assembleRevenueState({ measurementTrusted: true, marginBasis: "unavailable" }),
       targetROAS: 3,
       nextCycleDate: "2026-05-21",
     });
@@ -176,7 +176,7 @@ describe("decideForCampaign targetSource (PR2 Gate-4)", () => {
       learningStatus: successStatus,
       economicTier: "booked_cac",
       effectiveTarget: 100,
-      marginBasis: "unavailable",
+      revenueState: assembleRevenueState({ measurementTrusted: true, marginBasis: "unavailable" }),
       targetROAS: 3,
       nextCycleDate: "2026-05-14",
       targetSource: "campaign",
@@ -195,7 +195,7 @@ describe("decideForCampaign targetSource (PR2 Gate-4)", () => {
       learningStatus: successStatus,
       economicTier: "booked_cac",
       effectiveTarget: 100,
-      marginBasis: "unavailable",
+      revenueState: assembleRevenueState({ measurementTrusted: true, marginBasis: "unavailable" }),
       targetROAS: 3,
       nextCycleDate: "2026-05-14",
     });

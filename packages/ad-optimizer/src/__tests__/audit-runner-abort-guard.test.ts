@@ -189,7 +189,14 @@ describe("AuditRunner abort-guard (RevenueState progressive assembly)", () => {
   it("Gate-0 coverage abstention calls ZERO downstream providers", async () => {
     const { deps, adsClient, crmDataProvider, insightsProvider, bookedValueProvider } =
       buildSpiedDeps();
-    const insufficient: CoverageReport = { bySource: {}, coveragePct: 0.2 };
+    const insufficient: CoverageReport = {
+      coveragePct: 0.2,
+      bySource: {
+        ctwa: { campaigns: 0, spend: 0, tracking: "missing_webhook" },
+        instant_form: { campaigns: 0, spend: 0, tracking: "missing_webhook" },
+        web: { campaigns: 1, spend: 200, tracking: "no_recent_traffic" },
+      },
+    };
     const coverageValidator = { validate: vi.fn().mockResolvedValue(insufficient) };
     const runner = new AuditRunner({ ...deps, coverageValidator });
 

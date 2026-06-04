@@ -5,7 +5,6 @@ import type {
   RecommendationOutputSchema as RecommendationOutput,
   LearningPhaseStatusSchema as LearningPhaseStatus,
   EconomicTierSchema as EconomicTier,
-  MarginBasisSchema as MarginBasis,
   TargetBreachResult,
   TargetSourceSchema as TargetSource,
 } from "@switchboard/schemas";
@@ -16,6 +15,7 @@ import { applyTier } from "./analyzers/economic-target.js";
 import { LearningPhaseGuard } from "./learning-phase-guard.js";
 import { evidenceFamilyFor } from "./evidence-floor.js";
 import { resetsLearningFor } from "./action-reset-classification.js";
+import type { RevenueState } from "./revenue-state.js";
 
 function safeDivide(a: number, b: number): number {
   return b === 0 ? 0 : a / b;
@@ -53,18 +53,22 @@ export interface CampaignDecisionInput {
   learningStatus: LearningPhaseStatus;
   economicTier: EconomicTier;
   effectiveTarget: number;
-  marginBasis: MarginBasis;
+  /**
+   * Account-level pre-flight state for this audit cycle (Riley v3 slice 1). This decision
+   * reads two account-level signals from it:
+   *  - `measurementTrusted` (producer 1): when `false`, an account-wide conversion-denominator
+   *    step-change is suspected (an attribution-window/action-type reporting shift, not a real
+   *    performance drop), so Riley DEMOTES every cost-number-driven or learning-resetting rec to
+   *    a `measurement_untrusted` watch this cycle and only lets measurement/diagnostic-and-non-
+   *    resetting recs (fix_signal_health, harden_capi_attribution, hold) keep flowing.
+   *  - `marginBasis` (producer 3): feeds applyTier (currently always "unavailable").
+   * The per-campaign `economicTier`/`effectiveTarget`/`targetSource` above are resolved
+   * per-campaign and are NOT taken from RevenueState (which carries the ACCOUNT-level tier for
+   * later slices).
+   */
+  revenueState: RevenueState;
   targetROAS: number;
   nextCycleDate: string;
-  /**
-   * Phase-A Gate 1: when `false`, an account-wide conversion-denominator
-   * step-change is suspected (an attribution-window/action-type reporting shift,
-   * not a real performance drop). Riley DEMOTES every cost-number-driven or
-   * learning-resetting rec to a `measurement_untrusted` watch this cycle, and only
-   * lets measurement/diagnostic-and-non-resetting recs (fix_signal_health,
-   * harden_capi_attribution, hold) keep flowing. `undefined` is treated as `true`.
-   */
-  measurementTrusted?: boolean;
   /**
    * Phase-A Task 8 (ad-set-granular learning lockout): when `true`, this campaign
    * has at least one material ad set in Meta's LEARNING / learning-limited state, so
@@ -175,7 +179,7 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
     const family = evidenceFamilyFor(item.action);
     const costDriven = family === "destructive" || family === "scale" || family === "structural";
     if (
-      input.measurementTrusted === false &&
+      input.revenueState.measurementTrusted === false &&
       (costDriven || resetsLearningFor(item.action) !== "no")
     ) {
       watches.push({
@@ -191,7 +195,7 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
     const tiered = applyTier({
       recommendation: item,
       tier: input.economicTier,
-      marginBasis: input.marginBasis,
+      marginBasis: input.revenueState.marginBasis ?? "unavailable",
       checkBackDate: input.nextCycleDate,
       ...(input.targetSource ? { targetSource: input.targetSource } : {}),
     });
