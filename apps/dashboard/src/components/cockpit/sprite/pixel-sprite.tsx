@@ -5,7 +5,8 @@ import { SPRITE_SIZE } from "./build-sprite";
 export interface PixelSpriteProps {
   rows: Frame;
   palette: Palette;
-  size: number;
+  /** Box size in px, or "fill" to scale to the parent box (fluid hero scale). */
+  size: number | "fill";
   style?: CSSProperties;
 }
 
@@ -25,8 +26,8 @@ export function PixelSprite({ rows, palette, size, style }: PixelSpriteProps) {
   }
   return (
     <svg
-      width={size}
-      height={size}
+      width={size === "fill" ? "100%" : size}
+      height={size === "fill" ? "100%" : size}
       viewBox={`0 0 ${SPRITE_SIZE} ${SPRITE_SIZE}`}
       shapeRendering="crispEdges"
       aria-hidden="true"
