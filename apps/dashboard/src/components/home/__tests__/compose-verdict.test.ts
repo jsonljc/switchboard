@@ -76,7 +76,7 @@ describe("composeVerdict — ACTIVE shape (decisionCount > 0)", () => {
     expect(line.post).toMatch(/has it ready/);
   });
 
-  it("uses 'N things need you — start with {name}' for 2+ decisions", () => {
+  it("uses 'N things need you. Start with {name}.' for 2+ decisions", () => {
     const m = composeVerdict({
       ...baseSignals,
       decisionCount: 3,
@@ -85,7 +85,7 @@ describe("composeVerdict — ACTIVE shape (decisionCount > 0)", () => {
       now: at(9),
     });
     const line = m.line as { pre: string; em: string; post: string };
-    expect(line.pre).toMatch(/3 things need you/);
+    expect(line.pre).toMatch(/3 things need you\. Start with $/);
     expect(line.em).toBe("Riley");
     expect(line.post).toBe(".");
   });

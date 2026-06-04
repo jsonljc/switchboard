@@ -122,11 +122,9 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
         data-testid="activation-block"
       >
         <p className={styles.heroActivationLine}>
-          <em>
-            {agentKey === "riley"
-              ? "Connect Meta Ads so Riley can start finding leads."
-              : "Connect your inbox so Alex can respond to leads."}
-          </em>
+          {agentKey === "riley"
+            ? "Connect Meta Ads so Riley can start finding leads."
+            : "Connect your inbox so Alex can respond to leads."}
         </p>
         {/* Channel chips from mission data */}
         {missionData?.mission?.channels && missionData.mission.channels.length > 0 && (

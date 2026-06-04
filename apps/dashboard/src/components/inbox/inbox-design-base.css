@@ -52,7 +52,7 @@
 
   /* type */
   --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --serif: "Newsreader", "Iowan Old Style", "Apple Garamond", Georgia, serif;
+  --serif: var(--font-fraunces), "Fraunces", "Iowan Old Style", Georgia, serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* radii */
@@ -243,7 +243,6 @@
     min-height: 240px;
     color: var(--ink-3);
     font-family: var(--serif);
-    font-style: italic;
     border: 1px dashed var(--hair);
     border-radius: var(--r-lg);
   }

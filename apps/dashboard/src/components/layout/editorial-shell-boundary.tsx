@@ -23,13 +23,11 @@ export class EditorialShellBoundary extends Component<{ children: ReactNode }, S
         <>
           <header className="app-header">
             <div className="app-header-row">
-              <span>Switchboard — temporarily unavailable</span>
+              <span>Switchboard is temporarily unavailable</span>
             </div>
           </header>
           <main>
-            <p className="empty-state">
-              <em>Reload the page to try again.</em>
-            </p>
+            <p className="empty-state">Reload the page to try again.</p>
           </main>
         </>
       );

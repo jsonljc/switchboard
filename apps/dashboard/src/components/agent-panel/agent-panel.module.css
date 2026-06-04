@@ -183,7 +183,6 @@
   font-size: 14.5px;
   color: var(--ink-3);
   font-family: var(--font-home-sans);
-  font-style: italic;
   margin: 0;
 }
 
@@ -208,7 +207,6 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-home-serif);
-  font-style: italic;
   font-size: 38px;
   font-weight: 500;
   color: hsl(var(--agent-mira-deep));
@@ -228,7 +226,6 @@
   font-family: var(--font-home-serif);
   font-size: 28px;
   font-weight: 500;
-  font-style: italic;
   color: var(--ink);
   letter-spacing: -0.015em;
   max-width: 18ch;
@@ -378,7 +375,6 @@
   color: var(--ink-3);
   line-height: 1.4;
   font-family: var(--font-home-sans);
-  font-style: italic;
   text-align: center;
   margin: 4px 0 0;
 }
@@ -409,7 +405,6 @@
 .heroErrorMsg {
   font-size: 14px;
   color: var(--ink-2);
-  font-style: italic;
   font-family: var(--font-home-sans);
   margin: 0;
   display: inline-flex;
@@ -447,10 +442,6 @@
   font-weight: 400;
   text-wrap: pretty;
   margin: 0;
-}
-
-.heroActivationLine em {
-  font-style: italic;
 }
 
 .heroActivationChannels {
@@ -617,11 +608,10 @@
   height: 12px;
 }
 
-/* Empty / error state: italic serif line */
+/* Empty / error state: serif line */
 .decisionEmptyLine {
   font-family: var(--font-home-serif);
   font-variation-settings: "opsz" 18;
-  font-style: italic;
   font-size: 15.5px;
   color: var(--ink-3);
   padding: 14px 16px;
@@ -759,11 +749,10 @@
   border-radius: 2px;
 }
 
-/* Empty / error state — italic serif line (mirrors .decisionEmptyLine) */
+/* Empty / error state: serif line (mirrors .decisionEmptyLine) */
 .logEmptyLine {
   font-family: var(--font-home-serif);
   font-variation-settings: "opsz" 18;
-  font-style: italic;
   font-size: 15.5px;
   color: var(--ink-3);
   padding: 14px 16px;
