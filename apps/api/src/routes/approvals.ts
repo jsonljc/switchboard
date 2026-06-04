@@ -54,7 +54,22 @@ async function respondViaParkedLifecycle(
       .code(404)
       .send({ error: "Approval not found", code: "not_found", statusCode: 404 });
   }
-  const lifecycle = await app.lifecycleService.getLifecycleById(input.lifecycleId);
+  // Lookup failures (e.g. DB outage) keep the structured error contract: a
+  // 503 with a code, never a code-less 400 from the legacy catch upstream.
+  let lifecycle;
+  try {
+    lifecycle = await app.lifecycleService.getLifecycleById(input.lifecycleId);
+  } catch (err) {
+    app.log.error(
+      { err, lifecycleId: input.lifecycleId },
+      "Parked lifecycle lookup failed during respond",
+    );
+    return reply.code(503).send({
+      error: "Approval lookup failed; try again shortly",
+      code: "lookup_failed",
+      statusCode: 503,
+    });
+  }
   if (!lifecycle) {
     return reply
       .code(404)

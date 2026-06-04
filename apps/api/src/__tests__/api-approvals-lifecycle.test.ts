@@ -178,6 +178,25 @@ describe("approvals respond: lifecycle-native leg", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it("503s with lookup_failed when the lifecycle store is unreachable (structured, not a bare 400)", async () => {
+    const { approval } = await parkOne();
+    const spy = vi
+      .spyOn(app.lifecycleService!, "getLifecycleById")
+      .mockRejectedValueOnce(new Error("connection refused"));
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/approvals/${approval.id}/respond`,
+      payload: {
+        action: "approve",
+        respondedBy: "reviewer_1",
+        bindingHash: approval.bindingHash,
+      },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe("lookup_failed");
+    spy.mockRestore();
+  });
+
   it("400s patch on the lifecycle-native leg", async () => {
     const { approval } = await parkOne();
     const res = await app.inject({
