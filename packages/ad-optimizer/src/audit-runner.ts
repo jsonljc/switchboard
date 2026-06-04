@@ -431,7 +431,7 @@ export class AuditRunner {
     // sufficient (or absent) and signal-health is non-red (or absent), and measurementTrusted /
     // economicTier / effectiveTarget / marginBasis are now resolved. The late per-source
     // spendAttributionCoverageBySource is completed inside computeAuditEconomicsSections. Do NOT
-    // hoist this above the two early returns — that would call late producers past an abort.
+    // hoist this above the two early returns; that would call late producers past an abort.
     const revenueState: RevenueState = assembleRevenueState({
       measurementTrusted,
       economicTier,

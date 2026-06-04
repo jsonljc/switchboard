@@ -228,7 +228,7 @@ describe("AuditRunner abort-guard (RevenueState progressive assembly)", () => {
 
     await runner.run(RANGE);
 
-    // Meta insight fetches DID run (they feed the critical report's totals — not skippable).
+    // Meta insight fetches DID run (they feed the critical report's totals, not skippable).
     expect(adsClient.getCampaignInsights).toHaveBeenCalledTimes(2);
     expect(adsClient.getAccountSummary).toHaveBeenCalledTimes(1);
     // But every LATE producer is skipped: CRM funnel (which gates resolveEconomicTarget),
