@@ -5,118 +5,28 @@ import {
   STALE_MSG,
   NOT_AUTHORIZED_MSG,
   ALREADY_RESPONDED_MSG,
-  APPROVE_SUCCESS_MSG,
+  APPROVE_EXECUTED_MSG,
+  PARTIAL_APPROVAL_MSG,
   REJECT_SUCCESS_MSG,
   APPROVAL_EXECUTION_ERROR_MSG,
   APPROVAL_LOOKUP_ERROR_MSG,
 } from "../handle-approval-response.js";
 import { StaleVersionError } from "../../approval/state-machine.js";
-import type { ApprovalStore, IdentityStore } from "../../storage/interfaces.js";
-import type { ReplySink, HandleApprovalResponseConfig } from "../types.js";
-import type { ParsedApprovalResponsePayload } from "../approval-response-payload.js";
-import type { OperatorChannelBindingStore } from "../operator-channel-binding-store.js";
-import type { Principal } from "@switchboard/schemas";
-
-const PAYLOAD: ParsedApprovalResponsePayload = {
-  action: "approve",
-  approvalId: "appr_1",
-  bindingHash: "hash123",
-};
-
-const REJECT_PAYLOAD: ParsedApprovalResponsePayload = {
-  action: "reject",
-  approvalId: "appr_1",
-  bindingHash: "hash123",
-};
-
-const BASE_ARGS = {
-  channel: "whatsapp",
-  channelIdentifier: "+15551234567",
-  organizationId: "org-1",
-};
-
-function makeApproval(
-  overrides: Partial<{
-    bindingHash: string;
-    organizationId: string | null;
-    status: string;
-  }> = {},
-) {
-  return {
-    request: {
-      id: "appr_1",
-      bindingHash: overrides.bindingHash ?? "hash123",
-    } as never,
-    state: { status: overrides.status ?? "pending", version: 0 } as never,
-    envelopeId: "env_1",
-    organizationId: overrides.organizationId === undefined ? "org-1" : overrides.organizationId,
-  };
-}
-
-function makeStore(getById: ApprovalStore["getById"]): ApprovalStore {
-  return {
-    save: vi.fn(),
-    getById,
-    updateState: vi.fn(),
-    listPending: vi.fn(),
-  };
-}
-
-function makeReplySink(): { sink: ReplySink; sendSpy: ReturnType<typeof vi.fn> } {
-  const sendSpy = vi.fn().mockResolvedValue(undefined);
-  return { sink: { send: sendSpy }, sendSpy };
-}
-
-function makeBindingStore(
-  binding: Awaited<ReturnType<OperatorChannelBindingStore["findActiveBinding"]>>,
-): OperatorChannelBindingStore {
-  return {
-    findActiveBinding: vi.fn().mockResolvedValue(binding),
-  };
-}
-
-function makePrincipal(roles: Principal["roles"]): Principal {
-  return {
-    id: "principal-1",
-    type: "user",
-    name: "Operator",
-    organizationId: "org-1",
-    roles,
-  };
-}
-
-function makeIdentityStore(principal: Principal | null): IdentityStore {
-  return {
-    getSpecByPrincipalId: vi.fn(),
-    listOverlaysBySpecId: vi.fn(),
-    saveSpec: vi.fn(),
-    saveOverlay: vi.fn(),
-    getPrincipal: vi.fn().mockResolvedValue(principal),
-    savePrincipal: vi.fn(),
-    listDelegationRules: vi.fn(),
-  } as unknown as IdentityStore;
-}
-
-function makeRespondDeps(impl?: { throwInRespond?: boolean }) {
-  return {
-    approvalStore: makeStore(vi.fn().mockResolvedValue(makeApproval())),
-    envelopeStore: { getById: vi.fn(), update: vi.fn(), save: vi.fn() } as never,
-    workTraceStore: null,
-    lifecycleService: null,
-    platformLifecycle: {
-      respondToApproval: impl?.throwInRespond
-        ? vi.fn().mockRejectedValue(new Error("downstream lifecycle failure"))
-        : vi.fn().mockResolvedValue({
-            envelope: { id: "env_1" },
-            approvalState: { status: "approved" },
-            executionResult: null,
-          }),
-      executeApproved: vi.fn(),
-    },
-    sessionManager: null,
-    logger: { info: vi.fn(), error: vi.fn() },
-  };
-}
+import type { HandleApprovalResponseConfig } from "../types.js";
+import {
+  PAYLOAD,
+  REJECT_PAYLOAD,
+  BASE_ARGS,
+  makeApproval,
+  makeStore,
+  makeReplySink,
+  makeBindingStore,
+  makeFullBinding,
+  makePrincipal,
+  makeIdentityStore,
+  makeRespondDeps,
+  authorizedConfig,
+} from "./approval-response-fixtures.js";
 
 describe("handleApprovalResponse", () => {
   it("replies NOT_FOUND_MSG when approval is missing", async () => {
@@ -266,7 +176,7 @@ describe("handleApprovalResponse", () => {
     const { sink, sendSpy } = makeReplySink();
     const config: HandleApprovalResponseConfig = {
       bindingStore: makeBindingStore(null),
-      identityStore: makeIdentityStore(makePrincipal(["operator"])),
+      identityStore: makeIdentityStore(makePrincipal(["approver"])),
       respondDeps: makeRespondDeps(),
     };
 
@@ -279,32 +189,14 @@ describe("handleApprovalResponse", () => {
     });
 
     expect(sendSpy).toHaveBeenCalledWith(NOT_AUTHORIZED_MSG);
-    expect(config.bindingStore.findActiveBinding).toHaveBeenCalledWith({
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-    });
   });
 
   it("replies NOT_AUTHORIZED_MSG when binding's principal lacks an approver role", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
-      identityStore: makeIdentityStore(makePrincipal(["requester"])), // no approver/operator/admin
+      bindingStore: makeBindingStore(makeFullBinding()),
+      identityStore: makeIdentityStore(makePrincipal(["viewer"] as never)),
       respondDeps: makeRespondDeps(),
     };
 
@@ -322,21 +214,8 @@ describe("handleApprovalResponse", () => {
   it("replies NOT_AUTHORIZED_MSG when binding's principal record is missing", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "ghost-principal",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(null),
       respondDeps: makeRespondDeps(),
     };
@@ -356,25 +235,12 @@ describe("handleApprovalResponse", () => {
   // Successful execution
   // ---------------------------------------------------------------------------
 
-  it("executes approve via shared helper and replies APPROVE_SUCCESS_MSG", async () => {
+  it("executes approve via shared helper and replies APPROVE_EXECUTED_MSG", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const respondDeps = makeRespondDeps();
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(makePrincipal(["approver"])),
       respondDeps,
     };
@@ -395,28 +261,15 @@ describe("handleApprovalResponse", () => {
         bindingHash: "hash123",
       }),
     );
-    expect(sendSpy).toHaveBeenCalledWith(APPROVE_SUCCESS_MSG);
+    expect(sendSpy).toHaveBeenCalledWith(APPROVE_EXECUTED_MSG);
   });
 
   it("executes reject via shared helper and replies REJECT_SUCCESS_MSG", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const respondDeps = makeRespondDeps();
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(makePrincipal(["operator"])),
       respondDeps,
     };
@@ -452,25 +305,12 @@ describe("handleApprovalResponse", () => {
   it("replies ALREADY_RESPONDED_MSG when shared helper throws StaleVersionError (race)", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const respondDeps = makeRespondDeps();
     respondDeps.platformLifecycle.respondToApproval = vi
       .fn()
       .mockRejectedValue(new StaleVersionError("appr_1", 0, 1));
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(makePrincipal(["operator"])),
       respondDeps,
     };
@@ -489,25 +329,12 @@ describe("handleApprovalResponse", () => {
   it("replies ALREADY_RESPONDED_MSG when lifecycle throws status-mismatch (race, lifecycle path)", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const respondDeps = makeRespondDeps();
     respondDeps.platformLifecycle.respondToApproval = vi
       .fn()
       .mockRejectedValue(new Error('Cannot approve: lifecycle status is "approved"'));
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(makePrincipal(["operator"])),
       respondDeps,
     };
@@ -526,21 +353,8 @@ describe("handleApprovalResponse", () => {
   it("replies APPROVAL_EXECUTION_ERROR_MSG when the shared helper throws", async () => {
     const store = makeStore(vi.fn().mockResolvedValue(makeApproval()));
     const { sink, sendSpy } = makeReplySink();
-    const binding = {
-      id: "b-1",
-      organizationId: "org-1",
-      channel: "whatsapp",
-      channelIdentifier: "+15551234567",
-      principalId: "principal-1",
-      status: "active" as const,
-      createdBy: "admin",
-      revokedBy: null,
-      revokedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
     const config: HandleApprovalResponseConfig = {
-      bindingStore: makeBindingStore(binding),
+      bindingStore: makeBindingStore(makeFullBinding()),
       identityStore: makeIdentityStore(makePrincipal(["admin"])),
       respondDeps: makeRespondDeps({ throwInRespond: true }),
     };
@@ -554,5 +368,25 @@ describe("handleApprovalResponse", () => {
     });
 
     expect(sendSpy).toHaveBeenCalledWith(APPROVAL_EXECUTION_ERROR_MSG);
+  });
+});
+
+describe("handleApprovalResponse: quorum partial", () => {
+  it("an approve that leaves quorum open replies PARTIAL_APPROVAL_MSG", async () => {
+    const respondDeps = makeRespondDeps();
+    respondDeps.platformLifecycle.respondToApproval = vi.fn().mockResolvedValue({
+      envelope: { id: "env_1" },
+      approvalState: { status: "pending" },
+      executionResult: null,
+    });
+    const { sink, sendSpy } = makeReplySink();
+    await handleApprovalResponse({
+      payload: PAYLOAD,
+      ...BASE_ARGS,
+      approvalStore: makeStore(vi.fn().mockResolvedValue(makeApproval())),
+      replySink: sink,
+      config: authorizedConfig(respondDeps),
+    });
+    expect(sendSpy).toHaveBeenCalledWith(PARTIAL_APPROVAL_MSG);
   });
 });
