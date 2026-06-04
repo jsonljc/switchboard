@@ -35,11 +35,11 @@ import { synthesizeCreativeBrief } from "../services/workflows/creative-brief-sy
 import {
   ORG,
   buildCronDeps,
-  buildLifecycleWorld,
   readerFor,
   step,
   type ParkedHandoff,
 } from "./recommendation-handoff-harness.js";
+import { buildLifecycleWorld } from "./recommendation-handoff-lifecycle-world.js";
 
 const OPERATOR_PRINCIPAL = "principal-op-1";
 const CHANNEL = "whatsapp";
