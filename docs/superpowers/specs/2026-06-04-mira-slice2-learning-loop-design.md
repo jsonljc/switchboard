@@ -26,23 +26,23 @@ sweep starts measuring).
 
 ## 2. Verified current state (grounded against origin/main @ 055a2100, 2026-06-04)
 
-| Fact                                                                                                                                                                                                                                                                                                                                            | Evidence                                                                                                                                                                                                                                      |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Publish creates a DEDICATED paused campaign per creative (1:1 campaign:creative)                                                                                                                                                                                                                                                                | `apps/api/src/services/creative-publish-function.ts` walks upload, campaign, ad set, creative, ad per job; checkpoints persisted via `PrismaCreativeJobStore.updatePublishFields` (`packages/db/src/stores/prisma-creative-job-store.ts:150`) |
-| `CreativeJob.pastPerformance` is `Json?`, typed `z.record(z.unknown()).nullable()`, written only as a brief passthrough at job creation, read by nothing                                                                                                                                                                                        | `packages/db/prisma/schema.prisma` (CreativeJob), `packages/schemas/src/creative-job.ts:224`, `apps/api/src/services/workflows/creative-job-submit-workflow.ts:47`                                                                            |
-| The pipeline runner's stage brief omits `pastPerformance` entirely                                                                                                                                                                                                                                                                              | `packages/creative-pipeline/src/creative-job-runner.ts:79-86`                                                                                                                                                                                 |
-| Campaign insights are an account-level read returning every campaign in one rate-limited call (60s self-limit) with campaignId, spend, impressions, clicks, conversions, ctr, cpm                                                                                                                                                               | `packages/ad-optimizer/src/meta-ads-client.ts:101-126`, `mapCampaignInsight` at `:425`                                                                                                                                                        |
-| No per-ad or per-video insights read exists anywhere; `creative-analyzer` is a pure function whose `RawAdData` input nothing live assembles                                                                                                                                                                                                     | `packages/ad-optimizer/src/creative-analyzer.ts:35`, tool wrapper takes pre-built entries (`apps/api/src/tools/ad-optimizer/ads-analytics.ts:135-159`)                                                                                        |
-| Internal booked value per campaign already exists: `queryBookedValueCentsByCampaign({orgId, from, to, campaignIds?}) -> Map<campaignId, cents>`                                                                                                                                                                                                 | `packages/db/src/stores/prisma-conversion-record-store.ts:224-251`                                                                                                                                                                            |
-| `ConversionRecord.value` is CENTS; cents normalize to major units ONLY via `normalizeConversionValue`                                                                                                                                                                                                                                           | `packages/ad-optimizer/src/conversion-value.ts:9-11`, `analyzers/source-comparator.ts:61-64`                                                                                                                                                  |
-| DeploymentMemory categories are `z.enum(["preference","faq","objection","pattern","fact"])`; the Prisma column is `String` (no migration to add values); the store exposes create / incrementConfidence / listHighConfidence / findByCategory / findByCategoryAndCanonicalKey / countByDeployment / findEvictionCandidate / delete / decayStale | `packages/schemas/src/deployment-memory.ts:7-13`, `packages/db/prisma/schema.prisma` (DeploymentMemory), `packages/db/src/stores/prisma-deployment-memory-store.ts`                                                                           |
-| Confidence mechanics: `computeConfidenceScore = ownerConfirmed ? 1.0 : min(0.95, 0.5 + 0.15 ln(sourceCount))`; surfacing threshold 0.66 confidence / 3 sources; 500-entry cap with lowest-confidence eviction; daily decay cron                                                                                                                 | `packages/schemas/src/deployment-memory.ts:70-76`, `packages/core/src/memory/inngest-functions.ts:38-62`                                                                                                                                      |
-| `DeploymentMemoryCategorySchema` has zero consumers outside `packages/schemas` itself; store interfaces take plain `category: string`; context-builder's binary checks compare against the literal `"pattern"`                                                                                                                                  | grep of `DeploymentMemoryCategorySchema`; `packages/core/src/memory/context-builder.ts:179,204`                                                                                                                                               |
-| Alex's conversation extractor casts (`JSON.parse(raw) as ExtractionResult`), it does not zod-parse against the category enum; its prompt hardcodes the five legacy categories                                                                                                                                                                   | `packages/core/src/memory/compounding-service.ts:327`, `packages/core/src/memory/extraction-prompts.ts:43`                                                                                                                                    |
-| Keep/Pass producer is the firewalled `mira-decision` route: org-scoped `updateMany` writing ONLY `reviewDecision` ("kept" / "passed" / null un-keep) + `reviewDecidedAt`                                                                                                                                                                        | `apps/api/src/routes/agent-home/mira-decision.ts:57-62`                                                                                                                                                                                       |
-| Hooks carry a structured 3-value archetype enum (`pattern_interrupt`, `question`, `bold_statement`); scripts reference hooks via `hookRef`; the assembled video is a composite (all storyboards' scenes, all scripts joined into one voiceover)                                                                                                 | `packages/schemas/src/creative-job.ts:31,61-69,86-105`, `packages/creative-pipeline/src/stages/video-producer.ts:107-158`                                                                                                                     |
-| Per-org async sweeps follow the dispatch + worker Inngest pair pattern with doctrine-#7 onFailure                                                                                                                                                                                                                                               | `riley-outcome-attribution-dispatch` / `-worker` (`packages/ad-optimizer/src/inngest-functions.ts:439-471`, registered in `apps/api/src/bootstrap/inngest.ts`)                                                                                |
-| System-initiated submits use the seeded `{id:"system", type:"system"}` principal; derived-data writes (publish checkpoints, RecommendationOutcome rows, read models) are direct store writes, not ingress                                                                                                                                       | `apps/api/src/services/workflows/recommendation-handoff-request.ts`, `creative-publish-function.ts`                                                                                                                                           |
+| Fact                                                                                                                                                                                                                                                                                                                                                      | Evidence                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Publish creates a DEDICATED paused campaign per creative (1:1 campaign:creative)                                                                                                                                                                                                                                                                          | `apps/api/src/services/creative-publish-function.ts` walks upload, campaign, ad set, creative, ad per job; checkpoints persisted via `PrismaCreativeJobStore.updatePublishFields` (`packages/db/src/stores/prisma-creative-job-store.ts:150`) |
+| `CreativeJob.pastPerformance` is `Json?`, typed `z.record(z.unknown()).nullable()`, written only as a brief passthrough at job creation, read by nothing                                                                                                                                                                                                  | `packages/db/prisma/schema.prisma` (CreativeJob), `packages/schemas/src/creative-job.ts:224`, `apps/api/src/services/workflows/creative-job-submit-workflow.ts:47`                                                                            |
+| The pipeline runner's stage brief omits `pastPerformance` entirely                                                                                                                                                                                                                                                                                        | `packages/creative-pipeline/src/creative-job-runner.ts:79-86`                                                                                                                                                                                 |
+| Campaign insights are an account-level read returning every campaign in one rate-limited call (60s self-limit) with campaignId, spend, impressions, inlineLinkClicks, conversions, inlineLinkClickCtr, cpm (plus revenue, frequency, effectiveStatus, actions)                                                                                            | `packages/ad-optimizer/src/meta-ads-client.ts:101-126`, `mapCampaignInsight` at `:425`                                                                                                                                                        |
+| No per-ad or per-video insights read exists anywhere; `creative-analyzer` is a pure function whose `RawAdData` input nothing live assembles                                                                                                                                                                                                               | `packages/ad-optimizer/src/creative-analyzer.ts:35`, tool wrapper takes pre-built entries (`apps/api/src/tools/ad-optimizer/ads-analytics.ts:135-159`)                                                                                        |
+| Internal booked value per campaign already exists: `queryBookedValueCentsByCampaign({orgId, from, to, campaignIds?}) -> Map<campaignId, cents>`                                                                                                                                                                                                           | `packages/db/src/stores/prisma-conversion-record-store.ts:224-251`                                                                                                                                                                            |
+| `ConversionRecord.value` is CENTS; cents normalize to major units ONLY via `normalizeConversionValue`                                                                                                                                                                                                                                                     | `packages/ad-optimizer/src/conversion-value.ts:9-11`, `analyzers/source-comparator.ts:61-64`                                                                                                                                                  |
+| DeploymentMemory categories are `z.enum(["preference","faq","objection","pattern","fact"])`; the Prisma column is `String` (no migration to add values); the store exposes create / incrementConfidence / listHighConfidence / findByCategory / findByCategoryAndCanonicalKey / countByDeployment / findEvictionCandidate / delete / decayStale           | `packages/schemas/src/deployment-memory.ts:7-13`, `packages/db/prisma/schema.prisma` (DeploymentMemory), `packages/db/src/stores/prisma-deployment-memory-store.ts`                                                                           |
+| Confidence mechanics: `computeConfidenceScore = ownerConfirmed ? 1.0 : min(0.95, 0.5 + 0.15 ln(sourceCount))`; surfacing threshold 0.66 confidence / 3 sources; 500-entry cap with lowest-confidence eviction; daily decay cron                                                                                                                           | `packages/schemas/src/deployment-memory.ts:70-76`, `packages/core/src/memory/inngest-functions.ts:38-62`                                                                                                                                      |
+| `DeploymentMemoryCategorySchema` has no behavior-bearing consumers outside `packages/schemas`: the schema embeds it (`deployment-memory.ts:28,52`) and `outcome-pattern-extractor.ts:10` uses the derived TYPE (benign widening); store interfaces take plain `category: string`; context-builder's binary checks compare against the literal `"pattern"` | grep of `DeploymentMemoryCategorySchema`; `packages/core/src/memory/context-builder.ts:179,204`                                                                                                                                               |
+| Alex's conversation extractor casts (`JSON.parse(raw) as ExtractionResult`), it does not zod-parse against the category enum; its prompt hardcodes the five legacy categories                                                                                                                                                                             | `packages/core/src/memory/compounding-service.ts:327`, `packages/core/src/memory/extraction-prompts.ts:43`                                                                                                                                    |
+| Keep/Pass producer is the firewalled `mira-decision` route: org-scoped `updateMany` writing ONLY `reviewDecision` ("kept" / "passed" / null un-keep) + `reviewDecidedAt`                                                                                                                                                                                  | `apps/api/src/routes/agent-home/mira-decision.ts:57-62`                                                                                                                                                                                       |
+| Hooks carry a structured 3-value archetype enum (`pattern_interrupt`, `question`, `bold_statement`); scripts reference hooks via `hookRef`; the assembled video is a composite (all storyboards' scenes, all scripts joined into one voiceover)                                                                                                           | `packages/schemas/src/creative-job.ts:31,61-69,86-105`, `packages/creative-pipeline/src/stages/video-producer.ts:107-158`                                                                                                                     |
+| Per-org async sweeps follow the dispatch + worker Inngest pair pattern with doctrine-#7 onFailure; the worker ships behind a default-off kill-switch ("dark until the bake period completes")                                                                                                                                                             | dispatch: `packages/ad-optimizer/src/inngest-functions.ts:439-471`; worker + kill-switch: `apps/api/src/services/cron/riley-outcome-attribution.ts:47-82`, `apps/api/src/bootstrap/inngest.ts:820-846`                                        |
+| System-initiated submits use the seeded `{id:"system", type:"system"}` principal; derived-data writes (publish checkpoints, RecommendationOutcome rows, read models) are direct store writes, not ingress                                                                                                                                                 | `apps/api/src/services/workflows/recommendation-handoff-request.ts`, `creative-publish-function.ts`                                                                                                                                           |
 
 ## 3. Decisions (resolving roadmap section 7 for slice 2)
 
@@ -86,9 +86,19 @@ Mirrors `riley-outcome-attribution-dispatch` / `-worker`:
   makes the single insights call, the booked aggregates, computes one `PastPerformance` object
   per job, persists via the new org-scoped setter.
 - Doctrine #7: the worker registers `onFailure` via `makeOnFailureHandler` recording
-  `infrastructure.job.retry_exhausted`. Risk class mirrors the Riley attribution worker (LOW,
-  read-side projection, no spend): audit entry always, no operator alert, no domain failed event
-  (Class E: no downstream consumer of a failure event exists).
+  `infrastructure.job.retry_exhausted` (the audit entry is ALWAYS written). Failure params:
+  `{ functionId: "creative-attribution-worker", eventDomain: "creative.attribution",
+riskCategory: "low", alert: false, emitEvent: false }`. This DIVERGES from the Riley worker's
+  contract (`riley-outcome-attribution.ts:70-78` is `riskCategory: "medium"` and emits
+  `riley.outcome-attribution.failed`) deliberately: Riley's outcome rows feed operator-visible
+  trust surfaces, while this worker writes a refreshable projection that the next daily run
+  rebuilds; a `creative.attribution.failed` event would have zero consumers, the exact Class E
+  carve-out doctrine #7 allows (`async-failure-handler.ts:85` honors `emitEvent: false`; the
+  audit record is unconditional).
+- Kill-switch, mirroring the Riley bake pattern (`bootstrap/inngest.ts:820-821,846`):
+  `CREATIVE_ATTRIBUTION_ENABLED === "true"` read per invocation; default off, the worker
+  short-circuits before any Meta call or DB write. New env var: allowlist +
+  `.env.example` in the same PR.
 - Missing credentials, no published jobs, or no insights rows are graceful no-ops, not failures.
 
 **Rejected: one serial cron over all orgs** (the weekly-audit shape): no per-org failure
@@ -129,7 +139,7 @@ export const CreativePastPerformanceSchema = z.object({
     valueCents: z.number().int(), // CENTS, never pre-normalized
     count: z.number().int(),
   }),
-  trueRoas: z.number().nullable(), // normalizeConversionValue(valueCents) / meta.spend; null when spend == 0
+  trueRoas: z.number().nullable(), // computation rule below; null means "insufficient signal", never a fabricated 0
   source: z.object({
     insights: z.literal("meta_campaign_insights"),
     conversions: z.literal("conversion_records"),
@@ -141,14 +151,25 @@ Rules:
 
 - The two sources stay labeled (`meta.conversions` vs `booked.count`): the Riley arc's dual-source
   lesson. Nothing averages or merges them.
-- Cents convert to major units ONLY inside the `trueRoas` computation, via the existing
-  `normalizeConversionValue`. `booked.valueCents` is stored as cents.
-- `delivery: "no_delivery"` (spend == 0 and impressions == 0) is the expected state for every
-  parked ad until an operator activates it in Ads Manager. Writing it is honest and makes the
-  cockpit story true ("published, not yet delivering").
+- `trueRoas` REUSES `trueRoasFromCents(valueCents, spend)`
+  (`packages/ad-optimizer/src/analyzers/source-comparator.ts:61`): null when the value is unknown
+  or spend is non-positive, never a fabricated 0. The worker passes `null` (not 0) as the value
+  when `booked.count === 0`: absence of attributed records is not proof the creative earned
+  zero (conversions can exist unattributed). `booked.valueCents` itself stays a non-negative
+  int (0 when no records). Cents convert to major units ONLY inside that function.
+- EVERY published job gets a `pastPerformance` row on every sweep. Meta omits zero-delivery
+  campaigns from insights responses, so `delivery` derives from the ABSENCE of the campaign's
+  insight row (left-join semantics): absent row means a zeroed `meta` block and
+  `delivery: "no_delivery"`; a present row with activity means `"measured"`. `no_delivery` is
+  the expected state for every parked ad until an operator activates it in Ads Manager; writing
+  it is honest and makes the cockpit story true ("published, not yet delivering").
 - Window: from the earliest published job's `createdAt` (clamped to the last 90 days) to now, one
   window per org so the insights call stays single. Pilot-correct; the clamp is documented and
-  revisited when any creative has more than 90 days of delivery history.
+  revisited when any creative has more than 90 days of delivery history. At the Meta boundary
+  the window converts to `YYYY-MM-DD` strings (`toISOString().split("T")[0]`, until-inclusive),
+  the established convention (`meta-insights-adapter.ts`); the stored `window.from/to` stay full
+  ISO timestamps. The insights call requests an explicit `fields` array (campaign_id, spend,
+  impressions, inline_link_clicks, inline_link_click_ctr, conversions, cpm).
 - The existing `CreativeBriefInput.pastPerformance` stays `z.record(z.unknown()).nullable()` at
   ingest (callers may pass arbitrary context); the TYPED schema governs what the attribution
   sweep writes and what the read model and brief enrichment parse (parse-do-not-cast, skip rows
@@ -176,8 +197,12 @@ assumptions downstream):
 - `context-builder.ts:179,204` compares against the literal `"pattern"`: taste/revenue_proven rows
   would flow into the "fact-like" branch, but only for the deployment being prompted. Alex's
   context builder reads Alex's deployment; Mira's memories live on Mira's creative deployment, so
-  there is no crossover. Documented, and PR-B adds a regression test pinning that taste rows on
-  the creative deployment never surface in a conversation-context build for another deployment.
+  there is no crossover. This rests on a stated TOPOLOGY INVARIANT: Mira's creative deployment
+  (seeded by `seed-mira-creative-deployment.ts`) is its own deployment, never shared with a
+  conversational agent's deployment; a shared deployment would let taste rows surface in that
+  agent's learned-facts block and compete in the same 500-entry eviction pool. Documented, and
+  PR-B adds a regression test pinning that taste rows on the creative deployment never surface
+  in a conversation-context build for another deployment.
 - `extraction-prompts.ts:43` (Alex's conversation extractor) intentionally does NOT gain the new
   categories: conversation extraction must never emit `taste` or `revenue_proven`. The extractor
   output is cast, not enum-parsed (`compounding-service.ts:327`), so widening the schema enum does
@@ -189,10 +214,16 @@ assumptions downstream):
 The gesture is binary (kept / passed) on a composite video. The deterministic, bounded descriptor
 available today is the creative's mode and leading hook archetype:
 
-- **canonicalKey:** `taste:{kept|passed}:{mode}:{hookType}`, e.g. `taste:kept:polished:question`.
-  Bounded vocabulary: 2 decisions x 2 modes x 3 hook types = at most 12 buckets per deployment.
-  Polarity lives in the KEY (separate kept and passed buckets) because DeploymentMemory has no
-  negative-evidence counter; `sourceCount` only grows. Readers compare bucket pairs.
+- **canonicalKey:** `taste:{decision}_{mode}_{hookType}`, e.g. `taste:kept_polished_question`.
+  Single-colon namespace:subkey form, conforming to the system's structural grammar
+  `CANONICAL_KEY_PATTERN = /^[a-z_]+:[a-z0-9_]+$/` (`packages/schemas/src/canonical-keys.ts:11`).
+  (That pattern is only ENFORCED on the conversation-pattern branch of compounding-service, and
+  `isKnownCanonicalKey` checks a per-vertical enum that taste keys are intentionally NOT part
+  of; conforming structurally keeps any future cross-key validation from rejecting taste rows.)
+  Bounded vocabulary: 2 decisions x 2 modes x 4 hook segments (3 archetypes + `none`) = at most
+  16 buckets per deployment. Polarity lives in the KEY (separate kept and passed buckets)
+  because DeploymentMemory has no negative-evidence counter; `sourceCount` only grows. Readers
+  compare bucket pairs.
 - **Descriptor extraction** (pure function in `packages/creative-pipeline`, exported; tested):
   leading hook = `stageOutputs.scripts.scripts[0].hookRef` resolved against
   `stageOutputs.hooks.hooks[]`; fallback chain `topCombos[0].hookRef`, then `hooks[0]`; if no hook
@@ -203,7 +234,9 @@ available today is the creative's mode and leading hook archetype:
 - **Content** (human-readable, for the memory surfaces and future prompt rendering):
   `Operator kept a polished creative with a question hook ("<hook text, truncated>")`.
 - **Confidence:** the standard curve. First observation creates at 0.5; each repeat observation of
-  the same canonicalKey goes through `incrementConfidence(computeConfidenceScore(sourceCount + 1))`.
+  the same canonicalKey goes through
+  `incrementConfidence(orgId, id, computeConfidenceScore(sourceCount + 1, false))` (the second
+  argument is `ownerConfirmed`; gestures are never owner-confirmed facts).
   Surfacing uses the existing thresholds (0.66 confidence, 3 sources): taste only shapes briefs
   after three consistent gestures on the same bucket. No new tuning knobs.
 - **Re-decisions:** each sweep observation of a changed decision is a new gesture observation
@@ -219,15 +252,26 @@ New nullable column `CreativeJob.tasteCapturedAt DateTime?` (migration required,
 
 ```
 jobs = WHERE reviewDecision != null AND (tasteCapturedAt == null OR reviewDecidedAt > tasteCapturedAt)
-for each job (org-scoped):
+for each job (org-scoped writes; per-job try/catch so one bad job skips, never aborts the run):
+  observedDecidedAt = job.reviewDecidedAt        // capture BEFORE any write
   descriptor = extractCreativeDescriptor(stageOutputs, mode)
   upsert memory on the job's deploymentId:
     existing = findByCategoryAndCanonicalKey(org, deployment, "taste", key)
-    existing ? incrementConfidence(...) : create({category: "taste", canonicalKey: key, confidence: 0.5})
+    existing
+      ? incrementConfidence(org, existing.id, computeConfidenceScore(existing.sourceCount + 1, false))
+      : create({category: "taste", canonicalKey: key, confidence: computeConfidenceScore(1, false)})
     (respect the 500-entry cap exactly like compounding-service: countByDeployment +
-     findEvictionCandidate, evict only if the newcomer beats the candidate)
-  setTasteCapturedAt(org, job.id, now)   // the idempotency watermark
+     findEvictionCandidate, evict only if the newcomer beats the candidate. The DB unique
+     constraint is on (org, deployment, category, CONTENT), not canonicalKey: a concurrent
+     duplicate create surfaces as a unique violation, which the sweep catches and resolves by
+     re-finding the bucket and incrementing instead.)
+  setTasteCapturedAt(org, job.id, observedDecidedAt)   // the idempotency watermark
 ```
+
+The watermark stores the OBSERVED `reviewDecidedAt`, never wall-clock now(): if the operator
+re-decides while a sweep runs (the route writes a fresh `reviewDecidedAt = T2`), the predicate
+`reviewDecidedAt > tasteCapturedAt` stays true on the next run (T2 > observed T1), so the new
+gesture is neither swallowed nor double-counted.
 
 Why a sweep:
 
@@ -245,6 +289,16 @@ Why a sweep:
   follows the established convention.
 - **Latency is acceptable:** taste influences the NEXT brief; briefs are operator-cadence events,
   not real-time.
+- **Why a single cron here when attribution gets dispatch+worker:** the asymmetry is deliberate.
+  The attribution worker performs external Meta I/O per org (one org's API failure must not burn
+  retries for every org), while the taste sweep touches no external system: descriptor
+  extraction is pure and memory writes are local DB calls wrapped in per-job try/catch, so a bad
+  job is skipped and counted rather than failing the run. Function retries fire only on systemic
+  faults (DB down), where per-org isolation buys nothing. The decided-job set is small and the
+  sweep query is FETCH-capped; no new index in v1 (documented; revisit if the decided backlog
+  grows).
+- The taste sweep ships WITHOUT a kill-switch (unlike attribution): no external calls, derived
+  data, and every write is reversible via the memory delete API.
 
 ### 3.7 Revenue-proven memory and the Riley promotion contract (designed now, built on trigger)
 
@@ -260,9 +314,9 @@ Why a sweep:
   `trueRoas >= 1.5`, AND Riley's account substrate does not abstain (`measurementTrusted` true and
   signal health not red, read from the same RevenueState producers the audit uses). Floors are
   constants reviewed when the first real cohort exists.
-- **canonicalKey:** `revenue_proven:{mode}:{hookType}` (the same descriptor grammar as taste,
-  WITHOUT polarity: only wins are promoted; losses are Riley recommendation territory, not
-  memory).
+- **canonicalKey:** `revenue_proven:{mode}_{hookType}` (single-colon grammar, same descriptor
+  vocabulary as taste, WITHOUT polarity: only wins are promoted; losses are Riley recommendation
+  territory, not memory).
 - **Content carries provenance:** jobId, metaCampaignId, metaVideoId, window, spend, bookedValue,
   trueRoas at promotion time. A revenue_proven memory must be traceable to the attributed rows
   that earned it.
@@ -312,8 +366,11 @@ trueRoas, bookedValueCents, conversions source-labeled), populated by parsing
 `CreativeJob.pastPerformance` with the typed schema (parse failures project nothing). Surfaced on
 the detail projection (`GET /agents/mira/creatives/:id`) and rendered in the existing /mira
 detail surface as a compact "Performance" block ("No delivery yet" for `no_delivery`). The feed
-stays light. This is the "answerable" leg: the operator can see what a published creative earned
-without leaving the desk.
+stays light. Known bound: the detail route resolves ids inside the read-model fetch window
+(FEED_WINDOW/FETCH_CAP = 200 most recent jobs), so a published job older than the window 404s
+and shows no block; acceptable at pilot scale, inherited from M1, documented here. This is the
+"answerable" leg: the operator can see what a published creative earned without leaving the
+desk.
 
 ## 4. PR plan (each producer ships with its live consumer)
 
@@ -328,7 +385,9 @@ without leaving the desk.
   doctrine-#7 onFailure; credential resolution mirroring the publish function.
 - Consumer: read-model `performance` projection + detail-route exposure + minimal dashboard
   detail block.
-- No Prisma migration (column exists). No new env vars. No governance change (no new intents).
+- No Prisma migration (column exists). ONE new env var: `CREATIVE_ATTRIBUTION_ENABLED`
+  (kill-switch, default off; allowlist + `.env.example` in the same PR). No governance change
+  (no new intents).
 - Tests: worker unit tests with mocked step tools + mocked ads client (real interfaces);
   store tests mirroring `prisma-workflow-store.test.ts` mocked-Prisma style; cents/major boundary
   test (trueRoas from cents fixtures); no_delivery classification; idempotent re-sweep
@@ -384,11 +443,17 @@ this order). Both PRs are focused branches off main, not a stacked pair.
 
 ## 7. What flips it live
 
-Nothing in this slice gates on deployment flags. The sweep is live at merge: the day an operator
-activates a parked Mira ad in Ads Manager (the human-gated step outside this system), the next
-daily run records real delivery, `delivery` flips to `measured`, the detail block shows earned
-dollars and trueROAS, and enrichment starts citing it. The Riley promotion PR (3.7) is the only
-deferred build, with its trigger defined.
+Two switches, both explicit:
+
+1. **`CREATIVE_ATTRIBUTION_ENABLED=true`** turns the attribution worker on (default off,
+   mirroring the Riley bake pattern: deploy dark, enable deliberately). The taste sweep and the
+   read-model/prompt consumers ship live at merge (no external I/O, reversible writes,
+   degrade-gracefully when no data exists).
+2. The day an operator activates a parked Mira ad in Ads Manager (the human-gated step outside
+   this system), the next daily run records real delivery, `delivery` flips to `measured`, the
+   detail block shows earned dollars and trueROAS, and enrichment starts citing it.
+
+The Riley promotion PR (3.7) is the only deferred build, with its trigger defined.
 
 ## 8. Out of scope (deferred by the roadmap, not by omission)
 
