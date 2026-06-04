@@ -37,6 +37,45 @@ describe("buildHookPrompt", () => {
     expect(systemPrompt).toContain("TikTok");
     expect(userMessage).toContain("Time savings");
   });
+
+  it("renders the feed-back blocks only when data exists", () => {
+    const bare = buildHookPrompt(
+      { productDescription: "AI tool", targetAudience: "SMBs", platforms: ["meta"] },
+      mockTrendOutput,
+    );
+    expect(bare.userMessage).not.toContain("PAST PERFORMANCE (measured)");
+    expect(bare.userMessage).not.toContain("OPERATOR TASTE");
+
+    const fed = buildHookPrompt(
+      {
+        productDescription: "AI tool",
+        targetAudience: "SMBs",
+        platforms: ["meta"],
+        pastPerformance: {
+          kind: "performance_history",
+          version: 1,
+          generatedAt: "2026-06-04T12:00:00.000Z",
+          topPerformers: [
+            {
+              jobId: "job-1",
+              descriptor: "polished:question",
+              trueRoas: 5,
+              spend: 50,
+              bookedValueCents: 25000,
+              window: { from: "2026-05-05T00:00:00.000Z", to: "2026-06-04T06:30:00.000Z" },
+            },
+          ],
+          summary: "1 measured creative(s) on this deployment; top by trueROAS listed.",
+        },
+        tasteContext: ["consistently keeps question hooks in polished mode (4 keeps)"],
+      },
+      mockTrendOutput,
+    );
+    expect(fed.userMessage).toContain("PAST PERFORMANCE (measured)");
+    expect(fed.userMessage).toContain("polished:question: 5.0x trueROAS");
+    expect(fed.userMessage).toContain("OPERATOR TASTE (subjective, from review gestures):");
+    expect(fed.userMessage).toContain("- consistently keeps question hooks");
+  });
 });
 
 describe("runHookGenerator", () => {

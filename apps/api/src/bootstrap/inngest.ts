@@ -115,6 +115,8 @@ import {
   createCreativeAttributionWorker,
   resolveMetaAdsConnectionCredentials,
 } from "../services/cron/creative-attribution.js";
+import { createCreativeTasteSweep } from "../services/cron/creative-taste-sweep.js";
+import { buildCreativeTasteProvider } from "../services/creative-taste-context.js";
 import { buildCreativeAssetStorage } from "../lib/creative-asset-storage.js";
 
 function requireInstantFormAdapter(adapter: InstantFormAdapter | undefined): InstantFormAdapter {
@@ -899,6 +901,20 @@ export async function registerInngest(
     logger: app.log,
   });
 
+  // Mira slice 2: taste memory. The daily sweep projects Keep/Pass gestures
+  // (the CreativeJob review columns ARE the durable event record) into
+  // DeploymentMemory taste buckets; the provider feeds high-confidence buckets
+  // back into the trend/hook prompts via the runner's L2 seam. No kill-switch
+  // (spec 3.6): no external calls, derived data, reversible writes.
+  const deploymentMemoryStoreForTaste = new PrismaDeploymentMemoryStore(app.prisma);
+  const creativeTasteSweep = createCreativeTasteSweep({
+    failure: asyncFailure,
+    jobStore,
+    memoryStore: deploymentMemoryStoreForTaste,
+    logger: app.log,
+  });
+  const creativeTasteProvider = buildCreativeTasteProvider(deploymentMemoryStoreForTaste);
+
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
@@ -927,6 +943,7 @@ export async function registerInngest(
           },
           asyncFailure,
         ) as (arg: unknown) => Promise<void>,
+        creativeTasteProvider,
       ),
       createUgcJobRunner(
         {
@@ -1013,6 +1030,7 @@ export async function registerInngest(
       rileyOutcomeWorker,
       creativeAttributionDispatch,
       creativeAttributionWorker,
+      creativeTasteSweep,
     ],
   });
 

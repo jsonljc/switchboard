@@ -10,6 +10,15 @@ export const DeploymentMemoryCategorySchema = z.enum([
   "objection",
   "pattern",
   "fact",
+  // Slice-2 creative-loop categories. `taste` = the operator's subjective
+  // Keep/Pass judgment, written ONLY by the creative-taste-sweep cron.
+  // `revenue_proven` = attributed-performance promotion, Riley-owned writer
+  // ONLY (designed in the slice-2 spec section 3.7; built when its trigger
+  // fires: the first measured creative with spend > 0). Conversation
+  // extraction must never emit either; the extractor prompt pins the legacy
+  // five (see extraction-prompts + its category pin test).
+  "taste",
+  "revenue_proven",
 ]);
 export type DeploymentMemoryCategory = z.infer<typeof DeploymentMemoryCategorySchema>;
 
