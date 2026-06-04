@@ -154,6 +154,9 @@ export function adaptDegradedParkedApproval(lifecycle: ParkedLifecycleLike): Dec
     id: `workflow_approval:${lifecycle.id}`,
     kind: "workflow_approval",
     orgId: lifecycle.organizationId ?? "",
+    // Deliberate misattribution: with no trace there is no skillSlug, so the
+    // degraded card renders under the default agent identity (alex). The card
+    // copy explains the record is missing; identity accuracy is secondary.
     agentKey: "alex",
     humanSummary: `An approval could not be fully loaded (id ${lifecycle.id.slice(0, 8)}). You can still reject it; approving needs the underlying work record.`,
     presentation: {
