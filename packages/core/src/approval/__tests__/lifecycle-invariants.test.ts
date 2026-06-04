@@ -23,6 +23,8 @@ function makeStore(): ApprovalLifecycleStore {
     updateDispatchRecord: vi.fn(),
     listPendingLifecycles: vi.fn(),
     listExpiredPendingLifecycles: vi.fn(),
+    listRecoveryRequiredLifecycles: vi.fn(),
+    countDispatchRecords: vi.fn(),
   };
 }
 
