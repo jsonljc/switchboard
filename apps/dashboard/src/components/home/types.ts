@@ -23,7 +23,7 @@ export interface VerdictModel {
   salutation: string;
   line: { pre: string; em: string; post: string } | string;
   proof: string;
-  /** When set, the `em` accent is colored with `hsl(var(--agent-{accentAgent}))`. Calm/fallback leave this undefined. */
+  /** When set, the accent span is colored with the deep identity ink, `hsl(var(--agent-{accentAgent}-deep))` (the poster-name ink; the base hue fails contrast on the grain canvas). Calm/fallback leave this undefined. */
   accentAgent?: AgentKey;
 }
 
