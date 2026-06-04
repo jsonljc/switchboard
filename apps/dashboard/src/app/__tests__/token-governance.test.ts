@@ -613,4 +613,18 @@ describe("token governance: type voice (TY2)", () => {
     const frauncesBlock = layout.slice(layout.indexOf("Fraunces("));
     expect(frauncesBlock.slice(0, frauncesBlock.indexOf("})"))).toMatch(/style:\s*\["normal"\]/);
   });
+
+  it("the verdict accent deep inks hold large-text AA on the canvas (3:1 plus grain margin)", () => {
+    // The verdict accent renders the agent's DEEP ink (the same ink as the
+    // poster names) at 36 to 48px weight 700: WCAG large-scale text, AA floor
+    // 3:1. The canvas grain darkens the real ground below this token bound
+    // (live pixel sample: coral-deep 3.96 on the grained canvas), so the gate
+    // demands 3.5 against the ungrained canvas to keep the live value over 3.
+    const CANVAS = tokenValue("canvas");
+    for (const deep of ["palette-coral-deep", "palette-teal-deep", "palette-violet-deep"]) {
+      expect(contrastRatio(tokenValue(deep), CANVAS), `${deep} on canvas`).toBeGreaterThanOrEqual(
+        3.5,
+      );
+    }
+  });
 });

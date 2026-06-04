@@ -65,10 +65,12 @@ describe("Verdict component", () => {
       expect(heading.textContent).toContain("has it ready.");
     });
 
-    it("applies agent identity color via inline style on the accent span", () => {
+    it("applies the deep agent identity ink via inline style on the accent span", () => {
+      // Deep ink (same as the poster names): the base hue fails contrast on
+      // the grain canvas; see Verdict's accentStyle comment.
       render(<Verdict model={activeModel} />);
       const emEl = screen.getByText("Alex");
-      expect(emEl).toHaveStyle({ color: "hsl(var(--agent-alex))" });
+      expect(emEl).toHaveStyle({ color: "hsl(var(--agent-alex-deep))" });
     });
 
     it("marks shape with data-shape='active'", () => {
@@ -94,9 +96,9 @@ describe("Verdict component", () => {
       render(<Verdict model={calmModel} />);
       const emEl = screen.getByText("All caught up.");
       // When no accentAgent, span should not have inline color
-      expect(emEl).not.toHaveStyle({ color: "hsl(var(--agent-alex))" });
-      expect(emEl).not.toHaveStyle({ color: "hsl(var(--agent-riley))" });
-      expect(emEl).not.toHaveStyle({ color: "hsl(var(--agent-mira))" });
+      expect(emEl).not.toHaveStyle({ color: "hsl(var(--agent-alex-deep))" });
+      expect(emEl).not.toHaveStyle({ color: "hsl(var(--agent-riley-deep))" });
+      expect(emEl).not.toHaveStyle({ color: "hsl(var(--agent-mira-deep))" });
     });
 
     it("calm em has no inline style attribute (class default provides neutral ink, not agent coral)", () => {

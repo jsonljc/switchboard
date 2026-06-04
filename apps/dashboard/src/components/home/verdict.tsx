@@ -15,8 +15,11 @@ interface VerdictProps {
 export function Verdict({ model }: VerdictProps) {
   const { shape, eyebrow, salutation, line, proof, accentAgent } = model;
 
+  // Deep identity ink (the same ink as the team poster names): the base hue
+  // fails contrast on the grain canvas (2.4:1 sampled live); the deep ink
+  // holds AA for large-scale text on the real ground.
   const accentStyle: CSSProperties | undefined = accentAgent
-    ? { color: `hsl(var(--agent-${accentAgent}))` }
+    ? { color: `hsl(var(--agent-${accentAgent}-deep))` }
     : undefined;
 
   return (
