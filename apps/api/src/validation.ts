@@ -75,6 +75,22 @@ export const ApprovalRespondBodySchema = z.object({
   bindingHash: z.string().max(500).optional(),
 });
 
+/**
+ * Internal chat-approval bridge respond body (bridge spec section 3.1).
+ * .strict() is load-bearing: identity fields (respondedBy and friends) must be
+ * unrepresentable on this wire; the binding lookup is the only authority.
+ */
+export const InternalChatApprovalRespondBodySchema = z
+  .object({
+    approvalId: z.string().min(1).max(500),
+    action: z.enum(["approve", "reject"]),
+    bindingHash: z.string().min(1).max(500),
+    channel: z.string().min(1).max(100),
+    channelIdentifier: z.string().min(1).max(500),
+    organizationId: z.string().min(1).max(500),
+  })
+  .strict();
+
 // ── Simulate ─────────────────────────────────────────────────────────
 
 export const SimulateBodySchema = z.object({

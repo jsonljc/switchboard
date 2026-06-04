@@ -129,7 +129,10 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       request.url === "/api/billing/webhook" ||
       // Meta Data Deletion callback — verified by signed_request HMAC instead.
       request.url === "/api/meta/deletion" ||
-      request.url.startsWith("/api/meta/deletion/status")
+      request.url.startsWith("/api/meta/deletion/status") ||
+      // Chat approval bridge: self-authenticates with INTERNAL_API_SECRET
+      // (timing-safe) inside the route; exact path, never a prefix.
+      request.url === "/api/internal/chat-approvals/respond"
     ) {
       return;
     }
