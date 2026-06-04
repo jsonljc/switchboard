@@ -49,6 +49,7 @@ import {
   runAfterLlmCallHooks,
   runBeforeToolCallHooks,
   runAfterToolCallHooks,
+  runAfterSkillHooks,
 } from "./hook-runner.js";
 import { IntentClassSchema, type IntentClass } from "@switchboard/schemas";
 import { parseQualificationSidecar } from "./qualification-sidecar-parser.js";
@@ -287,9 +288,9 @@ export class SkillExecutorImpl implements SkillExecutor {
     const requestCtx = this.buildRequestContext(params);
     const runtimeTools = this.materializeRuntimeTools(requestCtx);
 
-    // Hook context for the isolated execution-trace recorder (built once; the
-    // recorder is invoked directly at the success-return / on a thrown turn —
-    // never via runAfterSkillHooks, so the governance afterSkill gates stay dormant).
+    // Hook context shared by the afterSkill governance gates (run via runAfterSkillHooks
+    // at the success-return seam) and the isolated execution-trace recorder (a separate
+    // arg, invoked directly at the success-return / on a thrown turn — not via the runner).
     const hookCtx: SkillHookContext = {
       deploymentId: params.deploymentId,
       orgId: params.orgId,
@@ -461,10 +462,32 @@ export class SkillExecutorImpl implements SkillExecutor {
               : {}),
           };
 
-          // Isolated telemetry recorder — invoked directly (NOT via runAfterSkillHooks),
-          // so the governance afterSkill gates stay dormant. FIRE-AND-FORGET: NOT
-          // awaited, so a slow ExecutionTrace DB write never delays the lead-visible
-          // response. Log-and-swallow on the floating promise; apps/api is a
+          // Governance afterSkill gates (banned-phrase / claim / PDPA / WhatsApp-window).
+          // Wired here — AFTER result assembly, BEFORE the isolated trace recorder — so any
+          // in-place result.response mutation (enforce-mode block/rewrite/handoff) is reflected
+          // in the returned reply AND every downstream trace consumer, preserving the
+          // "trace never sees pre-block unsafe text" invariant the bootstrap relies on.
+          //
+          // FAIL-CLOSED: this is deliberately NOT wrapped in a swallowing try/catch. An
+          // unexpected gate throw propagates to the turn's error path (the catch below re-throws
+          // the original error), so skill-mode emits the neutral fallback and the lead NEVER
+          // receives ungated text. Swallowing here could leak pre-block text if a gate threw
+          // mid-decision in enforce mode. The gates already fail CLOSED internally (posture cache)
+          // for the resolver-unavailable case, so an escaping throw is a genuine logic bug and
+          // failing the turn is the safe response. With no governanceConfig seeded today every
+          // gate early-returns → inert in prod (byte-identical).
+          await runAfterSkillHooks(this.hooks, hookCtx, result);
+
+          // Keep the canonical WorkTrace summary consistent with any in-place gate mutation:
+          // skill-mode persists result.trace.responseSummary (stamped pre-gate above), so a
+          // blocked/rewritten turn must refresh it or the canonical trace records pre-block text.
+          // No-op when no gate mutated (it already equals result.response.slice(0, 500)).
+          result.trace.responseSummary = result.response.slice(0, 500);
+
+          // Isolated telemetry recorder — a SEPARATE arg (not in the `hooks` array), invoked
+          // directly AFTER the governance gates above so it records the post-gate result.
+          // FIRE-AND-FORGET: NOT awaited, so a slow ExecutionTrace DB write never delays the
+          // lead-visible response. Log-and-swallow on the floating promise; apps/api is a
           // long-running Fastify server, so it settles safely after we return.
           if (this.executionTraceHook?.afterSkill) {
             void this.executionTraceHook.afterSkill(hookCtx, result).catch((e: unknown) => {
@@ -613,8 +636,9 @@ export class SkillExecutorImpl implements SkillExecutor {
     } catch (err) {
       // Isolated telemetry recorder for the error path — FIRE-AND-FORGET (NOT
       // awaited), then re-throw the ORIGINAL error immediately so a slow trace write
-      // never delays surfacing the failure. Mirrors the success-path afterSkill;
-      // never via runAfterSkillHooks, so the governance afterSkill gates stay dormant.
+      // never delays surfacing the failure. This is the SEPARATE trace-recorder arg
+      // (invoked directly, not via runAfterSkillHooks) — a throwing afterSkill gate
+      // reaches this catch and re-throws, so skill-mode emits the neutral fallback.
       // The partial threads the burned tokens/latency so a budget-busting turn is
       // recorded with real cost, not a zero fallback.
       if (this.executionTraceHook?.onError) {

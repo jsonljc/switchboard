@@ -112,6 +112,8 @@ export type {
   SkillToolFactory,
   SkillToolOperation,
   SkillExecutor,
+  SkillHook,
+  SkillHookContext,
   OutputFieldDeclaration,
   SkillExecutionTraceData,
   SkillExecutionTrace,

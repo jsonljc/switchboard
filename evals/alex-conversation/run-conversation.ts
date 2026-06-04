@@ -9,6 +9,7 @@ import type {
   SkillDefinition,
   SkillExecutionParams,
   SkillExecutionResult,
+  SkillHook,
   SkillTool,
 } from "@switchboard/core/skill-runtime";
 import { resolvePersona } from "@switchboard/schemas";
@@ -60,6 +61,13 @@ export interface RunConversationDeps {
   refsDir?: string;
   /** Override the skills dir for `loadSkill`. Defaults to the repo `skills/` dir. */
   skillsDir?: string;
+  /**
+   * Optional governance hooks for the real-adapter path. Default [] keeps the
+   * eval ungoverned (baseline byte-identical). Supplying the live afterSkill gates
+   * makes a governed run possible so a gate regression is observable. Ignored when
+   * an `executor` is injected directly (that seam owns its own hooks).
+   */
+  hooks?: SkillHook[];
 }
 
 /** One captured Alex turn for downstream grading. */
@@ -269,7 +277,8 @@ function buildExecutor(deps: RunConversationDeps, tools: Map<string, SkillTool>)
     deps.model ?? DEFAULT_MODEL,
     deps.maxTokens ?? DEFAULT_MAX_TOKENS,
   );
-  // No router (undefined) and NO hooks ([]) — deterministic, ungoverned offline
-  // run. The temp-0 adapter forces temperature:0 despite the absent router.
-  return new SkillExecutorImpl(adapter, tools, undefined, []);
+  // No router (undefined). Hooks default to [] (deterministic, ungoverned offline run);
+  // callers may supply the live afterSkill gates via deps.hooks to drive a governed run.
+  // The temp-0 adapter forces temperature:0 despite the absent router.
+  return new SkillExecutorImpl(adapter, tools, undefined, deps.hooks ?? []);
 }

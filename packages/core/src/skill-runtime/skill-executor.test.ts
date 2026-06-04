@@ -1002,3 +1002,80 @@ describe("parseIntentTag", () => {
     expect(r.text).toMatch(/back!/);
   });
 });
+
+describe("SkillExecutorImpl — afterSkill governance seam", () => {
+  const execParams = {
+    skill: mockSkill,
+    parameters: { NAME: "Alice" },
+    messages: [{ role: "user" as const, content: "hello" }],
+    deploymentId: "d1",
+    orgId: "org1",
+    trustScore: 50,
+    trustLevel: "guided" as const,
+  };
+
+  it("invokes runAfterSkillHooks: a hook's afterSkill runs and can mutate result.response", async () => {
+    const adapter = createMockAdapter([
+      { content: [{ type: "text", text: "raw reply" }], stop_reason: "end_turn" },
+    ]);
+    let seenResponse: string | undefined; // capture by value BEFORE mutation
+    const recordingHook = {
+      name: "recording",
+      afterSkill: async (_ctx: SkillHookContext, result: SkillExecutionResult) => {
+        seenResponse = result.response;
+        result.response = "MUTATED";
+      },
+    };
+    const executor = new SkillExecutorImpl(adapter, new Map(), undefined, [recordingHook]);
+
+    const result = await executor.execute(execParams);
+
+    expect(seenResponse).toBe("raw reply"); // hook saw the assembled reply...
+    expect(result.response).toBe("MUTATED"); // ...and its mutation IS the returned reply
+  });
+
+  it("with no hooks ([]) the response is unchanged (control)", async () => {
+    const adapter = createMockAdapter([
+      { content: [{ type: "text", text: "raw reply" }], stop_reason: "end_turn" },
+    ]);
+    const executor = new SkillExecutorImpl(adapter, new Map(), undefined, []);
+
+    const result = await executor.execute(execParams);
+
+    expect(result.response).toBe("raw reply");
+  });
+
+  it("fail-closed: a throwing afterSkill hook rejects the turn (skill-mode then sends the neutral fallback, never ungated text)", async () => {
+    const adapter = createMockAdapter([
+      { content: [{ type: "text", text: "raw reply" }], stop_reason: "end_turn" },
+    ]);
+    const throwingHook = {
+      name: "throwing",
+      afterSkill: async () => {
+        throw new Error("gate bug");
+      },
+    };
+    const executor = new SkillExecutorImpl(adapter, new Map(), undefined, [throwingHook]);
+
+    // The gate throw propagates to the turn's error path; the lead never gets the raw "raw reply".
+    await expect(executor.execute(execParams)).rejects.toThrow("gate bug");
+  });
+
+  it("refreshes result.trace.responseSummary after a gate mutation (no pre-block text in the canonical trace)", async () => {
+    const adapter = createMockAdapter([
+      { content: [{ type: "text", text: "raw reply" }], stop_reason: "end_turn" },
+    ]);
+    const blockingHook = {
+      name: "blocking",
+      afterSkill: async (_ctx: SkillHookContext, result: SkillExecutionResult) => {
+        result.response = "[blocked: connecting you with our team]";
+      },
+    };
+    const executor = new SkillExecutorImpl(adapter, new Map(), undefined, [blockingHook]);
+
+    const result = await executor.execute(execParams);
+
+    expect(result.response).toBe("[blocked: connecting you with our team]");
+    expect(result.trace.responseSummary).toBe("[blocked: connecting you with our team]");
+  });
+});
