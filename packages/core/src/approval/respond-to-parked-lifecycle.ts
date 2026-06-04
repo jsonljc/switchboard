@@ -32,6 +32,13 @@ import type { WorkTrace } from "../platform/work-trace.js";
 import type { WorkTraceStore } from "../platform/work-trace-recorder.js";
 import type { WorkUnit } from "../platform/work-unit.js";
 import type { AuditLedger } from "../audit/ledger.js";
+import {
+  runDispatch,
+  writeApprovedPayloadToTrace,
+  type ExecuteApprovedLike,
+} from "./lifecycle-dispatch.js";
+
+export type { ExecuteApprovedLike } from "./lifecycle-dispatch.js";
 
 export class ParkedLifecycleNotFoundError extends Error {
   readonly code = "not_found";
@@ -55,10 +62,6 @@ export class ParkedLifecycleExpiredError extends Error {
     super(`Lifecycle ${lifecycleId} has expired`);
     this.name = "ParkedLifecycleExpiredError";
   }
-}
-
-export interface ExecuteApprovedLike {
-  executeApproved(workUnitId: string): Promise<ExecuteResult>;
 }
 
 export interface RespondToParkedLifecycleDeps {
@@ -162,25 +165,16 @@ export async function respondToParkedLifecycle(
 
   // Payload authority (spec 4.1): the trace MUST carry the approved frozen
   // payload before dispatch — executeAfterApproval dispatches from the trace.
-  const frozenParameters =
-    (executableWorkUnit.frozenPayload["parameters"] as Record<string, unknown> | undefined) ??
-    workUnit.parameters;
-  const traceUpdate = await workTraceStore.update(
-    lifecycle.actionEnvelopeId,
-    {
-      parameters: frozenParameters,
-      approvalOutcome: "approved",
-      approvalRespondedBy: params.respondedBy,
-      approvalRespondedAt: respondedAt,
-    },
-    {
-      caller: "respond_to_parked_lifecycle",
-      organizationId: lifecycle.organizationId ?? undefined,
-    },
-  );
-  if (!traceUpdate.ok) {
-    throw new Error(`WorkTrace update rejected before dispatch: ${traceUpdate.reason}`);
-  }
+  await writeApprovedPayloadToTrace({
+    deps: { workTraceStore },
+    lifecycle: approved,
+    executableWorkUnit,
+    fallbackParameters: workUnit.parameters,
+    approvalOutcome: "approved",
+    respondedBy: params.respondedBy,
+    respondedAt,
+    caller: "respond_to_parked_lifecycle",
+  });
 
   const executionResult = await runDispatch(
     deps,
@@ -247,70 +241,6 @@ async function retryDispatch(
     },
     executionResult,
   };
-}
-
-async function runDispatch(
-  deps: RespondToParkedLifecycleDeps,
-  lifecycle: LifecycleRecord,
-  executableWorkUnitId: string,
-  revisionId: string,
-): Promise<ExecuteResult> {
-  const { lifecycleService, platformLifecycle } = deps;
-  const attemptNumber = (await lifecycleService.countDispatchAttempts(executableWorkUnitId)) + 1;
-  const { dispatchRecord } = await lifecycleService.prepareDispatch({
-    lifecycleId: lifecycle.id,
-    executableWorkUnitId,
-    idempotencyKey: `lifecycle-dispatch:${lifecycle.id}:${revisionId}:attempt-${attemptNumber}`,
-    attemptNumber,
-  });
-
-  const startedAt = Date.now();
-  let executionResult: ExecuteResult;
-  try {
-    // CONTRACT (spec 4.2): executeApproved takes the ORIGINAL WorkUnit id and
-    // dispatches from the WorkTrace, which now carries the frozen payload (4.1).
-    executionResult = await platformLifecycle.executeApproved(lifecycle.actionEnvelopeId);
-  } catch (err) {
-    await lifecycleService.recordDispatchOutcome({
-      dispatchRecordId: dispatchRecord.id,
-      state: "failed",
-      errorMessage: err instanceof Error ? err.message : String(err),
-      durationMs: Date.now() - startedAt,
-    });
-    await markRecoveryRequired(deps, lifecycle.id);
-    throw err;
-  }
-  await lifecycleService.recordDispatchOutcome({
-    dispatchRecordId: dispatchRecord.id,
-    state: executionResult.success ? "succeeded" : "failed",
-    outcome: executionResult.summary,
-    ...(executionResult.success ? {} : { errorMessage: executionResult.summary }),
-    durationMs: Date.now() - startedAt,
-  });
-  if (!executionResult.success) {
-    await markRecoveryRequired(deps, lifecycle.id);
-  }
-  return executionResult;
-}
-
-/**
- * Review #3: an approved action whose dispatch failed must come BACK to the
- * operator (as a Retry card), never vanish into logs.
- */
-async function markRecoveryRequired(
-  deps: RespondToParkedLifecycleDeps,
-  lifecycleId: string,
-): Promise<void> {
-  const fresh = await deps.lifecycleService.getLifecycleById(lifecycleId);
-  if (!fresh || fresh.status !== "approved") return;
-  try {
-    await deps.lifecycleService.transitionStatus(fresh, "recovery_required");
-  } catch (err) {
-    deps.logger.error(
-      { lifecycleId, err: err instanceof Error ? err.message : String(err) },
-      "Failed to mark lifecycle recovery_required",
-    );
-  }
 }
 
 function assertNotSelfApproval(
