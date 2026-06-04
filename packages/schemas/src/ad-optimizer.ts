@@ -276,7 +276,7 @@ export const AuditReportSchema = z.object({
       ),
     })
     .optional(),
-  // Riley v3 slice 2: cross-campaign arbitration — ADDITIVE ranking metadata over
+  // Riley v3 slice 2: cross-campaign arbitration, ADDITIVE ranking metadata over
   // recommendations[]; it never filters emission or handoff. Entries reference
   // recommendations[] by array index (recs carry no id at report time, and
   // campaignId+action alone is not unique, e.g. per-breach fix_signal_health recs)

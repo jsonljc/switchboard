@@ -62,14 +62,14 @@ describe("ACTION_CONTRACT consolidation", () => {
 
   it("isMutating bakes in the elevation: both static-false-but-elevated cases are mutating", () => {
     // refresh_creative AND add_creative are {financialEffect:false, externalEffect:false}
-    // in the static contract but resetsLearning="yes" -- the sink elevates them.
+    // in the static contract but resetsLearning="yes"; the sink elevates them.
     expect(ACTION_CONTRACT.refresh_creative.financialEffect).toBe(false);
     expect(ACTION_CONTRACT.refresh_creative.externalEffect).toBe(false);
     expect(isMutating("refresh_creative")).toBe(true);
     expect(ACTION_CONTRACT.add_creative.financialEffect).toBe(false);
     expect(ACTION_CONTRACT.add_creative.externalEffect).toBe(false);
     expect(isMutating("add_creative")).toBe(true);
-    // pause is static true/true with resetsLearning="no" -- mutating via the booleans.
+    // pause is static true/true with resetsLearning="no": mutating via the booleans.
     expect(isMutating("pause")).toBe(true);
     // The four informational actions stay non-mutating.
     expect(isMutating("hold")).toBe(false);

@@ -6,7 +6,7 @@ import { ACTION_CONTRACT } from "./action-contract.js";
 
 /**
  * Learning-phase reset classification, now DERIVED from the consolidated
- * ACTION_CONTRACT (Riley v3 slice 2) -- see action-contract.ts for the rationale
+ * ACTION_CONTRACT (Riley v3 slice 2); see action-contract.ts for the rationale
  * per action (Meta mechanics, Phase-A spec section 5). Public API unchanged.
  *
  * INVARIANT (enforced in recommendation-sink): any action classified "yes" is

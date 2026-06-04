@@ -174,7 +174,7 @@ describe("AuditRunner arbitration (additive ranking metadata)", () => {
     const report = await runner.run(RANGE);
 
     // The breaching fixture must produce at least one recommendation, or this
-    // test pins nothing — fail loudly rather than vacuously pass.
+    // test pins nothing; fail loudly rather than vacuously pass.
     expect(report.recommendations.length).toBeGreaterThan(0);
     expect(report.arbitration).toBeDefined();
 

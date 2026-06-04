@@ -16,7 +16,7 @@ import { decideRawForCase } from "./decide.js";
  * blind to a cross-campaign selection (spec 7.1), so the arbitrator brings its own
  * pin: multi-campaign accounts resolved through the REAL producers
  * (decideForCampaign per campaign + generateSignalHealthRecommendations for
- * breaches) and the REAL arbitrate() — nothing here re-implements decision logic.
+ * breaches) and the REAL arbitrate(); nothing here re-implements decision logic.
  */
 
 /** One campaign inside a multi-campaign arbitration account: a standard riley case

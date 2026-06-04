@@ -578,7 +578,7 @@ export class AuditRunner {
       recommendations.push(...signalHealthRecs);
     }
 
-    // Step 8d (Riley v3 slice 2): cross-campaign arbitration — ADDITIVE ranking
+    // Step 8d (Riley v3 slice 2): cross-campaign arbitration, ADDITIVE ranking
     // metadata over the final candidate set. Pure annotation: Step 9 emission and
     // the handoff consume `recommendations` unchanged; only the report carries the
     // ranking. Reads the economics-enriched RevenueState (producer 6 present when

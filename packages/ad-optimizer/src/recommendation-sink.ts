@@ -134,7 +134,7 @@ const URGENCY_TO_EXPIRY_HOURS: Record<RecommendationOutput["urgency"], number> =
 };
 
 // Risk-contract flags now live on the consolidated ACTION_CONTRACT (Riley v3
-// slice 2, action-contract.ts) -- the sink reads the same financialEffect /
+// slice 2, action-contract.ts); the sink reads the same financialEffect /
 // externalEffect booleans it always emitted. Riley does NOT message clients, so
 // clientFacing stays false below; requiresConfirmation stays false (riskLevel
 // drives the high-risk confirm step on the UI side).

@@ -257,7 +257,7 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
   campaignEconomics?: { rows: CampaignEconomicsRow[] };
   reallocation: RecommendationOutput | WatchOutput | null;
   /** Riley v3 slice 2: the input RevenueState completed with producer 6 when per-source
-   * data was available (passthrough otherwise) -- the arbitrator reads it. */
+   * data was available (passthrough otherwise); the arbitrator reads it. */
   revenueState: RevenueState;
   /** Riley v3 slice 2: per-source attributed spend (dollars) when computed; keys the
    * account-scoped shift candidate's structured materiality. */

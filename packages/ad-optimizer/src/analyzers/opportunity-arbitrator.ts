@@ -86,7 +86,7 @@ export interface ArbitrationResult {
 export interface ArbitrateInput {
   /** The report's recommendations[] verbatim (order defines `index`). Never mutated. */
   candidates: RecommendationOutput[];
-  /** Account-level pre-flight state -- pass the economics-ENRICHED state (producer 6). */
+  /** Account-level pre-flight state; pass the economics-ENRICHED state (producer 6). */
   revenueState: RevenueState;
   /** Structured materiality source: per-campaign current-window spend (dollars). */
   currentInsights: ReadonlyArray<{ campaignId: string; spend: number }>;
@@ -97,7 +97,9 @@ export interface ArbitrateInput {
 
 /** Structured magnitude (dollars) for one candidate: its campaign's spend, or for the
  * account-scoped shift candidate, the from-source attributed spend being re-potted.
- * Never the estimateRisk prose dollar-scrape (spec 7.6). */
+ * Never the estimateRisk prose dollar-scrape (spec 7.6). A campaignId absent from the
+ * audited insights (defensive; not produced today) falls back to 0, so such a
+ * candidate stays rankable but can never become primary. */
 function magnitudeFor(
   candidate: RecommendationOutput,
   spendByCampaign: ReadonlyMap<string, number>,

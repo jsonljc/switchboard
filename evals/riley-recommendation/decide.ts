@@ -113,7 +113,7 @@ export interface RileyRawDecision {
  * outputs (the arbitration eval feeds them to arbitrate(); decideForCase reduces
  * them to the per-campaign assertion surfaces). campaignId/campaignName are
  * parameterizable because a multi-campaign arbitration account needs distinct ids.
- * Deterministic, model-free, DB-free — the engine is the source of truth; this
+ * Deterministic, model-free, DB-free: the engine is the source of truth, and this
  * never re-implements any decision logic.
  */
 export function decideRawForCase(

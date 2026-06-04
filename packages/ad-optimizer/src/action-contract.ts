@@ -7,15 +7,15 @@ import type {
  * graph stays acyclic: action-contract <- evidence-floor / reset-classification /
  * sink / arbitrator). evidence-floor re-exports it for back-compat. */
 export type EvidenceFamily =
-  | "destructive" // pause / cut -- highest floor
+  | "destructive" // pause / cut: highest floor
   | "scale" // moderate-high
-  | "structural" // restructure/consolidate/expand -- destructive-grade floor (Phase D)
-  | "diagnostic" // hold / diagnose-only -- low floor
-  | "measurement"; // signal/CAPI fixes -- account-level, bypass campaign-volume floor
+  | "structural" // restructure/consolidate/expand: destructive-grade floor (Phase D)
+  | "diagnostic" // hold / diagnose-only: low floor
+  | "measurement"; // signal/CAPI fixes: account-level, bypass campaign-volume floor
 
 /**
  * Riley v3 slice 2 (spec 2.3): ONE keyed per-action contract consolidating the three
- * formerly-parallel maps -- the sink's ACTION_RISK_CONTRACT booleans, the
+ * formerly-parallel maps: the sink's ACTION_RISK_CONTRACT booleans, the
  * ACTION_RESETS_LEARNING classification, and the evidence-floor FAMILY map. The legacy
  * modules re-point here (single source of truth); their public APIs are unchanged.
  *
@@ -35,7 +35,7 @@ export interface ActionContract {
 }
 
 export const ACTION_CONTRACT: Record<AdRecommendationAction, ActionContract> = {
-  // -- Money- or ad-platform-state-changing: NOT swipe-approvable --
+  // ── Money- or ad-platform-state-changing: NOT swipe-approvable ──
   scale: {
     financialEffect: true,
     externalEffect: true,
@@ -84,7 +84,7 @@ export const ACTION_CONTRACT: Record<AdRecommendationAction, ActionContract> = {
     resetsLearning: "yes",
     evidenceFamily: "scale",
   },
-  // -- Informational / internal-queue only: swipe-approvable --
+  // ── Informational / internal-queue only: swipe-approvable ──
   hold: {
     financialEffect: false,
     externalEffect: false,
@@ -124,7 +124,7 @@ export const ACTION_CONTRACT: Record<AdRecommendationAction, ActionContract> = {
 };
 
 /**
- * "Would this action mutate live money / platform state?" -- the question the
+ * "Would this action mutate live money / platform state?" is the question the
  * OpportunityArbitrator (and, in Phase C, any execution path) must answer the SAME
  * way the sink does. Bakes in the sink's elevation (recommendation-sink: any
  * resetsLearning === "yes" action is externally-effecting even when its static
