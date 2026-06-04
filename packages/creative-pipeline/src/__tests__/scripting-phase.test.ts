@@ -73,6 +73,31 @@ describe("executeScriptingPhase", () => {
     apiKey: "test-key",
   };
 
+  it("grounds product_in_hand specs on the first product image only (slice-3 spec 3.2)", async () => {
+    const withImages = {
+      ...baseInput,
+      brief: {
+        ...baseInput.brief,
+        ugcFormat: "product_in_hand",
+        productImages: ["https://cdn.example.com/product.jpg", "https://cdn.example.com/alt.jpg"],
+      },
+    };
+    const result = await executeScriptingPhase(withImages);
+    expect(result.specs[0]!.referenceImageUrl).toBe("https://cdn.example.com/product.jpg");
+  });
+
+  it("never grounds talking_head specs on a product image (first-frame hijack)", async () => {
+    const withImages = {
+      ...baseInput,
+      brief: {
+        ...baseInput.brief,
+        productImages: ["https://cdn.example.com/product.jpg"],
+      },
+    };
+    const result = await executeScriptingPhase(withImages);
+    expect(result.specs[0]!.referenceImageUrl).toBeUndefined();
+  });
+
   it("produces one CreativeSpec per casting assignment", async () => {
     const result = await executeScriptingPhase(baseInput);
     expect(result.specs).toHaveLength(1);
