@@ -41,7 +41,10 @@
     radial-gradient(120% 70% at 16% -6%, hsl(var(--agent-alex-tint)) 0%, transparent 45%),
     radial-gradient(120% 70% at 50% -6%, hsl(var(--agent-riley-tint)) 0%, transparent 45%),
     radial-gradient(120% 70% at 84% -6%, hsl(var(--agent-mira-tint)) 0%, transparent 45%),
-    linear-gradient(180deg, hsl(var(--surface)), hsl(var(--canvas)));
+    /* Cream up top (under the tints), full white from 55% down so the whole
+       label zone sits on the light end: the deep inks need it to hold AA
+       (live pixel-sampled; coral-deep has the least headroom). */
+      linear-gradient(180deg, hsl(var(--canvas)), hsl(var(--surface)) 55%);
   background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
   background-size:
     200px 200px,
