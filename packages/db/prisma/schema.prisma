@@ -1343,6 +1343,9 @@ model CreativeJob {
   // null = undecided (still in the feed); "kept" = on the shelf; "passed" = dismissed.
   reviewDecision  String?
   reviewDecidedAt DateTime?
+  // Slice-2 taste-sweep idempotency watermark: the OBSERVED reviewDecidedAt
+  // last captured (never wall-clock), so re-decisions stay strictly newer.
+  tasteCapturedAt DateTime?
 
   // Meta publish (P2 parked draft package). Nullable — set by creative.job.publish.
   // durableAssetUrl is the PR A contract (durable assembled-creative URL); publish

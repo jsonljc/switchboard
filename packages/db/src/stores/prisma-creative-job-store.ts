@@ -38,6 +38,18 @@ interface CreativeJobFilters {
   offset?: number;
 }
 
+/** Narrow row the taste sweep consumes (slice 2): identity + descriptor inputs + watermark. */
+export interface TasteCandidate {
+  id: string;
+  organizationId: string;
+  deploymentId: string;
+  mode: string;
+  stageOutputs: unknown;
+  reviewDecision: string | null;
+  reviewDecidedAt: Date | null;
+  tasteCapturedAt: Date | null;
+}
+
 export class PrismaCreativeJobStore {
   constructor(private prisma: PrismaDbClient) {}
 
@@ -215,6 +227,55 @@ export class PrismaCreativeJobStore {
       where: { organizationId, metaCampaignId: { not: null } },
       orderBy: { createdAt: "asc" },
     }) as unknown as CreativeJob[];
+  }
+
+  /**
+   * Slice-2 taste-sweep watermark: stores the OBSERVED reviewDecidedAt (never
+   * wall-clock), so a re-decision landing mid-sweep stays strictly newer and
+   * is re-observed next run. Org-scoped updateMany (doctrine #12); count===0
+   * throws StaleVersionError.
+   */
+  async setTasteCapturedAt(
+    organizationId: string,
+    id: string,
+    observedDecidedAt: Date,
+  ): Promise<void> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: { tasteCapturedAt: observedDecidedAt },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+  }
+
+  /**
+   * Decided jobs whose gesture is not yet captured: tasteCapturedAt null OR
+   * reviewDecidedAt strictly newer. The column-to-column comparison is not
+   * expressible in a Prisma where, so the query fetches decided rows (narrow
+   * select, FETCH-capped, oldest decisions first) and filters in JS; the
+   * decided set is small (spec 3.6) and the cap is the caller's. Cross-org by
+   * design (system cron read); every WRITE stays org-scoped per row.
+   */
+  async listTasteCandidates(limit: number): Promise<TasteCandidate[]> {
+    const rows = await this.prisma.creativeJob.findMany({
+      where: { reviewDecision: { not: null } },
+      select: {
+        id: true,
+        organizationId: true,
+        deploymentId: true,
+        mode: true,
+        stageOutputs: true,
+        reviewDecision: true,
+        reviewDecidedAt: true,
+        tasteCapturedAt: true,
+      },
+      orderBy: { reviewDecidedAt: "asc" },
+      take: limit,
+    });
+    return (rows as TasteCandidate[]).filter(
+      (r) =>
+        r.reviewDecidedAt != null &&
+        (r.tasteCapturedAt == null || r.reviewDecidedAt.getTime() > r.tasteCapturedAt.getTime()),
+    );
   }
 
   // ── UGC methods ──

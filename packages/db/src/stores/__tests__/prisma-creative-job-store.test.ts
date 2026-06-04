@@ -628,4 +628,76 @@ describe("PrismaCreativeJobStore", () => {
       });
     });
   });
+
+  describe("setTasteCapturedAt", () => {
+    it("writes the OBSERVED decidedAt org-scoped, resolves void", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      const observed = new Date("2026-06-03T10:00:00Z");
+
+      await expect(store.setTasteCapturedAt("org_1", "cj_1", observed)).resolves.toBeUndefined();
+
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+        data: { tasteCapturedAt: observed },
+      });
+    });
+
+    it("throws StaleVersionError when count=0 (cross-org / missing)", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+      await expect(store.setTasteCapturedAt("org_x", "cj_1", new Date())).rejects.toThrow(
+        StaleVersionError,
+      );
+    });
+  });
+
+  describe("listTasteCandidates", () => {
+    function decided(over: Record<string, unknown>) {
+      return {
+        id: "a",
+        organizationId: "o",
+        deploymentId: "d",
+        mode: "polished",
+        stageOutputs: {},
+        reviewDecision: "kept",
+        reviewDecidedAt: new Date("2026-06-03T10:00:00Z"),
+        tasteCapturedAt: null,
+        ...over,
+      };
+    }
+
+    it("fetches decided rows capped + narrow, filters the column-vs-column watermark in JS", async () => {
+      prisma.creativeJob.findMany.mockResolvedValue([
+        decided({ id: "uncaptured" }),
+        decided({ id: "redecided", tasteCapturedAt: new Date("2026-06-01T00:00:00Z") }),
+        // Boundary: equality means already captured (strict >) — SKIP.
+        decided({ id: "boundary", tasteCapturedAt: new Date("2026-06-03T10:00:00Z") }),
+        decided({ id: "stale", tasteCapturedAt: new Date("2026-06-04T00:00:00Z") }),
+      ]);
+
+      const out = await store.listTasteCandidates(500);
+
+      expect(prisma.creativeJob.findMany).toHaveBeenCalledWith({
+        where: { reviewDecision: { not: null } },
+        select: {
+          id: true,
+          organizationId: true,
+          deploymentId: true,
+          mode: true,
+          stageOutputs: true,
+          reviewDecision: true,
+          reviewDecidedAt: true,
+          tasteCapturedAt: true,
+        },
+        orderBy: { reviewDecidedAt: "asc" },
+        take: 500,
+      });
+      expect(out.map((j) => j.id)).toEqual(["uncaptured", "redecided"]);
+    });
+
+    it("drops rows with a null reviewDecidedAt defensively", async () => {
+      prisma.creativeJob.findMany.mockResolvedValue([decided({ reviewDecidedAt: null })]);
+      const out = await store.listTasteCandidates(500);
+      expect(out).toEqual([]);
+    });
+  });
 });
