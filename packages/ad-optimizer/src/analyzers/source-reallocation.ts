@@ -18,7 +18,7 @@ import { withSpendAttributionCoverage, type RevenueState } from "../revenue-stat
  * `"account"` sentinel the audit-runner coverage insight uses rather than a real
  * Meta campaign id.
  */
-const ACCOUNT_CAMPAIGN_ID = "account";
+export const ACCOUNT_CAMPAIGN_ID = "account";
 
 // Meaningful-difference + winner-quality thresholds. Relocated verbatim from the
 // former (never-reached) per-campaign shift branch in recommendation-engine.ts;
