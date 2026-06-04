@@ -3,7 +3,7 @@
 import type { AgentKey } from "@switchboard/schemas";
 import { PrintedPortraitAvatar } from "@/components/agent-avatar/printed-portrait-avatar";
 import type { TeamBandAgent } from "./types";
-import styles from "./home.module.css";
+import styles from "./team-band.module.css";
 
 interface TeamBandProps {
   agents: TeamBandAgent[];
@@ -32,11 +32,26 @@ export function teamStatusLabel(a: TeamBandAgent): string {
 }
 
 /**
- * TeamBand - the "your team today" hero band. The crew at hero scale (96px) on
- * their identity grounds, with name and honest live status. One breathing
- * focal avatar (the first genuinely-working agent); reduced motion strips it.
- * Each tile opens the agent panel. Agent hues are identity-only (portrait
- * ground + status accent), never on an action surface.
+ * Honest role lines (job descriptions, not status claims), from the locked
+ * aesthetic-direction mockup. Presentation copy: the registry's `role` field
+ * is a machine slug, not display copy.
+ */
+const ROLE_FOR_AGENT: Record<AgentKey, string> = {
+  alex: "Front desk",
+  riley: "Ad analyst",
+  mira: "The maker",
+};
+
+/**
+ * TeamBand - the "meet your team" poster, the emotional peak of the locked
+ * direction. The crew at fluid hero scale (about 81px at a 320px viewport up to
+ * 112px capped) as printed portraits on one tri-radial identity-tint ground
+ * under the lighter poster grain, with serif identity names, role lines, and
+ * honest live status. One breathing focal avatar (the first genuinely-working
+ * agent) which also steps forward (the featured lift); reduced motion strips
+ * both, plus the grain. Each cell opens the agent panel. Agent hues are
+ * identity-only (grounds, name and role inks, status accents), never on an
+ * action surface; the focus ring stays amber.
  */
 export function TeamBand({ agents, onOpenAgent }: TeamBandProps) {
   const focalKey = agents.find(
@@ -44,37 +59,45 @@ export function TeamBand({ agents, onOpenAgent }: TeamBandProps) {
   )?.key;
 
   return (
-    <section className={styles.teamBand} aria-label="Your team">
-      <h2 className={styles.teamBandHeading}>Your team</h2>
-      <div className={styles.teamBandGrid} role="list">
-        {agents.map((agent) => {
-          const { key, name, setUp, halted } = agent;
-          const statusLabel = teamStatusLabel(agent);
-          return (
-            <div key={key} role="listitem">
-              <button
-                type="button"
-                className={styles.teamMate}
-                data-agent={key}
-                data-disabled={String(!setUp)}
-                data-testid={`team-mate-${key}`}
-                aria-label={`Open ${name}, ${statusLabel}`}
-                onClick={() => onOpenAgent?.(key)}
-              >
-                <PrintedPortraitAvatar
-                  agentKey={key}
-                  size={88}
-                  status={setUp ? agent.status : "idle"}
-                  halted={halted}
-                  allowMotion={key === focalKey}
-                  showPip
-                />
-                <span className={styles.teamMateName}>{name}</span>
-                <span className={styles.teamMateStatus}>{statusLabel}</span>
-              </button>
-            </div>
-          );
-        })}
+    <section className={styles.band} aria-label="Your team">
+      <h2 className={styles.heading}>Your team</h2>
+      <div className={styles.poster} data-testid="team-poster">
+        <div className={styles.grid} role="list">
+          {agents.map((agent) => {
+            const { key, name, setUp, halted } = agent;
+            const statusLabel = teamStatusLabel(agent);
+            const featured = key === focalKey;
+            return (
+              <div key={key} role="listitem">
+                <button
+                  type="button"
+                  className={styles.mate}
+                  data-agent={key}
+                  data-disabled={String(!setUp)}
+                  data-featured={String(featured)}
+                  data-testid={`team-mate-${key}`}
+                  aria-label={`Open ${name}, ${statusLabel}`}
+                  onClick={() => onOpenAgent?.(key)}
+                >
+                  <span className={styles.portraitBox}>
+                    <PrintedPortraitAvatar
+                      agentKey={key}
+                      size="fill"
+                      hero
+                      status={setUp ? agent.status : "idle"}
+                      halted={halted}
+                      allowMotion={featured}
+                      showPip
+                    />
+                  </span>
+                  <span className={styles.mateName}>{name}</span>
+                  <span className={styles.mateRole}>{ROLE_FOR_AGENT[key]}</span>
+                  <span className={styles.mateStatus}>{statusLabel}</span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
