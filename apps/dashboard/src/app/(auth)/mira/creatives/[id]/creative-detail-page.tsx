@@ -63,6 +63,18 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
               : "Still drafting."}
       </div>
 
+      {job.qa && (
+        // Technical frame QA (slice-3): objective integrity only. Taste stays
+        // the operator's call; this line never judges creative quality.
+        <div style={{ fontSize: 12, color: T.ink3 }}>
+          {job.qa.status === "evaluated" && job.qa.decision === "pass"
+            ? "Frame QA: passed (evaluated)"
+            : job.qa.status === "evaluated" && job.qa.decision === "fail"
+              ? "Frame QA: rejected"
+              : "Frame QA: needs your eyes"}
+        </div>
+      )}
+
       {job.performance && (
         <div
           style={{

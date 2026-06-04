@@ -42,6 +42,38 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     mockApprove.data = undefined;
   });
 
+  it("renders the frame-QA line per verdict (slice-3), labeled as technical QA", () => {
+    const cases: Array<[MiraCreativeJobSummary["qa"], RegExp]> = [
+      [{ status: "evaluated", decision: "pass" }, /Frame QA: passed \(evaluated\)/i],
+      [{ status: "evaluated", decision: "fail" }, /Frame QA: rejected/i],
+      [{ status: "requires_human_review", decision: "review" }, /Frame QA: needs your eyes/i],
+    ];
+    for (const [qa, expected] of cases) {
+      mockCreative.mockReturnValue({
+        data: summary({
+          source: { engine: "legacy_creative_job", mode: "ugc" },
+          draft: { videoUrl: "https://x/u.mp4" },
+          qa,
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      const { unmount } = render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.getByText(expected)).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it("renders no frame-QA line when qa is absent", () => {
+    mockCreative.mockReturnValue({
+      data: summary({ draft: { videoUrl: "https://x/p.mp4" } }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.queryByText(/Frame QA/i)).toBeNull();
+  });
+
   it("renders a UGC draft clip (no 'No draft clip yet')", () => {
     mockCreative.mockReturnValue({
       data: summary({

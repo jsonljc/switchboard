@@ -36,6 +36,16 @@ export interface MiraCreativePerformance {
   metaConversions: number;
 }
 
+/**
+ * Slice-3 frame-QA verdict for the draft-chosen UGC asset. Technical QA only
+ * (objective integrity); taste remains the operator's Keep/Pass. Absent for
+ * polished jobs and when no parseable verdict exists.
+ */
+export interface MiraCreativeQa {
+  status: "not_evaluated" | "requires_human_review" | "evaluated";
+  decision: "pass" | "review" | "fail";
+}
+
 export interface MiraCreativeJobSummary {
   id: string;
   title: string;
@@ -50,6 +60,8 @@ export interface MiraCreativeJobSummary {
   reviewDecision?: "kept" | "passed" | null;
   /** Slice-2 measured performance; absent until an attribution row parses. */
   performance?: MiraCreativePerformance;
+  /** Slice-3 frame-QA verdict (UGC only); absent when nothing parseable. */
+  qa?: MiraCreativeQa;
 }
 
 export interface MiraCreativeCounts {
