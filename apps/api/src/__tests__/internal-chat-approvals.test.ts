@@ -167,6 +167,18 @@ describe("auth and shape", () => {
     expect((await inject(app, validBody(), { authorization: SECRET })).statusCode).toBe(401);
   });
 
+  it("401 (not 500) for a same-code-unit-length header with multi-byte chars", async () => {
+    // Review finding: a UTF-16 length guard with a byte-wise timingSafeEqual
+    // throws RangeError when code-unit counts match but byte counts differ.
+    // "...secrét" has the same string length as "...secret" but one more byte.
+    vi.stubEnv("INTERNAL_API_SECRET", SECRET);
+    const { app } = await buildApp({ bindingStore: bindingStoreFor(OPERATOR) });
+    const sameLengthMultiByte = `Bearer ${SECRET.slice(0, -1)}é`;
+    expect(sameLengthMultiByte.length).toBe(`Bearer ${SECRET}`.length);
+    const res = await inject(app, validBody(), { authorization: sameLengthMultiByte });
+    expect(res.statusCode).toBe(401);
+  });
+
   it("400 on missing fields; engine untouched", async () => {
     vi.stubEnv("INTERNAL_API_SECRET", SECRET);
     const { app, respondToApprovalSpy } = await buildApp({

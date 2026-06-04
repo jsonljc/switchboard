@@ -40,9 +40,15 @@ function validateInternalSecret(request: FastifyRequest): SecretCheck {
   const secret = process.env["INTERNAL_API_SECRET"];
   if (!secret) return "unconfigured";
   const header = request.headers.authorization;
-  const expected = `Bearer ${secret}`;
-  if (!header || header.length !== expected.length) return "unauthorized";
-  if (!timingSafeEqual(Buffer.from(header), Buffer.from(expected))) return "unauthorized";
+  if (!header) return "unauthorized";
+  // Compare BYTE lengths (not UTF-16 code units): a multi-byte header with a
+  // matching code-unit count would otherwise make timingSafeEqual throw a
+  // RangeError and surface as a 500 instead of a 401 (review finding; the
+  // guard stays length-first so the timing-safe compare sees equal sizes).
+  const headerBuf = Buffer.from(header);
+  const expectedBuf = Buffer.from(`Bearer ${secret}`);
+  if (headerBuf.length !== expectedBuf.length) return "unauthorized";
+  if (!timingSafeEqual(headerBuf, expectedBuf)) return "unauthorized";
   return "ok";
 }
 
