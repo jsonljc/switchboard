@@ -11,20 +11,22 @@
 // This is the single point where `respondedBy` enters the lifecycle. Both surfaces MUST
 // call through here; no direct calls to `platformLifecycle.respondToApproval` or
 // `lifecycleService.approveLifecycle` from route/gateway code.
+//
+// The lifecycle fork lives in respond-via-lifecycle.ts and ends in the shared
+// dispatch engine (lifecycle-dispatch.ts): an approve either executes the
+// frozen payload or transitions the lifecycle to "recovery_required". No
+// approve leg ends in bare approveLifecycle.
 
-import type { ApprovalRequest } from "@switchboard/schemas";
+import type { ApprovalRequest, ExecuteResult } from "@switchboard/schemas";
 import type { ApprovalState } from "../approval/state-machine.js";
 import type { ApprovalLifecycleService } from "../approval/lifecycle-service.js";
-import type { LifecycleRecord } from "../approval/lifecycle-types.js";
-import type { WorkUnit } from "../platform/work-unit.js";
-import type { WorkTrace } from "../platform/work-trace.js";
 import type { WorkTraceStore } from "../platform/work-trace-recorder.js";
-import type { DeploymentContext } from "../platform/deployment-context.js";
 import type { ApprovalStore, EnvelopeStore } from "../storage/interfaces.js";
-import { transitionApproval } from "../approval/state-machine.js";
-import { computeBindingHash, hashObject } from "../approval/binding.js";
+import type { AuditLedger } from "../audit/ledger.js";
+import type { ExecuteApprovedLike } from "./lifecycle-dispatch.js";
+import { respondViaLifecycle, getWorkTrace } from "./respond-via-lifecycle.js";
 
-export interface PlatformLifecycleLike {
+export interface PlatformLifecycleLike extends ExecuteApprovedLike {
   respondToApproval(params: {
     approvalId: string;
     action: "approve" | "reject" | "patch";
@@ -34,7 +36,7 @@ export interface PlatformLifecycleLike {
   }): Promise<{
     envelope: unknown;
     approvalState: unknown;
-    executionResult: unknown;
+    executionResult: ExecuteResult | null;
   }>;
 }
 
@@ -63,10 +65,12 @@ export interface RespondToApprovalDeps {
   workTraceStore: WorkTraceStore | null;
   /** Lifecycle-backed approvals route through this. Null when no lifecycle exists. */
   lifecycleService: ApprovalLifecycleService | null;
-  /** Legacy fallback for approvals without a lifecycle record. */
+  /** Legacy fallback for approvals without a lifecycle record; also the dispatch engine. */
   platformLifecycle: PlatformLifecycleLike;
   /** Optional session-resume hook. Best-effort: failures surface as resumeWarning. */
   sessionManager: SessionManagerLike | null;
+  /** Optional audit ledger: the lifecycle fork records action.approved/patched. */
+  auditLedger?: AuditLedger;
   logger: RespondToApprovalLogger;
   /**
    * When false/undefined (the default, and the production default — wired from
@@ -95,7 +99,7 @@ export interface ApprovalRecordForResponse {
 export interface RespondToApprovalResult {
   envelope: unknown;
   approvalState: unknown;
-  executionResult: unknown;
+  executionResult: ExecuteResult | null;
   resumeWarning?: string;
 }
 
@@ -117,7 +121,7 @@ export async function respondToApproval(
   let response: {
     envelope: unknown;
     approvalState: unknown;
-    executionResult: unknown;
+    executionResult: ExecuteResult | null;
   };
 
   if (lifecycle && deps.lifecycleService) {
@@ -127,14 +131,18 @@ export async function respondToApproval(
     await assertNotSelfApproval(deps, params, approval);
 
     response = await respondViaLifecycle({
-      lifecycleService: deps.lifecycleService,
+      deps: {
+        lifecycleService: deps.lifecycleService,
+        approvalStore: deps.approvalStore,
+        envelopeStore: deps.envelopeStore,
+        workTraceStore: deps.workTraceStore,
+        platformLifecycle: deps.platformLifecycle,
+        auditLedger: deps.auditLedger,
+        logger: deps.logger,
+      },
       lifecycle,
       approval,
       params,
-      workTraceStore: deps.workTraceStore,
-      approvalStore: deps.approvalStore,
-      envelopeStore: deps.envelopeStore,
-      logger: deps.logger,
     });
   } else {
     const legacyResponse = await deps.platformLifecycle.respondToApproval({
@@ -182,139 +190,6 @@ export async function respondToApproval(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Lifecycle-backed path (extracted from apps/api/src/routes/approvals.ts)
-// ---------------------------------------------------------------------------
-
-async function respondViaLifecycle(args: {
-  lifecycleService: ApprovalLifecycleService;
-  lifecycle: LifecycleRecord;
-  approval: ApprovalRecordForResponse;
-  params: RespondToApprovalParams;
-  workTraceStore: WorkTraceStore | null;
-  approvalStore: ApprovalStore;
-  envelopeStore: EnvelopeStore;
-  logger: RespondToApprovalLogger;
-}): Promise<{ envelope: unknown; approvalState: unknown; executionResult: unknown }> {
-  const {
-    lifecycleService,
-    lifecycle,
-    approval,
-    params,
-    workTraceStore,
-    approvalStore,
-    envelopeStore,
-    logger,
-  } = args;
-
-  const newState = transitionApproval(
-    approval.state,
-    params.action,
-    params.respondedBy,
-    params.patchValue,
-  );
-  await approvalStore.updateState(
-    approval.request.id,
-    newState,
-    approval.state.version,
-    approval.organizationId ?? null,
-  );
-
-  if (params.action === "reject") {
-    if (!workTraceStore) {
-      throw new Error("WorkTraceStore not available for lifecycle rejection");
-    }
-    await lifecycleService.rejectLifecycle({
-      lifecycleId: lifecycle.id,
-      respondedBy: params.respondedBy,
-      traceStore: workTraceStore,
-    });
-
-    const envelope = await envelopeStore.getById(approval.envelopeId);
-    if (envelope) {
-      await envelopeStore.update(
-        envelope.id,
-        { status: "denied" },
-        approval.organizationId ?? null,
-      );
-    }
-
-    return {
-      envelope: envelope ?? null,
-      approvalState: newState,
-      executionResult: null,
-    };
-  }
-
-  if (params.action === "patch") {
-    if (!params.patchValue) {
-      throw new Error("patchValue is required for patch action");
-    }
-
-    const trace = await getWorkTrace(workTraceStore, approval.envelopeId);
-    const patchedParams = { ...(trace?.parameters ?? {}), ...params.patchValue };
-
-    const newBindingHash = computeBindingHash({
-      envelopeId: approval.envelopeId,
-      envelopeVersion: (approval.state.version ?? 0) + 1,
-      actionId: approval.request.actionId,
-      parameters: patchedParams,
-      decisionTraceHash: hashObject({ governance: "patched" }),
-      contextSnapshotHash: hashObject({ actor: params.respondedBy }),
-    });
-
-    const revision = await lifecycleService.createRevision({
-      lifecycleId: lifecycle.id,
-      parametersSnapshot: patchedParams,
-      approvalScopeSnapshot: {},
-      bindingHash: newBindingHash,
-      createdBy: params.respondedBy,
-      sourceBindingHash: params.bindingHash,
-      rationale: "Patched via approval respond",
-    });
-
-    return {
-      envelope: null,
-      approvalState: { ...newState, bindingHash: revision.bindingHash },
-      executionResult: null,
-    };
-  }
-
-  // --- approve ---
-  const trace = await getWorkTrace(workTraceStore, approval.envelopeId);
-  const workUnit = reconstructWorkUnit(trace, approval);
-
-  const { lifecycle: updatedLifecycle, executableWorkUnit } =
-    await lifecycleService.approveLifecycle({
-      lifecycleId: lifecycle.id,
-      respondedBy: params.respondedBy,
-      clientBindingHash: params.bindingHash,
-      workUnit,
-      actionEnvelopeId: approval.envelopeId,
-      constraints: (trace?.governanceConstraints as unknown as Record<string, unknown>) ?? {},
-    });
-
-  const envelope = await envelopeStore.getById(approval.envelopeId);
-  if (envelope) {
-    await envelopeStore.update(
-      envelope.id,
-      { status: "approved" },
-      approval.organizationId ?? null,
-    );
-  }
-
-  logger.info(
-    { lifecycleId: updatedLifecycle.id, executableWorkUnitId: executableWorkUnit.id },
-    "Approval responded via lifecycle service",
-  );
-
-  return {
-    envelope: envelope ?? null,
-    approvalState: newState,
-    executionResult: { executableWorkUnitId: executableWorkUnit.id },
-  };
-}
-
 /**
  * Four-eyes / human-override guard (DOCTRINE §8). Prevent an action's own
  * originator from approving or patching it on the lifecycle path. The legacy
@@ -338,57 +213,4 @@ async function assertNotSelfApproval(
   if (originator && originator === params.respondedBy) {
     throw new Error("Self-approval is not permitted");
   }
-}
-
-async function getWorkTrace(
-  workTraceStore: WorkTraceStore | null,
-  workUnitId: string,
-): Promise<WorkTrace | null> {
-  if (!workTraceStore) return null;
-  const result = await workTraceStore.getByWorkUnitId(workUnitId);
-  return result?.trace ?? null;
-}
-
-function reconstructWorkUnit(
-  trace: WorkTrace | null,
-  approval: ApprovalRecordForResponse,
-): WorkUnit {
-  const fallbackDeployment: DeploymentContext = {
-    deploymentId: "",
-    skillSlug: "",
-    trustLevel: "supervised",
-    trustScore: 0,
-  };
-
-  if (!trace) {
-    return {
-      id: approval.envelopeId,
-      requestedAt: approval.request.createdAt.toISOString(),
-      organizationId: approval.organizationId ?? "",
-      actor: { id: "system", type: "system" },
-      intent: approval.request.actionId,
-      parameters: {},
-      deployment: fallbackDeployment,
-      resolvedMode: "cartridge",
-      traceId: approval.envelopeId,
-      trigger: "api",
-      priority: "normal",
-    };
-  }
-
-  return {
-    id: trace.workUnitId,
-    requestedAt: trace.requestedAt,
-    organizationId: trace.organizationId,
-    actor: trace.actor,
-    intent: trace.intent,
-    parameters: trace.parameters ?? {},
-    deployment: trace.deploymentContext ?? fallbackDeployment,
-    resolvedMode: trace.mode,
-    idempotencyKey: trace.idempotencyKey,
-    parentWorkUnitId: trace.parentWorkUnitId,
-    traceId: trace.traceId,
-    trigger: trace.trigger,
-    priority: "normal",
-  };
 }
