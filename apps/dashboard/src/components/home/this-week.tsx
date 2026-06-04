@@ -56,7 +56,7 @@ export function ThisWeek({ model }: ThisWeekProps) {
           <span className={styles.weeknoteTime}>Mon → today</span>
         </header>
         <p className={styles.weeknoteBody}>
-          <em>Your week&rsquo;s still being tallied. Check back soon.</em>
+          Your week&rsquo;s still being tallied. Check back soon.
         </p>
         <span className={styles.weeknoteSignoff}>
           <span className={styles.weeknoteSignoffMark} style={avatarStyle} aria-hidden="true">
