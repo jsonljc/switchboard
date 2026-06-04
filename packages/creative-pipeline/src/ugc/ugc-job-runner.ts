@@ -2,6 +2,7 @@
 import { inngestClient } from "../inngest-client.js";
 import { shouldRequireApproval, UGC_PHASE_ORDER } from "./approval-config.js";
 import type { UgcPhase } from "./approval-config.js";
+import type { AssetStorageClient } from "../stages/video-producer.js";
 import type {
   CreativeJob,
   CreatorIdentity,
