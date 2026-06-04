@@ -15,6 +15,13 @@ describe("resolveAgentKey", () => {
     expect(resolveAgentKey("creative-director")).toBe("mira");
   });
 
+  it("maps skill slugs from parked-approval deployment contexts", () => {
+    // Parked publish WorkUnits carry skillSlug "creative" (Mira's deployment);
+    // parked cartridge ads actions carry "digital-ads" (Riley's surface).
+    expect(resolveAgentKey("creative")).toBe("mira");
+    expect(resolveAgentKey("digital-ads")).toBe("riley");
+  });
+
   it("is case-insensitive", () => {
     expect(resolveAgentKey("ALEX")).toBe("alex");
     expect(resolveAgentKey("Riley")).toBe("riley");

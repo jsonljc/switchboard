@@ -6,8 +6,10 @@ const SOURCE_AGENT_TO_KEY: Record<string, AgentKey> = {
   "speed-to-lead": "alex",
   riley: "riley",
   "ad-optimizer": "riley",
+  "digital-ads": "riley",
   mira: "mira",
   "creative-director": "mira",
+  creative: "mira",
 };
 
 /**
