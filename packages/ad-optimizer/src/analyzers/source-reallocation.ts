@@ -10,6 +10,7 @@ import { compareSources, compareCampaigns } from "./source-comparator.js";
 import { computeSpendBySource, SPEND_ATTRIBUTION_COVERAGE_FLOOR } from "./spend-attributor.js";
 import { resetsLearningFor, learningPhaseImpactText } from "../action-reset-classification.js";
 import { meetsEvidenceFloor } from "../evidence-floor.js";
+import { withSpendAttributionCoverage, type RevenueState } from "../revenue-state.js";
 
 /**
  * Account-level identity for a cross-source reallocation rec. This is ONE decision
@@ -81,14 +82,17 @@ export interface SourceReallocationInput {
   /** Account-wide window evidence for the scale-family floor. */
   accountEvidence: { clicks: number; conversions: number; days: number };
   /**
-   * Per-source fraction of spend that is REAL ad-set attribution (vs the synthetic lead-share
-   * fallback), keyed by source. The gate requires BOTH the chosen `from` and `to` sources to
-   * clear `SPEND_ATTRIBUTION_COVERAGE_FLOOR`; a missing/low source means its trueROAS rests on
-   * synthetic spend, so the comparison is too approximate to move budget. From `computeSpendBySource`.
+   * Account-level pre-flight state for this cycle (Riley v3 slice 1). This decision reads two
+   * fields from it:
+   *  - `measurementTrusted` (producer 1): false ⇒ a suspected account-wide conversion-denominator
+   *    step-change, so the budget shift is held as a measurement_untrusted watch.
+   *  - `spendAttributionCoverageBySource` (producer 6, completed late by the economics
+   *    orchestrator): per-source fraction of spend that is REAL ad-set attribution (vs the
+   *    synthetic lead-share fallback). The gate requires BOTH the chosen `from` and `to`
+   *    sources to clear `SPEND_ATTRIBUTION_COVERAGE_FLOOR`; a missing/low source means its
+   *    trueROAS rests on synthetic spend, so the comparison is too approximate to move budget.
    */
-  spendAttributionCoverageBySource: Record<string, number>;
-  /** Phase-A Gate 1: false ⇒ a suspected account-wide conversion-denominator step-change. */
-  measurementTrusted: boolean;
+  revenueState: RevenueState;
   nextCycleDate: string;
 }
 
@@ -147,8 +151,9 @@ export function decideSourceReallocation(
   // the lead-share fallback (synthetic). Gating per CANDIDATE (not account-wide) prevents an
   // overall-coverage pass from blessing a comparison whose `from` or `to` denominator is all
   // fallback. Below the floor → no signal (the economics still reach the report's display).
-  const fromCoverage = input.spendAttributionCoverageBySource[from.source] ?? 0;
-  const toCoverage = input.spendAttributionCoverageBySource[to.source] ?? 0;
+  const coverageBySource = input.revenueState.spendAttributionCoverageBySource ?? {};
+  const fromCoverage = coverageBySource[from.source] ?? 0;
+  const toCoverage = coverageBySource[to.source] ?? 0;
   if (
     fromCoverage < SPEND_ATTRIBUTION_COVERAGE_FLOOR ||
     toCoverage < SPEND_ATTRIBUTION_COVERAGE_FLOOR
@@ -156,7 +161,7 @@ export function decideSourceReallocation(
     return null;
   }
 
-  if (input.measurementTrusted === false) {
+  if (input.revenueState.measurementTrusted === false) {
     return abstain(
       "measurement_untrusted",
       `Holding a budget shift toward ${to.source}: a suspected account-wide conversion-reporting shift makes the cost signal untrustworthy this cycle.`,
@@ -228,7 +233,9 @@ export interface AuditEconomicsSectionsInput {
   byCampaign: Record<string, CampaignFunnel> | undefined;
   currentInsights: CampaignInsight[];
   adSetData: AdSetLearningInput[] | null;
-  measurementTrusted: boolean;
+  /** Account-level pre-flight state (without the late spend-attribution coverage, which this
+   *  orchestrator computes and completes before calling decideSourceReallocation). */
+  revenueState: RevenueState;
   nextCycleDate: string;
   orgId: string;
   dateRange: { since: string; until: string };
@@ -269,7 +276,6 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
     reallocation = decideSourceReallocation({
       sourceComparison,
       bySource,
-      spendAttributionCoverageBySource: coverageBySource,
       accountEvidence: {
         clicks: input.currentInsights.reduce((s, i) => s + i.inlineLinkClicks, 0),
         conversions: input.currentInsights.reduce((s, i) => s + i.conversions, 0),
@@ -277,7 +283,9 @@ export async function computeAuditEconomicsSections(input: AuditEconomicsSection
         // (the `days` floor is 7 and a weekly audit always satisfies it).
         days: 7,
       },
-      measurementTrusted: input.measurementTrusted,
+      // Progressive assembly: complete the late per-source spend-attribution coverage field
+      // (producer 6) on the account RevenueState just before the reallocation reads it.
+      revenueState: withSpendAttributionCoverage(input.revenueState, coverageBySource),
       nextCycleDate: input.nextCycleDate,
     });
   }

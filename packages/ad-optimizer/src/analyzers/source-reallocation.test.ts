@@ -4,6 +4,7 @@ import {
   computeAuditEconomicsSections,
   MIN_SOURCE_BOOKINGS,
 } from "./source-reallocation.js";
+import { assembleRevenueState, withSpendAttributionCoverage } from "../revenue-state.js";
 import type { SourceComparisonRow } from "./source-comparator.js";
 import type { SourceFunnel } from "../crm-data-provider/real-provider.js";
 import type {
@@ -33,12 +34,20 @@ const row = (
   trueRoas,
 });
 const goodEvidence = { clicks: 200, conversions: 20, days: 7 };
+// RevenueState carries the account-level measurementTrusted + the per-source spend-attribution
+// coverage (completed late). Default: trusted + both candidate sources fully ad-set-attributed
+// (coverage 1.0); individual tests override via the args.
+const makeState = (
+  over: { measurementTrusted?: boolean; coverage?: Record<string, number> } = {},
+) =>
+  withSpendAttributionCoverage(
+    assembleRevenueState({ measurementTrusted: over.measurementTrusted ?? true }),
+    over.coverage ?? { ctwa: 1, instant_form: 1 },
+  );
 const base = {
   bySource: { ctwa: funnel({}), instant_form: funnel({}) } as Record<string, SourceFunnel>,
   accountEvidence: goodEvidence,
-  // Both candidate sources fully ad-set-attributed (coverage 1.0) unless a test overrides.
-  spendAttributionCoverageBySource: { ctwa: 1, instant_form: 1 } as Record<string, number>,
-  measurementTrusted: true,
+  revenueState: makeState(),
   nextCycleDate: "2026-05-14",
 };
 
@@ -88,7 +97,7 @@ describe("decideSourceReallocation", () => {
   it("returns null when both sources' spend is below the attribution-coverage floor", () => {
     const r = decideSourceReallocation({
       ...base,
-      spendAttributionCoverageBySource: { ctwa: 0.5, instant_form: 0.5 },
+      revenueState: makeState({ coverage: { ctwa: 0.5, instant_form: 0.5 } }),
       sourceComparison: { rows: [row("ctwa", 3.8, 0.2), row("instant_form", 1.5, 0.07)] },
     });
     expect(r).toBeNull();
@@ -99,7 +108,7 @@ describe("decideSourceReallocation", () => {
     // An account-wide gate would bless this; the per-source gate must abstain.
     const r = decideSourceReallocation({
       ...base,
-      spendAttributionCoverageBySource: { ctwa: 1, instant_form: 0 },
+      revenueState: makeState({ coverage: { ctwa: 1, instant_form: 0 } }),
       sourceComparison: { rows: [row("ctwa", 3.8, 0.2), row("instant_form", 1.5, 0.07)] },
     });
     expect(r).toBeNull();
@@ -119,7 +128,7 @@ describe("decideSourceReallocation", () => {
   it("abstains to measurement_untrusted when the cost signal is suspect this cycle", () => {
     const r = decideSourceReallocation({
       ...base,
-      measurementTrusted: false,
+      revenueState: makeState({ measurementTrusted: false }),
       sourceComparison: { rows: [row("ctwa", 3.8, 0.2), row("instant_form", 1.5, 0.07)] },
     });
     expect(r?.type).toBe("watch");
@@ -159,7 +168,7 @@ describe("computeAuditEconomicsSections", () => {
   const sectionBase = {
     currentInsights: [insight({})],
     adSetData: null,
-    measurementTrusted: true,
+    revenueState: assembleRevenueState({ measurementTrusted: true }),
     nextCycleDate: "2026-05-14",
     orgId: "org-1",
     dateRange: { since: "2026-05-01", until: "2026-05-07" },

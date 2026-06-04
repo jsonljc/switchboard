@@ -45,6 +45,7 @@ import {
   resolveEconomicTargetForCampaign,
 } from "./analyzers/economic-target.js";
 import { decideForCampaign, deriveLearningPhaseActive } from "./campaign-decision.js";
+import { assembleRevenueState, type RevenueState } from "./revenue-state.js";
 import {
   isCoverageSufficient,
   MIN_COVERAGE_PCT,
@@ -297,13 +298,14 @@ export class AuditRunner {
     // holds all recommendations rather than analyze on blind spots, returning an
     // abstention report with one account-level explanatory insight. Opt-in: absent
     // validator ⇒ no gate (existing callers unaffected).
+    let coverageReport: CoverageReport | undefined;
     if (this.coverageValidator) {
-      const coverage = await this.coverageValidator.validate({
+      coverageReport = await this.coverageValidator.validate({
         orgId: this.config.orgId,
         accountId: this.config.accountId,
       });
-      if (!isCoverageSufficient(coverage)) {
-        const pct = Math.round(coverage.coveragePct * 100);
+      if (!isCoverageSufficient(coverageReport)) {
+        const pct = Math.round(coverageReport.coveragePct * 100);
         return buildCoverageAbstentionReport({
           accountId: this.config.accountId,
           dateRange,
@@ -424,6 +426,23 @@ export class AuditRunner {
     // awareness is reported unavailable, never silently satisfied (spec §3.4).
     const marginBasis: MarginBasis = "unavailable";
 
+    // Riley v3 slice 1: consolidate the six account-level pre-flight producers into one typed
+    // RevenueState. Assembled HERE, on the post-abort happy path: Gate-0 coverage was validated
+    // sufficient (or absent) and signal-health is non-red (or absent), and measurementTrusted /
+    // economicTier / effectiveTarget / marginBasis are now resolved. The late per-source
+    // spendAttributionCoverageBySource is completed inside computeAuditEconomicsSections. Do NOT
+    // hoist this above the two early returns; that would call late producers past an abort.
+    const revenueState: RevenueState = assembleRevenueState({
+      measurementTrusted,
+      economicTier,
+      effectiveTarget,
+      marginBasis,
+      ...(coverageReport
+        ? { coverage: { coveragePct: coverageReport.coveragePct, sufficient: true } }
+        : {}),
+      ...(signalHealthReport ? { signalHealthScore: signalHealthReport.score } : {}),
+    });
+
     // PR2 Gate-4: per-campaign booking funnel (CRM real-provider only). Absent
     // for non-real providers → every campaign falls back to the account target.
     const byCampaign = (crmData as { byCampaign?: Record<string, CampaignFunnel> }).byCampaign;
@@ -501,10 +520,9 @@ export class AuditRunner {
         learningStatus,
         economicTier: campaignTarget.economicTier,
         effectiveTarget: campaignTarget.effectiveTarget,
-        marginBasis,
+        revenueState,
         targetROAS: this.config.targetROAS,
         nextCycleDate,
-        measurementTrusted,
         learningPhaseActive,
         targetSource: campaignTarget.targetSource,
       });
@@ -539,7 +557,7 @@ export class AuditRunner {
         byCampaign,
         currentInsights,
         adSetData,
-        measurementTrusted,
+        revenueState,
         nextCycleDate,
         orgId: this.config.orgId,
         dateRange,
