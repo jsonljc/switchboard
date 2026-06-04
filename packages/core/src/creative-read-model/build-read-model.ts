@@ -5,6 +5,7 @@ import {
   deriveTitle,
   deriveDraft,
 } from "./status-mapper.js";
+import { derivePerformance } from "./performance-projection.js";
 import type { MiraCreativeJobSummary, MiraCreativeReadModel } from "./types.js";
 
 export interface BuildMiraReadModelOpts {
@@ -27,6 +28,7 @@ export function buildMiraCreativeReadModel(
   const summaries: MiraCreativeJobSummary[] = jobs.map((job) => {
     const status = mapCreativeJobToMiraStatus(job);
     const draft = deriveDraft(job);
+    const performance = derivePerformance(job);
     return {
       id: job.id,
       title: deriveTitle(job),
@@ -38,6 +40,7 @@ export function buildMiraCreativeReadModel(
       createdAt: new Date(job.createdAt).toISOString(),
       updatedAt: new Date(job.updatedAt).toISOString(),
       reviewDecision: job.reviewDecision ?? null,
+      ...(performance ? { performance } : {}),
     };
   });
 
