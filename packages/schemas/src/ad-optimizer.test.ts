@@ -5,6 +5,8 @@ import {
   MarginBasisSchema,
   TargetSourceSchema,
   AuditReportSchema,
+  OwnershipClassSchema,
+  EmittableOwnershipClassSchema,
 } from "./ad-optimizer.js";
 
 const base = {
@@ -119,5 +121,87 @@ describe("AuditReportSchema campaignEconomics (PR2 Gate-4)", () => {
     });
     expect(r.campaignEconomics?.rows).toHaveLength(2);
     expect(r.campaignEconomics?.rows[1]?.trueRoas).toBeNull();
+  });
+});
+
+describe("AuditReportSchema ownership (Riley v3, spec 2.2 net-new item 1)", () => {
+  const baseReport = {
+    accountId: "act-1",
+    dateRange: { since: "2026-05-25", until: "2026-06-01" },
+    summary: {
+      totalSpend: 0,
+      totalLeads: 0,
+      totalRevenue: 0,
+      overallROAS: 0,
+      activeCampaigns: 0,
+      campaignsInLearning: 0,
+      adSetsInLearning: 0,
+      adSetsLearningLimited: 0,
+    },
+    funnel: [],
+    periodDeltas: [],
+    insights: [],
+    watches: [],
+    recommendations: [],
+  };
+
+  it("parses without ownership (back-compat: pre-ownership reports)", () => {
+    expect(AuditReportSchema.parse(baseReport).ownership).toBeUndefined();
+  });
+
+  it("parses ownership entries for every emittable class", () => {
+    const r = AuditReportSchema.parse({
+      ...baseReport,
+      ownership: [
+        { campaignId: "c1", action: "hold", index: 0, ownership: "operator_swipe" },
+        { campaignId: "c1", action: "pause", index: 1, ownership: "human_escalation" },
+        { campaignId: "c2", action: "refresh_creative", index: 2, ownership: "mira_handoff" },
+        {
+          campaignId: "account",
+          action: "shift_budget_to_source",
+          index: 3,
+          ownership: "operator_approval",
+        },
+      ],
+    });
+    expect(r.ownership).toHaveLength(4);
+    expect(r.ownership?.[2]?.ownership).toBe("mira_handoff");
+  });
+
+  it("REJECTS riley_self on today's report wire (Phase-C widens this deliberately)", () => {
+    expect(() =>
+      AuditReportSchema.parse({
+        ...baseReport,
+        ownership: [{ campaignId: "c1", action: "pause", index: 0, ownership: "riley_self" }],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects an unknown ownership class and a negative index", () => {
+    expect(() =>
+      AuditReportSchema.parse({
+        ...baseReport,
+        ownership: [{ campaignId: "c1", action: "pause", index: 0, ownership: "operator" }],
+      }),
+    ).toThrow();
+    expect(() =>
+      AuditReportSchema.parse({
+        ...baseReport,
+        ownership: [{ campaignId: "c1", action: "pause", index: -1, ownership: "operator_swipe" }],
+      }),
+    ).toThrow();
+  });
+
+  it("pins the two enums against drift: reserved = emittable + riley_self", () => {
+    expect(OwnershipClassSchema.options).toEqual([
+      ...EmittableOwnershipClassSchema.options,
+      "riley_self",
+    ]);
+    expect(EmittableOwnershipClassSchema.options).toEqual([
+      "operator_swipe",
+      "operator_approval",
+      "mira_handoff",
+      "human_escalation",
+    ]);
   });
 });

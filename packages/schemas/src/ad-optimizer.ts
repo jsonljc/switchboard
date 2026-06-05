@@ -34,6 +34,32 @@ export type AdRecommendationActionSchema = z.infer<typeof AdRecommendationAction
 export const UrgencySchema = z.enum(["immediate", "this_week", "next_cycle"]);
 export type UrgencySchema = z.infer<typeof UrgencySchema>;
 
+// Riley v3 (spec 2.2 net-new item 1): who SHOULD own the fix for a recommendation.
+// Every class is a should-own classification, not a record of consummated action
+// (operator_swipe does not mean a swipe happened; mira_handoff means "Mira-owned
+// by the live handoff gate", NOT "a draft was submitted to Mira": surface routing,
+// submitter wiring, and deployment resolution are dispatch mechanics annotated
+// elsewhere when a consumer needs them).
+//
+// EmittableOwnershipClassSchema is what today's advisory derivation can produce
+// and what the report wire accepts. OwnershipClassSchema additionally reserves
+// riley_self as the documented Phase-C target (the governed permit path); the
+// Phase-C wiring session widens the report field to it deliberately. A test pins
+// reserved = emittable + riley_self so the two cannot drift.
+export const EmittableOwnershipClassSchema = z.enum([
+  "operator_swipe",
+  "operator_approval",
+  "mira_handoff",
+  "human_escalation",
+]);
+export type EmittableOwnershipClassSchema = z.infer<typeof EmittableOwnershipClassSchema>;
+
+export const OwnershipClassSchema = z.enum([
+  ...EmittableOwnershipClassSchema.options,
+  "riley_self",
+]);
+export type OwnershipClassSchema = z.infer<typeof OwnershipClassSchema>;
+
 export const EconomicTierSchema = z.enum(["booked_cac", "cpl", "cpc"]);
 export type EconomicTierSchema = z.infer<typeof EconomicTierSchema>;
 
@@ -309,6 +335,22 @@ export const AuditReportSchema = z.object({
         })
         .optional(),
     })
+    .optional(),
+  // Riley v3 (spec 2.2 net-new item 1): per-recommendation ownership annotation,
+  // ADDITIVE like arbitration above; it never filters emission or handoff. One
+  // entry per recommendations[] element, same order (index = array position; the
+  // same disambiguation rule as arbitration: campaignId+action is not unique).
+  // campaignId+action are carried for human legibility. The EMITTABLE enum is
+  // deliberate: today's wire rejects riley_self (see OwnershipClassSchema).
+  ownership: z
+    .array(
+      z.object({
+        campaignId: z.string(),
+        action: AdRecommendationActionSchema,
+        index: z.number().int().nonnegative(),
+        ownership: EmittableOwnershipClassSchema,
+      }),
+    )
     .optional(),
 });
 export type AuditReportSchema = z.infer<typeof AuditReportSchema>;
