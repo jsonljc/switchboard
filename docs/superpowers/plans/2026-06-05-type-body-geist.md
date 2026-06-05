@@ -10,6 +10,8 @@
 
 **Standing rules:** no em-dashes anywhere; no italics; commit subjects lowercase, header under 100 chars, body for detail; every commit ends with the Co-Authored-By line; `git checkout -- apps/dashboard/next-env.d.ts` before every commit while a dev server runs; never full `pnpm build` while next dev is up.
 
+**Route register inventory (review addendum, 2026-06-05; the spec carries the full table):** `/` is ALWAYS the authed Home under DEV_BYPASS_AUTH and is labeled `home-authed` in every evidence artifact; the landing is `/welcome` in the `(public)` group (with /privacy, /terms), reachable regardless of auth, and is the landing negative. Mercury = exactly /reports, /activity, /contacts, /automations (the whole `(mercury)` group). Chrome-free authed = /onboarding, /operator. Pre-auth top-level = /login, /forgot-password, /reset-password. Never use an unlabeled `/` in a negative table.
+
 ---
 
 ### Task 0: Branch and environment
@@ -91,6 +93,20 @@ describe("token governance: type body (TY4)", () => {
       "utf8",
     );
     expect(mercuryLayout).toMatch(/data-register="mercury"/);
+  });
+
+  it("the register hook producer exists (.app-header is load-bearing architecture now)", () => {
+    // The body-face rule hangs on the .app-header class. A shell refactor that
+    // renames it would leave the rule inert while a globals-only guard stays
+    // green. Pair the consumer (the rule) with both producers: the shell and
+    // its error-boundary fallback.
+    for (const p of [
+      "src/components/layout/editorial-auth-shell.tsx",
+      "src/components/layout/editorial-shell-boundary.tsx",
+    ]) {
+      const src = readFileSync(path.resolve(process.cwd(), p), "utf8");
+      expect(src, p).toMatch(/className="app-header"/);
+    }
   });
 
   it("no governed CSS names Geist or Hanken raw (the face rides the token)", () => {
@@ -264,6 +280,11 @@ export default function MercuryLayout({ children }: { children: React.ReactNode 
 Run: `pnpm --filter @switchboard/dashboard test 2>&1 | tail -5`
 Expected: full suite green including the Task 1 guards.
 
+- [ ] **Step 2.5b: Stale-Hanken grep gate** (catches comment rot the guards do not)
+
+Run: `grep -rin "hanken" apps/dashboard/src | grep -v node_modules`
+Expected: ZERO hits (no loader, no token head, no comments, no test references to the old alias).
+
 - [ ] **Step 2.6: Build + typecheck** (no dev server running yet)
 
 ```bash
@@ -376,17 +397,24 @@ Wait for `curl -s localhost:3002 -o /dev/null -w "%{http_code}"` = 200 (or 307) 
 import { chromium } from "playwright-core";
 import fs from "fs";
 const label = process.argv[2];
-const ROUTES = ["/", "/inbox", "/results", "/mira", "/settings/identity",
-  "/reports", "/activity", "/contacts", "/automations",
-  "/login", "/onboarding"];
+// Labeled routes: "/" is ALWAYS home-authed under DEV_BYPASS_AUTH; the landing
+// negative is /welcome in the (public) group (review addendum 2026-06-05).
+const ROUTES = [
+  ["home-authed", "/"], ["inbox", "/inbox"], ["results", "/results"],
+  ["mira", "/mira"], ["settings-identity", "/settings/identity"],
+  ["mercury-reports", "/reports"], ["mercury-activity", "/activity"],
+  ["mercury-contacts", "/contacts"], ["mercury-automations", "/automations"],
+  ["preauth-login", "/login"], ["chromefree-onboarding", "/onboarding"],
+  ["public-welcome", "/welcome"],
+];
 const b = await chromium.launch({ executablePath:
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", args: ["--no-sandbox"] });
 const page = await b.newPage({ viewport: { width: 1280, height: 900 } });
 const out = {};
-for (const r of ROUTES) {
+for (const [label2, r] of ROUTES) {
   await page.goto("http://localhost:3002" + r, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2500);
-  out[r] = await page.evaluate(() => {
+  out[label2] = await page.evaluate(() => {
     const fams = {};
     for (const el of document.querySelectorAll("body *")) {
       const t = (el.childNodes && [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()));
@@ -403,12 +431,62 @@ fs.writeFileSync(`/tmp/sbshot/fontmap-${label}.json`, JSON.stringify(out, null, 
 console.log("wrote fontmap-" + label);
 ```
 
-- [ ] **Step 5.4: BEFORE captures.** In the worktree: `git checkout --detach origin/main` (dashboard-only diff, so no package rebuild; next dev hot-reloads). Then:
+- [ ] **Step 5.4: BEFORE captures.** Evidence for a root-layout font-loader change must NOT trust hot reload (review finding, 2026-06-05). Protocol: stop the dashboard dev server YOU launched (find its PID via `lsof -ti :3002`, verify with `ps -p <pid> -o command=` that it is yours from this worktree, then kill it), `rm -rf apps/dashboard/.next`, `git checkout --detach origin/main`, relaunch the dashboard via launch.mjs, wait for 200. The API on :3000 keeps running (no API-side diff). Then:
   - `node /tmp/sbshot/fontmap.mjs before`
   - Matrix shots (390x844 and 1280x900) of: Home, /inbox, approval sheet open (click a HIGH-RISK card), handoff sheet open, /results, agent panel open (Home avatar click), /mira, /settings/identity, one settings panel, inbox drawer open, live-signal popover open, one undo toast (approve then capture); save as `/tmp/sbshot/before/<surface>-<w>.png`.
   - Negative set: /reports, /activity, /contacts, /automations, /login, landing `/` logged out if reachable, one onboarding step; same two widths; `/tmp/sbshot/neg-before/`.
   - FOUT wrap baseline (Step 5.6 script with label `before`).
-- [ ] **Step 5.5: AFTER captures.** `git checkout feat/ty4-body-geist`, wait for recompile, repeat all of 5.4 with `after` labels.
+- [ ] **Step 5.5: AFTER captures.** Same restart protocol: stop the dashboard dev, `rm -rf apps/dashboard/.next`, `git checkout feat/ty4-body-geist`, relaunch, wait for 200; repeat all of 5.4 with `after` labels.
+
+- [ ] **Step 5.5b: Open-overlay census + enumerated computed-style table** (the portal proof as DATA; screenshots alone do not record computed family):
+
+```js
+// /tmp/sbshot/openstates.mjs  (run on the branch: node openstates.mjs after)
+// Opens each overlay on an app route and records computed style INSIDE it.
+// Also asserts the enumerated TY4 selector metrics. Computed letter-spacing
+// returns px: normalize by font-size and compare ratios (tolerance .0005).
+import { chromium } from "playwright-core";
+import fs from "fs";
+const label = process.argv[2];
+const b = await chromium.launch({ executablePath:
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", args: ["--no-sandbox"] });
+const page = await b.newPage({ viewport: { width: 1280, height: 900 } });
+const probe = (sel) => page.evaluate((sel) => {
+  const el = document.querySelector(sel);
+  if (!el) return null;
+  const cs = getComputedStyle(el);
+  const fs_ = parseFloat(cs.fontSize);
+  const lsPx = cs.letterSpacing === "normal" ? 0 : parseFloat(cs.letterSpacing);
+  return { sel, family: cs.fontFamily.slice(0, 60), weight: cs.fontWeight,
+           size: cs.fontSize, lsEm: +(lsPx / fs_).toFixed(4) };
+}, sel);
+const out = { overlays: {}, metrics: [] };
+// 1. inbox + approval sheet
+await page.goto("http://localhost:3002/inbox", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+for (const s of [".decision-contact-quiet", ".filter-chip"]) out.metrics.push(await probe(s));
+const card = page.locator(".decision-card, [class*='decision']").first();
+await card.click().catch(() => {});
+await page.waitForTimeout(1200);
+for (const s of [".ds-datalines li", ".ds-lead-interest", ".ds-qual-line", ".ds-action",
+  ".ds-turn-bubble", ".ds-contact-strip", ".ds-lead-contact"]) out.metrics.push(await probe(s));
+out.overlays["approval-sheet"] = await probe(".ds-datalines li, .ds-summary");
+// 2. home: quietText + btn + agent panel
+await page.goto("http://localhost:3002/", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+for (const s of [".quietText", "[class*='quietText']", "[class*='btn']"]) out.metrics.push(await probe(s));
+await page.locator("[class*='teamBand'] button, [class*='avatar']").first().click().catch(() => {});
+await page.waitForTimeout(1200);
+out.overlays["agent-panel"] = await probe("[class*='apHead'], [role='dialog'] *");
+// 3. shell overlays: drawer + popover (header buttons)
+await page.locator("header button").nth(1).click().catch(() => {});
+await page.waitForTimeout(900);
+out.overlays["drawer-or-popover"] = await probe("[role='dialog'] p, [role='dialog'] h2, [data-radix-popper-content-wrapper] *");
+fs.writeFileSync(`/tmp/sbshot/openstates-${label}.json`, JSON.stringify(out, null, 2));
+console.log("wrote openstates-" + label);
+```
+
+Selector clicking is best-effort against the live DOM: adjust locators by READING the rendered HTML if a click misses (page.content() dump), never claim a state was probed when the JSON shows null. PASS = every overlay family resolves `__Geist` on app routes; every enumerated metric row shows weight 450 (cards) or 600 (buttons) and lsEm within .0005 of -0.006 / -0.01; record the table verbatim in the README and addenda.
 
 - [ ] **Step 5.6: FOUT line-count gate** (fonts-blocked vs loaded wrap counts; the body-swap check):
 
@@ -417,12 +495,18 @@ console.log("wrote fontmap-" + label);
 import { chromium } from "playwright-core";
 import fs from "fs";
 const [label, mode] = process.argv.slice(2);
+// Probes cover the enumerated TY4 selectors (review finding 2026-06-05), not
+// just convenient ones. The sheet-open state is captured by the click step.
 const PROBES = {
   "/": [".quietText", "[class*='weeknoteBody']", "[class*='btn']"],
   "/inbox": [".decision-contact-quiet", ".decision-title", ".filter-chip"],
+  "/inbox#sheet-open": [".ds-datalines li", ".ds-lead-interest", ".ds-turn-bubble",
+    ".ds-qual-line", ".ds-contact-strip", ".ds-action"],
   "/results": ["[class*='campaignCard']", "[class*='stateBanner']"],
   "/settings/identity": ["main p", "main label"],
 };
+// "#sheet-open" routes: goto the base path, then click the first decision card
+// and wait 1200ms before probing (same locator approach as openstates.mjs).
 const b = await chromium.launch({ executablePath:
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", args: ["--no-sandbox"] });
 const page = await b.newPage({ viewport: { width: 390, height: 844 } });

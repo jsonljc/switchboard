@@ -3,7 +3,17 @@
 **Status:** Approved 2026-06-05 (autonomous session, operator delegated design approval; check-in #1 happens with the docs PR open).
 **Parent direction:** the locked app aesthetic (PR #845 branch, `docs/superpowers/specs/2026-06-03-app-aesthetic-direction/design.md`), section 4 TYPE: `--font-body: "Geist"`, card body 14.5/450/-.006em, button 14/600/-.01em.
 **Predecessors:** the type-voice slice (TY2, `2026-06-04-type-voice-fraunces-design.md`, #875/#881) and the type-scale slice (TY3, `2026-06-04-type-scale-display-consolidation-design.md`, #888/#893). This slice is their inherited follow-up 1: the body face, "the biggest blast radius" both specs deferred.
-**Scope:** the authed product app register (Home, Inbox, approval/handoff sheets, Results, agent panel, settings, /mira, authed shell chrome, and every portal those surfaces spawn). Mercury (`(mercury)` route group), marketing/landing, login/forgot-password/reset-password, onboarding, and /operator are OUT: own registers, zero pixel change there is the bar.
+**Scope:** the authed product app register (Home, Inbox, approval/handoff sheets, Results, agent panel, settings, /mira, authed shell chrome, and every portal those surfaces spawn). Mercury (`(mercury)` route group), the `(public)` marketing pages (/welcome, /privacy, /terms), login/forgot-password/reset-password, onboarding, and /operator are OUT: own registers, zero pixel change there is the bar.
+
+**Route register inventory (the explicit map; `/` is always the authed Home, never the landing, which lives at /welcome):**
+
+| Register | Routes | Body face | Mechanism |
+| --- | --- | --- | --- |
+| Authed app (Geist) | `/`, /inbox, /results, /mira, /settings/*, /alex + /riley (redirects) | Geist | shell renders `.app-header`; rule matches |
+| Mercury (excluded) | /reports, /activity, /contacts, /automations | Inter | marker in `(mercury)/layout.tsx` |
+| Chrome-free authed | /onboarding/*, /operator/* | Inter | no `.app-header` rendered |
+| Pre-auth top-level | /login, /forgot-password, /reset-password, /post-auth | Inter | outside `(auth)`, no shell |
+| Public marketing | /welcome, /privacy, /terms | Inter | `(public)` group, no shell |
 
 ## 1. Problem (verified against main at `3dc12252`)
 
@@ -23,7 +33,7 @@ The locked direction names Geist as the [body] face. None of that is built, and 
 
 1. Geist becomes the authed app register's body face, self-hosted, loaded as a variable font (the 450 weight must be real, not synthetic).
 2. The face arrives by inheritance at the register boundary, not by per-surface adoption: new authed surfaces get Geist by default, and portals are covered.
-3. Zero pixel change outside the register: Mercury, landing, login/forgot/reset, onboarding, /operator render byte-identical CSS-wise and pixel-identical on the negative screenshots.
+3. Zero pixel change outside the register is the intent bar; the PROOF is stated honestly (review finding, 2026-06-05): no typography-family change on any enumerated legacy route, proven by a computed-font census over every Mercury route (/reports, /activity, /contacts, /automations: the complete `(mercury)` group), the pre-auth pages, /onboarding, and the `(public)` landing at /welcome, plus pixel-identical static negatives where the page is static; static guards ban raw Hanken/Geist outside the token site. "Zero pixels anywhere" without route enumeration would be a claim the evidence cannot carry.
 4. ONE body sans: Hanken retires; `--font-home-sans` consumers re-voice to Geist through the token, zero churn.
 5. The locked section 4 [body] metric voice lands where it was designed to land: card reading text (450/-.006em) and the money action buttons (tracking -.01em), sizes preserved per the TY2/TY3 precedent.
 6. Drift guards make the register boundary and the loader honesty structural (new TY4 block; TY2/TY3 guards extended, never weakened).
@@ -150,8 +160,8 @@ All proven to bite (red against a deliberate violation first), mirroring the TY2
 1. **Loader honesty:** layout.tsx loads `Geist(` with `variable: "--font-geist"` and NO `weight:` array inside the Geist block (the variable font is what makes 450 real). Mirrors the Fraunces upright guard's block-slicing approach.
 2. **Token honesty chain:** globals.css declares `--font-body-app: var(--font-geist)` and `--font-home-sans: var(--font-body-app)`.
 3. **The register rule, both halves in one selector:** globals.css contains `body:has(.app-header)` with `:not(:has([data-register="mercury"]))` setting `font-family: var(--font-body-app)`. A rule without the exclusion or an exclusion without the rule both fail.
-4. **Producer/consumer pairing** (the safety-gate-needs-producer lesson): `src/app/(auth)/(mercury)/layout.tsx` exists and renders `data-register="mercury"`. The CSS exclusion is inert without the marker; the guard fails if either side drifts.
-5. **No raw family heads:** no governed CSS outside the globals.css token definition names "Geist" raw (must ride `var(--font-body-app)`), and "Hanken" appears nowhere in globals.css or layout.tsx once retired.
+4. **Producer/consumer pairing, BOTH hooks** (the safety-gate-needs-producer lesson): `src/app/(auth)/(mercury)/layout.tsx` exists and renders `data-register="mercury"`, AND `editorial-auth-shell.tsx` renders `className="app-header"` (review finding, 2026-06-05: the register rule hangs on a class name; a shell refactor renaming `.app-header` would leave the rule inert while the guard that only checks globals.css stays green). The CSS side is inert without either producer; the guard fails if any side drifts. Register membership is architectural, not enumerated: a future authed route joins the register by rendering inside the shell, and a route that opts out of the shell (chrome-free) opts out of the face. That invariant is this slice's contract, recorded here.
+5. **No raw family heads:** raw "Geist" is allowed at exactly ONE site, the canonical `--font-body-app` declaration in globals.css (the fallback head, the --font-display-app pattern); every other governed CSS file must ride `var(--font-body-app)`. "Hanken" appears nowhere in globals.css or layout.tsx once retired, and a repo-wide grep for hanken/Hanken at the gate confirms zero source references (comments included).
 6. **tokens.test.ts:** the `--font-home-sans: var(--font-hanken)` assertion flips to the body-app chain; `--font-body-app` joins the declared-stacks test; the token-honesty not-match list gains `/Hanken/` alongside Instrument Sans and Newsreader.
 7. TY2/TY3 blocks, `LEGACY_ALLOWED`, and `TYPE_VOICE_EXEMPT` are untouched. arch-check excludes `*.test.ts`, so extending token-governance.test.ts (~750 lines) stays safe.
 
@@ -168,12 +178,14 @@ All proven to bite (red against a deliberate violation first), mirroring the TY2
 | /mira desk | cockpit sans inherits Geist |
 | Settings (identity + one panel) | Tailwind text re-faced by inheritance, identity h1 Fraunces unchanged |
 | Inbox drawer + live-signal popover + toast (undo) | PORTALS carry the register face: the load-bearing scoping proof |
-| /reports, /activity, /contacts, /automations | NEGATIVE: pixel-identical end to end (marker + module pins) |
-| Login + landing + one onboarding step | NEGATIVE: pixel-identical (no `.app-header`) |
+| /reports, /activity, /contacts, /automations | NEGATIVE: computed-font census identical + pixel review (marker + module pins; census beats pixel-diff on live-data routes) |
+| /login + /welcome + one onboarding step | NEGATIVE: census identical AND pixel-identical (static pages, no `.app-header`; the landing is /welcome in `(public)`, never `/`) |
+| Open-overlay census (approval sheet, handoff sheet, drawer, popover, undo toast, agent panel) | computed font-family INSIDE each portal resolves Geist on an app route: the portal-coverage proof as data, not just shots |
+| Enumerated TY4 selectors | computed-style table: font-family resolves Geist, fontWeight 450/600 as specced, letter-spacing/font-size ratio within 0.0005em of -0.006/-0.01 (computed tracking returns px; normalize by font-size) |
 
 ## 6. AA and FOUT verification
 
-- **FOUT line-count gate (the load-bearing check this slice):** a body swap rewraps every paragraph. Fonts-blocked vs fonts-loaded wrap counts at 390px (and 1280 spot checks) on: inbox cards + open approval sheet datalines, settings panel text, Home quietText + buttons, agent panel body (the Hanken-to-Geist fallback change), and week-note prose as the serif control (must not move). next/font's size-adjusted fallback does the work; the wrap-count table is the committed proof.
+- **FOUT line-count gate (the load-bearing check this slice):** a body swap rewraps every paragraph. Fonts-blocked vs fonts-loaded wrap counts at 390px (and 1280 spot checks) on: inbox cards + open approval sheet datalines (`.ds-datalines li`, `.ds-lead-interest`), the metric-edited buttons (`.ds-action`, home and swipe `.btn`), settings panel text, Home quietText, agent panel body (the Hanken-to-Geist fallback change), and week-note prose as the serif control (must not move). Probes cover the enumerated TY4 selectors, not just convenient ones (review finding, 2026-06-05). next/font's size-adjusted fallback does the work; the wrap-count table is the committed proof.
 - **AA, two ways, correct tier per target:** face/weight changes do not move color ratios, but the standing rule is pixel-sampling real grounds: card-body 450 inks on the card surface (12.5 to 14px: 4.5:1 floor), `.ds-action` white-on-amber at 14/600 (4.5:1), home `.btn` (4.5:1), one settings text sample (4.5:1). 600 under 24px takes the conservative 4.5 floor (not WCAG bold large-text). Tier stated per target in the committed report; pre-existing failures (ink-3 micro-labels) recorded as pre-existing, not chased.
 - Token gates stay green throughout (necessary, not sufficient).
 
