@@ -30,6 +30,7 @@ import {
   PrismaOpportunityStore,
   PrismaReconciliationStore,
   PrismaBusinessFactsStore,
+  PrismaOperationalStateStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -253,6 +254,13 @@ export async function registerInngest(
   // Riley PR-3: outcome attribution stores (Task 10)
   const recommendationOutcomeStore = new PrismaRecommendationOutcomeStore(app.prisma);
   const attributableRecommendationStore = new PrismaAttributableRecommendationStore(app.prisma);
+
+  // Riley v3 slice 4c: operational-state reads (the 4a substrate; first and
+  // only app-layer construction of this store). One store, two injection
+  // points: getLatest feeds RevenueState.businessContextFreshness in the
+  // weekly audit; the window read feeds businessContextStable in the
+  // outcome-attribution worker. Read-only; Riley stays advisory.
+  const operationalStateStore = new PrismaOperationalStateStore(app.prisma);
   const rileyRecommendationEmitter = async (
     input: RecommendationInput,
     ctx: { cronId: string; deploymentId?: string },
@@ -358,6 +366,7 @@ export async function registerInngest(
     recommendationEmitter: rileyRecommendationEmitter,
     bookedValueByCampaignProvider: bookedValueByCampaignStore,
     recommendationHandoffSubmitter,
+    getLatestOperationalState: (organizationId) => operationalStateStore.getLatest(organizationId),
   };
 
   // Signal-health daily cron uses a slimmer dep set than the audit cron —
@@ -861,6 +870,7 @@ export async function registerInngest(
       recommendationStore: attributableRecommendationStore,
       createInsightsProvider: (orgId) => createMetaInsightsProviderForOrg(orgId, app.prisma!),
       outcomeStore: recommendationOutcomeStore,
+      operationalStateReader: operationalStateStore,
     }),
     readEnabledFlag: () => process.env["RILEY_OUTCOME_ATTRIBUTION_ENABLED"] === "true",
     logger: app.log,

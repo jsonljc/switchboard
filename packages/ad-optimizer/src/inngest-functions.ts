@@ -91,6 +91,14 @@ export interface CronDependencies {
    * PlatformIngress. Absent ⇒ the weekly audit produces no Riley -> agent handoffs.
    */
   recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
+  /**
+   * Optional (slice 4c). Latest operator operational-state confirmation per
+   * org, feeding RevenueState.businessContextFreshness in the weekly audit.
+   * Wired in apps/api/src/bootstrap/inngest.ts with
+   * PrismaOperationalStateStore.getLatest; ad-optimizer (Layer 2) never
+   * imports the store. Absent ⇒ freshness stays "unknown" (back-compat).
+   */
+  getLatestOperationalState?: (organizationId: string) => Promise<{ confirmedAt: Date } | null>;
 }
 
 interface StepTools {
@@ -240,6 +248,9 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
           : {}),
         ...(deps.recommendationHandoffSubmitter
           ? { recommendationHandoffSubmitter: deps.recommendationHandoffSubmitter }
+          : {}),
+        ...(deps.getLatestOperationalState
+          ? { operationalStateProvider: { getLatest: deps.getLatestOperationalState } }
           : {}),
       });
       const report = await runner.run(dateRanges);
