@@ -21,85 +21,24 @@ import {
   APPROVE_EXECUTED_MSG,
   APPROVE_DISPATCH_FAILED_MSG,
   REJECT_SUCCESS_MSG,
-  createApprovalState,
 } from "@switchboard/core";
 import type {
   HandleApprovalResponseConfig,
   IdentityStore,
   OperatorChannelBindingStore,
-  ReplySink,
 } from "@switchboard/core";
-import type { ApprovalRequest, Principal } from "@switchboard/schemas";
-import { executeWeeklyAudit } from "@switchboard/ad-optimizer";
+import type { Principal } from "@switchboard/schemas";
 import { synthesizeCreativeBrief } from "../services/workflows/creative-brief-synthesis.js";
-import {
-  ORG,
-  buildCronDeps,
-  readerFor,
-  step,
-  type ParkedHandoff,
-} from "./recommendation-handoff-harness.js";
+import { ORG, readerFor } from "./recommendation-handoff-harness.js";
 import { buildLifecycleWorld } from "./recommendation-handoff-lifecycle-world.js";
-
-const OPERATOR_PRINCIPAL = "principal-op-1";
-const CHANNEL = "whatsapp";
-const CHANNEL_IDENTIFIER = "+6591234567";
-
-async function parkViaCron(w: ReturnType<typeof buildLifecycleWorld>) {
-  const parked: ParkedHandoff[] = [];
-  await executeWeeklyAudit(
-    step as Parameters<typeof executeWeeklyAudit>[0],
-    buildCronDeps(w.harness.ingress, parked),
-  );
-  expect(parked).toHaveLength(1);
-  const res = parked[0]!.res;
-  if (!res.ok) throw new Error("submit failed");
-  return {
-    workUnitId: res.workUnit.id,
-    lifecycleId: (res as unknown as { lifecycleId: string }).lifecycleId,
-    bindingHash: (res as unknown as { bindingHash: string }).bindingHash,
-  };
-}
-
-/** Seed the legacy ApprovalRequest row that coexists with the lifecycle row. */
-async function seedLegacyApprovalRow(
-  w: ReturnType<typeof buildLifecycleWorld>,
-  parked: { workUnitId: string; bindingHash: string },
-): Promise<string> {
-  const approvalId = "appr_chat_1";
-  const expiresAt = new Date(Date.now() + 3_600_000);
-  const request: ApprovalRequest = {
-    id: approvalId,
-    actionId: `prop_${parked.workUnitId}`,
-    envelopeId: parked.workUnitId,
-    conversationId: null,
-    summary: "adoptimizer.recommendation.handoff (requested by system)",
-    riskCategory: "medium",
-    bindingHash: parked.bindingHash,
-    evidenceBundle: { decisionTrace: null, contextSnapshot: {}, identitySnapshot: {} },
-    suggestedButtons: [
-      { label: "Approve", action: "approve" },
-      { label: "Reject", action: "reject" },
-    ],
-    approvers: [OPERATOR_PRINCIPAL],
-    fallbackApprover: null,
-    status: "pending",
-    respondedBy: null,
-    respondedAt: null,
-    patchValue: null,
-    expiresAt,
-    expiredBehavior: "deny",
-    createdAt: new Date(),
-    quorum: null,
-  } as unknown as ApprovalRequest;
-  await w.storage.approvals.save({
-    request,
-    state: createApprovalState(expiresAt, null),
-    envelopeId: parked.workUnitId,
-    organizationId: ORG,
-  });
-  return approvalId;
-}
+import {
+  OPERATOR_PRINCIPAL,
+  CHANNEL,
+  CHANNEL_IDENTIFIER,
+  parkViaCron,
+  seedLegacyApprovalRow,
+  replyCapture,
+} from "./chat-approval-world.js";
 
 function chatConfig(w: ReturnType<typeof buildLifecycleWorld>): HandleApprovalResponseConfig {
   const bindingStore: OperatorChannelBindingStore = {
@@ -133,18 +72,6 @@ function chatConfig(w: ReturnType<typeof buildLifecycleWorld>): HandleApprovalRe
       auditLedger: w.ledger,
       logger: { info: () => {}, error: () => {} },
     },
-  };
-}
-
-function replyCapture(): { sink: ReplySink; replies: string[] } {
-  const replies: string[] = [];
-  return {
-    sink: {
-      send: async (text) => {
-        replies.push(text);
-      },
-    },
-    replies,
   };
 }
 
