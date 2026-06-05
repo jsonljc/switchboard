@@ -1,13 +1,13 @@
 // apps/dashboard/src/components/agent-avatar/printed-portrait-avatar.tsx
 "use client";
 
-import { useEffect, useState } from "react";
 import type { AgentKey } from "@switchboard/schemas";
 import { AnimatedSprite } from "@/components/cockpit/sprite/animated-sprite";
 import type { SpriteVariantKey, VariantBundle } from "@/components/cockpit/sprite/types";
 import { ALEX_VARIANTS, DEFAULT_ALEX_VARIANT } from "@/lib/cockpit/alex-config";
 import { RILEY_VARIANTS, DEFAULT_RILEY_VARIANT } from "@/lib/cockpit/riley/riley-config";
 import { MIRA_VARIANTS, DEFAULT_MIRA_VARIANT } from "@/lib/cockpit/mira/mira-config";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { agentVisualState, type AgentActivity } from "./agent-status-visual";
 import styles from "./printed-portrait-avatar.module.css";
 
@@ -40,22 +40,6 @@ const AGENT_LETTER: Record<AgentKey, string> = {
   riley: "R",
   mira: "M",
 };
-
-/** Local reduced-motion read so the sprite holds still when the OS asks. */
-function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = (): void => setReduced(mq.matches);
-    update();
-    // optional-chained so the jsdom matchMedia mock (which may omit the listener
-    // API) does not throw in tests:
-    mq.addEventListener?.("change", update);
-    return () => mq.removeEventListener?.("change", update);
-  }, []);
-  return reduced;
-}
 
 export interface PrintedPortraitAvatarProps {
   agentKey: AgentKey;
