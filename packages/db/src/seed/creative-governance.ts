@@ -105,3 +105,37 @@ export function buildCreativePublishApprovalPolicyInput(organizationId: string) 
     approvalRequirement: "mandatory",
   };
 }
+
+/**
+ * Rule matching ONLY the slice-4 brain compose intent (anchored + escaped,
+ * same rationale as the publish rule above: the rule-evaluator regex is
+ * unanchored). The creative allow policy matches creative job intents only,
+ * so the compose intent default-denies without this. Compose is read-class
+ * reasoning whose only downstream artifact is a draft-only concept row, so
+ * the effect is allow, NOT system_auto_approved: a real policy row keeps the
+ * per-org governance dial (an org-scoped deny or require_approval policy can
+ * throttle Mira the day an operator wants her quieter). Slice-4 spec 3.5.
+ */
+export const CREATIVE_BRIEF_COMPOSE_ALLOW_POLICY_RULE = {
+  conditions: [
+    { field: "actionType", operator: "matches" as const, value: "^creative\\.brief\\.compose$" },
+  ],
+};
+
+export function creativeBriefComposeAllowPolicyId(organizationId: string): string {
+  return `policy_allow_creative_brief_compose_${organizationId}`;
+}
+
+export function buildCreativeBriefComposeAllowPolicyInput(organizationId: string) {
+  return {
+    id: creativeBriefComposeAllowPolicyId(organizationId),
+    name: "Allow Mira brief compose",
+    description:
+      "Mira's brief-compose reasoning step is allowed; its only artifact is a draft-only concept row a human later funds.",
+    organizationId,
+    priority: 50,
+    active: true,
+    rule: CREATIVE_BRIEF_COMPOSE_ALLOW_POLICY_RULE,
+    effect: "allow",
+  };
+}

@@ -3,6 +3,7 @@ import {
   CREATIVE_GOVERNANCE_SETTINGS,
   CREATIVE_SPEND_APPROVAL_THRESHOLD,
   buildCreativeAllowPolicyInput,
+  buildCreativeBriefComposeAllowPolicyInput,
   buildCreativePublishApprovalPolicyInput,
 } from "./creative-governance.js";
 import {
@@ -117,6 +118,17 @@ export async function seedMiraCreativeDeployment(
     where: { id: handoffApprovalId },
     create: { id: handoffApprovalId, ...handoffApprovalData },
     update: handoffApprovalData,
+  });
+
+  // Slice-4 brain: creative.brief.compose is a skill intent matching no other
+  // seeded policy, so the engine would default-deny it. Allow (not
+  // system_auto_approved) keeps the per-org governance dial real (spec 3.5).
+  const { id: composeAllowId, ...composeAllowData } =
+    buildCreativeBriefComposeAllowPolicyInput(orgId);
+  await prisma.policy.upsert({
+    where: { id: composeAllowId },
+    create: { id: composeAllowId, ...composeAllowData },
+    update: composeAllowData,
   });
 
   await seedDefaultCreator(prisma, deployment.id);
