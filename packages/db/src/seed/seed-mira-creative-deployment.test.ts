@@ -8,6 +8,7 @@ import {
   CREATIVE_GOVERNANCE_SETTINGS,
   CREATIVE_SPEND_APPROVAL_THRESHOLD,
   creativeAllowPolicyId,
+  creativeBriefComposeAllowPolicyId,
   creativePublishApprovalPolicyId,
 } from "./creative-governance.js";
 import {
@@ -162,11 +163,12 @@ describe("seedMiraCreativeDeployment", () => {
 
   it("upserts an org-scoped allow policy so creative.job.* is governed-not-denied", async () => {
     await seedMiraCreativeDeployment(prisma, "org_dev");
-    // Four policies are seeded together: the creative allow + publish
-    // mandatory-approval policies AND the recommendation-handoff allow +
-    // mandatory-approval policies (a workflow intent default-denies without an
-    // allow policy; a Riley handoff that is allowed but ungated would auto-route).
-    expect(prisma._policyUpserts).toHaveLength(4);
+    // Five policies are seeded together: the creative allow + publish
+    // mandatory-approval policies, the recommendation-handoff allow +
+    // mandatory-approval policies, and the slice-4 brief-compose allow policy
+    // (a workflow/skill intent default-denies without an allow policy; a Riley
+    // handoff that is allowed but ungated would auto-route).
+    expect(prisma._policyUpserts).toHaveLength(5);
     const call = prisma._policyUpserts.find(
       (c) => c.where.id === creativeAllowPolicyId("org_dev"),
     )!;
@@ -227,6 +229,20 @@ describe("seedMiraCreativeDeployment", () => {
       approvalRequirement: "mandatory",
       active: true,
     });
+  });
+
+  it("upserts the slice-4 brief-compose allow policy (anchored, allow-not-auto)", async () => {
+    await seedMiraCreativeDeployment(prisma, "org_dev");
+    const compose = prisma._policyUpserts.find(
+      (c) => c.where.id === creativeBriefComposeAllowPolicyId("org_dev"),
+    );
+    expect(compose).toBeDefined();
+    expect(compose!.create).toMatchObject({
+      organizationId: "org_dev",
+      effect: "allow",
+      active: true,
+    });
+    expect(JSON.stringify(compose!.create.rule)).toContain("creative\\\\.brief\\\\.compose");
   });
 
   it("throws a clear error when the creative listing is missing", async () => {
