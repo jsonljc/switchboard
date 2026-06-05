@@ -86,6 +86,45 @@ describe("canonical key grammar", () => {
 });
 
 describe("executeCreativeTasteSweep", () => {
+  it("ugc gestures bucket by the leading spec's structureId from ugcPhaseOutputs (slice-3 spec 3.4)", async () => {
+    const d = deps({
+      jobStore: {
+        listTasteCandidates: vi.fn().mockResolvedValue([
+          candidate({
+            mode: "ugc",
+            stageOutputs: {}, // ugc jobs never populate the polished column
+            ugcPhaseOutputs: {
+              scripting: { specs: [{ structureId: "demo_first", specId: "s1" }] },
+            },
+          }),
+        ]),
+        setTasteCapturedAt: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+    await executeCreativeTasteSweep(d as never);
+    expect(d.memoryStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canonicalKey: "taste:kept_ugc_demo_first",
+        content: "Operator kept ugc creatives with demo_first structure",
+      }),
+    );
+  });
+
+  it("ugc gestures without parseable scripting fall back to the none bucket", async () => {
+    const d = deps({
+      jobStore: {
+        listTasteCandidates: vi
+          .fn()
+          .mockResolvedValue([candidate({ mode: "ugc", stageOutputs: {}, ugcPhaseOutputs: {} })]),
+        setTasteCapturedAt: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+    await executeCreativeTasteSweep(d as never);
+    expect(d.memoryStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({ canonicalKey: "taste:kept_ugc_none" }),
+    );
+  });
+
   it("first observation creates the bucket at the standard curve with deterministic content", async () => {
     const d = deps();
     const out = await executeCreativeTasteSweep(d as never);

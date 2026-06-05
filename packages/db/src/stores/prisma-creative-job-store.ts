@@ -45,6 +45,8 @@ export interface TasteCandidate {
   deploymentId: string;
   mode: string;
   stageOutputs: unknown;
+  /** UGC outputs (slice-3 spec 3.4): the descriptor's source for ugc jobs. */
+  ugcPhaseOutputs: unknown;
   reviewDecision: string | null;
   reviewDecidedAt: Date | null;
   tasteCapturedAt: Date | null;
@@ -272,6 +274,7 @@ export class PrismaCreativeJobStore {
       deploymentId: true,
       mode: true,
       stageOutputs: true,
+      ugcPhaseOutputs: true,
       reviewDecision: true,
       reviewDecidedAt: true,
       tasteCapturedAt: true,

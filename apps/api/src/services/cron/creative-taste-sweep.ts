@@ -29,7 +29,17 @@ const HOOK_PHRASE: Record<string, string> = {
  * equivalent to the bucket, so the constraint enforces one row per bucket and
  * a concurrent duplicate create surfaces as a catchable unique violation.
  */
-export function bucketContent(decision: string, mode: string, hookType: string): string {
+export function bucketContent(
+  decision: string,
+  mode: string,
+  hookType: string,
+  structureId?: string,
+): string {
+  // UGC buckets key by structure (slice-3 spec 3.4): the structure id IS the
+  // ugc creative taxonomy; hooks do not exist for ugc.
+  if (structureId) {
+    return `Operator ${decision} ${mode} creatives with ${structureId} structure`;
+  }
   return `Operator ${decision} ${mode} creatives with ${HOOK_PHRASE[hookType] ?? hookType}`;
 }
 
@@ -209,9 +219,21 @@ export async function executeCreativeTasteSweep(
     if (!observedDecidedAt || (decision !== "kept" && decision !== "passed")) continue;
     try {
       const mode = job.mode === "ugc" ? "ugc" : "polished";
-      const descriptor = extractCreativeDescriptor(job.stageOutputs, mode);
-      const canonicalKey = `taste:${decision}_${descriptor.mode}_${descriptor.hookType}`;
-      const content = bucketContent(decision, descriptor.mode, descriptor.hookType);
+      // Mode-correct outputs (slice-3 spec 3.4): ugc content lives in
+      // ugcPhaseOutputs; the polished column stays empty for ugc jobs.
+      const descriptor = extractCreativeDescriptor(
+        mode === "ugc" ? job.ugcPhaseOutputs : job.stageOutputs,
+        mode,
+      );
+      // Third segment: the ugc structure when present, else the hook bucket.
+      const segment = descriptor.structureId ?? descriptor.hookType;
+      const canonicalKey = `taste:${decision}_${descriptor.mode}_${segment}`;
+      const content = bucketContent(
+        decision,
+        descriptor.mode,
+        descriptor.hookType,
+        descriptor.structureId,
+      );
 
       const outcome = await upsertTasteBucket(deps, job, canonicalKey, content);
       if (outcome === "created" || outcome === "created_with_eviction") {

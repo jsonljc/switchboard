@@ -65,6 +65,31 @@ describe("extractCreativeDescriptor", () => {
     });
   });
 
+  it("reads the leading spec's structureId for ugc outputs (slice-3 spec 3.4)", () => {
+    const d = extractCreativeDescriptor(
+      {
+        scripting: {
+          specs: [
+            { structureId: "demo_first", specId: "s1" },
+            { structureId: "confession", specId: "s2" },
+          ],
+        },
+      },
+      "ugc",
+    );
+    expect(d).toEqual({ mode: "ugc", hookType: "none", structureId: "demo_first" });
+  });
+
+  it("OMITS structureId for polished (the exact toEqual pins above depend on it)", () => {
+    const d = extractCreativeDescriptor({}, "polished");
+    expect("structureId" in d).toBe(false);
+  });
+
+  it("ugc with unparseable scripting output stays the none bucket without a structure", () => {
+    const d = extractCreativeDescriptor({ scripting: { specs: "garbage" } }, "ugc");
+    expect(d).toEqual({ mode: "ugc", hookType: "none" });
+  });
+
   it("returns none on malformed stage outputs (parse-don't-cast, never throws)", () => {
     expect(
       extractCreativeDescriptor({ hooks: { hooks: "junk" }, scripts: 42 }, "polished"),
