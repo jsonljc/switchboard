@@ -1,13 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { MiraHeader } from "../mira-header";
-
-vi.stubGlobal(
-  "matchMedia",
-  vi
-    .fn()
-    .mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
-);
 
 describe("MiraHeader", () => {
   it("renders the printed-portrait sprite, not a letter monogram", () => {
@@ -53,5 +47,25 @@ describe("MiraHeader", () => {
   it("renders the greeting line when present", () => {
     render(<MiraHeader halted={false} subtitle="sub" line="You've got 3 drafts" />);
     expect(screen.getByText("You've got 3 drafts")).toBeInTheDocument();
+  });
+
+  it("server-renders plain subtitle text with no mission button (SSR-safe first paint)", () => {
+    const html = renderToStaticMarkup(
+      <MiraHeader
+        halted={false}
+        subtitle="Creative drafts, ready for your review"
+        line={null}
+        missionInteractive
+        onOpenMission={() => {}}
+      />,
+    );
+    expect(html).toContain("Creative drafts, ready for your review");
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("Edit Mira's mission");
+  });
+
+  it("exposes the agent name as the page heading", () => {
+    render(<MiraHeader halted={false} subtitle="sub" line={null} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Mira" })).toBeInTheDocument();
   });
 });

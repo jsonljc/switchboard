@@ -24,6 +24,9 @@ export interface MiraHeaderProps {
  * mission trigger renders only after hydration: mission data arrives via React
  * Query and can be present at first client render but never in server HTML,
  * which previously caused a live hydration mismatch on /mira and /mira/review.
+ *
+ * Promotion note: if Alex/Riley ever get a surface header, generalize via the
+ * data-agent deep-ink pattern (inbox .ds-head-name), not by forking this file.
  */
 export function MiraHeader({
   status = "idle",
@@ -41,7 +44,7 @@ export function MiraHeader({
     <div className={styles.header}>
       <PrintedPortraitAvatar agentKey="mira" size={44} status={status} halted={halted} />
       <div className={styles.text}>
-        <span className={styles.name}>Mira</span>
+        <h1 className={styles.name}>Mira</h1>
         <div className={styles.subtitle}>
           {interactive ? (
             <button

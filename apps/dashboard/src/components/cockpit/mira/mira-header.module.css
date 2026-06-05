@@ -15,6 +15,7 @@
 }
 .name {
   display: block;
+  margin: 0;
   font-family: var(--font-display-app);
   font-variation-settings: "opsz" 24;
   font-size: 22px;
