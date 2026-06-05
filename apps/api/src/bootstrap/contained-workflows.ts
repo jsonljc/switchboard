@@ -18,6 +18,12 @@ import {
   buildRecommendationHandoffSubmitRequest,
   type RecommendationHandoffSubmitInput,
 } from "../services/workflows/recommendation-handoff-request.js";
+import {
+  buildMiraBriefComposeSubmitRequest,
+  buildMiraConceptDraftSubmitRequest,
+  type MiraBriefComposeSubmitInput,
+  type MiraConceptDraftSubmitInput,
+} from "../services/workflows/mira-self-brief-request.js";
 
 interface ContainedWorkflowBootstrapDeps {
   prismaClient: unknown;
@@ -60,6 +66,23 @@ export interface ContainedWorkflowBootstrapResult {
     input: RecommendationHandoffSubmitInput,
     deployment: { deploymentId: string; skillSlug: string },
   ) => Promise<SubmitWorkResponse | null>;
+  /**
+   * Top-level submit closures for the slice-4 mira brain. Compose is the
+   * read-class reasoning work unit; concept-draft is the draft-only child the
+   * weekly scan creates from a propose verdict. Both resolve the org's
+   * creative deployment by intent prefix when the caller has not already
+   * resolved it, and both carry the seeded system principal. The scan worker
+   * passes the deployment it resolved at floor time; the PR-4 handoff
+   * enrichment path lets the closure resolve it.
+   */
+  submitMiraBriefCompose: (
+    input: MiraBriefComposeSubmitInput,
+    deployment?: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse>;
+  submitMiraConceptDraft: (
+    input: MiraConceptDraftSubmitInput,
+    deployment?: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse>;
 }
 
 /**
@@ -475,10 +498,40 @@ export async function bootstrapContainedWorkflows(
     return platformIngress.submit(req);
   };
 
+  const submitMiraBriefCompose = async (
+    input: MiraBriefComposeSubmitInput,
+    deployment?: { deploymentId: string; skillSlug: string },
+  ): Promise<SubmitWorkResponse> => {
+    const resolved =
+      deployment ??
+      (await resolveDeploymentForIntent(
+        deploymentResolver,
+        input.organizationId,
+        "creative.brief.compose",
+      ));
+    return platformIngress.submit(buildMiraBriefComposeSubmitRequest(input, resolved));
+  };
+
+  const submitMiraConceptDraft = async (
+    input: MiraConceptDraftSubmitInput,
+    deployment?: { deploymentId: string; skillSlug: string },
+  ): Promise<SubmitWorkResponse> => {
+    const resolved =
+      deployment ??
+      (await resolveDeploymentForIntent(
+        deploymentResolver,
+        input.organizationId,
+        "creative.concept.draft",
+      ));
+    return platformIngress.submit(buildMiraConceptDraftSubmitRequest(input, resolved));
+  };
+
   return {
     instantFormAdapter,
     submitScheduledFollowUp,
     submitScheduledReminder,
     submitRecommendationHandoff,
+    submitMiraBriefCompose,
+    submitMiraConceptDraft,
   };
 }
