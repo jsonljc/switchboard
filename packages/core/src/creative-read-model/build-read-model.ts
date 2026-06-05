@@ -44,6 +44,9 @@ export function buildMiraCreativeReadModel(
       reviewDecision: job.reviewDecision ?? null,
       ...(performance ? { performance } : {}),
       ...(qa ? { qa } : {}),
+      ...(job.mode === "ugc" && typeof job.ugcPhase === "string" && job.ugcPhase
+        ? { ugcPhase: job.ugcPhase }
+        : {}),
     };
   });
 

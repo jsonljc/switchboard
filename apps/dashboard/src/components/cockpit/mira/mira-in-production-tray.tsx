@@ -1,9 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import type { MiraDeskItem } from "@switchboard/core";
-import { STAGE_COPY, PROBLEM_COPY, DESK_COPY } from "@/lib/cockpit/mira/desk-copy";
+import {
+  STAGE_COPY,
+  UGC_PHASE_COPY,
+  AWAITING_GO_COPY,
+  PROBLEM_COPY,
+  DESK_COPY,
+} from "@/lib/cockpit/mira/desk-copy";
 import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
 import { T } from "@/components/cockpit/tokens";
+
+// Mode-honest progress label: ugc reads its phase (the polished stage column
+// is frozen for ugc jobs); a pre-video approval gate beats both.
+function itemStatusCopy(it: MiraDeskItem): string {
+  if (it.problem) return PROBLEM_COPY[it.problem];
+  if (it.awaitingGo) return AWAITING_GO_COPY;
+  if (it.ugcPhase) return UGC_PHASE_COPY[it.ugcPhase] ?? it.ugcPhase;
+  return STAGE_COPY[it.stage];
+}
 
 // Calm, muted tray (NOT the hero). Plain stage copy by default; a problem
 // message only when something is wrong. No engineering-console detail.
@@ -54,7 +70,15 @@ export function MiraInProductionTray({ items }: { items: MiraDeskItem[] }) {
                 color: T.ink2,
               }}
             >
-              <span>{it.title}</span>
+              {/* The detail page is where Continue/Stop lives; pre-video
+                  gates have no feed card, so this link IS the operator's
+                  path to them (slice-3 spec 3.4). */}
+              <Link
+                href={`/mira/creatives/${it.id}`}
+                style={{ color: T.ink2, textDecoration: "none" }}
+              >
+                {it.title}
+              </Link>
               <span
                 style={{
                   fontFamily: "JetBrains Mono",
@@ -63,7 +87,7 @@ export function MiraInProductionTray({ items }: { items: MiraDeskItem[] }) {
                   color: it.problem ? T.red : MIRA_ACCENT.base,
                 }}
               >
-                {it.problem ? PROBLEM_COPY[it.problem] : STAGE_COPY[it.stage]}
+                {itemStatusCopy(it)}
               </span>
             </li>
           ))}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMiraCreative } from "@/hooks/use-mira-creative";
 import { useApproveStage, useCostEstimate } from "@/hooks/use-creative-pipeline";
 import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
+import { STAGE_COPY, UGC_PHASE_COPY } from "@/lib/cockpit/mira/desk-copy";
 import { T } from "@/components/cockpit/tokens";
 
 export function MiraCreativeDetailPage({ id }: { id: string }) {
@@ -50,7 +51,15 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
           style={{ width: "100%", borderRadius: 10 }}
         />
       ) : (
-        <div style={{ color: T.ink3 }}>No draft clip yet. Still drafting.</div>
+        // Phase-honest no-video header (slice-3 spec 3.4): a job parked at a
+        // pre-video gate reads its real progress, not a generic "drafting".
+        <div style={{ color: T.ink3 }}>
+          {`No draft clip yet. ${
+            job.ugcPhase
+              ? (UGC_PHASE_COPY[job.ugcPhase] ?? "In production")
+              : (STAGE_COPY[job.stage] ?? "Still drafting")
+          }.`}
+        </div>
       )}
 
       <div style={{ fontSize: 13, color: T.ink3 }}>

@@ -39,6 +39,18 @@ function job(o: Partial<CreativeJob>): CreativeJob {
 describe("buildMiraCreativeReadModel", () => {
   const opts = { now: NOW, weekStart: WEEK_START, prevWeekStart: PREV_WEEK_START, visibleLimit: 5 };
 
+  it("projects ugcPhase on ugc summaries only (slice-3 spec 3.4: mode-honest labels)", () => {
+    const rm = buildMiraCreativeReadModel(
+      [
+        job({ id: "u1", mode: "ugc", ugcPhase: "production", ugcPhaseOutputs: { planning: {} } }),
+        job({ id: "p1" }),
+      ],
+      opts,
+    );
+    expect(rm.jobs.find((j) => j.id === "u1")!.ugcPhase).toBe("production");
+    expect(rm.jobs.find((j) => j.id === "p1")!.ugcPhase).toBeUndefined();
+  });
+
   it("empty org → empty jobs, zero counts", () => {
     const rm = buildMiraCreativeReadModel([], opts);
     expect(rm.jobs).toEqual([]);

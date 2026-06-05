@@ -62,6 +62,12 @@ export interface MiraCreativeJobSummary {
   performance?: MiraCreativePerformance;
   /** Slice-3 frame-QA verdict (UGC only); absent when nothing parseable. */
   qa?: MiraCreativeQa;
+  /**
+   * Slice-3 (spec 3.4): the UGC lifecycle phase, for mode-honest progress
+   * labels. UGC jobs never advance `stage` (it stays the polished column
+   * default), so the tray and detail render from this for ugc summaries.
+   */
+  ugcPhase?: string;
 }
 
 export interface MiraCreativeCounts {

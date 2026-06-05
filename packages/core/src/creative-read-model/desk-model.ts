@@ -36,6 +36,14 @@ export interface MiraDeskItem {
   thumbnailUrl?: string;
   problem?: MiraDeskProblemCode;
   updatedAt: string;
+  /** Slice-3 (spec 3.4): UGC lifecycle phase for mode-honest tray labels. */
+  ugcPhase?: string;
+  /**
+   * True when the job sits at a pre-video approval gate (awaiting_review
+   * with no draft yet): the operator must Continue/Stop from the detail
+   * page. Covers BOTH modes (polished stage gates share the problem).
+   */
+  awaitingGo: boolean;
 }
 
 export interface MiraDeskModel {
@@ -73,6 +81,8 @@ function toItem(job: MiraCreativeJobSummary, state: MiraDeskItemState): MiraDesk
     thumbnailUrl: job.draft?.thumbnailUrl,
     problem: job.status === "failed" ? "quality_failed" : undefined,
     updatedAt: job.updatedAt,
+    ...(job.ugcPhase ? { ugcPhase: job.ugcPhase } : {}),
+    awaitingGo: job.status === "awaiting_review" && typeof job.draft?.videoUrl !== "string",
   };
 }
 

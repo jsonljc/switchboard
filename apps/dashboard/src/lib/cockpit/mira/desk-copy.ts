@@ -11,6 +11,20 @@ export const STAGE_COPY: Record<CreativeJobStage, string> = {
   complete: "Ready to review",
 };
 
+// UGC phases (slice-3 spec 3.4): ugc jobs never advance the polished stage
+// column, so their tray labels come from ugcPhase.
+export const UGC_PHASE_COPY: Record<string, string> = {
+  planning: "Planning the shoot",
+  scripting: "Writing the script",
+  production: "Filming the clip",
+  delivery: "Wrapping up",
+  complete: "Ready to review",
+};
+
+// Pre-video approval gates (both modes): the operator must continue from the
+// detail page; the tray links there.
+export const AWAITING_GO_COPY = "Waiting for your go-ahead";
+
 // Problem copy only surfaces when something is wrong (default tray is plain status).
 export const PROBLEM_COPY: Record<MiraDeskProblemCode, string> = {
   needs_input: "Needs your input",
