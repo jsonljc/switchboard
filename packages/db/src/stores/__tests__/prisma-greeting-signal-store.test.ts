@@ -153,7 +153,7 @@ describe("PrismaGreetingSignalStore — Mira (mocked Prisma)", () => {
 });
 
 describe("PrismaGreetingSignalStore — Mira count alignment with desk hero (mocked Prisma)", () => {
-  it("inboxCount uses readyToReviewCount (undecided draft_ready only), excluding kept/passed and mid-pipeline", async () => {
+  it("inboxCount equals the desk hero readyToReviewCount (undecided ready-to-review drafts)", async () => {
     const prisma = mockPrisma([
       // undecided draft_ready (polished complete) → ready_to_review → counted
       {
@@ -188,6 +188,21 @@ describe("PrismaGreetingSignalStore — Mira count alignment with desk hero (moc
         createdAt: new Date("2026-06-01T08:00:00Z"),
         updatedAt: new Date("2026-06-01T08:00:00Z"),
       },
+      // awaiting_review WITH video (scripts stage, production.assembledVideos present)
+      // → deriveDeskItemState returns ready_to_review → counted
+      {
+        ...creativeJobBase,
+        id: "awr1",
+        organizationId: ORG_ID,
+        currentStage: "scripts",
+        stageOutputs: {
+          scripts: {},
+          production: { assembledVideos: [{ videoUrl: "v-awr", thumbnailUrl: "t-awr" }] },
+        },
+        reviewDecision: null,
+        createdAt: new Date("2026-06-01T04:00:00Z"),
+        updatedAt: new Date("2026-06-01T04:00:00Z"),
+      },
       // mid-pipeline without video (awaiting_review, no draft yet) → in_production, not counted
       {
         ...creativeJobBase,
@@ -204,9 +219,14 @@ describe("PrismaGreetingSignalStore — Mira count alignment with desk hero (moc
 
     const signal = await store.getSignal(ORG_ID, "mira");
 
-    // The desk hero's exact count: only the two undecided ready-to-review drafts.
-    expect(signal.inboxCount).toBe(2);
-    // kept and mid-pipeline are excluded.
+    // The desk hero's exact count: the two undecided draft_ready drafts plus the
+    // awaiting_review job that already has a produced video — all three are
+    // ready_to_review; mid-pipeline (no video) and kept are excluded.
+    expect(signal.inboxCount).toBe(3);
+    // awr1 (04:00) is older than rtr1 (10:00) and rtr2 (next day) → it is the
+    // oldest ready-to-review item and sets the age anchor.
+    expect(signal.oldestOpenItemAgeHours).toBeGreaterThan(0);
+    // kept and mid-pipeline (no video) are excluded.
     expect(prisma.pendingActionRecord.count as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 });

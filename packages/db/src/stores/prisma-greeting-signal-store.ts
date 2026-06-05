@@ -7,7 +7,12 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type { AgentKey } from "@switchboard/schemas";
-import { buildMiraDeskModel, type agentHome, type MiraCreativeJobSummary } from "@switchboard/core";
+import {
+  buildMiraDeskModel,
+  deriveDeskItemState,
+  type agentHome,
+  type MiraCreativeJobSummary,
+} from "@switchboard/core";
 import { PrismaMiraCreativeReadModelReader } from "./prisma-mira-creative-read-model-reader.js";
 
 // Greeting window timezone for the Mira read-model. M1 uses "UTC" here: greeting
@@ -98,7 +103,7 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
       }),
     ]);
 
-    const oldest = oldestAwaitingReview(readModel.jobs);
+    const oldest = oldestReadyToReview(readModel.jobs);
     const oldestOpenItemAgeHours = oldest
       ? (now - new Date(oldest.createdAt).getTime()) / (1000 * 60 * 60)
       : null;
@@ -150,28 +155,23 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
       timezone: MIRA_GREETING_TIMEZONE,
       visibleLimit: MIRA_GREETING_VISIBLE_LIMIT,
     });
-    const oldest = oldestAwaitingReview(readModel.jobs);
+    const oldest = oldestReadyToReview(readModel.jobs);
     if (!oldest) return null;
     const ageHours = (now - new Date(oldest.createdAt).getTime()) / (1000 * 60 * 60);
     return { name: oldest.title, ageLabel: formatAgeLabel(ageHours) };
   }
 }
 
-// Oldest (earliest createdAt) ready-to-review job in the read-model window, or
-// null when none are ready to review. Mirrors the desk hero: counts undecided
-// draft_ready jobs and awaiting_review jobs that have a video draft. Excludes
-// kept/passed decisions so the age tracks the same population as inboxCount.
-function oldestAwaitingReview(
+// Oldest undecided ready-to-review job: the SAME cohort the desk hero counts
+// (single-sourced via core's deriveDeskItemState so count and age can never
+// silently diverge again).
+function oldestReadyToReview(
   jobs: readonly MiraCreativeJobSummary[],
 ): MiraCreativeJobSummary | null {
   let oldest: MiraCreativeJobSummary | null = null;
   for (const job of jobs) {
-    // Only undecided jobs — mirrors buildMiraDeskModel's decision-first guard.
     if (job.reviewDecision === "kept" || job.reviewDecision === "passed") continue;
-    const isReadyToReview =
-      job.status === "draft_ready" ||
-      (job.status === "awaiting_review" && typeof job.draft?.videoUrl === "string");
-    if (!isReadyToReview) continue;
+    if (deriveDeskItemState(job) !== "ready_to_review") continue;
     if (
       oldest === null ||
       new Date(job.createdAt).getTime() < new Date(oldest.createdAt).getTime()
