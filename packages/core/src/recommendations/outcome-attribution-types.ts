@@ -1,3 +1,4 @@
+import type { OperationalStateConfirmation } from "@switchboard/schemas";
 import type { AttributableKind } from "./outcome-attribution-config.js";
 
 /**
@@ -62,6 +63,21 @@ export interface InsightsWindowQuery {
 export interface MetaInsightsProvider {
   /** Returns null when no insights rows exist for the campaign in this window. */
   getWindowMetrics(query: InsightsWindowQuery): Promise<WindowMetrics | null>;
+}
+
+/**
+ * Slice-4c: the 4a store's window read. Implementation is
+ * PrismaOperationalStateStore in @switchboard/db, injected at the app layer
+ * (core is Layer 3 and cannot import db). Contract: the latest confirmation
+ * at-or-before windowStart (the governing regime) plus every confirmation in
+ * (windowStart, windowEnd], oldest first; [] = honest unknown.
+ */
+export interface OperationalStateReader {
+  getConfirmationsOverlappingWindow(
+    organizationId: string,
+    windowStart: Date,
+    windowEnd: Date,
+  ): Promise<OperationalStateConfirmation[]>;
 }
 
 /**
