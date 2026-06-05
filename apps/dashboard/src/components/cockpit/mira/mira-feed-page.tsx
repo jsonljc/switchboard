@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Identity } from "@/components/cockpit/identity";
+import { MiraHeader } from "@/components/cockpit/mira/mira-header";
 import { MissionPopover } from "@/components/cockpit/mission-popover";
 import { useAgentGreeting } from "@/hooks/use-agent-greeting";
 import { useAgentMission } from "@/hooks/use-agent-mission";
 import { useMiraFeed } from "@/hooks/use-mira-feed";
 import { useHalt } from "@/components/layout/halt/halt-context";
-import { MIRA_ACCENT, MIRA_MISSION_SUBTITLE } from "@/lib/cockpit/mira/mira-config";
+import { MIRA_MISSION_SUBTITLE } from "@/lib/cockpit/mira/mira-config";
 import { T } from "@/components/cockpit/tokens";
 import { MiraCreativeFeed } from "./mira-creative-feed";
 
@@ -27,6 +27,7 @@ export function MiraFeedPage() {
   const countLine = meta
     ? `${meta.reviewableCount} draft${meta.reviewableCount === 1 ? "" : "s"} to review${meta.renderingCount > 0 ? ` · ${meta.renderingCount} still rendering` : ""}`
     : null;
+  const working = (meta?.renderingCount ?? 0) > 0;
 
   return (
     <div
@@ -38,17 +39,16 @@ export function MiraFeedPage() {
         background: "#000",
       }}
     >
-      <div style={{ position: "relative", background: T.paper }}>
-        <Identity
-          statusKey="IDLE"
+      {/* Light chrome band above the immersive feed body: the header stays on
+          the warm canvas; only the clip viewport below is the night register. */}
+      <div style={{ position: "relative", background: T.bg }}>
+        <MiraHeader
+          status={working ? "working" : "idle"}
           halted={haltCtx.halted}
           subtitle={countLine ?? MIRA_MISSION_SUBTITLE}
           line={line}
-          onHaltToggle={haltCtx.toggleHalt}
           missionInteractive={!!mission.data}
           onOpenMission={() => setMissionOpen((o) => !o)}
-          displayName="Mira"
-          avatarAccent={{ soft: MIRA_ACCENT.soft, deep: MIRA_ACCENT.deep }}
         />
         {mission.data ? (
           <MissionPopover
