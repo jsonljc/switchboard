@@ -13,6 +13,7 @@ import { registerWidgetMessagesEndpoint } from "./endpoints/widget-messages.js";
 import { registerWidgetEventsEndpoint } from "./endpoints/widget-events.js";
 import { registerWidgetEmbedEndpoint } from "./endpoints/widget-embed.js";
 import { createGatewayBridge } from "./gateway/gateway-bridge.js";
+import { registerSlackFormEncodedParser } from "./routes/slack-form-parser.js";
 import { TelegramAdapter } from "./adapters/telegram.js";
 import { HttpPlatformIngressAdapter } from "./gateway/http-platform-ingress-adapter.js";
 import { buildCtwaIngressSubmitRequest } from "./gateway/ctwa-ingress-request.js";
@@ -66,20 +67,7 @@ async function main() {
   });
 
   // Parse application/x-www-form-urlencoded (Slack interactive payloads)
-  app.addContentTypeParser(
-    "application/x-www-form-urlencoded",
-    { parseAs: "string" },
-    (req, body, done) => {
-      try {
-        (req as unknown as Record<string, unknown>).rawBody = body;
-        const params = new URLSearchParams(body as string);
-        const payload = params.get("payload");
-        done(null, payload ? JSON.parse(payload) : Object.fromEntries(params));
-      } catch (err) {
-        done(err as Error, undefined);
-      }
-    },
-  );
+  registerSlackFormEncodedParser(app);
 
   // Platform ingress adapter — all chat traffic routes through the API server
   const apiUrl = process.env["SWITCHBOARD_API_URL"] ?? "http://localhost:3000";
@@ -314,7 +302,13 @@ async function main() {
       };
 
       await singleTenantGateway.handleIncoming(
-        { channel: "telegram", token: "single-tenant", sessionId: threadId, text: incoming.text },
+        {
+          channel: "telegram",
+          token: "single-tenant",
+          sessionId: threadId,
+          principalId: incoming.principalId,
+          text: incoming.text,
+        },
         replySink,
       );
       return reply.code(200).send({ ok: true });
