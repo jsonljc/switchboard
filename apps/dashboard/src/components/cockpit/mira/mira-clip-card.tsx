@@ -41,9 +41,14 @@ export function MiraClipCard({
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    // Reduced motion: hold the poster frame; the existing tap-to-play toggle on
-    // the video element remains the explicit opt-in.
-    if (isActive && !reducedMotion) void el.play().catch(() => {});
+    // Live media-query read inside the effect (hydration-safe: effects render no
+    // markup) so a reduced-motion user never gets even one autoplay frame; the
+    // hook keeps the two-pass value for reactive re-runs on preference change.
+    const reduceNow =
+      reducedMotion ||
+      (typeof window !== "undefined" &&
+        !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    if (isActive && !reduceNow) void el.play().catch(() => {});
     else el.pause();
     return () => {
       el.pause();
