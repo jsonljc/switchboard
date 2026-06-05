@@ -51,6 +51,8 @@
 
 - path: "apps/api/src/routes/approvals.ts"
   reason: "Approval response — uses transitionApproval/ApprovalLifecycleService per DOCTRINE; original action already passed through ingress."
+- path: "apps/api/src/routes/internal-chat-approvals.ts"
+  reason: "Chat approval bridge respond — same unified respond engine as routes/approvals.ts (respondToChannelApproval -> respondToApproval/respondToParkedLifecycle); the original action already passed through ingress. Identity is re-derived server-side from OperatorChannelBinding (bridge spec 2026-06-05)."
 - path: "apps/api/src/routes/dlq.ts"
   reason: "DLQ retry/resolve — operates on failed-message lifecycle records; the original message already passed (or attempted) ingress."
 - path: "apps/api/src/routes/escalations.ts"
