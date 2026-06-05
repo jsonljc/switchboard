@@ -56,6 +56,8 @@ export type {
 export { composeSkillRequestContext } from "./skill-request-context.js";
 export {
   alexBuilder,
+  miraBuilder,
+  hasSurfacedCreativeMemorySignal,
   salesPipelineBuilder,
   websiteProfilerBuilder,
   adOptimizerInteractiveBuilder,
