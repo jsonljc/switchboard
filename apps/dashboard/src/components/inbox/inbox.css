@@ -324,8 +324,9 @@
 .decision-foot-spacer { flex: 1; }
 .decision-contact-quiet {
   font-size: 12.5px;
+  font-weight: 450;
   color: var(--ink-2);
-  letter-spacing: -0.003em;
+  letter-spacing: -0.006em;
 }
 .decision-contact-quiet::before {
   content: 'For ';
@@ -681,9 +682,10 @@
   display: flex;
   gap: 10px;
   font-size: 14px;
+  font-weight: 450;
   line-height: 1.5;
   color: var(--ink-2);
-  letter-spacing: -0.003em;
+  letter-spacing: -0.006em;
 }
 .ds-datalines-bullet {
   color: var(--ink-4);
@@ -697,6 +699,8 @@
   gap: 4px;
   padding: 6px 0 0;
   font-size: 13.5px;
+  font-weight: 450;
+  letter-spacing: -0.006em;
   color: var(--ink-2);
 }
 .ds-contact-strip b {
@@ -886,7 +890,7 @@
   border-radius: var(--r-pill);
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   transition: transform 160ms var(--ease), background 160ms ease, color 160ms ease, box-shadow 200ms ease;
   -webkit-tap-highlight-color: transparent;
@@ -1007,6 +1011,8 @@
 .ds-lead-interest,
 .ds-lead-source {
   font-size: 13.5px;
+  font-weight: 450;
+  letter-spacing: -0.006em;
   color: var(--ink-1);
   line-height: 1.4;
 }
@@ -1015,6 +1021,8 @@
   flex-wrap: wrap;
   gap: 8px 18px;
   font-size: 13.5px;
+  font-weight: 450;
+  letter-spacing: -0.006em;
   color: var(--ink-1);
 }
 .ds-lead-contact span { font-feature-settings: "tnum"; }
@@ -1027,6 +1035,8 @@
   gap: 8px;
   flex-wrap: wrap;
   font-size: 13px;
+  font-weight: 450;
+  letter-spacing: -0.006em;
   color: var(--ink-2);
 }
 .ds-qual-stage {
@@ -1224,8 +1234,9 @@
   padding: 10px 14px;
   border-radius: 16px;
   font-size: 14px;
+  font-weight: 450;
   line-height: 1.45;
-  letter-spacing: -0.003em;
+  letter-spacing: -0.006em;
   color: var(--ink-1);
   background: var(--canvas-2);
   border: 1px solid var(--hair-soft);
