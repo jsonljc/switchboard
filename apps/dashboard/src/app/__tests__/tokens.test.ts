@@ -71,7 +71,8 @@ describe("Home warm-operational-editorial tokens — P1-A", () => {
   });
 
   it("declares the Home editorial font stacks", () => {
-    expect(css).toMatch(/--font-home-sans:\s*var\(--font-hanken\)/);
+    expect(css).toMatch(/--font-body-app:\s*var\(--font-geist\)/);
+    expect(css).toMatch(/--font-home-sans:\s*var\(--font-body-app\)/);
     expect(css).toMatch(/--font-display-app:\s*var\(--font-fraunces\)/);
     expect(css).toMatch(/--font-home-serif:\s*var\(--font-display-app\)/);
   });
@@ -79,6 +80,7 @@ describe("Home warm-operational-editorial tokens — P1-A", () => {
   it("font tokens never name an unloaded family (token honesty)", () => {
     expect(css).not.toMatch(/Instrument Sans/);
     expect(css).not.toMatch(/Newsreader/);
+    expect(css).not.toMatch(/Hanken/);
   });
 });
 
