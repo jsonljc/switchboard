@@ -154,6 +154,16 @@ export type {
   MeasurementFixRef,
 } from "./analyzers/opportunity-arbitrator.js";
 
+// Riley v3 (spec 2.2): the ownership derivation and the single five-field
+// emitted-risk-contract producer (both PURE modules; the dashboard parity
+// tripwire and any future operator surface consume these through the barrel).
+// deriveOwnershipAnnotations stays package-internal (only the audit runner
+// builds the report annotation); the sink module is never public API.
+export { deriveOwnership } from "./recommendation-ownership.js";
+export type { DeriveOwnershipInput, OwnershipAnnotation } from "./recommendation-ownership.js";
+export { emittedRiskContractFor, URGENCY_TO_RISK } from "./recommendation-risk-contract.js";
+export type { EmittedRiskContract } from "./recommendation-risk-contract.js";
+
 // Abstention helpers (consumed by the Riley->agent recommendation-handoff seam).
 export { meetsEvidenceFloor, evidenceFamilyFor, EVIDENCE_FLOORS } from "./evidence-floor.js";
 export type { Evidence, EvidenceFamily } from "./evidence-floor.js";

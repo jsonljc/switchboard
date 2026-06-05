@@ -6,7 +6,7 @@ import type {
 } from "@switchboard/schemas";
 import type { RecommendationOutput } from "./recommendation-engine.js";
 import type { CampaignEconomicsRow } from "./analyzers/source-comparator.js";
-import { ACTION_CONTRACT } from "./action-contract.js";
+import { emittedRiskContractFor } from "./recommendation-risk-contract.js";
 import {
   buildHandoffCandidate,
   type HandoffCampaignContext,
@@ -111,18 +111,6 @@ export interface RunRecommendationSinkResult {
 }
 
 /**
- * Map ad-optimizer urgency (immediate / this_week / next_cycle) to the
- * Recommendation riskLevel enum (low / medium / high) used by the core router.
- * Urgency reflects "how soon should this be acted on" — that aligns with risk
- * for the v1 router (high-urgency items are time-sensitive financial signals).
- */
-const URGENCY_TO_RISK: Record<RecommendationOutput["urgency"], "low" | "medium" | "high"> = {
-  immediate: "high",
-  this_week: "medium",
-  next_cycle: "low",
-};
-
-/**
  * Map urgency to expiry hours. high=8h (act today), medium=24h (this week),
  * low=168h / 7d (next cycle). The router/UI uses expiresAt to mark stale
  * recommendations; values are deliberate calibration knobs for v1.
@@ -133,11 +121,10 @@ const URGENCY_TO_EXPIRY_HOURS: Record<RecommendationOutput["urgency"], number> =
   next_cycle: 168,
 };
 
-// Risk-contract flags now live on the consolidated ACTION_CONTRACT (Riley v3
-// slice 2, action-contract.ts); the sink reads the same financialEffect /
-// externalEffect booleans it always emitted. Riley does NOT message clients, so
-// clientFacing stays false below; requiresConfirmation stays false (riskLevel
-// drives the high-risk confirm step on the UI side).
+// Risk-contract fields are produced by emittedRiskContractFor
+// (recommendation-risk-contract.ts), the single producer shared with the
+// ownership derivation and the dashboard parity tripwire; the sink emits the
+// same five fields it always emitted.
 
 /**
  * Surface-agnostic human summary. Describes the recommendation, NOT the
@@ -416,12 +403,7 @@ export async function runRecommendationSink(
 
   for (const rec of args.recommendations) {
     const expiresAt = new Date(Date.now() + URGENCY_TO_EXPIRY_HOURS[rec.urgency] * 60 * 60 * 1000);
-    const contract = ACTION_CONTRACT[rec.action];
-    const financialEffect = contract.financialEffect;
-    // INVARIANT (Phase-A spec §5/§7): a learning-resetting action is a material,
-    // hard-to-undo change even when no dollars move — never swipe-approvable. The
-    // router treats externalEffect=true as "not swipe-approvable".
-    const externalEffect = contract.externalEffect || rec.resetsLearning === "yes";
+    const riskContract = emittedRiskContractFor(rec.action, rec.urgency);
     const result = await args.emit(
       {
         orgId: args.orgId,
@@ -431,11 +413,11 @@ export async function runRecommendationSink(
         humanSummary: humanizeRecommendation(rec),
         confidence: rec.confidence,
         dollarsAtRisk: estimateRisk(rec),
-        riskLevel: URGENCY_TO_RISK[rec.urgency],
-        financialEffect,
-        externalEffect,
-        clientFacing: false,
-        requiresConfirmation: false,
+        riskLevel: riskContract.riskLevel,
+        financialEffect: riskContract.financialEffect,
+        externalEffect: riskContract.externalEffect,
+        clientFacing: riskContract.clientFacing,
+        requiresConfirmation: riskContract.requiresConfirmation,
         // NOTE: we deliberately do NOT inject a `spendAmount` here for the
         // governance spend-approval threshold. `dollarsAtRisk` is scraped from the
         // human-authored `estimatedImpact` string, which is an IMPACT projection
