@@ -121,17 +121,17 @@ Mechanics:
 The notification is built at park time from data already in scope (verified at
 `platform-ingress.ts:282-317`):
 
-| ApprovalNotification field | Value at park                                                                                                       | Why                                                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `approvalId`               | `lifecycle.id`                                                                                                      | The respond fallback leg resolves lifecycle ids; e2e-proven by the bridge suite (taps drive `approvalId = parked.lifecycleId`). |
-| `envelopeId`               | `workUnit.id`                                                                                                       | Matches the lifecycle's `actionEnvelopeId`; rendered as context only.                                                           |
-| `summary`                  | `` `${workUnit.intent} (requested by ${workUnit.actor.id})` ``                                                      | The established summary convention (`summary-builder.ts`, and the exact shape the bridge tests seed).                           |
-| `riskCategory`             | same cast the scope snapshot uses (`riskCategory ?? "medium"`)                                                      | One derivation, not two.                                                                                                        |
-| `explanation`              | `` `Approval level: ${decision.approvalLevel}. Policies: ${decision.matchedPolicies.join(", ") \|\| "default"}.` `` | Terse. The dashboard is the detail surface.                                                                                     |
-| `bindingHash`              | `revision.bindingHash`                                                                                              | The CURRENT revision's hash. A later patch creates a new revision; the old button then refuses `stale`, honestly.               |
-| `expiresAt`                | the same `expiresAt` written to the lifecycle                                                                       | One clock.                                                                                                                      |
-| `approvers`                | `routingConfig.defaultApprovers`                                                                                    | Identical to the `approvalScopeSnapshot`. Empty today; Slack targeting does not depend on it (section 5).                       |
-| `evidenceBundle`           | `{ intent, organizationId }`                                                                                        | Minimal. WorkUnit parameters never enter notification copy.                                                                     |
+| ApprovalNotification field | Value at park                                                                                                           | Why                                                                                                                                                                                                                                                                |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `approvalId`               | `lifecycle.id`                                                                                                          | The respond fallback leg resolves lifecycle ids; e2e-proven by the bridge suite (taps drive `approvalId = parked.lifecycleId`).                                                                                                                                    |
+| `envelopeId`               | `workUnit.id`                                                                                                           | Matches the lifecycle's `actionEnvelopeId`; rendered as context only.                                                                                                                                                                                              |
+| `summary`                  | `` `${workUnit.intent} (requested by ${workUnit.actor.id})` ``                                                          | The established summary convention (`summary-builder.ts`, and the exact shape the bridge tests seed).                                                                                                                                                              |
+| `riskCategory`             | normalized to the four known categories (`critical/high/medium/low`); anything else, including absent, becomes `medium` | A free-form cast would hide schema drift; the normalizer makes the fallback explicit and testable.                                                                                                                                                                 |
+| `explanation`              | `` `Approval level: ${decision.approvalLevel}. Policies: ${decision.matchedPolicies.join(", ") \|\| "default"}.` ``     | Terse. The dashboard is the detail surface.                                                                                                                                                                                                                        |
+| `bindingHash`              | `revision.bindingHash`                                                                                                  | The CURRENT revision's hash. A later patch creates a new revision; the old button then refuses `stale`, honestly.                                                                                                                                                  |
+| `expiresAt`                | the same `expiresAt` written to the lifecycle                                                                           | One clock.                                                                                                                                                                                                                                                         |
+| `approvers`                | `routingConfig.defaultApprovers` when non-empty, else `decision.approvers`                                              | Explicit rule: routing config wins (it is what the scope snapshot enforces), the governance decision's approvers inform when routing is silent. Informational in the pilot: Slack targeting is the configured conversation and never reads this field (section 5). |
+| `evidenceBundle`           | `{ intent, organizationId }`                                                                                            | Minimal. WorkUnit parameters never enter notification copy.                                                                                                                                                                                                        |
 
 The Slack message keeps the existing block layout (header with risk emoji, Risk +
 Expires fields, Summary + Reason section, envelope context line, Approve + Reject
@@ -140,7 +140,11 @@ bindingHash })`, `action_id` stays `approval_approve` / `approval_reject` (displ
 routing only; the value is the payload carrier). Approve and Reject only: chat cannot
 patch, and the parser rejects anything else. Expiry renders as minutes under 3 hours
 and whole hours at or above (the production default expiry is 24 hours;
-"1440 minutes" is noise). No em-dashes in any copy.
+"1440 minutes" is noise). When the message renders alert-only (empty bindingHash,
+section 6 item 3), a context line tells the operator what to do instead:
+"This approval cannot be actioned from Slack. Open the Inbox to review." No
+em-dashes in any copy. The mechanical summary shape is accepted for the pilot;
+enriching it from the work unit and evidence bundle is a named follow-up (section 8).
 
 ## 4. Decision 3: tap identity. CHOSEN: surface the stable channel user id through the gateway input
 
@@ -208,7 +212,11 @@ per-org BYO apps whose events/interactivity URLs point at
 that same org Slack app, or taps on notifier-posted buttons go to the wrong app and
 never reach the gateway. For the pilot (one org) this is one constraint to honor when
 setting the env var; it is also the structural reason posture B is the eventual
-multi-tenant shape. The deploy notes carry this requirement.
+multi-tenant shape. The deploy notes carry this requirement, the builder's enable log
+restates it ("ensure this bot token belongs to the same Slack app whose interactivity
+URL routes to the managed webhook"), and the pre-flip checklist treats posting alone
+as insufficient validation: a real button tap must round-trip before the pilot relies
+on it.
 
 Construction lives in a new `apps/api/src/bootstrap/approval-notifier.ts` (a pure,
 testable builder), injected at the existing `PlatformIngress` construction in
@@ -225,16 +233,18 @@ chain is explicitly out of scope.
    unset, the legacy approvers-as-conversation-ids behavior remains for backward
    compatibility. The bootstrap always sets it.
 2. **Logged-not-thrown delivery failure.** `postMessage` checks both the HTTP status
-   and Slack's `{ ok: false, error }` envelope and throws internally; `notify()`
-   catches per-target results and logs failures with `console.error` including the
-   `approvalId` (never the bindingHash, never message content; the bridge spec's
-   logging discipline). `notify()` itself never rejects with a delivery error, and the
-   park path additionally guards (Decision 1), so failure is observable in logs and
-   harmless to the action.
+   and Slack's `{ ok: false, error }` envelope and throws internally (a non-JSON or
+   empty body from a proxy also surfaces here, as the json() rejection); `notify()`
+   inspects per-target results and logs failures with `console.error` including the
+   `approvalId` AND the target conversation id (operational identifiers, useful for
+   debugging; never the bindingHash, never message content). `notify()` itself never
+   rejects with a delivery error, and the park path additionally guards (Decision 1),
+   so failure is observable in logs and harmless to the action.
 3. **Buttons only when actionable.** The actions block renders only when
    `bindingHash` is non-empty. An empty hash (the `HandoffNotifier` shape) produces an
    alert-only message instead of buttons whose taps would fall through to the LLM as
-   raw JSON text.
+   raw JSON text, plus the context cue from section 3 so the operator knows to use
+   the Inbox.
 
 ## 7. Degraded modes and activation
 
@@ -254,7 +264,11 @@ wiring PR body): respond bridge live (it is, since #910), binding row seeded wit
 U... id, `SLACK_BOT_TOKEN` = the managed org app's token, `SLACK_APPROVAL_CHANNEL` set
 to the ops conversation, bot invited to that conversation (`channel_not_found` /
 `not_in_channel` otherwise, visible in API logs), then one real parked approval
-round-tripped.
+round-tripped END TO END: a successful post is NOT sufficient validation, because the
+wrong app's token still posts fine (row 7 above); only a real button tap that reaches
+the gateway and replies honestly proves the loop. The PR-4 body also states the
+visibility/authority split explicitly: Slack channel membership does not grant
+approval authority; the binding store remains the enforcement point.
 
 ## 8. Scope
 
@@ -286,6 +300,9 @@ OUT (each named, none silent):
   orchestrator's `ctx.approvalNotifier` surface: untouched.
 - Updating the Slack message in place after a response (nice-to-have; the honest
   in-thread reply already closes the loop).
+- Operator-friendly summary enrichment (deriving human copy from the work unit and
+  evidence bundle): the mechanical `intent (requested by actor)` shape ships for the
+  pilot; enrichment is a named follow-up.
 
 ## 9. Tests (co-located, TDD; api tests use mocked Prisma; core uses in-memory stores)
 
@@ -294,18 +311,23 @@ OUT (each named, none silent):
   non-null with exactly `{action, approvalId, bindingHash}` (mutation check: a
   four-key or truncated value must parse null and the test must red);
   `defaultConversationId` wins over approvers; empty approvers + no default = no
-  post; HTTP failure and `{ok:false}` envelope are logged via `console.error` and
-  `notify()` resolves; empty `bindingHash` renders no actions block; expiry renders
-  minutes under 3h and hours at/above.
+  post; HTTP failure and `{ok:false}` envelope are logged via `console.error` with
+  the approvalId AND the target conversation, and `notify()` resolves; empty
+  `bindingHash` renders no actions block AND renders the Inbox cue line; expiry
+  renders minutes under 3h and hours at/above.
 - **core, platform-ingress-approval-notify suite** (new file, sibling to the existing
   focused ingress suites): a `require_approval` submit with a lifecycle service fires
   exactly one notification carrying `approvalId === lifecycle.id`,
-  `bindingHash === revision.bindingHash`, the workUnit intent in the summary, and the
-  lifecycle's `expiresAt`; an `execute` submit fires nothing; a `deny` fires nothing;
-  no notifier configured = parking unchanged (mutation check: removing the hook call
-  must red the fired test); a notifier whose `notify` rejects, and one that throws
-  synchronously, both leave the submit response and lifecycle creation intact with the
-  failure logged.
+  `bindingHash === revision.bindingHash`, the workUnit intent in the summary
+  (substring assertions, not locked copy), and the lifecycle's `expiresAt`; an
+  `execute` submit fires nothing; a `deny` fires nothing; no notifier configured =
+  parking unchanged (mutation check: removing the hook call must red the fired test);
+  a notifier whose `notify` rejects, and one that throws synchronously, both leave
+  the submit response and lifecycle creation intact with the failure logged (async
+  assertions via `vi.waitFor`, not bare timer flushes); approver fallback rule
+  (routing config empty + decision approvers present = decision approvers in the
+  notification); an unknown `riskCategory` value on the decision normalizes to
+  `medium`.
 - **core, channel-gateway approval branch** (extends `channel-gateway-approval.test.ts`):
   an approval-shaped message with `principalId` set reaches the respond path with
   `channelIdentifier === principalId`; without `principalId` it uses `sessionId`
@@ -314,7 +336,13 @@ OUT (each named, none silent):
 - **chat, managed-webhook mapping** (extends the webhook suite): a signed Slack
   block_actions POST reaches the gateway with `sessionId = channel id` AND
   `principalId = user id`; an events-API message maps the same way; WhatsApp messages
-  map `principalId === sessionId`.
+  map `principalId === sessionId`. Production-encoding realism: the interactivity
+  parser registration is extracted from `main.ts` into
+  `apps/chat/src/routes/slack-form-parser.ts` so the suite can drive the REAL
+  parser, and one leg posts a genuine `application/x-www-form-urlencoded`
+  `payload=<json>` body with a REAL HMAC signature computed over the RAW form body
+  (the exact wire shape Slack sends), proving form decode, rawBody preservation for
+  signature verification, and identity forwarding in one pass.
 - **api, bootstrap builder suite** (new): both envs set = notifier constructed with
   the right token and conversation; either missing = undefined + the boot log line;
   no throw in any combination.
@@ -346,20 +374,24 @@ OUT (each named, none silent):
    (port + fire), `platform/__tests__/platform-ingress-approval-notify.test.ts` (new).
 2. **PR-2 identity seam**: `channel-gateway/types.ts` (`principalId`),
    `channel-gateway/channel-gateway.ts` (approval-branch identity + contract comment),
+   `channel-gateway/index.ts` (export the payload parser for the e2e proof),
    `channel-gateway/__tests__/channel-gateway-approval.test.ts`,
-   `apps/chat/src/routes/managed-webhook.ts`, `apps/chat/src/main.ts` (one line),
-   chat webhook tests.
+   `apps/chat/src/routes/managed-webhook.ts`,
+   `apps/chat/src/routes/slack-form-parser.ts` (new; parser extraction),
+   `apps/chat/src/main.ts` (consume the extracted parser + one principalId line),
+   chat webhook tests including the form-encoded leg.
 3. **PR-3 e2e proof**: `apps/api/src/__tests__/slack-approval-notify-loop.test.ts`
    (new) + the one-field harness extension (`recommendation-handoff-harness.ts` gains
    an optional `approvalNotifier` passthrough). Proof lands BEFORE activation.
 4. **PR-4 api wiring (the activating PR, last)**:
    `apps/api/src/bootstrap/approval-notifier.ts` (new) + builder tests, `app.ts`
    injection, `.env.example`, `scripts/env-allowlist.local-readiness.json`. Dark until
-   both env vars are set on Render; PR body carries the pre-flip checklist (section 7).
+   both env vars are set on Render; PR body carries the pre-flip checklist (section 7)
+   and the visibility/authority statement.
 
 PR-2 is compile-independent of PR-1; PR-3 depends on PR-1 (the port and notifier
-options); PR-4 depends on PR-1. Landing order is 1, 2, 3, 4 to keep the train
-sequential and each diff reviewable against main.
+options) and PR-2 (the parser barrel export); PR-4 depends on PR-1. Landing order is
+1, 2, 3, 4 to keep the train sequential and each diff reviewable against main.
 
 ## 11. Risks and honest limits
 

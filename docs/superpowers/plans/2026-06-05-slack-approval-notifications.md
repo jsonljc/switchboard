@@ -27,13 +27,13 @@
 
 ## File map
 
-| PR   | Files                                                                                                                                                                                                                                                                                                                                                                                        |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PR-0 | `docs/superpowers/specs/2026-06-05-slack-approval-notifications-design.md`, `docs/superpowers/plans/2026-06-05-slack-approval-notifications.md`                                                                                                                                                                                                                                              |
-| PR-1 | `packages/core/src/notifications/slack-notifier.ts`, `packages/core/src/notifications/index.ts`, `packages/core/src/notifications/__tests__/slack-notifier.test.ts`, `packages/core/src/platform/platform-ingress.ts`, `packages/core/src/platform/__tests__/platform-ingress-approval-notify.test.ts` (new)                                                                                 |
-| PR-2 | `packages/core/src/channel-gateway/types.ts`, `packages/core/src/channel-gateway/channel-gateway.ts`, `packages/core/src/channel-gateway/index.ts` (export the parser), `packages/core/src/channel-gateway/__tests__/channel-gateway-approval.test.ts`, `apps/chat/src/routes/managed-webhook.ts`, `apps/chat/src/main.ts`, `apps/chat/src/__tests__/managed-webhook-identity.test.ts` (new) |
-| PR-3 | `apps/api/src/__tests__/recommendation-handoff-harness.ts`, `apps/api/src/__tests__/recommendation-handoff-lifecycle-world.ts`, `apps/api/src/__tests__/slack-approval-notify-loop.test.ts` (new)                                                                                                                                                                                            |
-| PR-4 | `apps/api/src/bootstrap/approval-notifier.ts` (new), `apps/api/src/bootstrap/__tests__/approval-notifier.test.ts` (new), `apps/api/src/app.ts`, `.env.example`, `scripts/env-allowlist.local-readiness.json`                                                                                                                                                                                 |
+| PR   | Files                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PR-0 | `docs/superpowers/specs/2026-06-05-slack-approval-notifications-design.md`, `docs/superpowers/plans/2026-06-05-slack-approval-notifications.md`                                                                                                                                                                                                                                                                                                 |
+| PR-1 | `packages/core/src/notifications/slack-notifier.ts`, `packages/core/src/notifications/index.ts`, `packages/core/src/notifications/__tests__/slack-notifier.test.ts`, `packages/core/src/platform/platform-ingress.ts`, `packages/core/src/platform/__tests__/platform-ingress-approval-notify.test.ts` (new)                                                                                                                                    |
+| PR-2 | `packages/core/src/channel-gateway/types.ts`, `packages/core/src/channel-gateway/channel-gateway.ts`, `packages/core/src/channel-gateway/index.ts` (export the parser), `packages/core/src/channel-gateway/__tests__/channel-gateway-approval.test.ts`, `apps/chat/src/routes/slack-form-parser.ts` (new), `apps/chat/src/routes/managed-webhook.ts`, `apps/chat/src/main.ts`, `apps/chat/src/__tests__/managed-webhook-identity.test.ts` (new) |
+| PR-3 | `apps/api/src/__tests__/recommendation-handoff-harness.ts`, `apps/api/src/__tests__/recommendation-handoff-lifecycle-world.ts`, `apps/api/src/__tests__/slack-approval-notify-loop.test.ts` (new)                                                                                                                                                                                                                                               |
+| PR-4 | `apps/api/src/bootstrap/approval-notifier.ts` (new), `apps/api/src/bootstrap/__tests__/approval-notifier.test.ts` (new), `apps/api/src/app.ts`, `.env.example`, `scripts/env-allowlist.local-readiness.json`                                                                                                                                                                                                                                    |
 
 No file appears in two PRs. PR-2 is compile-independent of PR-1. PR-3 depends on PR-1 (port + notifier options) AND PR-2 (the parser barrel export). PR-4 depends on PR-1.
 
@@ -120,7 +120,7 @@ it("does not post when approvers is empty and no default conversation is set", a
   expect(fetchSpy).not.toHaveBeenCalled();
 });
 
-it("logs and resolves on HTTP failure (send is best-effort, never thrown)", async () => {
+it("logs approvalId AND target and resolves on HTTP failure (best-effort, never thrown)", async () => {
   const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   fetchSpy.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
   const notifier = new SlackApprovalNotifier("xoxb-test-token");
@@ -128,6 +128,10 @@ it("logs and resolves on HTTP failure (send is best-effort, never thrown)", asyn
   await expect(notifier.notify(makeNotification())).resolves.toBeUndefined();
   expect(errorSpy).toHaveBeenCalledWith(
     expect.stringContaining("approvalId=appr_1"),
+    expect.anything(),
+  );
+  expect(errorSpy).toHaveBeenCalledWith(
+    expect.stringContaining("target=U12345"),
     expect.anything(),
   );
 });
@@ -139,16 +143,15 @@ it("logs and resolves on a Slack ok:false envelope (HTTP 200)", async () => {
     status: 200,
     json: async () => ({ ok: false, error: "channel_not_found" }),
   });
-  const notifier = new SlackApprovalNotifier("xoxb-test-token");
+  const notifier = new SlackApprovalNotifier("xoxb-test-token", {
+    defaultConversationId: "C_OPS",
+  });
 
   await expect(notifier.notify(makeNotification())).resolves.toBeUndefined();
-  expect(errorSpy).toHaveBeenCalledWith(
-    expect.stringContaining("approvalId=appr_1"),
-    expect.anything(),
-  );
+  expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("target=C_OPS"), expect.anything());
 });
 
-it("renders no action buttons when bindingHash is empty (alert-only)", async () => {
+it("renders no action buttons when bindingHash is empty, with the Inbox cue (alert-only)", async () => {
   const notifier = new SlackApprovalNotifier("xoxb-test-token");
   await notifier.notify(makeNotification({ bindingHash: "" }));
 
@@ -156,6 +159,9 @@ it("renders no action buttons when bindingHash is empty (alert-only)", async () 
   const body = JSON.parse(options.body);
   const actionsBlock = (body.blocks as Array<{ type: string }>).find((b) => b.type === "actions");
   expect(actionsBlock).toBeUndefined();
+  expect(JSON.stringify(body.blocks)).toContain(
+    "This approval cannot be actioned from Slack. Open the Inbox to review.",
+  );
 });
 
 it("renders expiry in hours at or above 3 hours, minutes below", async () => {
@@ -213,17 +219,18 @@ export class SlackApprovalNotifier implements ApprovalNotifier {
     const results = await Promise.allSettled(
       targets.map((conversation) => this.postMessage(conversation, blocks)),
     );
-    for (const result of results) {
+    results.forEach((result, i) => {
       if (result.status === "rejected") {
         // Logged, never thrown: a notification is best-effort delivery of an
         // invitation to act (spec section 6). The lifecycle and the dashboard
-        // Inbox remain canonical. Never log bindingHash or message content.
+        // Inbox remain canonical. The target is an operational identifier
+        // (debugging aid); never log bindingHash or message content.
         console.error(
-          `[SlackApprovalNotifier] send failed (approvalId=${notification.approvalId})`,
+          `[SlackApprovalNotifier] send failed (approvalId=${notification.approvalId}, target=${targets[i]})`,
           result.reason,
         );
       }
-    }
+    });
   }
 
   private buildBlocks(n: ApprovalNotification): unknown[] {
@@ -253,7 +260,8 @@ export class SlackApprovalNotifier implements ApprovalNotifier {
 
     // Buttons only when actionable: an empty bindingHash (the escalation-handoff
     // shape) cannot form a payload parseApprovalResponsePayload accepts, so render
-    // alert-only instead of buttons whose taps would fall through as raw JSON text.
+    // alert-only (with an Inbox cue) instead of buttons whose taps would fall
+    // through as raw JSON text.
     if (n.bindingHash.length > 0) {
       blocks.push({
         type: "actions",
@@ -279,6 +287,16 @@ export class SlackApprovalNotifier implements ApprovalNotifier {
               approvalId: n.approvalId,
               bindingHash: n.bindingHash,
             }),
+          },
+        ],
+      });
+    } else {
+      blocks.push({
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: "This approval cannot be actioned from Slack. Open the Inbox to review.",
           },
         ],
       });
@@ -472,10 +490,6 @@ function buildIngress(opts: {
   });
 }
 
-function flushAsync(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 describe("PlatformIngress park-time approval notification", () => {
   it("fires exactly one notification carrying the lifecycle id and current bindingHash", async () => {
     const notify = vi.fn().mockResolvedValue(undefined);
@@ -489,11 +503,47 @@ describe("PlatformIngress park-time approval notification", () => {
     expect(notification.approvalId).toBe(res.lifecycleId);
     expect(notification.bindingHash).toBe(res.bindingHash);
     expect(notification.envelopeId).toBe(res.workUnit.id);
-    expect(notification.summary).toBe("noop.intent (requested by system)");
+    // Substring assertions: the summary shape is pilot copy, not a contract.
+    expect(notification.summary).toContain("noop.intent");
+    expect(notification.summary).toContain("system");
     expect(notification.riskCategory).toBe("medium");
     expect(notification.explanation).toContain("operator");
     expect(notification.expiresAt).toBeInstanceOf(Date);
     expect(notification.approvers).toEqual([]);
+  });
+
+  it("falls back to the decision's approvers when routing config has none", async () => {
+    const notify = vi.fn().mockResolvedValue(undefined);
+    const decision = requireApprovalDecision();
+    if (decision.outcome !== "require_approval") throw new Error("unreachable");
+    decision.approvers = ["principal-1"];
+    const ingress = buildIngress({ decision, notifier: { notify } });
+
+    await ingress.submit(makeRequest());
+
+    expect(notify.mock.calls[0]![0].approvers).toEqual(["principal-1"]);
+  });
+
+  it("normalizes an unknown riskCategory on the decision to medium", async () => {
+    const notify = vi.fn().mockResolvedValue(undefined);
+    const decision = requireApprovalDecision() as GovernanceDecision & Record<string, unknown>;
+    decision["riskCategory"] = "banana";
+    const ingress = buildIngress({ decision, notifier: { notify } });
+
+    await ingress.submit(makeRequest());
+
+    expect(notify.mock.calls[0]![0].riskCategory).toBe("medium");
+  });
+
+  it("passes a known riskCategory through", async () => {
+    const notify = vi.fn().mockResolvedValue(undefined);
+    const decision = requireApprovalDecision() as GovernanceDecision & Record<string, unknown>;
+    decision["riskCategory"] = "high";
+    const ingress = buildIngress({ decision, notifier: { notify } });
+
+    await ingress.submit(makeRequest());
+
+    expect(notify.mock.calls[0]![0].riskCategory).toBe("high");
   });
 
   it("does not notify on an execute outcome", async () => {
@@ -536,14 +586,16 @@ describe("PlatformIngress park-time approval notification", () => {
     const ingress = buildIngress({ decision: requireApprovalDecision(), notifier: { notify } });
 
     const res = await ingress.submit(makeRequest());
-    await flushAsync();
 
     if (!res.ok || !("approvalRequired" in res)) throw new Error("expected a parked response");
     expect(res.lifecycleId).toBeDefined();
-    expect(errorSpy).toHaveBeenCalledWith(
-      "[PlatformIngress] approval notification failed",
-      expect.anything(),
-    );
+    // The fire is intentionally not awaited by submit; wait for the catch leg.
+    await vi.waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        "[PlatformIngress] approval notification failed",
+        expect.anything(),
+      );
+    });
   });
 
   it("a synchronously-throwing notifier is logged and never breaks the park", async () => {
@@ -589,7 +641,23 @@ import type { ApprovalNotifier, ApprovalNotification } from "../notifications/no
   approvalNotifier?: ApprovalNotifier;
 ```
 
-(c) in step 6, between the `const { lifecycle, revision } = await ...createGatedLifecycle(...)` call and the `return`, insert:
+(c) add a module-level normalizer next to `jitteredDelayMs` (top of file, after the
+delay helpers):
+
+```ts
+/**
+ * The notification surface renders four known risk categories; anything else
+ * (including absent) is schema drift and falls back to "medium" explicitly
+ * rather than leaking free-form strings into operator copy.
+ */
+function normalizeRiskCategory(value: unknown): string {
+  return value === "critical" || value === "high" || value === "medium" || value === "low"
+    ? value
+    : "medium";
+}
+```
+
+(d) in step 6, between the `const { lifecycle, revision } = await ...createGatedLifecycle(...)` call and the `return`, insert:
 
 ```ts
 if (this.config.approvalNotifier) {
@@ -597,13 +665,19 @@ if (this.config.approvalNotifier) {
     approvalId: lifecycle.id,
     envelopeId: workUnit.id,
     summary: `${workUnit.intent} (requested by ${workUnit.actor.id})`,
-    riskCategory: String((decision as Record<string, unknown>)["riskCategory"] ?? "medium"),
+    riskCategory: normalizeRiskCategory((decision as Record<string, unknown>)["riskCategory"]),
     explanation: `Approval level: ${decision.approvalLevel}. Policies: ${
       decision.matchedPolicies.join(", ") || "default"
     }.`,
     bindingHash: revision.bindingHash,
     expiresAt,
-    approvers: routingConfig.defaultApprovers,
+    // Routing config wins (it is what the scope snapshot enforces); the
+    // governance decision's approvers inform when routing is silent.
+    // Informational in the pilot: Slack targeting never reads this field.
+    approvers:
+      routingConfig.defaultApprovers.length > 0
+        ? routingConfig.defaultApprovers
+        : decision.approvers,
     evidenceBundle: { intent: workUnit.intent, organizationId: workUnit.organizationId },
   };
   // Fire-and-forget with logged failure (the propose-pipeline precedent).
@@ -758,13 +832,53 @@ git add packages/core/src/channel-gateway/types.ts packages/core/src/channel-gat
 git commit -m "feat(core): bind channel approvals on the stable channel user id"
 ```
 
-### Task 5: webhook routes forward principalId
+### Task 5: webhook routes forward principalId (with production-encoding realism)
 
 **Files:**
 
+- Create: `apps/chat/src/routes/slack-form-parser.ts` (parser extraction from main.ts, so tests drive the REAL production form decoder)
 - Modify: `apps/chat/src/routes/managed-webhook.ts` (one field)
-- Modify: `apps/chat/src/main.ts` (one field, single-tenant telegram path)
+- Modify: `apps/chat/src/main.ts` (consume the extracted parser + one principalId field, single-tenant telegram path)
 - Test: `apps/chat/src/__tests__/managed-webhook-identity.test.ts` (new)
+
+- [ ] **Step 5.0: Extract the form parser** (pure move, no behavior change; main.ts's inline `addContentTypeParser` block at ~69-82 becomes a call). Create `apps/chat/src/routes/slack-form-parser.ts`:
+
+```ts
+import type { FastifyInstance } from "fastify";
+
+/**
+ * Slack interactivity (block_actions) arrives as application/x-www-form-urlencoded
+ * with a `payload` field carrying JSON. Decode it to the parsed payload object and
+ * preserve the RAW body on the request for HMAC signature verification: Slack signs
+ * the raw form body, not the decoded JSON. Extracted from main.ts so route tests
+ * can register the REAL production parser.
+ */
+export function registerSlackFormEncodedParser(app: FastifyInstance): void {
+  app.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string" },
+    (req, body, done) => {
+      try {
+        (req as unknown as Record<string, unknown>).rawBody = body;
+        const params = new URLSearchParams(body as string);
+        const payload = params.get("payload");
+        done(null, payload ? JSON.parse(payload) : Object.fromEntries(params));
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    },
+  );
+}
+```
+
+In `main.ts`, replace the inline `app.addContentTypeParser("application/x-www-form-urlencoded", ...)` block with:
+
+```ts
+// Parse application/x-www-form-urlencoded (Slack interactive payloads)
+registerSlackFormEncodedParser(app);
+```
+
+plus the import `import { registerSlackFormEncodedParser } from "./routes/slack-form-parser.js";`. Run `pnpm --filter @switchboard/chat test` to confirm the move broke nothing before proceeding.
 
 - [ ] **Step 5.1: Write the failing test file:**
 
@@ -777,6 +891,8 @@ import {
 } from "../routes/managed-webhook.js";
 import type { GatewayEntry } from "../managed/runtime-registry.js";
 import { SlackAdapter } from "../adapters/slack.js";
+import { registerSlackFormEncodedParser } from "../routes/slack-form-parser.js";
+import { createHmac } from "node:crypto";
 
 // The gateway binds approval responses on the stable channel USER id
 // (OperatorChannelBinding doctrine; bridge spec section 5). The route must
@@ -798,6 +914,9 @@ function makeEntry(
 
 async function buildApp(entry: GatewayEntry): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+  // The REAL production form decoder (extracted from main.ts): block_actions
+  // arrive form-encoded; the parser unwraps `payload` and preserves rawBody.
+  registerSlackFormEncodedParser(app);
   const deps: ManagedWebhookDeps = {
     registry: { getGatewayByWebhookPath: () => entry },
   };
@@ -873,6 +992,96 @@ describe("managed webhook identity forwarding", () => {
     await app.close();
   });
 
+  it("a REAL form-encoded signed interactivity POST (the wire shape Slack sends) forwards identity", async () => {
+    // Signature verification runs over the RAW form body; the parser must
+    // preserve it. This is the production encoding path end to end: form decode
+    // -> rawBody HMAC -> adapter parse -> identity forwarding.
+    const SIGNING_SECRET = "test-signing-secret";
+    const adapter = new SlackAdapter(
+      "xoxb-test",
+      SIGNING_SECRET,
+    ) as unknown as GatewayEntry["adapter"];
+    const handleIncoming = vi.fn(async () => {});
+    const app = await buildApp(makeEntry(adapter, handleIncoming));
+
+    const interactivityPayload = {
+      type: "block_actions",
+      user: { id: "U12345" },
+      channel: { id: "C67890" },
+      team: { id: "T11111" },
+      actions: [
+        {
+          action_id: "approval_approve",
+          value: JSON.stringify({ action: "approve", approvalId: "lc_1", bindingHash: "h1" }),
+          type: "button",
+        },
+      ],
+    };
+    const rawBody = new URLSearchParams({
+      payload: JSON.stringify(interactivityPayload),
+    }).toString();
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature =
+      "v0=" +
+      createHmac("sha256", SIGNING_SECRET).update(`v0:${timestamp}:${rawBody}`).digest("hex");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/webhook/managed/abc",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-slack-request-timestamp": timestamp,
+        "x-slack-signature": signature,
+      },
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(handleIncoming).toHaveBeenCalledTimes(1);
+    const input = handleIncoming.mock.calls[0]![0];
+    expect(input.sessionId).toBe("C67890");
+    expect(input.principalId).toBe("U12345");
+    expect(input.text).toBe(
+      JSON.stringify({ action: "approve", approvalId: "lc_1", bindingHash: "h1" }),
+    );
+    await app.close();
+  });
+
+  it("a tampered form body fails signature verification (rawBody is what gets signed)", async () => {
+    const SIGNING_SECRET = "test-signing-secret";
+    const adapter = new SlackAdapter(
+      "xoxb-test",
+      SIGNING_SECRET,
+    ) as unknown as GatewayEntry["adapter"];
+    const handleIncoming = vi.fn(async () => {});
+    const app = await buildApp(makeEntry(adapter, handleIncoming));
+
+    const rawBody = new URLSearchParams({
+      payload: JSON.stringify({ type: "block_actions" }),
+    }).toString();
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature =
+      "v0=" +
+      createHmac("sha256", SIGNING_SECRET)
+        .update(`v0:${timestamp}:${rawBody}DIFFERENT`)
+        .digest("hex");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/webhook/managed/abc",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-slack-request-timestamp": timestamp,
+        "x-slack-signature": signature,
+      },
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(handleIncoming).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("a stable-identity adapter (WhatsApp shape) yields principalId === sessionId", async () => {
     const adapter = {
       channel: "whatsapp",
@@ -944,7 +1153,7 @@ await singleTenantGateway.handleIncoming(
 - [ ] **Step 5.5:** Commit:
 
 ```bash
-git add apps/chat/src/routes/managed-webhook.ts apps/chat/src/main.ts apps/chat/src/__tests__/managed-webhook-identity.test.ts
+git add apps/chat/src/routes/slack-form-parser.ts apps/chat/src/routes/managed-webhook.ts apps/chat/src/main.ts apps/chat/src/__tests__/managed-webhook-identity.test.ts
 git commit -m "feat(chat): forward stable channel user id to the gateway"
 ```
 
@@ -1354,7 +1563,9 @@ export function buildParkedApprovalNotifier(
     );
     return undefined;
   }
-  logger.info("Approval notifications: Slack enabled for parked approvals");
+  logger.info(
+    "Approval notifications: Slack enabled for parked approvals. Ensure this bot token belongs to the same Slack app whose interactivity URL routes to the managed webhook, or button taps will never arrive.",
+  );
   return new SlackApprovalNotifier(env.slackBotToken, {
     defaultConversationId: env.slackApprovalChannel,
   });
@@ -1403,7 +1614,7 @@ git add apps/api/src/bootstrap/approval-notifier.ts apps/api/src/bootstrap/__tes
 git commit -m "feat(api): wire slack parked-approval notifier into platform ingress"
 ```
 
-- [ ] **Step 8.9:** Full gate, push, PR-4 with the PRE-FLIP CHECKLIST in the body (from spec section 7): respond bridge live (#910), binding row seeded with the U... id (SQL in bridge spec section 5), `SLACK_BOT_TOKEN` = the managed org app's token, `SLACK_APPROVAL_CHANNEL` = the ops conversation id, bot invited to that conversation, then one real parked approval round-tripped. Code-review subagent, merge, ancestry check.
+- [ ] **Step 8.9:** Full gate, push, PR-4 with the PRE-FLIP CHECKLIST in the body (from spec section 7): respond bridge live (#910), binding row seeded with the U... id (SQL in bridge spec section 5), `SLACK_BOT_TOKEN` = the managed org app's token, `SLACK_APPROVAL_CHANNEL` = the ops conversation id, bot invited to that conversation, then one real parked approval round-tripped END TO END with a REAL button tap (a successful post is NOT sufficient validation: the wrong app's token still posts fine but taps go to the wrong interactivity URL). The body also states the visibility/authority split: Slack channel membership does not grant approval authority; the binding store remains the enforcement point. Code-review subagent, merge, ancestry check.
 
 ---
 
