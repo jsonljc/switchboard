@@ -11,6 +11,7 @@ Each prompt is verified against the backend at the moment it was written — fil
 - [/mission](2026-05-13-mission.md) — operator command center across agents. Greenfield route; data hooks exist.
 - [/reports](2026-05-13-reports.md) — renewal-checkpoint statement. Schema locked (PRs R1..R6); this is an editorial second pass.
 - [/results](2026-05-26-results.md) — customer-facing Results tab (Home·Inbox·Results). Reuses the locked `ReportDataV1`; supersedes the 2026-05-13 `/reports` statement-page prompt for the customer surface. Producer-audited (corrected 2026-05-26).
+- [agent panel](2026-05-26-agent-panel.md) — read-mostly agent drill-in sheet (tap an agent from Home/Inbox/Results). Existing per-agent hooks (greeting/metrics/decisions/activity/mission); honest org-global Pause + "Not set up" Mira; cumulative-proof + autonomy-ratchet deferred to v1.1.
 
 ## Locked design snapshots
 
