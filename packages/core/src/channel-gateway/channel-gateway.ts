@@ -173,12 +173,13 @@ export class ChannelGateway {
       await handleApprovalResponse({
         payload: approvalPayload,
         organizationId: resolved.organizationId,
-        // sessionId IS the stable external identity for WhatsApp (phone) — see
-        // resolveContactIdentity.ts (sessionId === phone for WhatsApp). For other channels,
-        // the inbound adapter MUST set sessionId to a stable identity (channel user id), never
-        // an ephemeral message thread id. See OperatorChannelBinding model docs.
+        // Binding identity: the stable channel USER id when the adapter supplied
+        // one (Slack taps surface user.id as principalId while sessionId is the
+        // channel), else sessionId (WhatsApp sessionId IS the phone; see
+        // resolveContactIdentity.ts). Never an ephemeral message/thread id. See
+        // OperatorChannelBinding model docs and bridge spec section 5.
         channel: message.channel,
-        channelIdentifier: message.sessionId,
+        channelIdentifier: message.principalId ?? message.sessionId,
         approvalStore: this.config.approvalStore,
         replySink,
         config: this.config.approvalResponseConfig,
