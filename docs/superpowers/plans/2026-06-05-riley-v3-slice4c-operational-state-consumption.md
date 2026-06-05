@@ -2289,4 +2289,11 @@ Task 7 real-engine proof (scratch DB `switchboard_4c`: migrate deploy clean, all
 
 exit 0. Proven on the real engine: the 4a SQL window predicates and getLatest read, the stability derivation, the trustDelta demotion (none on the unstable window, up on stable/unknown), the DB CHECK acceptance of `stable`/`unstable`, and the full DI chain.
 
-(Task 8 gate outputs + grep proofs recorded below at the verification sweep.)
+Task 8 verification sweep (recorded 2026-06-05, branch HEAD post-Task-7, base `2951510b`):
+
+- Full build green (10 turbo tasks); `pnpm typecheck` green (21 tasks).
+- schemas: 753 passed (750 baseline + 3). core: 3845 passed (3806 baseline + 39: 32 stability matrix + 7 outcome additions). ad-optimizer: 552 passed (539 baseline + 13). api: 201 files passed (1489 tests). db: 9 failed in exactly the pre-existing PG trio (work-trace 6, ledger 2, greeting 1); one extra full-suite-load flake (`lead-intake-store` concurrent-upsert) passed 6/6 on isolated rerun, zero `packages/db` diff in this branch (fence proof 2).
+- `pnpm eval:riley` exit 0, BYTE-IDENTICAL to the pre-change baseline (12+10+6). `pnpm eval:governance` exit 0, BYTE-IDENTICAL (26). `pnpm eval:alex-conversation` exit 0, same environmental skip as baseline ("ANTHROPIC_API_KEY is not available"); static proof chain holds (fence proof 3: alex substrate byte-untouched; core suite green; build green).
+- Diff surface = exactly the 18 planned files (17 code/test + this plan doc), 3483 insertions, 17 deletions.
+- Fence proofs: (2) zero diff under `packages/db`, `apps/dashboard`, `evals/`; (3) `operational-state.ts`, `marketplace.ts`, `prisma-business-facts-store.ts` byte-untouched; (4) zero ADDED non-docs lines mention PlatformIngress (the one raw-grep hit was an unchanged context line of the pre-existing handoff comment adjacent to the new dep); (5) `corroborated` appears in non-test engine code only as comments asserting the negative plus the reserved type union (comment-stripped grep empty); (6) trust-copy tripwire + `outcome-activity-row.ts` byte-untouched; (7) `businessContextFreshness` referenced in ad-optimizer only by revenue-state/audit-runner/inngest-functions(threading)/tests.
+- `pnpm lint` green; `pnpm format:check` green; `pnpm arch:check` exit 0 (`audit-runner.ts` 687 lines = 🟡 legacy-debt warn via its eslint-disable marker, as planned; 🔴 package file-count lines are pre-existing informational); `check-routes --mode=error` exit 0 (8 pre-existing §12 advisories, tracked #654, none from this branch).
