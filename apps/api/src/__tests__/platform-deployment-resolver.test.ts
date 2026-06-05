@@ -104,4 +104,29 @@ describe("resolveAuthoritativeDeployment", () => {
     // distinguish an opted-in deployment from one merely carrying the $50 default.
     expect(ctx.spendAutonomyEnabled).toBe(true);
   });
+
+  it("resolves the creative deployment from the compose intent prefix (slice-4, no targetHint)", async () => {
+    // The slice-4 initiators pass targetHint explicitly, but the prefix
+    // fallback must ALSO land on the creative deployment: "creative.brief
+    // .compose" splits to "creative", which is Mira's seeded deployment slug.
+    let resolvedSlug: string | undefined;
+    const result = makeResult({ skillSlug: "creative", deploymentId: "dep-creative" });
+    const resolver: DeploymentResolver = {
+      resolveByOrgAndSlug: async (_org: string, slug: string) => {
+        resolvedSlug = slug;
+        return result;
+      },
+      resolveByDeploymentId: async () => result,
+      resolveByChannelToken: async () => result,
+    };
+    const authoritative = resolveAuthoritativeDeployment(resolver);
+    const ctx = await authoritative.resolve({
+      organizationId: "org-1",
+      intent: "creative.brief.compose",
+    } as unknown as CanonicalSubmitRequest);
+
+    expect(resolvedSlug).toBe("creative");
+    expect(ctx.deploymentId).toBe("dep-creative");
+    expect(ctx.skillSlug).toBe("creative");
+  });
 });

@@ -176,4 +176,25 @@ describe("mira brief-compose gate (real GovernanceGate + real registration)", ()
     const decision = await gate.evaluate(makeComposeWorkUnit(), composeRegistration());
     expect(decision.outcome).toBe("require_approval");
   });
+
+  it("require_approval wins regardless of priority order (override is sticky)", async () => {
+    // Reversed priorities vs the case above: the allow runs FIRST (40), the
+    // require_approval LAST (60). The engine's approval override is set-only
+    // and never cleared, so the park still wins; this pins order-independence
+    // rather than lower-number-wins.
+    const gate = buildGate([
+      policyFrom(CREATIVE_BRIEF_COMPOSE_ALLOW_POLICY_RULE, {
+        id: "policy_allow_compose",
+        priority: 40,
+      }),
+      policyFrom(CREATIVE_BRIEF_COMPOSE_ALLOW_POLICY_RULE, {
+        id: "policy_park_compose",
+        effect: "require_approval",
+        approvalRequirement: "mandatory",
+        priority: 60,
+      }),
+    ]);
+    const decision = await gate.evaluate(makeComposeWorkUnit(), composeRegistration());
+    expect(decision.outcome).toBe("require_approval");
+  });
 });
