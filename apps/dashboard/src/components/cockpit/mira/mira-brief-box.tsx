@@ -204,7 +204,7 @@ export function MiraBriefBox() {
               <span style={{ fontSize: 12, color: T.red }}>Resume Mira to brief her.</span>
             )}
             {phase === "submitted" && (
-              <span style={{ fontSize: 13, color: MIRA_ACCENT.base }}>
+              <span style={{ fontSize: 13, color: MIRA_ACCENT.deep }}>
                 Mira is on it. She started a draft. You&apos;ll review it before anything goes
                 further.
               </span>
