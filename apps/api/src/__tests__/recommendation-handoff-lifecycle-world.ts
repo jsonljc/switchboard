@@ -17,10 +17,15 @@ import {
 } from "@switchboard/core";
 import { buildHarness, allowPolicy, approvalPolicy } from "./recommendation-handoff-harness.js";
 
-export function buildLifecycleWorld() {
+export function buildLifecycleWorld(
+  opts: { approvalNotifier?: import("@switchboard/core/notifications").ApprovalNotifier } = {},
+) {
   const store = new InMemoryLifecycleStore();
   const lifecycleService = new ApprovalLifecycleService({ store });
-  const harness = buildHarness([allowPolicy(), approvalPolicy()], { lifecycleService });
+  const harness = buildHarness([allowPolicy(), approvalPolicy()], {
+    lifecycleService,
+    approvalNotifier: opts.approvalNotifier,
+  });
   const storage = createInMemoryStorage();
   const ledger = new AuditLedger(new InMemoryLedgerStorage());
   const platformLifecycle = new PlatformLifecycle({
