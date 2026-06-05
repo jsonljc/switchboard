@@ -18,6 +18,15 @@ import type {
   TargetBreachResult,
 } from "@switchboard/schemas";
 import type { CoverageReport } from "../onboarding/coverage-validator.js";
+import { decideForCampaign } from "../campaign-decision.js";
+
+// Slice 4c: partial passthrough mock; the freshness seam test reads the
+// RevenueState handed to the per-campaign decision. Wraps the REAL
+// implementation, so all other tests in this file behave identically.
+vi.mock("../campaign-decision.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../campaign-decision.js")>();
+  return { ...actual, decideForCampaign: vi.fn(actual.decideForCampaign) };
+});
 
 // Asymmetric abort-guard (spec 7.3 / Riley v3 slice 1). RevenueState is assembled
 // PROGRESSIVELY on the post-abort happy path; no late producer may run past an abort.
@@ -143,6 +152,7 @@ function buildSpiedDeps(): {
   crmDataProvider: CrmDataProvider;
   insightsProvider: CampaignInsightsProvider;
   bookedValueProvider: BookedValueByCampaignProvider;
+  operationalStateProvider: { getLatest: ReturnType<typeof vi.fn> };
 } {
   const adsClient: AdsClientInterface = {
     getCampaignInsights: vi
@@ -163,6 +173,9 @@ function buildSpiedDeps(): {
   const bookedValueProvider: BookedValueByCampaignProvider = {
     queryBookedValueCentsByCampaign: vi.fn().mockResolvedValue(new Map<string, number>()),
   };
+  const operationalStateProvider = {
+    getLatest: vi.fn().mockResolvedValue({ confirmedAt: new Date("2026-03-25T00:00:00.000Z") }),
+  };
   const config: AuditConfig = {
     accountId: "act-123",
     orgId: "org-1",
@@ -176,8 +189,16 @@ function buildSpiedDeps(): {
     insightsProvider,
     config,
     bookedValueByCampaignProvider: bookedValueProvider,
+    operationalStateProvider,
   };
-  return { deps, adsClient, crmDataProvider, insightsProvider, bookedValueProvider };
+  return {
+    deps,
+    adsClient,
+    crmDataProvider,
+    insightsProvider,
+    bookedValueProvider,
+    operationalStateProvider,
+  };
 }
 
 const RANGE = {
@@ -187,8 +208,14 @@ const RANGE = {
 
 describe("AuditRunner abort-guard (RevenueState progressive assembly)", () => {
   it("Gate-0 coverage abstention calls ZERO downstream providers", async () => {
-    const { deps, adsClient, crmDataProvider, insightsProvider, bookedValueProvider } =
-      buildSpiedDeps();
+    const {
+      deps,
+      adsClient,
+      crmDataProvider,
+      insightsProvider,
+      bookedValueProvider,
+      operationalStateProvider,
+    } = buildSpiedDeps();
     const insufficient: CoverageReport = {
       coveragePct: 0.2,
       bySource: {
@@ -212,11 +239,19 @@ describe("AuditRunner abort-guard (RevenueState progressive assembly)", () => {
     expect(insightsProvider.getCampaignLearningData).not.toHaveBeenCalled();
     expect(insightsProvider.getTargetBreachStatus).not.toHaveBeenCalled();
     expect(bookedValueProvider.queryBookedValueCentsByCampaign).not.toHaveBeenCalled();
+    // Slice 4c: the operational-state read is a post-abort producer.
+    expect(operationalStateProvider.getLatest).not.toHaveBeenCalled();
   });
 
   it("signal-health-red runs ONLY the Meta insight fetches, then aborts before late producers", async () => {
-    const { deps, adsClient, crmDataProvider, insightsProvider, bookedValueProvider } =
-      buildSpiedDeps();
+    const {
+      deps,
+      adsClient,
+      crmDataProvider,
+      insightsProvider,
+      bookedValueProvider,
+      operationalStateProvider,
+    } = buildSpiedDeps();
     const checker = {
       getSignalHealthReport: vi.fn().mockResolvedValue(makeSignalReport("red")),
     };
@@ -237,10 +272,13 @@ describe("AuditRunner abort-guard (RevenueState progressive assembly)", () => {
     expect(insightsProvider.getCampaignLearningData).not.toHaveBeenCalled();
     expect(insightsProvider.getTargetBreachStatus).not.toHaveBeenCalled();
     expect(bookedValueProvider.queryBookedValueCentsByCampaign).not.toHaveBeenCalled();
+    // Slice 4c: skipped at this abort too (it sits with the late producers).
+    expect(operationalStateProvider.getLatest).not.toHaveBeenCalled();
   });
 
   it("happy path (no abort) runs Meta fetches, CRM funnel, and per-campaign decisions", async () => {
-    const { deps, adsClient, crmDataProvider, insightsProvider } = buildSpiedDeps();
+    const { deps, adsClient, crmDataProvider, insightsProvider, operationalStateProvider } =
+      buildSpiedDeps();
     const runner = new AuditRunner(deps);
 
     await runner.run(RANGE);
@@ -249,5 +287,41 @@ describe("AuditRunner abort-guard (RevenueState progressive assembly)", () => {
     expect(crmDataProvider.getFunnelData).toHaveBeenCalledTimes(1);
     expect(insightsProvider.getCampaignLearningData).toHaveBeenCalledTimes(1);
     expect(insightsProvider.getTargetBreachStatus).toHaveBeenCalledTimes(1);
+    // Slice 4c: read exactly once on the happy path, keyed by the org.
+    expect(operationalStateProvider.getLatest).toHaveBeenCalledTimes(1);
+    expect(operationalStateProvider.getLatest).toHaveBeenCalledWith("org-1");
+  });
+
+  it("completes the audit with freshness degraded when the operational-state read fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { deps, operationalStateProvider } = buildSpiedDeps();
+    operationalStateProvider.getLatest.mockRejectedValue(new Error("db down"));
+    const runner = new AuditRunner(deps);
+
+    const report = await runner.run(RANGE);
+
+    // The weekly audit must not sink on an advisory read: report still produced.
+    expect(report.accountId).toBe("act-123");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("threads the DERIVED freshness into the RevenueState the decision layer reads (seam pin)", async () => {
+    const { deps, operationalStateProvider } = buildSpiedDeps();
+    // Relative to the runner's real clock: 370 days old is unambiguously
+    // past the 14-day vouch window. "stale" discriminates against BOTH
+    // failure modes: a dropped value (would default "unknown") and a
+    // hardcoded constant (would read "fresh"/"unknown").
+    operationalStateProvider.getLatest.mockResolvedValue({
+      confirmedAt: new Date(Date.now() - 370 * 24 * 60 * 60 * 1000),
+    });
+    const decideMock = vi.mocked(decideForCampaign);
+    decideMock.mockClear();
+    const runner = new AuditRunner(deps);
+
+    await runner.run(RANGE);
+
+    expect(decideMock).toHaveBeenCalledTimes(1);
+    expect(decideMock.mock.calls[0]?.[0]?.revenueState.businessContextFreshness).toBe("stale");
   });
 });

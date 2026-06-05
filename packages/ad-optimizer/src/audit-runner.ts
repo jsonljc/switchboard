@@ -46,7 +46,11 @@ import {
   resolveEconomicTargetForCampaign,
 } from "./analyzers/economic-target.js";
 import { decideForCampaign, deriveLearningPhaseActive } from "./campaign-decision.js";
-import { assembleRevenueState, type RevenueState } from "./revenue-state.js";
+import {
+  assembleRevenueState,
+  resolveBusinessContextFreshness,
+  type RevenueState,
+} from "./revenue-state.js";
 import {
   isCoverageSufficient,
   MIN_COVERAGE_PCT,
@@ -129,6 +133,16 @@ export interface BookedValueByCampaignProvider {
   }): Promise<Map<string, number>>;
 }
 
+/**
+ * Slice-4c: latest operator operational-state confirmation (the 4a
+ * substrate). Implementation is PrismaOperationalStateStore.getLatest in
+ * @switchboard/db, injected at the app layer (ad-optimizer is Layer 2 and
+ * cannot import db). Structural type: freshness needs only the anchor.
+ */
+export interface OperationalStateProvider {
+  getLatest(organizationId: string): Promise<{ confirmedAt: Date } | null>;
+}
+
 export interface AuditDependencies {
   adsClient: AdsClientInterface;
   crmDataProvider: CrmDataProvider;
@@ -177,6 +191,10 @@ export interface AuditDependencies {
   bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
   /** Optional bootstrap callback: routes each emitted creative rec (post-abstention) to a governed Mira draft. */
   recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
+  /** Optional (slice 4c). Feeds RevenueState.businessContextFreshness; read
+   * POST-ABORT only. Absent ⇒ freshness stays "unknown" (back-compat: the
+   * eval harness and analysis-only callers are unaffected). */
+  operationalStateProvider?: OperationalStateProvider;
 }
 
 // ── Helpers ──
@@ -257,6 +275,7 @@ export class AuditRunner {
   private readonly coverageValidator?: AuditDependencies["coverageValidator"];
   private readonly bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
   private readonly recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
+  private readonly operationalStateProvider?: OperationalStateProvider;
 
   constructor(deps: AuditDependencies) {
     this.adsClient = deps.adsClient;
@@ -273,6 +292,7 @@ export class AuditRunner {
     this.coverageValidator = deps.coverageValidator;
     this.bookedValueByCampaignProvider = deps.bookedValueByCampaignProvider;
     this.recommendationHandoffSubmitter = deps.recommendationHandoffSubmitter;
+    this.operationalStateProvider = deps.operationalStateProvider;
 
     if (deps.recommendationEmitter && !deps.recommendationEmissionContext) {
       throw new Error(
@@ -433,11 +453,22 @@ export class AuditRunner {
     // economicTier / effectiveTarget / marginBasis are now resolved. The late per-source
     // spendAttributionCoverageBySource is completed inside computeAuditEconomicsSections. Do NOT
     // hoist this above the two early returns; that would call late producers past an abort.
+    // Riley v3 slice 4c: freshness of the operator operational-state source,
+    // read POST-ABORT only (the Gate-0 and signal-red abort paths never touch
+    // it; pinned by the abort-guard test). Advisory CARRY: nothing gates on
+    // it in this slice; a read failure degrades to "unknown" inside the
+    // resolver rather than sinking the weekly audit.
+    const businessContextFreshness = await resolveBusinessContextFreshness(
+      this.operationalStateProvider,
+      this.config.orgId,
+      new Date(),
+    );
     const revenueState: RevenueState = assembleRevenueState({
       measurementTrusted,
       economicTier,
       effectiveTarget,
       marginBasis,
+      businessContextFreshness,
       ...(coverageReport
         ? { coverage: { coveragePct: coverageReport.coveragePct, sufficient: true } }
         : {}),
