@@ -7,6 +7,7 @@ import { useCreateCreativeDraftRequest } from "@/hooks/use-create-creative-draft
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
 import { T } from "@/components/cockpit/tokens";
+import styles from "./mira-desk.module.css";
 import {
   BRIEF_HEADING_EMPTY,
   BRIEF_PROMOTING_LABEL,
@@ -65,7 +66,7 @@ export function MiraBriefBox() {
   });
   const btn = {
     padding: "8px 16px",
-    borderRadius: 4,
+    borderRadius: 999,
     border: `1px solid ${T.amberDeep}`,
     background: T.amber,
     color: T.actionFg,
@@ -76,26 +77,8 @@ export function MiraBriefBox() {
   } as const;
 
   return (
-    <section
-      aria-label="Brief Mira"
-      style={{
-        background: T.paper,
-        borderRadius: 8,
-        padding: 16,
-        border: `1px solid ${T.hair}`,
-      }}
-    >
-      <h2
-        style={{
-          margin: "0 0 8px",
-          fontSize: 15,
-          fontWeight: 600,
-          letterSpacing: "-0.01em",
-          color: T.ink,
-        }}
-      >
-        {BRIEF_HEADING_EMPTY}
-      </h2>
+    <section aria-label="Brief Mira" className={styles.card}>
+      <h2 className={styles.moduleHSentence}>{BRIEF_HEADING_EMPTY}</h2>
 
       {phase === "preview" ? (
         <div style={{ background: MIRA_ACCENT.paper, borderRadius: 8, padding: 12 }}>
@@ -156,7 +139,7 @@ export function MiraBriefBox() {
             style={{
               width: "100%",
               resize: "vertical",
-              borderRadius: 8,
+              borderRadius: 10,
               border: `1px solid ${T.hair}`,
               background: T.paper,
               color: T.ink,

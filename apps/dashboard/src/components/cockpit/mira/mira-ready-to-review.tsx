@@ -3,34 +3,16 @@
 import Link from "next/link";
 import { DESK_COPY } from "@/lib/cockpit/mira/desk-copy";
 import { T } from "@/components/cockpit/tokens";
+import styles from "./mira-desk.module.css";
 
 export function MiraReadyToReview({ count }: { count: number }) {
   return (
-    <section
-      aria-label={DESK_COPY.readyTitle}
-      style={{
-        background: T.paper,
-        borderRadius: 8,
-        padding: 18,
-        border: `1px solid ${T.hair}`,
-      }}
-    >
+    <section aria-label={DESK_COPY.readyTitle} className={styles.card}>
       {count > 0 ? (
         // The cockpit's one loud element: a KPI/verdict block. Loudness comes
         // from the type scale (big tabular numeral) + the amber CTA, not a border.
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-          <span
-            style={{
-              fontFamily: T.mono,
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: T.ink3,
-            }}
-          >
-            {DESK_COPY.readyTitle}
-          </span>
+          <span className={styles.eyebrow}>{DESK_COPY.readyTitle}</span>
           <span
             style={{
               marginTop: 4,
@@ -56,10 +38,11 @@ export function MiraReadyToReview({ count }: { count: number }) {
               alignItems: "center",
               gap: 6,
               padding: "10px 16px",
-              borderRadius: 8,
+              borderRadius: 999,
               background: T.amber,
               color: T.actionFg,
               border: `1px solid ${T.amberDeep}`,
+              boxShadow: "var(--shadow-action-gloss)",
               textDecoration: "none",
               fontSize: 13,
               fontWeight: 600,
