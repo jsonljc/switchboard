@@ -3,6 +3,8 @@ import { render, screen, act, fireEvent, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MiraCreativeJobSummary } from "@switchboard/core";
 import type React from "react";
+import type { ReactElement } from "react";
+import type { ReviewDecisionResult } from "@/hooks/use-review-decision";
 
 // ---------------------------------------------------------------------------
 // Controllable IntersectionObserver — override BEFORE any component imports so
@@ -314,16 +316,12 @@ describe("MiraCreativeFeed", () => {
     decideMutate = vi
       .fn()
       .mockImplementationOnce(
-        (
-          _args: unknown,
-          opts?: { onSuccess?: (data: { id: string; decision: string; silent?: boolean }) => void },
-        ) => opts?.onSuccess?.({ id: "d3", decision: "kept" }),
+        (_args: unknown, opts?: { onSuccess?: (data: ReviewDecisionResult) => void }) =>
+          opts?.onSuccess?.({ id: "d3", decision: "kept" }),
       )
       .mockImplementationOnce(
-        (
-          _args: unknown,
-          opts?: { onSuccess?: (data: { id: string; decision: string; silent?: boolean }) => void },
-        ) => opts?.onSuccess?.({ id: "d3", decision: null }),
+        (_args: unknown, opts?: { onSuccess?: (data: ReviewDecisionResult) => void }) =>
+          opts?.onSuccess?.({ id: "d3", decision: null }),
       );
 
     renderFeed();
@@ -335,7 +333,10 @@ describe("MiraCreativeFeed", () => {
     await waitFor(() => expect(toastSpy).toHaveBeenCalled());
 
     // Invoke the Undo action from the toast payload
-    const toastArg = toastSpy.mock.calls[0][0] as { action: React.ReactElement };
+    const toastArg = toastSpy.mock.calls[0][0] as {
+      title: string;
+      action: ReactElement<{ onClick: () => void }>;
+    };
     await act(async () => {
       toastArg.action.props.onClick();
     });
