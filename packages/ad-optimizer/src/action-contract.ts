@@ -134,3 +134,68 @@ export function isMutating(action: AdRecommendationAction): boolean {
   const c = ACTION_CONTRACT[action];
   return c.financialEffect || c.externalEffect || c.resetsLearning === "yes";
 }
+
+/**
+ * PHASE-C (designed-but-unwired; Riley v3 slice 5): execution-time contract for a
+ * self-executed action class. Declarations only, strings not machinery; consumed by
+ * nothing live. The submit-request mapper lives in
+ * apps/api/src/services/workflows/riley-pause-submit-request.ts (CanonicalSubmitRequest
+ * is a core type and this package is Layer 2: schemas only).
+ */
+export interface PhaseCExecutionContract {
+  /**
+   * PLATFORM-STATE reversibility: can the ad-platform state be cleanly restored?
+   * Deliberately NOT outcome reversibility: lost delivery, auction re-entry effects,
+   * and missed bookings during the action window are not reversed by the rollback.
+   */
+  reversibility: "full" | "partial" | "none";
+  /** Human-readable inverse action the executor (or operator) applies to undo. */
+  rollbackPlan: string;
+  /** What improving looks like after the action lands. */
+  successMetric: string;
+  /** Abort signals the Phase-C executor must watch post-action. */
+  guardrailMetrics: string[];
+}
+
+/**
+ * Sparse on purpose: an action gets an entry only when it earns execution
+ * (parent spec slice 5: pause is the first self-owned reversible class).
+ * Do NOT backfill entries for actions nobody has reviewed for execution.
+ */
+export const PHASE_C_EXECUTION_SEAM: Partial<
+  Record<AdRecommendationAction, PhaseCExecutionContract>
+> = {
+  pause: {
+    reversibility: "full",
+    rollbackPlan:
+      "Resume the campaign (status back to ACTIVE). This reverses the platform state only, not any lost delivery during the paused window; delivery restarts without a learning reset.",
+    successMetric: "Account-level cost per booked falls once the leaking campaign stops spending.",
+    guardrailMetrics: [
+      "account-level booked conversions drop beyond the paused campaign's share",
+      "remaining campaigns' spend does not absorb the freed budget within the window",
+    ],
+  },
+};
+
+/**
+ * CLASS eligibility ONLY (the "first self-owned reversible action class" gate,
+ * parent spec slice 5): is this ACTION CLASS structurally safe to ever self-execute?
+ * Phase-C wiring consumes THIS predicate verbatim; class eligibility is never
+ * re-derived from scattered conditions.
+ *
+ * It deliberately does NOT decide request- or execution-eligibility. Approval policy,
+ * org entitlement, evidence sufficiency, attribution confidence, learning/stability
+ * windows, shared-budget/CBO membership, and budget-absorption risk are all
+ * wiring-session concerns (GovernanceGate + the executor), NOT encoded here.
+ * All four legs must hold: seam entry exists, platform-state reversible, never
+ * resets learning, and actually mutating.
+ */
+export function isPhaseCActionClassEligible(action: AdRecommendationAction): boolean {
+  const seam = PHASE_C_EXECUTION_SEAM[action];
+  return (
+    seam !== undefined &&
+    seam.reversibility === "full" &&
+    ACTION_CONTRACT[action].resetsLearning === "no" &&
+    isMutating(action)
+  );
+}
