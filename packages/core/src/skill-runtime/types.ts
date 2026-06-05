@@ -168,7 +168,7 @@ export interface SkillExecutionTrace {
   organizationId: string;
   skillSlug: string;
   skillVersion: string;
-  trigger: "chat_message" | "batch_job";
+  trigger: "chat_message" | "batch_job" | "brief_compose";
   sessionId: string;
   inputParametersHash: string;
   toolCalls: ToolCallRecord[];
