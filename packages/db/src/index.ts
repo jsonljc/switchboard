@@ -156,6 +156,9 @@ export {
   CREATIVE_PUBLISH_APPROVAL_POLICY_RULE,
   creativePublishApprovalPolicyId,
   buildCreativePublishApprovalPolicyInput,
+  CREATIVE_BRIEF_COMPOSE_ALLOW_POLICY_RULE,
+  creativeBriefComposeAllowPolicyId,
+  buildCreativeBriefComposeAllowPolicyInput,
 } from "./seed/creative-governance.js";
 export {
   RECOMMENDATION_HANDOFF_ALLOW_POLICY_RULE,

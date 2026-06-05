@@ -66,6 +66,7 @@ export async function bootstrapSkillMode(
 
   const {
     loadSkill,
+    miraBuilder,
     SkillExecutorImpl,
     GovernanceHook,
     TracePersistenceHook,
@@ -112,6 +113,8 @@ export async function bootstrapSkillMode(
     PrismaGovernanceVerdictStore,
     PrismaExecutionTraceStore,
     PrismaKnowledgeEntryStore,
+    PrismaDeploymentMemoryStore,
+    PrismaMiraCreativeReadModelReader,
     PrismaScheduledFollowUpStore,
     createPrismaApprovedComplianceClaimStore,
     createPrismaConsentStore,
@@ -128,9 +131,22 @@ export async function bootstrapSkillMode(
 
   const skillsDir = new URL("../../../../skills", import.meta.url).pathname;
   const alexSkill = loadSkill("alex", skillsDir);
-  const skillsBySlug = new Map([[alexSkill.slug, alexSkill]]);
+  // Slice-4 brain: directory "mira" (product identity), frontmatter slug
+  // "creative" (runtime identity = the seeded deployment skillSlug; SkillMode
+  // keys BOTH the skill and builder lookups off deployment.skillSlug). The
+  // loader never cross-validates directory vs slug; this guard pins it.
+  const miraSkill = loadSkill("mira", skillsDir);
+  if (miraSkill.slug !== "creative" || miraSkill.slug === alexSkill.slug) {
+    throw new Error(
+      `skills/mira/SKILL.md must declare slug "creative" distinct from alex (got "${miraSkill.slug}")`,
+    );
+  }
+  const skillsBySlug = new Map([
+    [alexSkill.slug, alexSkill],
+    [miraSkill.slug, miraSkill],
+  ]);
 
-  registerSkillIntents(intentRegistry, [alexSkill]);
+  registerSkillIntents(intentRegistry, [alexSkill, miraSkill]);
 
   const contactStore = new PrismaContactStore(prismaClient);
   const opportunityStore = new PrismaOpportunityStore(prismaClient);
@@ -603,104 +619,6 @@ export async function bootstrapSkillMode(
     tracePersistenceHook,
   );
 
-  const builderRegistry = new BuilderRegistry();
-
-  const { alexBuilder } = await import("@switchboard/core/skill-runtime");
-  const { resolveOutcomePatternsConfig } = await import("@switchboard/schemas");
-
-  builderRegistry.register("alex", async (ctx) => {
-    const agentContext = ctx.workUnit.parameters._agentContext as Parameters<typeof alexBuilder>[0];
-    // PR-3.2e: resolve pilotMode from the deployment's inputConfig.outcomePatterns
-    // namespace. Defaults to false when the namespace is absent, so steady-state
-    // surfacing remains the default for every deployment.
-    const { pilotMode } = resolveOutcomePatternsConfig(ctx.deployment.inputConfig ?? null);
-    const config = {
-      deploymentId: ctx.deployment.deploymentId,
-      orgId: ctx.workUnit.organizationId,
-      contactId: ctx.workUnit.parameters.contactId as string,
-      phone: ctx.workUnit.parameters.phone as string | undefined,
-      channel: ctx.workUnit.parameters.channel as string | undefined,
-      message: ctx.workUnit.parameters._message as string | undefined,
-      pilotMode,
-    };
-    const result = await alexBuilder(agentContext, config, ctx.stores, {
-      contextBuilder: deps.contextBuilder,
-    });
-    return {
-      parameters: result.parameters,
-      metadata: { injectedPatternIds: result.injectedPatternIds },
-    };
-  });
-
-  modeRegistry.register(
-    new SkillMode({
-      executor: skillExecutor,
-      skillsBySlug,
-      builderRegistry,
-      contextResolver,
-      stores: {
-        opportunityStore: {
-          findActiveByContact: async (orgId: string, contactId: string) =>
-            opportunityStore.findActiveByContact(orgId, contactId),
-          create: async (input: {
-            organizationId: string;
-            contactId: string;
-            serviceId: string;
-            serviceName: string;
-          }) => {
-            const created = await opportunityStore.create(input);
-            return { id: created.id, stage: "interested" as const, createdAt: new Date() };
-          },
-        },
-        contactStore: {
-          findById: async (orgId: string, contactId: string) =>
-            contactStore.findById(orgId, contactId),
-          create: async (input: {
-            organizationId: string;
-            phone?: string | null;
-            name?: string | null;
-            primaryChannel: "whatsapp" | "telegram" | "dashboard";
-            source?: string | null;
-          }) => contactStore.create({ ...input, primaryChannel: input.primaryChannel }),
-        },
-        activityStore: {
-          listByDeployment: async (orgId: string, deploymentId: string, opts: { limit: number }) =>
-            activityStore.listByDeployment(orgId, deploymentId, opts),
-        },
-        businessFactsStore,
-      },
-    }),
-  );
-
-  // Startup assertion: verify gate deps reached SkillMode.
-  // Missing deps cause silent gate degradation at runtime — fail fast instead.
-  const missingGateDeps: string[] = [];
-  // 1b-1 deterministic-gate deps
-  if (!governanceConfigResolver) missingGateDeps.push("governanceConfigResolver");
-  if (!governanceVerdictStore) missingGateDeps.push("verdictStore");
-  if (!governancePostureCache) missingGateDeps.push("postureCache");
-  if (!handoffStore) missingGateDeps.push("handoffStore");
-  if (!conversationStatusSetter) missingGateDeps.push("conversationStatusSetter");
-  if (!loadBannedPhrases) missingGateDeps.push("bannedPhraseLoader");
-  // 1b-2 claim-classifier deps
-  if (!claimClassifier) missingGateDeps.push("claimClassifier");
-  if (!substantiationResolver) missingGateDeps.push("substantiationResolver");
-  if (!claimClassifierPostureCache) missingGateDeps.push("claimClassifierPostureCache");
-  // 1c pdpa-consent-gate deps
-  if (!consentService) missingGateDeps.push("consentService");
-  if (!contactConsentReader) missingGateDeps.push("contactConsentReader");
-  if (!consentPostureCache) missingGateDeps.push("consentPostureCache");
-  // 1d whatsapp-window-gate deps
-  if (!whatsAppWindowPostureCache) missingGateDeps.push("whatsAppWindowPostureCache");
-  // Construction-presence invariant: mirrors the other gate-dep checks. new ContextResolverImpl
-  // throws synchronously on failure, so this is a belt-and-suspenders assertion, not a real catch.
-  if (!contextResolver) missingGateDeps.push("contextResolver");
-  if (missingGateDeps.length > 0) {
-    throw new Error(`SkillMode: gate deps incomplete — missing: ${missingGateDeps.join(", ")}`);
-  }
-
-  logger.info(`SkillMode registered with ${skillsBySlug.size} skills and ${toolsMap.size} tools`);
-
   // Simulation executor: same adapter + tools, but with SimulationPolicyHook to block writes.
   // Pass toolFactories so read-effect tools (e.g. calendar-book.slots.query) materialize
   // against the simulation request's real orgId/SkillRequestContext rather than the
@@ -736,6 +654,158 @@ export async function bootstrapSkillMode(
     undefined,
     simulationToolFactories,
   );
+
+  // ---------------------------------------------------------------------------
+  // Slice-4 compose executor (spec 3.4). Zero tools, zero hooks: the four
+  // conversation gates are afterSkill hooks that fire regardless of tool count,
+  // and on an internal compose they would corrupt the JSON verdict and write
+  // compliance handoff rows. Claim safety for briefs lives at the source (the
+  // SKILL.md boundaries) and downstream (desk review + mandatory publish
+  // approval). Trace telemetry stays: per-compose cost and latency are recorded
+  // under the brief_compose trigger. Constructed AFTER the simulation executor
+  // so the governance test's call-index identities (0=main, 1=simulation,
+  // 2=compose) stay stable.
+  // ---------------------------------------------------------------------------
+  const composeTracePersistenceHook = new TracePersistenceHook(
+    new PrismaExecutionTraceStore(prismaClient),
+    { trigger: "brief_compose" },
+  );
+  const composeExecutor = new SkillExecutorImpl(
+    adapter,
+    new Map(),
+    undefined,
+    [],
+    undefined,
+    undefined,
+    undefined,
+    composeTracePersistenceHook,
+  );
+
+  const builderRegistry = new BuilderRegistry();
+
+  const { alexBuilder } = await import("@switchboard/core/skill-runtime");
+  const { resolveOutcomePatternsConfig } = await import("@switchboard/schemas");
+
+  builderRegistry.register("alex", async (ctx) => {
+    const agentContext = ctx.workUnit.parameters._agentContext as Parameters<typeof alexBuilder>[0];
+    // PR-3.2e: resolve pilotMode from the deployment's inputConfig.outcomePatterns
+    // namespace. Defaults to false when the namespace is absent, so steady-state
+    // surfacing remains the default for every deployment.
+    const { pilotMode } = resolveOutcomePatternsConfig(ctx.deployment.inputConfig ?? null);
+    const config = {
+      deploymentId: ctx.deployment.deploymentId,
+      orgId: ctx.workUnit.organizationId,
+      contactId: ctx.workUnit.parameters.contactId as string,
+      phone: ctx.workUnit.parameters.phone as string | undefined,
+      channel: ctx.workUnit.parameters.channel as string | undefined,
+      message: ctx.workUnit.parameters._message as string | undefined,
+      pilotMode,
+    };
+    const result = await alexBuilder(agentContext, config, ctx.stores, {
+      contextBuilder: deps.contextBuilder,
+    });
+    return {
+      parameters: result.parameters,
+      metadata: { injectedPatternIds: result.injectedPatternIds },
+    };
+  });
+
+  // Slice-4 brain builder, registered under the RUNTIME slug "creative"
+  // (= deployment skillSlug; SkillMode's builder lookup keys off it, never the
+  // directory name "mira"). The builder receives the WHOLE workUnit.parameters
+  // as `request` and zod-parses it itself (parse, don't cast) — do NOT "tidy"
+  // this to cherry-picked keys, or the riley_handoff recommendation context is
+  // silently dropped and every handoff compose abstains.
+  builderRegistry.register("creative", async (ctx) => {
+    const result = await miraBuilder(
+      {
+        orgId: ctx.workUnit.organizationId,
+        deploymentId: ctx.deployment.deploymentId,
+        request: ctx.workUnit.parameters,
+      },
+      ctx.stores,
+    );
+    return {
+      parameters: result.parameters,
+      metadata: { injectedPatternIds: result.injectedPatternIds },
+    };
+  });
+
+  modeRegistry.register(
+    new SkillMode({
+      executor: skillExecutor,
+      // Slice-4: the compose surface gets the dedicated zero-hook executor;
+      // every other slug (alex) rides the default conversation executor.
+      executorBySlug: new Map([["creative", composeExecutor]]),
+      skillsBySlug,
+      builderRegistry,
+      contextResolver,
+      stores: {
+        opportunityStore: {
+          findActiveByContact: async (orgId: string, contactId: string) =>
+            opportunityStore.findActiveByContact(orgId, contactId),
+          create: async (input: {
+            organizationId: string;
+            contactId: string;
+            serviceId: string;
+            serviceName: string;
+          }) => {
+            const created = await opportunityStore.create(input);
+            return { id: created.id, stage: "interested" as const, createdAt: new Date() };
+          },
+        },
+        contactStore: {
+          findById: async (orgId: string, contactId: string) =>
+            contactStore.findById(orgId, contactId),
+          create: async (input: {
+            organizationId: string;
+            phone?: string | null;
+            name?: string | null;
+            primaryChannel: "whatsapp" | "telegram" | "dashboard";
+            source?: string | null;
+          }) => contactStore.create({ ...input, primaryChannel: input.primaryChannel }),
+        },
+        activityStore: {
+          listByDeployment: async (orgId: string, deploymentId: string, opts: { limit: number }) =>
+            activityStore.listByDeployment(orgId, deploymentId, opts),
+        },
+        businessFactsStore,
+        // Slice-4 brain readers (spec 3.3): brief-time memory + measured
+        // performance, consumed only by the "creative" builder.
+        deploymentMemoryReader: new PrismaDeploymentMemoryStore(prismaClient),
+        miraReadModelReader: new PrismaMiraCreativeReadModelReader(prismaClient),
+      },
+    }),
+  );
+
+  // Startup assertion: verify gate deps reached SkillMode.
+  // Missing deps cause silent gate degradation at runtime — fail fast instead.
+  const missingGateDeps: string[] = [];
+  // 1b-1 deterministic-gate deps
+  if (!governanceConfigResolver) missingGateDeps.push("governanceConfigResolver");
+  if (!governanceVerdictStore) missingGateDeps.push("verdictStore");
+  if (!governancePostureCache) missingGateDeps.push("postureCache");
+  if (!handoffStore) missingGateDeps.push("handoffStore");
+  if (!conversationStatusSetter) missingGateDeps.push("conversationStatusSetter");
+  if (!loadBannedPhrases) missingGateDeps.push("bannedPhraseLoader");
+  // 1b-2 claim-classifier deps
+  if (!claimClassifier) missingGateDeps.push("claimClassifier");
+  if (!substantiationResolver) missingGateDeps.push("substantiationResolver");
+  if (!claimClassifierPostureCache) missingGateDeps.push("claimClassifierPostureCache");
+  // 1c pdpa-consent-gate deps
+  if (!consentService) missingGateDeps.push("consentService");
+  if (!contactConsentReader) missingGateDeps.push("contactConsentReader");
+  if (!consentPostureCache) missingGateDeps.push("consentPostureCache");
+  // 1d whatsapp-window-gate deps
+  if (!whatsAppWindowPostureCache) missingGateDeps.push("whatsAppWindowPostureCache");
+  // Construction-presence invariant: mirrors the other gate-dep checks. new ContextResolverImpl
+  // throws synchronously on failure, so this is a belt-and-suspenders assertion, not a real catch.
+  if (!contextResolver) missingGateDeps.push("contextResolver");
+  if (missingGateDeps.length > 0) {
+    throw new Error(`SkillMode: gate deps incomplete — missing: ${missingGateDeps.join(", ")}`);
+  }
+
+  logger.info(`SkillMode registered with ${skillsBySlug.size} skills and ${toolsMap.size} tools`);
 
   return { simulationExecutor, alexSkill, consentService, contactConsentReader };
 }
