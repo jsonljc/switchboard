@@ -9,6 +9,7 @@ import { actionsRoutes } from "../routes/actions.js";
 import { actionLifecycleRoutes } from "../routes/action-lifecycle.js";
 import { executeRoutes } from "../routes/execute.js";
 import { approvalsRoutes } from "../routes/approvals.js";
+import { internalChatApprovalsRoutes } from "../routes/internal-chat-approvals.js";
 import { recommendationsRoutes } from "../routes/recommendations.js";
 import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
 import { decisionsRoutes } from "../routes/decisions.js";
@@ -112,6 +113,9 @@ export async function registerRoutes(
   await app.register(actionLifecycleRoutes, { prefix: "/api/actions" });
   await app.register(executeRoutes, { prefix: "/api" });
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });
+  // Internal chat-approval bridge: INTERNAL_API_SECRET-authenticated respond
+  // surface for the chat process (excluded from API-key auth by exact path).
+  await app.register(internalChatApprovalsRoutes, { prefix: "/api/internal/chat-approvals" });
   await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
   await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
   // decisionsRoutes registers two paths under /api/dashboard:
