@@ -10,6 +10,7 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       "img-src 'self' data: https:",
+      "media-src 'self' blob: https:",
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "connect-src 'self' https:",
