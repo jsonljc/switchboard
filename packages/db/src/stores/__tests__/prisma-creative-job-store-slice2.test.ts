@@ -92,6 +92,7 @@ describe("PrismaCreativeJobStore (slice-2 attribution + taste)", () => {
       deploymentId: true,
       mode: true,
       stageOutputs: true,
+      ugcPhaseOutputs: true,
       reviewDecision: true,
       reviewDecidedAt: true,
       tasteCapturedAt: true,

@@ -35,10 +35,16 @@ export function buildPerformanceHistory(
   );
 
   const topPerformers = measured.slice(0, 3).map(({ job, perf }) => {
-    const d = extractCreativeDescriptor(job.stageOutputs, job.mode === "ugc" ? "ugc" : "polished");
+    const mode = job.mode === "ugc" ? "ugc" : "polished";
+    // Mode-correct outputs (slice-3 spec 3.4): ugc descriptors read
+    // ugcPhaseOutputs; the structure id is the ugc vocabulary.
+    const d = extractCreativeDescriptor(
+      mode === "ugc" ? job.ugcPhaseOutputs : job.stageOutputs,
+      mode,
+    );
     return {
       jobId: job.id,
-      descriptor: `${d.mode}:${d.hookType}`,
+      descriptor: `${d.mode}:${d.structureId ?? d.hookType}`,
       trueRoas: perf.trueRoas,
       spend: perf.meta.spend,
       bookedValueCents: perf.booked.valueCents,

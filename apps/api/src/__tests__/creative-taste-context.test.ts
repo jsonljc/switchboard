@@ -42,14 +42,40 @@ describe("buildCreativeTasteProvider", () => {
       {
         id: "m1",
         category: "taste",
-        canonicalKey: "taste:passed_ugc_none",
+        canonicalKey: "taste:passed_polished_none",
         sourceCount: 3,
         confidence: 0.66,
       },
     ]);
     const provider = buildCreativeTasteProvider(s as never);
     expect(await provider.getTasteContext("o", "d")).toEqual([
-      "consistently passes creatives with no leading hook in ugc mode (3 passes)",
+      "consistently passes creatives with no leading hook in polished mode (3 passes)",
+    ]);
+  });
+
+  it("never bleeds ugc buckets into the polished provider (slice-3 spec 3.4)", async () => {
+    // ugc buckets are structure-keyed; rendering demo_first as a "hook" into
+    // a polished prompt would be incoherent cross-mode guidance. They stay
+    // accumulated for the named ugc-prompt-injection follow-on.
+    const s = store([
+      {
+        id: "m1",
+        category: "taste",
+        canonicalKey: "taste:kept_ugc_demo_first",
+        sourceCount: 4,
+        confidence: 0.8,
+      },
+      {
+        id: "m2",
+        category: "taste",
+        canonicalKey: "taste:kept_polished_question",
+        sourceCount: 4,
+        confidence: 0.8,
+      },
+    ]);
+    const provider = buildCreativeTasteProvider(s as never);
+    expect(await provider.getTasteContext("o", "d")).toEqual([
+      "consistently keeps question hooks in polished mode (4 keeps)",
     ]);
   });
 

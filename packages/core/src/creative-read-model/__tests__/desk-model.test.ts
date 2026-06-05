@@ -84,6 +84,39 @@ describe("buildMiraDeskModel", () => {
     expect(desk.isEmpty).toBe(false);
   });
 
+  it("tray items carry ugcPhase and an awaiting-go flag for pre-video gates (slice-3 spec 3.4)", () => {
+    const rm: MiraCreativeReadModel = {
+      jobs: [
+        // a ugc job waiting at a pre-video gate (planning done, no draft yet)
+        job({
+          id: "ugc1",
+          source: { engine: "legacy_creative_job", mode: "ugc" },
+          status: "awaiting_review",
+          ugcPhase: "scripting",
+        }),
+        // a polished job waiting at a pre-video stage gate: same flag
+        job({ id: "pol1", status: "awaiting_review", stage: "scripts" }),
+        // actively rendering, nothing to approve
+        job({
+          id: "ugc2",
+          source: { engine: "legacy_creative_job", mode: "ugc" },
+          status: "in_progress",
+          ugcPhase: "planning",
+        }),
+      ],
+      counts,
+    };
+    const model = buildMiraDeskModel(rm);
+    const ugc1 = model.inProduction.find((i) => i.id === "ugc1")!;
+    expect(ugc1.ugcPhase).toBe("scripting");
+    expect(ugc1.awaitingGo).toBe(true);
+    const pol1 = model.inProduction.find((i) => i.id === "pol1")!;
+    expect(pol1.awaitingGo).toBe(true);
+    expect(pol1.ugcPhase).toBeUndefined();
+    const ugc2 = model.inProduction.find((i) => i.id === "ugc2")!;
+    expect(ugc2.awaitingGo).toBe(false);
+  });
+
   it("reports empty when there are no jobs", () => {
     expect(buildMiraDeskModel({ jobs: [], counts }).isEmpty).toBe(true);
   });

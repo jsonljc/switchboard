@@ -1,10 +1,22 @@
 // packages/creative-pipeline/src/creative-descriptor.ts
+import { z } from "zod";
 import { HookGeneratorOutput, ScriptWriterOutput, type HookType } from "@switchboard/schemas";
 
 export interface CreativeDescriptor {
   mode: "polished" | "ugc";
   hookType: HookType | "none";
+  /**
+   * UGC only (slice-3 spec 3.4): the leading spec's structure id, the UGC
+   * creative taxonomy (confession, demo_first, ...). OMITTED (never null/
+   * undefined-keyed) for polished so exact-shape assertions stay valid.
+   */
+  structureId?: string;
 }
+
+// Minimal parse of the ugc scripting output: only what the descriptor needs.
+const UgcScriptingForDescriptor = z.object({
+  specs: z.array(z.object({ structureId: z.string() })).min(1),
+});
 
 /**
  * hookRef is a 0-based index STRING (script-writer prompt contract); legacy
@@ -35,6 +47,16 @@ export function extractCreativeDescriptor(
     stageOutputs !== null && typeof stageOutputs === "object"
       ? (stageOutputs as Record<string, unknown>)
       : {};
+
+  // UGC vocabulary (slice-3 spec 3.4): callers pass ugcPhaseOutputs for ugc
+  // jobs; the LEADING spec's structureId is the bucket axis (hooks do not
+  // exist for ugc, so hookType stays "none").
+  if (mode === "ugc") {
+    const scripting = UgcScriptingForDescriptor.safeParse(outputs["scripting"]);
+    return scripting.success
+      ? { mode, hookType: "none", structureId: scripting.data.specs[0]!.structureId }
+      : { mode, hookType: "none" };
+  }
 
   const hooksParsed = HookGeneratorOutput.safeParse(outputs["hooks"]);
   if (!hooksParsed.success || hooksParsed.data.hooks.length === 0) {

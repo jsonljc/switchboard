@@ -82,6 +82,23 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     expect(screen.getByText(/Frame QA: rejected/i)).toBeTruthy();
   });
 
+  it("no-video ugc header shows the phase, not 'Still drafting' (slice-3 spec 3.4)", () => {
+    mockCreative.mockReturnValue({
+      data: summary({
+        source: { engine: "legacy_creative_job", mode: "ugc" },
+        status: "awaiting_review",
+        stage: "trends",
+        ugcPhase: "production",
+        reviewAction: { canContinue: true, canStop: true, label: "continue_draft" },
+      }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.getByText(/filming the clip/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /continue draft/i })).toBeTruthy();
+  });
+
   it("renders no frame-QA line when qa is absent", () => {
     mockCreative.mockReturnValue({
       data: summary({ draft: { videoUrl: "https://x/p.mp4" } }),

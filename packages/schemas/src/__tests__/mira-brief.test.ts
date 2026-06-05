@@ -13,6 +13,12 @@ describe("MiraBriefRequestSchema", () => {
     expect(MiraBriefRequestSchema.safeParse({ promoting: "" }).success).toBe(false);
     expect(MiraBriefRequestSchema.safeParse({ promoting: "x", goal: "nope" }).success).toBe(false);
   });
+
+  it("mode defaults to polished and accepts ugc (slice-3 spec 3.4)", () => {
+    expect(MiraBriefRequestSchema.parse({ promoting: "x" }).mode).toBe("polished");
+    expect(MiraBriefRequestSchema.parse({ promoting: "x", mode: "ugc" }).mode).toBe("ugc");
+    expect(MiraBriefRequestSchema.safeParse({ promoting: "x", mode: "fancy" }).success).toBe(false);
+  });
 });
 
 describe("mapMiraBriefToCreativeBrief", () => {
