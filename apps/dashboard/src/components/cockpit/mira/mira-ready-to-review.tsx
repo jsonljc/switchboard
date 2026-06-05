@@ -58,7 +58,7 @@ export function MiraReadyToReview({ count }: { count: number }) {
               padding: "10px 16px",
               borderRadius: 8,
               background: T.amber,
-              color: "#fff",
+              color: T.actionFg,
               border: `1px solid ${T.amberDeep}`,
               textDecoration: "none",
               fontSize: 13,

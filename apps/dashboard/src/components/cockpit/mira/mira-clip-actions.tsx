@@ -73,7 +73,7 @@ export function MiraClipActions({
             style={{
               ...btn,
               background: T.amber,
-              color: "#fff",
+              color: T.actionFg,
               border: `1px solid ${T.amberDeep}`,
             }}
             disabled={approve.isPending}

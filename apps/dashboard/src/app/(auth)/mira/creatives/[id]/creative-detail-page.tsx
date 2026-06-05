@@ -175,7 +175,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     padding: "10px 16px",
                     borderRadius: 8,
                     background: T.amber,
-                    color: "white",
+                    color: T.actionFg,
                     border: `1px solid ${T.amberDeep}`,
                   }}
                 >
@@ -269,7 +269,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     padding: "10px 16px",
                     borderRadius: 8,
                     background: T.amber,
-                    color: "white",
+                    color: T.actionFg,
                     border: `1px solid ${T.amberDeep}`,
                   }}
                 >
@@ -338,7 +338,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     padding: "10px 16px",
                     borderRadius: 8,
                     background: T.red,
-                    color: "white",
+                    color: T.actionFg,
                     border: "none",
                   }}
                 >

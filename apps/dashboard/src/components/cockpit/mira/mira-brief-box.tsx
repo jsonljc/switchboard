@@ -61,14 +61,14 @@ export function MiraBriefBox() {
     cursor: "pointer",
     border: `1px solid ${active ? MIRA_ACCENT.deep : T.hair}`,
     background: active ? MIRA_ACCENT.deep : "transparent",
-    color: active ? "#fff" : T.ink2,
+    color: active ? T.actionFg : T.ink2,
   });
   const btn = {
     padding: "8px 16px",
     borderRadius: 4,
     border: `1px solid ${T.amberDeep}`,
     background: T.amber,
-    color: "#fff",
+    color: T.actionFg,
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
