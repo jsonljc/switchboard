@@ -4,6 +4,7 @@
  * never a phantom success), the draft branch matrix, and key determinism.
  */
 import { describe, expect, it, vi } from "vitest";
+import type { SubmitWorkResponse } from "@switchboard/core/platform";
 import {
   executeMiraSelfBriefScan,
   executeMiraSelfBriefDispatch,
@@ -34,7 +35,7 @@ function composeOk(response: string, outcome = "completed") {
       traceId: "t-compose",
     },
     workUnit: { id: "wu-compose", traceId: "t-compose" },
-  };
+  } as unknown as SubmitWorkResponse & { ok: true; result: { outcome: string } };
 }
 
 function draftOk(outputs: Record<string, unknown>, outcome = "completed") {
@@ -50,7 +51,7 @@ function draftOk(outputs: Record<string, unknown>, outcome = "completed") {
       traceId: "t-draft",
     },
     workUnit: { id: "wu-draft", traceId: "t-draft" },
-  };
+  } as unknown as SubmitWorkResponse & { ok: true; result: { outcome: string } };
 }
 
 const measuredJob = { performance: { delivery: "measured" } };
@@ -150,20 +151,26 @@ describe("executeMiraSelfBriefScan floor", () => {
 describe("executeMiraSelfBriefScan compose branches", () => {
   it("maps entitlement_required to the named org_not_entitled skip", async () => {
     const deps = makeDeps({
-      submitCompose: vi.fn(async () => ({
-        ok: false as const,
-        error: { type: "entitlement_required", intent: "x", message: "m" },
-      })),
+      submitCompose: vi.fn(
+        async () =>
+          ({
+            ok: false as const,
+            error: { type: "entitlement_required", intent: "x", message: "m" },
+          }) as unknown as SubmitWorkResponse,
+      ),
     });
     expect(await executeMiraSelfBriefScan(deps, "org1")).toEqual({ skipped: "org_not_entitled" });
   });
 
   it("maps idempotency_in_flight to compose_claim_unresolved (orphaned running claim)", async () => {
     const deps = makeDeps({
-      submitCompose: vi.fn(async () => ({
-        ok: false as const,
-        error: { type: "idempotency_in_flight", intent: "x", message: "m" },
-      })),
+      submitCompose: vi.fn(
+        async () =>
+          ({
+            ok: false as const,
+            error: { type: "idempotency_in_flight", intent: "x", message: "m" },
+          }) as unknown as SubmitWorkResponse,
+      ),
     });
     expect(await executeMiraSelfBriefScan(deps, "org1")).toEqual({
       skipped: "compose_claim_unresolved",
@@ -172,10 +179,13 @@ describe("executeMiraSelfBriefScan compose branches", () => {
 
   it("maps any other ingress error to compose_submit_failed with a warn", async () => {
     const deps = makeDeps({
-      submitCompose: vi.fn(async () => ({
-        ok: false as const,
-        error: { type: "governance_error", intent: "x", message: "denied" },
-      })),
+      submitCompose: vi.fn(
+        async () =>
+          ({
+            ok: false as const,
+            error: { type: "governance_error", intent: "x", message: "denied" },
+          }) as unknown as SubmitWorkResponse,
+      ),
     });
     expect(await executeMiraSelfBriefScan(deps, "org1")).toMatchObject({
       skipped: "compose_submit_failed",
@@ -185,11 +195,14 @@ describe("executeMiraSelfBriefScan compose branches", () => {
 
   it("stops on a parked compose without creating a draft (no phantom)", async () => {
     const deps = makeDeps({
-      submitCompose: vi.fn(async () => ({
-        ...composeOk(proposeJson, "pending_approval"),
-        approvalRequired: true as const,
-        lifecycleId: "l1",
-      })),
+      submitCompose: vi.fn(
+        async () =>
+          ({
+            ...composeOk(proposeJson, "pending_approval"),
+            approvalRequired: true as const,
+            lifecycleId: "l1",
+          }) as unknown as SubmitWorkResponse,
+      ),
     });
     expect(await executeMiraSelfBriefScan(deps, "org1")).toEqual({ skipped: "compose_parked" });
     expect(deps.submitConceptDraft).not.toHaveBeenCalled();
@@ -259,10 +272,13 @@ describe("executeMiraSelfBriefScan draft branches", () => {
 
   it("maps an unexpectedly parked draft to draft_parked with a warn", async () => {
     const deps = makeDeps({
-      submitConceptDraft: vi.fn(async () => ({
-        ...draftOk({}, "pending_approval"),
-        approvalRequired: true as const,
-      })),
+      submitConceptDraft: vi.fn(
+        async () =>
+          ({
+            ...draftOk({}, "pending_approval"),
+            approvalRequired: true as const,
+          }) as unknown as SubmitWorkResponse,
+      ),
     });
     expect(await executeMiraSelfBriefScan(deps, "org1")).toEqual({ skipped: "draft_parked" });
     expect(deps.warn).toHaveBeenCalled();
@@ -270,10 +286,13 @@ describe("executeMiraSelfBriefScan draft branches", () => {
 
   it("maps a draft ingress failure to draft_submit_failed", async () => {
     const deps = makeDeps({
-      submitConceptDraft: vi.fn(async () => ({
-        ok: false as const,
-        error: { type: "deployment_not_found", intent: "x", message: "m" },
-      })),
+      submitConceptDraft: vi.fn(
+        async () =>
+          ({
+            ok: false as const,
+            error: { type: "deployment_not_found", intent: "x", message: "m" },
+          }) as unknown as SubmitWorkResponse,
+      ),
     });
     expect(await executeMiraSelfBriefScan(deps, "org1")).toMatchObject({
       skipped: "draft_submit_failed",

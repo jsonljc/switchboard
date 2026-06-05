@@ -19,6 +19,7 @@ import {
   PrismaAssetRecordStore,
   PrismaCrmFunnelStore,
   PrismaDeploymentMemoryStore,
+  PrismaMiraCreativeReadModelReader,
   PrismaRecommendationStore,
   PrismaRecommendationEmissionMirror,
   PrismaRecommendationOutcomeStore,
@@ -43,6 +44,7 @@ import {
   getMetrics,
   makeOnFailureHandler,
   NoopOperatorAlerter,
+  PrismaDeploymentResolver,
   type AsyncFailureContext,
   type OperatorAlerter,
   type PatternDecayDependencies,
@@ -116,6 +118,11 @@ import {
   createCreativeAttributionWorker,
   resolveMetaAdsConnectionCredentials,
 } from "../services/cron/creative-attribution.js";
+import {
+  createMiraSelfBriefDispatch,
+  createMiraSelfBriefWorker,
+} from "../services/cron/mira-self-brief.js";
+import { isAgentHomeAccessible } from "../lib/agent-home-access.js";
 import { createCreativeTasteSweep } from "../services/cron/creative-taste-sweep.js";
 import { buildCreativeTasteProvider } from "../services/creative-taste-context.js";
 import { buildCreativeAssetStorage } from "../lib/creative-asset-storage.js";
@@ -166,6 +173,20 @@ export interface RegisterInngestOptions {
     input: RecommendationHandoffSubmitInput,
     deployment: { deploymentId: string; skillSlug: string },
   ) => Promise<SubmitWorkResponse | null>;
+  /**
+   * Top-level submit closures for the slice-4 mira weekly self-brief loop.
+   * Built in bootstrapContainedWorkflows and threaded here so the cron
+   * submits through the same PlatformIngress front door. The compose work
+   * unit is a trace root; the concept draft carries parentWorkUnitId.
+   */
+  submitMiraBriefCompose?: (
+    input: import("../services/workflows/mira-self-brief-request.js").MiraBriefComposeSubmitInput,
+    deployment?: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse>;
+  submitMiraConceptDraft?: (
+    input: import("../services/workflows/mira-self-brief-request.js").MiraConceptDraftSubmitInput,
+    deployment?: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse>;
 }
 
 export async function registerInngest(
@@ -919,6 +940,64 @@ export async function registerInngest(
   // back into the trend/hook prompts via the runner's L2 seam. No kill-switch
   // (spec 3.6): no external calls, derived data, reversible writes.
   const deploymentMemoryStoreForTaste = new PrismaDeploymentMemoryStore(app.prisma);
+  // Slice-4 weekly self-brief loop (spec 3.7). Kill-switch:
+  // MIRA_SELF_BRIEF_ENABLED=true to enable; default off so the deploy is dark
+  // until deliberately enabled. Class-E failure contract on both halves: the
+  // next weekly run self-heals and a domain event would have zero consumers.
+  // The worker resolves the creative deployment itself at floor time and
+  // passes it through to the submit closures (no api-direct fallback can leak
+  // into a submit: the floor fails closed first).
+  const miraSelfBriefDispatch = createMiraSelfBriefDispatch(
+    {
+      listCreativeOrgs: () => listActiveCreativeOrgs(app.prisma!),
+      sendEvent: (event: { name: string; data: Record<string, unknown> }) =>
+        inngestClient.send(event),
+    },
+    makeOnFailureHandler(
+      {
+        functionId: "mira-self-brief-dispatch",
+        eventDomain: "mira.self_brief.dispatch",
+        riskCategory: "low",
+        alert: false,
+        emitEvent: false,
+      },
+      asyncFailure,
+    ) as (arg: unknown) => Promise<void>,
+  );
+
+  const selfBriefDeploymentResolver = new PrismaDeploymentResolver(app.prisma as never);
+  const miraSelfBriefWorker = createMiraSelfBriefWorker({
+    failure: asyncFailure,
+    readEnabledFlag: () => process.env["MIRA_SELF_BRIEF_ENABLED"] === "true",
+    isMiraEnabled: (orgId: string) =>
+      app.orgAgentEnablementStore
+        ? isAgentHomeAccessible("mira", orgId, app.orgAgentEnablementStore)
+        : Promise.resolve(false),
+    resolveCreativeDeployment: async (orgId: string) => {
+      try {
+        const resolved = await selfBriefDeploymentResolver.resolveByOrgAndSlug(orgId, "creative");
+        return resolved
+          ? { deploymentId: resolved.deploymentId, skillSlug: resolved.skillSlug }
+          : null;
+      } catch {
+        return null;
+      }
+    },
+    readModel: new PrismaMiraCreativeReadModelReader(app.prisma as never),
+    memoryReader: new PrismaDeploymentMemoryStore(app.prisma as never),
+    submitCompose:
+      options.submitMiraBriefCompose ??
+      (() => {
+        throw new Error("submitMiraBriefCompose not wired");
+      }),
+    submitConceptDraft:
+      options.submitMiraConceptDraft ??
+      (() => {
+        throw new Error("submitMiraConceptDraft not wired");
+      }),
+    warn: (msg: string) => app.log.warn(msg),
+  });
+
   const creativeTasteSweep = createCreativeTasteSweep({
     failure: asyncFailure,
     jobStore,
@@ -1048,6 +1127,8 @@ export async function registerInngest(
       creativeAttributionDispatch,
       creativeAttributionWorker,
       creativeTasteSweep,
+      miraSelfBriefDispatch,
+      miraSelfBriefWorker,
     ],
   });
 
@@ -1061,6 +1142,28 @@ export async function registerInngest(
  * intent starts with "recommendation." — the same rows that outcome attribution
  * reads back for candidates.
  */
+/**
+ * Enumerates distinct organizationIds holding an ACTIVE creative deployment.
+ * Used by the mira self-brief dispatch to fan out per-org scan events; the
+ * per-org worker re-checks enablement, entitlement, and signal floors itself.
+ */
+async function listActiveCreativeOrgs(prisma: {
+  agentDeployment: {
+    findMany: (args: {
+      where: { skillSlug: string; status: string };
+      select: { organizationId: true };
+      distinct: ["organizationId"];
+    }) => Promise<Array<{ organizationId: string }>>;
+  };
+}): Promise<string[]> {
+  const rows = await prisma.agentDeployment.findMany({
+    where: { skillSlug: "creative", status: "active" },
+    select: { organizationId: true },
+    distinct: ["organizationId"],
+  });
+  return rows.map((r) => r.organizationId);
+}
+
 async function listRileyActiveOrgs(prisma: {
   pendingActionRecord: {
     findMany: (args: {

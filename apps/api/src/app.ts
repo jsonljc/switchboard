@@ -682,6 +682,18 @@ export async function buildServer() {
         deployment: { deploymentId: string; skillSlug: string },
       ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse | null>)
     | undefined;
+  let submitMiraBriefCompose:
+    | ((
+        input: import("./services/workflows/mira-self-brief-request.js").MiraBriefComposeSubmitInput,
+        deployment?: { deploymentId: string; skillSlug: string },
+      ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
+    | undefined;
+  let submitMiraConceptDraft:
+    | ((
+        input: import("./services/workflows/mira-self-brief-request.js").MiraConceptDraftSubmitInput,
+        deployment?: { deploymentId: string; skillSlug: string },
+      ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
+    | undefined;
   if (prismaClient) {
     const { bootstrapContainedWorkflows } = await import("./bootstrap/contained-workflows.js");
     const result = await bootstrapContainedWorkflows({
@@ -696,6 +708,8 @@ export async function buildServer() {
     submitScheduledFollowUp = result.submitScheduledFollowUp;
     submitScheduledReminder = result.submitScheduledReminder;
     submitRecommendationHandoff = result.submitRecommendationHandoff;
+    submitMiraBriefCompose = result.submitMiraBriefCompose;
+    submitMiraConceptDraft = result.submitMiraConceptDraft;
   }
 
   // --- Phase 3b: lifecycle disqualification hook + store decoration (Wave 2 Phase 1b.3) ---
@@ -887,6 +901,8 @@ export async function buildServer() {
     submitScheduledFollowUp,
     submitScheduledReminder,
     submitRecommendationHandoff,
+    submitMiraBriefCompose,
+    submitMiraConceptDraft,
   });
 
   // --- Phase 3b: lifecycle disqualification route deps ---
