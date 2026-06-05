@@ -153,6 +153,9 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/hooks/use-mira-enabled", () => ({
   useMiraEnabled: () => ({ enabled: false, isLoading: false }),
 }));
+vi.mock("@/hooks/use-mira-desk", () => ({
+  useMiraDesk: vi.fn().mockReturnValue({ data: undefined }),
+}));
 
 // ── Import component after all mocks ─────────────────────────────────────────
 import { AgentPanel } from "@/components/agent-panel/agent-panel";

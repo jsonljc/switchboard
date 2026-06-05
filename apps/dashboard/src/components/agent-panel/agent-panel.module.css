@@ -198,29 +198,6 @@
   gap: 18px;
 }
 
-.notsetMark {
-  width: 84px;
-  height: 84px;
-  border-radius: 50%;
-  background: hsl(var(--agent-mira-tint));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-home-serif);
-  font-size: 38px;
-  font-weight: 500;
-  color: hsl(var(--agent-mira-deep));
-  letter-spacing: -0.02em;
-  position: relative;
-}
-
-.notsetMark::after {
-  content: "";
-  position: absolute;
-  inset: -6px;
-  border-radius: 50%;
-  border: 1px dashed hsl(var(--agent-mira) / 0.4);
-}
 
 .notsetHeading {
   font-family: var(--font-home-serif);
@@ -798,25 +775,25 @@
   opacity: 0.88;
 }
 
-/* Mira "open workspace" drill-in CTA — small pill, Mira-tinted accent */
+/* Mira "open workspace" CTA — quiet secondary pill (identity-neutral) */
 .miraOpenCta {
   align-self: center;
   margin-top: 4px;
   padding: 8px 18px;
   border-radius: var(--radius-pill);
-  background: hsl(var(--agent-mira));
-  color: hsl(var(--action-foreground));
+  background: var(--canvas-2);
+  color: var(--ink);
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: -0.003em;
   font-family: var(--font-home-sans);
-  border: none;
+  border: 1px solid var(--hair);
   cursor: pointer;
-  transition: opacity 160ms ease;
+  transition: background 160ms ease;
 }
 
 .miraOpenCta:hover {
-  opacity: 0.88;
+  background: hsl(var(--surface));
 }
 
 .miraOpenCta:focus-visible {
