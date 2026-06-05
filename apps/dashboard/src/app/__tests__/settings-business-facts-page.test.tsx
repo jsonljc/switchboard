@@ -11,6 +11,11 @@ vi.mock("@/hooks/use-business-facts", () => ({
   BusinessFactsValidationError: class extends Error {},
 }));
 vi.mock("@/components/ui/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("@/components/settings/operational-state/operational-state-section", () => ({
+  OperationalStateSection: ({ timezone }: { timezone: string }) => (
+    <div data-testid="operational-state-section" data-timezone={timezone} />
+  ),
+}));
 
 import BusinessFactsPage from "@/app/(auth)/settings/business-facts/page";
 
@@ -68,5 +73,28 @@ describe("BusinessFactsPage", () => {
     });
     render(<BusinessFactsPage />);
     expect(screen.getByDisplayValue("Saved Clinic")).toBeInTheDocument();
+  });
+
+  it("renders the operational-state sibling section when a deployment exists", () => {
+    useOrgDeploymentId.mockReturnValue({ deploymentId: "dep_1", isLoading: false, isError: false });
+    useBusinessFacts.mockReturnValue({ data: { facts: null, status: "missing" }, error: null });
+    render(<BusinessFactsPage />);
+    expect(screen.getByTestId("operational-state-section")).toBeInTheDocument();
+    expect(screen.getByTestId("operational-state-section").dataset.timezone).toBe("Asia/Singapore");
+  });
+
+  it("passes the saved org timezone to the operational-state section", () => {
+    useOrgDeploymentId.mockReturnValue({ deploymentId: "dep_1", isLoading: false, isError: false });
+    useBusinessFacts.mockReturnValue({
+      data: {
+        status: "present",
+        facts: { businessName: "Saved Clinic", timezone: "America/New_York" },
+      },
+      error: null,
+    });
+    render(<BusinessFactsPage />);
+    expect(screen.getByTestId("operational-state-section").dataset.timezone).toBe(
+      "America/New_York",
+    );
   });
 });
