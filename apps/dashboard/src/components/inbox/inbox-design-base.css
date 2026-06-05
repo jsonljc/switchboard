@@ -50,8 +50,11 @@
   /* token-debt: no --destructive-subtle primitive yet (inbox semantic tint) — #832 — expires wave-3 */
   --critical-tint: #f8e4e0;
 
-  /* type */
-  --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  /* type. --sans completes the inbox honesty set (TY4): the old raw family
+     name never matched a next/font registration, so its five consumers
+     (reason chip, confirm/resolve notes, suggested-use, composer textarea)
+     silently rendered system sans. Now they ride the canonical body face. */
+  --sans: var(--font-body-app);
   --serif: var(--font-display-app);
   --mono: var(--font-mono-editorial), "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
