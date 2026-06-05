@@ -645,6 +645,18 @@ export async function buildServer() {
     app.decorate("billingEntitlementResolver", billingEntitlementResolver);
   }
 
+  // Parked-approval Slack notifications (env-gated pilot posture; spec:
+  // 2026-06-05-slack-approval-notifications-design.md section 5). Undefined
+  // unless SLACK_BOT_TOKEN + SLACK_APPROVAL_CHANNEL are both set.
+  const { buildParkedApprovalNotifier } = await import("./bootstrap/approval-notifier.js");
+  const approvalNotifier = buildParkedApprovalNotifier(
+    {
+      slackBotToken: process.env.SLACK_BOT_TOKEN,
+      slackApprovalChannel: process.env.SLACK_APPROVAL_CHANNEL,
+    },
+    app.log,
+  );
+
   const platformIngress = new PlatformIngress({
     intentRegistry,
     modeRegistry,
@@ -655,6 +667,7 @@ export async function buildServer() {
     entitlementResolver: billingEntitlementResolver,
     auditLedger: ledger,
     operatorAlerter,
+    approvalNotifier,
   });
   app.decorate("platformIngress", platformIngress);
 
