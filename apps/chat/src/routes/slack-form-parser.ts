@@ -1,3 +1,7 @@
+// @route-class: read-only
+// (content-type parser registration only; this file declares no routes and
+// mutates nothing -- the header satisfies Route Governance section 1, which
+// classifies every file under src/routes/)
 import type { FastifyInstance } from "fastify";
 
 /**
