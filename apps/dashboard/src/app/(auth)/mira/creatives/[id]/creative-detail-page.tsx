@@ -300,9 +300,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 gap: 10,
                 padding: 14,
                 borderRadius: 8,
-                // Intentional red wash: #F6ECEC here (stop confirm on cream) vs the
-                // feed's rgba(122,46,46) on black (mira-clip-actions.tsx) — both deliberate.
-                background: "#F6ECEC",
+                background: "hsl(var(--risk-tint))",
               }}
             >
               <span

@@ -29,6 +29,7 @@
     --palette-violet: 270 45% 58%;       /* Mira identity */
     --palette-violet-deep: 256 31% 45%;
     --palette-violet-tint: 255 33% 95%;
+    --palette-risk-tint: 14 45% 93%; /* dusty terracotta wash, spec §4 high-risk ground */
     --palette-editorial-accent: 20 90% 55%; /* bright editorial orange (Mercury/reports) — NOT the action amber */
     --palette-editorial-accent-soft: 20 60% 50%; /* softened editorial orange */
     /* warm-neutral ink ramp — ONE canonical text/neutral scale (T5, by role) */
@@ -88,6 +89,7 @@
     --action-hover: var(--palette-action-hover);
     --action-subtle: var(--palette-action-subtle);
     --action-tint: var(--palette-action-tint);
+    --risk-tint: var(--palette-risk-tint); /* destructive-confirm ground (consumed hsl(var())) */
     /* Per-agent IDENTITY ONLY — never on action buttons */
     --agent-alex: var(--palette-coral);
     --agent-riley: var(--palette-teal);

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { collectGovernedFiles, rel, typeVoiceGoverned } from "./token-governance.lib";
+import { collectGovernedFiles, rel, typeVoiceGoverned, css } from "./token-governance.lib";
+
+function tokenValue(name: string): string {
+  const m = css.match(new RegExp(`--${name}\\s*:\\s*([^;]+);`));
+  if (!m) throw new Error(`token --${name} is not defined in globals.css`);
+  return m[1].trim();
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mira reskin A2: raw font-family string guard. next/font loads JetBrains Mono
@@ -27,5 +33,12 @@ describe("type honesty: no raw font-family strings in governed TSX (mira reskin)
       offenders,
       "raw font-family strings bypass next/font (use T.mono / T.display / var(--font-*))",
     ).toEqual([]);
+  });
+});
+
+describe("risk tint (mira stop confirm)", () => {
+  it("defines the terracotta risk-tint primitive and semantic alias", () => {
+    expect(tokenValue("palette-risk-tint")).toBe("14 45% 93%");
+    expect(tokenValue("risk-tint")).toBe("var(--palette-risk-tint)");
   });
 });
