@@ -36,3 +36,9 @@ describe("risk tint (mira stop confirm)", () => {
     expect(tokenValue("risk-tint")).toBe("var(--palette-risk-tint)");
   });
 });
+
+describe("radius tokens", () => {
+  it("defines the pill radius consumed by panel/nav controls", () => {
+    expect(tokenValue("radius-pill")).toBe("999px");
+  });
+});

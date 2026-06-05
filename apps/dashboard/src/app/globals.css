@@ -111,6 +111,7 @@
     --radius-md: 0.5rem;
     --radius-lg: 0.75rem;
     --radius-xl: 1rem;
+    --radius-pill: 999px; /* fully-rounded pill controls (was consumed but never defined) */
 
     /* ─── Typography ─── */
     --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
