@@ -20,6 +20,7 @@ import type { BillingEntitlementResolver } from "../billing/entitlement.js";
 import type { ApprovalLifecycleService } from "../approval/lifecycle-service.js";
 import type { ApprovalRoutingConfig } from "../approval/router.js";
 import type { AuditLedger } from "../audit/ledger.js";
+import type { ApprovalNotifier, ApprovalNotification } from "../notifications/notifier.js";
 import type { OperatorAlerter } from "../observability/operator-alerter.js";
 import { NoopOperatorAlerter, safeAlert } from "../observability/operator-alerter.js";
 import { buildInfrastructureFailureAuditParams } from "../observability/infrastructure-failure.js";
@@ -46,6 +47,17 @@ function jitteredDelayMs(attempt: number): number {
   return Math.max(0, base + (Math.random() * 2 - 1) * jitter);
 }
 
+/**
+ * The notification surface renders four known risk categories; anything else
+ * (including absent) is schema drift and falls back to "medium" explicitly
+ * rather than leaking free-form strings into operator copy.
+ */
+function normalizeRiskCategory(value: unknown): string {
+  return value === "critical" || value === "high" || value === "medium" || value === "low"
+    ? value
+    : "medium";
+}
+
 export interface GovernanceGateInterface {
   evaluate(workUnit: WorkUnit, registration: IntentRegistration): Promise<GovernanceDecision>;
 }
@@ -61,6 +73,13 @@ export interface PlatformIngressConfig {
   entitlementResolver?: BillingEntitlementResolver;
   auditLedger?: AuditLedger;
   operatorAlerter?: OperatorAlerter;
+  /**
+   * Optional best-effort notifier fired when a submission parks as a gated
+   * lifecycle (require_approval with a lifecycleService). Failures are logged
+   * and never affect the park; the dashboard Inbox remains canonical (spec:
+   * 2026-06-05-slack-approval-notifications-design.md section 2).
+   */
+  approvalNotifier?: ApprovalNotifier;
   /** Injectable for tests — defaults to setTimeout-based delay. */
   delayFn?: (ms: number) => Promise<void>;
 }
@@ -306,6 +325,40 @@ export class PlatformIngress {
             createdBy: workUnit.actor.id,
           },
         });
+
+        if (this.config.approvalNotifier) {
+          const notification: ApprovalNotification = {
+            approvalId: lifecycle.id,
+            envelopeId: workUnit.id,
+            summary: `${workUnit.intent} (requested by ${workUnit.actor.id})`,
+            riskCategory: normalizeRiskCategory(
+              (decision as Record<string, unknown>)["riskCategory"],
+            ),
+            explanation: `Approval level: ${decision.approvalLevel}. Policies: ${
+              decision.matchedPolicies.join(", ") || "default"
+            }.`,
+            bindingHash: revision.bindingHash,
+            expiresAt,
+            // Routing config wins (it is what the scope snapshot enforces); the
+            // governance decision's approvers inform when routing is silent.
+            // Informational in the pilot: Slack targeting never reads this field.
+            approvers:
+              routingConfig.defaultApprovers.length > 0
+                ? routingConfig.defaultApprovers
+                : decision.approvers,
+            evidenceBundle: { intent: workUnit.intent, organizationId: workUnit.organizationId },
+          };
+          // Fire-and-forget with logged failure (the propose-pipeline precedent).
+          // try/catch guards a synchronously-throwing notifier; .catch guards the
+          // async leg. Neither can fail the park.
+          try {
+            this.config.approvalNotifier.notify(notification).catch((err) => {
+              console.error("[PlatformIngress] approval notification failed", err);
+            });
+          } catch (err) {
+            console.error("[PlatformIngress] approval notification failed", err);
+          }
+        }
 
         return {
           ok: true,
