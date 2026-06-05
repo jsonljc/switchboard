@@ -142,10 +142,16 @@ describe("MiraCreativeFeed", () => {
     expect(screen.getByTestId("mira-feed-skeleton")).toBeInTheDocument();
   });
 
-  it("error → retry card", () => {
-    feed.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+  it("error → ConnectionTrouble card with retry wiring", () => {
+    const retrySpy = vi.fn();
+    feed.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch: retrySpy });
     renderFeed();
-    expect(screen.getByText(/Couldn't load/i)).toBeInTheDocument();
+    // role=alert is the shared failure vocabulary from ConnectionTrouble
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    // retry button is wired to refetch
+    const retryBtn = screen.getByRole("button", { name: /try again/i });
+    retryBtn.click();
+    expect(retrySpy).toHaveBeenCalledOnce();
   });
 
   it("first clip active on mount, others paused", () => {

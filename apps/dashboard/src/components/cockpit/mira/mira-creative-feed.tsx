@@ -7,10 +7,12 @@ import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { useReviewDecision } from "@/hooks/use-review-decision";
+import { ConnectionTrouble } from "@/components/query-states";
+import { T } from "@/components/cockpit/tokens";
 import { MiraClipCard } from "./mira-clip-card";
 
 export function MiraCreativeFeed() {
-  const { data, isLoading, isError } = useMiraFeed();
+  const { data, isLoading, isError, refetch } = useMiraFeed();
   const [activeIndex, setActiveIndex] = useState(0);
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,19 +83,63 @@ export function MiraCreativeFeed() {
   }, [jobs.length]);
 
   if (isLoading) {
-    return <div data-testid="mira-feed-skeleton" style={{ height: "100%", background: "#000" }} />;
+    return (
+      <div
+        data-testid="mira-feed-skeleton"
+        style={{ height: "100%", background: "hsl(var(--night-canvas))" }}
+      />
+    );
   }
   if (isError) {
+    // The shared failure vocabulary (role=alert, offline-aware) on a light card
+    // floating over the night ground: same component, honest on both registers.
     return (
-      <div style={{ padding: 28, color: "#777" }}>
-        Couldn&apos;t load your drafts. Pull to refresh.
+      <div
+        style={{
+          height: "100%",
+          background: "hsl(var(--night-canvas))",
+          display: "grid",
+          placeItems: "center",
+          padding: 28,
+        }}
+      >
+        <div
+          style={{
+            background: T.paper,
+            borderRadius: 18,
+            boxShadow: "var(--shadow-3)",
+            padding: 8,
+            maxWidth: 420,
+            width: "100%",
+          }}
+        >
+          <ConnectionTrouble agentName="Mira" onRetry={refetch} />
+        </div>
       </div>
     );
   }
   if (jobs.length === 0) {
     return (
-      <div style={{ padding: 28, color: "#777" }}>
-        No drafts to review yet. Mira&apos;s drafts will appear here as she drafts them.
+      <div
+        style={{
+          height: "100%",
+          background: "hsl(var(--night-canvas))",
+          display: "grid",
+          placeItems: "center",
+          padding: 28,
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            color: "hsl(var(--night-ink-2))",
+            fontSize: 14,
+            textAlign: "center",
+            maxWidth: 360,
+          }}
+        >
+          No drafts to review yet. Mira&apos;s drafts will appear here as she drafts them.
+        </p>
       </div>
     );
   }

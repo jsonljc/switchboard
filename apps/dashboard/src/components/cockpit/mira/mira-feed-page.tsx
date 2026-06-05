@@ -36,11 +36,12 @@ export function MiraFeedPage() {
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
-        background: "#000",
+        background: "hsl(var(--night-canvas))",
       }}
     >
       {/* Light chrome band above the immersive feed body: the header stays on
-          the warm canvas; only the clip viewport below is the night register. */}
+          the warm canvas; the clip viewport below is the night register (warm
+          charcoal, never pure black — tokenized via --night-canvas). */}
       <div style={{ position: "relative", background: T.bg }}>
         <MiraHeader
           status={working ? "working" : "idle"}

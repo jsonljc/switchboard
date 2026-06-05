@@ -42,14 +42,14 @@ export function MiraClipActions({
 
   const pendingApproval = approve.data?.pendingApproval === true;
 
-  // btn.color is intentionally a literal white: these buttons sit on the dark
-  // feed overlays (scrims/confirm boxes), not on app surfaces. Amber-ground
-  // buttons override with T.actionFg. A later PR tokenizes the night register.
+  // btn.color rides the night ink token: these buttons sit on feed overlays
+  // (scrims/confirm boxes) in the night register. Amber-ground buttons
+  // override with T.actionFg (light foreground required for AA on amber).
   const btn = {
     padding: "8px 12px",
     borderRadius: 8,
     border: "none",
-    color: "#fff",
+    color: "hsl(var(--night-ink))",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
@@ -63,13 +63,13 @@ export function MiraClipActions({
           display: "flex",
           flexDirection: "column",
           gap: 6,
-          background: "rgba(14,12,10,0.92)",
+          background: "hsl(var(--night-scrim) / 0.92)",
           padding: 10,
           borderRadius: 10,
           maxWidth: 220,
         }}
       >
-        <span style={{ color: "#fff", fontSize: 12 }}>
+        <span style={{ color: "hsl(var(--night-ink))", fontSize: 12 }}>
           Runs the next render step. This may create provider cost
           {estimateQ.data ? ` (about $${estimateQ.data.basic.cost})` : ""}.
         </span>
@@ -87,14 +87,18 @@ export function MiraClipActions({
             Confirm continue
           </button>
           <button
-            style={{ ...btn, background: "transparent", border: "1px solid #fff" }}
+            style={{
+              ...btn,
+              background: "transparent",
+              border: "1px solid hsl(var(--night-ink) / 0.45)",
+            }}
             onClick={() => setConfirm(null)}
           >
             Cancel
           </button>
         </div>
         {approve.isError && (
-          <span style={{ color: "#fff", fontSize: 11 }}>
+          <span style={{ color: "hsl(var(--night-ink))", fontSize: 11 }}>
             Couldn&apos;t update the draft. Try again.
           </span>
         )}
@@ -108,32 +112,36 @@ export function MiraClipActions({
           display: "flex",
           flexDirection: "column",
           gap: 6,
-          background: "rgba(122,46,46,0.95)",
+          background: "hsl(var(--night-risk) / 0.95)",
           padding: 10,
           borderRadius: 10,
           maxWidth: 220,
         }}
       >
-        <span style={{ color: "#fff", fontSize: 12 }}>
+        <span style={{ color: "hsl(var(--night-ink))", fontSize: 12 }}>
           Stop this draft? You can&apos;t continue it later. This can&apos;t be undone.
         </span>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            style={{ ...btn, background: "#fff", color: T.red }}
+            style={{ ...btn, background: "hsl(var(--night-ink))", color: "hsl(var(--night-risk))" }}
             disabled={approve.isPending}
             onClick={() => run("stop")}
           >
             Confirm stop
           </button>
           <button
-            style={{ ...btn, background: "transparent", border: "1px solid #fff" }}
+            style={{
+              ...btn,
+              background: "transparent",
+              border: "1px solid hsl(var(--night-ink) / 0.45)",
+            }}
             onClick={() => setConfirm(null)}
           >
             Cancel
           </button>
         </div>
         {approve.isError && (
-          <span style={{ color: "#fff", fontSize: 11 }}>
+          <span style={{ color: "hsl(var(--night-ink))", fontSize: 11 }}>
             Couldn&apos;t update the draft. Try again.
           </span>
         )}
@@ -162,14 +170,16 @@ export function MiraClipActions({
           Keep
         </button>
         <button
-          style={{ ...btn, background: "rgba(0,0,0,0.55)" }}
+          style={{ ...btn, background: "hsl(var(--night-surface))" }}
           disabled={decide.isPending}
           onClick={() => decideAndResolve("passed")}
         >
           Pass
         </button>
         {decide.isError && (
-          <span style={{ color: "#fff", fontSize: 11 }}>Couldn&apos;t save. Try again.</span>
+          <span style={{ color: "hsl(var(--night-ink))", fontSize: 11 }}>
+            Couldn&apos;t save. Try again.
+          </span>
         )}
       </div>
     );
@@ -180,14 +190,26 @@ export function MiraClipActions({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
       {pendingApproval && (
-        <span style={{ color: "#fff", fontSize: 11, maxWidth: 220, textAlign: "right" }}>
+        <span
+          style={{
+            color: "hsl(var(--night-ink))",
+            fontSize: 11,
+            maxWidth: 220,
+            textAlign: "right",
+          }}
+        >
           Queued for your approval. Over the auto-spend limit, nothing ran.
         </span>
       )}
       {reviewAction.canContinue &&
         (halted ? (
           <button
-            style={{ ...btn, background: "#555", cursor: "not-allowed" }}
+            style={{
+              ...btn,
+              background: "hsl(var(--night-surface))",
+              color: "hsl(var(--night-ink-3))",
+              cursor: "not-allowed",
+            }}
             disabled
             title="Resume Mira to continue drafts."
           >
@@ -203,7 +225,7 @@ export function MiraClipActions({
         ))}
       {reviewAction.canStop && (
         <button
-          style={{ ...btn, background: "rgba(0,0,0,0.55)" }}
+          style={{ ...btn, background: "hsl(var(--night-surface))" }}
           onClick={() => setConfirm("stop")}
         >
           Stop draft

@@ -57,3 +57,20 @@ describe("night register tokens (mira review feed)", () => {
     }
   });
 });
+
+describe("night register: mira surfaces carry no raw neutral literals", () => {
+  it("mira feed/detail consume tokens, never #000/#fff/raw rgba", () => {
+    const SCOPES = ["components/cockpit/mira/", "app/(auth)/mira/"];
+    const offenders: string[] = [];
+    for (const f of collectGovernedFiles()) {
+      if (!SCOPES.some((s) => f.path.includes(s))) continue;
+      const re = /#(?:000|fff)\b|rgba?\(\s*\d/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(f.content)) !== null) {
+        const line = f.content.slice(0, m.index).split("\n").length;
+        offenders.push(`${rel(f.path)}:${line}: ${m[0]}`);
+      }
+    }
+    expect(offenders, "use hsl(var(--night-*)) / T.* tokens on Mira surfaces").toEqual([]);
+  });
+});

@@ -21,8 +21,8 @@ export default async function MiraReviewPage() {
           zIndex: 20,
           padding: "6px 12px",
           borderRadius: 999,
-          background: "rgba(0,0,0,0.55)",
-          color: "#fff",
+          background: "hsl(var(--night-scrim) / 0.7)",
+          color: "hsl(var(--night-ink))",
           fontSize: 13,
           textDecoration: "none",
         }}
