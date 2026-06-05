@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { contrastRatio } from "@/lib/tokens/contrast";
+import { css, collectGovernedFiles, rel, typeVoiceGoverned } from "./token-governance.lib";
 
 /**
  * Token drift-guard (spec §3.4). Reads globals.css and asserts the governance
@@ -9,9 +10,6 @@ import { contrastRatio } from "@/lib/tokens/contrast";
  * because the dashboard ESLint "lint" is stubbed and CI format:check is *.ts-only,
  * so CSS/token changes are otherwise not gated.
  */
-
-// vitest runs with cwd = apps/dashboard (the package dir).
-const css = readFileSync(path.resolve(process.cwd(), "src/app/globals.css"), "utf8");
 
 /** First (:root / light) definition of a CSS custom property in globals.css. */
 function tokenValue(name: string): string {
@@ -206,31 +204,6 @@ describe("token governance — one neutral ink ramp by role (T5)", () => {
 
 // Recursive sweep over ALL governed source (spec §3.2 governed paths), excluding
 // tests (they hold legacy hexes as fixtures), sprite pixel data, node_modules, .next.
-function collectGovernedFiles(): Array<{ path: string; content: string }> {
-  const roots = ["src/app", "src/components", "src/lib", "src/styles"];
-  const out: Array<{ path: string; content: string }> = [];
-  const walk = (dir: string): void => {
-    if (!existsSync(dir)) return;
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      const full = `${dir}/${e.name}`;
-      if (e.isDirectory()) {
-        if (e.name === "node_modules" || e.name === ".next" || e.name === "__tests__") continue;
-        walk(full);
-      } else if (/\.(css|ts|tsx)$/.test(e.name) && !/\.test\.(ts|tsx)$/.test(e.name)) {
-        if (/-variants\.ts$/.test(e.name)) continue; // sprite pixel data (excluded)
-        // Strip the bare `.dark { … }` block — dark palette VALUES are Wave-3
-        // deferred (spec §0), not part of the light-mode governance contract.
-        const content = readFileSync(full, "utf8").replace(/\.dark\s*\{[^}]*\}/g, "");
-        out.push({ path: full, content });
-      }
-    }
-  };
-  for (const r of roots) walk(path.resolve(process.cwd(), r));
-  return out;
-}
-
-/** Path relative to src/ for readable failure messages. */
-const rel = (p: string): string => (p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p);
 
 describe("token governance — governed-source drift sweep (generalized)", () => {
   const files = collectGovernedFiles();
@@ -579,9 +552,6 @@ describe("token governance — hero poster label contrast (AA)", () => {
 // banned from governed surfaces (locked direction, section 3 non-negotiables).
 // Mercury and the marketing landing keep their own registers until retired.
 // ─────────────────────────────────────────────────────────────────────────────
-const TYPE_VOICE_EXEMPT = ["(mercury)/", "components/landing/"];
-const typeVoiceGoverned = (p: string): boolean => !TYPE_VOICE_EXEMPT.some((ex) => p.includes(ex));
-
 describe("token governance: type voice (TY2)", () => {
   const files = collectGovernedFiles().filter((f) => typeVoiceGoverned(f.path));
 
@@ -691,73 +661,6 @@ describe("token governance: type scale + display consolidation (TY3)", () => {
       .filter((f) => !LEGACY_ALLOWED.some((a) => f.path.includes(a)))
       .filter((f) => /font-display(?!-app\b)/.test(f.content))
       .map((f) => rel(f.path));
-    expect(offenders, offenders.join("\n")).toEqual([]);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TY4: the authed body face (spec 2026-06-05). Geist loaded as a variable font,
-// the register rule on body (portal coverage), the producer pairings for BOTH
-// hooks (.app-header and the mercury marker), and one body sans (Hanken
-// retired).
-// ─────────────────────────────────────────────────────────────────────────────
-describe("token governance: type body (TY4)", () => {
-  const governed = collectGovernedFiles().filter((f) => typeVoiceGoverned(f.path));
-
-  it("layout.tsx loads Geist as a variable font (no weight array: the 450 cut must be real)", () => {
-    const layout = readFileSync(path.resolve(process.cwd(), "src/app/layout.tsx"), "utf8");
-    expect(layout).toMatch(/Geist\(/);
-    const geistBlock = layout.slice(layout.indexOf("Geist("));
-    const block = geistBlock.slice(0, geistBlock.indexOf("})"));
-    expect(block).toMatch(/variable:\s*"--font-geist"/);
-    expect(block).not.toMatch(/weight:/);
-  });
-
-  it("the body face chains to the loaded Geist primitive (token honesty)", () => {
-    expect(css).toMatch(/--font-body-app:\s*var\(--font-geist\)/);
-    expect(css).toMatch(/--font-home-sans:\s*var\(--font-body-app\)/);
-  });
-
-  it("the register rule carries the mercury exclusion in the same selector", () => {
-    expect(css).toMatch(
-      /body:has\(\.app-header\):not\(:has\(\[data-register="mercury"\]\)\)\s*\{[^}]*font-family:\s*var\(--font-body-app\)/,
-    );
-  });
-
-  it("the mercury marker producer exists (the exclusion is inert without it)", () => {
-    const mercuryLayout = readFileSync(
-      path.resolve(process.cwd(), "src/app/(auth)/(mercury)/layout.tsx"),
-      "utf8",
-    );
-    expect(mercuryLayout).toMatch(/data-register="mercury"/);
-  });
-
-  it("the register hook producer exists (.app-header is load-bearing architecture now)", () => {
-    // The body-face rule hangs on the .app-header class. A shell refactor that
-    // renames it would leave the rule inert while a globals-only guard stays
-    // green. Pair the consumer (the rule) with both producers: the shell and
-    // its error-boundary fallback.
-    for (const p of [
-      "src/components/layout/editorial-auth-shell.tsx",
-      "src/components/layout/editorial-shell-boundary.tsx",
-    ]) {
-      const src = readFileSync(path.resolve(process.cwd(), p), "utf8");
-      expect(src, p).toMatch(/className="app-header"/);
-    }
-  });
-
-  it("no governed CSS names Geist or Hanken raw (the face rides the token)", () => {
-    const offenders: string[] = [];
-    for (const f of governed) {
-      if (!f.path.endsWith(".css")) continue;
-      if (f.path.endsWith("globals.css")) {
-        // The canonical token declaration is the ONE site allowed to name the
-        // "Geist" fallback head; Hanken must be fully retired.
-        if (/Hanken/.test(f.content)) offenders.push("globals.css: Hanken survives");
-        continue;
-      }
-      if (/"Geist"|Hanken/.test(f.content)) offenders.push(rel(f.path));
-    }
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
 });
