@@ -58,6 +58,12 @@ export function buildCreativeTasteProvider(
         if (row.category !== "taste" || !row.canonicalKey) continue;
         const m = TASTE_KEY.exec(row.canonicalKey);
         if (!m) continue;
+        // This provider feeds the POLISHED runner only (spec 3.8/3.4): ugc
+        // buckets are structure-keyed (taste:kept_ugc_demo_first), and
+        // rendering a structure id as a "hook" into a polished prompt would
+        // be incoherent cross-mode guidance. UGC taste stays accumulated for
+        // the named follow-on (ugc prompt injection); it never bleeds here.
+        if (m[2] !== "polished") continue;
         lines.push(renderLine(m[1]!, m[2]!, m[3]!, row.sourceCount));
       }
       return lines;

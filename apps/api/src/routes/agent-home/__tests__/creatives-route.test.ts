@@ -71,6 +71,13 @@ const PILOT_ROWS = [
     ugcPhaseOutputs: { production: { assets: [{ outputs: { videoUrl: "https://x/u.mp4" } }] } },
   }), // draft_ready + UGC video
   baseJob({
+    id: "ugc-gated",
+    createdAt: new Date("2026-05-25"),
+    mode: "ugc",
+    ugcPhase: "scripting",
+    ugcPhaseOutputs: { planning: { structures: [] } },
+  }), // ugc parked at a pre-video approval gate (slice-3 spec 3.4)
+  baseJob({
     id: "stopped-1",
     createdAt: new Date("2026-05-24"),
     currentStage: "production",
@@ -162,7 +169,8 @@ describe("GET /agents/mira/creatives", () => {
     };
     expect(body.jobs.map((j) => j.id).sort()).toEqual(["polished-ready", "ugc-ready"]);
     expect(body.jobs.every((j) => typeof j.draft?.videoUrl === "string")).toBe(true);
-    expect(body.feed).toEqual({ reviewableCount: 2, renderingCount: 2 });
+    // renderingCount includes the ugc-gated fixture (awaiting_review, no video)
+    expect(body.feed).toEqual({ reviewableCount: 2, renderingCount: 3 });
   });
 
   it("filter-before-limit: older reviewable survives newer no-video clips", async () => {
@@ -255,6 +263,28 @@ describe("GET /agents/mira/desk", () => {
     };
     expect(body.desk.readyToReviewCount).toBeGreaterThanOrEqual(1);
     expect(Array.isArray(body.desk.inProduction)).toBe(true);
+  });
+
+  it("surfaces a pre-video ugc gate in the tray with ugcPhase + awaitingGo (slice-3 spec 3.4)", async () => {
+    // Regression guard for the operator path: the desk endpoint builds over
+    // the FULL window (never the reviewable-only feed filter), so an
+    // in-flight ugc job parked at a gate must reach the tray with the fields
+    // the link/caption UI reads.
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/desk",
+      headers: { "x-org-id": PILOT },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      desk: {
+        inProduction: Array<{ id: string; ugcPhase?: string; awaitingGo: boolean }>;
+      };
+    };
+    const gated = body.desk.inProduction.find((i) => i.id === "ugc-gated");
+    expect(gated).toBeDefined();
+    expect(gated!.ugcPhase).toBe("scripting");
+    expect(gated!.awaitingGo).toBe(true);
   });
 
   it("404s for a non-mira agent", async () => {

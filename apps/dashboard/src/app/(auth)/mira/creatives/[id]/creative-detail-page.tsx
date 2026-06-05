@@ -53,12 +53,15 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
       ) : (
         // Phase-honest no-video header (slice-3 spec 3.4): a job parked at a
         // pre-video gate reads its real progress, not a generic "drafting".
+        // Terminal states keep it plain; the status line below carries them.
         <div style={{ color: T.ink3 }}>
-          {`No draft clip yet. ${
-            job.ugcPhase
-              ? (UGC_PHASE_COPY[job.ugcPhase] ?? "In production")
-              : (STAGE_COPY[job.stage] ?? "Still drafting")
-          }.`}
+          {job.status === "failed" || job.status === "stopped"
+            ? "No draft clip."
+            : `No draft clip yet. ${
+                job.ugcPhase
+                  ? (UGC_PHASE_COPY[job.ugcPhase] ?? "In production")
+                  : (STAGE_COPY[job.stage] ?? "Still drafting")
+              }.`}
         </div>
       )}
 
