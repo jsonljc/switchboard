@@ -84,6 +84,16 @@ describe("convention parity with the live handoff builder (anti-rot tripwire)", 
     expect(seam.actor).toEqual(live.actor);
   });
 
+  it("organizationId threads identically", () => {
+    expect(seam.organizationId).toBe(live.organizationId);
+  });
+
+  it("both requests set (and omit) the SAME top-level fields: optional-field drift trips here", () => {
+    // If the live builder ever starts setting priority/suggestedMode/traceId as a Riley
+    // convention, the seam must not silently diverge; key-set equality catches it.
+    expect(Object.keys(seam).sort()).toEqual(Object.keys(live).sort());
+  });
+
   it("trigger and surface metadata are identical", () => {
     expect(seam.trigger).toBe(live.trigger);
     expect(seam.surface).toEqual(live.surface);
@@ -102,7 +112,9 @@ describe("convention parity with the live handoff builder (anti-rot tripwire)", 
     expect(seamParts[1]).toBe(liveParts[1]); // "riley"
     expect(seamParts[2]).toBe(base.recommendationId);
     expect(seamParts[3]).toBe("pause");
-    expect(seamParts[0]).not.toBe(liveParts[0]); // distinct namespace, no key collision
+    // Distinct namespace pinned for legibility; actual collision is already impossible
+    // because the action segment differs (pause vs refresh_creative).
+    expect(seamParts[0]).not.toBe(liveParts[0]);
   });
 
   it("intents are distinct: pause is NOT the creative handoff", () => {
