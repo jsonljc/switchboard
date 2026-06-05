@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { MiraCreativeJobSummary } from "@switchboard/core";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { MiraClipActions } from "./mira-clip-actions";
 
 function statusLabel(status: MiraCreativeJobSummary["status"]): string {
@@ -35,16 +36,19 @@ export function MiraClipCard({
 }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const reducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (isActive) void el.play().catch(() => {});
+    // Reduced motion: hold the poster frame; the existing tap-to-play toggle on
+    // the video element remains the explicit opt-in.
+    if (isActive && !reducedMotion) void el.play().catch(() => {});
     else el.pause();
     return () => {
       el.pause();
     };
-  }, [isActive]);
+  }, [isActive, reducedMotion]);
 
   return (
     <section
