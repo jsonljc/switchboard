@@ -3,6 +3,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import { BusinessFactsForm } from "@/components/settings/business-facts/business-facts-form";
+import { OperationalStateSection } from "@/components/settings/operational-state/operational-state-section";
 import {
   emptyBusinessFacts,
   type BusinessFactsForm as BusinessFactsFormValues,
@@ -119,6 +120,13 @@ export default function BusinessFactsPage() {
         isSaving={upsert.isPending}
         onSubmit={handleSubmit}
       />
+
+      {deploymentId && (
+        <OperationalStateSection
+          deploymentId={deploymentId}
+          timezone={saved?.timezone ?? "Asia/Singapore"}
+        />
+      )}
     </div>
   );
 }
