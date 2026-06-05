@@ -148,6 +148,22 @@ describe("buildUgcVideoRequest", () => {
     expect(req.cameraMotion).toBeUndefined();
   });
 
+  it("always carries the SPOKEN script separately from the composed visual prompt", () => {
+    const req = buildUgcVideoRequest(makeSpec());
+    expect(req.script).toBe("Hey, so I have to tell you about this.");
+    expect(req.prompt).not.toBe(req.script); // composed prompt adds scene/delivery
+  });
+
+  it("threads the avatar block from the spec creator (slice-3 spec 3.5)", () => {
+    const withAvatar = buildUgcVideoRequest(
+      makeSpec({ creator: { heygenAvatarId: "avatar_42", heygenVoiceId: "voice_9" } }),
+    );
+    expect(withAvatar.avatar).toEqual({ refId: "avatar_42", voiceId: "voice_9" });
+
+    const without = buildUgcVideoRequest(makeSpec());
+    expect(without.avatar).toBeUndefined();
+  });
+
   it("threads referenceImageUrl through only when the spec carries one", () => {
     const withRef = buildUgcVideoRequest(
       makeSpec({ referenceImageUrl: "https://cdn.example.com/product.jpg" }),

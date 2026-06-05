@@ -14,7 +14,19 @@ export interface RankedProvider {
   profile: ProviderCapabilityProfile;
   score: number;
   estimatedCost: number;
+  /**
+   * Per-provider attempt cap (slice-3 spec 3.5): heygen gets ONE attempt
+   * before fallback (it ranks first for avatar talking-heads, and its
+   * submit-poll calls are minutes long; Kling-style triple attempts would
+   * let a heygen outage stall the whole production step). Absent = the
+   * spec's retryConfig.maxAttempts applies.
+   */
+  attemptLimit?: number;
 }
+
+const PROVIDER_ATTEMPT_LIMIT: Record<string, number> = {
+  heygen: 1,
+};
 
 // ── Default Provider Registry (Phase 1) ──
 
@@ -165,6 +177,9 @@ export function rankProviders(
         profile,
         score,
         estimatedCost: ESTIMATED_COST[profile.provider] ?? 1.0,
+        ...(PROVIDER_ATTEMPT_LIMIT[profile.provider] !== undefined
+          ? { attemptLimit: PROVIDER_ATTEMPT_LIMIT[profile.provider] }
+          : {}),
       };
     })
     .sort((a, b) => b.score - a.score);

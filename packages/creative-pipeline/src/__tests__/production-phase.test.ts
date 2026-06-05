@@ -328,6 +328,32 @@ describe("executeProductionPhase", () => {
     expect(result.assets[0]!.provider).toBe("kling");
   });
 
+  it("grants heygen exactly ONE attempt before falling back to kling (slice-3 spec 3.5)", async () => {
+    // heygen ranks first for talking_head; its tighter posture (5-min poll +
+    // single attempt) keeps a heygen outage from stalling the whole step.
+    const heygenClient = { generateAvatar: vi.fn().mockRejectedValue(new Error("heygen down")) };
+    const d = {
+      ...deps,
+      providerClients: { ...deps.providerClients, heygenClient },
+    };
+    const spec = makeSpec("spec_1", {
+      format: "talking_head",
+      providersAllowed: ["kling", "heygen"],
+      creator: { heygenAvatarId: "avatar_42" },
+    });
+    const input: ProductionInput = {
+      specs: [spec],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: d as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(heygenClient.generateAvatar).toHaveBeenCalledTimes(1);
+    expect(result.assets).toHaveLength(1);
+    expect(result.assets[0]!.provider).toBe("kling");
+  });
+
   it("fails a spec loudly when no ranked provider is allowed", async () => {
     const spec = makeSpec("spec_1", { providersAllowed: ["nonexistent"] });
     const input: ProductionInput = {
