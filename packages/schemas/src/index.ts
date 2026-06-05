@@ -214,5 +214,8 @@ export {
 // Mira Director's Desk — open-brief schema, mapping, and intent classifier (PR3)
 export * from "./mira-brief.js";
 
+// Mira slice-4 brain — compose request/output contract + parser
+export * from "./mira-compose.js";
+
 // Scheduled follow-up types
 export * from "./scheduled-follow-up.js";

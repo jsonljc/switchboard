@@ -51,7 +51,7 @@ export class TracePersistenceHook
 
   constructor(
     private traceStore: ExecutionTraceStore,
-    private traceContext: { trigger: "chat_message" | "batch_job" },
+    private traceContext: { trigger: "chat_message" | "batch_job" | "brief_compose" },
   ) {}
 
   async afterSkill(ctx: SkillHookContext, result: SkillExecutionResult): Promise<void> {
