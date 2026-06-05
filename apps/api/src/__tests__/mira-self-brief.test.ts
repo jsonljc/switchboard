@@ -267,7 +267,9 @@ describe("executeMiraSelfBriefScan draft branches", () => {
     const deps = makeDeps({
       submitConceptDraft: vi.fn(async () => draftOk({ skipped: true, reason: "mira_not_enabled" })),
     });
-    expect(await executeMiraSelfBriefScan(deps, "org1")).toEqual({ skipped: "mira_not_enabled" });
+    expect(await executeMiraSelfBriefScan(deps, "org1")).toEqual({
+      skipped: "draft_child_skipped:mira_not_enabled",
+    });
   });
 
   it("maps an unexpectedly parked draft to draft_parked with a warn", async () => {

@@ -129,8 +129,9 @@ export type MiraSelfBriefOutcome =
  * draft-only concept child. Every submit is idempotency-keyed on the UTC ISO
  * week, so a retried run (inngest retries: 2) replays claims instead of
  * duplicating work, and at most ONE self-initiated draft exists per org per
- * week by construction. Every exit is a named outcome in the inngest run
- * history: "Mira chose quiet" and "Mira stopped parsing" are distinguishable.
+ * week by construction. Every expected exit is a named outcome in the
+ * inngest run history (a thrown floor read is a genuine infra failure that
+ * rides the retry + onFailure path instead): "Mira chose quiet" and "Mira stopped parsing" are distinguishable.
  */
 export async function executeMiraSelfBriefScan(
   deps: MiraSelfBriefWorkerDeps,
@@ -145,6 +146,10 @@ export async function executeMiraSelfBriefScan(
   // Floor reads are tz-insensitive (status counts + measured presence): UTC.
   // The builder re-reads authoritatively with the org timezone at compose time.
   const model = await deps.readModel.read(organizationId, { now, timezone: "UTC" });
+  // NOTE: on a post-mutation inngest retry, the re-read floor can trip on
+  // drafts that landed between attempts and report backlog_cap even though a
+  // prior attempt's keyed draft persists. The mutation stays exactly-once;
+  // only the retried run's REPORTED outcome is conservative.
   if (model.counts.inFlight >= SELF_BRIEF_BACKLOG_CAP) return { skipped: "backlog_cap" };
 
   const hasMeasured = model.jobs.some((j) => j.performance?.delivery === "measured");
@@ -249,6 +254,9 @@ function classifyDraftResponse(
     return { skipped: "draft_parked" };
   }
   const outcome = response.result.outcome;
+  // "queued" is union-possible but path-impossible today (the concept workflow
+  // returns only completed/failed); kept as defensive coding, and a genuinely
+  // queued child without a jobId still falls to draft_no_job below.
   if (outcome !== "completed" && outcome !== "queued") {
     warn(`[mira-self-brief] draft outcome ${outcome} for ${organizationId}`);
     return { skipped: "draft_failed", detail: outcome };
@@ -259,7 +267,15 @@ function classifyDraftResponse(
   const outputs = response.result.outputs as { jobId?: unknown; reason?: unknown };
   const jobId = typeof outputs?.jobId === "string" ? outputs.jobId : null;
   if (!jobId) {
-    return { skipped: typeof outputs?.reason === "string" ? outputs.reason : "draft_no_job" };
+    // Namespaced so a mid-run enablement flip (the child re-checks and skips
+    // AFTER the compose LLM ran) is distinguishable in run history from the
+    // floor's pre-LLM skip of the same reason.
+    return {
+      skipped:
+        typeof outputs?.reason === "string"
+          ? `draft_child_skipped:${outputs.reason}`
+          : "draft_no_job",
+    };
   }
   return { jobId };
 }

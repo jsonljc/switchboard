@@ -357,7 +357,8 @@ closures (`submitMiraBriefCompose`, `submitMiraConceptDraft`) are built in
 `required_in_env_example` bucket of `scripts/env-allowlist.local-readiness.json` AND to
 `.env.example` in the same PR (env-completeness checks both).
 
-**Worker steps** (each step output JSON-only):
+**Worker stages** (the function RETURNS one named JSON outcome; the implementation
+deliberately uses no internal step state so retries replay idempotency claims):
 
 1. `floor`: flag on; Mira org-enabled (`isAgentHomeAccessible`); creative deployment resolves;
    read model floor: `counts.inFlight < 5` (desk hygiene cap, constant
@@ -529,7 +530,9 @@ the merged tip.
 
 1. `MIRA_SELF_BRIEF_ENABLED=true` on the API host: weekly scans begin for orgs that are Mira-enabled
    AND have the seeded creative deployment + compose allow policy (`seedMiraCreativeDeployment`,
-   org_dev only until real-org provisioning ships, fact 30).
+   org_dev only until real-org provisioning ships, fact 30). If a creative deployment predates
+   the PR-2 seed change, re-run `seedMiraCreativeDeployment` for that org so the compose allow
+   policy is installed; otherwise compose default-denies weekly with a warn (observable, named).
 2. **The org must be billing-entitled** (fact 31): `subscriptionStatus` active/trialing or
    `entitlementOverride=true`. org_dev is unentitled by default (the known local-dev gotcha), so
    a local end-to-end run requires flipping the override on the org row deliberately; this spec
