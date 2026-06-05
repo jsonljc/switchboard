@@ -51,6 +51,7 @@ import {
   resolveBusinessContextFreshness,
   type RevenueState,
 } from "./revenue-state.js";
+import { deriveOwnershipAnnotations } from "./recommendation-ownership.js";
 import {
   isCoverageSufficient,
   MIN_COVERAGE_PCT,
@@ -310,9 +311,11 @@ export class AuditRunner {
     // Inclusive window length (weekly window since = until - 6 ⇒ 7 days) for handoff evidence.
     const windowDays =
       Math.round((Date.parse(dateRange.until) - Date.parse(dateRange.since)) / 86_400_000) + 1;
-    const handoffContextByCampaign = this.recommendationHandoffSubmitter
-      ? new Map<string, HandoffCampaignContext>()
-      : undefined;
+    // Per-campaign handoff-gate context (evidence + learning phase), captured for
+    // EVERY run since Riley v3 ownership reads it (Step 8e). The sink still
+    // receives it only alongside a submitter (see Step 9), so the sink-visible
+    // contract and the handoff path are byte-identical to pre-ownership behavior.
+    const handoffContextByCampaign = new Map<string, HandoffCampaignContext>();
 
     // Gate 0 (Phase-A): data-sufficiency abstention. When a coverage validator is
     // injected and tracked-source coverage is below the sufficiency floor, Riley
@@ -506,7 +509,7 @@ export class AuditRunner {
       // Task 8 Step 4: derived from the already-fetched `learningStatus` — no extra Graph call.
       const learningPhaseActive = deriveLearningPhaseActive(learningStatus.state);
       if (learningPhaseActive) campaignsInLearning++;
-      handoffContextByCampaign?.set(
+      handoffContextByCampaign.set(
         insight.campaignId,
         handoffContextFromInsight(insight, windowDays, learningPhaseActive),
       );
@@ -624,6 +627,14 @@ export class AuditRunner {
           })
         : undefined;
 
+    // Step 8e (Riley v3, spec 2.2 net-new item 1): per-recommendation ownership
+    // annotation, ADDITIVE like arbitration above; it never filters emission or
+    // handoff. Reads the always-built per-campaign handoff context.
+    const ownership =
+      recommendations.length > 0
+        ? deriveOwnershipAnnotations({ recommendations, handoffContextByCampaign })
+        : undefined;
+
     // Step 9: Emit recommendations to the v1 pipeline (queue / shadow / dropped).
     // Graceful degradation: skipped when no emitter is wired so existing
     // analysis-only callers keep working.
@@ -638,7 +649,9 @@ export class AuditRunner {
         emit: this.recommendationEmitter,
         emissionContext: this.recommendationEmissionContext!,
         recommendationHandoffSubmitter: this.recommendationHandoffSubmitter,
-        handoffContextByCampaign,
+        handoffContextByCampaign: this.recommendationHandoffSubmitter
+          ? handoffContextByCampaign
+          : undefined,
         // PR2 Gate-4: per-campaign economics (built above) so each rec's approval
         // card surfaces its own CPL / cost-per-booked / true ROAS. Omitted when the
         // provider returned no per-campaign funnel (graceful — no economics line).
@@ -681,6 +694,7 @@ export class AuditRunner {
       ...(sourceComparison ? { sourceComparison } : {}),
       ...(campaignEconomics ? { campaignEconomics } : {}),
       ...(arbitration ? { arbitration } : {}),
+      ...(ownership ? { ownership } : {}),
     };
   }
 }
