@@ -9,7 +9,8 @@ import type { EmitOutcome, RecommendationEmitter } from "../recommendation-sink.
 import type { RecommendationOutput } from "../recommendation-engine.js";
 import type { CampaignEconomicsRow } from "../analyzers/source-comparator.js";
 import { resetsLearningFor } from "../action-reset-classification.js";
-import { AdRecommendationActionSchema } from "@switchboard/schemas";
+import { emittedRiskContractFor } from "../recommendation-risk-contract.js";
+import { AdRecommendationActionSchema, UrgencySchema } from "@switchboard/schemas";
 import type { RecommendationInput } from "@switchboard/schemas";
 
 const baseRec = (overrides: Partial<RecommendationOutput> = {}): RecommendationOutput => {
@@ -592,5 +593,37 @@ describe("runRecommendationSink — Riley -> agent handoff dispatch", () => {
     });
     expect(result.routedQueue).toBe(1);
     expect(recommendationHandoffSubmitter).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("sink emission parity with emittedRiskContractFor (Riley v3 ownership)", () => {
+  it("the sink's emitted risk-contract fields match the pure producer for every action x urgency", async () => {
+    for (const action of AdRecommendationActionSchema.options) {
+      for (const urgency of UrgencySchema.options) {
+        const captured: RecommendationInput[] = [];
+        const emit: RecommendationEmitter = async (input) => {
+          captured.push(input);
+          return { surface: "queue" };
+        };
+        await runRecommendationSink({
+          orgId: "org-1",
+          auditRunId: "audit-1",
+          recommendations: [baseRec({ action, urgency })],
+          emit,
+          emissionContext: { cronId: "cron-1" },
+        });
+        const emitted = captured[0]!;
+        expect(
+          {
+            riskLevel: emitted.riskLevel,
+            financialEffect: emitted.financialEffect,
+            externalEffect: emitted.externalEffect,
+            clientFacing: emitted.clientFacing,
+            requiresConfirmation: emitted.requiresConfirmation,
+          },
+          `${action}/${urgency}`,
+        ).toEqual(emittedRiskContractFor(action, urgency));
+      }
+    }
   });
 });
