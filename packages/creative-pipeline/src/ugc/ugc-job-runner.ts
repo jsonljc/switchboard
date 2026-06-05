@@ -1,4 +1,4 @@
-// packages/core/src/creative-pipeline/ugc/ugc-job-runner.ts
+// packages/creative-pipeline/src/ugc/ugc-job-runner.ts
 import { inngestClient } from "../inngest-client.js";
 import { shouldRequireApproval, UGC_PHASE_ORDER } from "./approval-config.js";
 import type { UgcPhase } from "./approval-config.js";
@@ -70,6 +70,9 @@ interface UgcPipelineDeps {
   assetStorage?: AssetStorageClient;
 }
 
+// Step-memoized snapshot: JSON-safe DATA ONLY. Live client objects (kling,
+// heygen, asset stores, storage) ride DEPS instead; a class instance through
+// step.run would lose its methods on an Inngest replay.
 interface UgcPipelineContext {
   creatorPool: unknown[];
   trustLevel: number;
@@ -78,8 +81,6 @@ interface UgcPipelineContext {
   providerCapabilities: unknown[];
   creativeWeights: unknown;
   apiKey: string;
-  klingClient: unknown;
-  assetStore: unknown;
 }
 
 // ── Phase execution (no-op stubs for SP2) ──
@@ -190,15 +191,15 @@ async function executePhase(
           costAuthority: "estimated",
         },
         deps: {
+          // ALL live client objects ride DEPS, never step-memoized context
+          // (a replayed context is plain JSON; class methods do not survive).
           providerClients: {
-            klingClient: ctx.context
-              .klingClient as ProductionInput["deps"]["providerClients"]["klingClient"],
-            // Live client objects ride DEPS, never step-memoized context
-            // (slice-3 spec 3.5; same rule as assetStorage).
+            klingClient:
+              deps?.klingClient as ProductionInput["deps"]["providerClients"]["klingClient"],
             heygenClient:
               deps?.heygenClient as ProductionInput["deps"]["providerClients"]["heygenClient"],
           },
-          assetStore: ctx.context.assetStore as ProductionInput["deps"]["assetStore"],
+          assetStore: deps?.assetStore as ProductionInput["deps"]["assetStore"],
           apiKey: ctx.context.apiKey,
           assetStorage: deps?.assetStorage,
         },
@@ -236,8 +237,6 @@ async function preloadContext(
     providerCapabilities: [], // SP5 adds real provider registry
     creativeWeights: translateFrictions([] as FunnelFriction[]),
     apiKey: deps.llmConfig?.apiKey ?? "",
-    klingClient: deps.klingClient,
-    assetStore: deps.assetStore,
   };
 }
 

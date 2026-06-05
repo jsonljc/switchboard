@@ -200,8 +200,9 @@ async function processSpec(
 
         return { asset: assetData, qaHistory };
       } catch {
-        // Generation error — try next attempt/provider
-        if (attempt === retryConfig.maxAttempts - 1) break;
+        // Generation error — try next attempt/provider (bounded by the
+        // per-provider attemptsFor, not the global max).
+        if (attempt === attemptsFor - 1) break;
       }
     }
   }

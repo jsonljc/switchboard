@@ -77,9 +77,19 @@ export class HeyGenClient {
       headers: this.headers(),
       body: JSON.stringify(body),
     });
-    const submitData = (await submitRes.json()) as { data?: { video_id?: string } };
+    const submitData = (await submitRes.json()) as {
+      data?: { video_id?: string };
+      error?: unknown;
+    };
     const videoId = submitData?.data?.video_id;
-    if (!videoId) throw new Error("HeyGen API: no video_id in response");
+    if (!videoId) {
+      // HeyGen can signal submit validation failures as 200 + error body.
+      throw new Error(
+        `HeyGen API: no video_id in response${
+          submitData?.error ? `: ${JSON.stringify(submitData.error)}` : ""
+        }`,
+      );
+    }
 
     return this.pollForResult(videoId);
   }

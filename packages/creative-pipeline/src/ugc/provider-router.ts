@@ -1,4 +1,4 @@
-// packages/core/src/creative-pipeline/ugc/provider-router.ts
+// packages/creative-pipeline/src/ugc/provider-router.ts
 import type { ProviderCapabilityProfile } from "@switchboard/schemas";
 import { KLING_COST_PER_5S, HEYGEN_COST_PER_CLIP } from "../stages/cost-estimator.js";
 import type { ProviderPerformanceHistory } from "./provider-performance.js";
