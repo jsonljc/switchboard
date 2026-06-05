@@ -102,7 +102,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
         >
           <span
             style={{
-              fontFamily: "JetBrains Mono",
+              fontFamily: T.mono,
               fontSize: 10,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -235,7 +235,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 >
                   <span
                     style={{
-                      fontFamily: "JetBrains Mono",
+                      fontFamily: T.mono,
                       fontSize: 10,
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
@@ -310,7 +310,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 6,
-                  fontFamily: "JetBrains Mono",
+                  fontFamily: T.mono,
                   fontSize: 10,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",

@@ -20,7 +20,7 @@ export const T = {
   green: "hsl(var(--positive))",
   red: "hsl(var(--destructive))",
   // Type + foreground honesty (mira reskin): the loaded next/font faces and the
-  // AA amber foreground, so inline cockpit styles never name a raw family or #fff.
+  // AA amber foreground, so inline cockpit styles never name a raw family or a literal white.
   mono: "var(--font-mono-editorial)",
   display: "var(--font-display-app)",
   actionFg: "hsl(var(--action-foreground))",

@@ -102,7 +102,7 @@ export function Identity({
             marginTop: 4,
             fontSize: 12.5,
             color: T.ink3,
-            fontFamily: "JetBrains Mono",
+            fontFamily: T.mono,
             letterSpacing: "0.02em",
           }}
         >
