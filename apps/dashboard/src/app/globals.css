@@ -276,7 +276,7 @@
        as a variable font. Applied at the register boundary by the body:has
        rule at the end of this file. This is the ONE site allowed to name the
        "Geist" fallback head; consumer CSS rides the token. --font-home-sans
-       is the legacy alias (zero churn for its 32 declarations; the previous
+       is the legacy alias (zero churn for its consumers; the previous
        Home grotesk retired); new code references --font-body-app directly. */
     --font-body-app: var(--font-geist), "Geist", ui-sans-serif, system-ui, sans-serif;
     --font-home-sans: var(--font-body-app);
@@ -550,6 +550,10 @@
    legacy pages keep their existing background. */
 @layer components {
   body:has(.app-header) {
+    /* NOTE: the TY4 body-face rule (end of file) shares this .app-header hook
+       but ALSO excludes [data-register="mercury"]. The divergence is
+       deliberate: the canvas is shell-level (Mercury keeps the cream), the
+       FACE is register-level (Mercury keeps Inter). Edit one, re-check both. */
     background-color: var(--ambient-cream, hsl(40 25% 94%));
     /* Warm-riso paper grain (spec 2026-06-04-paper-grain-canvas): a second
        background layer multiplied into the cream. background-blend-mode blends

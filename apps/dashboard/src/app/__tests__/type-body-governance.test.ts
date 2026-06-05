@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { css, collectGovernedFiles, rel, typeVoiceGoverned } from "./token-governance.lib";
 
@@ -64,8 +64,16 @@ describe("token governance: type body (TY4)", () => {
     // register-exempt via typeVoiceGoverned.
     const offenders: string[] = [];
     for (const f of governed) {
-      if (!f.path.endsWith(".css") || f.path.endsWith("globals.css")) continue;
-      if (/font-family:\s*var\(--font-sans\)/.test(f.content)) offenders.push(rel(f.path));
+      if (f.path.endsWith("globals.css")) continue;
+      if (f.path.endsWith(".css")) {
+        if (/font-family:\s*var\(--font-sans\)/.test(f.content)) offenders.push(rel(f.path));
+      } else if (/\.tsx?$/.test(f.path)) {
+        // Inline styles and the Tailwind utility are the same drift vector
+        // (the adversarial review planted both and the CSS-only sweep stayed
+        // green): ban them in governed TSX too.
+        if (/fontFamily:\s*["'`]var\(--font-sans\)/.test(f.content)) offenders.push(rel(f.path));
+        if (/className=[^>]*\bfont-sans\b/.test(f.content)) offenders.push(rel(f.path));
+      }
     }
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
@@ -82,6 +90,24 @@ describe("token governance: type body (TY4)", () => {
       }
       if (/"Geist"|Hanken/.test(f.content)) offenders.push(rel(f.path));
     }
+    for (const f of governed) {
+      if (!/\.tsx?$/.test(f.path)) continue;
+      // Inline-style raw family names never match a next/font registration
+      // (the recorded token-lie class); ban them in font contexts only so a
+      // string literal elsewhere (test names, copy) cannot false-positive.
+      if (/fontFamily:\s*["'`][^"'`]*(?:Geist|Hanken)/.test(f.content)) offenders.push(rel(f.path));
+    }
     expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+
+  it("the mercury routes live inside the (mercury) group (the marker's coverage contract)", () => {
+    // The exclusion is route-group-owned: a refactor that flattens a Mercury
+    // route out of (auth)/(mercury)/ silently re-faces it to Geist while every
+    // other guard stays green (the review's coverage finding). Pin the four
+    // route inventories to the group.
+    for (const route of ["reports", "activity", "contacts", "automations"]) {
+      const dir = path.resolve(process.cwd(), `src/app/(auth)/(mercury)/${route}`);
+      expect(existsSync(dir), `(mercury)/${route} moved out of the group`).toBe(true);
+    }
   });
 });
