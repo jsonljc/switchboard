@@ -362,4 +362,65 @@ describe("ChannelGateway approval-payload interception", () => {
     expect(addMessage).not.toHaveBeenCalled();
     expect(getById).not.toHaveBeenCalled();
   });
+
+  describe("approval binding identity (principalId seam)", () => {
+    function transportConfig(respond: ReturnType<typeof vi.fn>) {
+      return createMockConfig({
+        approvalResponseConfig: { transport: { respond } },
+      });
+    }
+
+    it("binds on principalId when the adapter supplied one (Slack taps)", async () => {
+      const respond = vi.fn().mockResolvedValue({ kind: "refused", code: "not_authorized" });
+      const gateway = new ChannelGateway(transportConfig(respond));
+
+      await gateway.handleIncoming(
+        {
+          channel: "slack",
+          token: "sw_test",
+          sessionId: "C67890",
+          principalId: "U12345",
+          text: APPROVAL_TEXT,
+        },
+        { send: vi.fn().mockResolvedValue(undefined) },
+      );
+
+      expect(respond).toHaveBeenCalledTimes(1);
+      expect(respond.mock.calls[0]![0].channelIdentifier).toBe("U12345");
+    });
+
+    it("falls back to sessionId when no principalId is present (WhatsApp pin)", async () => {
+      const respond = vi.fn().mockResolvedValue({ kind: "refused", code: "not_authorized" });
+      const gateway = new ChannelGateway(transportConfig(respond));
+
+      await gateway.handleIncoming(
+        { channel: "whatsapp", token: "sw_test", sessionId: "+6591234567", text: APPROVAL_TEXT },
+        { send: vi.fn().mockResolvedValue(undefined) },
+      );
+
+      expect(respond.mock.calls[0]![0].channelIdentifier).toBe("+6591234567");
+    });
+
+    it("non-approval conversation flow still keys on sessionId, ignoring principalId", async () => {
+      const config = createMockConfig();
+      const gateway = new ChannelGateway(config);
+
+      await gateway.handleIncoming(
+        {
+          channel: "slack",
+          token: "sw_test",
+          sessionId: "C67890",
+          principalId: "U12345",
+          text: "hello there",
+        },
+        { send: vi.fn().mockResolvedValue(undefined) },
+      );
+
+      expect(config.conversationStore.getOrCreateBySession).toHaveBeenCalledWith(
+        "dep-1",
+        "slack",
+        "C67890",
+      );
+    });
+  });
 });

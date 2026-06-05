@@ -36,6 +36,8 @@ export {
   SELF_APPROVAL_MSG,
   ADMISSION_FAILED_MSG,
 } from "./handle-approval-response.js";
+export { parseApprovalResponsePayload } from "./approval-response-payload.js";
+export type { ParsedApprovalResponsePayload } from "./approval-response-payload.js";
 export { respondToChannelApproval, refusalCodeForError } from "./respond-to-channel-approval.js";
 export type {
   ChannelApprovalRespondRequest,

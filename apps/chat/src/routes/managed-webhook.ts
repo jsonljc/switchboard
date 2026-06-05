@@ -174,6 +174,9 @@ export function registerManagedWebhookRoutes(app: FastifyInstance, deps: Managed
           channel: gatewayEntry.channel,
           token: gatewayEntry.deploymentConnectionId,
           sessionId: threadId,
+          // Stable channel user identity (Slack U..., Telegram from.id, WhatsApp
+          // phone). Approval responses bind on this; conversations key on sessionId.
+          principalId: incoming.principalId,
           text: incoming.text,
         },
         replySink,

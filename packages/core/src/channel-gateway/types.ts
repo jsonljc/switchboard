@@ -195,6 +195,13 @@ export interface IncomingChannelMessage {
   channel: string;
   token: string;
   sessionId: string;
+  /**
+   * Stable channel user identity (Slack U... user id, Telegram from.id).
+   * Approval responses bind on this when present; conversation keying and
+   * reply routing stay on sessionId. Adapters whose sessionId IS the stable
+   * identity (WhatsApp: phone) may omit it.
+   */
+  principalId?: string;
   text: string;
   visitor?: { name?: string; email?: string };
 }
