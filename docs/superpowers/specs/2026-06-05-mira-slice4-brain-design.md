@@ -539,7 +539,12 @@ the merged tip.
    does NOT make any seed flip billing state as a side effect. Until entitled, every scan records
    the named `org_not_entitled` skip.
 3. `MIRA_HANDOFF_BRIEF_ENRICHMENT_ENABLED=true`: Riley handoff cards start carrying composed
-   briefs, independently of (1).
+   briefs, independently of (1). FLIP GATE: enrichment puts one synchronous LLM compose per
+   candidate (a handful per org) INSIDE the weekly audit's per-deployment inngest step, which
+   already serializes rate-limited Graph calls. At pilot tenancy this is minutes of headroom;
+   before enabling at larger tenancy, move the compose onto its own step or event (named seam:
+   the recommendation sink). A retry after a crash MID-compose falls back to the synthesized
+   brief for that handoff (fail-safe; enrichment is not guaranteed to survive a step crash).
 4. `ANTHROPIC_API_KEY` present (already required by skill mode at boot).
 5. No schema migration in this slice; `db:check-drift` is expected clean unless PR review
    surfaces a needed index (none anticipated: all reads ride existing indexes).

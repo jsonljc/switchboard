@@ -318,14 +318,10 @@ export async function registerInngest(
       // The synthesis itself stays a cheap indexed read, resolved per handoff so
       // an operator's BusinessFacts edits take effect on the next run.
       const brief = await resolveHandoffBrief({
-        candidate: {
-          organizationId: candidate.organizationId,
-          recommendationId: candidate.recommendationId,
-          actionType: candidate.actionType,
-          campaignId: candidate.campaignId,
-          rationale: candidate.rationale,
-          evidence: candidate.evidence,
-        },
+        // The raw candidate is a structural superset of HandoffBriefCandidate;
+        // passing it whole lets the compiler pin the field mapping (a
+        // same-typed field swap in a hand re-map would ship silently).
+        candidate,
         readFlag: () => process.env["MIRA_HANDOFF_BRIEF_ENRICHMENT_ENABLED"] === "true",
         synthesize: async () =>
           synthesizeCreativeBrief(await businessFactsStore.get(candidate.organizationId)),

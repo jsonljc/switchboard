@@ -52,8 +52,11 @@ export async function resolveHandoffBrief(
         rationale: c.rationale,
         evidence: c.evidence,
       },
-      // Deterministic per recommendation+action: a retried audit run replays
-      // the claimed compose instead of paying a second LLM call.
+      // Deterministic per recommendation+action: a retried audit run whose
+      // prior compose COMPLETED replays the cached verdict (no second LLM
+      // call); a retry after a crash MID-compose gets idempotency_in_flight
+      // and this run falls back to synthesis (fail-safe, enrichment lost for
+      // that handoff only).
       idempotencyKey: `handoff-compose:${c.recommendationId}:${c.actionType}`,
       trigger: "internal",
     });

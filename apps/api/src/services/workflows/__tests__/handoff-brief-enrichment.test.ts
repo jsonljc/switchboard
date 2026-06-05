@@ -49,6 +49,7 @@ describe("resolveHandoffBrief", () => {
   it("returns the synthesized brief without composing when the flag is off", async () => {
     const deps = makeDeps({ readFlag: () => false });
     expect(await resolveHandoffBrief(deps)).toEqual(synthesized);
+    expect(deps.synthesize).toHaveBeenCalledTimes(1);
     expect(deps.submitCompose).not.toHaveBeenCalled();
     expect(deps.warn).not.toHaveBeenCalled();
   });
@@ -56,6 +57,7 @@ describe("resolveHandoffBrief", () => {
   it("returns the composed brief on propose, with the per-recommendation key and internal trigger", async () => {
     const deps = makeDeps();
     expect(await resolveHandoffBrief(deps)).toEqual(composed);
+    expect(deps.synthesize).toHaveBeenCalledTimes(0);
     expect(deps.submitCompose).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: "org1",
@@ -93,11 +95,14 @@ describe("resolveHandoffBrief", () => {
     });
     expect(await resolveHandoffBrief(deps)).toEqual(synthesized);
     expect(deps.warn).toHaveBeenCalled();
+    // Exactly once: a double-call would double the BusinessFacts DB read.
+    expect(deps.synthesize).toHaveBeenCalledTimes(1);
   });
 
   it("falls back when the compose submit throws (the handoff path is never blocked)", async () => {
     const deps = makeDeps({ submitCompose: vi.fn(async () => Promise.reject(new Error("boom"))) });
     expect(await resolveHandoffBrief(deps)).toEqual(synthesized);
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("boom"));
+    expect(deps.synthesize).toHaveBeenCalledTimes(1);
   });
 });
