@@ -18,6 +18,8 @@ interface SpecForPrompt {
   direction?: unknown;
   renderTargets: { aspect: string; durationSec: number };
   referenceImageUrl?: string;
+  /** Avatar refs attached at scripting (slice-3 spec 3.5). */
+  creator?: { heygenAvatarId?: string; heygenVoiceId?: string };
 }
 
 const STANDARD_NEGATIVE = "blurry, low quality, distorted, watermark, text artifacts";
@@ -53,9 +55,20 @@ export function buildUgcVideoRequest(spec: SpecForPrompt): VideoGenerationReques
 
   const base: VideoGenerationRequest = {
     prompt: spec.script.text,
+    // The SPOKEN script rides separately (slice-3 spec 3.5): avatar providers
+    // read it aloud; the composed prompt below is visual-generation text.
+    script: spec.script.text,
     durationSec: spec.renderTargets.durationSec,
     aspectRatio: spec.renderTargets.aspect,
     ...(spec.referenceImageUrl ? { referenceImageUrl: spec.referenceImageUrl } : {}),
+    ...(spec.creator?.heygenAvatarId
+      ? {
+          avatar: {
+            refId: spec.creator.heygenAvatarId,
+            ...(spec.creator.heygenVoiceId ? { voiceId: spec.creator.heygenVoiceId } : {}),
+          },
+        }
+      : {}),
   };
 
   if (!styleParsed.success && !directionParsed.success) {

@@ -8,6 +8,7 @@ import {
   estimateUgcCost,
   KLING_COST_PER_5S,
   KLING_COST_PER_10S,
+  HEYGEN_COST_PER_CLIP,
 } from "../stages/cost-estimator.js";
 import { ESTIMATED_COST } from "../ugc/provider-router.js";
 
@@ -47,10 +48,24 @@ describe("estimateUgcCost (slice-3 spec 3.3b)", () => {
     expect(est.cost).toBe(0);
     expect(est.description).toBe("No clips to produce");
   });
+
+  it("bills avatar-capable specs at the MAX across allowed providers (conservative parking)", () => {
+    // a heygen-allowed talking-head spec MAY render on heygen: governance
+    // parks on the dearest allowed rate so the operator never under-approves.
+    const est = estimateUgcCost([
+      { renderTargets: { durationSec: 12 }, providersAllowed: ["kling", "heygen"] },
+    ]);
+    expect(est.cost).toBeCloseTo(Math.max(KLING_COST_PER_10S, HEYGEN_COST_PER_CLIP), 2);
+    expect(est.description).toBe("1 UGC clips via heygen, kling");
+  });
 });
 
 describe("cost-table parity (governance signal vs production budget accumulator)", () => {
   it("the router's kling ranking cost equals the estimator's per-clip base rate", () => {
     expect(ESTIMATED_COST.kling).toBe(KLING_COST_PER_5S);
+  });
+
+  it("the router's heygen cost equals the estimator's per-clip rate (slice-3 spec 3.5)", () => {
+    expect(ESTIMATED_COST.heygen).toBe(HEYGEN_COST_PER_CLIP);
   });
 });

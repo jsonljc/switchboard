@@ -29,6 +29,8 @@ interface CreativeSpecInput {
   direction?: unknown;
   /** Product grounding image (product_in_hand format only; set at scripting). */
   referenceImageUrl?: string;
+  /** Avatar refs from the cast creator (slice-3 spec 3.5; heygen routing). */
+  creator?: { heygenAvatarId?: string; heygenVoiceId?: string };
   format: string;
   identityConstraints: { strategy: string; maxIdentityDrift?: number };
   renderTargets: { aspect: string; durationSec: number };
@@ -119,7 +121,13 @@ async function processSpec(
   let lastFailedAsset: AssetRecordOutput | undefined;
 
   for (const provider of rankedProviders) {
-    for (let attempt = 0; attempt < retryConfig.maxAttempts; attempt++) {
+    // Per-provider attempt cap (slice-3 spec 3.5): heygen gets one shot
+    // before fallback; others use the spec's retry config.
+    const attemptsFor = Math.min(
+      provider.attemptLimit ?? retryConfig.maxAttempts,
+      retryConfig.maxAttempts,
+    );
+    for (let attempt = 0; attempt < attemptsFor; attempt++) {
       totalAttempts++;
       const startMs = Date.now();
 
@@ -192,8 +200,9 @@ async function processSpec(
 
         return { asset: assetData, qaHistory };
       } catch {
-        // Generation error — try next attempt/provider
-        if (attempt === retryConfig.maxAttempts - 1) break;
+        // Generation error — try next attempt/provider (bounded by the
+        // per-provider attemptsFor, not the global max).
+        if (attempt === attemptsFor - 1) break;
       }
     }
   }

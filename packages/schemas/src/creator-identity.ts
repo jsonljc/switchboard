@@ -60,6 +60,11 @@ export const CreatorIdentitySchema = z.object({
   id: z.string(),
   deploymentId: z.string(),
   name: z.string(),
+  /**
+   * Provider-prefixed identity refs (slice-3): `heygen:<avatar_id>` enables
+   * avatar routing for talking-head UGC. A creator with no `heygen:` entry is
+   * never routed to an identity-requiring provider.
+   */
   identityRefIds: z.array(z.string()),
   heroImageAssetId: z.string(),
   identityDescription: z.string(),

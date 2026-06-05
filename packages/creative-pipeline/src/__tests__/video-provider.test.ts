@@ -61,6 +61,56 @@ describe("createVideoProvider", () => {
     );
   });
 
+  it("heygen adapter renders the SPOKEN script via the avatar, ignoring prompt-composition fields", async () => {
+    const mockHeyGen = {
+      generateAvatar: vi
+        .fn()
+        .mockResolvedValue({ videoUrl: "https://cdn.heygen.example/a.mp4", duration: 12 }),
+    };
+    const provider = createVideoProvider("heygen", { heygenClient: mockHeyGen as never });
+
+    const result = await provider.generate({
+      prompt: "Scene: golden hour... (composed visual prompt)",
+      script: "Hey, quick story about my first visit.",
+      durationSec: 12,
+      aspectRatio: "9:16",
+      negativePrompt: "no studio lighting",
+      cameraMotion: "pan_right",
+      avatar: { refId: "avatar_42", voiceId: "voice_9" },
+    });
+
+    expect(mockHeyGen.generateAvatar).toHaveBeenCalledWith({
+      script: "Hey, quick story about my first visit.",
+      avatarId: "avatar_42",
+      voiceId: "voice_9",
+      aspectRatio: "9:16",
+    });
+    expect(result.provider).toBe("heygen");
+    expect(result.videoUrl).toBe("https://cdn.heygen.example/a.mp4");
+  });
+
+  it("heygen adapter throws a typed not-configured error without a client", async () => {
+    const provider = createVideoProvider("heygen", {});
+    await expect(
+      provider.generate({
+        prompt: "p",
+        script: "s",
+        durationSec: 5,
+        aspectRatio: "9:16",
+        avatar: { refId: "a" },
+      }),
+    ).rejects.toThrow(/not configured/i);
+  });
+
+  it("heygen adapter throws when the spec carries no avatar ref (falls back via the retry loop)", async () => {
+    const mockHeyGen = { generateAvatar: vi.fn() };
+    const provider = createVideoProvider("heygen", { heygenClient: mockHeyGen as never });
+    await expect(
+      provider.generate({ prompt: "p", script: "s", durationSec: 5, aspectRatio: "9:16" }),
+    ).rejects.toThrow(/avatar/i);
+    expect(mockHeyGen.generateAvatar).not.toHaveBeenCalled();
+  });
+
   it("creates a seedance provider adapter (stub)", () => {
     const provider = createVideoProvider("seedance", {});
     expect(provider).toBeDefined();

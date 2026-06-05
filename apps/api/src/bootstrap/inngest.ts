@@ -57,6 +57,7 @@ import {
   createModeDispatcher,
   createUgcJobRunner,
   KlingClient,
+  HeyGenClient,
 } from "@switchboard/creative-pipeline";
 import {
   createWeeklyAuditCron,
@@ -195,6 +196,11 @@ export async function registerInngest(
   const assetStore = new PrismaAssetRecordStore(app.prisma);
   const klingApiKey = process.env["KLING_API_KEY"] ?? "";
   const klingClient = klingApiKey ? new KlingClient({ apiKey: klingApiKey }) : undefined;
+  // Real HeyGen avatar provider (slice-3 spec 3.5): routing only selects
+  // heygen for talking-head specs whose creator carries a heygen: ref, so an
+  // unset key simply leaves avatar routing dormant (kling-only).
+  const heygenApiKey = process.env["HEYGEN_API_KEY"] ?? "";
+  const heygenClient = heygenApiKey ? new HeyGenClient({ apiKey: heygenApiKey }) : undefined;
   // Durable storage for assembled creatives (NOT the PrismaAssetRecordStore above).
   // Injected into the polished runner; undefined when CREATIVE_ASSET_* env is unset.
   const assetStorage = buildCreativeAssetStorage(app.log);
@@ -968,6 +974,7 @@ export async function registerInngest(
           },
           llmConfig: { apiKey },
           klingClient,
+          heygenClient,
           assetStore,
           // Durable storage for final UGC assets (slice-3 spec 3.3f): the SAME
           // S3 client the polished runner receives, so kept UGC creatives gain
