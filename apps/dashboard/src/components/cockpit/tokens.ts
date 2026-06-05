@@ -19,6 +19,11 @@ export const T = {
   amberPaper: "hsl(var(--action-tint))",
   green: "hsl(var(--positive))",
   red: "hsl(var(--destructive))",
+  // Type + foreground honesty (mira reskin): the loaded next/font faces and the
+  // AA amber foreground, so inline cockpit styles never name a raw family or #fff.
+  mono: "var(--font-mono-editorial)",
+  display: "var(--font-display-app)",
+  actionFg: "hsl(var(--action-foreground))",
 } as const;
 
 export type CockpitToken = keyof typeof T;
