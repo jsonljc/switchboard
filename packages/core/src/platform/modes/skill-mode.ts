@@ -10,6 +10,13 @@ import type { ContextResolverImpl } from "../../skill-runtime/context-resolver.j
 
 export interface SkillModeConfig {
   executor: SkillExecutor;
+  /**
+   * Slice-4: per-slug executor override. SkillMode holds ONE executor for all
+   * skills; the mira brain runs with a dedicated zero-hook executor so Alex's
+   * conversation gates never fire on an internal compose (spec 3.4). Absent or
+   * unmapped slug falls back to `executor` unchanged.
+   */
+  executorBySlug?: Map<string, SkillExecutor>;
   skillsBySlug: Map<string, SkillDefinition>;
   builderRegistry?: BuilderRegistry;
   stores?: SkillStores;
@@ -70,7 +77,8 @@ export class SkillMode implements ExecutionMode {
       // inject_as name a builder also sets.
       const mergedParameters = { ...parameters, ...contextVariables };
 
-      const result = await this.config.executor.execute({
+      const executor = this.config.executorBySlug?.get(slug) ?? this.config.executor;
+      const result = await executor.execute({
         skill,
         parameters: mergedParameters,
         messages,
