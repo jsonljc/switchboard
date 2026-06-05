@@ -5,6 +5,7 @@ import {
   type AsyncFailureContext,
   type AttributableRecommendationStore,
   type MetaInsightsProvider,
+  type OperationalStateReader,
   type RecommendationOutcomeStore,
   type RileyOutcomeRunSummary,
 } from "@switchboard/core";
@@ -86,6 +87,9 @@ export interface BindRileyOutcomeOrchestratorDeps {
   /** Factory invoked once per worker call (per orgId) to build a credentials-aware provider. */
   createInsightsProvider: (orgId: string) => MetaInsightsProvider;
   outcomeStore: RecommendationOutcomeStore;
+  /** Slice 4c: the 4a operational-state window read (PrismaOperationalStateStore).
+   * Absent ⇒ every outcome row records businessContextStable "unknown". */
+  operationalStateReader?: OperationalStateReader;
 }
 
 /**
@@ -103,6 +107,9 @@ export function bindRileyOutcomeOrchestrator(deps: BindRileyOutcomeOrchestratorD
       recommendationStore: deps.recommendationStore,
       insightsProvider: deps.createInsightsProvider(args.orgId),
       outcomeStore: deps.outcomeStore,
+      ...(deps.operationalStateReader
+        ? { operationalStateReader: deps.operationalStateReader }
+        : {}),
       orgId: args.orgId,
       now: args.now,
     });

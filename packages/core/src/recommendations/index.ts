@@ -42,6 +42,7 @@ export type {
   WindowMetrics,
   InsightsWindowQuery,
   MetaInsightsProvider,
+  OperationalStateReader,
   AttributableRecommendation,
   AttributableRecommendationStore,
   RileyOutcomeRow,
