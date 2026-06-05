@@ -35,7 +35,12 @@ describe("useCreateCreativeDraftRequest", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useCreateCreativeDraftRequest(), { wrapper });
     await act(async () => {
-      await result.current.mutateAsync({ promoting: "Botox", goal: "more_bookings", vibe: "warm" });
+      await result.current.mutateAsync({
+        promoting: "Botox",
+        goal: "more_bookings",
+        vibe: "warm",
+        mode: "polished",
+      });
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;

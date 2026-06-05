@@ -15,6 +15,7 @@ const a = (id: string): MiraDeskItem => ({
   state: "approved_draft",
   thumbnailUrl: `t-${id}`,
   updatedAt: "2026-05-26",
+  awaitingGo: false,
 });
 
 describe("MiraKeptShelf", () => {
