@@ -60,9 +60,9 @@ export function MiraBriefBox() {
     borderRadius: 999,
     fontSize: 12,
     cursor: "pointer",
-    border: `1px solid ${active ? MIRA_ACCENT.deep : T.hair}`,
-    background: active ? MIRA_ACCENT.deep : "transparent",
-    color: active ? T.actionFg : T.ink2,
+    border: `1px solid ${active ? T.ink : T.hair}`,
+    background: active ? T.ink : "transparent",
+    color: active ? T.paper : T.ink2,
   });
   const btn = {
     padding: "8px 16px",

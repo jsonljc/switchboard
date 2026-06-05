@@ -114,4 +114,13 @@ describe("MiraClipActions — Keep/Pass on review_draft", () => {
     fireEvent.click(screen.getByRole("button", { name: /^keep/i }));
     expect(decideMock).toHaveBeenCalledWith({ id: "j", decision: "kept" }, expect.anything());
   });
+
+  it("keep commits in amber, never the identity violet", () => {
+    render(<MiraClipActions jobId="j" reviewAction={reviewable} onResolve={vi.fn()} />);
+    const keep = screen.getByRole("button", { name: "Keep" });
+    // assert on the attribute: jsdom's CSSStyleDeclaration normalization of
+    // hsl(var()) values is version-dependent, the raw attribute is stable
+    expect(keep.getAttribute("style")).toContain("hsl(var(--action))");
+    expect(keep.getAttribute("style")).not.toContain("--agent-mira");
+  });
 });

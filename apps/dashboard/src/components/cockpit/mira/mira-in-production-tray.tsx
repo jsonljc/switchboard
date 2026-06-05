@@ -9,7 +9,6 @@ import {
   PROBLEM_COPY,
   DESK_COPY,
 } from "@/lib/cockpit/mira/desk-copy";
-import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
 import { T } from "@/components/cockpit/tokens";
 import styles from "./mira-desk.module.css";
 
@@ -65,7 +64,7 @@ export function MiraInProductionTray({ items }: { items: MiraDeskItem[] }) {
                   fontFamily: T.mono,
                   fontSize: 12,
                   letterSpacing: "0.02em",
-                  color: it.problem ? T.red : MIRA_ACCENT.base,
+                  color: it.problem ? T.red : T.ink2,
                 }}
               >
                 {itemStatusCopy(it)}
