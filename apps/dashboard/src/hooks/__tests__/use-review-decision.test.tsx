@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, waitFor, act } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useReviewDecision } from "../use-review-decision";
@@ -18,18 +18,36 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("useReviewDecision", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  afterEach(() => vi.unstubAllGlobals());
 
-  it("POSTs the decision to the per-draft decision endpoint", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue({ ok: true, json: async () => ({ id: "j1", decision: "kept" }) });
-    vi.stubGlobal("fetch", fetchMock);
+  it("treats 409 (already decided) as silent success, like the inbox commit", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 409 })));
     const { result } = renderHook(() => useReviewDecision(), { wrapper });
-    await act(async () => {
-      await result.current.mutateAsync({ id: "j1", decision: "kept" });
-    });
+    result.current.mutate({ id: "job1", decision: "kept" });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(fetchMock.mock.calls[0]?.[0]).toContain("/agents/mira/creatives/j1/decision");
+    expect(result.current.data).toMatchObject({ id: "job1", decision: "kept", silent: true });
+  });
+
+  it("still throws on real failures", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 500 })));
+    const { result } = renderHook(() => useReviewDecision(), { wrapper });
+    result.current.mutate({ id: "job1", decision: "kept" });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+
+  it("returns the server payload on plain success", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ id: "job1", decision: "kept" }), { status: 200 }),
+        ),
+    );
+    const { result } = renderHook(() => useReviewDecision(), { wrapper });
+    result.current.mutate({ id: "job1", decision: "kept" });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toMatchObject({ id: "job1", decision: "kept" });
+    expect(result.current.data?.silent).toBeUndefined();
   });
 });
