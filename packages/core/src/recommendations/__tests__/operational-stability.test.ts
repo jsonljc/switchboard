@@ -319,6 +319,33 @@ describe("deriveBusinessContextStability: half-open boundary edges (the measured
   });
 });
 
+describe("deriveBusinessContextStability: unparseable declared bounds (post-review hardening)", () => {
+  // Unreachable for store-validated rows (OperationalIntervalSchema pins
+  // datetime bounds); pins the pure unit's fail-safe for direct callers: a
+  // garbage bound must never silently certify "stable".
+  it("treats a closure with an unparseable start as disruption evidence", () => {
+    expect(
+      derive([
+        confirm("2026-05-28T09:00:00.000Z", {
+          ...FULL_NORMAL,
+          closures: [{ start: "not-a-date" }],
+        }),
+      ]),
+    ).toBe("unstable");
+  });
+
+  it("treats a promo with an unparseable end as disruption evidence", () => {
+    expect(
+      derive([
+        confirm("2026-05-28T09:00:00.000Z", {
+          ...FULL_NORMAL,
+          promoWindows: [{ start: "2026-05-25T00:00:00.000Z", end: "garbage" }],
+        }),
+      ]),
+    ).toBe("unstable");
+  });
+});
+
 describe("deriveBusinessContextStability: order independence (defensive sort)", () => {
   it("derives the same verdicts from a shuffled confirmation set (sorted by confirmedAt, createdAt, id internally)", () => {
     const governing = confirm("2026-05-28T09:00:00.000Z", FULL_NORMAL);

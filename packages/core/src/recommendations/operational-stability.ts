@@ -80,6 +80,19 @@ function intervalBoundsMs(interval: OperationalInterval): { startMs: number; end
   };
 }
 
+/**
+ * True when both declared bounds parse as instants. Store-validated rows
+ * always pass (OperationalIntervalSchema pins datetime bounds); this guards
+ * DIRECT callers of this pure unit: an uninterpretable declared bound makes
+ * every overlap comparison silently false, which would let a garbage closure
+ * certify "stable". Such intervals are routed to disruption evidence instead
+ * (fail-safe toward "unstable", never toward fabricated stability).
+ */
+function hasParseableBounds(interval: OperationalInterval): boolean {
+  if (Number.isNaN(Date.parse(interval.start))) return false;
+  return interval.end === undefined || !Number.isNaN(Date.parse(interval.end));
+}
+
 function overlapsWindow(interval: OperationalInterval, wsMs: number, weMs: number): boolean {
   const { startMs, endMs } = intervalBoundsMs(interval);
   // Both sides are half-open: intervals are [start, end) (the 4b day-boundary
@@ -164,13 +177,16 @@ export function deriveBusinessContextStability(
     //    bounds (it may lie entirely outside the window).
     if (c.state.operatingStatus === "temporarily_closed") disrupted = true;
     for (const closure of c.state.closures ?? []) {
-      if (overlapsWindow(closure, wsMs, weMs)) disrupted = true;
+      if (!hasParseableBounds(closure) || overlapsWindow(closure, wsMs, weMs)) disrupted = true;
     }
     // 2. Promo comparability: overlapping the window is fine ONLY when the
     //    promo covers the ENTIRE window (running throughout pre and post);
     //    starting or ending inside it breaks the delta.
     for (const promo of c.state.promoWindows ?? []) {
-      if (overlapsWindow(promo, wsMs, weMs) && !coversWindow(promo, wsMs, weMs)) {
+      if (
+        !hasParseableBounds(promo) ||
+        (overlapsWindow(promo, wsMs, weMs) && !coversWindow(promo, wsMs, weMs))
+      ) {
         disrupted = true;
       }
     }
