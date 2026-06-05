@@ -79,6 +79,7 @@ import type {
   RecommendationHandoffSubmitter,
 } from "@switchboard/ad-optimizer";
 import { synthesizeCreativeBrief } from "../services/workflows/creative-brief-synthesis.js";
+import { resolveHandoffBrief } from "../services/workflows/handoff-brief-enrichment.js";
 import type { RecommendationHandoffSubmitInput } from "../services/workflows/recommendation-handoff-request.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
@@ -310,10 +311,25 @@ export async function registerInngest(
   const recommendationHandoffSubmitter: RecommendationHandoffSubmitter = async (candidate) => {
     if (!options.submitRecommendationHandoff) return;
     try {
-      // A cheap indexed BusinessFacts read; a weekly audit yields only a handful of
-      // creative recs per org. Resolved per handoff (no process-lifetime cache) so an
-      // operator's BusinessFacts edits take effect on the next run.
-      const brief = synthesizeCreativeBrief(await businessFactsStore.get(candidate.organizationId));
+      // Slice-4 (spec 3.8): under MIRA_HANDOFF_BRIEF_ENRICHMENT_ENABLED the brain
+      // composes the brief BEFORE the mandatory-approval park (so the human
+      // approves what dispatches); every degrade path falls back to the shipped
+      // BusinessFacts synthesis. Flag off = byte-identical pre-slice-4 behavior.
+      // The synthesis itself stays a cheap indexed read, resolved per handoff so
+      // an operator's BusinessFacts edits take effect on the next run.
+      const brief = await resolveHandoffBrief({
+        // The raw candidate is a structural superset of HandoffBriefCandidate;
+        // passing it whole lets the compiler pin the field mapping (a
+        // same-typed field swap in a hand re-map would ship silently).
+        candidate,
+        readFlag: () => process.env["MIRA_HANDOFF_BRIEF_ENRICHMENT_ENABLED"] === "true",
+        synthesize: async () =>
+          synthesizeCreativeBrief(await businessFactsStore.get(candidate.organizationId)),
+        submitCompose:
+          options.submitMiraBriefCompose ??
+          (() => Promise.reject(new Error("submitMiraBriefCompose not wired"))),
+        warn: (msg: string) => app.log.warn(msg),
+      });
       const input: RecommendationHandoffSubmitInput = {
         organizationId: candidate.organizationId,
         recommendationId: candidate.recommendationId,
