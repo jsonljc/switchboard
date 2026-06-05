@@ -7,6 +7,7 @@
   "include": [
     "claim-classifier/**/*.ts",
     "alex-conversation/**/*.ts",
-    "governance-decision/**/*.ts"
+    "governance-decision/**/*.ts",
+    "riley-recommendation/**/*.ts"
   ]
 }

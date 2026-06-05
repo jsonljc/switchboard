@@ -23,6 +23,36 @@ export interface ValidatorWarning {
 }
 
 /**
+ * Does `sf` carry a named import (from any module) of the symbol `name`?
+ *
+ * Module-level so both `validateRouteClass` (operator-direct/read-only cells)
+ * and `validateControlPlaneOrgGuard` (the control-plane org-guard advisory)
+ * share one definition. Mirrors the original in-closure check: a named import
+ * `n` whose `.getName()` strictly equals `name` (aliases match on the original
+ * name, which is what we want — the helper is still in scope under its alias).
+ */
+function importsNamed(sf: SourceFile, name: string): boolean {
+  return sf
+    .getImportDeclarations()
+    .some((d) => d.getNamedImports().some((n) => n.getName() === name));
+}
+
+/**
+ * Org-scoping guards recognized by the control-plane advisory. A mutating
+ * control-plane route that imports at least one of these is considered scoped
+ * (Route Governance §12: control-plane mutations must enforce org ownership).
+ */
+const CONTROL_PLANE_ORG_GUARDS = [
+  "requireOrganizationScope",
+  "assertOrgAccess",
+  "requireOrgForMutation",
+  "requireOrgForAuditedMutation",
+] as const;
+
+/** Mirrors `countMutatingRoutes`: callee text ends with `.post/.patch/.put/.delete`. */
+const MUTATING_HANDLER_RX = /\.(post|patch|delete|put)$/;
+
+/**
  * Parse the `// @route-class: <name>` header comment from a source file.
  * Returns null when the header is absent or names an unknown class.
  */
@@ -138,8 +168,7 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
 
   const warnings: ValidatorWarning[] = [];
 
-  const importsNamed = (name: string) =>
-    sf.getImportDeclarations().some((d) => d.getNamedImports().some((n) => n.getName() === name));
+  const importsNamedHere = (name: string) => importsNamed(sf, name);
 
   const callsNamed = (name: string): number => {
     // Count CallExpression nodes whose callee is the bare Identifier `name`.
@@ -162,7 +191,7 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
   };
 
   const WRITE_SIDE_DECORATORS = ["requireOrgForMutation", "requireOrgForAuditedMutation"] as const;
-  const importsAnyWriteSide = () => WRITE_SIDE_DECORATORS.some((n) => importsNamed(n));
+  const importsAnyWriteSide = () => WRITE_SIDE_DECORATORS.some((n) => importsNamedHere(n));
   const writeSideIdentifierCount = (): number => {
     let count = 0;
     sf.forEachDescendant((node) => {
@@ -204,7 +233,7 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
     }
 
     // No deferral directive — run the full three-stage cell checks.
-    if (!importsNamed("requireIdempotencyKey")) {
+    if (!importsNamedHere("requireIdempotencyKey")) {
       warnings.push({
         path: repoPath,
         message:
@@ -251,4 +280,53 @@ export function validateRouteClass(sf: SourceFile, repoPath: string): ValidatorW
   }
 
   return warnings;
+}
+
+/**
+ * WARN-ONLY advisory for Route Governance §12 ("control-plane mutations must
+ * enforce org ownership"). A mutating `control-plane` route that imports NONE
+ * of the recognized org-scoping guards (`CONTROL_PLANE_ORG_GUARDS`) gets one
+ * ADVISORY warning naming the missing guards.
+ *
+ * This is deliberately SEPARATE from `validateRouteClass` — that validator's
+ * warnings are BLOCKING in --mode=error. This advisory is wired NON-BLOCKING
+ * in check-routes.ts (printed as `::warning::`, excluded from exitCode) so it
+ * catches NEW unguarded control-plane routes without breaking CI on the 7
+ * existing un-migrated ones. Full error-mode enforcement is staged behind
+ * the §12 migration issue (#654).
+ *
+ * Returns:
+ * - `[]` unless `parseRouteClass(sf) === "control-plane"`.
+ * - `[]` if the file registers no mutating handler (callee ends with
+ *   `.post/.patch/.put/.delete`; GET-only control-plane routes are exempt).
+ * - `[]` if any recognized guard is imported (the route is considered scoped).
+ * - otherwise exactly one advisory warning.
+ */
+export function validateControlPlaneOrgGuard(sf: SourceFile, repoPath: string): ValidatorWarning[] {
+  if (parseRouteClass(sf) !== "control-plane") return [];
+
+  // No mutating handler → nothing to scope.
+  let hasMutatingHandler = false;
+  sf.forEachDescendant((node) => {
+    if (hasMutatingHandler) return;
+    if (node.getKindName() !== "CallExpression") return;
+    const expr = (
+      node as unknown as { getExpression: () => { getText: () => string } }
+    ).getExpression();
+    if (MUTATING_HANDLER_RX.test(expr.getText())) hasMutatingHandler = true;
+  });
+  if (!hasMutatingHandler) return [];
+
+  // Any recognized org guard imported → considered scoped, no advisory.
+  if (CONTROL_PLANE_ORG_GUARDS.some((g) => importsNamed(sf, g))) return [];
+
+  return [
+    {
+      path: repoPath,
+      message:
+        `ADVISORY: mutating control-plane route imports none of the recognized org-scoping guards ` +
+        `(${CONTROL_PLANE_ORG_GUARDS.join(", ")}) — control-plane mutations must enforce org ownership ` +
+        `per Route Governance §12 (tracked: #654). Warn-only for now; not enforced.`,
+    },
+  ];
 }

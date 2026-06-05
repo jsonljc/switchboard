@@ -12,12 +12,27 @@ export type {
 } from "./learning-phase-guard.js";
 export { diagnose } from "./metric-diagnostician.js";
 export type { Diagnosis } from "./metric-diagnostician.js";
-export { generateRecommendations } from "./recommendation-engine.js";
+export {
+  generateRecommendations,
+  generateSignalHealthRecommendations,
+} from "./recommendation-engine.js";
 export type { RecommendationInput } from "./recommendation-engine.js";
+export {
+  decideForCampaign,
+  insightToMetrics,
+  deriveLearningPhaseActive,
+} from "./campaign-decision.js";
+export type { CampaignDecisionInput, CampaignDecisionResult } from "./campaign-decision.js";
 export { AuditRunner } from "./audit-runner.js";
-export type { AuditDependencies, AuditConfig, AdsClientInterface } from "./audit-runner.js";
+export type {
+  AuditDependencies,
+  AuditConfig,
+  AdsClientInterface,
+  BookedValueByCampaignProvider,
+} from "./audit-runner.js";
 export {
   createWeeklyAuditCron,
+  executeWeeklyAudit,
   createDailyCheckCron,
   createDailySignalHealthCron,
   executeDailySignalHealthCheck,
@@ -54,12 +69,38 @@ export { detectSaturation } from "./saturation-detector.js";
 export * from "./lead-intake/index.js";
 export * from "./outcome-dispatcher.js";
 export { RealCrmDataProvider } from "./crm-data-provider/real-provider.js";
-export { compareSources } from "./analyzers/source-comparator.js";
+export {
+  compareSources,
+  compareCampaigns,
+  trueRoasFromCents,
+} from "./analyzers/source-comparator.js";
+export {
+  decideSourceReallocation,
+  computeAuditEconomicsSections,
+  findShiftCandidates,
+  MIN_SOURCE_LEADS,
+  MIN_SOURCE_BOOKINGS,
+} from "./analyzers/source-reallocation.js";
+export type {
+  SourceReallocationInput,
+  AuditEconomicsSectionsInput,
+} from "./analyzers/source-reallocation.js";
+export {
+  resolveEconomicTarget,
+  resolveEconomicTargetForCampaign,
+} from "./analyzers/economic-target.js";
+export type {
+  ResolvedEconomicTarget,
+  PerCampaignEconomicTarget,
+  PerCampaignEconomicTargetInput,
+} from "./analyzers/economic-target.js";
 export * from "./onboarding/coverage-validator.js";
 export type {
   SourceComparisonRow,
   SourceComparisonInput,
   SourceComparisonResult,
+  CampaignEconomicsRow,
+  CampaignComparisonInput,
 } from "./analyzers/source-comparator.js";
 export type {
   CrmFunnelStore,
@@ -87,3 +128,50 @@ export type {
   RecommendationEmitter,
   EmitOutcome,
 } from "./recommendation-sink.js";
+
+// Riley v3 slice 1: the consolidated account-level RevenueState pre-flight object
+// (the decision layer + eval seam construct it; per-campaign tier stays separate).
+export { assembleRevenueState, withSpendAttributionCoverage } from "./revenue-state.js";
+export type { RevenueState, AssembleRevenueStateInput } from "./revenue-state.js";
+
+// Riley v3 slice 2: the consolidated per-action contract (single source for the
+// sink booleans + reset class + evidence family), the mutating-ness question, and
+// the cross-campaign arbitrator (the eval harness drives it through the barrel).
+export { ACTION_CONTRACT, isMutating } from "./action-contract.js";
+export type { ActionContract } from "./action-contract.js";
+export {
+  arbitrate,
+  PROXIMITY_BY_TIER,
+  MEASUREMENT_UNTRUSTED_FACTOR,
+  SIGNAL_YELLOW_FACTOR,
+  LEARNING_RESET_PENALTY,
+  ATTRIBUTION_CONFLICT_PENALTY,
+} from "./analyzers/opportunity-arbitrator.js";
+export type {
+  ArbitrateInput,
+  ArbitrationResult,
+  RankedOpportunity,
+  MeasurementFixRef,
+} from "./analyzers/opportunity-arbitrator.js";
+
+// Abstention helpers (consumed by the Riley->agent recommendation-handoff seam).
+export { meetsEvidenceFloor, evidenceFamilyFor, EVIDENCE_FLOORS } from "./evidence-floor.js";
+export type { Evidence, EvidenceFamily } from "./evidence-floor.js";
+export {
+  resetsLearningFor,
+  learningPhaseImpactText,
+  ACTION_RESETS_LEARNING,
+} from "./action-reset-classification.js";
+export {
+  shouldAbstainFromHandoff,
+  CREATIVE_HANDOFF_ACTIONS,
+} from "./recommendation-handoff-abstention.js";
+export type {
+  HandoffAbstentionDecision,
+  HandoffAbstentionInput,
+  HandoffAbstentionReason,
+} from "./recommendation-handoff-abstention.js";
+// Only the submit-callback type crosses the package boundary (apps/api wires the
+// callback). The candidate/context/dispatch helpers stay package-internal (relative
+// imports), so they are deliberately NOT re-exported from the barrel.
+export type { RecommendationHandoffSubmitter } from "./recommendation-handoff-dispatch.js";

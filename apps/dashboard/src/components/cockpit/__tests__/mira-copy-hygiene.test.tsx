@@ -13,21 +13,29 @@ import { resolve } from "path";
 // __dirname = apps/dashboard/src/components/cockpit/__tests__
 // Four levels up lands on apps/dashboard.
 const DASHBOARD_ROOT = resolve(__dirname, "../../../..");
-const SOURCES = [
-  resolve(DASHBOARD_ROOT, "src/lib/cockpit/mira/mira-config.ts"),
-  resolve(DASHBOARD_ROOT, "src/app/(auth)/mira/creatives/[id]/creative-detail-page.tsx"),
+const SOURCES: Array<{ path: string; allow?: string[] }> = [
+  { path: resolve(DASHBOARD_ROOT, "src/lib/cockpit/mira/mira-config.ts") },
+  {
+    path: resolve(DASHBOARD_ROOT, "src/app/(auth)/mira/creatives/[id]/creative-detail-page.tsx"),
+    // Slice-2 exception: the detail page renders the MEASURED performance
+    // block written by the attribution sweep (always as-of dated; spec
+    // 2026-06-04-mira-slice2-learning-loop-design.md section 3.9). Real
+    // measured data is not a fabricated capability claim; every other
+    // forbidden word (and every other surface) stays guarded.
+    allow: ["performance"],
+  },
   // Live feed surfaces (PR3A/3B) — guard against forbidden CTAs on the active UI
-  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-feed-page.tsx"),
-  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-clip-card.tsx"),
-  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-creative-feed.tsx"),
-  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-clip-actions.tsx"),
+  { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-feed-page.tsx") },
+  { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-clip-card.tsx") },
+  { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-creative-feed.tsx") },
+  { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-clip-actions.tsx") },
   // Phase 2 Director's Desk surfaces:
-  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-desk-page.tsx"),
-  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-in-production-tray.tsx"),
-  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-ready-to-review.tsx"),
-  resolve(DASHBOARD_ROOT, "src/lib/cockpit/mira/desk-copy.ts"),
-  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-brief-box.tsx"),
-  resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-kept-shelf.tsx"),
+  { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-desk-page.tsx") },
+  { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-in-production-tray.tsx") },
+  { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-ready-to-review.tsx") },
+  { path: resolve(DASHBOARD_ROOT, "src/lib/cockpit/mira/desk-copy.ts") },
+  { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-brief-box.tsx") },
+  { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-kept-shelf.tsx") },
 ];
 
 const FORBIDDEN: Array<{ label: string; re: RegExp }> = [
@@ -49,12 +57,13 @@ const FORBIDDEN: Array<{ label: string; re: RegExp }> = [
 ];
 
 describe("Mira M1 copy hygiene — draft-only, no publish/launch CTAs", () => {
-  for (const src of SOURCES) {
+  for (const { path: src, allow } of SOURCES) {
     const shortPath = src.replace(DASHBOARD_ROOT, "").replace(/^\//, "");
     it(`${shortPath} contains no forbidden CTAs`, () => {
       const content = readFileSync(src, "utf-8");
       const hits: Array<{ label: string; match: string }> = [];
       for (const { label, re } of FORBIDDEN) {
+        if (allow?.includes(label)) continue;
         const m = content.match(re);
         if (m) hits.push({ label, match: m[0] });
       }

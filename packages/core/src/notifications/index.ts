@@ -20,3 +20,16 @@ export type {
 } from "./notification-classifier.js";
 export { NotificationBatcher } from "./notification-batcher.js";
 export type { NotificationBatcherConfig } from "./notification-batcher.js";
+export {
+  WHATSAPP_WINDOW_MS,
+  isWithinWhatsAppWindow,
+  canSendWhatsAppTemplate,
+} from "./whatsapp-window.js";
+export type { WhatsAppTemplateConsentReason } from "./whatsapp-window.js";
+export { evaluateProactiveSendEligibility } from "./proactive-eligibility.js";
+export type {
+  ProactiveSendEligibility,
+  ProactiveEligibilityInput,
+} from "./proactive-eligibility.js";
+export type { WhatsAppTemplate } from "../skill-runtime/templates/whatsapp-registry.js";
+export { formatReminderDateTime } from "./reminder-template-vars.js";

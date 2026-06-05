@@ -115,7 +115,7 @@ export function composeVerdict(signals: VerdictSignals): VerdictModel {
     } else {
       const word = numberWord(decisionCount);
       if (hasName) {
-        pre = `${word} things need you — start with `;
+        pre = `${word} things need you. Start with `;
         em = topAgentName!;
         post = ".";
       } else {

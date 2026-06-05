@@ -1,10 +1,20 @@
 import type { AdsClientInterface } from "./audit-runner.js";
 import type {
+  CampaignInsightSchema as CampaignInsight,
   CampaignInsightsProvider,
   CampaignLearningInput,
   TargetBreachResult,
   WeeklyCampaignSnapshot,
 } from "@switchboard/schemas";
+
+const MATERIAL_CHILD_SPEND_SHARE = 0.1;
+const MIN_LEARNING_COVERAGE = 0.8;
+// The Meta insights edge does not expose campaign last-modified. The native ad-set
+// learningPhase (deriveLearningPhase, from learning_stage_info) is the authoritative
+// learning signal, so report a value >= the V1 guard's 7-day recency window: this keeps
+// the legacy "recently-modified + <50 conversions" data heuristic from firing on data we
+// don't actually have, and lets the native signal govern.
+const LAST_MODIFIED_DAYS_UNKNOWN = 30;
 
 export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
   private readonly adsClient: AdsClientInterface;
@@ -29,12 +39,39 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
 
     const match = insights.find((i) => i.campaignId === input.campaignId);
 
+    const learningPhase = await this.deriveLearningPhase(input.campaignId);
+
     return {
       effectiveStatus: match?.effectiveStatus ?? "UNKNOWN",
-      learningPhase: false,
-      lastModifiedDays: 0,
+      learningPhase,
+      lastModifiedDays: LAST_MODIFIED_DAYS_UNKNOWN,
       optimizationEvents: match?.conversions ?? 0,
     };
+  }
+
+  private async deriveLearningPhase(campaignId: string): Promise<boolean> {
+    if (!this.adsClient.getAdSetLearningInputs) return false;
+    const adSets = await this.adsClient.getAdSetLearningInputs(campaignId);
+    const totalSpend = adSets.reduce((s, a) => s + a.spend, 0);
+    // No ad-set spend signal (zero spend, or no ad sets) ⇒ false (not "in learning").
+    // Deliberate and currently safe: a zero-spend campaign yields no breach days
+    // (getTargetBreachStatus skips spend<=0 days) and no actionable recommendation, so
+    // this never exposes such a campaign to a destructive action. It also matches the
+    // no-data graceful stance (the getAdSetLearningInputs-absent path returns false too).
+    // NOTE for future consumers of `learningPhase`: if a recommendation is ever added
+    // that acts on zero-spend campaigns, revisit this to "protect when in doubt".
+    if (totalSpend <= 0 || adSets.length === 0) return false;
+
+    const knownSpend = adSets
+      .filter((a) => a.learningStageStatus !== "UNKNOWN")
+      .reduce((s, a) => s + a.spend, 0);
+    if (knownSpend / totalSpend < MIN_LEARNING_COVERAGE) return true; // incomplete coverage ⇒ protect
+
+    const anyMaterialChildLearning = adSets.some(
+      (a) =>
+        a.spend / totalSpend >= MATERIAL_CHILD_SPEND_SHARE && a.learningStageStatus === "LEARNING",
+    );
+    return anyMaterialChildLearning;
   }
 
   async getTargetBreachStatus(input: {
@@ -45,21 +82,83 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     startDate: Date;
     endDate: Date;
     snapshots?: WeeklyCampaignSnapshot[];
+    /**
+     * Phase-A Gate 1: when set, the conversions denominator for the breach test
+     * is the value of THIS Meta `actions` entry (e.g. "lead"/"purchase") under a
+     * pinned attribution window, not the unfiltered aggregate `conversions` field.
+     * Unset ⇒ aggregate `conversions` (unchanged back-compat behavior).
+     */
+    conversionActionType?: string;
+    /** Attribution windows to pin when `conversionActionType` is set. Default ["7d_click"]. */
+    attributionWindows?: string[];
   }): Promise<TargetBreachResult> {
-    const snapshots = input.snapshots ?? [];
+    const BREACH_WINDOW_DAYS = 14;
+    const until = input.endDate;
+    const since = new Date(until);
+    // -(N-1): Meta's time_range is inclusive of both ends, so this spans exactly
+    // BREACH_WINDOW_DAYS daily buckets.
+    since.setDate(since.getDate() - (BREACH_WINDOW_DAYS - 1));
 
-    let periodsAboveTarget = 0;
-    for (const snap of snapshots) {
-      if (snap.cpa != null && snap.cpa > input.targetCPA) {
-        periodsAboveTarget++;
+    // Denominator selection (Gate 1): an action-type denominator requires the
+    // `actions` breakdown and a PINNED attribution window so the per-day value is
+    // stable run-to-run. When unset we leave both off — exact back-compat: the
+    // aggregate `conversions` field under Meta's account-default windows.
+    const useActionDenominator = Boolean(input.conversionActionType);
+    const rows = await this.adsClient.getCampaignInsights({
+      dateRange: { since: fmt(since), until: fmt(until) },
+      fields: useActionDenominator
+        ? ["campaign_id", "spend", "conversions", "inline_link_clicks", "actions"]
+        : ["campaign_id", "spend", "conversions", "inline_link_clicks"],
+      timeIncrement: 1,
+      ...(useActionDenominator
+        ? { actionAttributionWindows: input.attributionWindows ?? ["7d_click"] }
+        : {}),
+    });
+
+    const campaignDays = rows.filter((r) => r.campaignId === input.campaignId);
+
+    // NOTE: currently DORMANT in production — the audit-runner does not yet pass
+    // `snapshots`, so this branch is a safe-by-default contract for a future
+    // weekly-snapshot source (follow-up). It fails safe (daily/0) when unfed.
+    if (campaignDays.length === 0 && input.snapshots && input.snapshots.length > 0) {
+      let weekly = 0;
+      for (const snap of input.snapshots) {
+        if (snap.cpa != null && snap.cpa > input.targetCPA) weekly++;
       }
+      return { periodsAboveTarget: weekly, granularity: "weekly", isApproximate: true };
     }
 
-    return {
-      periodsAboveTarget,
-      granularity: "weekly",
-      isApproximate: true,
+    // Phase-A breach-counter fix: a zero-conversion day is only real "breach" signal when
+    // the campaign has enough total window volume for "zero conversions" to mean something.
+    // Below the click floor, a quiet low-traffic day is noise — counting it as a breach lets
+    // a near-zero-traffic campaign accrue durability and get paused on nothing. Days WITH
+    // conversions are unaffected (breach iff cpa > target).
+    const MIN_WINDOW_CLICKS_FOR_ZERO_DAY_BREACH = 20;
+    const windowClicks = campaignDays.reduce((s, d) => s + d.inlineLinkClicks, 0);
+    const zeroDayCounts = windowClicks >= MIN_WINDOW_CLICKS_FOR_ZERO_DAY_BREACH;
+
+    // Selected per-day conversions denominator (Gate 1): the configured action
+    // type's value when set, else the aggregate `conversions` field. This single
+    // value feeds BOTH the volume gate's notion of "zero conversions" and the
+    // cpa breach test below; the clicks-based gate itself is unchanged.
+    const dayConversions = (day: CampaignInsight): number => {
+      if (!input.conversionActionType) return day.conversions;
+      const raw = Number(
+        day.actions?.find((a) => a.action_type === input.conversionActionType)?.value ?? 0,
+      );
+      return Number.isFinite(raw) ? raw : 0;
     };
+
+    let periodsAboveTarget = 0;
+    for (const day of campaignDays) {
+      if (day.spend <= 0) continue; // no spend → not a breach day
+      const conv = dayConversions(day);
+      // Local boolean — never carry Infinity into rationale/logs/evidence downstream.
+      const breached = conv > 0 ? day.spend / conv > input.targetCPA : zeroDayCounts; // was `day.spend > 0` — the footgun
+      if (breached) periodsAboveTarget++;
+    }
+
+    return { periodsAboveTarget, granularity: "daily", isApproximate: false };
   }
 }
 

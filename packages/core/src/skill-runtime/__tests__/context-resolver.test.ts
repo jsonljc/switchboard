@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ContextResolverImpl } from "../context-resolver.js";
+import { ContextResolverImpl, renderBusinessFacts } from "../context-resolver.js";
 import type { KnowledgeKind, BusinessFacts } from "@switchboard/schemas";
 import { ContextResolutionError } from "../types.js";
 
@@ -453,5 +453,21 @@ describe("ContextResolverImpl — business-facts", () => {
     expect(result.variables.PLAYBOOK_CONTEXT).toBe("Playbook text");
     expect(result.variables.BUSINESS_FACTS).toContain("Glow Dental");
     expect(result.metadata).toHaveLength(2);
+  });
+});
+
+describe("renderBusinessFacts — advanceBookingDays", () => {
+  it("renders advanceBookingDays as non-promissory context", () => {
+    const facts = makeFacts();
+    facts.bookingPolicies = { advanceBookingDays: 60 };
+    expect(renderBusinessFacts(facts)).toContain(
+      "Advance booking: up to 60 days ahead (subject to availability)",
+    );
+  });
+
+  it("omits the advance-booking line when not set", () => {
+    const facts = makeFacts();
+    facts.bookingPolicies = { cancellationPolicy: "24 hours notice required" };
+    expect(renderBusinessFacts(facts)).not.toContain("Advance booking");
   });
 });

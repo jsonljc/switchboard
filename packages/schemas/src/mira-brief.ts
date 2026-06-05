@@ -14,10 +14,13 @@ export type MiraBriefVibe = z.infer<typeof MiraBriefVibe>;
 
 // The hybrid brief: ONE required line + two optional chips. Reference/asset
 // upload is intentionally deferred in Phase 2.
+// `mode` (slice-3 spec 3.4): the format toggle. Wire name matches the
+// pipeline's SubmitBriefInput.mode; the desk renders it as Polished/Real-talk.
 export const MiraBriefRequestSchema = z.object({
   promoting: z.string().min(1).max(500),
   goal: MiraBriefGoal.default("more_bookings"),
   vibe: MiraBriefVibe.default("warm"),
+  mode: z.enum(["polished", "ugc"]).default("polished"),
 });
 export type MiraBriefRequest = z.infer<typeof MiraBriefRequestSchema>;
 
@@ -46,8 +49,15 @@ const VIBE_VOICE: Record<MiraBriefVibe, string> = {
 
 const DEFAULT_AUDIENCE = "Local prospects interested in aesthetic treatments";
 
-/** Map the lightweight Desk brief into the pipeline's CreativeBriefInput (polished mode). */
-export function mapMiraBriefToCreativeBrief(input: MiraBriefRequest): CreativeBriefInputType {
+/**
+ * Map the lightweight Desk brief into the pipeline's CreativeBriefInput. The
+ * brief shape is mode-agnostic; `mode` rides the request separately into the
+ * ingress params. Accepts the schema INPUT type so defaulted fields stay
+ * optional for callers.
+ */
+export function mapMiraBriefToCreativeBrief(
+  input: z.input<typeof MiraBriefRequestSchema>,
+): CreativeBriefInputType {
   const brief = MiraBriefRequestSchema.parse(input); // applies chip defaults
   return CreativeBriefInput.parse({
     productDescription: `${brief.promoting.trim()} — ${GOAL_OBJECTIVE[brief.goal]}`,

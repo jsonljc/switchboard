@@ -113,8 +113,8 @@ export function createInMemoryRecommendationStore(): RecommendationStore & {
       const sliced = filtered.slice(0, Math.max(0, limit));
       return { rows: sliced, totalCount: filtered.length };
     },
-    async applyAct({ id, actor, fromStatus, toStatus, note }) {
-      const row = rows.find((r) => r.id === id);
+    async applyAct({ id, orgId, actor, fromStatus, toStatus, note }) {
+      const row = rows.find((r) => r.id === id && r.orgId === orgId);
       if (!row) throw new Error("not found");
       if (row.status !== fromStatus) throw new RecommendationStaleStatusError(row);
       row.status = toStatus;

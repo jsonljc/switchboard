@@ -30,6 +30,21 @@ vi.mock("@/hooks/use-recommendation-action", () => ({
   }),
 }));
 
+const wfApproveMock = vi.fn(() => Promise.resolve({ executionResult: { success: true } }));
+const wfRejectMock = vi.fn(() => Promise.resolve({}));
+const wfCtor = vi.fn(); // captures the lifecycle id arg
+vi.mock("@/hooks/use-workflow-approval-action", () => ({
+  useWorkflowApprovalAction: (id: string) => {
+    wfCtor(id);
+    return {
+      approve: wfApproveMock,
+      reject: wfRejectMock,
+      isPending: false,
+      error: null,
+    };
+  },
+}));
+
 vi.mock("@/components/ui/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 const invalidateQueriesMock = vi.fn();
@@ -502,6 +517,90 @@ describe("<InboxScreen>", () => {
   });
 
   // Test 10: Escape closes the open detail sheet (aria-modal convention)
+  describe("(11) workflow approval cards: detail-only actions through the lifecycle hook", () => {
+    const workflowDecision = makeDecision({
+      id: "workflow_approval:lc-1",
+      kind: "workflow_approval",
+      agentKey: "riley",
+      humanSummary: "Riley wants to brief Mira to refresh creative on campaign camp-1.",
+      presentation: {
+        primaryLabel: "Approve handoff",
+        secondaryLabel: "Not now",
+        dismissLabel: "Reject",
+        dataLines: ["Evidence: 1000 clicks"],
+      },
+      sourceRef: { kind: "workflow_approval", sourceId: "lc-1" },
+      meta: {
+        bindingHash: "hash-1",
+        riskContract: {
+          riskLevel: "medium",
+          externalEffect: false,
+          financialEffect: false,
+          clientFacing: false,
+          requiresConfirmation: true,
+        },
+      },
+    });
+
+    it("opens the detail sheet and approve carries the bindingHash through the confirm flow", async () => {
+      feedByKey = () => successFeed([workflowDecision]);
+      const { container } = render(<InboxScreen />);
+
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(wfCtor).toHaveBeenCalledWith("lc-1");
+
+      // requiresConfirmation -> primary shows the confirm step first.
+      fireEvent.click(screen.getByRole("button", { name: /Approve handoff…/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Yes, approve handoff/i }));
+
+      await Promise.resolve();
+      expect(wfApproveMock).toHaveBeenCalledWith("hash-1", undefined);
+    });
+
+    it("Reject fires the lifecycle reject", async () => {
+      feedByKey = () => successFeed([workflowDecision]);
+      const { container } = render(<InboxScreen />);
+
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
+      fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+
+      await Promise.resolve();
+      expect(wfRejectMock).toHaveBeenCalled();
+      expect(wfApproveMock).not.toHaveBeenCalled();
+    });
+
+    it("a dispatchFailed decision presents Retry as the primary action", () => {
+      const retryDecision = {
+        ...workflowDecision,
+        presentation: { ...workflowDecision.presentation, primaryLabel: "Retry" },
+        meta: { ...workflowDecision.meta, dispatchFailed: true },
+      };
+      feedByKey = () => successFeed([retryDecision]);
+      const { container } = render(<InboxScreen />);
+
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
+      expect(screen.getByRole("button", { name: /Retry…/ })).toBeInTheDocument();
+    });
+
+    it("refuses approve when the bindingHash is missing (degraded card)", async () => {
+      const degraded = {
+        ...workflowDecision,
+        meta: { ...workflowDecision.meta, bindingHash: undefined },
+      };
+      feedByKey = () => successFeed([degraded]);
+      const { container } = render(<InboxScreen />);
+
+      fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
+      fireEvent.click(screen.getByRole("button", { name: /Approve handoff…/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Yes, approve handoff/i }));
+
+      await Promise.resolve();
+      expect(wfApproveMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("(10) Escape closes the open detail sheet", () => {
     it("closes the detail sheet on an Escape keydown", () => {
       feedByKey = (_agentKey) => successFeed([alexDecision]);

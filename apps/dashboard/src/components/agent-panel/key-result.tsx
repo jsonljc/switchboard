@@ -2,11 +2,11 @@
 
 import { useAgentMetrics } from "@/hooks/use-agent-metrics";
 import { useAgentMission } from "@/hooks/use-agent-mission";
+import { resolveQueryState } from "@/components/query-states";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { agentDisplay, type PanelAgentKey } from "./lib/agent-display";
 import { selectKeyResult, coreSetupIncomplete } from "./lib/key-result-state";
 import { labelForHeroKind } from "./lib/agent-display";
-import { formatCents } from "./lib/format";
 import type {
   MissionAggregatorResponse,
   MissionSetupRow,
@@ -37,11 +37,28 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   const mission = useAgentMission(agentKey);
   const { halted } = useHalt();
 
-  // Guard: on cold mount (data undefined, isError false) the hooks are still
-  // fetching. Without this check, selectKeyResult would return { kind: "error" }
-  // and flash "Couldn't load this week's number" before any response arrives —
-  // violating the three-states-never-collapse invariant (loading ≠ error).
-  if (all.isLoading || week.isLoading || mission.isLoading) {
+  // Guard: on cold mount the hooks are still fetching. Without this check,
+  // selectKeyResult would return { kind: "error" } and flash "Couldn't load
+  // this week's number" before any response arrives — violating the
+  // three-states-never-collapse invariant (loading ≠ error).
+  //
+  // These hooks are `enabled: !!keys`, so during keys-pending isLoading is
+  // false while data/error are still undefined/null. A plain `isLoading` gate
+  // is skipped then. Derive "still pending" from {data, error} via
+  // resolveQueryState so keys-pending (no data, no real error yet) also counts
+  // as loading; only proceed to selectKeyResult once each hook has resolved
+  // data or a real error. We use the resolver here, NOT the <QueryStates>
+  // component, on purpose: the post-loading states below (paused / activation /
+  // proof / error) are domain-specific, not a generic empty/data split. Do not
+  // "finish the migration" by wrapping this slot in <QueryStates>.
+  const stillPending =
+    resolveQueryState({ data: all.data, error: all.isError ? all.error : null }).status ===
+      "loading" ||
+    resolveQueryState({ data: week.data, error: week.isError ? week.error : null }).status ===
+      "loading" ||
+    resolveQueryState({ data: mission.data, error: mission.isError ? mission.error : null })
+      .status === "loading";
+  if (stillPending) {
     return (
       <div className={styles.heroCard} data-kind="loading" aria-busy="true">
         <div className={styles.heroSkeleton} />
@@ -105,11 +122,9 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
         data-testid="activation-block"
       >
         <p className={styles.heroActivationLine}>
-          <em>
-            {agentKey === "riley"
-              ? "Connect Meta Ads so Riley can start finding leads."
-              : "Connect your inbox so Alex can respond to leads."}
-          </em>
+          {agentKey === "riley"
+            ? "Connect Meta Ads so Riley can start finding leads."
+            : "Connect your inbox so Alex can respond to leads."}
         </p>
         {/* Channel chips from mission data */}
         {missionData?.mission?.channels && missionData.mission.channels.length > 0 && (
@@ -140,18 +155,18 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
 
   // ── Proof (lifetime or week) ───────────────────────────────────────────────
   // result.kind === "proof"
-  const { hero, scope, spendCents, targets } = result;
+  const { hero, scope, roi } = result;
   const isZero = hero.value === 0;
   const missionDataForProof = mission.data;
 
-  // CPL beat for Riley when ad-leads + spend + target all present
-  const cplBeat =
-    agentKey === "riley" &&
-    hero.kind === "ad-leads" &&
-    spendCents != null &&
-    hero.value > 0 &&
-    targets?.targetCpbCents != null
-      ? buildCplBeat(spendCents, hero.value, targets.targetCpbCents)
+  // Riley's ROI proof = server-computed cost-per-booked comparator (single source of
+  // truth; the read-model owns the CAC math). Show only when a real value AND target
+  // exist — never gate on roi.degraded (Riley marks all ROI degraded), and never render
+  // a blank "— · target" line.
+  const hasRoiProof = !!roi && roi.comparator.value !== "—" && roi.comparator.target !== "—";
+  const rileyRoiLine =
+    agentKey === "riley" && hero.kind === "ad-leads" && hasRoiProof
+      ? `${roi.comparator.value} · ${roi.comparator.target}`
       : null;
 
   // Non-core nudge: shown when core is done (proof) but a secondary step/channel is still off
@@ -172,8 +187,8 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
           {labelForHeroKind(hero.kind)}
         </span>
       </div>
-      {/* CPL comparator — neutral ink only, never green/red */}
-      {cplBeat && <p className={styles.heroComp}>{cplBeat}</p>}
+      {/* ROI comparator — neutral ink only, never green/red */}
+      {rileyRoiLine && <p className={styles.heroComp}>{rileyRoiLine}</p>}
       {/* Non-core nudge — muted inline hint; never amber, never replaces proof hero */}
       {nudge && (
         <p className={styles.nonCoreNudge} data-testid="non-core-nudge">
@@ -248,24 +263,4 @@ function nonCoreChannelNudgeCopy(
     return `Connect your calendar so ${displayName} can book consults.`;
   }
   return `Finish setup to get more from ${displayName}.`;
-}
-
-/**
- * Compose the CPL comparator line for Riley's ad-leads hero.
- * Neutral words only: "over" / "under" — no green/red sentiment.
- *
- * @param spendCents  Total spend in cents
- * @param leads       Number of leads (> 0)
- * @param targetCents Target cost-per-lead in cents
- */
-function buildCplBeat(spendCents: number, leads: number, targetCents: number): string {
-  const cpl = spendCents / leads; // in cents
-  const diff = Math.abs(cpl - targetCents); // in cents
-  const direction = cpl > targetCents ? "over" : "under";
-
-  const cplStr = formatCents(Math.round(cpl)) ?? "";
-  const diffStr = formatCents(Math.round(diff)) ?? "";
-  const targetStr = formatCents(targetCents) ?? "";
-
-  return `${cplStr} per lead · ${diffStr} ${direction} your ${targetStr} target`;
 }

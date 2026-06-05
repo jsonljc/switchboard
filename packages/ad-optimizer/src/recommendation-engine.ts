@@ -1,18 +1,19 @@
 // packages/ad-optimizer/src/recommendation-engine.ts
 import type { Diagnosis } from "./metric-diagnostician.js";
-import type { SourceComparisonRow } from "./analyzers/source-comparator.js";
 import type {
   RecommendationOutputSchema as RecommendationOutput,
+  WatchOutputSchema as WatchOutput,
   MetricDeltaSchema as MetricDelta,
   UrgencySchema as Urgency,
   TargetBreachResult,
 } from "@switchboard/schemas";
 import type { SignalHealthReport, Breach } from "./signal-health-checker.js";
+import { resetsLearningFor, learningPhaseImpactText } from "./action-reset-classification.js";
+import { meetsEvidenceFloor } from "./evidence-floor.js";
 
 // ── Re-export types ──
 
 export type { RecommendationOutput };
-export type { SourceComparisonRow };
 
 // ── Constants ──
 
@@ -32,7 +33,14 @@ export interface RecommendationInput {
   targetROAS: number;
   currentSpend: number;
   targetBreach: TargetBreachResult;
-  sourceComparison?: { rows: SourceComparisonRow[] };
+  /**
+   * Evidence available for THIS campaign in the analysis window. Required so
+   * the engine can enforce action-family-specific evidence floors (Phase-A
+   * spec Gate 2) — a destructive/scale rec on thin data is demoted to an
+   * abstention watch rather than acted on. Measurement-family fixes
+   * (signal/CAPI) carry a 0/0/0 floor and pass regardless.
+   */
+  evidence: { clicks: number; conversions: number; days: number };
   /**
    * Optional flag set externally (e.g. by CAPI dispatch tracker) when no
    * Schedule events have been received in 7+ days for a CTWA campaign.
@@ -59,7 +67,6 @@ function makeRec(
   urgency: Urgency,
   estimatedImpact: string,
   steps: string[],
-  learningPhaseImpact: string,
   params?: Record<string, string>,
 ): RecommendationOutput {
   return {
@@ -71,34 +78,10 @@ function makeRec(
     urgency,
     estimatedImpact,
     steps,
-    learningPhaseImpact,
+    learningPhaseImpact: learningPhaseImpactText(action),
+    resetsLearning: resetsLearningFor(action),
     ...(params ? { params } : {}),
   };
-}
-
-const SHIFT_TRUE_ROAS_RATIO = 2;
-const SHIFT_MIN_CLOSE_RATE = 0.05;
-
-function findShiftCandidates(
-  rows: SourceComparisonRow[],
-): { from: SourceComparisonRow; to: SourceComparisonRow } | null {
-  const eligible = rows.filter(
-    (r) => r.trueRoas !== null && r.trueRoas !== undefined && r.closeRate !== null,
-  );
-  if (eligible.length < 2) return null;
-  let best: SourceComparisonRow | null = null;
-  let worst: SourceComparisonRow | null = null;
-  for (const row of eligible) {
-    if (best === null || (row.trueRoas ?? 0) > (best.trueRoas ?? 0)) best = row;
-    if (worst === null || (row.trueRoas ?? 0) < (worst.trueRoas ?? 0)) worst = row;
-  }
-  if (!best || !worst || best === worst) return null;
-  const bestRoas = best.trueRoas ?? 0;
-  const worstRoas = worst.trueRoas ?? 0;
-  if (worstRoas <= 0) return null;
-  if (bestRoas < worstRoas * SHIFT_TRUE_ROAS_RATIO) return null;
-  if ((best.closeRate ?? 0) < SHIFT_MIN_CLOSE_RATE) return null;
-  return { from: worst, to: best };
 }
 
 function addCreativeRecommendation(
@@ -122,7 +105,6 @@ function addCreativeRecommendation(
         "Reduce budget on underperforming ads once replacements are delivering",
         `CPA has been ${multiplier}x target for ${periods} days`,
       ],
-      "will reset learning",
     ),
   );
 }
@@ -145,7 +127,6 @@ function addPauseRecommendation(
         "Pause campaign in Ads Manager immediately",
         `CPA is ${multiplier}x target — active financial loss`,
       ],
-      "no impact",
     ),
   );
 }
@@ -168,14 +149,39 @@ function addReviewBudgetRecommendation(
         "Review campaign performance in Ads Manager",
         "Based on weekly snapshot data, not daily trend — exercise caution",
       ],
-      "no impact",
     ),
   );
 }
 
+// ── Evidence-floor abstention ──
+
+/**
+ * Build an abstention watch for a recommendation whose action family lacks the
+ * evidence to act (Phase-A spec Gate 2). Riley re-checks next cycle rather than
+ * acting on noise. `checkBackDate` is left blank here — the caller
+ * (campaign-decision.ts) fills it from `input.nextCycleDate` since the engine
+ * has no access to that value.
+ */
+function insufficientEvidenceWatch(
+  base: Pick<RecommendationInput, "campaignId" | "campaignName">,
+  action: RecommendationOutput["action"],
+  e: { clicks: number; conversions: number },
+): WatchOutput {
+  return {
+    type: "watch",
+    campaignId: base.campaignId,
+    campaignName: base.campaignName,
+    pattern: "insufficient_evidence",
+    message: `Not enough evidence to ${action}: ${e.clicks} clicks / ${e.conversions} conversions in window — re-checking next cycle.`,
+    checkBackDate: "",
+  };
+}
+
 // ── Main export ──
 
-export function generateRecommendations(input: RecommendationInput): RecommendationOutput[] {
+export function generateRecommendations(
+  input: RecommendationInput,
+): (RecommendationOutput | WatchOutput)[] {
   const { campaignId, campaignName, diagnoses, deltas, targetCPA, targetBreach } = input;
   const cpa = getCPA(deltas);
   const results: RecommendationOutput[] = [];
@@ -184,7 +190,11 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
   const isAboveAddCreativeCpa = cpa > ADD_CREATIVE_CPA_MULTIPLIER * targetCPA;
   const isAbovePauseCpa = cpa > PAUSE_CPA_MULTIPLIER * targetCPA;
 
-  // Daily data — add_creative at 2x, pause at 3x
+  // Daily data — add_creative at 2x, pause at 3x.
+  // Note: ANDs the 7-day aggregate CPA (getCPA(deltas)) with the 14-day daily breach
+  // window (periodsAboveTarget >= KILL_DAYS_THRESHOLD). Intentional fail-safe — Riley
+  // won't pause a campaign that is currently recovering (low recent aggregate CPA) even
+  // if it had many bad days earlier, nor one newly-bad with fewer than 7 breach days.
   if (
     isAboveAddCreativeCpa &&
     targetBreach.granularity === "daily" &&
@@ -223,7 +233,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
           `Approve draft with ${MAX_BUDGET_INCREASE_PERCENT}% higher budget`,
           `Budget increase capped at ${MAX_BUDGET_INCREASE_PERCENT}%`,
         ],
-        "will reset learning",
       ),
     );
   }
@@ -238,7 +247,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "this_week",
         "Fatigued creatives are reducing engagement — new creative will restore performance",
         ["Trigger PCD for fresh creative", "Replace fatigued creatives", "Approve new draft"],
-        "will reset learning",
       ),
     );
   }
@@ -256,7 +264,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "this_week",
         "Saturated audience needs fresh creative to re-engage",
         ["Trigger PCD for fresh creative", "Replace fatigued creatives", "Approve new draft"],
-        "will reset learning",
       ),
     );
   }
@@ -271,33 +278,8 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "next_cycle",
         "Audience is saturated — expanding targeting will find new reach",
         ["Create new ad set with expanded targeting", "Approve new ad set draft"],
-        "will reset learning",
       ),
     );
-  }
-
-  // Shift budget across sources when one clearly outperforms another
-  if (input.sourceComparison && input.sourceComparison.rows.length >= 2) {
-    const candidate = findShiftCandidates(input.sourceComparison.rows);
-    if (candidate) {
-      const ratio = ((candidate.to.trueRoas ?? 0) / (candidate.from.trueRoas ?? 1)).toFixed(1);
-      results.push(
-        makeRec(
-          base,
-          "shift_budget_to_source",
-          0.6,
-          "this_week",
-          `${candidate.to.source} trueRoas is ${ratio}x ${candidate.from.source} — consider shifting budget`,
-          [
-            `Reduce budget on ${candidate.from.source} (trueRoas ${candidate.from.trueRoas?.toFixed(2)})`,
-            `Increase budget on ${candidate.to.source} (trueRoas ${candidate.to.trueRoas?.toFixed(2)})`,
-            "Source attribution is heuristic — operator should validate before large reallocations",
-          ],
-          "no impact",
-          { from: candidate.from.source, to: candidate.to.source },
-        ),
-      );
-    }
   }
 
   // CTWA optimizing on chats sees drive-by clickers — switch optimization event
@@ -314,7 +296,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
           "Ensure CAPI is sending Schedule events reliably before switching",
           "Allow 3–5 days for re-learning",
         ],
-        "will reset learning",
         { from: "Lead", to: "Schedule" },
       ),
     );
@@ -334,7 +315,6 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
           "Re-run a Schedule test event from the booking system",
           "Confirm event_id deduplication matches browser pixel",
         ],
-        "no impact",
       ),
     );
   }
@@ -349,12 +329,19 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
         "this_week",
         "Landing page issues are driving up costs — fix before increasing spend",
         ["Check landing page load speed", "Verify tracking pixel", "Hold budget changes"],
-        "no impact",
       ),
     );
   }
 
-  return results;
+  // Gate 2 (Phase-A spec): action-family-specific evidence floors. Any rec whose
+  // action family lacks the clicks/conversions/days to act is demoted to an
+  // abstention watch. Measurement-family fixes (0/0/0 floor) and most diagnostics
+  // pass; destructive (pause/add_creative) and scale recs get gated on thin data.
+  return results.map((rec) =>
+    meetsEvidenceFloor(rec.action, input.evidence)
+      ? rec
+      : insufficientEvidenceWatch(base, rec.action, input.evidence),
+  );
 }
 
 // ── Signal Health Recommendations ──
@@ -433,7 +420,6 @@ function makeFixSignalHealthRec(
     urgency,
     remediation.estimatedImpact,
     remediation.steps,
-    "no impact",
     { breach: breach.signal, pixelId },
   );
 }

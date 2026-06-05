@@ -34,6 +34,24 @@ export type AdRecommendationActionSchema = z.infer<typeof AdRecommendationAction
 export const UrgencySchema = z.enum(["immediate", "this_week", "next_cycle"]);
 export type UrgencySchema = z.infer<typeof UrgencySchema>;
 
+export const EconomicTierSchema = z.enum(["booked_cac", "cpl", "cpc"]);
+export type EconomicTierSchema = z.infer<typeof EconomicTierSchema>;
+
+export const MarginBasisSchema = z.enum(["configured", "unavailable"]);
+export type MarginBasisSchema = z.infer<typeof MarginBasisSchema>;
+
+// PR2 Gate-4: which tier the judged target came from (campaign Tier-1 / account
+// Tier-2). Named like its sibling enums above so the union is defined once and
+// reused (recommendation schema + ad-optimizer types + eval), not re-inlined.
+export const TargetSourceSchema = z.enum(["campaign", "account"]);
+export type TargetSourceSchema = z.infer<typeof TargetSourceSchema>;
+
+// Structured, single-source-of-truth learning-reset class for a recommendation's
+// action (Phase-A spec §5). Derived from ACTION_RESETS_LEARNING in @switchboard/
+// ad-optimizer; replaces the free-text `learningPhaseImpact` as the governing field.
+export const ResetsLearningSchema = z.enum(["yes", "no", "conditional"]);
+export type ResetsLearningSchema = z.infer<typeof ResetsLearningSchema>;
+
 export const MetricDirectionSchema = z.enum(["up", "down", "stable"]);
 export type MetricDirectionSchema = z.infer<typeof MetricDirectionSchema>;
 
@@ -61,6 +79,11 @@ export const CampaignInsightSchema = z.object({
   costPerInlineLinkClick: z.number(),
   dateStart: z.string(),
   dateStop: z.string(),
+  // Optional per-action breakdown from Meta's `actions` field. When a breach
+  // detector is configured with a `conversionActionType`, the matching action's
+  // value (under a pinned attribution window) becomes the conversions denominator;
+  // otherwise the aggregate `conversions` field is used (back-compat).
+  actions: z.array(z.object({ action_type: z.string(), value: z.string() })).optional(),
 });
 export type CampaignInsightSchema = z.infer<typeof CampaignInsightSchema>;
 
@@ -175,8 +198,21 @@ export const RecommendationOutputSchema = z.object({
   estimatedImpact: z.string(),
   steps: z.array(z.string()),
   learningPhaseImpact: z.string(),
+  // Phase A: structured, single-source-of-truth learning-reset class (derived from
+  // the action via ACTION_RESETS_LEARNING). `learningPhaseImpact` is now a human
+  // string derived FROM this, not an independent free-text field.
+  resetsLearning: ResetsLearningSchema,
   draftId: z.string().nullable().optional(),
   params: z.record(z.string(), z.string()).optional(),
+  // PR2 (Target): the economic basis this recommendation was judged against, and
+  // whether the target was margin-derived. Optional for back-compat; populated
+  // by the audit's applyTier post-processor going forward.
+  economicTier: EconomicTierSchema.optional(),
+  marginBasis: MarginBasisSchema.optional(),
+  // PR2 (Gate-4): which tier the judged target came from — the campaign's own
+  // booking-calibrated CAC ("campaign", Tier-1) or the account-level fallback
+  // ("account", Tier-2). Optional for back-compat; stamped by applyTier.
+  targetSource: TargetSourceSchema.optional(),
 });
 export type RecommendationOutputSchema = z.infer<typeof RecommendationOutputSchema>;
 
@@ -220,6 +256,58 @@ export const AuditReportSchema = z.object({
           trueRoas: z.number().nullable(),
         }),
       ),
+    })
+    .optional(),
+  // PR2 (Gate-4): per-campaign economics — CPL, cost-per-booked, booked value in
+  // CENTS, and trueROAS. Mirrors sourceComparison; only present when the CRM
+  // provider returned a per-campaign funnel. trueRoas/bookedValueCents are null
+  // when no valued booked ConversionRecord was attributed (or the booked-value
+  // port is unwired) — never a fabricated 0.
+  campaignEconomics: z
+    .object({
+      rows: z.array(
+        z.object({
+          campaignId: z.string(),
+          cpl: z.number().nullable(),
+          costPerBooked: z.number().nullable(),
+          bookedValueCents: z.number().nullable(),
+          trueRoas: z.number().nullable(),
+        }),
+      ),
+    })
+    .optional(),
+  // Riley v3 slice 2: cross-campaign arbitration, ADDITIVE ranking metadata over
+  // recommendations[]; it never filters emission or handoff. Entries reference
+  // recommendations[] by array index (recs carry no id at report time, and
+  // campaignId+action alone is not unique, e.g. per-breach fix_signal_health recs)
+  // plus campaignId+action for human legibility. primary is absent exactly when the
+  // cycle produced no mutating candidate; measurementFix is the at-most-one
+  // non-mutating measurement-integrity fix (it bypasses the mutating cap).
+  arbitration: z
+    .object({
+      primary: z
+        .object({
+          campaignId: z.string(),
+          action: AdRecommendationActionSchema,
+          index: z.number().int().nonnegative(),
+          score: z.number(),
+        })
+        .optional(),
+      secondary: z.array(
+        z.object({
+          campaignId: z.string(),
+          action: AdRecommendationActionSchema,
+          index: z.number().int().nonnegative(),
+          score: z.number(),
+        }),
+      ),
+      measurementFix: z
+        .object({
+          campaignId: z.string(),
+          action: AdRecommendationActionSchema,
+          index: z.number().int().nonnegative(),
+        })
+        .optional(),
     })
     .optional(),
 });

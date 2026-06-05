@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { scoreRecommendation, scoreHandoff, decisionSortComparator } from "../urgency.js";
+import {
+  scoreRecommendation,
+  scoreHandoff,
+  scoreParkedApproval,
+  decisionSortComparator,
+} from "../urgency.js";
 import type { Decision } from "../types.js";
 
 const baseRec = {
@@ -119,6 +124,38 @@ describe("scoreHandoff", () => {
     });
     expect(score).toBeGreaterThanOrEqual(64);
     expect(score).toBeLessThanOrEqual(66);
+  });
+});
+
+describe("scoreParkedApproval", () => {
+  const HOUR = 3_600_000;
+  const now = Date.UTC(2026, 5, 4, 12, 0, 0);
+
+  it("sits at the risk floor when expiry is far away", () => {
+    expect(
+      scoreParkedApproval({ expiresAt: new Date(now + 72 * HOUR), riskLevel: "medium" }, now),
+    ).toBe(55);
+    expect(
+      scoreParkedApproval({ expiresAt: new Date(now + 72 * HOUR), riskLevel: "high" }, now),
+    ).toBe(70);
+    expect(
+      scoreParkedApproval({ expiresAt: new Date(now + 72 * HOUR), riskLevel: "low" }, now),
+    ).toBe(45);
+  });
+
+  it("ramps toward 100 inside the final 24h", () => {
+    const at12h = scoreParkedApproval(
+      { expiresAt: new Date(now + 12 * HOUR), riskLevel: "medium" },
+      now,
+    );
+    expect(at12h).toBeGreaterThan(55);
+    expect(at12h).toBeLessThan(100);
+  });
+
+  it("pins at 100 once expired", () => {
+    expect(scoreParkedApproval({ expiresAt: new Date(now - HOUR), riskLevel: "low" }, now)).toBe(
+      100,
+    );
   });
 });
 

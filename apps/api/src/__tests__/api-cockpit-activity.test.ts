@@ -19,7 +19,10 @@
 import { describe, it, expect, vi } from "vitest";
 import Fastify from "fastify";
 import { cockpitActivityRoutes } from "../routes/agent-home/activity.js";
-import { buildCockpitActivityDeps } from "../lib/cockpit-activity-deps.js";
+import {
+  buildCockpitActivityDeps,
+  type CockpitActivityDeps,
+} from "../lib/cockpit-activity-deps.js";
 import { createInMemoryOrgAgentEnablementStore } from "@switchboard/db";
 
 type AuditRow = {
@@ -67,7 +70,10 @@ function buildMockPrisma(opts: { audit: AuditRow[]; messages?: MessageRow[] }) {
   };
 }
 
-async function buildApp(prisma: ReturnType<typeof buildMockPrisma>) {
+async function buildApp(
+  prisma: ReturnType<typeof buildMockPrisma>,
+  listRenderableOutcomes?: CockpitActivityDeps["listRenderableOutcomes"],
+) {
   const app = Fastify({ logger: false });
   app.decorate("authDisabled", true);
   app.decorate("organizationIdFromAuth", undefined as string | undefined);
@@ -82,7 +88,7 @@ async function buildApp(prisma: ReturnType<typeof buildMockPrisma>) {
   // Cast: buildCockpitActivityDeps wants PrismaClient; the mock satisfies the
   // narrow subset the deps actually use (auditEntry.findMany + the reader's
   // conversationMessage.findMany).
-  const deps = buildCockpitActivityDeps(prisma as never);
+  const deps = { ...buildCockpitActivityDeps(prisma as never), listRenderableOutcomes };
   await app.register(cockpitActivityRoutes(deps), { prefix: "/api/dashboard" });
   return app;
 }
@@ -283,5 +289,106 @@ describe("GET /api/dashboard/agents/:agentId/activity — server-level", () => {
     expect(ids).toContain("riley-via-snapshot");
     // Riley does NOT see actorId-literal "alex"
     expect(ids).not.toContain("alex-literal");
+  });
+});
+
+describe("GET /api/dashboard/agents/riley/activity — outcome-row merge (slice 3)", () => {
+  const OUTCOME = {
+    id: "outcome-1",
+    recommendationId: "rec-1",
+    actionKind: "pause" as const,
+    windowEndedAt: new Date("2026-05-15T13:00:00.000Z"),
+    copyTemplate: "pause.spend.fell",
+    copyValues: { deltaPct: -92, windowDays: 7 },
+    campaignId: "camp-A",
+    campaignName: "Campaign A",
+    causalStrength: "directional" as const,
+    businessContextStable: "unknown" as const,
+    trustDelta: "up" as const,
+  };
+
+  const RILEY_AUDIT: AuditRow = {
+    id: "a-riley",
+    eventType: "message.sent",
+    timestamp: new Date("2026-05-15T12:00:00.000Z"),
+    actorType: "agent",
+    actorId: "riley",
+    snapshot: {},
+    organizationId: "org-1",
+  };
+
+  it("merges observed outcome rows into the riley feed, newest first, trust suffix in head", async () => {
+    const prisma = buildMockPrisma({ audit: [RILEY_AUDIT] });
+    const listRenderableOutcomes = vi.fn().mockResolvedValue([OUTCOME]);
+    const app = await buildApp(prisma, listRenderableOutcomes);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/riley/activity?expandPreview=false",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { rows: Array<{ id: string; kind: string; head: string }> };
+    expect(body.rows.map((r) => r.id)).toEqual(["outcome:outcome-1", "a-riley"]);
+    expect(body.rows[0]).toMatchObject({
+      kind: "observed",
+      head: "Spend fell 92.0% in 7d after pause. This outcome is a positive signal for this action.",
+    });
+    expect(listRenderableOutcomes).toHaveBeenCalledWith({ orgId: "org-1", limit: 50 });
+  });
+
+  it("honors the limit cap across merged sources", async () => {
+    const prisma = buildMockPrisma({ audit: [RILEY_AUDIT] });
+    const listRenderableOutcomes = vi.fn().mockResolvedValue([OUTCOME]);
+    const app = await buildApp(prisma, listRenderableOutcomes);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/riley/activity?limit=1&expandPreview=false",
+      headers: { "x-org-id": "org-1" },
+    });
+    const body = res.json() as { rows: Array<{ id: string }> };
+    expect(body.rows).toHaveLength(1);
+    expect(body.rows[0]?.id).toBe("outcome:outcome-1"); // newest survives
+  });
+
+  it("never fetches outcomes for non-riley agents", async () => {
+    const prisma = buildMockPrisma({
+      audit: [{ ...RILEY_AUDIT, id: "a-alex", actorId: "alex" }],
+    });
+    const listRenderableOutcomes = vi.fn().mockResolvedValue([OUTCOME]);
+    const app = await buildApp(prisma, listRenderableOutcomes);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/alex/activity?expandPreview=false",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(listRenderableOutcomes).not.toHaveBeenCalled();
+  });
+
+  it("serves the audit-only feed when the outcomes dep is absent (backward compat)", async () => {
+    const prisma = buildMockPrisma({ audit: [RILEY_AUDIT] });
+    const app = await buildApp(prisma); // no outcomes dep
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/riley/activity?expandPreview=false",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { rows: Array<{ id: string }> };
+    expect(body.rows.map((r) => r.id)).toEqual(["a-riley"]);
+  });
+
+  it("degrades to the audit-only feed when the outcomes fetch fails", async () => {
+    const prisma = buildMockPrisma({ audit: [RILEY_AUDIT] });
+    const listRenderableOutcomes = vi.fn().mockRejectedValue(new Error("db down"));
+    const app = await buildApp(prisma, listRenderableOutcomes);
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/riley/activity?expandPreview=false",
+      headers: { "x-org-id": "org-1" },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { rows: Array<{ id: string }> };
+    expect(body.rows.map((r) => r.id)).toEqual(["a-riley"]);
   });
 });

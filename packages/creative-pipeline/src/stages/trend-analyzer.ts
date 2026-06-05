@@ -1,12 +1,17 @@
-// packages/core/src/creative-pipeline/stages/trend-analyzer.ts
+// packages/creative-pipeline/src/stages/trend-analyzer.ts
 import { callClaude } from "./call-claude.js";
-import { TrendAnalysisOutput } from "@switchboard/schemas";
+import { TrendAnalysisOutput, type CreativePerformanceHistory } from "@switchboard/schemas";
+import { renderPastPerformanceBlock, renderTasteBlock } from "./prompt-blocks.js";
 
 interface TrendBrief {
   productDescription: string;
   targetAudience: string;
   platforms: string[];
   references?: string[];
+  /** Slice-2 measured channel: typed attribution history (spec 3.8). */
+  pastPerformance?: CreativePerformanceHistory | null;
+  /** Slice-2 taste channel: rendered subjective lines from review gestures. */
+  tasteContext?: string[];
 }
 
 export function buildTrendPrompt(brief: TrendBrief): {
@@ -58,6 +63,9 @@ Guidelines:
   if (brief.references && brief.references.length > 0) {
     userMessage += `\n\n**References (competitor ads, trend links, inspiration):**\n${brief.references.map((r) => `- ${r}`).join("\n")}`;
   }
+
+  userMessage += renderPastPerformanceBlock(brief.pastPerformance);
+  userMessage += renderTasteBlock(brief.tasteContext);
 
   return { systemPrompt, userMessage };
 }

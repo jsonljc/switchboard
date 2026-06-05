@@ -52,7 +52,8 @@ export function generateAvailableSlots(input: SlotGeneratorInput): TimeSlot[] {
           });
         }
 
-        slotCursor.setTime(slotCursor.getTime() + (durationMinutes + bufferMinutes) * 60_000);
+        const stepMinutes = durationMinutes + (Number.isFinite(bufferMinutes) ? bufferMinutes : 0);
+        slotCursor.setTime(slotCursor.getTime() + stepMinutes * 60_000);
       }
     }
 

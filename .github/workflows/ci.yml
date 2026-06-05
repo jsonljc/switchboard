@@ -214,6 +214,13 @@ jobs:
       - name: Check for untested packages
         run: bash scripts/check-no-empty-tests.sh
 
+      # apps/dashboard has its own vitest runner (jsdom + .test.tsx) and coverage
+      # gate (40/35/40/40), excluded from the root config above — so its 300+ test
+      # files never ran in CI until this step. Without it a dashboard test can rot
+      # red and still merge green.
+      - name: Dashboard tests with coverage
+        run: pnpm --filter @switchboard/dashboard exec vitest run --coverage
+
       - name: Dashboard production build
         env:
           CREDENTIALS_ENCRYPTION_KEY: ${{ secrets.CI_CREDENTIALS_ENCRYPTION_KEY || 'ci-test-encryption-secret-32chr' }}
@@ -356,6 +363,12 @@ jobs:
           # Empty token forces a local `git diff` against the base instead of the
           # GitHub REST API (the default token's API access returns 401 in CI here).
           token: ""
+          # Scope = exactly what the eval exercises. It invokes the classifier
+          # unit directly (createAnthropicClaimClassifier), so its only inputs are
+          # the classifier source + the claim-classifier schema below. The
+          # skill-runtime hook that wires the classifier into production is a
+          # consumer the eval bypasses, so it is intentionally NOT a trigger here
+          # (a change there can't shift this eval's results).
           filters: |
             classifier:
               - '.github/workflows/ci.yml'
@@ -382,7 +395,11 @@ jobs:
 
       - name: Build packages required by the harness
         if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
-        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build
+        # The shared evals/vitest.config.ts runs ALL eval suites' unit tests — incl.
+        # riley-recommendation (imports @switchboard/ad-optimizer) and alex-conversation
+        # (imports @switchboard/db) from dist — so every job running that config must
+        # build both (each depends only on already-built @switchboard/schemas/core).
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
 
       - name: Run eval unit tests
         if: steps.filter.outputs.classifier == 'true' || github.ref == 'refs/heads/main'
@@ -434,15 +451,26 @@ jobs:
 
       - name: Build packages required by the harness
         if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
-        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build
+        # The shared evals/vitest.config.ts now also runs the riley-recommendation
+        # suite, which imports @switchboard/ad-optimizer from dist — so every job
+        # that runs that config must build ad-optimizer too (it depends only on
+        # @switchboard/schemas, already built by the core chain above).
+        # The eval now also imports @switchboard/db (real PrismaBusinessFactsStore
+        # over a mock prisma) from dist, so build db too — its `build` runs
+        # `prisma generate` (no Postgres needed) + tsc.
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
 
       - name: Run eval unit tests
         if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
         run: pnpm exec vitest run --config evals/vitest.config.ts
 
       - name: Run alex-conversation eval
-        # TODO: flip continue-on-error to false after baseline bakes (≥14 days on main,
-        # baseline.json committed, zero false-positives observed). Tracking issue: TBD.
+        # Informational (live-LLM scored) — deliberately non-blocking until BOTH:
+        # (1) the baseline bakes (≥14 days on main, baseline.json committed, zero
+        # false-positives observed), and (2) live-eval credits are restored
+        # (ANTHROPIC_API_KEY, #672). NOTE: the deterministic oracle/fixture checks
+        # in the "Run eval unit tests" step above ARE blocking — only the live
+        # conversation scoring is informational here. Flip to false once both hold.
         continue-on-error: true
         if: steps.filter.outputs.alex == 'true' || github.ref == 'refs/heads/main'
         env:
@@ -490,7 +518,11 @@ jobs:
 
       - name: Build packages required by the harness
         if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
-        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build
+        # The shared evals/vitest.config.ts runs ALL eval suites' unit tests — incl.
+        # riley-recommendation (imports @switchboard/ad-optimizer) and alex-conversation
+        # (imports @switchboard/db) from dist — so every job running that config must
+        # build both (each depends only on already-built @switchboard/schemas/core).
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
 
       - name: Run eval unit tests
         if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
@@ -500,3 +532,70 @@ jobs:
       - name: Run governance-decision eval
         if: steps.filter.outputs.governance == 'true' || github.ref == 'refs/heads/main'
         run: pnpm eval:governance
+
+  eval-riley-recommendation:
+    name: Eval — Riley Recommendation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Filter riley-relevant paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # Empty token forces a local `git diff` against the base instead of the
+          # GitHub REST API (the default token's API access returns 401 in CI here).
+          token: ""
+          # Scope = exactly what the eval exercises. decideForCampaign reduces
+          # campaign metrics + learning status + economic tier into a label, so its
+          # inputs are the campaign-decision pipeline, the learning-phase guard it
+          # composes, and the ad-optimizer schemas the fixtures express.
+          filters: |
+            riley:
+              - '.github/workflows/ci.yml'
+              - 'evals/riley-recommendation/**'
+              - 'evals/vitest.config.ts'
+              - 'packages/ad-optimizer/src/campaign-decision.ts'
+              - 'packages/ad-optimizer/src/learning-phase-guard.ts'
+              - 'packages/ad-optimizer/src/recommendation-engine.ts'
+              - 'packages/ad-optimizer/src/metric-diagnostician.ts'
+              - 'packages/ad-optimizer/src/period-comparator.ts'
+              - 'packages/ad-optimizer/src/analyzers/economic-target.ts'
+              - 'packages/ad-optimizer/src/index.ts'
+              - 'packages/schemas/src/ad-optimizer.ts'
+              - 'packages/schemas/src/ad-optimizer-shared.ts'
+              - 'packages/schemas/src/crm-outcome.ts'
+
+      - name: Skip notice (no riley-relevant changes)
+        if: steps.filter.outputs.riley != 'true' && github.ref != 'refs/heads/main'
+        run: 'echo "Eval — Riley Recommendation skipped: no riley-relevant paths changed."'
+
+      - uses: pnpm/action-setup@v5
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+
+      - uses: actions/setup-node@v6
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages required by the harness
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+        # core (+ its @switchboard/schemas dep) for the alex/classifier/governance
+        # suites in the shared evals/vitest.config.ts; ad-optimizer for the riley suite;
+        # @switchboard/db for the alex-conversation suite (real PrismaBusinessFactsStore).
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
+
+      - name: Run eval unit tests
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm exec vitest run --config evals/vitest.config.ts
+
+      # Deterministic, model-free, DB-free — no ANTHROPIC_API_KEY needed. Blocking.
+      - name: Run riley-recommendation eval
+        if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm eval:riley

@@ -3,7 +3,18 @@ import { describe, it, expect } from "vitest";
 import { generateRecommendations } from "../recommendation-engine.js";
 import type { RecommendationInput } from "../recommendation-engine.js";
 import type { Diagnosis } from "../metric-diagnostician.js";
-import type { MetricDeltaSchema as MetricDelta } from "@switchboard/schemas";
+import type {
+  MetricDeltaSchema as MetricDelta,
+  RecommendationOutputSchema as RecommendationOutput,
+  WatchOutputSchema as WatchOutput,
+} from "@switchboard/schemas";
+
+/** Narrow the engine's `(RecommendationOutput | WatchOutput)[]` to just the
+ * recommendations. These cases all supply generous evidence so the Gate-2
+ * evidence floor never demotes a rec to a watch — the prior assertions hold. */
+function recs(result: (RecommendationOutput | WatchOutput)[]): RecommendationOutput[] {
+  return result.filter((r): r is RecommendationOutput => r.type === "recommendation");
+}
 
 function makeDelta(
   metric: string,
@@ -31,11 +42,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 5000,
       targetBreach: { periodsAboveTarget: 10, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const addCreative = result.find((r) => r.action === "add_creative");
+    const addCreative = recs(result).find((r) => r.action === "add_creative");
     expect(addCreative).toBeDefined();
     expect(addCreative?.urgency).toBe("this_week");
     expect(addCreative?.confidence).toBe(0.8);
@@ -51,11 +63,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 1000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const scale = result.find((r) => r.action === "scale");
+    const scale = recs(result).find((r) => r.action === "scale");
     expect(scale).toBeDefined();
     expect(scale?.urgency).toBe("this_week");
   });
@@ -70,11 +83,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 2000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const refresh = result.find((r) => r.action === "refresh_creative");
+    const refresh = recs(result).find((r) => r.action === "refresh_creative");
     expect(refresh).toBeDefined();
     expect(refresh?.confidence).toBe(0.85);
     expect(refresh?.urgency).toBe("this_week");
@@ -90,11 +104,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 1000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const scale = result.find((r) => r.action === "scale");
+    const scale = recs(result).find((r) => r.action === "scale");
     expect(scale).toBeDefined();
     const stepsText = scale!.steps.join(" ");
     expect(stepsText).toContain("20%");
@@ -110,6 +125,7 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 2000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
@@ -127,11 +143,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 2000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const refresh = result.find((r) => r.action === "refresh_creative");
+    const refresh = recs(result).find((r) => r.action === "refresh_creative");
     expect(refresh).toBeDefined();
     expect(refresh?.confidence).toBe(0.7);
   });
@@ -146,11 +163,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 2000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const restructure = result.find((r) => r.action === "restructure");
+    const restructure = recs(result).find((r) => r.action === "restructure");
     expect(restructure).toBeDefined();
     expect(restructure?.confidence).toBe(0.65);
     expect(restructure?.urgency).toBe("next_cycle");
@@ -166,11 +184,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 2000,
       targetBreach: { periodsAboveTarget: 2, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const hold = result.find((r) => r.action === "hold");
+    const hold = recs(result).find((r) => r.action === "hold");
     expect(hold).toBeDefined();
     expect(hold?.confidence).toBe(0.75);
     expect(hold?.urgency).toBe("this_week");
@@ -186,11 +205,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 5000,
       targetBreach: { periodsAboveTarget: 5, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const addCreative = result.find((r) => r.action === "add_creative");
+    const addCreative = recs(result).find((r) => r.action === "add_creative");
     expect(addCreative).toBeUndefined();
   });
 
@@ -204,11 +224,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 1000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const scale = result.find((r) => r.action === "scale");
+    const scale = recs(result).find((r) => r.action === "scale");
     expect(scale).toBeUndefined();
   });
 
@@ -222,12 +243,13 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 5000,
       targetBreach: { periodsAboveTarget: 10, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
     expect(result.length).toBeGreaterThan(0);
-    for (const rec of result) {
+    for (const rec of recs(result)) {
       expect(rec.type).toBe("recommendation");
       expect(rec.campaignId).toBe("camp-11");
       expect(rec.campaignName).toBe("Kill Campaign");
@@ -249,11 +271,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 5000,
       targetBreach: { periodsAboveTarget: 1, granularity: "weekly", isApproximate: true },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const review = result.find((r) => r.action === "review_budget");
+    const review = recs(result).find((r) => r.action === "review_budget");
     expect(review).toBeDefined();
     expect(review?.confidence).toBe(0.65);
   });
@@ -268,13 +291,14 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 5000,
       targetBreach: { periodsAboveTarget: 7, granularity: "weekly", isApproximate: true },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const addCreative = result.find((r) => r.action === "add_creative");
+    const addCreative = recs(result).find((r) => r.action === "add_creative");
     expect(addCreative).toBeUndefined();
-    const review = result.find((r) => r.action === "review_budget");
+    const review = recs(result).find((r) => r.action === "review_budget");
     expect(review).toBeDefined();
   });
 
@@ -288,13 +312,14 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 5000,
       targetBreach: { periodsAboveTarget: 10, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const addCreative = result.find((r) => r.action === "add_creative");
+    const addCreative = recs(result).find((r) => r.action === "add_creative");
     expect(addCreative).toBeDefined();
-    const pause = result.find((r) => r.action === "pause");
+    const pause = recs(result).find((r) => r.action === "pause");
     expect(pause).toBeUndefined();
   });
 
@@ -308,54 +333,15 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 5000,
       targetBreach: { periodsAboveTarget: 10, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const pause = result.find((r) => r.action === "pause");
+    const pause = recs(result).find((r) => r.action === "pause");
     expect(pause).toBeDefined();
     expect(pause?.urgency).toBe("immediate");
     expect(pause?.confidence).toBe(0.9);
-  });
-
-  it("recommends shift_budget_to_source when one source has much better trueRoas", () => {
-    const input: RecommendationInput = {
-      campaignId: "camp-shift",
-      campaignName: "Shift Source",
-      diagnoses: [],
-      deltas: [],
-      targetCPA: 100,
-      targetROAS: 3,
-      currentSpend: 5000,
-      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
-      sourceComparison: {
-        rows: [
-          {
-            source: "ctwa",
-            cpl: 4,
-            costPerQualified: 10,
-            costPerBooked: 30,
-            closeRate: 0.12,
-            trueRoas: 3.2,
-          },
-          {
-            source: "instant_form",
-            cpl: 2,
-            costPerQualified: 12,
-            costPerBooked: 50,
-            closeRate: 0.03,
-            trueRoas: 0.9,
-          },
-        ],
-      },
-    };
-
-    const result = generateRecommendations(input);
-
-    const shift = result.find((r) => r.action === "shift_budget_to_source");
-    expect(shift).toBeDefined();
-    expect(shift?.params?.from).toBe("instant_form");
-    expect(shift?.params?.to).toBe("ctwa");
   });
 
   it("recommends switch_optimization_event for CTWA optimizing on chats", () => {
@@ -368,114 +354,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 5000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    expect(result.some((r) => r.action === "switch_optimization_event")).toBe(true);
-  });
-
-  it("does NOT recommend shift_budget_to_source when only one source exists", () => {
-    const input: RecommendationInput = {
-      campaignId: "camp-shift-1",
-      campaignName: "Single Source",
-      diagnoses: [],
-      deltas: [],
-      targetCPA: 100,
-      targetROAS: 3,
-      currentSpend: 5000,
-      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
-      sourceComparison: {
-        rows: [
-          {
-            source: "ctwa",
-            cpl: 4,
-            costPerQualified: 10,
-            costPerBooked: 30,
-            closeRate: 0.12,
-            trueRoas: 3.2,
-          },
-        ],
-      },
-    };
-
-    const result = generateRecommendations(input);
-
-    expect(result.find((r) => r.action === "shift_budget_to_source")).toBeUndefined();
-  });
-
-  it("recommends shift_budget_to_source when trueRoas is exactly 2x", () => {
-    const input: RecommendationInput = {
-      campaignId: "camp-shift-2x",
-      campaignName: "Exact 2x ROAS",
-      diagnoses: [],
-      deltas: [],
-      targetCPA: 100,
-      targetROAS: 3,
-      currentSpend: 5000,
-      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
-      sourceComparison: {
-        rows: [
-          {
-            source: "ctwa",
-            cpl: 4,
-            costPerQualified: 10,
-            costPerBooked: 30,
-            closeRate: 0.1,
-            trueRoas: 2.0,
-          },
-          {
-            source: "instant_form",
-            cpl: 2,
-            costPerQualified: 12,
-            costPerBooked: 50,
-            closeRate: 0.05,
-            trueRoas: 1.0,
-          },
-        ],
-      },
-    };
-
-    const result = generateRecommendations(input);
-
-    expect(result.find((r) => r.action === "shift_budget_to_source")).toBeDefined();
-  });
-
-  it("does NOT recommend shift_budget_to_source when best closeRate is below 0.05", () => {
-    const input: RecommendationInput = {
-      campaignId: "camp-shift-low-close",
-      campaignName: "Low Close Rate",
-      diagnoses: [],
-      deltas: [],
-      targetCPA: 100,
-      targetROAS: 3,
-      currentSpend: 5000,
-      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
-      sourceComparison: {
-        rows: [
-          {
-            source: "ctwa",
-            cpl: 4,
-            costPerQualified: 10,
-            costPerBooked: 30,
-            closeRate: 0.04,
-            trueRoas: 5.0,
-          },
-          {
-            source: "instant_form",
-            cpl: 2,
-            costPerQualified: 12,
-            costPerBooked: 50,
-            closeRate: 0.01,
-            trueRoas: 1.0,
-          },
-        ],
-      },
-    };
-
-    const result = generateRecommendations(input);
-
-    expect(result.find((r) => r.action === "shift_budget_to_source")).toBeUndefined();
+    expect(recs(result).some((r) => r.action === "switch_optimization_event")).toBe(true);
   });
 
   it("emits harden_capi_attribution when capiAttributionStale flag is true", () => {
@@ -488,13 +372,13 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 5000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
-      sourceComparison: { rows: [] },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
       capiAttributionStale: true,
     };
 
     const result = generateRecommendations(input);
 
-    expect(result.find((r) => r.action === "harden_capi_attribution")).toBeDefined();
+    expect(recs(result).find((r) => r.action === "harden_capi_attribution")).toBeDefined();
   });
 
   it("does NOT emit harden_capi_attribution when capiAttributionStale is unset", () => {
@@ -507,12 +391,12 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 5000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
-      sourceComparison: { rows: [] },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    expect(result.find((r) => r.action === "harden_capi_attribution")).toBeUndefined();
+    expect(recs(result).find((r) => r.action === "harden_capi_attribution")).toBeUndefined();
   });
 
   it("adds learning phase reset warning to restructure recommendations", () => {
@@ -525,12 +409,52 @@ describe("generateRecommendations", () => {
       targetROAS: 3,
       currentSpend: 2000,
       targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 1000, conversions: 100, days: 7 },
     };
 
     const result = generateRecommendations(input);
 
-    const restructure = result.find((r) => r.action === "restructure");
+    const restructure = recs(result).find((r) => r.action === "restructure");
     expect(restructure).toBeDefined();
     expect(restructure?.learningPhaseImpact).toBe("will reset learning");
+  });
+
+  describe("Gate-2 evidence-floor abstention (direct engine coverage)", () => {
+    // CPA = 3x target + 9 daily breach days → the engine WOULD emit add_creative +
+    // pause if evidence were sufficient. With only 8 clicks / 0 conversions (well
+    // below destructive floor: 50 clicks / 5 conversions), Gate 2 demotes both to
+    // insufficient_evidence watches. This test would vacuously pass if the floor
+    // gating were removed — the assertion `not a destructive recommendation` is the
+    // guard (it would flip to a real add_creative/pause, breaking the test).
+    const subFloorInput: RecommendationInput = {
+      campaignId: "camp-sub-floor",
+      campaignName: "Thin Evidence Campaign",
+      diagnoses: [],
+      deltas: [makeDelta("cpa", 300, 100, "up", true)],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 2400,
+      targetBreach: { periodsAboveTarget: 9, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 8, conversions: 0, days: 7 }, // sub-floor: clicks<50, conversions<5
+    };
+
+    it("emits an insufficient_evidence watch instead of destructive recs when evidence is below floor", () => {
+      const result = generateRecommendations(subFloorInput);
+
+      const watches = result.filter((r): r is WatchOutput => r.type === "watch");
+      const insufficientEvidenceWatch = watches.find((w) => w.pattern === "insufficient_evidence");
+      expect(insufficientEvidenceWatch).toBeDefined();
+    });
+
+    it("does NOT emit the destructive recommendation when evidence is below floor", () => {
+      const result = generateRecommendations(subFloorInput);
+
+      // If floor gating were removed, add_creative/pause would appear here —
+      // that's the failure mode this test catches.
+      const destructiveRec = recs(result).find(
+        (r) => r.action === "add_creative" || r.action === "pause",
+      );
+      expect(destructiveRec).toBeUndefined();
+    });
   });
 });

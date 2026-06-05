@@ -18,12 +18,11 @@ describe("AnthropicToolCallingAdapter", () => {
       tools: [],
     });
 
-    expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1024,
-      }),
-    );
+    // Body is the first arg; a second per-request options arg (signal/timeout/
+    // maxRetries) is now also passed — assert on the body explicitly.
+    const body = mockCreate.mock.calls[0]![0] as { model: string; max_tokens: number };
+    expect(body.model).toBe("claude-sonnet-4-6");
+    expect(body.max_tokens).toBe(1024);
   });
 
   it("uses profile model when provided", async () => {
@@ -49,11 +48,8 @@ describe("AnthropicToolCallingAdapter", () => {
       profile,
     });
 
-    expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: "claude-haiku-4-5-20251001",
-      }),
-    );
+    const body = mockCreate.mock.calls[0]![0] as { model: string };
+    expect(body.model).toBe("claude-haiku-4-5-20251001");
   });
 
   it("uses profile maxTokens over default", async () => {
@@ -79,10 +75,7 @@ describe("AnthropicToolCallingAdapter", () => {
       profile,
     });
 
-    expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        max_tokens: 4096,
-      }),
-    );
+    const body = mockCreate.mock.calls[0]![0] as { max_tokens: number };
+    expect(body.max_tokens).toBe(4096);
   });
 });

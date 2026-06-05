@@ -117,6 +117,13 @@ export type {
 // Outbox Publisher (outbox → bus relay)
 export { OutboxPublisher } from "./events/outbox-publisher.js";
 
+// Reconciliation Runner (CRM↔Meta drift; consumed by the api reconciliation cron)
+export { ReconciliationRunner } from "./attribution/reconciliation-runner.js";
+export type {
+  ReconciliationDeps,
+  ReconciliationReport,
+} from "./attribution/reconciliation-runner.js";
+
 // LLM Client Interface + Adapters (Claude, Voyage)
 export * from "./llm/index.js";
 
@@ -132,6 +139,7 @@ export type {
 
 // Dialogue (emotional classification, naturalness, bilingual, post-validation)
 export { classifyEmotionalSignal } from "./dialogue/emotional-classifier.js";
+export { emotionalSignalToStage } from "./dialogue/dialogue-stage.js";
 export { NaturalnessPacketAssembler } from "./dialogue/naturalness-assembler.js";
 export { buildLocalisedSystemPrompt } from "./dialogue/system-prompt-builder.js";
 export { VariationPool } from "./dialogue/variation-pool.js";
@@ -210,7 +218,13 @@ export type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from ".
 
 // Model Router (slot-based model selection)
 export { ModelRouter } from "./model-router.js";
-export type { ModelSlot, ModelConfig, ResolveOptions, TierContext } from "./model-router.js";
+export type {
+  ModelSlot,
+  ModelConfig,
+  ResolveOptions,
+  TierContext,
+  DialogueStage,
+} from "./model-router.js";
 
 // Sessions (session runtime)
 export * from "./sessions/index.js";
@@ -294,8 +308,20 @@ export * as contacts from "./contacts/index.js";
 // Consent (reader interface, errors, PDPA utilities)
 export * from "./consent/index.js";
 
+// Scheduled Follow-Up (durable queue interface for Alex re-engagement nudges)
+export * from "./scheduled-follow-up/index.js";
+
+// Scheduled Reminder (idempotent booking-driven appointment reminder queue)
+export * from "./scheduled-reminder/index.js";
+
 // Route Templates (surface-URL injection contract — Route Governance Contract v1 §8.5)
 export type { RouteTemplates } from "./lib/route-templates.js";
 
 // Deployment Resolver (Prisma-backed implementation — used by api routes for skill-slug lookups)
 export { PrismaDeploymentResolver } from "./platform/prisma-deployment-resolver.js";
+
+// Exposed for the apps/api production-path integration test that proves operator
+// BusinessFacts reach the live Alex prompt through the real store + real builder.
+// Intentional narrow export — do NOT `export *` the skill-runtime barrel here
+// (collision/bloat risk against the existing root exports).
+export { alexBuilder } from "./skill-runtime/builders/alex.js";

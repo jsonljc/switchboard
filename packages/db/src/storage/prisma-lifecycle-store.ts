@@ -292,6 +292,20 @@ export class PrismaLifecycleStore implements ApprovalLifecycleStore {
     });
     return rows.map(toLifecycleRecord);
   }
+
+  async listRecoveryRequiredLifecycles(organizationId?: string): Promise<LifecycleRecord[]> {
+    const rows = await this.prisma.approvalLifecycle.findMany({
+      where: {
+        status: "recovery_required",
+        ...(organizationId ? { organizationId } : {}),
+      },
+    });
+    return rows.map(toLifecycleRecord);
+  }
+
+  async countDispatchRecords(executableWorkUnitId: string): Promise<number> {
+    return this.prisma.dispatchRecord.count({ where: { executableWorkUnitId } });
+  }
 }
 
 function toLifecycleRecord(row: {

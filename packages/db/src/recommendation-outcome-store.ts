@@ -6,8 +6,11 @@ import {
   type AttributableKind,
   type AttributableRecommendation,
   type AttributableRecommendationStore,
+  type BusinessContextStability,
+  type CausalStrength,
   type RecommendationOutcomeStore,
   type RileyOutcomeRow,
+  type TrustDelta,
 } from "@switchboard/core";
 
 export class RecommendationOutcomeAlreadyExistsError extends Error {
@@ -111,6 +114,9 @@ export class PrismaRecommendationOutcomeStore implements RecommendationOutcomeSt
           copyValues:
             row.copyValues === null ? Prisma.JsonNull : (row.copyValues as Prisma.InputJsonValue),
           visibilityFlags: row.visibilityFlags as Prisma.InputJsonValue,
+          causalStrength: row.causalStrength,
+          businessContextStable: row.businessContextStable,
+          trustDelta: row.trustDelta,
         },
       });
     } catch (err) {
@@ -170,8 +176,17 @@ export interface RecommendationOutcomeReadModel {
   windowEndedAt: Date;
   copyTemplate: string | null;
   copyValues: { deltaPct: number; windowDays: number } | null;
+  /** Slice-3 enrichments; null on rows predating slice 3 (honest absence). */
+  causalStrength: CausalStrength | null;
+  businessContextStable: BusinessContextStability | null;
+  trustDelta: TrustDelta | null;
   campaignId: string | null;
   campaignName: string | null;
+}
+
+/** Fail-closed enum narrowing: unexpected DB strings project as null (honest absence). */
+function narrowEnum<T extends string>(value: string | null, allowed: readonly T[]): T | null {
+  return value !== null && (allowed as readonly string[]).includes(value) ? (value as T) : null;
 }
 
 function projectReadModel(row: {
@@ -181,6 +196,9 @@ function projectReadModel(row: {
   windowEndedAt: Date;
   copyTemplate: string | null;
   copyValues: Prisma.JsonValue;
+  causalStrength: string | null;
+  businessContextStable: string | null;
+  trustDelta: string | null;
   recommendation: { targetEntities: Prisma.JsonValue; parameters: Prisma.JsonValue } | null;
 }): RecommendationOutcomeReadModel {
   const cv = row.copyValues as { deltaPct?: number; windowDays?: number } | null;
@@ -195,6 +213,19 @@ function projectReadModel(row: {
       cv && typeof cv.deltaPct === "number" && typeof cv.windowDays === "number"
         ? { deltaPct: cv.deltaPct, windowDays: cv.windowDays }
         : null,
+    // "corroborated" is legal on the READ side: reading a future slice-4
+    // value is not fabricating it (the engine never writes it this slice).
+    causalStrength: narrowEnum(row.causalStrength, [
+      "directional",
+      "corroborated",
+      "inconclusive",
+    ] as const),
+    businessContextStable: narrowEnum(row.businessContextStable, [
+      "stable",
+      "unstable",
+      "unknown",
+    ] as const),
+    trustDelta: narrowEnum(row.trustDelta, ["up", "none", "down"] as const),
     campaignId: campaign?.campaignId ?? null,
     campaignName: campaign?.campaignName ?? null,
   };

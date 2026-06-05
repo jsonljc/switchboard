@@ -12,7 +12,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     await requireDashboardSession();
     const client = await getApiClient();
     const data = await client.getBusinessFacts(id);
-    return NextResponse.json({ facts: data.config ?? null });
+    return NextResponse.json({ facts: data.config ?? null, status: data.status });
   } catch (err: unknown) {
     return proxyError(
       err instanceof Error ? { error: err.message } : {},

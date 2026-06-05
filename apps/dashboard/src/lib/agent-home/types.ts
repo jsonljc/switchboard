@@ -93,7 +93,7 @@ export interface WinsViewModel {
 // `revenue-attributed` exists in the union but is not the default for either
 // agent in Slice B (no per-agent attribution wiring on LifecycleRevenueEvent yet).
 export type HeroMetric =
-  | { kind: "tours-booked"; value: number; comparator: MetricComparator }
+  | { kind: "appointments-booked"; value: number; comparator: MetricComparator }
   | { kind: "ad-leads"; value: number; comparator: MetricComparator }
   | { kind: "creatives-shipped"; value: number; comparator: MetricComparator }
   | { kind: "revenue-attributed"; value: number; currency: string; comparator: MetricComparator };
@@ -112,6 +112,7 @@ export interface StatCell {
   rawValue: number | null;
   unit: "count" | "percent" | "currency";
   unavailable?: boolean;
+  hint?: string;
 }
 
 // This shape is mirrored at packages/core/src/agent-home/metrics.ts. The core
@@ -132,6 +133,7 @@ export interface MetricsViewModel {
   spendCents?: number | null;
   leads?: number;
   qualifiedPct?: number;
+  showed?: number;
   bookedDelta?: string | null;
   leadsDelta?: string | null;
   qualifiedDelta?: string | null;

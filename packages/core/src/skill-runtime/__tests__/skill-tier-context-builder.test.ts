@@ -57,7 +57,7 @@ describe("buildTierContext", () => {
 
   it("returns default tier for first turn with read-only tools", () => {
     const result = buildTierContext({
-      turnCount: 0,
+      conversationDepth: 0,
       declaredToolIds: ["crm-query"],
       tools: readOnlyTools,
       previousTurnHadToolUse: false,
@@ -65,42 +65,17 @@ describe("buildTierContext", () => {
     });
 
     expect(result).toEqual({
-      messageIndex: 0,
+      conversationDepth: 0,
       toolCount: 1,
-      hasHighRiskTools: false,
       previousTurnUsedTools: false,
       previousTurnEscalated: false,
       modelFloor: undefined,
     });
   });
 
-  it("flags hasHighRiskTools when external_write tool is declared", () => {
-    const result = buildTierContext({
-      turnCount: 1,
-      declaredToolIds: ["crm-write"],
-      tools: externalWriteTools,
-      previousTurnHadToolUse: false,
-      previousTurnEscalated: false,
-    });
-
-    expect(result.hasHighRiskTools).toBe(true);
-  });
-
-  it("flags hasHighRiskTools when destructive tool is declared", () => {
-    const result = buildTierContext({
-      turnCount: 1,
-      declaredToolIds: ["crm-delete"],
-      tools: destructiveTools,
-      previousTurnHadToolUse: false,
-      previousTurnEscalated: false,
-    });
-
-    expect(result.hasHighRiskTools).toBe(true);
-  });
-
   it("passes previousTurnUsedTools through", () => {
     const result = buildTierContext({
-      turnCount: 2,
+      conversationDepth: 2,
       declaredToolIds: ["crm-query"],
       tools: readOnlyTools,
       previousTurnHadToolUse: true,
@@ -112,7 +87,7 @@ describe("buildTierContext", () => {
 
   it("passes previousTurnEscalated through", () => {
     const result = buildTierContext({
-      turnCount: 2,
+      conversationDepth: 2,
       declaredToolIds: ["crm-query"],
       tools: readOnlyTools,
       previousTurnHadToolUse: false,
@@ -124,7 +99,7 @@ describe("buildTierContext", () => {
 
   it("sets modelFloor from minimumModelTier", () => {
     const result = buildTierContext({
-      turnCount: 0,
+      conversationDepth: 0,
       declaredToolIds: ["crm-query"],
       tools: readOnlyTools,
       previousTurnHadToolUse: false,
@@ -143,7 +118,7 @@ describe("buildTierContext", () => {
     ]);
 
     const result = buildTierContext({
-      turnCount: 0,
+      conversationDepth: 0,
       declaredToolIds: ["crm-query", "crm-write"],
       tools: mixedTools,
       previousTurnHadToolUse: false,
@@ -151,5 +126,30 @@ describe("buildTierContext", () => {
     });
 
     expect(result.toolCount).toBe(2);
+  });
+
+  it("threads currentStage through to the TierContext", () => {
+    const result = buildTierContext({
+      conversationDepth: 3,
+      declaredToolIds: [],
+      tools: new Map(),
+      previousTurnHadToolUse: false,
+      previousTurnEscalated: false,
+      currentStage: "fear",
+    });
+
+    expect(result.currentStage).toBe("fear");
+  });
+
+  it("leaves currentStage undefined when not provided", () => {
+    const result = buildTierContext({
+      conversationDepth: 3,
+      declaredToolIds: [],
+      tools: new Map(),
+      previousTurnHadToolUse: false,
+      previousTurnEscalated: false,
+    });
+
+    expect(result.currentStage).toBeUndefined();
   });
 });

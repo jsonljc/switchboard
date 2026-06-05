@@ -5,7 +5,12 @@ import type { MiraCreativeJobSummary } from "@switchboard/core";
 const mockCreative = vi.fn();
 const mockMutate = vi.fn();
 const mockEstimate = vi.fn();
-const mockApprove = { mutate: mockMutate, isPending: false, isError: false };
+const mockApprove: {
+  mutate: typeof mockMutate;
+  isPending: boolean;
+  isError: boolean;
+  data?: { pendingApproval: boolean };
+} = { mutate: mockMutate, isPending: false, isError: false, data: undefined };
 vi.mock("@/hooks/use-mira-creative", () => ({ useMiraCreative: () => mockCreative() }));
 vi.mock("@/hooks/use-creative-pipeline", () => ({
   useApproveStage: () => mockApprove,
@@ -34,6 +39,74 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     mockMutate.mockReset();
     mockEstimate.mockReset();
     mockEstimate.mockReturnValue({ data: null });
+    mockApprove.data = undefined;
+  });
+
+  it("renders the frame-QA line per verdict (slice-3), labeled as technical QA", () => {
+    const cases: Array<[MiraCreativeJobSummary["qa"], RegExp]> = [
+      [{ status: "evaluated", decision: "pass" }, /Frame QA: passed \(evaluated\)/i],
+      [{ status: "evaluated", decision: "fail" }, /Frame QA: rejected/i],
+      [{ status: "requires_human_review", decision: "review" }, /Frame QA: needs your eyes/i],
+    ];
+    for (const [qa, expected] of cases) {
+      mockCreative.mockReturnValue({
+        data: summary({
+          source: { engine: "legacy_creative_job", mode: "ugc" },
+          draft: { videoUrl: "https://x/u.mp4" },
+          qa,
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      const { unmount } = render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.getByText(expected)).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it("renders honest failed copy for an all-rejected job (never 'Still drafting')", () => {
+    mockCreative.mockReturnValue({
+      data: summary({
+        source: { engine: "legacy_creative_job", mode: "ugc" },
+        status: "failed",
+        reviewAction: { canContinue: false, canStop: false, label: "none" },
+        draft: { videoUrl: "https://x/rejected.mp4" },
+        qa: { status: "evaluated", decision: "fail" },
+      }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.getByText(/could not be completed/i)).toBeTruthy();
+    expect(screen.queryByText(/Still drafting/i)).toBeNull();
+    expect(screen.getByText(/Frame QA: rejected/i)).toBeTruthy();
+  });
+
+  it("no-video ugc header shows the phase, not 'Still drafting' (slice-3 spec 3.4)", () => {
+    mockCreative.mockReturnValue({
+      data: summary({
+        source: { engine: "legacy_creative_job", mode: "ugc" },
+        status: "awaiting_review",
+        stage: "trends",
+        ugcPhase: "production",
+        reviewAction: { canContinue: true, canStop: true, label: "continue_draft" },
+      }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.getByText(/filming the clip/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /continue draft/i })).toBeTruthy();
+  });
+
+  it("renders no frame-QA line when qa is absent", () => {
+    mockCreative.mockReturnValue({
+      data: summary({ draft: { videoUrl: "https://x/p.mp4" } }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.queryByText(/Frame QA/i)).toBeNull();
   });
 
   it("renders a UGC draft clip (no 'No draft clip yet')", () => {
@@ -75,7 +148,7 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     // No standalone "published" outside of the draft-only disclaimer
     const publishTexts = screen
       .queryAllByText(/published/i)
-      .filter((el) => !el.textContent?.includes("not published"));
+      .filter((el) => !el.textContent?.toLowerCase().includes("not published"));
     expect(publishTexts).toHaveLength(0);
   });
 
@@ -136,6 +209,22 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     expect(mockMutate).toHaveBeenCalledWith({ jobId: "j", action: "stop" });
   });
 
+  it("shows a pending-approval notice (not a completion) when a render is parked over the spend limit", () => {
+    mockApprove.data = { pendingApproval: true };
+    mockCreative.mockReturnValue({
+      data: summary({
+        reviewAction: { canContinue: true, canStop: true, label: "review_draft" },
+        draft: { videoUrl: "https://x/p.mp4" },
+      }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.getByText(/needs your sign-off|Queued for your approval/i)).toBeTruthy();
+    // Not framed as a failure.
+    expect(screen.queryByText(/try again/i)).toBeNull();
+  });
+
   it("shows 'Draft not found' (not load-error) when data is undefined and no error", () => {
     mockCreative.mockReturnValue({ data: undefined, isLoading: false, isError: false });
     render(<MiraCreativeDetailPage id="j" />);
@@ -148,5 +237,113 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     render(<MiraCreativeDetailPage id="j" />);
     expect(screen.getByText(/load this draft/i)).toBeTruthy();
     expect(screen.queryByText(/Draft not found/i)).toBeNull();
+  });
+
+  describe("performance block (slice-2 measured attribution)", () => {
+    it("renders nothing when the summary has no performance projection", () => {
+      mockCreative.mockReturnValue({
+        data: summary({ draft: { videoUrl: "https://x/p.mp4" } }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.queryByText("Performance")).toBeNull();
+    });
+
+    it("renders 'No delivery yet' for a published-but-parked creative", () => {
+      mockCreative.mockReturnValue({
+        data: summary({
+          draft: { videoUrl: "https://x/p.mp4" },
+          performance: {
+            asOf: "2026-06-04T06:30:00.000Z",
+            delivery: "no_delivery",
+            spend: 0,
+            trueRoas: null,
+            bookedValueCents: 0,
+            bookedCount: 0,
+            metaConversions: 0,
+          },
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.getByText("Performance")).toBeInTheDocument();
+      expect(screen.getByText(/No delivery yet/i)).toBeInTheDocument();
+    });
+
+    it("renders measured numbers WITH the as-of date (never an undated number)", () => {
+      mockCreative.mockReturnValue({
+        data: summary({
+          draft: { videoUrl: "https://x/p.mp4" },
+          performance: {
+            asOf: "2026-06-04T06:30:00.000Z",
+            delivery: "measured",
+            spend: 50,
+            trueRoas: 5,
+            bookedValueCents: 25000,
+            bookedCount: 2,
+            metaConversions: 3,
+          },
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.getByText("Performance")).toBeInTheDocument();
+      expect(screen.getByText(/\$50\.00 spent/)).toBeInTheDocument();
+      expect(screen.getByText(/5\.0x trueROAS/)).toBeInTheDocument();
+      expect(screen.getByText(/\$250\.00 booked \(2\)/)).toBeInTheDocument();
+      expect(screen.getByText(/3 Meta-reported conversions/)).toBeInTheDocument();
+      expect(screen.getByText(/as of Jun 4, 2026/)).toBeInTheDocument();
+    });
+
+    it("renders measured-with-no-bookings honestly (no fabricated 0x)", () => {
+      mockCreative.mockReturnValue({
+        data: summary({
+          draft: { videoUrl: "https://x/p.mp4" },
+          performance: {
+            asOf: "2026-06-04T06:30:00.000Z",
+            delivery: "measured",
+            spend: 12.5,
+            trueRoas: null,
+            bookedValueCents: 0,
+            bookedCount: 0,
+            metaConversions: 1,
+          },
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.getByText(/\$12\.50 spent/)).toBeInTheDocument();
+      expect(screen.getByText(/no booked revenue attributed yet/i)).toBeInTheDocument();
+      expect(screen.getByText(/1 Meta-reported conversion/)).toBeInTheDocument();
+      expect(screen.queryByText(/0\.0x trueROAS/)).toBeNull();
+      expect(screen.getByText(/as of Jun 4, 2026/)).toBeInTheDocument();
+    });
+
+    it("suppresses the Meta-conversions line at zero (generic field is often empty) but keeps the booked-revenue hint", () => {
+      mockCreative.mockReturnValue({
+        data: summary({
+          draft: { videoUrl: "https://x/p.mp4" },
+          performance: {
+            asOf: "2026-06-04T06:30:00.000Z",
+            delivery: "measured",
+            spend: 20,
+            trueRoas: null,
+            bookedValueCents: 0,
+            bookedCount: 0,
+            metaConversions: 0,
+          },
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.queryByText(/Meta-reported conversion/)).toBeNull();
+      expect(screen.getByText(/no booked revenue attributed yet/i)).toBeInTheDocument();
+      expect(screen.getByText(/as of Jun 4, 2026/)).toBeInTheDocument();
+    });
   });
 });

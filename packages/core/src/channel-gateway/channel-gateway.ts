@@ -14,6 +14,7 @@ import { handleApprovalResponse } from "./handle-approval-response.js";
 import { isOptOutKeyword } from "./opt-out-keywords.js";
 import { runPreInputGate } from "./pre-input-gate.js";
 import { runConsentRevocationGate } from "./consent-revocation-gate.js";
+import { getMetrics } from "../telemetry/metrics.js";
 import { runConsentEnforcementGate } from "./consent-enforcement-gate.js";
 
 const OPT_OUT_CONFIRMATION =
@@ -62,6 +63,27 @@ async function dispatchResponse(params: {
   }
 
   if (response.ok) {
+    if (response.result.outcome === "failed") {
+      // A failed SkillMode result must never surface its internal error string to
+      // the lead. Like the ok:false branch below, this sends ONLY the framework-
+      // generated technical-failure notice (no agent/composer-authored text), so it
+      // is permitted to bypass the consent gate.
+      getMetrics().rawErrorFallback.inc({
+        deploymentId: resolved.deploymentId,
+        code: response.result.error?.code ?? "unknown",
+      });
+      try {
+        await conversationStore.addMessage(
+          conversationId,
+          "assistant",
+          "[suppressed:execution_failed]",
+        );
+      } catch (err) {
+        console.error("[channel-gateway] execution-failure marker persist failed", err);
+      }
+      await replySink.send("I'm having trouble right now. Let me connect you with the team.");
+      return;
+    }
     const text =
       typeof response.result.outputs.response === "string"
         ? response.result.outputs.response

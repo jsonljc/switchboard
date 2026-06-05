@@ -38,6 +38,20 @@ interface CreativeJobFilters {
   offset?: number;
 }
 
+/** Narrow row the taste sweep consumes (slice 2): identity + descriptor inputs + watermark. */
+export interface TasteCandidate {
+  id: string;
+  organizationId: string;
+  deploymentId: string;
+  mode: string;
+  stageOutputs: unknown;
+  /** UGC outputs (slice-3 spec 3.4): the descriptor's source for ugc jobs. */
+  ugcPhaseOutputs: unknown;
+  reviewDecision: string | null;
+  reviewDecidedAt: Date | null;
+  tasteCapturedAt: Date | null;
+}
+
 export class PrismaCreativeJobStore {
   constructor(private prisma: PrismaDbClient) {}
 
@@ -140,6 +154,156 @@ export class PrismaCreativeJobStore {
     if (result.count === 0) throw new StaleVersionError(id, -1, -1);
     const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
     return row as unknown as CreativeJob;
+  }
+
+  /**
+   * Persist Meta publish checkpoint fields. Org-scoped updateMany (doctrine #12);
+   * count===0 ⇒ missing/cross-org ⇒ throw. Called once per Meta object created so
+   * the publish handler is resumable (each id is a checkpoint).
+   */
+  async updatePublishFields(
+    organizationId: string,
+    id: string,
+    fields: Partial<
+      Pick<
+        CreativeJob,
+        | "metaVideoId"
+        | "metaCampaignId"
+        | "metaAdSetId"
+        | "metaCreativeId"
+        | "metaAdId"
+        | "metaPublishStatus"
+      >
+    >,
+  ): Promise<CreativeJob> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: fields,
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
+  }
+
+  /**
+   * Persist the durable assembled-creative URL (PR A producer write). Org-scoped
+   * updateMany (doctrine #12); count===0 ⇒ missing/cross-org ⇒ throw. Consumed by
+   * the creative.job.publish precondition (assertPublishable).
+   */
+  async setDurableAsset(organizationId: string, id: string, url: string): Promise<CreativeJob> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: { durableAssetUrl: url },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
+  }
+
+  /**
+   * Persist the attribution sweep's measured-performance snapshot (slice 2).
+   * Org-scoped updateMany (doctrine #12); count===0 ⇒ missing/cross-org ⇒
+   * throw StaleVersionError (the sweep treats it as a benign vanished-job
+   * skip). Returns void: the daily sweep writes every published job and never
+   * needs the row back (unlike the publish checkpoints above).
+   */
+  async setPastPerformance(
+    organizationId: string,
+    id: string,
+    performance: Record<string, unknown>,
+  ): Promise<void> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: { pastPerformance: performance as object },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+  }
+
+  /**
+   * Published jobs = those with a Meta campaign checkpoint (set by the slice-1
+   * publish path). The attribution sweep's working set; oldest first so window
+   * derivation reads the earliest createdAt naturally.
+   */
+  async listPublished(organizationId: string): Promise<CreativeJob[]> {
+    return this.prisma.creativeJob.findMany({
+      where: { organizationId, metaCampaignId: { not: null } },
+      orderBy: { createdAt: "asc" },
+    }) as unknown as CreativeJob[];
+  }
+
+  /**
+   * Slice-2 taste-sweep watermark: stores the OBSERVED reviewDecidedAt (never
+   * wall-clock), so a re-decision landing mid-sweep stays strictly newer and
+   * is re-observed next run. Org-scoped updateMany (doctrine #12); count===0
+   * throws StaleVersionError.
+   */
+  async setTasteCapturedAt(
+    organizationId: string,
+    id: string,
+    observedDecidedAt: Date,
+  ): Promise<void> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: { tasteCapturedAt: observedDecidedAt },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+  }
+
+  /**
+   * Decided jobs whose gesture is not yet captured: tasteCapturedAt null OR
+   * reviewDecidedAt strictly newer. Two legs so the SQL cap bounds PENDING
+   * work, never history (an oldest-first cap over ALL decided rows would fill
+   * with already-captured rows once lifetime decisions exceed it and silently
+   * starve new gestures forever):
+   *
+   *   leg 1: never-captured rows (tasteCapturedAt null), oldest decision
+   *          first — the dominant case, fully SQL-bounded.
+   *   leg 2: captured rows, NEWEST decision first — a pending re-decision has
+   *          a fresh reviewDecidedAt by construction (the route stamps now()
+   *          on every decision write), so it always sorts into the window;
+   *          the column-to-column watermark compare (not expressible in a
+   *          Prisma where) runs in JS on this bounded set.
+   *
+   * Merged oldest-decision-first. Cross-org by design (system cron read);
+   * every WRITE stays org-scoped per row.
+   */
+  async listTasteCandidates(limit: number): Promise<TasteCandidate[]> {
+    const select = {
+      id: true,
+      organizationId: true,
+      deploymentId: true,
+      mode: true,
+      stageOutputs: true,
+      ugcPhaseOutputs: true,
+      reviewDecision: true,
+      reviewDecidedAt: true,
+      tasteCapturedAt: true,
+    } as const;
+
+    const uncaptured = (await this.prisma.creativeJob.findMany({
+      where: { reviewDecision: { not: null }, tasteCapturedAt: null },
+      select,
+      orderBy: { reviewDecidedAt: "asc" },
+      take: limit,
+    })) as TasteCandidate[];
+
+    const captured = (await this.prisma.creativeJob.findMany({
+      where: { reviewDecision: { not: null }, tasteCapturedAt: { not: null } },
+      select,
+      orderBy: { reviewDecidedAt: "desc" },
+      take: limit,
+    })) as TasteCandidate[];
+
+    const redecided = captured.filter(
+      (r) =>
+        r.reviewDecidedAt != null &&
+        r.tasteCapturedAt != null &&
+        r.reviewDecidedAt.getTime() > r.tasteCapturedAt.getTime(),
+    );
+
+    return [...uncaptured.filter((r) => r.reviewDecidedAt != null), ...redecided]
+      .sort((a, b) => a.reviewDecidedAt!.getTime() - b.reviewDecidedAt!.getTime())
+      .slice(0, limit);
   }
 
   // ── UGC methods ──

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import { ConfirmSheet } from "@/components/decisions/swipe-decision-card";
+import { QueryStates } from "@/components/query-states";
 import { useDecisionFeed } from "@/hooks/use-decision-feed";
 import { useTenantContext } from "@/hooks/use-query-keys";
 import { mapToDecisionCard } from "@/lib/decisions/map-to-decision-card";
@@ -22,9 +23,14 @@ import type { Decision } from "@/lib/decisions/types";
 import { useRightDrawer } from "./right-drawer-context";
 import "./inbox-drawer.css";
 
-function describeTotal(total: number, isLoading: boolean, isError: boolean): string {
-  if (isLoading) return "Reading…";
-  if (isError) return "Couldn't load.";
+/**
+ * Subtitle copy for the drawer header. Derived from {hasData, error} so it is
+ * keys-pending-safe: a disabled query reports isLoading:false with no data, so
+ * a `isLoading`-based gate would false-show "You're caught up." Mirror the body
+ * precedence (data ▸ error ▸ reading) instead.
+ */
+function describeTotal(total: number, hasData: boolean, isError: boolean): string {
+  if (!hasData) return isError ? "Couldn't load." : "Reading…";
   if (total === 0) return "You're caught up.";
   return `${total} pending across your team.`;
 }
@@ -44,11 +50,11 @@ export function InboxDrawer() {
   const drawer = useRightDrawer();
   const open = drawer.kind === "inbox";
   const setOpen = (next: boolean) => (next ? drawer.open("inbox") : drawer.close());
-  const { data, isLoading, isError } = useDecisionFeed(null);
+  const feedQuery = useDecisionFeed(null);
+  const { data, isError } = feedQuery;
   const tenant = useTenantContext();
   const queryClient = useQueryClient();
 
-  const decisions = data?.decisions ?? [];
   const total = data?.counts.total ?? 0;
   const tenantReady = !!tenant;
 
@@ -120,52 +126,50 @@ export function InboxDrawer() {
         </SheetTrigger>
         <SheetContent side="right" className="inbox-drawer sm:max-w-[28rem]">
           <SheetHeader>
-            <SheetTitle className="font-display">Inbox</SheetTitle>
-            <SheetDescription>{describeTotal(total, isLoading, isError)}</SheetDescription>
+            <SheetTitle className="drawer-title">Inbox</SheetTitle>
+            <SheetDescription>{describeTotal(total, data != null, isError)}</SheetDescription>
           </SheetHeader>
-          {isLoading && !data ? (
-            <p className="empty-state">
-              <em>Reading your inbox…</em>
-            </p>
-          ) : isError ? (
-            <p className="empty-state">
-              <em>Couldn&apos;t load your inbox.</em>
-            </p>
-          ) : total === 0 ? (
-            <p className="empty-state">
-              <em>
+          <QueryStates
+            query={feedQuery}
+            isEmpty={(d) => d.counts.total === 0}
+            loading={<p className="empty-state">Reading your inbox…</p>}
+            error={<p className="empty-state">Couldn&apos;t load your inbox.</p>}
+            empty={
+              <p className="empty-state">
                 You&apos;re caught up across your team. I&apos;ll write again when something needs
                 you.
-              </em>
-            </p>
-          ) : (
-            <div className="decisions" data-testid="inbox-list">
-              {decisions.map((d, i) => {
-                const card = mapToDecisionCard(d, i);
-                const agent = AGENT_REGISTRY[d.agentKey];
-                const agentName = agent?.displayName ?? d.agentKey;
-                const folioWithAgent = {
-                  ...card.folio,
-                  kindLabel: `${agentName} · ${card.folio.kindLabel}`,
-                };
-                return (
-                  <div
-                    key={d.id}
-                    data-agent={d.agentKey}
-                    className="inbox-item"
-                    style={{ "--inbox-agent-accent": agent?.accent } as CSSProperties}
-                  >
-                    <DecisionCard
-                      {...card}
-                      folio={folioWithAgent}
-                      onPrimary={() => handleAction(d, "primary")}
-                      onSecondary={() => void commitAction(d, "secondary")}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          )}
+              </p>
+            }
+          >
+            {(feed) => (
+              <div className="decisions" data-testid="inbox-list">
+                {feed.decisions.map((d, i) => {
+                  const card = mapToDecisionCard(d, i);
+                  const agent = AGENT_REGISTRY[d.agentKey];
+                  const agentName = agent?.displayName ?? d.agentKey;
+                  const folioWithAgent = {
+                    ...card.folio,
+                    kindLabel: `${agentName} · ${card.folio.kindLabel}`,
+                  };
+                  return (
+                    <div
+                      key={d.id}
+                      data-agent={d.agentKey}
+                      className="inbox-item"
+                      style={{ "--inbox-agent-accent": agent?.accent } as CSSProperties}
+                    >
+                      <DecisionCard
+                        {...card}
+                        folio={folioWithAgent}
+                        onPrimary={() => handleAction(d, "primary")}
+                        onSecondary={() => void commitAction(d, "secondary")}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </QueryStates>
         </SheetContent>
       </Sheet>
 

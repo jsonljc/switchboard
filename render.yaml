@@ -71,9 +71,18 @@ services:
         sync: false
       - key: VOYAGE_API_KEY
         sync: false
-      - key: META_ADS_ACCESS_TOKEN
+      # Meta WhatsApp/Ads via the Tech Provider model: system-user token, app
+      # secret (webhook-signature verification), and webhook verify token.
+      # Supersedes the removed per-account META_ADS_ACCESS_TOKEN/META_ADS_ACCOUNT_ID.
+      - key: META_SYSTEM_USER_TOKEN
         sync: false
-      - key: META_ADS_ACCOUNT_ID
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_WEBHOOK_VERIFY_TOKEN
+        sync: false
+      # App-scoped WhatsApp Graph token for provisioning/health checks — distinct
+      # from META_SYSTEM_USER_TOKEN (the Tech-Provider token for client WABAs).
+      - key: WHATSAPP_GRAPH_TOKEN
         sync: false
       # Public-safe — surfaced in browser-side Meta Pixel events.
       # `sync: false` here is not about secrecy but about forcing the operator
@@ -88,6 +97,48 @@ services:
       - key: INNGEST_EVENT_KEY
         sync: false
       - key: INNGEST_SIGNING_KEY
+        sync: false
+      # Session + setup auth. SESSION_TOKEN_SECRET is required for the app to mint
+      # session tokens — absent, /api/sessions and every authed route fail closed.
+      - key: SESSION_TOKEN_SECRET
+        sync: false
+      - key: INTERNAL_SETUP_SECRET
+        sync: false
+      # Transactional email (Resend). Absent => onboarding/notification email
+      # silently no-ops (RESEND_API_KEY gates send; EMAIL_FROM is the from-address).
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      # Public chat-service URLs: webhook base + widget-embed snippet host.
+      # (Code prefers CHAT_PUBLIC_URL; the SWITCHBOARD_CHAT_URL alias is only a
+      # fallback and is intentionally not duplicated here.)
+      - key: CHAT_PUBLIC_URL
+        sync: false
+      - key: CHAT_SERVER_URL
+        sync: false
+      # Creative-pipeline SSRF allow-list (comma-separated host regexes).
+      - key: CREATIVE_PIPELINE_ALLOWED_HOSTS
+        sync: false
+      # Creative-pipeline durable asset storage (S3-compatible; R2 by default).
+      # Absent => rendered creatives are not durable and creative.job.publish
+      # fails loud CREATIVE_ASSET_NOT_DURABLE. Bucket must be public-read at
+      # CREATIVE_ASSET_PUBLIC_BASE_URL (objects use unguessable keys).
+      - key: CREATIVE_ASSET_BUCKET
+        sync: false
+      - key: CREATIVE_ASSET_S3_ENDPOINT
+        sync: false
+      - key: CREATIVE_ASSET_REGION
+        sync: false
+      - key: CREATIVE_ASSET_ACCESS_KEY_ID
+        sync: false
+      - key: CREATIVE_ASSET_SECRET_ACCESS_KEY
+        sync: false
+      - key: CREATIVE_ASSET_PUBLIC_BASE_URL
+        sync: false
+      # Comma-separated allowed CORS origins; MUST include the Vercel dashboard URL
+      # or all dashboard->API calls are rejected in prod (origin:false fail-closed).
+      - key: CORS_ORIGIN
         sync: false
       - key: SENTRY_DSN_SERVER
         sync: false
@@ -138,6 +189,9 @@ services:
         sync: false
       - key: SWITCHBOARD_API_URL
         value: http://switchboard-api:3000 # Render private network: http://<service-name>:<PORT>. PORT for api is 3000 (set above).
+      # Public URL of THIS chat service — used to render the widget-embed <script src>.
+      - key: CHAT_SERVER_URL
+        sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_WEBHOOK_SECRET
@@ -147,8 +201,6 @@ services:
       - key: WHATSAPP_PHONE_NUMBER_ID
         sync: false
       - key: WHATSAPP_APP_SECRET
-        sync: false
-      - key: WHATSAPP_VERIFY_TOKEN
         sync: false
       - key: SLACK_BOT_TOKEN
         sync: false

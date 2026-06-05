@@ -85,6 +85,12 @@ describe("buildMetaLeadIntakeWorkflow", () => {
     const inquiryCall = submitChildWork.mock.calls[1]![0];
     expect(inquiryCall.intent).toBe("meta.lead.inquiry.record");
     expect(inquiryCall.parameters.contactId).toBe("contact_1");
+
+    // Each child carries a deterministic idempotency key derived from the leadgen
+    // id so a redelivered Meta webhook can't double-send the billable greeting or
+    // double-record the inquiry (PlatformIngress's claim-first guard dedups on it).
+    expect(greetingCall.idempotencyKey).toBe("meta-greeting:lead_1");
+    expect(inquiryCall.idempotencyKey).toBe("meta-inquiry:lead_1");
   });
 
   it("treats adapter duplicate=true as a no-op (no double greeting)", async () => {

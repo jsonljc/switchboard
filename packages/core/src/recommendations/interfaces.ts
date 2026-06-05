@@ -54,9 +54,14 @@ export interface RecommendationStore {
     limit: number;
   }): Promise<{ rows: Recommendation[]; totalCount: number }>;
 
-  /** Atomic UPDATE + AuditEntry insert. Returns the updated row. */
+  /**
+   * Atomic UPDATE + AuditEntry insert. Returns the updated row. `orgId` scopes
+   * the read + mutation so the store is self-isolating: a cross-tenant `id`
+   * resolves to "not found" even if a caller skips its own pre-check.
+   */
   applyAct(args: {
     id: string;
+    orgId: string;
     actor: { principalId: string; type: "operator" };
     fromStatus: RecommendationStatus;
     toStatus: RecommendationStatus;

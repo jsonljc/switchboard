@@ -1,0 +1,180 @@
+import { it, expect, vi } from "vitest";
+import { BookingSlotConflictError } from "@switchboard/schemas";
+import { buildRescheduleOperations } from "./calendar-reschedule.js";
+
+const ctx = { orgId: "org-1", contactId: "c-1" } as never;
+const upcoming = [
+  {
+    id: "b1",
+    calendarEventId: "evt-1",
+    service: "botox",
+    startsAt: new Date("2026-06-12T02:00:00Z"),
+    endsAt: new Date("2026-06-12T03:00:00Z"),
+    status: "confirmed",
+  },
+];
+
+function deps(over: Record<string, unknown> = {}) {
+  return {
+    calendarProviderFactory: vi.fn().mockResolvedValue({
+      rescheduleBooking: vi.fn().mockResolvedValue({}),
+      cancelBooking: vi.fn().mockResolvedValue(undefined),
+    }),
+    isCalendarProviderConfigured: () => true,
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue(upcoming),
+      reschedule: vi.fn().mockResolvedValue({ id: "b1" }),
+      cancel: vi.fn().mockResolvedValue({ id: "b1" }),
+    },
+    ...over,
+  };
+}
+
+it("reschedule resolves the soonest booking from ctx.contactId and ignores a model contactId", async () => {
+  const d = deps();
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.reschedule"]!.execute({
+    slotStart: "2026-06-13T02:00:00Z",
+    slotEnd: "2026-06-13T03:00:00Z",
+    calendarId: "primary",
+    contactId: "ATTACKER",
+  });
+  expect(d.bookingStore.findUpcomingByContact).toHaveBeenCalledWith("org-1", "c-1");
+  expect(res.status).toBe("success");
+});
+
+it("returns NO_UPCOMING_BOOKING when the contact has none", async () => {
+  const d = deps({
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue([]),
+      reschedule: vi.fn(),
+      cancel: vi.fn(),
+    },
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({});
+  expect(res.status).toBe("error");
+  expect(res.error?.code).toBe("NO_UPCOMING_BOOKING");
+});
+
+it("cancel cancels the booking in the DB and deletes the calendar event", async () => {
+  const d = deps();
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({});
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const provider = await d.calendarProviderFactory.mock.results[0]!.value;
+  expect(d.bookingStore.cancel).toHaveBeenCalledWith("org-1", "b1");
+  expect(provider.cancelBooking).toHaveBeenCalledWith("evt-1");
+  expect(res.status).toBe("success");
+});
+
+it("reschedule increments via store after the provider patch", async () => {
+  const d = deps();
+  await buildRescheduleOperations(ctx, d as never)["booking.reschedule"]!.execute({
+    slotStart: "2026-06-13T02:00:00Z",
+    slotEnd: "2026-06-13T03:00:00Z",
+    calendarId: "primary",
+  });
+  expect(d.bookingStore.reschedule).toHaveBeenCalledWith(
+    "org-1",
+    "b1",
+    expect.objectContaining({ startsAt: expect.any(Date), endsAt: expect.any(Date) }),
+  );
+});
+
+it("reschedule onto a held slot surfaces SLOT_TAKEN (retryable) not a raw failure", async () => {
+  const d = deps({
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue(upcoming),
+      reschedule: vi.fn().mockRejectedValue(new BookingSlotConflictError("x")),
+      cancel: vi.fn(),
+    },
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.reschedule"]!.execute({
+    slotStart: "2026-06-13T02:00:00Z",
+    slotEnd: "2026-06-13T03:00:00Z",
+    calendarId: "primary",
+  });
+  expect(res.status).toBe("error");
+  expect(res.error?.code).toBe("SLOT_TAKEN");
+  expect(res.error?.retryable).toBe(true);
+});
+
+it("reschedule fails gracefully when the provider factory throws", async () => {
+  const d = deps({
+    calendarProviderFactory: vi.fn().mockRejectedValue(new Error("provider boom")),
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.reschedule"]!.execute({
+    slotStart: "2026-06-13T02:00:00Z",
+    slotEnd: "2026-06-13T03:00:00Z",
+    calendarId: "primary",
+  });
+  expect(res.status).toBe("error");
+  expect(res.error?.code).toBe("CALENDAR_PROVIDER_ERROR");
+});
+
+it("cancel fails gracefully when the provider factory throws", async () => {
+  const d = deps({
+    calendarProviderFactory: vi.fn().mockRejectedValue(new Error("provider boom")),
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({});
+  expect(res.status).toBe("error");
+  expect(res.error?.code).toBe("CALENDAR_PROVIDER_ERROR");
+});
+
+it("reschedule reverts the calendar event to the original slot when the durable write rejects", async () => {
+  // The provider moves the event to the new slot, THEN the store overlap-guard rejects:
+  // the event must be reverted to the original slot so calendar and DB don't diverge.
+  const rescheduleBooking = vi.fn().mockResolvedValue({});
+  const d = deps({
+    calendarProviderFactory: vi.fn().mockResolvedValue({
+      rescheduleBooking,
+      cancelBooking: vi.fn().mockResolvedValue(undefined),
+    }),
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue(upcoming),
+      reschedule: vi.fn().mockRejectedValue(new BookingSlotConflictError("x")),
+      cancel: vi.fn(),
+    },
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.reschedule"]!.execute({
+    slotStart: "2026-06-13T02:00:00Z",
+    slotEnd: "2026-06-13T03:00:00Z",
+    calendarId: "primary",
+  });
+  expect(res.error?.code).toBe("SLOT_TAKEN");
+  // moved to the new slot, then reverted to the ORIGINAL slot (b1: 2026-06-12T02:00→03:00Z)
+  expect(rescheduleBooking).toHaveBeenCalledTimes(2);
+  expect(rescheduleBooking).toHaveBeenLastCalledWith(
+    "evt-1",
+    expect.objectContaining({ start: "2026-06-12T02:00:00.000Z", end: "2026-06-12T03:00:00.000Z" }),
+  );
+});
+
+it("cancel still succeeds (booking cancelled in DB) when the calendar event delete fails", async () => {
+  const d = deps({
+    calendarProviderFactory: vi.fn().mockResolvedValue({
+      rescheduleBooking: vi.fn(),
+      cancelBooking: vi.fn().mockRejectedValue(new Error("calendar down")),
+    }),
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({});
+  expect(res.status).toBe("success");
+  expect((res.data as { status?: string }).status).toBe("cancelled");
+  expect(d.bookingStore.cancel).toHaveBeenCalledWith("org-1", "b1");
+});
+
+it("cancel returns CANCEL_FAILURE and does NOT delete the calendar event when the DB cancel fails", async () => {
+  const cancelBooking = vi.fn().mockResolvedValue(undefined);
+  const d = deps({
+    calendarProviderFactory: vi.fn().mockResolvedValue({
+      rescheduleBooking: vi.fn(),
+      cancelBooking,
+    }),
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue(upcoming),
+      reschedule: vi.fn(),
+      cancel: vi.fn().mockRejectedValue(new Error("db down")),
+    },
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({});
+  expect(res.error?.code).toBe("CANCEL_FAILURE");
+  expect(cancelBooking).not.toHaveBeenCalled();
+});

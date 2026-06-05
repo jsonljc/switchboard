@@ -26,53 +26,39 @@ function buildDeploymentRow(orgId: string) {
   };
 }
 
+// The resolver still runs in-route (to supply deploymentId/listingId to the submit),
+// so prisma only needs agentDeployment + deploymentConnection. The AgentTask/CreativeJob
+// writes + the pipeline kick now belong to the creative.job.submit WORKFLOW (post-
+// governance), NOT this route — so there are NO direct creativeJob/inngest writes here.
 function buildPrismaMock() {
   return {
     agentDeployment: {
       findUnique: vi.fn().mockResolvedValue(null),
       findFirst: vi
         .fn()
-        .mockImplementation(
-          async (args: {
-            where?: { organizationId?: string; skillSlug?: string; status?: string };
-          }) => {
-            const { organizationId } = args?.where ?? {};
-            if (organizationId === PILOT) return buildDeploymentRow(PILOT);
-            return null;
-          },
-        ),
+        .mockImplementation(async (args: { where?: { organizationId?: string } }) => {
+          const { organizationId } = args?.where ?? {};
+          if (organizationId === PILOT) return buildDeploymentRow(PILOT);
+          return null;
+        }),
     },
-    deploymentConnection: {
-      findFirst: vi.fn().mockResolvedValue(null),
-    },
-    agentTask: {
-      create: vi.fn().mockResolvedValue({ id: "task-001" }),
-    },
-    creativeJob: {
-      create: vi.fn().mockResolvedValue({ id: "job-001", organizationId: PILOT }),
-    },
-    // NO-CROSS-AGENT guards: these must never be called
-    recommendation: {
-      create: vi.fn(),
-    },
-    campaign: {
-      create: vi.fn(),
-    },
+    deploymentConnection: { findFirst: vi.fn().mockResolvedValue(null) },
+    // These must never be written by the route anymore.
+    agentTask: { create: vi.fn() },
+    creativeJob: { create: vi.fn() },
   };
 }
 
-// Module-level reference so it() blocks can assert on stubs directly (no ctx.spies).
 let prismaMock: ReturnType<typeof buildPrismaMock>;
 
-// Stub inngestClient.send so no real Inngest call occurs.
+const { inngestSend } = vi.hoisted(() => ({ inngestSend: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@switchboard/creative-pipeline", () => ({
-  inngestClient: {
-    send: vi.fn().mockResolvedValue(undefined),
-  },
+  inngestClient: { send: inngestSend },
 }));
 
-describe("POST /agents/mira/brief", () => {
+describe("POST /agents/mira/brief → PlatformIngress (creative.job.submit)", () => {
   let ctx: TestContext;
+  let submit: ReturnType<typeof vi.fn>;
 
   async function post(
     org: string,
@@ -82,33 +68,70 @@ describe("POST /agents/mira/brief", () => {
     return ctx.app.inject({
       method: "POST",
       url: "/api/dashboard/agents/mira/brief",
-      headers: { "x-org-id": org, ...(key ? { "idempotency-key": key } : {}) },
+      headers: {
+        "x-org-id": org,
+        "x-principal-id": "user-zoe",
+        ...(key ? { "idempotency-key": key } : {}),
+      },
       payload: body,
     });
   }
 
-  // "org-without-creative" is enabled for Mira so the test reaches the resolver,
-  // but its agentDeployment.findFirst returns null → triggers the 409 fail-closed path.
   const NO_CREATIVE_ORG = "org-without-creative";
 
   beforeAll(async () => {
     ctx = await buildTestServer();
     prismaMock = buildPrismaMock();
     (ctx.app as unknown as { prisma: unknown }).prisma = prismaMock;
+    submit = vi.fn();
+    (ctx.app as unknown as { platformIngress: unknown }).platformIngress = { submit };
     await ctx.app.register(miraBriefRoute, { prefix: "/api/dashboard" });
     await ctx.app.orgAgentEnablementStore!.enable(PILOT, "mira");
-    // Enable the no-creative org so it passes the enablement gate and reaches the resolver.
     await ctx.app.orgAgentEnablementStore!.enable(NO_CREATIVE_ORG, "mira");
   });
 
   afterAll(async () => ctx.app.close());
 
-  // Reset mock call counts between tests so assertions stay per-test.
   beforeEach(() => {
-    vi.clearAllMocks();
+    inngestSend.mockClear();
+    submit.mockReset();
+    submit.mockResolvedValue({
+      ok: true,
+      result: { outcome: "queued", outputs: { task: { id: "task-001" }, job: { id: "job-001" } } },
+    });
   });
 
-  it("creates a draft request and returns the open-brief contract", async () => {
+  it("submits creative.job.submit through the governance front door (no direct writes)", async () => {
+    await post(PILOT, { promoting: "Summer Botox special" });
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    const arg = submit.mock.calls[0]![0];
+    expect(arg).toMatchObject({
+      intent: "creative.job.submit",
+      parameters: {
+        deploymentId: "dep-creative-001",
+        listingId: "listing-001",
+        mode: "polished",
+      },
+      actor: { id: "user-zoe", type: "user" },
+      organizationId: PILOT,
+      trigger: "api",
+    });
+    // Brief is forwarded as the CreativeBriefInput the workflow expects.
+    expect(arg.parameters.brief).toMatchObject({ productDescription: expect.any(String) });
+    // No direct pipeline kick or DB writes — the workflow owns those post-governance.
+    expect(inngestSend).not.toHaveBeenCalled();
+    expect(prismaMock.creativeJob.create).not.toHaveBeenCalled();
+    expect(prismaMock.agentTask.create).not.toHaveBeenCalled();
+  });
+
+  it("threads mode ugc from the brief into the ingress params (slice-3 spec 3.4)", async () => {
+    await post(PILOT, { promoting: "Summer Botox special", mode: "ugc" });
+    const arg = submit.mock.calls[0]![0];
+    expect(arg.parameters.mode).toBe("ugc");
+  });
+
+  it("maps the submit outputs back to the open-brief contract (201)", async () => {
     const res = await post(PILOT, { promoting: "Summer Botox special" });
     expect(res.statusCode).toBe(201);
     const body = res.json() as {
@@ -117,39 +140,50 @@ describe("POST /agents/mira/brief", () => {
       cost: { generationGatedInReview: boolean };
       requestSource: string;
     };
+    expect(body.jobId).toBe("job-001");
     expect(body.status).toBe("brief_submitted");
     expect(body.requestSource).toBe("mira.open_brief");
     expect(body.cost.generationGatedInReview).toBe(true);
-    expect(typeof body.jobId).toBe("string");
   });
 
-  it("makes NO cross-agent writes (no Riley / recommendation / campaign / publish)", async () => {
-    await post(PILOT, { promoting: "Summer Botox special" });
-    // Assert the prisma mock's recommendation/campaign namespaces were never written.
-    expect(prismaMock.recommendation.create).not.toHaveBeenCalled();
-    expect(prismaMock.campaign.create).not.toHaveBeenCalled();
-    expect(prismaMock.creativeJob.create).toHaveBeenCalledTimes(1);
+  it("returns 202 PENDING_APPROVAL when the submit parks (never a phantom 201)", async () => {
+    submit.mockResolvedValue({
+      ok: true,
+      approvalRequired: true,
+      lifecycleId: "lc-1",
+      bindingHash: "bh-1",
+      workUnit: { id: "wu-1", traceId: "tr-1" },
+      result: { outcome: "pending_approval", outputs: {} },
+    });
+    const res = await post(PILOT, { promoting: "Summer Botox special" });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({
+      outcome: "PENDING_APPROVAL",
+      approvalRequest: { id: "lc-1", bindingHash: "bh-1" },
+    });
+    expect((res.json() as { jobId?: string }).jobId).toBeUndefined();
   });
 
-  it("fails closed when the org has no creative deployment", async () => {
-    const res = await post("org-without-creative", { promoting: "x" });
+  it("fails closed (409) when the org has no creative deployment — never submits", async () => {
+    const res = await post(NO_CREATIVE_ORG, { promoting: "x" });
     expect(res.statusCode).toBe(409);
     expect((res.json() as { error: string }).error).toBe("creative_deployment_not_provisioned");
+    expect(submit).not.toHaveBeenCalled();
   });
 
-  it("400s on an invalid brief", async () => {
+  it("400s on an invalid brief — never submits", async () => {
     const res = await post(PILOT, { promoting: "" });
     expect(res.statusCode).toBe(400);
+    expect(submit).not.toHaveBeenCalled();
   });
 
-  it("dedupes a replayed POST with the same Idempotency-Key", async () => {
+  it("dedupes a replayed POST with the same Idempotency-Key (one submit)", async () => {
     const key = "replay-key-1";
     const first = await post(PILOT, { promoting: "Replay test" }, key);
     const second = await post(PILOT, { promoting: "Replay test" }, key);
     expect(first.statusCode).toBe(201);
     expect(second.statusCode).toBe(201);
-    expect(second.json()).toEqual(first.json()); // served from the idempotency cache
-    // Prove the second POST was actually deduped (not re-run): only ONE job created.
-    expect(prismaMock.creativeJob.create).toHaveBeenCalledTimes(1);
+    expect(second.json()).toEqual(first.json()); // served from the HTTP idempotency cache
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 });

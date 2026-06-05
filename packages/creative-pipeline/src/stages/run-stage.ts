@@ -5,13 +5,13 @@ import {
   ScriptWriterOutput,
   StoryboardOutput,
 } from "@switchboard/schemas";
-import type { VideoProducerOutput } from "@switchboard/schemas";
+import type { VideoProducerOutput, CreativePerformanceHistory } from "@switchboard/schemas";
 import { runTrendAnalyzer } from "./trend-analyzer.js";
 import { runHookGenerator } from "./hook-generator.js";
 import { runScriptWriter } from "./script-writer.js";
 import { runStoryboardBuilder } from "./storyboard-builder.js";
 import { runVideoProducer, createPromptOptimizer } from "./video-producer.js";
-import type { VideoProducerDeps } from "./video-producer.js";
+import type { VideoProducerDeps, AssetStorageClient } from "./video-producer.js";
 import { KlingClient } from "./kling-client.js";
 import { ElevenLabsClient } from "./elevenlabs-client.js";
 import { WhisperClient } from "./whisper-client.js";
@@ -27,12 +27,19 @@ export interface StageInput {
     brandVoice?: string | null;
     references?: string[];
     productImages?: string[];
+    /** Slice-2 measured channel: typed attribution history (spec 3.8). */
+    pastPerformance?: CreativePerformanceHistory | null;
+    /** Slice-2 taste channel: rendered subjective lines from review gestures. */
+    tasteContext?: string[];
   };
   previousOutputs: Record<string, unknown>;
   apiKey: string;
+  /** OpenAI key for Whisper captions (pro tier). Absent = captions skipped, like image gen. */
+  openaiApiKey?: string;
   generateReferenceImages?: boolean;
   imageGenerator?: ImageGenerator;
   productionTier?: string;
+  assetStorage?: AssetStorageClient;
 }
 
 type StageOutput =
@@ -64,6 +71,8 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
           targetAudience: input.brief.targetAudience,
           platforms: input.brief.platforms,
           references: input.brief.references,
+          pastPerformance: input.brief.pastPerformance,
+          tasteContext: input.brief.tasteContext,
         },
         input.apiKey,
       );
@@ -77,6 +86,8 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
           productDescription: input.brief.productDescription,
           targetAudience: input.brief.targetAudience,
           platforms: input.brief.platforms,
+          pastPerformance: input.brief.pastPerformance,
+          tasteContext: input.brief.tasteContext,
         },
         trendsOutput,
         input.apiKey,
@@ -135,19 +146,28 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
         klingClient,
         optimizePrompt: createPromptOptimizer(input.apiKey),
       };
+      if (input.assetStorage) {
+        deps.assetStorage = input.assetStorage;
+      }
 
       if (tier === "pro") {
         deps.elevenLabsClient = new ElevenLabsClient({
           apiKey: process.env.ELEVENLABS_API_KEY ?? "",
         });
-        deps.whisperClient = new WhisperClient({
-          apiKey: input.apiKey,
-        });
+        // Whisper is an OpenAI API: it must get the OpenAI key, never the
+        // Anthropic one (which 401s). Absent key = captions degrade, the same
+        // contract as the runner's image-generator skip (creative-job-runner.ts).
+        if (input.openaiApiKey) {
+          deps.whisperClient = new WhisperClient({
+            apiKey: input.openaiApiKey,
+          });
+        }
         deps.videoAssembler = new VideoAssembler();
       }
 
       return runVideoProducer(
         {
+          jobId: input.jobId,
           storyboard,
           scripts,
           tier,

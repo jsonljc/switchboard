@@ -230,6 +230,66 @@ describe("ChannelGateway", () => {
     );
   });
 
+  it("suppresses raw error summary when ok:true but outcome is failed", async () => {
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+    const addMessageSpy = vi.fn().mockResolvedValue(undefined);
+    const config = createMockConfig({
+      conversationStore: {
+        getOrCreateBySession: vi.fn().mockResolvedValue({
+          conversationId: "conv-1",
+          messages: [],
+        }),
+        addMessage: addMessageSpy,
+      },
+      platformIngress: {
+        submit: vi.fn().mockResolvedValue({
+          ok: true,
+          result: {
+            outcome: "failed",
+            outputs: {},
+            summary: "Exceeded maximum LLM turns (6)",
+            error: {
+              code: "EXECUTION_ERROR",
+              message: "Exceeded maximum LLM turns (6)",
+            },
+            traceId: "t",
+            workUnitId: "wu-1",
+            mode: "skill",
+            durationMs: 100,
+          },
+          workUnit: { id: "wu-1", traceId: "t" },
+        }),
+      },
+    });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid",
+      sessionId: "sess-1",
+      text: "hi",
+    };
+
+    await gateway.handleIncoming(message, { send: sendSpy });
+
+    // Must send the neutral fallback, NOT the raw error summary
+    expect(sendSpy).toHaveBeenCalledWith(
+      "I'm having trouble right now. Let me connect you with the team.",
+    );
+    // Must persist a suppression marker, NOT the raw error
+    expect(addMessageSpy).toHaveBeenCalledWith(
+      "conv-1",
+      "assistant",
+      "[suppressed:execution_failed]",
+    );
+    // Must NOT have sent or stored the raw error message
+    expect(sendSpy).not.toHaveBeenCalledWith("Exceeded maximum LLM turns (6)");
+    expect(addMessageSpy).not.toHaveBeenCalledWith(
+      "conv-1",
+      "assistant",
+      "Exceeded maximum LLM turns (6)",
+    );
+  });
+
   it("skips skill dispatch when conversation status is human_override", async () => {
     const addMessageSpy = vi.fn().mockResolvedValue(undefined);
     const submitSpy = vi.fn();

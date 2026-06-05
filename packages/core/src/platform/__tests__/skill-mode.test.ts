@@ -476,3 +476,48 @@ describe("SkillMode context resolution (Critical 1)", () => {
     expect(executor.lastParams?.parameters.PLAYBOOK_CONTEXT).toBeUndefined();
   });
 });
+
+describe("SkillMode executorBySlug (slice-4 seam)", () => {
+  it("routes a slug with a dedicated executor to it", async () => {
+    const defaultExec = new MockExecutor();
+    const composeExec = new MockExecutor();
+    const skill = makeSkill({ slug: "creative", intent: "creative.brief.compose" });
+    const mode = new SkillMode({
+      executor: defaultExec,
+      executorBySlug: new Map([["creative", composeExec]]),
+      skillsBySlug: new Map([[skill.slug, skill]]),
+    });
+    const workUnit = makeWorkUnit({
+      intent: "creative.brief.compose",
+      deployment: {
+        deploymentId: "dep-1",
+        skillSlug: "creative",
+        trustLevel: "guided",
+        trustScore: 42,
+      },
+    });
+
+    const result = await mode.execute(workUnit, defaultConstraints, defaultContext);
+
+    expect(result.outcome).toBe("completed");
+    expect(composeExec.lastParams).toBeDefined();
+    expect(defaultExec.lastParams).toBeUndefined();
+  });
+
+  it("falls back to the default executor for unmapped slugs", async () => {
+    const defaultExec = new MockExecutor();
+    const composeExec = new MockExecutor();
+    const skill = makeSkill();
+    const mode = new SkillMode({
+      executor: defaultExec,
+      executorBySlug: new Map([["creative", composeExec]]),
+      skillsBySlug: new Map([[skill.slug, skill]]),
+    });
+
+    const result = await mode.execute(makeWorkUnit(), defaultConstraints, defaultContext);
+
+    expect(result.outcome).toBe("completed");
+    expect(defaultExec.lastParams).toBeDefined();
+    expect(composeExec.lastParams).toBeUndefined();
+  });
+});

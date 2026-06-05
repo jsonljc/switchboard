@@ -2,8 +2,16 @@ import { randomUUID } from "node:crypto";
 import type { SkillTool, SkillRequestContext } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
-import type { CalendarProvider, SlotQuery } from "@switchboard/schemas";
+import { getMetrics } from "../../telemetry/metrics.js";
+import {
+  SlotQuerySchema,
+  STAGES_AT_OR_BEYOND_BOOKED,
+  isBookingSlotConflictError,
+} from "@switchboard/schemas";
+import type { CalendarProvider, AttributionChain } from "@switchboard/schemas";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
+import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
+import { buildRescheduleOperations } from "./calendar-reschedule.js";
 
 interface BookingStoreSubset {
   create(input: {
@@ -26,10 +34,32 @@ interface BookingStoreSubset {
     service: string,
     startsAt: Date,
   ): Promise<{ id: string } | null>;
+  findUpcomingByContact(
+    orgId: string,
+    contactId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      calendarEventId: string | null;
+      service: string;
+      startsAt: Date;
+      endsAt: Date;
+      status: string;
+    }>
+  >;
+  reschedule(
+    orgId: string,
+    bookingId: string,
+    slot: { startsAt: Date; endsAt: Date },
+  ): Promise<unknown>;
+  cancel(orgId: string, bookingId: string): Promise<unknown>;
 }
 
 interface OpportunityStoreSubset {
-  findActiveByContact(orgId: string, contactId: string): Promise<{ id: string } | null>;
+  findActiveByContact(
+    orgId: string,
+    contactId: string,
+  ): Promise<{ id: string; estimatedValue?: number | null } | null>;
   create(input: {
     organizationId: string;
     contactId: string;
@@ -43,6 +73,12 @@ type TransactionFn = (
       update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
     };
     outboxEvent: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
+    opportunity: {
+      updateMany(args: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }): Promise<{ count: number }>;
+    };
   }) => Promise<unknown>,
 ) => Promise<unknown>;
 
@@ -71,14 +107,22 @@ interface CalendarBookToolDeps {
     findById(
       orgId: string,
       contactId: string,
-    ): Promise<{ name?: string | null; email?: string | null } | null>;
+    ): Promise<{
+      name?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      attribution?: AttributionChain | null;
+    } | null>;
   };
+  /** ISO-4217 default currency for booked-conversion value (cents). Temporary
+   *  injected dep until per-org currency is wired. */
+  defaultCurrency: string;
 }
 
 const NOT_CONFIGURED_REMEDIATION =
   "Do not tell the customer there are no available slots. Escalate to the operator because calendar booking is not configured.";
 
-async function resolveProviderOrFail(
+export async function resolveProviderOrFail(
   deps: Pick<CalendarBookToolDeps, "calendarProviderFactory" | "isCalendarProviderConfigured">,
   orgId: string,
 ): Promise<{ provider: CalendarProvider } | { failure: ToolResult }> {
@@ -132,10 +176,24 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           required: ["dateFrom", "dateTo", "durationMinutes", "service", "timezone"],
         },
         execute: async (params: unknown) => {
-          const query = params as SlotQuery;
+          // safeParse (not parse): SlotQuerySchema is stricter than the coarse
+          // runtime input guard (int/positive/min-length), so malformed LLM input
+          // must degrade to a recoverable tool failure, not throw and kill the turn.
+          const parsed = SlotQuerySchema.safeParse(params);
+          if (!parsed.success) {
+            return fail("INVALID_SLOT_QUERY", "The slot query parameters were invalid.", {
+              retryable: true,
+              modelRemediation:
+                "Re-issue slots.query with a positive integer durationMinutes and a non-empty service.",
+            });
+          }
+          const query = parsed.data;
           const resolved = await resolveProviderOrFail(deps, ctx.orgId);
           if ("failure" in resolved) return resolved.failure;
           const slots = await resolved.provider.listAvailableSlots(query);
+          if (slots.length === 0) {
+            getMetrics().slotQueryZeroResult.inc({ orgId: ctx.orgId, service: query.service });
+          }
           return ok({ slots } as Record<string, unknown>);
         },
       },
@@ -181,9 +239,11 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
 
           // Resolve or create opportunity
           let opportunityId: string | null = null;
+          let estimatedValue: number | null = null;
           const existing = await deps.opportunityStore.findActiveByContact(orgId, contactId);
           if (existing) {
             opportunityId = existing.id;
+            estimatedValue = existing.estimatedValue ?? null;
           } else {
             const created = await deps.opportunityStore.create({
               organizationId: orgId,
@@ -207,6 +267,17 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               attendeeEmail,
             });
           } catch (err) {
+            // Concurrent booking won the overlap race (store guard). Recoverable:
+            // re-offer the next slots instead of falsely claiming it's booked.
+            if (isBookingSlotConflictError(err)) {
+              getMetrics().bookingSlotConflict.inc({ orgId });
+              return fail("SLOT_TAKEN", "That time was just taken.", {
+                retryable: true,
+                data: { failureType: "slot_conflict" },
+                modelRemediation:
+                  "Re-run calendar-book.slots.query and offer the lead the next available times. Do not claim the slot is booked.",
+              });
+            }
             if (isPrismaUniqueConstraintError(err)) {
               const existingBooking = await deps.bookingStore.findBySlot(
                 orgId,
@@ -214,6 +285,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                 input.service,
                 new Date(input.slotStart),
               );
+              getMetrics().bookingFailed.inc({ orgId, reason: "duplicate" });
               return fail(
                 "DUPLICATE_BOOKING",
                 "This time slot is already booked for this contact.",
@@ -258,12 +330,14 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               failureType: "provider_error",
               retryable: false,
             });
+            getMetrics().bookingFailed.inc({ orgId, reason: "provider_error" });
             return fail("BOOKING_FAILURE", failResult.message, {
               data: failResult as unknown as Record<string, unknown>,
             });
           }
 
           // 3. On success: confirm booking + write outbox in one transaction
+          let stageAdvanced = false;
           try {
             const eventId = randomUUID();
             await deps.runTransaction(async (tx) => {
@@ -274,6 +348,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                   calendarEventId: calendarResult.calendarEventId,
                 },
               });
+              const conversion = buildBookedConversionPayload(contactRecord);
               await tx.outboxEvent.create({
                 data: {
                   eventId,
@@ -283,7 +358,12 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                     type: "booked",
                     contactId,
                     organizationId: orgId,
-                    value: 0,
+                    value: estimatedValue ?? 0,
+                    currency: deps.defaultCurrency,
+                    sourceCampaignId: conversion.sourceCampaignId,
+                    sourceAdId: conversion.sourceAdId,
+                    customer: conversion.customer,
+                    attribution: conversion.attribution,
                     occurredAt: new Date().toISOString(),
                     source: "calendar-book",
                     metadata: {
@@ -296,8 +376,32 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                   },
                 },
               });
+              // Monotonic stage advance in the same durable tx: a confirmed
+              // booking always implies a booked opp. updateMany never throws on
+              // count:0 and the `notIn` guard skips an already-advanced opp, so a
+              // stage no-op never fails the booking.
+              if (opportunityId) {
+                const adv = await tx.opportunity.updateMany({
+                  where: {
+                    id: opportunityId,
+                    organizationId: orgId,
+                    stage: { notIn: STAGES_AT_OR_BEYOND_BOOKED },
+                  },
+                  data: { stage: "booked" },
+                });
+                stageAdvanced = adv.count > 0;
+              }
             });
           } catch (error) {
+            // Provider event created but durable confirm failed: best-effort
+            // cancel the orphan so no live, untracked slot blocks the calendar.
+            if (calendarResult.calendarEventId) {
+              try {
+                await provider.cancelBooking(calendarResult.calendarEventId);
+              } catch (cancelErr) {
+                console.warn("[calendar-book] orphan-event compensation failed", cancelErr);
+              }
+            }
             const failResult = await deps.failureHandler.handle({
               bookingId: booking.id,
               orgId,
@@ -308,10 +412,14 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               failureType: "confirmation_failed",
               retryable: true,
             });
+            getMetrics().bookingFailed.inc({ orgId, reason: "confirmation_failed" });
             return fail("BOOKING_FAILURE", failResult.message, {
               data: failResult as unknown as Record<string, unknown>,
             });
           }
+
+          getMetrics().bookingConfirmed.inc({ orgId });
+          if (stageAdvanced) getMetrics().bookingStageAdvanced.inc({ orgId });
 
           return ok(
             {
@@ -325,6 +433,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           );
         },
       },
+      ...buildRescheduleOperations(ctx, deps),
     },
   });
 }

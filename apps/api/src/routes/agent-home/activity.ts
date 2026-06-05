@@ -22,6 +22,7 @@ import type { ActivityRow } from "@switchboard/schemas";
 import type { CockpitActivityDeps } from "../../lib/cockpit-activity-deps.js";
 import { requireOrganizationScope } from "../../utils/require-org.js";
 import { isAgentHomeAccessible } from "../../lib/agent-home-access.js";
+import { translateOutcomeToActivityRow } from "../../lib/outcome-activity-row.js";
 
 const ParamsSchema = z.object({ agentId: AgentKeySchema });
 
@@ -96,7 +97,35 @@ export function cockpitActivityRoutes(deps: CockpitActivityDeps): FastifyPluginA
           limit,
           expandPreview,
         });
-        const rows: ActivityRow[] = translated.slice(0, limit);
+
+        // Slice 3: merge renderable Riley outcome rows ("observed", with the
+        // allowlisted trust-signal suffix in head) into the audit-derived feed.
+        // Outcomes exist only for riley; a fetch failure degrades to the
+        // audit-only feed rather than sinking the operator surface.
+        let outcomeRows: ActivityRow[] = [];
+        if (agentKey === "riley" && deps.listRenderableOutcomes) {
+          try {
+            const outcomes = await deps.listRenderableOutcomes({ orgId, limit });
+            outcomeRows = outcomes
+              .map(translateOutcomeToActivityRow)
+              .filter((r): r is ActivityRow => r !== null);
+          } catch (err) {
+            app.log.warn({ err }, "riley outcome merge failed; serving audit-only feed");
+          }
+        }
+
+        // Top-limit merge of two independently sorted sources is correct
+        // because each source supplies AT LEAST its newest `limit` rows
+        // (audit may carry up to limit x overfetch rows, unsliced by the
+        // translator; outcomes are capped by the store's orderBy
+        // windowEndedAt desc + take, pinned in
+        // recommendation-outcome-store.test.ts). The final sort+slice below
+        // selects the true global top `limit`; do not remove it on the
+        // assumption that the sources are pre-capped.
+        const merged = [...translated, ...outcomeRows].sort((a, b) =>
+          (b.timestampIso ?? "").localeCompare(a.timestampIso ?? ""),
+        );
+        const rows: ActivityRow[] = merged.slice(0, limit);
         return reply.code(200).send({ rows });
       } catch (err) {
         app.log.error({ err }, "cockpit activity route failed");

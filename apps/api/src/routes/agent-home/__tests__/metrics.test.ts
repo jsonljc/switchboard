@@ -123,7 +123,7 @@ describe("metrics route", () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { vm: MetricsViewModel };
-    expect(body.vm.hero.kind).toBe("tours-booked");
+    expect(body.vm.hero.kind).toBe("appointments-booked");
     expect(typeof body.vm.folioRange).toBe("string");
     expect(body.vm.freshness.dataSource).toBe("live");
   });
@@ -163,6 +163,8 @@ describe("metrics route", () => {
     const mockPrisma = {
       organizationConfig: { findFirst: vi.fn(async () => null) },
       agentRoster: { findUnique },
+      // Alex's Showed stat queries the opportunity store (count + findFirst).
+      opportunity: { count: vi.fn(async () => 0), findFirst: vi.fn(async () => null) },
     } as unknown as import("@switchboard/db").PrismaClient;
 
     const app = await buildApp({ withStores: true, prisma: mockPrisma });
@@ -230,6 +232,8 @@ describe("metrics route", () => {
     const mockPrisma = {
       organizationConfig: { findFirst: mockFindFirst },
       agentRoster: { findUnique: vi.fn(async () => null) },
+      // Alex's Showed stat queries the opportunity store (count + findFirst).
+      opportunity: { count: vi.fn(async () => 0), findFirst: vi.fn(async () => null) },
     } as unknown as import("@switchboard/db").PrismaClient;
 
     const app = await buildApp({ withStores: true, prisma: mockPrisma });

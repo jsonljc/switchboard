@@ -21,6 +21,17 @@ export type CreativePipelineEvents = {
       mode?: string;
     };
   };
+  "creative-pipeline/publish.requested": {
+    data: {
+      jobId: string;
+      organizationId: string;
+    };
+  };
+  "creative-pipeline/attribution.refresh": {
+    data: {
+      orgId: string;
+    };
+  };
   "creative-pipeline/polished.submitted": {
     data: {
       jobId: string;

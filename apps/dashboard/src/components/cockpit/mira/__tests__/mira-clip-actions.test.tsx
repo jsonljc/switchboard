@@ -2,9 +2,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { MiraReviewAction } from "@switchboard/core";
 
-let approveMock: { mutate: ReturnType<typeof vi.fn>; isPending: boolean; isError: boolean };
+let approveMock: {
+  mutate: ReturnType<typeof vi.fn>;
+  isPending: boolean;
+  isError: boolean;
+  data?: { pendingApproval: boolean };
+};
 beforeEach(() => {
-  approveMock = { mutate: vi.fn(), isPending: false, isError: false };
+  approveMock = { mutate: vi.fn(), isPending: false, isError: false, data: undefined };
 });
 
 const decideMock = vi.fn().mockResolvedValue({ id: "j", decision: "kept" });
@@ -66,6 +71,18 @@ describe("MiraClipActions", () => {
     fireEvent.click(screen.getByRole("button", { name: /continue draft/i }));
     fireEvent.click(screen.getByRole("button", { name: /confirm continue/i }));
     expect(onResolve).toHaveBeenCalledWith("j2");
+  });
+
+  it("a parked (over-spend) render shows a pending notice and does NOT resolve the clip", () => {
+    approveMock.mutate = vi.fn((_args, opts) => opts?.onSuccess?.({ pendingApproval: true }));
+    approveMock.data = { pendingApproval: true };
+    const onResolve = vi.fn();
+    render(<MiraClipActions jobId="j4" reviewAction={reviewable} onResolve={onResolve} />);
+    fireEvent.click(screen.getByRole("button", { name: /continue draft/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm continue/i }));
+    // Parked, not resolved — the clip stays and a pending notice shows.
+    expect(onResolve).not.toHaveBeenCalled();
+    expect(screen.getByText(/auto-spend limit/i)).toBeInTheDocument();
   });
 
   it("mutation error shows an inline message and does NOT resolve", () => {

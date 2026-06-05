@@ -81,6 +81,7 @@ export { PrismaActionRequestStore } from "./stores/prisma-action-request-store.j
 export { PrismaDeploymentStateStore } from "./stores/prisma-deployment-state-store.js";
 export { PrismaDeploymentConnectionStore } from "./stores/prisma-deployment-connection-store.js";
 export { PrismaCreativeJobStore } from "./stores/prisma-creative-job-store.js";
+export type { TasteCandidate } from "./stores/prisma-creative-job-store.js";
 export { PrismaInteractionSummaryStore } from "./stores/prisma-interaction-summary-store.js";
 export { PrismaDeploymentMemoryStore } from "./stores/prisma-deployment-memory-store.js";
 export { PrismaDeploymentMemoryEvidenceStore } from "./stores/prisma-deployment-memory-evidence-store.js";
@@ -104,7 +105,13 @@ export { PrismaConversionRecordStore } from "./stores/prisma-conversion-record-s
 export { PrismaDispatchLogStore } from "./stores/prisma-dispatch-log-store.js";
 export { PrismaReconciliationStore } from "./stores/prisma-reconciliation-store.js";
 export { PrismaLifecycleStore } from "./storage/prisma-lifecycle-store.js";
-export { PrismaBusinessFactsStore } from "./stores/prisma-business-facts-store.js";
+export {
+  PrismaBusinessFactsStore,
+  classifyBusinessFacts,
+  type BusinessFactsStatus,
+  type BusinessFactsResult,
+} from "./stores/prisma-business-facts-store.js";
+export { PrismaOperationalStateStore } from "./stores/prisma-operational-state-store.js";
 export { PrismaManagedChannelStore } from "./stores/prisma-managed-channel-store.js";
 export { PrismaCrmDataProvider } from "./stores/prisma-crm-data-provider.js";
 export { PrismaCrmFunnelStore } from "./stores/crm-funnel-store.js";
@@ -136,8 +143,31 @@ export { PrismaReEngagementVerdictReader } from "./prisma-re-engagement-verdict-
 export { createPrismaApprovedComplianceClaimStore } from "./prisma-approved-compliance-claim-store.js";
 export { createPrismaConsentStore } from "./prisma-consent-store.js";
 export { createPrismaContactConsentReader } from "./prisma-contact-consent-reader.js";
+export { PrismaScheduledFollowUpStore } from "./stores/prisma-scheduled-follow-up-store.js";
+export { PrismaScheduledReminderStore } from "./stores/prisma-scheduled-reminder-store.js";
 export { seedOrgDayOneAgents } from "./seed/seed-org-day-one-agents.js";
 export { seedMiraPilotOrgs } from "./seed/seed-mira-pilot-orgs.js";
+export {
+  CREATIVE_GOVERNANCE_SETTINGS,
+  CREATIVE_SPEND_APPROVAL_THRESHOLD,
+  CREATIVE_ALLOW_POLICY_RULE,
+  creativeAllowPolicyId,
+  buildCreativeAllowPolicyInput,
+  CREATIVE_PUBLISH_APPROVAL_POLICY_RULE,
+  creativePublishApprovalPolicyId,
+  buildCreativePublishApprovalPolicyInput,
+  CREATIVE_BRIEF_COMPOSE_ALLOW_POLICY_RULE,
+  creativeBriefComposeAllowPolicyId,
+  buildCreativeBriefComposeAllowPolicyInput,
+} from "./seed/creative-governance.js";
+export {
+  RECOMMENDATION_HANDOFF_ALLOW_POLICY_RULE,
+  recommendationHandoffAllowPolicyId,
+  buildRecommendationHandoffAllowPolicyInput,
+  RECOMMENDATION_HANDOFF_APPROVAL_POLICY_RULE,
+  recommendationHandoffApprovalPolicyId,
+  buildRecommendationHandoffApprovalPolicyInput,
+} from "./seed/recommendation-handoff-governance.js";
 export {
   seedAlexSkillPack,
   assertAlexSkillPackSeeded,

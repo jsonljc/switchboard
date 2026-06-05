@@ -33,7 +33,9 @@ describe("useAgentMetrics (live)", () => {
   it("returns vm on 200", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ vm: { hero: { kind: "tours-booked", value: 1 }, folioRange: "Mon" } }),
+      json: async () => ({
+        vm: { hero: { kind: "appointments-booked", value: 1 }, folioRange: "Mon" },
+      }),
     });
     const { result } = renderHook(() => useAgentMetrics("alex"), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -52,7 +54,7 @@ describe("useAgentMetrics (live)", () => {
       ok: true,
       json: async () => ({
         vm: {
-          hero: { kind: "tours-booked", value: 9, comparator: { window: "week", value: 6 } },
+          hero: { kind: "appointments-booked", value: 9, comparator: { window: "week", value: 6 } },
           folioRange: "May 12 – May 18",
           targets: { avgValueCents: 17900, targetCpbCents: 3000 },
           spendCents: 21400,
@@ -81,7 +83,7 @@ describe("useAgentMetrics (live)", () => {
       ok: true,
       json: async () => ({
         vm: {
-          hero: { kind: "tours-booked", value: 3, comparator: { window: "week", value: 2 } },
+          hero: { kind: "appointments-booked", value: 3, comparator: { window: "week", value: 2 } },
           folioRange: "May 5 – May 11",
           // A.3 fields absent — simulate older API during deploy skew
         },

@@ -7,6 +7,7 @@ import {
   STALE_MSG,
   NOT_AUTHORIZED_MSG,
   APPROVAL_LOOKUP_ERROR_MSG,
+  APPROVE_EXECUTED_MSG,
 } from "../handle-approval-response.js";
 import { DeploymentInactiveError } from "../../platform/deployment-resolver.js";
 
@@ -322,5 +323,43 @@ describe("ChannelGateway approval-payload interception", () => {
     expect(sendSpy).toHaveBeenCalledWith(
       "This service is temporarily paused. Please try again later.",
     );
+  });
+
+  it("transport mode stays terminal: bridged tap replies and never reaches ingress or local stores", async () => {
+    // Bridge spec 4.5: an approval-shaped payload is terminal in the gateway
+    // regardless of bridge mode — no PlatformIngress.submit, no LLM
+    // fallthrough — and transport mode does no local approval lookups.
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+    const submit = vi.fn();
+    const addMessage = vi.fn();
+    const getById = vi.fn();
+    const respond = vi.fn().mockResolvedValue({
+      kind: "responded",
+      action: "approve",
+      executionSuccess: true,
+    });
+    const config = createMockConfig({
+      conversationStore: {
+        getOrCreateBySession: vi.fn().mockResolvedValue({ conversationId: "conv-1", messages: [] }),
+        addMessage,
+      },
+      platformIngress: { submit },
+      approvalStore: {
+        save: vi.fn().mockResolvedValue(undefined),
+        getById,
+        updateState: vi.fn().mockResolvedValue(undefined),
+        listPending: vi.fn().mockResolvedValue([]),
+      },
+      approvalResponseConfig: { transport: { respond } },
+    });
+
+    const gateway = new ChannelGateway(config);
+    await gateway.handleIncoming(makeMessage(), { send: sendSpy });
+
+    expect(respond).toHaveBeenCalledTimes(1);
+    expect(sendSpy).toHaveBeenCalledWith(APPROVE_EXECUTED_MSG);
+    expect(submit).not.toHaveBeenCalled();
+    expect(addMessage).not.toHaveBeenCalled();
+    expect(getById).not.toHaveBeenCalled();
   });
 });

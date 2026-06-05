@@ -3,6 +3,7 @@ import { Project } from "ts-morph";
 import {
   parseRouteClass,
   resolveRouteClass,
+  validateControlPlaneOrgGuard,
   validateRouteClass,
 } from "../route-class-validator.js";
 
@@ -375,5 +376,66 @@ describe("dashboard-proxy directory convention", () => {
     expect(
       resolveRouteClass(sf, "apps/dashboard/src/app/api/dashboard/meta/insights/daily/route.ts"),
     ).toBe("dashboard-proxy");
+  });
+});
+
+describe("validateControlPlaneOrgGuard", () => {
+  // WARN-ONLY advisory: a mutating control-plane route that imports NONE of the
+  // recognized org-scoping guards should produce exactly one ADVISORY warning.
+  // This is wired NON-BLOCKING in check-routes.ts (does not affect exitCode);
+  // full error-mode enforcement is staged behind the org-guard backfill (#654).
+
+  it("warns once for control-plane + .post handler + NO guard import", () => {
+    const sf = makeSource(`
+      // @route-class: control-plane
+      export const r = async (app) => {
+        app.post("/x", async () => {});
+      };
+    `);
+    const warnings = validateControlPlaneOrgGuard(sf, "test.ts");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].message).toMatch(/Route Governance §12 \(tracked: #654\)/);
+  });
+
+  it("returns [] for control-plane + .post + requireOrganizationScope imported", () => {
+    const sf = makeSource(`
+      // @route-class: control-plane
+      import { requireOrganizationScope } from "../utils/require-org.js";
+      export const r = async (app) => {
+        app.post("/x", async () => {});
+      };
+    `);
+    expect(validateControlPlaneOrgGuard(sf, "test.ts")).toEqual([]);
+  });
+
+  it("returns [] for control-plane + .patch + assertOrgAccess imported", () => {
+    const sf = makeSource(`
+      // @route-class: control-plane
+      import { assertOrgAccess } from "../utils/org-access.js";
+      export const r = async (app) => {
+        app.patch("/x", async () => {});
+      };
+    `);
+    expect(validateControlPlaneOrgGuard(sf, "test.ts")).toEqual([]);
+  });
+
+  it("returns [] for control-plane with only a .get handler (no mutating handler)", () => {
+    const sf = makeSource(`
+      // @route-class: control-plane
+      export const r = async (app) => {
+        app.get("/x", async () => {});
+      };
+    `);
+    expect(validateControlPlaneOrgGuard(sf, "test.ts")).toEqual([]);
+  });
+
+  it("returns [] for a non-control-plane class (operator-direct), even unguarded + mutating", () => {
+    const sf = makeSource(`
+      // @route-class: operator-direct
+      export const r = async (app) => {
+        app.post("/x", async () => {});
+      };
+    `);
+    expect(validateControlPlaneOrgGuard(sf, "test.ts")).toEqual([]);
   });
 });

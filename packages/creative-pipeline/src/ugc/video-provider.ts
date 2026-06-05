@@ -4,11 +4,19 @@
 
 export interface VideoGenerationRequest {
   prompt: string;
+  /**
+   * The SPOKEN script (slice-3 spec 3.5): what an avatar provider reads
+   * aloud. Distinct from `prompt`, the composed VISUAL generation text
+   * (scene/delivery sentences would be nonsense read aloud).
+   */
+  script?: string;
   durationSec: number;
   aspectRatio: string;
   referenceImageUrl?: string;
   negativePrompt?: string;
   cameraMotion?: string;
+  /** Avatar identity for providers that require one (heygen). */
+  avatar?: { refId: string; voiceId?: string };
 }
 
 export interface VideoGenerationResult {
@@ -62,13 +70,41 @@ function createKlingAdapter(klingClient: KlingLike): VideoProvider {
   };
 }
 
-// ── HeyGen adapter (stub — activates when API is available) ──
+// ── HeyGen adapter (slice-3 spec 3.5) ──
 
-function createHeyGenAdapter(): VideoProvider {
+interface HeyGenLike {
+  generateAvatar(req: {
+    script: string;
+    avatarId: string;
+    voiceId?: string;
+    aspectRatio: "16:9" | "9:16" | "1:1";
+  }): Promise<{ videoUrl: string; duration: number }>;
+}
+
+/**
+ * Avatar rendering consumes the SPOKEN script + avatar identity and IGNORES
+ * the prompt-composition fields (negativePrompt / cameraMotion /
+ * referenceImageUrl mean nothing to an avatar renderer). A missing client or
+ * missing avatar ref throws a typed error the production retry loop catches,
+ * falling back to the next allowed provider (kling).
+ */
+function createHeyGenAdapter(heygenClient?: HeyGenLike): VideoProvider {
   return {
     name: "heygen",
-    async generate(_req: VideoGenerationRequest): Promise<VideoGenerationResult> {
-      throw new Error("HeyGen provider not yet implemented — awaiting API access");
+    async generate(req: VideoGenerationRequest): Promise<VideoGenerationResult> {
+      if (!heygenClient) {
+        throw new Error("HeyGen client not configured");
+      }
+      if (!req.avatar?.refId) {
+        throw new Error("HeyGen requires an avatar ref on the spec's creator");
+      }
+      const result = await heygenClient.generateAvatar({
+        script: req.script ?? req.prompt,
+        avatarId: req.avatar.refId,
+        voiceId: req.avatar.voiceId,
+        aspectRatio: mapAspect(req.aspectRatio),
+      });
+      return { videoUrl: result.videoUrl, duration: result.duration, provider: "heygen" };
     },
   };
 }
@@ -99,6 +135,7 @@ function createRunwayAdapter(): VideoProvider {
 
 export interface ProviderClients {
   klingClient?: KlingLike;
+  heygenClient?: HeyGenLike;
 }
 
 export function createVideoProvider(provider: string, clients: ProviderClients): VideoProvider {
@@ -110,7 +147,7 @@ export function createVideoProvider(provider: string, clients: ProviderClients):
       return createKlingAdapter(clients.klingClient);
     }
     case "heygen":
-      return createHeyGenAdapter();
+      return createHeyGenAdapter(clients.heygenClient);
     case "seedance":
       return createSeedanceAdapter();
     case "runway":

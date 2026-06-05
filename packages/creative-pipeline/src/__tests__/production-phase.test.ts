@@ -1,17 +1,51 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { executeProductionPhase, type ProductionInput } from "../ugc/phases/production.js";
+import { buildFrameQaDeps } from "../ugc/frame-qa-deps.js";
 
-vi.mock("../stages/call-claude.js", () => ({
-  callClaude: vi.fn().mockResolvedValue({
-    faceSimilarity: 0.9,
-    ocrAccuracy: 0.95,
-    artifactFlags: [],
-    visualRealism: 0.8,
-    behavioralRealism: 0.8,
-    ugcAuthenticity: 0.85,
-    audioNaturalness: 0.75,
-  }),
+// The frame-QA deps factory is module-mocked: by default it returns undefined,
+// so evaluateRealism stays the honest stub (requires_human_review) and the
+// legacy tests keep their no-QA semantics. Slice-3 tests program it per case.
+vi.mock("../ugc/frame-qa-deps.js", () => ({
+  buildFrameQaDeps: vi.fn(),
 }));
+
+// Durable upload's download seam (slice-3 spec 3.3f): module-mocked so no test
+// touches the network; returns a fake local file + cleanup spy.
+const downloadCleanup = vi.fn();
+vi.mock("../ugc/video-download.js", () => ({
+  downloadVideoToTmp: vi.fn(async (url: string) => ({
+    localPath: `/tmp/fake-${url.split("/").pop()}`,
+    cleanup: downloadCleanup,
+  })),
+}));
+import { downloadVideoToTmp } from "../ugc/video-download.js";
+
+function fakeQaDeps(visionResults: Array<Record<string, unknown>>) {
+  let call = 0;
+  return {
+    frameExtractor: {
+      extract: vi
+        .fn()
+        .mockResolvedValue({ frames: ["QUJD"], localVideoPath: "/tmp/src.mp4", workDir: "/tmp" }),
+    },
+    vision: vi.fn().mockImplementation(async () => {
+      const result = visionResults[Math.min(call, visionResults.length - 1)]!;
+      call++;
+      return result;
+    }),
+  };
+}
+
+const CLEAN_VISION = {
+  artifactFlags: [],
+  humanPresent: true,
+  softScores: { visualRealism: 0.8, behavioralRealism: 0.8, ugcAuthenticity: 0.8 },
+};
+const BROKEN_VISION = {
+  artifactFlags: ["broken_frame"],
+  humanPresent: true,
+  softScores: { visualRealism: 0.2, behavioralRealism: 0.2, ugcAuthenticity: 0.2 },
+};
 
 function createMockDeps() {
   return {
@@ -47,7 +81,7 @@ function makeSpec(id: string, overrides: Record<string, unknown> = {}) {
     script: { text: "Hey so...", language: "en" },
     style: {},
     direction: {},
-    format: "product_demo", // Use product_demo instead of talking_head to avoid heygen bonus
+    format: "product_demo",
     identityConstraints: { strategy: "reference_conditioning", maxIdentityDrift: 0.5 },
     renderTargets: { aspect: "9:16", durationSec: 15 },
     qaThresholds: { faceSimilarityMin: 0.7, realismMin: 0.5 },
@@ -60,19 +94,12 @@ function makeSpec(id: string, overrides: Record<string, unknown> = {}) {
 describe("executeProductionPhase", () => {
   let deps: ReturnType<typeof createMockDeps>;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-    // Reset callClaude mock to default passing scores
-    const { callClaude } = await import("../stages/call-claude.js");
-    (callClaude as ReturnType<typeof vi.fn>).mockResolvedValue({
-      faceSimilarity: 0.9,
-      ocrAccuracy: 0.95,
-      artifactFlags: [],
-      visualRealism: 0.8,
-      behavioralRealism: 0.8,
-      ugcAuthenticity: 0.85,
-      audioNaturalness: 0.75,
-    });
+    // clearAllMocks clears CALLS, not implementations: a prior test's
+    // mockReturnValue(qaDeps) would otherwise leak across tests. Default to
+    // the no-deps honest stub; QA tests override per case.
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReset();
     deps = createMockDeps();
   });
 
@@ -89,28 +116,22 @@ describe("executeProductionPhase", () => {
     expect(result.failedSpecs).toHaveLength(0);
   });
 
-  it("retries on QA failure", async () => {
-    const { callClaude } = await import("../stages/call-claude.js");
-    const mockClaude = callClaude as ReturnType<typeof vi.fn>;
-    mockClaude
-      .mockResolvedValueOnce({
-        faceSimilarity: 0.3, // below 0.7 threshold → fail
-        ocrAccuracy: 0.9,
-        artifactFlags: ["face_drift"],
-        visualRealism: 0.3,
-        behavioralRealism: 0.3,
-        ugcAuthenticity: 0.3,
-        audioNaturalness: 0.3,
-      })
-      .mockResolvedValueOnce({
-        faceSimilarity: 0.9,
-        ocrAccuracy: 0.95,
-        artifactFlags: [],
-        visualRealism: 0.8,
-        behavioralRealism: 0.8,
-        ugcAuthenticity: 0.85,
-        audioNaturalness: 0.75,
-      });
+  it("persists every produced asset as requires_human_review — QA never auto-approves an unseen video", async () => {
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(result.assets[0]!.approvalState).toBe("requires_human_review");
+  });
+
+  it("retries on generation error, then succeeds", async () => {
+    deps.providerClients.klingClient.generateVideo
+      .mockRejectedValueOnce(new Error("provider 500"))
+      .mockResolvedValueOnce({ videoUrl: "https://cdn.example.com/ok.mp4", duration: 15 });
 
     const input: ProductionInput = {
       specs: [makeSpec("spec_1")],
@@ -121,22 +142,11 @@ describe("executeProductionPhase", () => {
     };
     const result = await executeProductionPhase(input);
     expect(result.assets.length).toBe(1);
-    // Should have generated twice (first fail, then pass)
     expect(deps.providerClients.klingClient.generateVideo).toHaveBeenCalledTimes(2);
   });
 
-  it("reports failed spec when all attempts exhausted", async () => {
-    const { callClaude } = await import("../stages/call-claude.js");
-    const mockClaude = callClaude as ReturnType<typeof vi.fn>;
-    mockClaude.mockResolvedValue({
-      faceSimilarity: 0.3, // below 0.7 threshold → fail
-      ocrAccuracy: 0.9,
-      artifactFlags: ["face_drift"],
-      visualRealism: 0.3,
-      behavioralRealism: 0.3,
-      ugcAuthenticity: 0.3,
-      audioNaturalness: 0.3,
-    });
+  it("reports failed spec when generation errors exhaust all attempts", async () => {
+    deps.providerClients.klingClient.generateVideo.mockRejectedValue(new Error("provider down"));
 
     const input: ProductionInput = {
       specs: [makeSpec("spec_1")],
@@ -151,17 +161,8 @@ describe("executeProductionPhase", () => {
     expect(result.failedSpecs[0]!.specId).toBe("spec_1");
   });
 
-  it("falls back to asset reuse when generation exhausted", async () => {
-    const { callClaude } = await import("../stages/call-claude.js");
-    (callClaude as ReturnType<typeof vi.fn>).mockResolvedValue({
-      faceSimilarity: 0.3, // below 0.7 threshold → fail
-      ocrAccuracy: 0.9,
-      artifactFlags: [],
-      visualRealism: 0.3,
-      behavioralRealism: 0.3,
-      ugcAuthenticity: 0.3,
-      audioNaturalness: 0.3,
-    });
+  it("falls back to asset reuse when generation errors exhaust attempts", async () => {
+    deps.providerClients.klingClient.generateVideo.mockRejectedValue(new Error("provider down"));
 
     const reusableAsset = {
       id: "existing_asset",
@@ -186,31 +187,6 @@ describe("executeProductionPhase", () => {
     expect(result.assets[0]!.lockedDerivativeOf).toBe("existing_asset");
   });
 
-  it("triggers circuit breaker after repeated failures", async () => {
-    const { callClaude } = await import("../stages/call-claude.js");
-    (callClaude as ReturnType<typeof vi.fn>).mockResolvedValue({
-      faceSimilarity: 0.3, // below 0.7 threshold → fail
-      ocrAccuracy: 0.9,
-      artifactFlags: [],
-      visualRealism: 0.3,
-      behavioralRealism: 0.3,
-      ugcAuthenticity: 0.3,
-      audioNaturalness: 0.3,
-    });
-
-    const input: ProductionInput = {
-      specs: [makeSpec("spec_1")],
-      providerRegistry: [],
-      retryConfig: { maxAttempts: 5, maxProviderFallbacks: 0 },
-      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
-      deps: deps as never,
-    };
-    const result = await executeProductionPhase(input);
-    // Should stop before all 5 attempts due to circuit breaker (triggers at 3 failures with 80%+ fail rate)
-    expect(deps.providerClients.klingClient.generateVideo.mock.calls.length).toBeLessThanOrEqual(4);
-    expect(result.failedSpecs.length).toBe(1);
-  });
-
   it("persists assets via upsertByKey", async () => {
     const input: ProductionInput = {
       specs: [makeSpec("spec_1")],
@@ -222,9 +198,298 @@ describe("executeProductionPhase", () => {
     await executeProductionPhase(input);
     expect(deps.assetStore.upsertByKey).toHaveBeenCalled();
     const firstCall = deps.assetStore.upsertByKey.mock.calls[0]![0];
-    expect(firstCall).toMatchObject({
-      specId: "spec_1",
-      attemptNumber: 1,
+    expect(firstCall).toMatchObject({ specId: "spec_1", attemptNumber: 1 });
+  });
+
+  // ── Slice-3 frame QA (spec 3.1): live wiring, retry-on-fail, budget ──
+
+  it("wires frame-qa deps from the phase apiKey into the evaluator (never silently the stub)", async () => {
+    const qa = fakeQaDeps([CLEAN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(buildFrameQaDeps).toHaveBeenCalledWith("test-key");
+    expect(qa.vision).toHaveBeenCalledTimes(1);
+    // evaluated + pass auto-approves through deriveApprovalState
+    expect(result.assets[0]!.approvalState).toBe("approved");
+  });
+
+  it("retries a qa-fail verdict and persists EVERY attempt row", async () => {
+    const qa = fakeQaDeps([BROKEN_VISION, CLEAN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+
+    expect(deps.providerClients.klingClient.generateVideo).toHaveBeenCalledTimes(2);
+    expect(deps.assetStore.upsertByKey).toHaveBeenCalledTimes(2);
+    const persisted = deps.assetStore.upsertByKey.mock.calls.map((c) => c[0]);
+    expect(persisted[0]).toMatchObject({ attemptNumber: 1, approvalState: "rejected" });
+    expect(persisted[1]).toMatchObject({ attemptNumber: 2, approvalState: "approved" });
+    expect(result.assets).toHaveLength(1);
+    expect(result.assets[0]!.approvalState).toBe("approved");
+    expect(result.failedSpecs).toHaveLength(0);
+    expect(result.qaResults["spec_1"]).toHaveLength(2);
+  });
+
+  it("exhausted qa-fails return the LAST rejected asset plus a qa_failed entry", async () => {
+    const qa = fakeQaDeps([BROKEN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 2, maxProviderFallbacks: 0 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+
+    expect(deps.assetStore.upsertByKey).toHaveBeenCalledTimes(2);
+    expect(result.assets).toHaveLength(1);
+    expect(result.assets[0]!.approvalState).toBe("rejected");
+    expect(result.assets[0]!.attemptNumber).toBe(2);
+    expect(result.failedSpecs).toEqual([{ specId: "spec_1", reason: "qa_failed" }]);
+    // garbage renders never fall back to unrelated reuse assets
+    expect(deps.assetStore.findLockedByCreator).not.toHaveBeenCalled();
+  });
+
+  // ── Slice-3 prompt fidelity + providersAllowed (spec 3.2) ──
+
+  it("generates with the composed direction-faithful request, not raw script text", async () => {
+    const styled = makeSpec("spec_1", {
+      style: {
+        lighting: "golden_hour",
+        cameraAngle: "selfie",
+        cameraMovement: "slow_pan",
+        environment: "bright clinic interior",
+        wardrobeSelection: ["soft neutrals"],
+        hairState: "natural",
+        props: [],
+      },
+      direction: {
+        hookType: "direct_camera",
+        eyeContact: "camera",
+        energyLevel: "medium",
+        pacingNotes: "Match conversational delivery style",
+        imperfections: {
+          hesitationDensity: 0.15,
+          sentenceRestartRate: 0.1,
+          microPauseDensity: 0.2,
+          fillerDensityTarget: 0.2,
+          fragmentationTarget: 0.3,
+        },
+        adLibPermissions: [],
+        forbiddenFraming: ["no studio lighting"],
+      },
     });
+    const input: ProductionInput = {
+      specs: [styled],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    await executeProductionPhase(input);
+    const req = deps.providerClients.klingClient.generateVideo.mock.calls[0]![0];
+    expect(req.prompt).toContain("Hey so...");
+    expect(req.prompt).toContain("golden hour lighting");
+    expect(req.negativePrompt).toContain("no studio lighting");
+    expect(req.cameraMotion).toBe("pan_right");
+  });
+
+  it("honors providersAllowed: a kling-only talking_head spec never burns heygen attempts", async () => {
+    // talking_head ranks heygen above kling (audio-driven bonus); the filter
+    // must keep the throwing heygen adapter out entirely.
+    const spec = makeSpec("spec_1", { format: "talking_head" });
+    const input: ProductionInput = {
+      specs: [spec],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(result.assets).toHaveLength(1);
+    expect(result.assets[0]!.attemptNumber).toBe(1);
+    expect(result.assets[0]!.provider).toBe("kling");
+  });
+
+  it("grants heygen exactly ONE attempt before falling back to kling (slice-3 spec 3.5)", async () => {
+    // heygen ranks first for talking_head; its tighter posture (5-min poll +
+    // single attempt) keeps a heygen outage from stalling the whole step.
+    const heygenClient = { generateAvatar: vi.fn().mockRejectedValue(new Error("heygen down")) };
+    const d = {
+      ...deps,
+      providerClients: { ...deps.providerClients, heygenClient },
+    };
+    const spec = makeSpec("spec_1", {
+      format: "talking_head",
+      providersAllowed: ["kling", "heygen"],
+      creator: { heygenAvatarId: "avatar_42" },
+    });
+    const input: ProductionInput = {
+      specs: [spec],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: d as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(heygenClient.generateAvatar).toHaveBeenCalledTimes(1);
+    expect(result.assets).toHaveLength(1);
+    expect(result.assets[0]!.provider).toBe("kling");
+  });
+
+  it("fails a spec loudly when no ranked provider is allowed", async () => {
+    const spec = makeSpec("spec_1", { providersAllowed: ["nonexistent"] });
+    const input: ProductionInput = {
+      specs: [spec],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(result.assets).toHaveLength(0);
+    expect(result.failedSpecs).toEqual([{ specId: "spec_1", reason: "no_allowed_provider" }]);
+    expect(deps.providerClients.klingClient.generateVideo).not.toHaveBeenCalled();
+  });
+
+  // ── Slice-3 durable UGC assets (spec 3.3f) ──
+
+  function depsWithStorage() {
+    const upload = vi.fn(async ({ key }: { key: string }) => ({
+      url: `https://durable.example.com/${key}`,
+    }));
+    return { ...deps, assetStorage: { upload } };
+  }
+
+  it("uploads ONLY the final returned asset to the deterministic per-spec key", async () => {
+    const qa = fakeQaDeps([BROKEN_VISION, CLEAN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+    const d = depsWithStorage();
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1", { jobId: "job-1" })],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: d as never,
+    };
+    const result = await executeProductionPhase(input);
+
+    // one upload (the passing attempt 2), never the rejected attempt 1
+    expect(d.assetStorage.upload).toHaveBeenCalledTimes(1);
+    expect(d.assetStorage.upload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "creative-assets/job-1/ugc-spec_1.mp4",
+        contentType: "video/mp4",
+      }),
+    );
+    const finalAsset = result.assets[0]!;
+    expect(finalAsset.durableAssetUrl).toBe(
+      "https://durable.example.com/creative-assets/job-1/ugc-spec_1.mp4",
+    );
+    expect((finalAsset.outputs as Record<string, unknown>).videoUrl).toBe(
+      finalAsset.durableAssetUrl,
+    );
+    expect((finalAsset.outputs as Record<string, unknown>).sourceUrl).toBe(
+      "https://cdn.example.com/generated.mp4",
+    );
+    // the persisted row carries the durable outputs too
+    const lastUpsert = deps.assetStore.upsertByKey.mock.calls.at(-1)![0];
+    expect(lastUpsert.outputs.videoUrl).toBe(finalAsset.durableAssetUrl);
+    // the temp download is cleaned up
+    expect(downloadCleanup).toHaveBeenCalled();
+  });
+
+  it("a durable-upload failure PROPAGATES (fail loud), never re-generates or fakes success", async () => {
+    const qa = fakeQaDeps([CLEAN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+    const d = {
+      ...deps,
+      assetStorage: { upload: vi.fn().mockRejectedValue(new Error("s3 outage")) },
+    };
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1", { jobId: "job-1" })],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: d as never,
+    };
+    await expect(executeProductionPhase(input)).rejects.toThrow("s3 outage");
+    // the QA-passed render must NOT be re-generated (re-billed) by the
+    // generation retry loop swallowing the storage error
+    expect(d.providerClients.klingClient.generateVideo).toHaveBeenCalledTimes(1);
+  });
+
+  it("never uploads an exhausted all-rejected asset", async () => {
+    const qa = fakeQaDeps([BROKEN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+    const d = depsWithStorage();
+
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 2, maxProviderFallbacks: 0 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: d as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(d.assetStorage.upload).not.toHaveBeenCalled();
+    expect(result.assets[0]!.durableAssetUrl).toBeUndefined();
+  });
+
+  it("without storage configured, provider URLs persist and no durable url appears", async () => {
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(downloadVideoToTmp).not.toHaveBeenCalled();
+    expect(result.assets[0]!.durableAssetUrl).toBeUndefined();
+    expect((result.assets[0]!.outputs as Record<string, unknown>).videoUrl).toBe(
+      "https://cdn.example.com/generated.mp4",
+    );
+  });
+
+  it("budget accounting is attempt-accurate: qa-fail retries spend against the job budget", async () => {
+    const qa = fakeQaDeps([BROKEN_VISION]);
+    (buildFrameQaDeps as ReturnType<typeof vi.fn>).mockReturnValue(qa);
+
+    // spec_1 burns 3 failing attempts (3 x 0.35 estimated kling cost = 1.05),
+    // crossing the 1.0 budget BEFORE spec_2 starts.
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_1"), makeSpec("spec_2")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 0 },
+      budget: { totalJobBudget: 1.0, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+
+    const reasons = result.failedSpecs.map((f) => `${f.specId}:${f.reason}`);
+    expect(reasons).toContain("spec_1:qa_failed");
+    expect(reasons).toContain("spec_2:budget exceeded");
+    // spec_2 never generated
+    expect(deps.providerClients.klingClient.generateVideo).toHaveBeenCalledTimes(3);
   });
 });

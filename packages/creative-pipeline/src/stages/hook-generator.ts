@@ -1,12 +1,17 @@
-// packages/core/src/creative-pipeline/stages/hook-generator.ts
+// packages/creative-pipeline/src/stages/hook-generator.ts
 import { callClaude } from "./call-claude.js";
 import { HookGeneratorOutput } from "@switchboard/schemas";
-import type { TrendAnalysisOutput } from "@switchboard/schemas";
+import type { TrendAnalysisOutput, CreativePerformanceHistory } from "@switchboard/schemas";
+import { renderPastPerformanceBlock, renderTasteBlock } from "./prompt-blocks.js";
 
 interface HookBrief {
   productDescription: string;
   targetAudience: string;
   platforms: string[];
+  /** Slice-2 measured channel: typed attribution history (spec 3.8). */
+  pastPerformance?: CreativePerformanceHistory | null;
+  /** Slice-2 taste channel: rendered subjective lines from review gestures. */
+  tasteContext?: string[];
 }
 
 export function buildHookPrompt(
@@ -78,7 +83,12 @@ ${trendOutput.angles.map((a, i) => `${i}. Theme: "${a.theme}" | Motivator: "${a.
 **Trend Signals:**
 ${trendOutput.trendSignals.map((t) => `- ${t.platform}: ${t.trend} (${t.relevance})`).join("\n")}`;
 
-  return { systemPrompt, userMessage };
+  const fedBack =
+    userMessage +
+    renderPastPerformanceBlock(brief.pastPerformance) +
+    renderTasteBlock(brief.tasteContext);
+
+  return { systemPrompt, userMessage: fedBack };
 }
 
 export async function runHookGenerator(

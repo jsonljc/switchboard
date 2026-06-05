@@ -29,9 +29,13 @@
   background: hsl(0 75% 50%);
 }
 
+/* A status sentence, not display copy: stays on the body sans (no uppercase,
+   an uppercase "SYSTEM NORMAL" reads like an alarm); weight leads the head. */
 .live-popover-head .status-label {
   flex: 1;
   font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .live-popover-head .halt-action {

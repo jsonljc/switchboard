@@ -1,11 +1,16 @@
 import type { AgentKey } from "@switchboard/schemas";
+import type { AgentActivity } from "@/components/agent-avatar/agent-status-visual";
 
-/** One agent in the Team Pulse chip ribbon. `setUp` false ⇒ greyed/coming-soon chip. */
-export interface TeamPulseAgent {
+/** One agent in the hero crew band. `status` is the REAL per-agent activity
+ *  (idle for agents with no role row, e.g. Mira). `setupLoading` true while
+ *  Mira's enablement probe is unresolved (never show "Not set up" then). */
+export interface TeamBandAgent {
   key: AgentKey;
   name: string;
-  status: "working" | "idle";
   setUp: boolean;
+  setupLoading?: boolean;
+  status: AgentActivity;
+  halted: boolean;
 }
 
 /** Tone of the verdict line: active (work pending), calm (caught up), fallback (no signal). */
@@ -18,7 +23,7 @@ export interface VerdictModel {
   salutation: string;
   line: { pre: string; em: string; post: string } | string;
   proof: string;
-  /** When set, the `em` accent is colored with `hsl(var(--agent-{accentAgent}))`. Calm/fallback leave this undefined. */
+  /** When set, the accent span is colored with the deep identity ink, `hsl(var(--agent-{accentAgent}-deep))` (the poster-name ink; the base hue fails contrast on the grain canvas). Calm/fallback leave this undefined. */
   accentAgent?: AgentKey;
 }
 

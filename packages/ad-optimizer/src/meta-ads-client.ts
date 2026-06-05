@@ -3,6 +3,7 @@ import type {
   CampaignInsightSchema as CampaignInsight,
   AdSetInsightSchema as AdSetInsight,
   AccountSummarySchema as AccountSummary,
+  AdSetLearningInput,
 } from "@switchboard/schemas";
 
 const API_BASE = "https://graph.facebook.com/v21.0";
@@ -22,12 +23,31 @@ interface CampaignInsightsParams {
   dateRange: DateRange;
   fields: string[];
   breakdowns?: string[];
+  timeIncrement?: number;
+  /**
+   * Pins the Meta `action_attribution_windows` for the `actions` breakdown (e.g.
+   * `["7d_click"]`). When set, action values are reported under exactly these
+   * windows instead of the account default. Used by the breach detector so the
+   * conversions denominator (per `conversionActionType`) is stable across runs.
+   */
+  actionAttributionWindows?: string[];
+  /**
+   * Meta `filtering` clauses (e.g. `[{field:"campaign.id", operator:"IN",
+   * value:[...]}]`). Scoping the account-level read server-side keeps campaigns
+   * of interest inside the first response page (this client does not follow
+   * `paging.next`) and shrinks the payload. Used by the creative-attribution
+   * sweep to scope to published Mira campaigns.
+   */
+  filtering?: Array<{ field: string; operator: string; value: unknown }>;
 }
 
 interface AdSetInsightsParams {
   dateRange: DateRange;
   fields: string[];
   campaignId?: string;
+  /** Page size. Defaults to Meta's small (~25) page when unset; set to match the paired
+   * `/adsets` entity cap so account-level joins don't drop the ad-set tail to spend:0. */
+  limit?: number;
 }
 
 interface DraftCampaignParams {
@@ -47,6 +67,22 @@ interface DraftAdSetParams {
 interface UploadCreativeAssetParams {
   file: Buffer;
   type: "image" | "video";
+}
+
+interface CreateAdCreativeParams {
+  name: string;
+  pageId: string;
+  videoId: string;
+  message: string;
+  linkUrl: string;
+  callToActionType?: string;
+  imageHash?: string;
+}
+
+interface CreateAdParams {
+  name: string;
+  adSetId: string;
+  creativeId: string;
 }
 
 type CampaignStatus = "ACTIVE" | "PAUSED" | "DELETED" | "ARCHIVED";
@@ -81,8 +117,23 @@ export class MetaAdsClient {
       queryParams.set("breakdowns", params.breakdowns.join(","));
     }
 
+    if (params.timeIncrement !== undefined) {
+      queryParams.set("time_increment", String(params.timeIncrement));
+    }
+
+    if (params.actionAttributionWindows) {
+      queryParams.set(
+        "action_attribution_windows",
+        JSON.stringify(params.actionAttributionWindows),
+      );
+    }
+
+    if (params.filtering) {
+      queryParams.set("filtering", JSON.stringify(params.filtering));
+    }
+
     const response = await this.get(`/${this.accountId}/insights?${queryParams.toString()}`);
-    const data = response.data as Record<string, string>[];
+    const data = response.data as Record<string, unknown>[];
     return data.map((raw) => this.mapCampaignInsight(raw));
   }
 
@@ -100,9 +151,101 @@ export class MetaAdsClient {
       );
     }
 
+    if (params.limit !== undefined) {
+      queryParams.set("limit", String(params.limit));
+    }
+
     const response = await this.get(`/${this.accountId}/insights?${queryParams.toString()}`);
     const data = response.data as Record<string, string>[];
     return data.map((raw) => this.mapAdSetInsight(raw));
+  }
+
+  /**
+   * Per-campaign ad-set learning inputs (learning_stage_info + destination_type + spend),
+   * used by MetaCampaignInsightsProvider to derive the campaign-level learning phase.
+   */
+  async getAdSetLearningInputs(campaignId: string): Promise<AdSetLearningInput[]> {
+    return this.fetchAdSetLearningInputs({ campaignId, dateRange: this.last7DayRange() });
+  }
+
+  /**
+   * Account-level ad-set learning inputs (ALL ad sets, no campaign filter). Feeds the weekly
+   * audit's per-source spend attribution: each ad set's `destination_type` maps to a funnel
+   * source (`destinationTypeToSource`) so spend can be attributed without the synthetic
+   * lead-share fallback. ADVISORY-ONLY read path: two account-level GETs (the `/adsets` config
+   * edge + ad-set insights), each behind the 60s rate limiter.
+   */
+  async getAccountAdSetLearningInputs(dateRange: {
+    since: string;
+    until: string;
+  }): Promise<AdSetLearningInput[]> {
+    return this.fetchAdSetLearningInputs({ dateRange });
+  }
+
+  private async fetchAdSetLearningInputs(opts: {
+    campaignId?: string;
+    dateRange: { since: string; until: string };
+  }): Promise<AdSetLearningInput[]> {
+    // NOTE: reads Graph page 1 only (no paging.next follow) on BOTH the entity (/adsets) and
+    // the paired insights edge, each capped at 200. Covers typical accounts; for >200 ad sets
+    // the two edges truncate consistently, so the tail is simply unattributed → coverage drops
+    // → honest abstain (fail-safe). Follow paging.next before broad enablement at larger scale.
+    const qpInit: Record<string, string> = {
+      fields: "id,name,campaign_id,destination_type,learning_stage_info",
+      limit: "200",
+    };
+    if (opts.campaignId) {
+      qpInit.filtering = JSON.stringify([
+        { field: "campaign.id", operator: "EQUAL", value: opts.campaignId },
+      ]);
+    }
+    const qp = new URLSearchParams(qpInit);
+    const entityResp = await this.get(`/${this.accountId}/adsets?${qp.toString()}`);
+    const entities = (entityResp.data as Record<string, unknown>[]) ?? [];
+
+    const insights = await this.getAdSetInsights({
+      dateRange: opts.dateRange,
+      fields: ["adset_id", "spend", "conversions", "frequency", "inline_link_click_ctr"],
+      limit: 200,
+      ...(opts.campaignId ? { campaignId: opts.campaignId } : {}),
+    });
+    const spendByAdSet = new Map<string, AdSetInsight>();
+    for (const ins of insights) spendByAdSet.set(ins.adSetId, ins);
+
+    return entities.map((e) => {
+      const id = String(e.id ?? "");
+      const ins = spendByAdSet.get(id);
+      const rawStatus = (
+        (e.learning_stage_info as { status?: string } | undefined)?.status ?? "UNKNOWN"
+      ).toUpperCase();
+      const learningStageStatus = (
+        ["LEARNING", "SUCCESS", "FAIL"].includes(rawStatus) ? rawStatus : "UNKNOWN"
+      ) as AdSetLearningInput["learningStageStatus"];
+      const spend = ins?.spend ?? 0;
+      const conversions = ins?.conversions ?? 0;
+      const destinationType = e.destination_type ? String(e.destination_type) : undefined;
+      return {
+        adSetId: id,
+        adSetName: String(e.name ?? ""),
+        campaignId: String(e.campaign_id ?? opts.campaignId ?? ""),
+        learningStageStatus,
+        frequency: ins?.frequency ?? 0,
+        spend,
+        conversions,
+        cpa: conversions > 0 ? spend / conversions : 0,
+        roas: 0,
+        inlineLinkClickCtr: ins?.inlineLinkClickCtr ?? 0,
+        ...(destinationType ? { destinationType } : {}),
+      };
+    });
+  }
+
+  private last7DayRange(): { since: string; until: string } {
+    const now = new Date();
+    const since = new Date(now);
+    since.setDate(since.getDate() - 7);
+    const f = (d: Date) => d.toISOString().split("T")[0]!;
+    return { since: f(since), until: f(now) };
   }
 
   async getAccountSummary(): Promise<AccountSummary> {
@@ -169,6 +312,44 @@ export class MetaAdsClient {
     });
 
     return { id: response.id as string, url: response.url as string };
+  }
+
+  async createAdCreative(params: CreateAdCreativeParams): Promise<{ id: string }> {
+    // Video-only by design: the creative pipeline produces video. An image creative
+    // would use object_story_spec.link_data/image_data instead of video_data.
+    const body = {
+      name: params.name,
+      object_story_spec: {
+        page_id: params.pageId,
+        video_data: {
+          video_id: params.videoId,
+          message: params.message,
+          ...(params.imageHash ? { image_hash: params.imageHash } : {}),
+          call_to_action: {
+            type: params.callToActionType ?? "LEARN_MORE",
+            value: { link: params.linkUrl },
+          },
+        },
+      },
+    };
+
+    const response = await this.post(`/${this.accountId}/adcreatives`, body);
+    return { id: response.id as string };
+  }
+
+  async createAd(params: CreateAdParams): Promise<{ id: string }> {
+    // status is hardcoded PAUSED and intentionally NOT a parameter — there is no
+    // path through this client to create a live ad. Activation is a human action
+    // in Ads Manager (see updateCampaignStatus, which throws on "ACTIVE").
+    const body = {
+      name: params.name,
+      adset_id: params.adSetId,
+      creative: { creative_id: params.creativeId },
+      status: "PAUSED",
+    };
+
+    const response = await this.post(`/${this.accountId}/ads`, body);
+    return { id: response.id as string };
   }
 
   async updateCampaignStatus(campaignId: string, status: CampaignStatus): Promise<void> {
@@ -253,23 +434,28 @@ export class MetaAdsClient {
     this.lastCallAt = Date.now();
   }
 
-  private mapCampaignInsight(raw: Record<string, string>): CampaignInsight {
+  private mapCampaignInsight(raw: Record<string, unknown>): CampaignInsight {
     return {
-      campaignId: raw.campaign_id ?? "",
-      campaignName: raw.campaign_name ?? "",
-      status: raw.status ?? "",
-      effectiveStatus: raw.effective_status ?? "",
-      impressions: parseInt(raw.impressions ?? "0", 10),
-      inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
-      spend: parseFloat(raw.spend ?? "0"),
-      conversions: parseInt(raw.conversions ?? "0", 10),
-      revenue: parseFloat(raw.revenue ?? "0"),
-      frequency: parseFloat(raw.frequency ?? "0"),
-      cpm: parseFloat(raw.cpm ?? "0"),
-      inlineLinkClickCtr: parseFloat(raw.inline_link_click_ctr ?? "0"),
-      costPerInlineLinkClick: parseFloat(raw.cost_per_inline_link_click ?? "0"),
-      dateStart: raw.date_start ?? "",
-      dateStop: raw.date_stop ?? "",
+      campaignId: String(raw.campaign_id ?? ""),
+      campaignName: String(raw.campaign_name ?? ""),
+      status: String(raw.status ?? ""),
+      effectiveStatus: String(raw.effective_status ?? ""),
+      impressions: parseInt(String(raw.impressions ?? "0"), 10),
+      inlineLinkClicks: parseInt(String(raw.inline_link_clicks ?? "0"), 10),
+      spend: parseFloat(String(raw.spend ?? "0")),
+      conversions: parseFloat(String(raw.conversions ?? "0")),
+      revenue: parseFloat(String(raw.revenue ?? "0")),
+      frequency: parseFloat(String(raw.frequency ?? "0")),
+      cpm: parseFloat(String(raw.cpm ?? "0")),
+      inlineLinkClickCtr: parseFloat(String(raw.inline_link_click_ctr ?? "0")),
+      costPerInlineLinkClick: parseFloat(String(raw.cost_per_inline_link_click ?? "0")),
+      dateStart: String(raw.date_start ?? ""),
+      dateStop: String(raw.date_stop ?? ""),
+      // Meta returns `actions` as an array of { action_type, value }. Surface it
+      // verbatim when present so action-type-scoped denominators can read it.
+      ...(Array.isArray(raw.actions)
+        ? { actions: raw.actions as { action_type: string; value: string }[] }
+        : {}),
     };
   }
 
@@ -281,7 +467,7 @@ export class MetaAdsClient {
       impressions: parseInt(raw.impressions ?? "0", 10),
       inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
       spend: parseFloat(raw.spend ?? "0"),
-      conversions: parseInt(raw.conversions ?? "0", 10),
+      conversions: parseFloat(raw.conversions ?? "0"),
       frequency: parseFloat(raw.frequency ?? "0"),
       cpm: parseFloat(raw.cpm ?? "0"),
       inlineLinkClickCtr: parseFloat(raw.inline_link_click_ctr ?? "0"),

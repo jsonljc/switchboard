@@ -1,3 +1,4 @@
+import type { OperationalStateConfirmation } from "@switchboard/schemas";
 import type { AttributableKind } from "./outcome-attribution-config.js";
 
 /**
@@ -10,6 +11,29 @@ export type VisibilityFlag =
   | "below_noise_floor"
   | "same_campaign_overlap"
   | "same_kind_retry";
+
+/**
+ * Slice-3 enrichment enums (Riley v3 OutcomeLedger, spec section 2.5).
+ *
+ * causalStrength: "corroborated" is RESERVED for the slice-4 CRM/booking
+ * agreement signal; the attribution engine must never emit it before that
+ * signal exists (honesty floor, spec section 7.5).
+ */
+export type CausalStrength = "directional" | "corroborated" | "inconclusive";
+
+/**
+ * "unknown" until the slice-4 operational-state source exists; never a
+ * fabricated "stable" (spec section 7.4).
+ */
+export type BusinessContextStability = "stable" | "unstable" | "unknown";
+
+/**
+ * Advisory display signal: should trust in this action class move, given
+ * the outcome direction and its causal strength. Recorded and rendered on
+ * the cockpit outcome feed; never fed back into recommendation scoring
+ * (that switch is Phase-C, spec section 2.5).
+ */
+export type TrustDelta = "up" | "none" | "down";
 
 /**
  * Aggregated metrics for a single attribution window. Implementations must
@@ -39,6 +63,21 @@ export interface InsightsWindowQuery {
 export interface MetaInsightsProvider {
   /** Returns null when no insights rows exist for the campaign in this window. */
   getWindowMetrics(query: InsightsWindowQuery): Promise<WindowMetrics | null>;
+}
+
+/**
+ * Slice-4c: the 4a store's window read. Implementation is
+ * PrismaOperationalStateStore in @switchboard/db, injected at the app layer
+ * (core is Layer 3 and cannot import db). Contract: the latest confirmation
+ * at-or-before windowStart (the governing regime) plus every confirmation in
+ * (windowStart, windowEnd], oldest first; [] = honest unknown.
+ */
+export interface OperationalStateReader {
+  getConfirmationsOverlappingWindow(
+    organizationId: string,
+    windowStart: Date,
+    windowEnd: Date,
+  ): Promise<OperationalStateConfirmation[]>;
 }
 
 /**
@@ -110,6 +149,10 @@ export interface RileyOutcomeRow {
   copyTemplate: string | null;
   copyValues: { deltaPct: number; windowDays: number } | null;
   visibilityFlags: VisibilityFlag[];
+  /** Slice-3 enrichments: always present on engine output; NULL on legacy DB rows. */
+  causalStrength: CausalStrength;
+  businessContextStable: BusinessContextStability;
+  trustDelta: TrustDelta;
 }
 
 export interface RecommendationOutcomeStore {

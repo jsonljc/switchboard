@@ -74,10 +74,24 @@ let weekIsLoading = false;
 
 vi.mock("@/hooks/use-agent-metrics", () => ({
   useAgentMetrics: vi.fn((_agentKey: string, metricWindow: "week" | "all" = "week") => {
+    // Surface a real error object when isError is true, mirroring the live hook
+    // (query.error is non-null on failure). KeyResult's keys-pending guard derives
+    // state from {data, error}; an errored query must have error != null to be
+    // distinguishable from keys-pending (data:undefined, error:null).
     if (metricWindow === "all") {
-      return { data: allData, isError: allIsError, isLoading: allIsLoading, error: null };
+      return {
+        data: allData,
+        isError: allIsError,
+        isLoading: allIsLoading,
+        error: allIsError ? new Error("metrics (all) error") : null,
+      };
     }
-    return { data: weekData, isError: weekIsError, isLoading: weekIsLoading, error: null };
+    return {
+      data: weekData,
+      isError: weekIsError,
+      isLoading: weekIsLoading,
+      error: weekIsError ? new Error("metrics (week) error") : null,
+    };
   }),
 }));
 
@@ -106,7 +120,10 @@ vi.mock("@/hooks/use-decision-feed", () => ({
     data: feedData,
     isLoading: feedIsLoading,
     isError: feedIsError,
-    error: null,
+    // Surface a real error when isError is true — OpenDecisions routes through
+    // <QueryStates>, which only shows the error slot when error != null
+    // (keys-pending is data:undefined, error:null → loading).
+    error: feedIsError ? new Error("decisions error") : null,
   }),
 }));
 
@@ -181,7 +198,7 @@ function makeState(agentRole = "responder", lastActionAt = "2026-05-28T11:50:00Z
 
 function makeMetricsVM(
   opts: {
-    kind?: "tours-booked" | "ad-leads" | "creatives-shipped" | "revenue-attributed";
+    kind?: "appointments-booked" | "ad-leads" | "creatives-shipped" | "revenue-attributed";
     value?: number;
     spendCents?: number | null;
     targetCpbCents?: number | null;
@@ -189,7 +206,7 @@ function makeMetricsVM(
 ) {
   return {
     hero: {
-      kind: opts.kind ?? "tours-booked",
+      kind: opts.kind ?? "appointments-booked",
       value: opts.value ?? 12,
       comparator: {},
     },
@@ -385,7 +402,7 @@ describe("AgentPanel state matrix", () => {
   it("3. Metrics window=all 400 → week hero under 'this week', not 'since you hired', not error", () => {
     allData = undefined;
     allIsError = true;
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 7 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 7 });
 
     renderAlexPanel();
 
@@ -431,14 +448,14 @@ describe("AgentPanel state matrix", () => {
   it("5. True zero — hero shows 0, not error/empty; health still renders", () => {
     allData = undefined;
     allIsError = true;
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 0 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 0 });
 
     renderAlexPanel();
 
     // "0" must appear — true zero must show, never coerced away
     expect(screen.getByText("0")).toBeInTheDocument();
-    // Label present ("consults booked")
-    expect(screen.getByText(/consults booked/i)).toBeInTheDocument();
+    // Label present ("appointments booked")
+    expect(screen.getByText(/appointments booked/i)).toBeInTheDocument();
     // No error message — zero is NOT a failed fetch
     expect(screen.queryByText(/couldn't load this week's number/i)).not.toBeInTheDocument();
     // Health line still present (fresh signal)
@@ -456,7 +473,7 @@ describe("AgentPanel state matrix", () => {
     // selectKeyResult with halted=true picks all.data ?? week.data.
     allData = undefined;
     allIsError = true;
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 12 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 12 });
 
     renderAlexPanel();
 

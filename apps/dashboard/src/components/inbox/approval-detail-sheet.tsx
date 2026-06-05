@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import { AGENT_REGISTRY } from "@switchboard/schemas";
 import { relativeTime, undoableFor } from "@/lib/decisions/time";
 import { riskChips } from "@/lib/decisions/risk-chips";
@@ -52,13 +52,13 @@ function ConfirmInline({
       <div className="ds-confirm-head">
         <span aria-hidden="true" />
         <span>
-          One last check — {agentName}&apos;s {primaryLabel.toLowerCase()}.
+          One last check: {agentName}&apos;s {primaryLabel.toLowerCase()}.
         </span>
       </div>
       <textarea
         className="ds-confirm-note"
         rows={2}
-        placeholder="Optional — leave a note for the audit log"
+        placeholder="Optional: leave a note for the audit log"
         value={note}
         onChange={(e) => onNote(e.target.value)}
       />
@@ -110,6 +110,9 @@ export function ApprovalDetailSheet({
   onDismiss,
 }: ApprovalDetailSheetProps) {
   const contract = decision.meta.riskContract;
+  // Accessible name for the aria-modal dialog: point at the visible title line
+  // ("<agent> needs your okay") so screen readers announce what the dialog is.
+  const titleId = useId();
   const mustConfirm = needsConfirm(contract);
   const chips = riskChips(contract);
   const undoableLabel = undoableFor(decision.meta.undoableUntil, nowMs);
@@ -144,6 +147,7 @@ export function ApprovalDetailSheet({
       data-open="true"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
     >
       <span className="sheet-handle" />
       <button type="button" className="sheet-close" onClick={onClose} aria-label="Close detail">
@@ -155,7 +159,7 @@ export function ApprovalDetailSheet({
           <div className="ds-head-id">
             <InboxAgentAvatar agentKey={decision.agentKey} size={36} />
             <div className="ds-head-id-text">
-              <div className="ds-head-line">
+              <div className="ds-head-line" id={titleId}>
                 <span className="ds-head-name" data-agent={decision.agentKey}>
                   {agentName}
                 </span>
@@ -184,8 +188,11 @@ export function ApprovalDetailSheet({
             <ul className="ds-datalines">
               {dataLines.map((line, i) => (
                 <li key={i}>
+                  {/* The lone no-data glyph as a string-literal expression: the
+                      voice-corpus exemption matches the exact glyph, and prettier
+                      cannot pad a string literal with JSX whitespace. */}
                   <span className="ds-datalines-bullet" aria-hidden="true">
-                    —
+                    {"—"}
                   </span>{" "}
                   {Array.isArray(line) ? line.join(" · ") : String(line)}
                 </li>
@@ -229,8 +236,7 @@ export function ApprovalDetailSheet({
             </div>
           </div>
           <p className="ds-pending-caption">
-            We&apos;re saving a slot here for live before-and-after numbers — wiring it up next
-            week.
+            We&apos;re saving a slot here for live before-and-after numbers, wiring it up next week.
           </p>
         </section>
 
@@ -240,7 +246,7 @@ export function ApprovalDetailSheet({
             <div className="ds-risk-missing">
               <span aria-hidden="true" />
               <span>
-                Needs review before this can run — this item was logged before risk-tracking was on.
+                Needs review before this can run. This item was logged before risk-tracking was on.
               </span>
             </div>
           ) : (

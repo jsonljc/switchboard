@@ -3,20 +3,20 @@ import { describe, it, expect } from "vitest";
 import { ALEX_CONFIG, statusColor, statusPulse, animState } from "../alex-config";
 
 describe("alex-config", () => {
-  it("uses coral identity accent (moved off action amber in P0-B)", () => {
-    expect(ALEX_CONFIG.accent.base).toBe("#E07A53");
-    expect(ALEX_CONFIG.accent.deep).toBe("#8C3E1E");
+  it("uses coral identity accent via the canonical --agent-alex tokens (T2)", () => {
+    expect(ALEX_CONFIG.accent.base).toBe("hsl(var(--agent-alex))");
+    expect(ALEX_CONFIG.accent.deep).toBe("hsl(var(--agent-alex-deep))");
   });
 
-  it("statusColor returns red when halted regardless of key", () => {
-    expect(statusColor("WORKING", true)).toBe("#A03A2E");
-    expect(statusColor("WAITING", true)).toBe("#A03A2E");
+  it("statusColor returns destructive when halted regardless of key", () => {
+    expect(statusColor("WORKING", true)).toBe("hsl(var(--destructive))");
+    expect(statusColor("WAITING", true)).toBe("hsl(var(--destructive))");
   });
 
-  it("statusColor returns green for WORKING, amber for WAITING, grey for IDLE", () => {
-    expect(statusColor("WORKING", false)).toBe("#3F7A36");
-    expect(statusColor("WAITING", false)).toBe("#B8782E");
-    expect(statusColor("IDLE", false)).toBe("#A39786");
+  it("statusColor: positive for WORKING, action for WAITING, ink-4 for IDLE", () => {
+    expect(statusColor("WORKING", false)).toBe("hsl(var(--positive))");
+    expect(statusColor("WAITING", false)).toBe("hsl(var(--action))");
+    expect(statusColor("IDLE", false)).toBe("var(--ink-4)");
   });
 
   it("statusPulse pulses only on WORKING/WAITING and never when halted", () => {

@@ -1,0 +1,48 @@
+[
+  {
+    "sel": ".decision-contact-quiet",
+    "route": "/inbox",
+    "fg": "rgb(77,69,66)",
+    "bgAvg": "rgb(252,252,252)",
+    "ratio": 9.12,
+    "floor": 4.5,
+    "tier": "normal (<24px, weight<700)",
+    "pass": true
+  },
+  {
+    "sel": ".ds-datalines li",
+    "route": "/inbox",
+    "fg": "rgb(77,69,66)",
+    "bgAvg": "rgb(247,244,238)",
+    "ratio": 8.52,
+    "floor": 4.5,
+    "tier": "normal (<24px, weight<700)",
+    "pass": true
+  },
+  {
+    "sel": "[class*='quietText']",
+    "route": "/",
+    "fg": "rgb(34,30,28)",
+    "bgAvg": "rgb(228,224,217)",
+    "ratio": 12.56,
+    "floor": 4.5,
+    "tier": "normal (<24px, weight<700)",
+    "pass": true
+  },
+  {
+    "sel": ".ds-action-primary (enabled, center-inset fill)",
+    "route": "/inbox",
+    "fg": "rgb(255,255,255)",
+    "branch": {
+      "bgAvg": "rgb(179,129,77)",
+      "ratio": 3.44
+    },
+    "main": {
+      "bgAvg": "rgb(178,126,74)",
+      "ratio": 3.51
+    },
+    "floor": 4.5,
+    "tier": "normal (14px, weight 600)",
+    "verdict": "PRE-EXISTING: identical on main; the gloss material lightens the real fill below the token amber's 4.51. TY4 changes face/tracking only; recorded for the backlog, not chased."
+  }
+]

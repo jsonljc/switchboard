@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { CoverageValidator } from "./coverage-validator.js";
+import { CoverageValidator, isCoverageSufficient } from "./coverage-validator.js";
 
 describe("CoverageValidator", () => {
   it("classifies campaigns by destination type and reports coverage", async () => {
@@ -24,5 +24,15 @@ describe("CoverageValidator", () => {
     expect(result.bySource.web.tracking).toBe("v2_pending");
     // 200 + 100 / (200+100+300) = 50% covered (excluding web)
     expect(result.coveragePct).toBeCloseTo(0.5, 2);
+  });
+});
+
+describe("isCoverageSufficient", () => {
+  it("passes at or above the 50% coverage floor", () => {
+    expect(isCoverageSufficient({ bySource: {} as never, coveragePct: 0.6 })).toBe(true);
+    expect(isCoverageSufficient({ bySource: {} as never, coveragePct: 0.5 })).toBe(true);
+  });
+  it("fails below the floor", () => {
+    expect(isCoverageSufficient({ bySource: {} as never, coveragePct: 0.2 })).toBe(false);
   });
 });

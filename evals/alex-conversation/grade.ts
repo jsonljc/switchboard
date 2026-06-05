@@ -9,6 +9,8 @@ export const ALEX_ALLOWED_TOOL_IDS = [
   "crm-write",
   "calendar-book",
   "escalate",
+  "follow-up",
+  "delegate",
 ] as const;
 
 export type AllowedToolId = (typeof ALEX_ALLOWED_TOOL_IDS)[number];

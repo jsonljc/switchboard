@@ -210,6 +210,87 @@ export class PrismaConversionRecordStore {
       },
     });
   }
+
+  /**
+   * Per-campaign sum of booked-conversion value for the window, in MINOR units
+   * (cents) — consistent with ConversionEvent.value; the caller normalizes to
+   * major units only at the trueROAS boundary, never here.
+   *
+   * Only valued records count: `type:"booked"` AND `value > 0` AND a present
+   * `sourceCampaignId`. A campaign with no valued booked record is ABSENT from
+   * the map (the caller reads absence as "no attributed booked value" →
+   * trueRoas null), never a fabricated 0.
+   */
+  async queryBookedValueCentsByCampaign(query: {
+    orgId: string;
+    from: Date;
+    to: Date;
+    campaignIds?: string[];
+  }): Promise<Map<string, number>> {
+    const rows = await this.prisma.conversionRecord.groupBy({
+      by: ["sourceCampaignId"],
+      where: {
+        organizationId: query.orgId,
+        type: "booked",
+        value: { gt: 0 },
+        occurredAt: { gte: query.from, lte: query.to },
+        sourceCampaignId: query.campaignIds ? { in: query.campaignIds } : { not: null },
+      },
+      _sum: { value: true },
+    });
+
+    const result = new Map<string, number>();
+    for (const row of rows as Array<{
+      sourceCampaignId: string | null;
+      _sum: { value: number | null };
+    }>) {
+      const sum = row._sum.value ?? 0;
+      if (row.sourceCampaignId && sum > 0) result.set(row.sourceCampaignId, sum);
+    }
+    return result;
+  }
+
+  /**
+   * Sibling of queryBookedValueCentsByCampaign returning BOTH the cents sum
+   * and the record count per campaign, aggregated over the SAME predicate
+   * (`type:"booked"` AND `value > 0` AND present `sourceCampaignId`), so the
+   * count can never be satisfied by zero-value bookings the sum excludes.
+   * Campaigns with no qualifying record are ABSENT from the map (the caller
+   * reads absence as "no attributed bookings" → trueRoas null, never 0).
+   */
+  async queryBookedStatsByCampaign(query: {
+    orgId: string;
+    from: Date;
+    to: Date;
+    campaignIds?: string[];
+  }): Promise<Map<string, { valueCents: number; count: number }>> {
+    const rows = await this.prisma.conversionRecord.groupBy({
+      by: ["sourceCampaignId"],
+      where: {
+        organizationId: query.orgId,
+        type: "booked",
+        value: { gt: 0 },
+        occurredAt: { gte: query.from, lte: query.to },
+        sourceCampaignId: query.campaignIds ? { in: query.campaignIds } : { not: null },
+      },
+      _sum: { value: true },
+      _count: { _all: true },
+    });
+
+    const result = new Map<string, { valueCents: number; count: number }>();
+    for (const row of rows as Array<{
+      sourceCampaignId: string | null;
+      _sum: { value: number | null };
+      _count: { _all: number };
+    }>) {
+      if (!row.sourceCampaignId) continue;
+      result.set(row.sourceCampaignId, {
+        valueCents: row._sum.value ?? 0,
+        count: row._count._all,
+      });
+    }
+    return result;
+  }
 }
 
 function emptyFunnel(dateRange: DateRange): FunnelCounts {

@@ -25,6 +25,17 @@ export interface SwitchboardMetrics {
   outcomePatternsCrossKeyCollision: Counter;
   outcomePatternsDecayed: Counter;
   outcomePatternConfidence: Histogram;
+  slotQueryZeroResult: Counter;
+  rawErrorFallback: Counter;
+  bookingConfirmed: Counter;
+  bookingFailed: Counter;
+  bookingStageAdvanced: Counter;
+  bookingSlotConflict: Counter;
+  bookingReschedule: Counter;
+  bookingCancel: Counter;
+  skillLlmTokensTotal: Counter;
+  skillLlmCostUsdTotal: Counter;
+  governanceVerdictsRecorded: Counter;
 }
 
 export interface Counter {
@@ -90,5 +101,16 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     outcomePatternsCrossKeyCollision: new InMemoryCounter(),
     outcomePatternsDecayed: new InMemoryCounter(),
     outcomePatternConfidence: new InMemoryHistogram(),
+    slotQueryZeroResult: new InMemoryCounter(),
+    rawErrorFallback: new InMemoryCounter(),
+    bookingConfirmed: new InMemoryCounter(),
+    bookingFailed: new InMemoryCounter(),
+    bookingStageAdvanced: new InMemoryCounter(),
+    bookingSlotConflict: new InMemoryCounter(),
+    bookingReschedule: new InMemoryCounter(),
+    bookingCancel: new InMemoryCounter(),
+    skillLlmTokensTotal: new InMemoryCounter(),
+    skillLlmCostUsdTotal: new InMemoryCounter(),
+    governanceVerdictsRecorded: new InMemoryCounter(),
   };
 }

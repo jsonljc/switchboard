@@ -74,7 +74,7 @@
 }
 
 .why-link {
-  font-family: var(--font-sans);
+  font-family: var(--font-body-app);
   font-size: 13px;
   color: var(--ink-3);
   border: none;
@@ -132,7 +132,7 @@
 }
 
 .thread-link {
-  font-family: var(--font-sans);
+  font-family: var(--font-body-app);
   font-size: 13px;
   color: var(--ink-3);
   display: inline-flex;
@@ -151,7 +151,6 @@
 
 .dc-resolved-line {
   font-family: var(--serif);
-  font-style: italic;
   font-size: 18px;
   color: var(--ink-2);
   display: flex;
@@ -161,7 +160,7 @@
   text-wrap: pretty;
 }
 .dc-undo {
-  font-family: var(--font-sans);
+  font-family: var(--font-body-app);
   font-size: 13px;
   display: inline-flex;
   align-items: center;
@@ -192,7 +191,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-sans);
+  font-family: var(--font-body-app);
   font-size: 14px;
   font-weight: 500;
   height: 40px;

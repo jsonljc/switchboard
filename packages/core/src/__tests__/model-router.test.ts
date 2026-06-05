@@ -61,9 +61,16 @@ describe("ModelRouter", () => {
     expect(config.timeoutMs).toBe(5000);
   });
 
-  it("uses default timeout when none specified", () => {
-    const config = router.resolve("default");
-    expect(config.timeoutMs).toBe(8000);
+  it("uses the per-tier slot timeout when no explicit option is given (C2)", () => {
+    // The per-slot timeoutMs replaces the old Haiku-shaped 8s DEFAULT_TIMEOUT_MS.
+    expect(router.resolve("default").timeoutMs).toBe(15_000);
+    expect(router.resolve("premium").timeoutMs).toBe(25_000);
+    expect(router.resolve("critical").timeoutMs).toBe(30_000);
+    expect(router.resolve("embedding").timeoutMs).toBe(8_000);
+  });
+
+  it("lets an explicit timeoutMs option override the per-tier slot value (C2)", () => {
+    expect(router.resolve("premium", { timeoutMs: 1234 }).timeoutMs).toBe(1234);
   });
 });
 

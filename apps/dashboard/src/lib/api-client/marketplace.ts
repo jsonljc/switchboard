@@ -18,6 +18,14 @@ import type {
   ExecutionTraceSummary,
 } from "./marketplace-types";
 
+/** The 202 envelope returned when a governed action parks for approval. */
+export interface CreativePendingApprovalEnvelope {
+  outcome: "PENDING_APPROVAL";
+  workUnitId: string;
+  traceId: string;
+  approvalRequest?: { id: string; bindingHash?: string };
+}
+
 export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
   // ── Marketplace ──
 
@@ -73,21 +81,49 @@ export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
   }
 
   async getBusinessFacts(deploymentId: string) {
-    const { deployment } = await this.request<{ deployment: MarketplaceDeployment }>(
-      `/api/marketplace/deployments/${deploymentId}`,
-    );
-    const config = deployment?.inputConfig as Record<string, unknown> | undefined;
-    return { config: config?.businessFacts ?? null };
+    return this.request<{
+      config: Record<string, unknown> | null;
+      status: "present" | "missing" | "malformed";
+    }>(`/api/marketplace/deployments/${deploymentId}/business-facts`);
   }
 
   async upsertBusinessFacts(deploymentId: string, facts: Record<string, unknown>) {
-    return this.request<{ deployment: MarketplaceDeployment }>(
-      `/api/marketplace/deployments/${deploymentId}`,
+    return this.request<{ ok: true }>(
+      `/api/marketplace/deployments/${deploymentId}/business-facts`,
       {
-        method: "PATCH",
-        body: JSON.stringify({ inputConfig: { businessFacts: facts } }),
+        method: "PUT",
+        body: JSON.stringify(facts),
       },
     );
+  }
+
+  async getLatestOperationalState(deploymentId: string) {
+    return this.request<{
+      confirmation: {
+        id: string;
+        organizationId: string;
+        state: Record<string, unknown>;
+        confirmedBy: string | null;
+        confirmedAt: string;
+        createdAt: string;
+      } | null;
+    }>(`/api/marketplace/deployments/${deploymentId}/operational-state`);
+  }
+
+  async recordOperationalState(deploymentId: string, state: Record<string, unknown>) {
+    return this.request<{
+      confirmation: {
+        id: string;
+        organizationId: string;
+        state: Record<string, unknown>;
+        confirmedBy: string | null;
+        confirmedAt: string;
+        createdAt: string;
+      };
+    }>(`/api/marketplace/deployments/${deploymentId}/operational-state`, {
+      method: "POST",
+      body: JSON.stringify(state),
+    });
   }
 
   async listFacebookAdAccounts(deploymentId: string) {
@@ -326,13 +362,14 @@ export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
     action: "continue" | "stop",
     productionTier?: "basic" | "pro",
   ) {
-    return this.request<{ job: CreativeJobSummary; action: string }>(
-      `/api/marketplace/creative-jobs/${id}/approve`,
-      {
-        method: "POST",
-        body: JSON.stringify({ action, ...(productionTier ? { productionTier } : {}) }),
-      },
-    );
+    // A render over the deployment spend-approval threshold is parked by
+    // governance: the API answers with a PENDING_APPROVAL envelope, not the job.
+    return this.request<
+      { job: CreativeJobSummary; action: string } | CreativePendingApprovalEnvelope
+    >(`/api/marketplace/creative-jobs/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ action, ...(productionTier ? { productionTier } : {}) }),
+    });
   }
 
   async listTraces(deploymentId: string, opts?: { limit?: number; cursor?: string }) {

@@ -10,6 +10,8 @@ function makeStore(overrides?: {
   bookingsByRange?: (from: Date, to: Date) => number;
   leadsByRange?: (from: Date, to: Date) => number;
   spendCents?: number | null;
+  showedByRange?: (from: Date, to: Date) => number;
+  boardLastUpdated?: Date | null;
 }): MetricsSignalStore {
   let bookingCalls = 0;
   return {
@@ -38,6 +40,10 @@ function makeStore(overrides?: {
       return 0;
     }),
     getMetaSpendCents: vi.fn(async () => overrides?.spendCents ?? null),
+    countCurrentlyAtStageUpdatedInWindow: vi.fn(async ({ from, to }) =>
+      overrides?.showedByRange ? overrides.showedByRange(from, to) : 0,
+    ),
+    latestOpportunityStageUpdatedAt: vi.fn(async () => overrides?.boardLastUpdated ?? null),
   };
 }
 
@@ -53,7 +59,7 @@ function makeInput(
 }
 
 describe("buildAlexMetricsViewModel", () => {
-  it("hero.kind is 'tours-booked' and value comes from the this-week count", async () => {
+  it("hero.kind is 'appointments-booked' and value comes from the this-week count", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
     const store = makeStore({
       bookingsByRange: (from, to) => {
@@ -69,19 +75,19 @@ describe("buildAlexMetricsViewModel", () => {
       store,
       targets: DEFAULT_TARGETS,
     });
-    expect(vm.hero.kind).toBe("tours-booked");
-    if (vm.hero.kind !== "tours-booked") throw new Error();
+    expect(vm.hero.kind).toBe("appointments-booked");
+    if (vm.hero.kind !== "appointments-booked") throw new Error();
     expect(vm.hero.value).toBe(14);
     expect(vm.hero.comparator).toEqual({ window: "week", value: 9 });
   });
 
-  it("excludes 'cancelled' status when counting bookings", async () => {
+  it("excludes 'cancelled' and 'failed' statuses when counting bookings", async () => {
     const store = makeStore();
     const week = buildWeekContext(WED_NOW, TZ);
     await buildAlexMetricsViewModel({ orgId: "org-1", week, store, targets: DEFAULT_TARGETS });
     const calls = (store.countBookingsCreated as ReturnType<typeof vi.fn>).mock.calls;
     for (const [arg] of calls) {
-      expect(arg.excludeStatuses).toEqual(["cancelled"]);
+      expect(arg.excludeStatuses).toEqual(["cancelled", "failed"]);
     }
   });
 
@@ -139,8 +145,8 @@ describe("buildAlexMetricsViewModel", () => {
 
   it("sparkline has 4 weekly + 3 daily points on Wednesday; last is isProjection", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
-    const toursPerWeeklyBucket = [7, 8, 9, 9];
-    const toursPerDailyBucket = [2, 5, 8];
+    const bookingsPerWeeklyBucket = [7, 8, 9, 9];
+    const bookingsPerDailyBucket = [2, 5, 8];
     const store = makeStore({
       bookingsByRange: (from, to) => {
         // full-week hero
@@ -149,9 +155,9 @@ describe("buildAlexMetricsViewModel", () => {
         // prevWeek (heroPrev + weeklyBuckets[3] both use same range)
         if (from.getTime() === week.prevWeekStart.getTime()) return 9;
         const weeklyIdx = week.weeklyBuckets.findIndex((b) => b.from.getTime() === from.getTime());
-        if (weeklyIdx >= 0) return toursPerWeeklyBucket[weeklyIdx] ?? 0;
+        if (weeklyIdx >= 0) return bookingsPerWeeklyBucket[weeklyIdx] ?? 0;
         const dailyIdx = week.dailyBuckets.findIndex((b) => b.from.getTime() === from.getTime());
-        if (dailyIdx >= 0) return toursPerDailyBucket[dailyIdx] ?? 0;
+        if (dailyIdx >= 0) return bookingsPerDailyBucket[dailyIdx] ?? 0;
         return 0;
       },
     });
@@ -200,15 +206,15 @@ describe("buildAlexMetricsViewModel", () => {
     });
   });
 
-  it("stats[1] Conversion = tours/leads as percent", async () => {
+  it("stats[1] Showed = operator-confirmed showed count (raw)", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
     const store = makeStore({
-      bookingsByRange: (from, to) => {
-        if (from.getTime() === week.weekStart.getTime() && to.getTime() === week.weekEnd.getTime())
-          return 14;
-        return 0;
-      },
-      leadsByRange: () => 50,
+      bookingsByRange: (from, to) =>
+        from.getTime() === week.weekStart.getTime() && to.getTime() === week.weekEnd.getTime()
+          ? 10
+          : 0,
+      showedByRange: () => 7,
+      boardLastUpdated: new Date("2026-05-06T00:00:00.000Z"),
     });
     const vm = await buildAlexMetricsViewModel({
       orgId: "org-1",
@@ -216,36 +222,25 @@ describe("buildAlexMetricsViewModel", () => {
       store,
       targets: DEFAULT_TARGETS,
     });
-    expect(vm.stats[1]).toEqual({
-      label: "Conversion",
-      display: "28%",
-      rawValue: 0.28,
-      unit: "percent",
-    });
+    expect(vm.stats[1].label).toBe("Showed");
+    expect(vm.stats[1].display).toBe("7");
+    expect(vm.stats[1].rawValue).toBe(7);
+    expect(vm.stats[1].unit).toBe("count");
+    expect(vm.stats[1].unavailable).toBe(false);
+    expect(vm.stats[1].hint).toBe("Operator-confirmed · board updated 2026-05-06");
   });
 
-  it("stats[1] Conversion is 0%/0 when leads=0 (no NaN)", async () => {
-    const week = buildWeekContext(WED_NOW, TZ);
+  it("stats[1] Showed is unavailable when the board was never updated", async () => {
     const store = makeStore({
-      bookingsByRange: (from, to) => {
-        if (from.getTime() === week.weekStart.getTime() && to.getTime() === week.weekEnd.getTime())
-          return 5;
-        return 0;
-      },
-      leadsByRange: () => 0,
+      bookingsByRange: () => 10,
+      showedByRange: () => 0,
+      boardLastUpdated: null,
     });
-    const vm = await buildAlexMetricsViewModel({
-      orgId: "org-1",
-      week,
-      store,
-      targets: DEFAULT_TARGETS,
-    });
-    expect(vm.stats[1]).toEqual({
-      label: "Conversion",
-      display: "0%",
-      rawValue: 0,
-      unit: "percent",
-    });
+    const vm = await buildAlexMetricsViewModel(makeInput(store));
+    expect(vm.stats[1].display).toBe("—");
+    expect(vm.stats[1].unavailable).toBe(true);
+    expect(vm.stats[1].rawValue).toBeNull();
+    expect(vm.stats[1].unit).toBe("count");
   });
 
   it("stats[2] Spend is unavailable: display='—', rawValue=null, unavailable=true", async () => {
@@ -354,6 +349,25 @@ describe("buildAlexMetricsViewModel", () => {
       );
       expect(vm.leads).toBe(47);
       expect(vm.qualifiedPct).toBe(Math.round((9 / 47) * 100));
+    });
+
+    it("echoes showed as a top-level field", async () => {
+      const week = buildWeekContext(WED_NOW, TZ);
+      const store = makeStore({
+        bookingsByRange: (from, to) =>
+          from.getTime() === week.weekStart.getTime() && to.getTime() === week.weekEnd.getTime()
+            ? 10
+            : 0,
+        showedByRange: () => 7,
+        boardLastUpdated: new Date("2026-05-06T00:00:00.000Z"),
+      });
+      const vm = await buildAlexMetricsViewModel({
+        orgId: "org-1",
+        week,
+        store,
+        targets: DEFAULT_TARGETS,
+      });
+      expect(vm.showed).toBe(7);
     });
 
     it("qualifiedDelta returns null when prior leads = 0 (no comparator)", async () => {

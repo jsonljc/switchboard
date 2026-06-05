@@ -42,6 +42,9 @@ const SAMPLE_ROW: RileyOutcomeRow = {
   copyTemplate: "pause.spend.fell",
   copyValues: { deltaPct: -92, windowDays: 7 },
   visibilityFlags: [],
+  causalStrength: "directional",
+  businessContextStable: "unknown",
+  trustDelta: "up",
 };
 
 describe("PrismaRecommendationOutcomeStore.insert", () => {
@@ -58,6 +61,9 @@ describe("PrismaRecommendationOutcomeStore.insert", () => {
         cockpitRenderable: true,
         copyTemplate: "pause.spend.fell",
         visibilityFlags: [],
+        causalStrength: "directional",
+        businessContextStable: "unknown",
+        trustDelta: "up",
       }),
     });
   });
@@ -129,6 +135,9 @@ describe("PrismaRecommendationOutcomeStore.listRenderableForOrg", () => {
         windowEndedAt: new Date("2026-05-08T12:00:00Z"),
         copyTemplate: "pause.spend.fell",
         copyValues: { deltaPct: -92, windowDays: 7 },
+        causalStrength: null,
+        businessContextStable: null,
+        trustDelta: null,
         recommendation: {
           targetEntities: { campaignId: "camp-A", campaignName: "Campaign A" },
           parameters: {},
@@ -141,6 +150,81 @@ describe("PrismaRecommendationOutcomeStore.listRenderableForOrg", () => {
       id: "outcome-1",
       campaignId: "camp-A",
       campaignName: "Campaign A",
+    });
+  });
+
+  it("projects the three enrichment fields when present", async () => {
+    const prisma = buildPrismaMock();
+    (prisma.recommendationOutcome.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: "outcome-1",
+        recommendationId: "rec-1",
+        actionKind: "pause",
+        windowEndedAt: new Date("2026-05-08T12:00:00Z"),
+        copyTemplate: "pause.spend.fell",
+        copyValues: { deltaPct: -92, windowDays: 7 },
+        causalStrength: "directional",
+        businessContextStable: "unknown",
+        trustDelta: "up",
+        recommendation: { targetEntities: { campaignId: "camp-A" }, parameters: {} },
+      },
+    ]);
+    const store = new PrismaRecommendationOutcomeStore(prisma as never);
+    const out = await store.listRenderableForOrg({ orgId: "org-1", agentRole: "riley", limit: 50 });
+    expect(out[0]).toMatchObject({
+      causalStrength: "directional",
+      businessContextStable: "unknown",
+      trustDelta: "up",
+    });
+  });
+
+  it("projects null enrichments on legacy rows (honest absence)", async () => {
+    const prisma = buildPrismaMock();
+    (prisma.recommendationOutcome.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: "outcome-legacy",
+        recommendationId: "rec-9",
+        actionKind: "pause",
+        windowEndedAt: new Date("2026-05-08T12:00:00Z"),
+        copyTemplate: "pause.spend.fell",
+        copyValues: { deltaPct: -92, windowDays: 7 },
+        causalStrength: null,
+        businessContextStable: null,
+        trustDelta: null,
+        recommendation: { targetEntities: { campaignId: "camp-A" }, parameters: {} },
+      },
+    ]);
+    const store = new PrismaRecommendationOutcomeStore(prisma as never);
+    const out = await store.listRenderableForOrg({ orgId: "org-1", agentRole: "riley", limit: 50 });
+    expect(out[0]).toMatchObject({
+      causalStrength: null,
+      businessContextStable: null,
+      trustDelta: null,
+    });
+  });
+
+  it("narrows unexpected enrichment strings to null (fail-closed)", async () => {
+    const prisma = buildPrismaMock();
+    (prisma.recommendationOutcome.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: "outcome-weird",
+        recommendationId: "rec-10",
+        actionKind: "pause",
+        windowEndedAt: new Date("2026-05-08T12:00:00Z"),
+        copyTemplate: "pause.spend.fell",
+        copyValues: { deltaPct: -92, windowDays: 7 },
+        causalStrength: "telepathic",
+        businessContextStable: "vibes",
+        trustDelta: "sideways",
+        recommendation: { targetEntities: { campaignId: "camp-A" }, parameters: {} },
+      },
+    ]);
+    const store = new PrismaRecommendationOutcomeStore(prisma as never);
+    const out = await store.listRenderableForOrg({ orgId: "org-1", agentRole: "riley", limit: 50 });
+    expect(out[0]).toMatchObject({
+      causalStrength: null,
+      businessContextStable: null,
+      trustDelta: null,
     });
   });
 });

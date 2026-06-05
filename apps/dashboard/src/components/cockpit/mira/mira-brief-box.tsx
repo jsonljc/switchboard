@@ -34,6 +34,7 @@ export function MiraBriefBox() {
   const [promoting, setPromoting] = useState("");
   const [goal, setGoal] = useState<MiraBriefGoal>("more_bookings");
   const [vibe, setVibe] = useState<MiraBriefVibe>("warm");
+  const [mode, setMode] = useState<"polished" | "ugc">("polished");
   const [phase, setPhase] = useState<Phase>("edit");
 
   const canPreview = promoting.trim().length > 0 && !halted;
@@ -45,7 +46,7 @@ export function MiraBriefBox() {
 
   async function makeTheDraft() {
     try {
-      await create.mutateAsync({ promoting: promoting.trim(), goal, vibe });
+      await create.mutateAsync({ promoting: promoting.trim(), goal, vibe, mode });
     } catch {
       return; // create.isError is set by the mutation; stay on preview so the user can retry
     }
@@ -122,7 +123,7 @@ export function MiraBriefBox() {
           </div>
           {create.isError && (
             <p style={{ margin: "8px 0 0", fontSize: 12, color: T.red }}>
-              Couldn&apos;t start the draft — try again.
+              Couldn&apos;t start the draft. Try again.
             </p>
           )}
         </div>
@@ -187,6 +188,20 @@ export function MiraBriefBox() {
               </button>
             ))}
           </div>
+          {/* Format toggle (slice-3 spec 3.4): Polished = the assembled multi-scene
+              ad; Real-talk = a single creator-style clip (ugc mode). */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            <button
+              type="button"
+              onClick={() => setMode("polished")}
+              style={chip(mode === "polished")}
+            >
+              Polished
+            </button>
+            <button type="button" onClick={() => setMode("ugc")} style={chip(mode === "ugc")}>
+              Real-talk
+            </button>
+          </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
             <button
@@ -207,7 +222,7 @@ export function MiraBriefBox() {
             )}
             {phase === "submitted" && (
               <span style={{ fontSize: 13, color: MIRA_ACCENT.base }}>
-                Mira is on it — she started a draft. You&apos;ll review it before anything goes
+                Mira is on it. She started a draft. You&apos;ll review it before anything goes
                 further.
               </span>
             )}

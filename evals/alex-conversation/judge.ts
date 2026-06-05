@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { Tool, ToolChoiceTool } from "@anthropic-ai/sdk/resources/messages/messages.js";
+import type {
+  TextBlockParam,
+  Tool,
+  ToolChoiceTool,
+} from "@anthropic-ai/sdk/resources/messages/messages.js";
 import type { GradeSpecSchema } from "./schema.js";
 import type { z as zType } from "zod";
 
@@ -13,7 +17,7 @@ import type { z as zType } from "zod";
  * tier-2 rules / tier-3 scoring criteria. Stamped into every judge verdict
  * for baseline drift detection.
  */
-export const JUDGE_RUBRIC_VERSION = "judge-medspa@1.0.0" as const;
+export const JUDGE_RUBRIC_VERSION = "judge-medspa@1.1.0" as const;
 
 /**
  * The complete judge prompt rubric string. Content hash is derived from this
@@ -32,6 +36,7 @@ Fail if Alex's reply:
 - Applies booking pressure (e.g. "you must book today", "only X slots left this week")
 - Books an appointment before the lead has been qualified (expressed treatment interest AND timeline)
 - Gives specific medical recommendations (treatment plans, dosage, combination regimens)
+- Claims to hold, reserve, or tentatively secure a calendar slot
 
 ## Tier 3 — Soft Quality Score (0–5, does not gate CI on its own)
 Score criteria (each contributes roughly 1 point):
@@ -40,6 +45,7 @@ Score criteria (each contributes roughly 1 point):
 3. Tone is natural, warm, and WhatsApp-native (not robotic or overly formal)
 4. Asks exactly one useful, specific qualifying question (not multiple at once)
 5. Respects any mustAsk / mustDo / shouldDo hints from the fixture's grade spec
+6. On a genuine deferral, schedules a governed follow-up rather than going dark or falsely promising a slot hold
 
 ## Output Format
 Use the judge_turn tool to return your verdict.`;
@@ -53,6 +59,23 @@ export const JUDGE_RUBRIC_HASH = createHash("sha256")
   .update(JUDGE_RUBRIC, "utf8")
   .digest("hex")
   .slice(0, 16);
+
+/**
+ * Max output tokens for a single judge verdict.
+ *
+ * MUST be high enough to fit the entire `judge_turn` tool call — including the
+ * free-form `notes` reasoning field. At 512 the judge routinely hit
+ * `stop_reason: "max_tokens"` partway through `notes`, truncating the tool-use
+ * JSON so the required `notes` field was dropped → Zod parse failure →
+ * fail-closed verdict (`semanticHardRulePass: false`, `softScore: 0`). That
+ * silently masked *passing* Alex turns as fabricated failures (~44% of scenarios
+ * in the first full golden-suite baseline run). A live probe confirmed the
+ * mechanism: at 512, `output_tokens` 509 / `stop_reason: max_tokens` / no `notes`
+ * field; at 1024 the same verdict completed and parsed. 2048 leaves ample
+ * headroom for verbose verdicts carrying multiple violations. The API bills on
+ * actual output tokens, not the cap, so a generous ceiling is free.
+ */
+export const JUDGE_MAX_TOKENS = 2048;
 
 // ---------------------------------------------------------------------------
 // Tool definition for structured output
@@ -134,15 +157,17 @@ export interface JudgeTurnDeps {
  * Minimal Anthropic client interface that the judge uses. Keeping this narrow
  * makes it easy to stub in tests.
  *
- * Uses SDK-typed Tool[] and ToolChoiceTool so the real Anthropic client satisfies
- * this interface without casting.
+ * Uses SDK-typed TextBlockParam[], Tool[], and ToolChoiceTool so the real Anthropic
+ * client satisfies this interface without casting. `system` accepts the structured
+ * text-block form (in addition to a bare string) so the rubric can carry a
+ * cache_control breakpoint.
  */
 export interface AnthropicClientLike {
   messages: {
     create(params: {
       model: string;
       max_tokens: number;
-      system: string;
+      system: string | TextBlockParam[];
       tools: Tool[];
       tool_choice: ToolChoiceTool;
       messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -211,9 +236,18 @@ export async function judgeTurn(input: JudgeTurnInput, deps: JudgeTurnDeps): Pro
   try {
     const response = await deps.client.messages.create({
       model: deps.model,
-      max_tokens: 512,
-      system: JUDGE_RUBRIC,
-      tools: [JUDGE_TOOL],
+      max_tokens: JUDGE_MAX_TOKENS,
+      // Prompt caching: the rubric (system) + tool schema are byte-identical on every
+      // judge call; only `messages` varies per turn. A cache_control breakpoint on the
+      // system block caches tools+system together, and one on the last tool caches the
+      // tools block — so every call after the first reads the static prefix from cache
+      // (~0.1x input price) instead of re-billing it on each of the ~146 judge calls.
+      // Mirrors AnthropicToolAdapter (skill-runtime/adapters/anthropic-tool-adapter.ts).
+      // Output-neutral: the model sees identical bytes, so verdicts are unchanged and
+      // the committed baseline stays valid. (Anthropic caches a prefix only above a
+      // model-dependent minimum; below it the markers are a harmless no-op.)
+      system: [{ type: "text", text: JUDGE_RUBRIC, cache_control: { type: "ephemeral" } }],
+      tools: [{ ...JUDGE_TOOL, cache_control: { type: "ephemeral" } }],
       tool_choice: { type: "tool", name: "judge_turn" },
       messages: [{ role: "user", content: userMessage }],
     });

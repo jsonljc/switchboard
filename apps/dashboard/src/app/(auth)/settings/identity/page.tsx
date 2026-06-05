@@ -282,8 +282,8 @@ export default function SettingsIdentityPage() {
         {/* Name & status */}
         <div className="text-center space-y-2">
           <h1
-            className="font-display font-light text-5xl md:text-6xl tracking-tight text-foreground leading-none"
-            style={{ fontFamily: "var(--font-display)" }}
+            className="text-5xl md:text-6xl tracking-tight text-foreground leading-none"
+            style={{ fontFamily: "var(--font-display-app)", fontWeight: 600 }}
           >
             {displayName}
           </h1>

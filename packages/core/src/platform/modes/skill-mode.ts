@@ -10,6 +10,13 @@ import type { ContextResolverImpl } from "../../skill-runtime/context-resolver.j
 
 export interface SkillModeConfig {
   executor: SkillExecutor;
+  /**
+   * Slice-4: per-slug executor override. SkillMode holds ONE executor for all
+   * skills; the mira brain runs with a dedicated zero-hook executor so Alex's
+   * conversation gates never fire on an internal compose (spec 3.4). Absent or
+   * unmapped slug falls back to `executor` unchanged.
+   */
+  executorBySlug?: Map<string, SkillExecutor>;
   skillsBySlug: Map<string, SkillDefinition>;
   builderRegistry?: BuilderRegistry;
   stores?: SkillStores;
@@ -70,7 +77,13 @@ export class SkillMode implements ExecutionMode {
       // inject_as name a builder also sets.
       const mergedParameters = { ...parameters, ...contextVariables };
 
-      const result = await this.config.executor.execute({
+      // NOTE: this lookup uses the resolved `slug` (deployment.skillSlug with a
+      // legacy fallback) while the builder lookup below uses deployment.skillSlug
+      // ONLY. The divergence is intentional: production always resolves a
+      // deployment, and the legacy intent-prefix slug ("creative.brief") never
+      // matches an executorBySlug key, so it falls back to the default executor.
+      const executor = this.config.executorBySlug?.get(slug) ?? this.config.executor;
+      const result = await executor.execute({
         skill,
         parameters: mergedParameters,
         messages,

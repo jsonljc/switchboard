@@ -1,5 +1,27 @@
 import type { AgentContext } from "@switchboard/sdk";
 import type { ContextBuilder } from "../memory/context-builder.js";
+import type { MiraCreativeReadModelReader } from "../creative-read-model/types.js";
+
+/**
+ * The DeploymentMemory subset the mira builder reads (slice-4 spec 3.3).
+ * PrismaDeploymentMemoryStore satisfies this structurally.
+ */
+export interface DeploymentMemoryHighConfidenceReader {
+  listHighConfidence(
+    organizationId: string,
+    deploymentId: string,
+    minConfidence: number,
+    minSourceCount: number,
+  ): Promise<
+    Array<{
+      id: string;
+      category: string;
+      canonicalKey: string | null;
+      sourceCount: number;
+      confidence: number;
+    }>
+  >;
+}
 
 export interface SkillServices {
   /**
@@ -45,6 +67,10 @@ export interface SkillStores {
   businessFactsStore?: {
     get(organizationId: string): Promise<unknown>;
   };
+  /** Slice-4 mira brain: taste + revenue-proven memory read at brief time. */
+  deploymentMemoryReader?: DeploymentMemoryHighConfidenceReader;
+  /** Slice-4 mira brain: measured performance + pipeline counts at brief time. */
+  miraReadModelReader?: MiraCreativeReadModelReader;
 }
 
 /**

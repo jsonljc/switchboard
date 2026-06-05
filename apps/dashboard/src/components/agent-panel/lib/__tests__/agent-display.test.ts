@@ -39,7 +39,7 @@ describe("parsePanelAgentKey", () => {
 
 describe("labelForHeroKind", () => {
   it("renders medspa-correct labels from kind (never 'tours')", () => {
-    expect(labelForHeroKind("tours-booked")).toBe("consults booked");
+    expect(labelForHeroKind("appointments-booked")).toBe("appointments booked");
     expect(labelForHeroKind("ad-leads")).toBe("leads");
     expect(labelForHeroKind("creatives-shipped")).toBe("creatives shipped");
     expect(labelForHeroKind("revenue-attributed")).toBe("attributed");

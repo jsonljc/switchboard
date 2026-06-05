@@ -66,6 +66,7 @@ export async function actOnRecommendation(
     try {
       const expired: Recommendation = await store.applyAct({
         id: row.id,
+        orgId: input.orgId,
         actor: input.actor,
         fromStatus: "pending",
         toStatus: "expired",
@@ -93,6 +94,7 @@ export async function actOnRecommendation(
   try {
     const updated: Recommendation = await store.applyAct({
       id: row.id,
+      orgId: input.orgId,
       actor: input.actor,
       fromStatus: row.status,
       toStatus: nextStatus(input.action),

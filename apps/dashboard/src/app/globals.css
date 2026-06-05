@@ -10,6 +10,34 @@
 
 @layer base {
   :root {
+    /* ═══ Tier 1: PRIMITIVES — single source of truth (spec §3.1).
+       Raw color values live ONLY in this block. Semantic tokens below
+       reference these via var(); .dark overrides primitives so semantics
+       follow automatically (Wave 3 completes the dark palette). ═══ */
+    --palette-action: 30 58% 41%;        /* AA action amber — white text ≥ 4.5:1 */
+    --palette-action-hover: 30 58% 35%;  /* darker pressed/hover step */
+    --palette-action-fg: 0 0% 100%;      /* pure white — required for AA on amber */
+    --palette-action-subtle: 32 45% 94%; /* light action tint (chips, soft fills) */
+    --palette-action-tint: 38 52% 90%;   /* warmer action surface tint */
+    --palette-action-bright: 30 55% 46%; /* NON-TEXT fills/stripes/pip ONLY — spec §4.5 */
+    --palette-coral: 14 70% 58%;         /* Alex identity */
+    --palette-coral-deep: 14 52% 43%; /* AA with real margin on the hero poster wash (live-sampled); spec intent ~4.9:1 */
+    --palette-coral-tint: 24 60% 95%;
+    --palette-teal: 180 33% 40%;         /* Riley identity */
+    --palette-teal-deep: 178 53% 26%;
+    --palette-teal-tint: 172 34% 93%;
+    --palette-violet: 270 45% 58%;       /* Mira identity */
+    --palette-violet-deep: 256 31% 45%;
+    --palette-violet-tint: 255 33% 95%;
+    --palette-editorial-accent: 20 90% 55%; /* bright editorial orange (Mercury/reports) — NOT the action amber */
+    --palette-editorial-accent-soft: 20 60% 50%; /* softened editorial orange */
+    /* warm-neutral ink ramp — ONE canonical text/neutral scale (T5, by role) */
+    --palette-ink-900: 20 10% 12%; /* primary text */
+    --palette-ink-700: 20 8% 28%; /* secondary */
+    --palette-ink-500: 20 6% 46%; /* tertiary */
+    --palette-ink-400: 20 6% 62%; /* faint */
+    --palette-ink-300: 38 22% 73%; /* quinary — disabled fills / off pills */
+
     /* ─── Surfaces ─── */
     --background: 45 25% 98%;
     --foreground: 30 8% 10%;
@@ -48,20 +76,22 @@
     --negative: 0 38% 40%;
     --negative-foreground: 0 0% 98%;
 
-    /* ─── Operator amber accent ─── */
-    --operator: 30 55% 46%;
-    --operator-foreground: 0 0% 98%;
-    --operator-subtle: 32 45% 94%;
+    /* ─── Operator amber accent (→ action primitive) ─── */
+    --operator: var(--palette-action);
+    --operator-foreground: var(--palette-action-fg);
+    --operator-subtle: var(--palette-action-subtle);
 
     /* ─── Canonical: warm operational editorial (§9) ─── */
     --canvas: 40 25% 94%;          /* warm cream base — same value as --mercury-cream */
-    --action: 30 55% 46%;          /* the ONE action amber — alias of --operator */
-    --action-foreground: 0 0% 98%;
-    --action-hover: 30 55% 40%;
+    --action: var(--palette-action);          /* the ONE action amber (AA, single-source) */
+    --action-foreground: var(--palette-action-fg);
+    --action-hover: var(--palette-action-hover);
+    --action-subtle: var(--palette-action-subtle);
+    --action-tint: var(--palette-action-tint);
     /* Per-agent IDENTITY ONLY — never on action buttons */
-    --agent-alex: 14 70% 58%;      /* coral */
-    --agent-riley: 180 33% 40%;    /* teal */
-    --agent-mira: 270 45% 58%;     /* violet (coming soon) */
+    --agent-alex: var(--palette-coral);
+    --agent-riley: var(--palette-teal);
+    --agent-mira: var(--palette-violet);
 
     /* ─── Cards ─── */
     --card: 0 0% 100%;
@@ -82,7 +112,7 @@
 
     /* ─── Typography ─── */
     --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
-    --font-display: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+    --font-display: ui-sans-serif, system-ui, sans-serif;
 
     /* ─── Public website: Stone & Weight design tokens ─── */
     --sw-base: #F5F3F0;
@@ -107,17 +137,17 @@
        aliases mercury → editorial at .reportsPage so consumers don't
        care which lands first. */
     --mercury-cream: hsl(var(--canvas)); /* aliased → canonical --canvas (hsl-wrapped: consumers use it as a complete color) */
-    --mercury-ink: hsl(20 10% 12%);
-    --mercury-ink-2: hsl(20 8% 28%);
-    --mercury-ink-3: hsl(20 6% 46%);
-    --mercury-ink-4: hsl(20 6% 62%);
-    --mercury-accent: hsl(20 90% 55%); /* editorial red-orange — kept until Phase 2 reclassification */
-    --mercury-accent-soft: hsl(20 60% 50%);
+    --mercury-ink: var(--ink);
+    --mercury-ink-2: var(--ink-2);
+    --mercury-ink-3: var(--ink-3);
+    --mercury-ink-4: var(--ink-4);
+    --mercury-accent: hsl(var(--palette-editorial-accent)); /* editorial red-orange */
+    --mercury-accent-soft: hsl(var(--palette-editorial-accent-soft));
     --mercury-hairline: hsl(40 15% 86%);
     --mercury-hairline-soft: hsl(40 15% 90%);
     --mercury-row-hover: hsl(40 18% 90%);
-    --mercury-pos: hsl(140 35% 35%);
-    --mercury-neg: hsl(0 60% 45%);
+    --mercury-pos: hsl(var(--positive));
+    --mercury-neg: hsl(var(--destructive));
     /* Mercury font vars alias editorial registrations (see app/layout.tsx). */
     --font-serif-mercury: var(--font-serif);
     --font-mono-mercury: var(--font-mono-editorial);
@@ -149,7 +179,7 @@
     /* ─── Character color system ─── */
     --char-body: hsl(30 8% 42%);
     --char-aura: hsl(30 8% 55%);
-    --char-accent: hsl(30 55% 46%);
+    --char-accent: hsl(var(--action));
 
     /* Role: Leads */
     --char-leads-body: hsl(238 28% 52%);
@@ -172,10 +202,11 @@
        (Source Serif 4 prose, JetBrains Mono folios). Do not consume from the
        Mercury / Tools tier. */
     --cream: hsl(40 25% 94%);
-    --ink: hsl(20 10% 12%);
-    --ink-2: hsl(20 8% 28%);
-    --ink-3: hsl(20 6% 46%);
-    --ink-4: hsl(20 6% 62%);
+    --ink: hsl(var(--palette-ink-900));
+    --ink-2: hsl(var(--palette-ink-700));
+    --ink-3: hsl(var(--palette-ink-500));
+    --ink-4: hsl(var(--palette-ink-400));
+    --ink-5: hsl(var(--palette-ink-300));
     --hairline: hsl(40 15% 86%);
 
     /* Editorial font stacks. --font-serif and --font-mono-editorial are wired
@@ -196,7 +227,7 @@
        surfaces declare their own brand orange directly. */
     --hair: var(--hairline);
     --hair-soft: hsl(40 15% 90%);
-    --editorial-accent: hsl(20 90% 55%);
+    --editorial-accent: hsl(var(--palette-editorial-accent));
     --col: 640px;
     --col-wide: 1080px;
     --gap-section: 144px;
@@ -207,21 +238,55 @@
     /* --agent-*-deep/-tint, --shadow-lift, --shadow-sheet, and --canvas-3 are landed here ahead of their first consumers in P1-B / Phase-2 (risk-tiered card, sheet overlays, etc.). They are not consumed in P1-A. */
     --canvas-2: hsl(42 33% 97%); /* lighter inset zone */
     --canvas-3: hsl(40 24% 90%); /* deeper divider / sheet handle */
-    /* agent deep/tint as raw-triples (match --agent-* base; consume via hsl(var(--x))) */
-    --agent-alex-deep: 14 50% 45%;
-    --agent-alex-tint: 24 60% 95%;
-    --agent-riley-deep: 178 53% 26%;
-    --agent-riley-tint: 172 34% 93%;
-    --agent-mira-deep: 256 31% 45%;
-    --agent-mira-tint: 255 33% 95%;
-    /* shadows (complete values, consumed bare) */
-    --shadow-card: 0 1px 0 rgba(40, 30, 20, 0.04), 0 1px 2px rgba(40, 30, 20, 0.05);
-    --shadow-lift: 0 12px 28px rgba(40, 30, 20, 0.1), 0 2px 6px rgba(40, 30, 20, 0.06);
-    --shadow-sheet: 0 -10px 30px rgba(40, 30, 20, 0.08), 0 -1px 2px rgba(40, 30, 20, 0.04);
+    /* agent deep/tint → primitives (consume via hsl(var(--x))) */
+    --agent-alex-deep: var(--palette-coral-deep);
+    --agent-alex-tint: var(--palette-coral-tint);
+    --agent-riley-deep: var(--palette-teal-deep);
+    --agent-riley-tint: var(--palette-teal-tint);
+    --agent-mira-deep: var(--palette-violet-deep);
+    --agent-mira-tint: var(--palette-violet-tint);
+    /* ─── Elevation ladder (EL1) ───
+       ONE warm shadow base (derived from the editorial ink), five downward
+       levels at incrementing offset/blur/opacity, z-index-mapped:
+       1 card-rest, 2 hover, 3 dropdown/popover/toast, 4 sheet, 5 modal.
+       Consumed bare: box-shadow: var(--shadow-3). Dark-overridable via the
+       single --shadow-color override in .dark below. */
+    --shadow-color: 24 16% 11%; /* raw triple: hsl(var(--shadow-color) / a) */
+    --shadow-1: 0 1px 0 hsl(var(--shadow-color) / 0.04), 0 1px 2px hsl(var(--shadow-color) / 0.05);
+    --shadow-2: 0 1px 2px hsl(var(--shadow-color) / 0.05), 0 4px 8px hsl(var(--shadow-color) / 0.06);
+    --shadow-3: 0 2px 6px hsl(var(--shadow-color) / 0.05), 0 10px 26px hsl(var(--shadow-color) / 0.09);
+    --shadow-4: 0 4px 10px hsl(var(--shadow-color) / 0.07), 0 18px 44px hsl(var(--shadow-color) / 0.12);
+    --shadow-5: 0 8px 18px hsl(var(--shadow-color) / 0.1), 0 30px 64px hsl(var(--shadow-color) / 0.16);
+    /* Semantic aliases repoint at the ladder (consumers never change). */
+    --shadow-card: var(--shadow-1);
+    --shadow-lift: var(--shadow-3);
+    /* Directional: bottom-docked sheets cast upward; level-4 weight, shared base. */
+    --shadow-sheet: 0 -10px 30px hsl(var(--shadow-color) / 0.08), 0 -1px 2px hsl(var(--shadow-color) / 0.04);
+    /* Brand material for the ONE amber action button. NOT elevation. */
+    --shadow-action-gloss:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -1px 0 rgba(80, 40, 0, 0.2),
+      0 2px 4px rgba(168, 101, 15, 0.25),
+      0 6px 16px rgba(201, 123, 26, 0.18);
+    /* Static base layers for the armed-button arm-pulse keyframe (amber brand
+       material, composed with a live var() ring in swipe-decision-card). */
+    --shadow-arm-base: 0 1px 0 rgba(80, 40, 0, 0.18), 0 2px 8px rgba(201, 123, 26, 0.25);
     --ease-home: cubic-bezier(0.22, 1, 0.36, 1);
-    /* Home editorial font stacks (wired in layout.tsx) */
-    --font-home-sans: var(--font-hanken), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
-    --font-home-serif: var(--font-newsreader), "Newsreader", "Iowan Old Style", Georgia, serif;
+    /* The authed app register's BODY face (TY4): Geist, loaded in layout.tsx
+       as a variable font. Applied at the register boundary by the body:has
+       rule at the end of this file. This is the ONE site allowed to name the
+       "Geist" fallback head; consumer CSS rides the token. --font-home-sans
+       is the legacy alias (zero churn for its consumers; the previous
+       Home grotesk retired); new code references --font-body-app directly. */
+    --font-body-app: var(--font-geist), "Geist", ui-sans-serif, system-ui, sans-serif;
+    --font-home-sans: var(--font-body-app);
+    /* The ONE authed display semantic (TY3). Consumers reference this token
+       (or one of the legacy aliases beneath it, kept so zero consumers churn).
+       --font-display (DM Sans, bound in layout.tsx) is the LEGACY register
+       token for Mercury, landing, onboarding, and pre-auth surfaces only;
+       it retires when those registers do. */
+    --font-display-app: var(--font-fraunces), "Fraunces", "Iowan Old Style", Georgia, serif;
+    --font-home-serif: var(--font-display-app);
 
     --app-frame: 1280px;     /* desktop content frame — aligns with .app-header-row */
     --app-sidebar-w: 216px;  /* desktop nav rail (consumed in PR2) */
@@ -267,8 +332,9 @@
     --negative: 0 32% 45%;
     --negative-foreground: 0 0% 98%;
 
-    /* Operator amber */
-    --operator: 30 50% 52%;
+    /* Operator amber → override the action PRIMITIVE so --action + --operator
+       both follow in dark (Wave 3 completes the dark palette). */
+    --palette-action: 30 50% 52%;
     --operator-foreground: 0 0% 98%;
     --operator-subtle: 32 40% 16%;
 
@@ -285,7 +351,11 @@
     /* Character */
     --char-body: hsl(30 8% 58%);
     --char-aura: hsl(30 8% 42%);
-    --char-accent: hsl(30 50% 52%);
+    /* --char-accent inherits hsl(var(--action)) → dark amber via --palette-action */
+    /* Elevation: dark swaps the warm base for near-black. Wave 3 replaces
+       shadow-based elevation with tonal surface steps (audit section 6).
+       The dark toggle remains hidden until then. */
+    --shadow-color: 0 0% 0%;
   }
 }
 
@@ -405,7 +475,10 @@
     color: hsl(var(--tertiary-foreground));
   }
 
-  /* Display type — uses the display font */
+  /* LEGACY display utility: DM Sans via --font-display (layout.tsx binding).
+     Remaining consumers are legacy registers (onboarding attribution-coverage,
+     pre-auth, Mercury, landing). Authed surfaces use --font-display-app.
+     Retires with those registers. */
   .font-display {
     font-family: var(--font-display);
   }
@@ -477,8 +550,33 @@
    legacy pages keep their existing background. */
 @layer components {
   body:has(.app-header) {
-    background: var(--ambient-cream, hsl(40 25% 94%));
-    transition: background 1200ms cubic-bezier(0.4, 0, 0.2, 1);
+    /* NOTE: the TY4 body-face rule (end of file) shares this .app-header hook
+       but ALSO excludes [data-register="mercury"]. The divergence is
+       deliberate: the canvas is shell-level (Mercury keeps the cream), the
+       FACE is register-level (Mercury keeps Inter). Edit one, re-check both. */
+    background-color: var(--ambient-cream, hsl(40 25% 94%));
+    /* Warm-riso paper grain (spec 2026-06-04-paper-grain-canvas): a second
+       background layer multiplied into the cream. background-blend-mode blends
+       only the body's own background layers, never child content, so cards, text,
+       the masthead, and the inbox detail sheet are untouched and the grain shows
+       only on the bare canvas. Intensity is the calibrated feColorMatrix alpha
+       (0.24) baked into the data URI; no raw hex (the #filter ref is encoded %23). */
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22200%22%3E%3Cfilter%20id%3D%22g%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%220.88%22%20numOctaves%3D%222%22%20stitchTiles%3D%22stitch%22%20seed%3D%227%22%2F%3E%3CfeColorMatrix%20type%3D%22matrix%22%20values%3D%220%200%200%200%200.16%200%200%200%200%200.13%200%200%200%200%200.09%200%200%200%200.24%200%22%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20filter%3D%22url(%23g)%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: repeat;
+    background-size: 200px 200px;
+    background-blend-mode: multiply;
+    transition: background-color 1200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  /* Grain is a light-mode-only signature: drop the grain layer, keep the cream. */
+  .dark body:has(.app-header) {
+    background-image: none;
+  }
+  /* Reduced motion strips the texture too (spec). The static texture needs its own
+     disable; the global reduced-motion block only neutralizes animation timings. */
+  @media (prefers-reduced-motion: reduce) {
+    body:has(.app-header) {
+      background-image: none;
+    }
   }
 
   /* ===== Editorial auth shell header ===== */
@@ -808,7 +906,6 @@
   }
   .dc-resolved-line {
     font-family: var(--serif);
-    font-style: italic;
     font-size: 18px;
     color: var(--ink-2);
     display: flex;
@@ -1145,7 +1242,6 @@
   .tile-ctx {
     font-family: var(--font-sans);
     font-size: 12.5px;
-    font-style: italic;
     color: var(--ink-3);
     line-height: 1.4;
     display: -webkit-box;
@@ -1193,14 +1289,12 @@
   /* ===== Empty + freshness states ===== */
   .empty-state {
     font-family: var(--serif);
-    font-style: italic;
     font-size: 18px;
     color: var(--ink-2);
     text-wrap: pretty;
   }
   .freshness-note {
     font-family: var(--serif);
-    font-style: italic;
     font-size: 13px;
     color: var(--ink-3);
     margin-top: 8px;
@@ -1294,6 +1388,34 @@
     font-family: var(--font-sans);
     font-size: 13px;
     color: var(--ink-2);
-    box-shadow: 0 8px 24px hsl(20 10% 12% / 0.08);
+    box-shadow: var(--shadow-3);
   }
+}
+
+@layer utilities {
+  /* Real tabular figures — fixes the [data-tabular] no-op (TY1). [data-tabular]
+     keeps each consumer's own face; .num is the canonical metric utility on the
+     JetBrains-Mono instrument face (var(--mono)). */
+  [data-tabular],
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+  .num {
+    font-family: var(--mono);
+  }
+}
+
+/* ===== TY4: the authed app register's body face =====
+   UNLAYERED on purpose: next/font's inter.className on <body> is an unlayered
+   (0,1,0) rule, and any @layer rule loses to it for font-family regardless of
+   specificity. This selector is unlayered (0,2,1): it beats the Inter binding
+   deterministically, order independent. body-level (not a shell wrapper) so
+   Radix portals (sheets, drawers, popovers, toasts) inherit the register face.
+   .app-header is the register hook (same condition as the cream + grain rule;
+   producers: editorial-auth-shell + the shell error boundary, guard-paired);
+   the (auth)/(mercury)/layout.tsx marker opts Mercury routes out wholesale so
+   every Mercury route keeps today's Inter end to end, portals included. */
+body:has(.app-header):not(:has([data-register="mercury"])) {
+  font-family: var(--font-body-app);
 }

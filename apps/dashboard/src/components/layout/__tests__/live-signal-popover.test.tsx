@@ -99,16 +99,16 @@ describe("LiveSignalPopover — pip (trigger)", () => {
     expect(pip!.textContent).toContain("Live");
   });
 
-  it("aria-label reads 'System live — open live signal' when not halted", () => {
+  it("aria-label reads 'System live. Open live signal' when not halted", () => {
     renderPopover({ initialHalted: false });
     const pip = screen.getByRole("button", { name: /system live/i });
-    expect(pip).toHaveAttribute("aria-label", "System live — open live signal");
+    expect(pip).toHaveAttribute("aria-label", "System live. Open live signal");
   });
 
-  it("aria-label reads 'System halted — open live signal' when halted", () => {
+  it("aria-label reads 'System halted. Open live signal' when halted", () => {
     renderPopover({ initialHalted: true });
     const pip = screen.getByRole("button", { name: /system halted/i });
-    expect(pip).toHaveAttribute("aria-label", "System halted — open live signal");
+    expect(pip).toHaveAttribute("aria-label", "System halted. Open live signal");
   });
 
   it("trigger has 'live-pip halted' class when halted", () => {

@@ -9,7 +9,7 @@ import { z } from "zod";
  * `./agent-persona.ts`, which models the full DB row (id, organizationId,
  * createdAt, …) and uses a tone enum + record-typed criteria. This schema
  * is the inputConfig-overlay variant — flatter, loose-typed criteria as
- * string arrays, plain-string tone — matching the runtime `AgentPersona`
+ * string arrays or object records, plain-string tone — matching the runtime `AgentPersona`
  * interface read by core skill builders (alex, sales-pipeline, etc.).
  *
  * The accessor `resolvePersona(inputConfig)` is intentionally lenient:
@@ -17,17 +17,23 @@ import { z } from "zod";
  *   (preserves the existing extractPersona contract — a deployment without
  *   a business name has no usable persona)
  * - defaults `tone` to "professional" when missing or non-string
- * - omits non-array criteria fields (does not coerce strings to arrays)
+ * - retains array OR object (record) criteria; drops primitive criteria (string/number/etc.)
  *
- * Byte-compatible with the legacy `extractPersona` in
- * `packages/core/src/platform/prisma-deployment-resolver.ts:13-35`.
+ * Mirrors the legacy `extractPersona` in
+ * `packages/core/src/platform/prisma-deployment-resolver.ts:13-35`, EXCEPT it
+ * intentionally preserves object/record criteria (the legacy dropped them to
+ * undefined, which crashed prompt interpolation for object-shaped deployments).
  */
 export const AgentPersonaConfigSchema = z.object({
   businessName: z.string(),
   tone: z.string(),
-  qualificationCriteria: z.array(z.string()).optional(),
-  disqualificationCriteria: z.array(z.string()).optional(),
-  escalationRules: z.array(z.string()).optional(),
+  qualificationCriteria: z
+    .union([z.array(z.string()), z.record(z.string(), z.unknown())])
+    .optional(),
+  disqualificationCriteria: z
+    .union([z.array(z.string()), z.record(z.string(), z.unknown())])
+    .optional(),
+  escalationRules: z.union([z.array(z.string()), z.record(z.string(), z.unknown())]).optional(),
   bookingLink: z.string().optional(),
   customInstructions: z.string().optional(),
 });
@@ -41,18 +47,17 @@ export function resolvePersona(
   const businessName = inputConfig.businessName;
   if (typeof businessName !== "string") return undefined;
 
+  const keepCriteria = (v: unknown): string[] | Record<string, unknown> | undefined =>
+    Array.isArray(v) || (v !== null && typeof v === "object")
+      ? (v as string[] | Record<string, unknown>)
+      : undefined;
+
   return {
     businessName,
     tone: typeof inputConfig.tone === "string" ? inputConfig.tone : "professional",
-    qualificationCriteria: Array.isArray(inputConfig.qualificationCriteria)
-      ? (inputConfig.qualificationCriteria as string[])
-      : undefined,
-    disqualificationCriteria: Array.isArray(inputConfig.disqualificationCriteria)
-      ? (inputConfig.disqualificationCriteria as string[])
-      : undefined,
-    escalationRules: Array.isArray(inputConfig.escalationRules)
-      ? (inputConfig.escalationRules as string[])
-      : undefined,
+    qualificationCriteria: keepCriteria(inputConfig.qualificationCriteria),
+    disqualificationCriteria: keepCriteria(inputConfig.disqualificationCriteria),
+    escalationRules: keepCriteria(inputConfig.escalationRules),
     bookingLink: typeof inputConfig.bookingLink === "string" ? inputConfig.bookingLink : undefined,
     customInstructions:
       typeof inputConfig.customInstructions === "string"

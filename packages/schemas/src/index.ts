@@ -73,6 +73,12 @@ export * from "./event-types.js";
 // Marketplace types (Agent Listings, Deployments, Tasks, Trust Scores)
 export * from "./marketplace.js";
 
+// Operational state (operator-confirmed business conditions; Riley v3 slice 4a)
+export * from "./operational-state.js";
+
+// Operational-state staleness policy (consumption-side; Riley v3 slice 4c)
+export * from "./operational-state-policy.js";
+
 // Reference metadata (skill reference YAML frontmatter contract)
 export * from "./reference-metadata.js";
 
@@ -81,6 +87,8 @@ export * from "./agent-persona.js";
 
 // Creative Pipeline (Performance Creative Director)
 export * from "./creative-job.js";
+// Agent-synergy handoff seams (Governed Handoff Contract Freeze)
+export * from "./creative-concept-draft.js";
 
 // UGC v2 — Creative Pipeline
 export * from "./ugc-job.js";
@@ -148,6 +156,8 @@ export * from "./pcd-identity.js";
 
 // Recommendations (surface, status, action enums + canonical input shape)
 export * from "./recommendations.js";
+// Riley -> agent recommendation handoff payload (Governed Handoff Contract Freeze §4.3)
+export * from "./recommendation-handoff.js";
 
 // Reports v1 view-model (operator deep-dive surface)
 export * from "./reports/v1.js";
@@ -177,6 +187,9 @@ export * from "./whatsapp-template-create.js";
 // Canonical-key enum + Zod refinement (PR-3.2a — outcome-pattern bucketing)
 export * from "./canonical-keys.js";
 
+// Scheduled reminder status + dedupe key (PR-4 — appointment reminders)
+export * from "./scheduled-reminder.js";
+
 // Outcome-pattern surfacing config (PR-3.2e — per-deployment pilotMode flag)
 export * from "./outcome-patterns-config.js";
 
@@ -194,10 +207,18 @@ export * from "./policy-overrides-config.js";
 // PR-3: Allowlisted directional copy for "observed" activity rows
 export {
   ALLOWLISTED_TEMPLATES,
+  TRUST_DELTA_COPY,
   renderOutcomeCopy,
+  renderTrustDeltaCopy,
   type OutcomeCopyTemplate,
   type OutcomeCopyValues,
 } from "./recommendation-outcome-copy.js";
 
 // Mira Director's Desk — open-brief schema, mapping, and intent classifier (PR3)
 export * from "./mira-brief.js";
+
+// Mira slice-4 brain — compose request/output contract + parser
+export * from "./mira-compose.js";
+
+// Scheduled follow-up types
+export * from "./scheduled-follow-up.js";

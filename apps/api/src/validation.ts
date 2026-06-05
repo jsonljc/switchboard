@@ -57,7 +57,15 @@ export const ExecuteBodySchema = z.object({
 
 export const ApprovalRespondBodySchema = z.object({
   action: z.enum(["approve", "reject", "patch"]),
-  respondedBy: z.string().min(1).max(500),
+  /**
+   * Optional since the lifecycle-native leg: the route derives the responder
+   * from the authenticated principal. When both are present they must match
+   * (403 otherwise). Body fallback is honored only when auth is disabled
+   * (dev/test).
+   */
+  respondedBy: z.string().min(1).max(500).optional(),
+  /** Optional operator note recorded in the audit ledger snapshot. */
+  note: z.string().max(2000).optional(),
   patchValue: z
     .record(z.string().max(200), z.unknown())
     .refine((obj) => JSON.stringify(obj).length <= 100_000, {
@@ -66,6 +74,22 @@ export const ApprovalRespondBodySchema = z.object({
     .optional(),
   bindingHash: z.string().max(500).optional(),
 });
+
+/**
+ * Internal chat-approval bridge respond body (bridge spec section 3.1).
+ * .strict() is load-bearing: identity fields (respondedBy and friends) must be
+ * unrepresentable on this wire; the binding lookup is the only authority.
+ */
+export const InternalChatApprovalRespondBodySchema = z
+  .object({
+    approvalId: z.string().min(1).max(500),
+    action: z.enum(["approve", "reject"]),
+    bindingHash: z.string().min(1).max(500),
+    channel: z.string().min(1).max(100),
+    channelIdentifier: z.string().min(1).max(500),
+    organizationId: z.string().min(1).max(500),
+  })
+  .strict();
 
 // ── Simulate ─────────────────────────────────────────────────────────
 
@@ -158,6 +182,17 @@ export const UpdateConnectionBodySchema = z.object({
     })
     .optional(),
   scopes: z.array(z.string().max(200)).max(50).optional(),
+});
+
+// Setter for the Facebook Page id stored in a meta-ads connection's credentials.
+// Meta ad `page_id` requires the numeric Page ID (a vanity username will not work);
+// the 5–32 digit bound rejects trivial typos. Format is a sanity check — the
+// human-gated publish step is the ultimate validator.
+export const SetMetaPageIdBodySchema = z.object({
+  pageId: z
+    .string()
+    .trim()
+    .regex(/^\d{5,32}$/, "Facebook Page id must be the numeric Page ID (digits only)."),
 });
 
 // ── Governance ──────────────────────────────────────────────────────

@@ -18,7 +18,10 @@ import {
   ConversationLifecycleTracker,
   createConsentService,
   loadRevocationKeywords,
+  recordGovernanceVerdictMetric,
+  HttpApprovalRespondTransport,
 } from "@switchboard/core";
+import type { HandleApprovalResponseConfig } from "@switchboard/core";
 import { createAnthropicAdapter } from "@switchboard/core/agent-runtime";
 import {
   ConversationCompoundingService,
@@ -43,6 +46,32 @@ function createEmbeddingAdapter(): EmbeddingAdapter {
   }
   console.warn("[gateway] VOYAGE_API_KEY not set — semantic search and memory dedup disabled");
   return new DisabledEmbeddingAdapter();
+}
+
+/**
+ * Approval respond bridge (spec 2026-06-05-chat-approval-bridge-design.md
+ * section 5): the chat process cannot host the respond engine (no
+ * ExecutionModeRegistry), so operator approve/reject taps thin-forward the
+ * webhook-authenticated channel identity to the API internal route over the
+ * INTERNAL_API_SECRET trust channel; the API re-derives the principal from
+ * OperatorChannelBinding. Wired only when both env vars are present;
+ * otherwise the gateway keeps the fail-closed NOT_AUTHORIZED reply for
+ * approval-shaped payloads.
+ */
+function buildApprovalResponseConfig(): HandleApprovalResponseConfig | undefined {
+  const baseUrl = process.env["SWITCHBOARD_API_URL"];
+  const internalApiSecret = process.env["INTERNAL_API_SECRET"];
+  if (!baseUrl || !internalApiSecret) {
+    console.warn(
+      "[gateway] approval respond bridge disabled: set SWITCHBOARD_API_URL and " +
+        "INTERNAL_API_SECRET to enable chat approve/reject buttons. Approval taps " +
+        "will reply not-authorized until then.",
+    );
+    return undefined;
+  }
+  return {
+    transport: new HttpApprovalRespondTransport({ baseUrl, internalApiSecret }),
+  };
 }
 
 export interface GatewayBridgeOptions {
@@ -135,7 +164,12 @@ export function createGatewayBridge(
   // ---------------------------------------------------------------------------
   const deploymentStore = new PrismaDeploymentStore(prisma);
   const gatewayGovernanceResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
-  const gatewayGovernanceVerdictStore = new PrismaGovernanceVerdictStore(prisma);
+  // onWrite mirrors every persisted verdict into the dual-prom counter
+  // (switchboard_governance_verdicts_total) — the observe-bake read surface.
+  // NOTE: single-callback slot; compose if a second onWrite consumer lands.
+  const gatewayGovernanceVerdictStore = new PrismaGovernanceVerdictStore(prisma, {
+    onWrite: recordGovernanceVerdictMetric,
+  });
   const gatewayPostureCache = new InMemoryGovernancePostureCache();
   const gatewayHandoffStore = new PrismaHandoffStore(prisma);
   // Adapter: GatewayConversationStatusSetter → upsert when context available,
@@ -236,6 +270,7 @@ export function createGatewayBridge(
     conversationStore: new PrismaGatewayConversationStore(prisma),
     contactStore: new PrismaContactStore(prisma),
     approvalStore: new PrismaApprovalStore(prisma),
+    approvalResponseConfig: buildApprovalResponseConfig(),
     governanceConfigResolver: gatewayGovernanceResolver,
     escalationTriggerLoader: loadEscalationTriggers,
     verdictStore: gatewayGovernanceVerdictStore,

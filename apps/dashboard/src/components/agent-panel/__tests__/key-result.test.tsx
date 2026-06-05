@@ -12,14 +12,30 @@ let weekIsError = false;
 let weekIsLoading = false;
 let missionData: unknown = undefined;
 let missionIsLoading = false;
+let missionIsError = false;
+let missionError: unknown = null;
 let haltedValue = false;
 
 vi.mock("@/hooks/use-agent-metrics", () => ({
   useAgentMetrics: vi.fn((agentKey: string, metricWindow: "week" | "all" = "week") => {
+    // Surface a real error object when isError is true, mirroring the live hook
+    // (query.error is non-null on failure). The keys-pending guard derives state
+    // from {data, error}, so error must be non-null for an errored query to be
+    // distinguishable from keys-pending (data:undefined, error:null).
     if (metricWindow === "all") {
-      return { data: allData, isError: allIsError, isLoading: allIsLoading, error: null };
+      return {
+        data: allData,
+        isError: allIsError,
+        isLoading: allIsLoading,
+        error: allIsError ? new Error("metrics (all) error") : null,
+      };
     }
-    return { data: weekData, isError: weekIsError, isLoading: weekIsLoading, error: null };
+    return {
+      data: weekData,
+      isError: weekIsError,
+      isLoading: weekIsLoading,
+      error: weekIsError ? new Error("metrics (week) error") : null,
+    };
   }),
 }));
 
@@ -27,8 +43,8 @@ vi.mock("@/hooks/use-agent-mission", () => ({
   useAgentMission: () => ({
     data: missionData,
     isLoading: missionIsLoading,
-    isError: false,
-    error: null,
+    isError: missionIsError,
+    error: missionError,
   }),
 }));
 
@@ -49,15 +65,16 @@ import { KeyResult } from "../key-result";
 
 function makeMetricsVM(
   overrides: {
-    kind?: "tours-booked" | "ad-leads" | "creatives-shipped" | "revenue-attributed";
+    kind?: "appointments-booked" | "ad-leads" | "creatives-shipped" | "revenue-attributed";
     value?: number;
     spendCents?: number | null;
     targetCpbCents?: number | null;
+    roi?: unknown;
   } = {},
 ) {
   return {
     hero: {
-      kind: overrides.kind ?? "tours-booked",
+      kind: overrides.kind ?? "appointments-booked",
       value: overrides.value ?? 12,
       comparator: {},
     },
@@ -80,6 +97,7 @@ function makeMetricsVM(
     bookedDelta: null,
     leadsDelta: null,
     qualifiedDelta: null,
+    roi: overrides.roi,
   };
 }
 
@@ -93,15 +111,24 @@ describe("KeyResult slot — launch-blocker tests", () => {
     weekData = undefined;
     weekIsError = false;
     weekIsLoading = false;
+    // Default mission to a SETTLED state (resolved, errored) rather than the
+    // keys-pending {data:undefined, isError:false} state. The keys-pending guard
+    // treats "no data and no real error yet" as loading; tests that don't supply
+    // a mission must still be past keys-pending so they exercise the metrics
+    // branches. selectKeyResult only reads mission.data (undefined here either
+    // way), so a settled-errored mission is behaviourally identical for them.
+    // The dedicated keys-pending test overrides these back to the pending state.
     missionData = undefined;
     missionIsLoading = false;
+    missionIsError = true;
+    missionError = new Error("mission unavailable");
     haltedValue = false;
   });
 
   // Blocker 1: window=all succeeds → hero under "since you hired …" (lifetime), shows the lifetime value.
   it("1. window=all succeeds → shows lifetime value under 'since you hired' eyebrow", () => {
-    allData = makeMetricsVM({ kind: "tours-booked", value: 214 });
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 5 });
+    allData = makeMetricsVM({ kind: "appointments-booked", value: 214 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 5 });
     render(<KeyResult agentKey="alex" />);
 
     // The big number shown should be the ALL-window value (214), not the week value (5)
@@ -116,7 +143,7 @@ describe("KeyResult slot — launch-blocker tests", () => {
   it("2. window=all errors + week ok → shows week value under 'this week' label, not 'since you hired'", () => {
     allData = undefined;
     allIsError = true;
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 7 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 7 });
     render(<KeyResult agentKey="alex" />);
 
     // Week value shown
@@ -146,13 +173,13 @@ describe("KeyResult slot — launch-blocker tests", () => {
   it("4. true zero value=0 (setup complete, not paused) → renders '0', not error or empty", () => {
     allData = undefined;
     allIsError = true; // all fails; fall to week
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 0 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 0 });
     render(<KeyResult agentKey="alex" />);
 
     // "0" must be in the document
     expect(screen.getByText("0")).toBeInTheDocument();
     // Must have a label
-    expect(screen.getByText(/consults booked/i)).toBeInTheDocument();
+    expect(screen.getByText(/appointments booked/i)).toBeInTheDocument();
     // Error message must NOT appear
     expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
   });
@@ -160,35 +187,42 @@ describe("KeyResult slot — launch-blocker tests", () => {
   // Blocker 5: halted + week value 12 → shows 12 (muted) + "No new actions are going out while paused", and NO health/comparator beat.
   it("5. halted + week value 12 → shows 12 (muted) + paused note; no CPL comparator", () => {
     haltedValue = true;
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 12 });
+    // all settles (errored, 400) → week fallback supplies the hero. Both windows
+    // settled = production-faithful; the keys-pending guard needs the unused
+    // window resolved, not pending-looking.
+    allIsError = true;
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 12 });
     render(<KeyResult agentKey="alex" />);
 
     // Hero value shown (muted)
     expect(screen.getByText("12")).toBeInTheDocument();
     // Paused note
     expect(screen.getByText("No new actions are going out while paused")).toBeInTheDocument();
-    // No CPL comparator text
-    expect(screen.queryByText(/per lead/i)).not.toBeInTheDocument();
+    // No ROI comparator text
+    expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
     // No error message
     expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
   });
 
-  // Blocker 6: Riley CPL beat: spendCents 142000, hero ad-leads value 32, targetCpbCents 3500 → renders "$44.38 per lead · $9.38 over your $35 target" (neutral text; assert NO element has a green/up or red/down class).
-  it("6. Riley CPL beat — correct neutral text, no green/red classes", () => {
+  // Riley ROI proof now comes from the server-computed roi.comparator (cost per booked).
+  it("6. Riley roi proof — renders 'cost per booked' comparator, neutral, no green/red classes", () => {
     allData = makeMetricsVM({
       kind: "ad-leads",
       value: 32,
-      spendCents: 142000,
-      targetCpbCents: 3500,
+      roi: {
+        degraded: true,
+        degradedHint: "",
+        label: "cost per booked",
+        comparator: { value: "$44 per booked", target: "target $35" },
+      },
     });
-    render(<KeyResult agentKey="riley" />);
-
-    // Must show the CPL beat text
-    expect(screen.getByText(/\$44\.38 per lead/i)).toBeInTheDocument();
-    expect(screen.getByText(/\$9\.38 over your \$35 target/i)).toBeInTheDocument();
-
-    // Assert NO element has a green/up or red/down class
+    // week settles (errored) so the unused window isn't pending-looking; proof
+    // is driven by the all-window data above.
+    weekIsError = true;
     const { container } = render(<KeyResult agentKey="riley" />);
+
+    expect(screen.getByText("$44 per booked · target $35")).toBeInTheDocument();
+
     const allElements = container.querySelectorAll("[class]");
     allElements.forEach((el) => {
       const cls = el.className;
@@ -201,9 +235,49 @@ describe("KeyResult slot — launch-blocker tests", () => {
     });
   });
 
+  it("6b. Riley roi blank CAC (value '—') → renders NO comparator line", () => {
+    allData = makeMetricsVM({
+      kind: "ad-leads",
+      value: 32,
+      roi: {
+        degraded: true,
+        degradedHint: "No bookings attributed yet",
+        label: "cost per booked",
+        comparator: { value: "—", target: "target $35" },
+      },
+    });
+    // week settles (errored) so we reach the proof branch (not the skeleton) and
+    // the "no comparator line" assertion is meaningful.
+    weekIsError = true;
+    render(<KeyResult agentKey="riley" />);
+    expect(screen.getByText("32")).toBeInTheDocument();
+    expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
+  });
+
+  it("6c. Riley roi real CAC but no target ('—') → renders NO comparator line", () => {
+    allData = makeMetricsVM({
+      kind: "ad-leads",
+      value: 32,
+      roi: {
+        degraded: true,
+        degradedHint: "No target set",
+        label: "cost per booked",
+        comparator: { value: "$44 per booked", target: "—" },
+      },
+    });
+    // week settles (errored) so we reach the proof branch (not the skeleton).
+    weekIsError = true;
+    render(<KeyResult agentKey="riley" />);
+    expect(screen.getByText("32")).toBeInTheDocument();
+    expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
+  });
+
   // Blocker 7: halted + core-setup-incomplete (mission setup has { primary: true, done: false }) + week value 12 → paused composition wins (shows 12 + paused note + a small setup note), and the activation block is NOT rendered.
   it("7. halted + core-setup-incomplete + week value 12 → paused wins; no activation block", () => {
     haltedValue = true;
+    // all settles (errored) so the unused window isn't pending-looking; paused
+    // hero falls back to the week value below.
+    allIsError = true;
     weekData = makeMetricsVM({ kind: "ad-leads", value: 12 });
     missionData = {
       agentKey: "riley",
@@ -296,8 +370,8 @@ describe("KeyResult slot — launch-blocker tests", () => {
 
   // Gap 1 — non-core nudge present when proof + non-primary setup step incomplete
   it("gap1a. proof + non-core setup step incomplete → proof hero shows + non-core-nudge present + no activation-block", () => {
-    allData = makeMetricsVM({ kind: "tours-booked", value: 8 });
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 2 });
+    allData = makeMetricsVM({ kind: "appointments-booked", value: 8 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 2 });
     missionData = {
       agentKey: "alex",
       displayName: "Alex",
@@ -388,6 +462,36 @@ describe("KeyResult slot — launch-blocker tests", () => {
     expect(screen.queryByText(/this week/i)).not.toBeInTheDocument();
   });
 
+  // Keys-pending guard — hooks are `enabled: !!keys`, so before the session
+  // resolves orgId React Query reports isLoading:false, data:undefined,
+  // isError:false, error:null. The guard must still treat this as loading
+  // (no data and no real error yet) and render the skeleton, never an
+  // error/proof flash.
+  it("keys-pending. all hooks data:undefined isLoading:false isError:false → skeleton, not error/proof", () => {
+    allData = undefined;
+    weekData = undefined;
+    missionData = undefined;
+    allIsLoading = false;
+    weekIsLoading = false;
+    missionIsLoading = false;
+    allIsError = false;
+    weekIsError = false;
+    // True keys-pending: mission also has no data and no real error yet.
+    missionIsError = false;
+    missionError = null;
+    const { container } = render(<KeyResult agentKey="alex" />);
+
+    // Skeleton present (data-kind=loading / aria-busy)
+    const loadingEl = container.querySelector("[data-kind='loading']");
+    expect(loadingEl).not.toBeNull();
+    expect(loadingEl?.getAttribute("aria-busy")).toBe("true");
+
+    // No error, no proof hero, no eyebrow
+    expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/since you hired/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/this week/i)).not.toBeInTheDocument();
+  });
+
   // Activation CTA — onActivate wired: clicking the button calls onActivate
   it("activation-cta. onActivate is called when the activation button is clicked", () => {
     allData = undefined;
@@ -422,8 +526,8 @@ describe("KeyResult slot — launch-blocker tests", () => {
 
   // Gap 1 — all-complete proof renders NO nudge
   it("gap1c. proof + all setup complete → no non-core-nudge", () => {
-    allData = makeMetricsVM({ kind: "tours-booked", value: 20 });
-    weekData = makeMetricsVM({ kind: "tours-booked", value: 4 });
+    allData = makeMetricsVM({ kind: "appointments-booked", value: 20 });
+    weekData = makeMetricsVM({ kind: "appointments-booked", value: 4 });
     missionData = {
       agentKey: "alex",
       displayName: "Alex",

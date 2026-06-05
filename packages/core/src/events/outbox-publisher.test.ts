@@ -122,4 +122,68 @@ describe("OutboxPublisher", () => {
     expect(emittedEvent.value).toBe(50);
     expect(emittedEvent.metadata.bookingId).toBe("bk_1");
   });
+
+  it("carries customer/attribution/currency through, preserving explicit nulls", async () => {
+    outboxStore.fetchPending.mockResolvedValue([
+      {
+        id: "ob_4",
+        eventId: "evt_4",
+        type: "booked",
+        payload: {
+          type: "booked",
+          contactId: "ct_1",
+          organizationId: "org_1",
+          value: 320000,
+          currency: "SGD",
+          sourceCampaignId: "camp_1",
+          sourceAdId: "ad_1",
+          customer: { email: "jane@example.com", phone: null },
+          attribution: { fbclid: null, lead_id: "lead_9" },
+          occurredAt: "2026-04-20T10:00:00Z",
+          source: "calendar-book",
+          metadata: { bookingId: "bk_1" },
+        },
+        status: "pending",
+        attempts: 0,
+      },
+    ]);
+    bus.emit.mockResolvedValue(undefined);
+
+    await publisher.publishBatch();
+
+    const emitted = (bus.emit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(emitted.currency).toBe("SGD");
+    expect(emitted.customer).toEqual({ email: "jane@example.com", phone: null });
+    expect(emitted.attribution).toEqual({ fbclid: null, lead_id: "lead_9" });
+  });
+
+  it("reconstructs legacy payloads with no new keys (fields undefined, not dropped-erroneously)", async () => {
+    outboxStore.fetchPending.mockResolvedValue([
+      {
+        id: "ob_5",
+        eventId: "evt_5",
+        type: "booked",
+        payload: {
+          type: "booked",
+          contactId: "ct_1",
+          organizationId: "org_1",
+          value: 0,
+          occurredAt: "2026-04-20T10:00:00Z",
+          source: "calendar-book",
+          metadata: {},
+        },
+        status: "pending",
+        attempts: 0,
+      },
+    ]);
+    bus.emit.mockResolvedValue(undefined);
+
+    await publisher.publishBatch();
+
+    const emitted = (bus.emit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(emitted.customer).toBeUndefined();
+    expect(emitted.attribution).toBeUndefined();
+    expect(emitted.currency).toBeUndefined();
+    expect(outboxStore.markPublished).toHaveBeenCalledWith("ob_5");
+  });
 });

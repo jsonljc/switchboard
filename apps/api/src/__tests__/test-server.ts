@@ -153,6 +153,13 @@ export interface BuildTestServerOptions {
    * directly set this `true` so the second call actually reaches the ingress.
    */
   disableHttpIdempotency?: boolean;
+  /**
+   * Wire an in-memory ApprovalLifecycleService into PlatformIngress + app.
+   * Opt-in so the legacy route-owned approval path (dev-no-DB production shape)
+   * keeps its own coverage in api-approvals.test.ts; lifecycle-path suites
+   * (api-approvals-lifecycle, api-decisions-parked) opt in.
+   */
+  lifecycle?: boolean;
 }
 
 export async function buildTestServer(options: BuildTestServerOptions = {}): Promise<TestContext> {
@@ -424,6 +431,12 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   const { resolveAuthoritativeDeployment } =
     await import("../bootstrap/platform-deployment-resolver.js");
 
+  let lifecycleService: import("@switchboard/core").ApprovalLifecycleService | null = null;
+  if (options.lifecycle) {
+    const { ApprovalLifecycleService, InMemoryLifecycleStore } = await import("@switchboard/core");
+    lifecycleService = new ApprovalLifecycleService({ store: new InMemoryLifecycleStore() });
+  }
+
   const platformIngress = new PlatformIngress({
     intentRegistry,
     modeRegistry,
@@ -431,9 +444,11 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     deploymentResolver: resolveAuthoritativeDeployment(null),
     traceStore: workTraceStore,
     entitlementResolver: undefined,
+    lifecycleService: lifecycleService ?? undefined,
   });
   app.decorate("platformIngress", platformIngress);
   app.decorate("workTraceStore", workTraceStore);
+  app.decorate("lifecycleService", lifecycleService);
 
   // Test-only ingress trace observer: the ObservableWorkTraceStore records the
   // most recent persisted WorkTrace summary AND counts persist() calls so

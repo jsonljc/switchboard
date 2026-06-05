@@ -57,15 +57,15 @@ export interface DirectionOutput {
 
 // ── Deterministic selection helpers ──
 
-function pickFrom<T>(arr: T[], seed: number = 0): T {
-  if (arr.length === 0) {
-    throw new Error("Cannot pick from empty array");
-  }
+/**
+ * Pick with a neutral fallback instead of throwing (slice-3 spec 3.3e): a
+ * creator with empty appearance/environment arrays (the PCD backfill's
+ * placeholder stock creator) must not crash the scripting phase.
+ */
+function pickFrom<T>(arr: T[], fallback: T, seed: number = 0): T {
+  if (arr.length === 0) return fallback;
   const selected = arr[seed % arr.length];
-  if (selected === undefined) {
-    throw new Error("Unexpected undefined in array");
-  }
-  return selected;
+  return selected === undefined ? fallback : selected;
 }
 
 // ── Energy mapping ──
@@ -162,12 +162,12 @@ export function generateDirection(input: DirectionInput): DirectionOutput {
   const { creator, structure, ugcFormat } = input;
 
   const sceneStyle: SceneStyle = {
-    lighting: pickFrom(UGC_LIGHTING),
+    lighting: pickFrom(UGC_LIGHTING, "natural"),
     cameraAngle: getCameraAngle(ugcFormat),
     cameraMovement: getCameraMovement(ugcFormat),
-    environment: pickFrom(creator.environmentSet),
+    environment: pickFrom(creator.environmentSet, "bright clinic interior"),
     wardrobeSelection: creator.appearanceRules.wardrobePalette.slice(0, 2),
-    hairState: pickFrom(creator.appearanceRules.hairStates),
+    hairState: pickFrom(creator.appearanceRules.hairStates, "natural"),
     props: [],
   };
 

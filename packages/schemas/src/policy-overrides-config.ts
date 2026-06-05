@@ -81,3 +81,23 @@ export function resolveTrustLevelOverride(
     ? (raw as GovernanceTrustLevel)
     : undefined;
 }
+
+/**
+ * Explicit per-deployment opt-in for the spend-approval autonomy lever, stored in
+ * `AgentDeployment.governanceSettings` under the `spendAutonomy` key (boolean).
+ *
+ * This MUST be a separate, explicitly-set signal — NOT derived from the presence
+ * of `spendApprovalThreshold`, which is a non-nullable Prisma column
+ * (`Float @default(50)`) and is therefore ALWAYS populated. Without this flag, the
+ * lever would silently treat the $50 schema default as an operator-chosen
+ * auto-execute boundary the moment a deployment is `trustLevelOverride:"autonomous"`
+ * (which the seed already ships for Alex/Riley) — an unchosen boundary, exactly the
+ * "stored ≠ enforced safely" failure class. Defaulting `false` keeps the lever
+ * dormant until an operator deliberately enables it. The threshold *value* still
+ * comes from the `spendApprovalThreshold` column; this flag only controls whether
+ * the lever is active at all.
+ */
+export function resolveSpendAutonomyEnabled(governanceSettings: unknown): boolean {
+  if (!governanceSettings || typeof governanceSettings !== "object") return false;
+  return (governanceSettings as Record<string, unknown>).spendAutonomy === true;
+}

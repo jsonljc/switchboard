@@ -471,6 +471,38 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
         reasonCode: "governance_unavailable",
       }),
     );
+    expect(result.response).toBe(""); // genuine resolver error with no cached posture → fail-closed blank
+  });
+
+  it("status:'error' (invalid config) with a cached posture → proceeds via the cache, not a blank", async () => {
+    // status:"error" (Zod-invalid config) differs from a resolver throw: resolveConfig
+    // consults the cache and proceeds with the cached posture rather than failing closed.
+    const deps = makeDeps({
+      governanceConfigResolver: vi
+        .fn()
+        .mockResolvedValue({ status: "error", error: new Error("invalid governanceConfig") }),
+      postureCache: {
+        lastKnown: vi.fn().mockReturnValue({
+          enabled: true,
+          mode: "enforce",
+          jurisdiction: "SG",
+          clinicType: "medical",
+          allowMarketingTemplateSubstitution: false,
+        }),
+        remember: vi.fn(),
+      },
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    const before = result.response;
+
+    await hook.afterSkill!(makeCtx(), result);
+
+    // Inside the 24h window (makeDeps threadStore = 1h ago) → allow, response untouched.
+    expect(result.response).toBe(before);
+    expect(deps.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "allow" }),
+    );
   });
 
   it("uses cached posture when resolver errors", async () => {
@@ -618,5 +650,40 @@ describe("WhatsAppWindowGateHook — fail closed", () => {
     expect(deps.verdictStore.save).toHaveBeenCalledWith(
       expect.objectContaining({ reasonCode: "governance_unavailable" }),
     );
+  });
+});
+
+describe("WhatsAppWindowGateHook — unconfigured deployment (no-op, byte-identical)", () => {
+  it("status:'missing' → passthrough: response unchanged, no verdict, channel resolver never called", async () => {
+    const deps = makeDeps({
+      governanceConfigResolver: vi.fn().mockResolvedValue({ status: "missing" }),
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    const before = result.response;
+
+    await hook.afterSkill!(makeCtx(), result);
+
+    expect(result.response).toBe(before);
+    expect(deps.verdictStore.save).not.toHaveBeenCalled();
+    expect(deps.handoffStore.save).not.toHaveBeenCalled();
+    expect(deps.channelTypeResolver.resolve).not.toHaveBeenCalled();
+  });
+
+  it("resolved governanceConfig WITHOUT a whatsappWindow block → passthrough, no verdict", async () => {
+    const deps = makeDeps({
+      governanceConfigResolver: vi.fn().mockResolvedValue({
+        status: "resolved",
+        config: { jurisdiction: "SG", clinicType: "medical" }, // no whatsappWindow sub-block
+      }),
+    });
+    const hook = new WhatsAppWindowGateHook(deps as never);
+    const result = makeResult();
+    const before = result.response;
+
+    await hook.afterSkill!(makeCtx(), result);
+
+    expect(result.response).toBe(before);
+    expect(deps.verdictStore.save).not.toHaveBeenCalled();
   });
 });

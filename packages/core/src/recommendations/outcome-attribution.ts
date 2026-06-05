@@ -1,10 +1,16 @@
+import type { OperationalStateConfirmation } from "@switchboard/schemas";
 import { KIND_CONFIG, type AttributableKind } from "./outcome-attribution-config.js";
+import { deriveBusinessContextStability } from "./operational-stability.js";
 import type {
   AttributableRecommendation,
   AttributableRecommendationStore,
+  BusinessContextStability,
+  CausalStrength,
   MetaInsightsProvider,
+  OperationalStateReader,
   RecommendationOutcomeStore,
   RileyOutcomeRow,
+  TrustDelta,
   VisibilityFlag,
   WindowMetrics,
 } from "./outcome-attribution-types.js";
@@ -16,6 +22,13 @@ export interface AttributeOneInput {
   preWindow: WindowMetrics | null;
   postWindow: WindowMetrics | null;
   overlaps: { id: string; actionKind: AttributableKind }[];
+  /**
+   * Slice-4c: operator operational-state confirmations overlapping the FULL
+   * attribution window (the getConfirmationsOverlappingWindow contract:
+   * governing + in-window, oldest first). undefined = no source wired; [] =
+   * source wired, zero confirmations. Both derive "unknown" (honest absence).
+   */
+  operationalStateConfirmations?: OperationalStateConfirmation[];
 }
 
 export function attributeOneRecommendation(input: AttributeOneInput): RileyOutcomeRow {
@@ -91,13 +104,41 @@ export function attributeOneRecommendation(input: AttributeOneInput): RileyOutco
   const cockpitRenderable = flags.length === 0 && deltaPct !== null;
   const confidence: "low" | "medium" = cockpitRenderable ? config.confidence : "low";
 
+  // 7. Slice-3 enrichments (advisory; spec sections 2.5, 7.4, 7.5).
+  // causalStrength is derived from the flags/delta directly, not from
+  // cockpitRenderable, so a future renderability change cannot silently
+  // change causal semantics. "corroborated" requires the slice-4
+  // CRM/booking-agreement signal and is never emitted here.
+  const causalStrength: CausalStrength =
+    flags.length === 0 && deltaPct !== null ? "directional" : "inconclusive";
+  // Slice 4c: real verdict from the operator operational-state confirmations
+  // overlapping the FULL attribution window (pre+post span). No source / no
+  // confirmations ⇒ "unknown" (honest absence), never a fabricated "stable".
+  // "corroborated" stays unemitted: the CRM/booking-agreement signal is
+  // deferred (plan Decision F); a stable window is context, not an
+  // independent second estimate.
+  const businessContextStable: BusinessContextStability = deriveBusinessContextStability({
+    confirmations: input.operationalStateConfirmations ?? [],
+    windowStartedAt,
+    windowEndedAt,
+  });
+
   let copyTemplate: string | null = null;
   let copyValues: { deltaPct: number; windowDays: number } | null = null;
+  let trustDelta: TrustDelta = "none";
 
   if (cockpitRenderable && deltaPct !== null) {
     const direction = Math.sign(deltaPct);
     const favorableSign = config.favorableDirection === "down" ? -1 : 1;
     const isFavorable = direction === favorableSign;
+
+    // The noise floor guarantees |deltaPct| >= noiseFloorPct on a clean row,
+    // so a directional outcome always has a definite direction. Slice 4c: an
+    // outcome whose window the business context disrupted must not claim a
+    // trust signal; the delta is real but its causal reading is confounded
+    // (spec 2.5: "stable enough for the result to mean anything"). "unknown"
+    // context preserves the slice-3 behavior (no operator source, no demotion).
+    trustDelta = businessContextStable === "unstable" ? "none" : isFavorable ? "up" : "down";
 
     if (candidate.actionKind === "pause") {
       copyTemplate = isFavorable ? "pause.spend.fell" : "pause.spend.changed";
@@ -129,6 +170,9 @@ export function attributeOneRecommendation(input: AttributeOneInput): RileyOutco
     copyTemplate,
     copyValues,
     visibilityFlags: flags,
+    causalStrength,
+    businessContextStable,
+    trustDelta,
   };
 }
 
@@ -151,6 +195,11 @@ export interface RunRileyOutcomeAttributionInput {
   recommendationStore: AttributableRecommendationStore;
   insightsProvider: MetaInsightsProvider;
   outcomeStore: RecommendationOutcomeStore;
+  /**
+   * Optional (slice 4c). The 4a operational-state window read; absent ⇒
+   * every row records businessContextStable "unknown" (honest absence).
+   */
+  operationalStateReader?: OperationalStateReader;
   orgId: string;
   now: Date;
 }
@@ -158,7 +207,14 @@ export interface RunRileyOutcomeAttributionInput {
 export async function runRileyOutcomeAttribution(
   input: RunRileyOutcomeAttributionInput,
 ): Promise<RileyOutcomeRunSummary> {
-  const { recommendationStore, insightsProvider, outcomeStore, orgId, now } = input;
+  const {
+    recommendationStore,
+    insightsProvider,
+    outcomeStore,
+    operationalStateReader,
+    orgId,
+    now,
+  } = input;
   const summary: RileyOutcomeRunSummary = {
     orgId,
     candidatesScanned: 0,
@@ -203,6 +259,16 @@ export async function runRileyOutcomeAttribution(
       windowEnd: postEnd,
     });
 
+    // Slice 4c: operational-state confirmations overlapping the FULL
+    // attribution window; fetched BEFORE the quota-bearing Meta calls (cheap
+    // indexed DB read first). A read failure PROPAGATES like every other
+    // provider error here: outcome rows are insert-once, so writing "unknown"
+    // on a transient blip would freeze it forever; the Inngest retry derives
+    // it right instead.
+    const operationalStateConfirmations = operationalStateReader
+      ? await operationalStateReader.getConfirmationsOverlappingWindow(orgId, preStart, postEnd)
+      : undefined;
+
     // Meta windows — let provider errors propagate to trigger Inngest retry
     const [preWindow, postWindow] = await Promise.all([
       insightsProvider.getWindowMetrics({
@@ -222,6 +288,7 @@ export async function runRileyOutcomeAttribution(
       preWindow,
       postWindow,
       overlaps,
+      ...(operationalStateConfirmations !== undefined ? { operationalStateConfirmations } : {}),
     });
 
     try {

@@ -32,13 +32,18 @@ export function resolveGovernanceMode(config: GovernanceConfig | null): Governan
  * sub-blocks at runtime.
  *
  * Defaults: mode="off" (pure pass-through), latencyBudgetMs=800 (per-turn budget
- * for all sentence classifications combined), model="claude-haiku-4-5-20251001".
+ * for all sentence classifications combined), model="claude-haiku-4-5-20251001",
+ * confidenceThreshold=0.7 (a sub-threshold classification is treated as allow).
  */
 export const ClaimClassifierConfigSchema = z
   .object({
     mode: GovernanceModeSchema.default("off"),
     latencyBudgetMs: z.number().int().positive().default(800),
     model: z.string().min(1).default("claude-haiku-4-5-20251001"),
+    // T1.1: a classification below this confidence is not trusted to rewrite or
+    // escalate a turn (the hook treats it as allow). De-risks the off->enforce
+    // flip; root of over-flag #673. Principled default, not an operator UI knob.
+    confidenceThreshold: z.number().min(0).max(1).default(0.7),
   })
   .default({});
 
@@ -144,4 +149,58 @@ export function resolveLifecycleQualificationConfig(
     ?.lifecycleTagging as Record<string, unknown> | undefined;
   const raw = lifecycleTagging?.qualification;
   return LifecycleTaggingQualificationConfigSchema.parse(raw ?? {});
+}
+
+export interface ObserveGovernanceConfigInput {
+  jurisdiction: "SG" | "MY";
+  clinicType: "medical" | "nonMedical";
+}
+
+// A type alias (not an interface) so the value stays assignable to JSON-column
+// input types that use index signatures (e.g. Prisma's InputJsonValue).
+export type ObserveGovernanceConfig = {
+  jurisdiction: "SG" | "MY";
+  clinicType: "medical" | "nonMedical";
+  deterministicGate: { mode: "observe" };
+  claimClassifier: { mode: "observe" };
+  consentState: { mode: "observe" };
+  whatsappWindow: {
+    enabled: boolean;
+    mode: "observe";
+    allowMarketingTemplateSubstitution: boolean;
+  };
+  lifecycleTagging: {
+    mechanical: { mode: "off" };
+    qualification: { mode: "off" };
+  };
+};
+
+/**
+ * Canonical all-gates-observe posture for staged governance rollout: every
+ * mode-bearing gate (the shared pre-input/output deterministic gate, the claim
+ * classifier, the consent gate, the WhatsApp window gate) runs telemetry-only;
+ * lifecycle tagging stays off. Seeds and tests consume THIS factory so the
+ * seeded posture, the parity test, and the eval can never drift apart.
+ * The off->enforce flip is a deliberate per-gate ops config update on the
+ * observe bake, never a default.
+ */
+export function buildObserveGovernanceConfig(
+  input: ObserveGovernanceConfigInput,
+): ObserveGovernanceConfig {
+  return {
+    jurisdiction: input.jurisdiction,
+    clinicType: input.clinicType,
+    deterministicGate: { mode: "observe" },
+    claimClassifier: { mode: "observe" },
+    consentState: { mode: "observe" },
+    whatsappWindow: {
+      enabled: true,
+      mode: "observe",
+      allowMarketingTemplateSubstitution: false,
+    },
+    lifecycleTagging: {
+      mechanical: { mode: "off" },
+      qualification: { mode: "off" },
+    },
+  };
 }

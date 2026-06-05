@@ -117,5 +117,13 @@ export interface CampaignInsightsProvider {
     startDate: Date;
     endDate: Date;
     snapshots?: WeeklyCampaignSnapshot[];
+    /**
+     * Phase-A Gate 1: when set, the conversions denominator for the breach test is
+     * the value of this Meta `actions` action_type under a pinned attribution
+     * window, not the unfiltered aggregate `conversions`. Unset ⇒ aggregate.
+     */
+    conversionActionType?: string;
+    /** Attribution windows pinned for `conversionActionType`. Default ["7d_click"]. */
+    attributionWindows?: string[];
   }): Promise<TargetBreachResult>;
 }

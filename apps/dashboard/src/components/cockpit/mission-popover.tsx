@@ -64,7 +64,7 @@ export function MissionPopover({ open, onClose, mission, agentLabel = "Alex" }: 
       ref={containerRef}
       role="dialog"
       aria-label={`${agentLabel} mission`}
-      className="absolute z-30 mt-2 w-[min(420px,calc(100vw-2rem))] rounded-lg border shadow-lg"
+      className="absolute z-30 mt-2 w-[min(420px,calc(100vw-2rem))] rounded-lg border shadow-[var(--shadow-3)]"
       style={{ background: T.paper, borderColor: T.hair, color: T.ink }}
     >
       <div className="divide-y" style={{ borderColor: T.hair }}>

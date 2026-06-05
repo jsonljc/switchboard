@@ -3,10 +3,16 @@ import { Inngest } from "inngest";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 import { AuditRunner } from "./audit-runner.js";
-import type { AdsClientInterface, AuditConfig } from "./audit-runner.js";
+import type {
+  AdsClientInterface,
+  AuditConfig,
+  BookedValueByCampaignProvider,
+} from "./audit-runner.js";
 import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/schemas";
 import type { SignalHealthReport, SignalHealthReportProvider } from "./signal-health-checker.js";
 import type { RecommendationEmitter } from "./recommendation-sink.js";
+import type { CoverageReport } from "./onboarding/coverage-validator.js";
+import type { RecommendationHandoffSubmitter } from "./recommendation-handoff-dispatch.js";
 
 interface DeploymentInfo {
   id: string;
@@ -15,6 +21,11 @@ interface DeploymentInfo {
     monthlyBudget?: number;
     targetCPA?: number;
     targetROAS?: number;
+    targetCostPerBooked?: number;
+    /** Phase-A Gate 1: Meta `actions` action_type for the breach denominator (e.g. "lead"). */
+    conversionActionType?: string;
+    /** Attribution windows pinned for `conversionActionType` (e.g. ["7d_click"]). */
+    attributionWindows?: string[];
   };
 }
 
@@ -52,6 +63,42 @@ export interface CronDependencies {
    * row + a paired WorkTrace row atomically (Wave B PR-1 substrate).
    */
   recommendationEmitter?: RecommendationEmitter;
+  /**
+   * Optional Gate 0. When provided, the weekly audit's AuditRunner gets a
+   * coverage validator and abstains (no recommendations, one explanatory insight)
+   * if tracked-source coverage is below the sufficiency floor. Default unset ⇒ no
+   * gate (production behavior unchanged until a real validator is wired in
+   * apps/api). NOTE: the real CoverageValidator needs `listCampaigns` + an intake
+   * store, neither of which is available on the current cron ads client — wiring a
+   * production validator is a follow-up.
+   */
+  createCoverageValidator?: (
+    deploymentId: string,
+    creds: DeploymentCredentials,
+  ) => { validate(q: { orgId: string; accountId: string }): Promise<CoverageReport> };
+  /**
+   * Optional. Per-campaign booked-VALUE (cents) provider for the weekly audit's
+   * trueROAS reporting (`campaignEconomics`). A singleton keyed on orgId — no
+   * per-deployment creds. Wired in apps/api/src/bootstrap/inngest.ts with
+   * PrismaConversionRecordStore. Absent ⇒ trueROAS reported null (graceful).
+   */
+  bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
+  /**
+   * Optional. When provided, each EMITTED creative recommendation that clears the
+   * handoff abstention is routed to a governed Mira draft (parking for mandatory
+   * human approval) through this bootstrap-injected submit callback. Wired in
+   * apps/api/src/bootstrap/inngest.ts; ad-optimizer (Layer 2) never imports
+   * PlatformIngress. Absent ⇒ the weekly audit produces no Riley -> agent handoffs.
+   */
+  recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
+  /**
+   * Optional (slice 4c). Latest operator operational-state confirmation per
+   * org, feeding RevenueState.businessContextFreshness in the weekly audit.
+   * Wired in apps/api/src/bootstrap/inngest.ts with
+   * PrismaOperationalStateStore.getLatest; ad-optimizer (Layer 2) never
+   * imports the store. Absent ⇒ freshness stays "unknown" (back-compat).
+   */
+  getLatestOperationalState?: (organizationId: string) => Promise<{ confirmedAt: Date } | null>;
 }
 
 interface StepTools {
@@ -84,9 +131,15 @@ function fmt(d: Date): string {
 
 // TODO(scale): Both weekly-audit and daily-signal-health crons loop
 // deployments serially. Each deployment runs ~4–6 Graph API calls inside a
-// single Inngest step, so wall time scales O(N). Acceptable up to ~25
-// deployments; revisit (parallelize via Promise.all of step.run) if launch
-// tenancy crosses that threshold.
+// single Inngest step, so wall time scales O(N). With the real
+// MetaCampaignInsightsProvider wired in, cost is now per-campaign (not just
+// per-deployment): each campaign adds ~4 serialized Graph calls (learning
+// inputs + daily breach window) behind the 60s RATE_LIMIT_MS, so total wall
+// time ≈ N_deployments × N_campaigns × 60s. Per-source attribution adds 2 more
+// ACCOUNT-level Graph calls per weekly deployment (the /adsets config edge +
+// account ad-set insights), i.e. +~60s/deployment — flat, not per-campaign.
+// Acceptable at current tenancy; revisit (parallelize via Promise.all of
+// step.run) if launch tenancy crosses ~25 deployments or avg campaign count > 5.
 
 export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies): Promise<void> {
   const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
@@ -106,11 +159,29 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
 
     await step.run(`audit-${deployment.id}`, async () => {
       const adsClient = deps.createAdsClient(creds);
+      // NOTE (PR2): read as a strict number. Sibling inputConfig fields (targetCPA/
+      // targetROAS) are stored as strings by the seed/wizard; a future producer that
+      // writes targetCostPerBooked as a string would be silently dropped here (→ Tier 2
+      // CPL, never booked_cac). When a real producer lands (wizard), route it through
+      // resolveAdOptimizerConfig/AdOptimizerConfigSchema to coerce string→number.
+      const cpb = deployment.inputConfig.targetCostPerBooked;
+      // Phase-A Gate 1: optional conversions-denominator config. Default unset =
+      // back-compat (aggregate `conversions`). Guarded like targetCostPerBooked so a
+      // missing/empty producer value never silently changes the denominator.
+      const conversionActionType = deployment.inputConfig.conversionActionType;
+      const attributionWindows = deployment.inputConfig.attributionWindows;
       const config: AuditConfig = {
         accountId: creds.accountId,
         orgId: deployment.organizationId,
         targetCPA: deployment.inputConfig.targetCPA ?? 100,
         targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
+        ...(typeof cpb === "number" && cpb > 0 ? { targetCostPerBooked: cpb } : {}),
+        ...(typeof conversionActionType === "string" && conversionActionType
+          ? { conversionActionType }
+          : {}),
+        ...(Array.isArray(attributionWindows) && attributionWindows.length > 0
+          ? { attributionWindows }
+          : {}),
         mediaBenchmarks: {
           inlineLinkClickCtr: 2.0,
           landingPageViewRate: 0.85,
@@ -122,12 +193,50 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         pixelId && deps.createSignalHealthChecker
           ? deps.createSignalHealthChecker(creds)
           : undefined;
+      // Gate 0 (optional, back-compat). Unset ⇒ no coverage gate. A production
+      // validator is a follow-up (needs listCampaigns + intake store).
+      const coverageValidator = deps.createCoverageValidator
+        ? deps.createCoverageValidator(deployment.id, creds)
+        : undefined;
       const runner = new AuditRunner({
         adsClient,
         crmDataProvider: deps.createCrmProvider(deployment.id),
         insightsProvider: deps.createInsightsProvider(adsClient),
         config,
+        // Per-source spend attribution: feed real account ad-set destination data so
+        // computeSpendBySource attributes spend (vs the synthetic lead-share fallback).
+        // Resilient: an ad-set fetch failure degrades to null (→ lead-share → honest abstain),
+        // never a crashed weekly run. Read-only; advisory path unchanged.
+        ...(adsClient.getAccountAdSetLearningInputs
+          ? {
+              getAdSetInsights: async ({
+                dateRange,
+              }: {
+                dateRange: { since: string; until: string };
+                fields: string[];
+              }) => {
+                try {
+                  return await adsClient.getAccountAdSetLearningInputs!(dateRange);
+                } catch (err) {
+                  // Error-level: a swallowed fetch failure must be visible to ops/alerting.
+                  // The audit still completes (the per-campaign analysis is independent), and
+                  // the source-reallocation rec degrades to honest abstain (lead-share). A
+                  // report-level "ad-set data unavailable" insight is a deferred enhancement;
+                  // re-throwing instead would re-run every rate-limited Graph call on a blip.
+                  console.error(
+                    `[ad-optimizer] ad-set attribution fetch failed for deployment=${deployment.id}; ` +
+                      `falling back to lead-share (no source reallocation this run): ${String(err)}`,
+                  );
+                  return null;
+                }
+              },
+            }
+          : {}),
         ...(signalHealthChecker ? { signalHealthChecker } : {}),
+        ...(coverageValidator ? { coverageValidator } : {}),
+        ...(deps.bookedValueByCampaignProvider
+          ? { bookedValueByCampaignProvider: deps.bookedValueByCampaignProvider }
+          : {}),
         ...(deps.recommendationEmitter
           ? {
               recommendationEmitter: deps.recommendationEmitter,
@@ -136,6 +245,12 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
                 deploymentId: deployment.id,
               },
             }
+          : {}),
+        ...(deps.recommendationHandoffSubmitter
+          ? { recommendationHandoffSubmitter: deps.recommendationHandoffSubmitter }
+          : {}),
+        ...(deps.getLatestOperationalState
+          ? { operationalStateProvider: { getLatest: deps.getLatestOperationalState } }
           : {}),
       });
       const report = await runner.run(dateRanges);

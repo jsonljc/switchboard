@@ -1,0 +1,71 @@
+import { z } from "zod";
+
+/** One deterministic Riley decision case. Inputs are the exact `decideForCampaign`
+ * inputs a fixture can express without a live Graph/CRM call; expectedOutcome is the
+ * reduced label the harness asserts. */
+export const RileyCaseSchema = z.object({
+  id: z.string().min(1),
+  current: z.object({
+    impressions: z.number(),
+    inlineLinkClicks: z.number(),
+    spend: z.number(),
+    conversions: z.number(),
+    revenue: z.number(),
+    frequency: z.number(),
+  }),
+  previous: z
+    .object({
+      impressions: z.number(),
+      inlineLinkClicks: z.number(),
+      spend: z.number(),
+      conversions: z.number(),
+      revenue: z.number(),
+      frequency: z.number(),
+    })
+    .nullable(),
+  targetBreach: z.object({
+    periodsAboveTarget: z.number(),
+    granularity: z.enum(["daily", "weekly"]),
+  }),
+  learningState: z.enum(["learning", "learning_limited", "success", "unknown"]),
+  economicTier: z.enum(["booked_cac", "cpl", "cpc"]),
+  effectiveTarget: z.number(),
+  targetROAS: z.number(),
+  /** Phase-A Gate 1: when false, the harness models a suspected account-wide
+   * conversion-denominator step-change for this case, demoting cost-driven /
+   * learning-resetting recs to watches. Omitted ⇒ measurement is trusted (true). */
+  measurementTrusted: z.boolean().optional(),
+  /** Reduced expected label (primary/back-compat assertion): an action name,
+   * `watch`, `insight`, or `none`. */
+  expectedOutcome: z.string().min(1),
+  /** Optional set-membership assertion: every action listed here MUST appear among
+   * the recommendation actions the engine produces. Pins multi-rec outcomes the
+   * single `expectedOutcome` label can't — e.g. a durable breach emitting BOTH
+   * `add_creative` AND `pause`, so a dropped `pause` fails the eval. */
+  expectedActions: z.array(z.string().min(1)).optional(),
+  /** Optional set-membership assertion: every watch pattern listed here MUST appear
+   * among the watches the engine produces (e.g. `measurement_untrusted`). */
+  expectedWatchPatterns: z.array(z.string().min(1)).optional(),
+  /** PR2 Gate-4: when present, the harness resolves the per-campaign economic
+   * target through the REAL resolveEconomicTargetForCampaign (Tier-1 the campaign's
+   * own booking-calibrated CAC vs Tier-2 the account fallback) and feeds the result
+   * into decideForCampaign — the exact live audit-runner seam. The flat
+   * economicTier/effectiveTarget above then describe the resolution OUTPUT that a
+   * non-hybrid case pins directly. */
+  hybrid: z
+    .object({
+      campaignBookings: z.number(),
+      campaignConversions: z.number(),
+      targetCostPerBooked: z.number().optional(),
+      accountTarget: z.object({
+        economicTier: z.enum(["booked_cac", "cpl", "cpc"]),
+        effectiveTarget: z.number(),
+      }),
+    })
+    .optional(),
+  /** Expected resolution source when `hybrid` is present (campaign Tier-1 vs
+   * account Tier-2). */
+  expectedTargetSource: z.enum(["campaign", "account"]).optional(),
+  notes: z.string().optional(),
+});
+export type RileyCase = z.infer<typeof RileyCaseSchema>;

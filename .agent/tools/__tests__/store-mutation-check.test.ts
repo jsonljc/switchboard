@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { Project } from "ts-morph";
-import { scanStoreFileForTest, runStoreMutationAdvisory } from "../store-mutation-check.js";
+import {
+  scanStoreFileForTest,
+  runStoreMutationAdvisory,
+  isStoreFileInScope,
+} from "../store-mutation-check.js";
 
 function scan(src: string, path = "packages/db/src/stores/x.ts") {
   const project = new Project({ useInMemoryFileSystem: true });
@@ -43,6 +47,22 @@ describe("store-mutation advisory", () => {
       }
     }`);
     expect(w).toHaveLength(0);
+  });
+});
+
+describe("store-file scope predicate (isStoreFileInScope)", () => {
+  it("includes top-level packages/db/src/*-store.ts files (audit L8-F4: not just stores/+storage/)", () => {
+    expect(isStoreFileInScope("packages/db/src/recommendation-store.ts")).toBe(true);
+    expect(isStoreFileInScope("packages/db/src/prisma-consent-store.ts")).toBe(true);
+  });
+  it("still includes the stores/ and storage/ subdirs", () => {
+    expect(isStoreFileInScope("packages/db/src/stores/prisma-workflow-store.ts")).toBe(true);
+    expect(isStoreFileInScope("packages/db/src/storage/prisma-identity-store.ts")).toBe(true);
+  });
+  it("excludes non-store top-level files, __tests__, and non-db paths", () => {
+    expect(isStoreFileInScope("packages/db/src/index.ts")).toBe(false);
+    expect(isStoreFileInScope("packages/db/src/stores/__tests__/x.test.ts")).toBe(false);
+    expect(isStoreFileInScope("apps/api/src/routes/foo.ts")).toBe(false);
   });
 });
 

@@ -6,7 +6,8 @@ import { useFrameCycle } from "./use-frame-cycle";
 export interface AnimatedSpriteProps {
   frames: readonly AnimFrame[];
   palette: Palette;
-  size: number;
+  /** Box size in px, or "fill" to scale to the parent box (fluid hero scale). */
+  size: number | "fill";
   playing?: boolean;
   style?: CSSProperties;
 }

@@ -5,6 +5,7 @@ import type { CastingAssignment } from "../scene-caster.js";
 import type { StructureSelection } from "../structure-engine.js";
 import { runUgcScriptWriter } from "../ugc-script-writer.js";
 import { generateDirection } from "../ugc-director.js";
+import { getProviderRef } from "../identity-refs.js";
 
 // ── Types ──
 
@@ -15,6 +16,7 @@ interface UgcBriefInput {
   creatorPoolIds: string[];
   ugcFormat: string;
   brandVoice?: string | null;
+  productImages?: string[];
 }
 
 interface PlanningOutputInput {
@@ -42,6 +44,10 @@ interface CreativeSpecOutput {
   script: { text: string; language: string; claimsPolicyTag?: string };
   style: Record<string, unknown>;
   direction: Record<string, unknown>;
+  /** Product grounding image for image2video (product_in_hand only; spec 3.2). */
+  referenceImageUrl?: string;
+  /** Avatar refs from the cast creator (slice-3 spec 3.5; heygen routing). */
+  creator?: { heygenAvatarId: string; heygenVoiceId?: string };
   format: string;
   identityConstraints: Record<string, unknown>;
   continuityConstraints?: Record<string, unknown>;
@@ -156,6 +162,12 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
     const specId = createId();
     const durationSec = estimateDuration(structure.template.sections);
 
+    // Capability-aware routing (slice-3 spec 3.5): heygen joins the allowed
+    // set ONLY for talking_head specs whose creator carries an explicit
+    // heygen avatar ref (avatars speak; lifestyle b-roll stays kling).
+    const heygenAvatarId = getProviderRef(creator, "heygen");
+    const heygenAllowed = brief.ugcFormat === "talking_head" && !!heygenAvatarId;
+
     specs.push({
       specId,
       mode: "ugc",
@@ -170,6 +182,13 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
       },
       style: sceneStyle as unknown as Record<string, unknown>,
       direction: ugcDirection as unknown as Record<string, unknown>,
+      // image2video uses the reference as the FIRST FRAME: grounding a
+      // talking-head video on a product still would hijack the scene, so the
+      // image rides product_in_hand specs only (slice-3 spec 3.2).
+      ...(brief.ugcFormat === "product_in_hand" && brief.productImages?.[0]
+        ? { referenceImageUrl: brief.productImages[0] }
+        : {}),
+      ...(heygenAllowed ? { creator: { heygenAvatarId: heygenAvatarId! } } : {}),
       format: brief.ugcFormat,
       identityConstraints: identityPlan
         ? {
@@ -185,7 +204,7 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
         faceSimilarityMin: 0.7,
         realismMin: 0.5,
       },
-      providersAllowed: ["kling"],
+      providersAllowed: heygenAllowed ? ["kling", "heygen"] : ["kling"],
       campaignTags: {},
     });
   }

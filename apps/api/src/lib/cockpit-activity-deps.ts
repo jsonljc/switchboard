@@ -10,7 +10,7 @@
 //   the requested agentKey via actorId/snapshot.agentRole/UUID-fallback).
 // ---------------------------------------------------------------------------
 
-import type { PrismaClient } from "@switchboard/db";
+import type { PrismaClient, RecommendationOutcomeReadModel } from "@switchboard/db";
 import { PrismaActivityPreviewReader } from "@switchboard/db";
 import type { ActivityPreviewReader, AuditEntryForTranslator } from "@switchboard/core";
 
@@ -28,6 +28,15 @@ export const AGENT_OVERFETCH_MULTIPLIER = 4;
 export interface CockpitActivityDeps {
   previewReader: ActivityPreviewReader;
   fetchAuditEntries: (args: { orgId: string; limit: number }) => Promise<AuditEntryForTranslator[]>;
+  /**
+   * Slice 3: renderable Riley outcome rows merged into the activity feed
+   * (the operator surface that replaced the retired /riley cockpit).
+   * Optional: when absent the feed is audit-only (backward compatible).
+   */
+  listRenderableOutcomes?: (args: {
+    orgId: string;
+    limit: number;
+  }) => Promise<RecommendationOutcomeReadModel[]>;
 }
 
 export function buildCockpitActivityDeps(prisma: PrismaClient): CockpitActivityDeps {

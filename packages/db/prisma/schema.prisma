@@ -589,6 +589,56 @@ model ConfigVersion {
   @@index([status])
 }
 
+// ── Operational State (Riley v3 slice 4a) ──
+
+// Append-only operator confirmations of business operational state
+// (open/closed, promo windows, staffing, inventory). A row is NEVER updated:
+// every operator confirm INSERTs a new row, so confirmedAt (the spec-7.4
+// freshness anchor) is structurally immune to unrelated writes. A
+// confirmation's validity interval is DERIVED as
+// [confirmedAt, next row's confirmedAt), with same-instant ties broken by
+// createdAt then id (the later row supersedes; a zero-length prior interval
+// is acceptable). That derivation is what lets the slice-4c outcome path
+// check overlap against a PAST attribution window. Zero rows for an org =
+// honest absence (unknown); no backfill ever fabricates confirmations for
+// existing orgs. No FK to an organization: no Organization model exists in
+// this schema; org scoping is enforced at the store/route layer like every
+// other org-scoped table (BusinessConfig, RecommendationOutcome).
+model OperationalStateConfirmation {
+  id             String @id @default(cuid())
+  organizationId String
+
+  // Scalar dimensions: NULL = the operator did not confirm that dimension
+  // (never a fabricated "open"/"normal"). Value sets are pinned by raw-SQL
+  // CHECK constraints (Prisma cannot express CHECKs in-schema; same pattern
+  // as 20260604200000_recommendation_outcome_enrichment). Keep in sync:
+  // operatingStatus: "open" | "temporarily_closed"
+  // staffing:        "normal" | "shortfall"
+  // inventory:       "normal" | "outage"
+  operatingStatus String?
+  staffing        String?
+  inventory       String?
+
+  // Bounded conditions with operator-known dates, arrays of
+  // { start, end?, label? } ISO instants validated by OperationalStateSchema
+  // at the store boundary. NULL = unconfirmed; [] = operator confirmed none.
+  promoWindows Json?
+  closures     Json?
+
+  // note is 4b display context only: it NEVER satisfies the nonempty-state
+  // floor (see the nonempty_state CHECK), so a free-text note alone cannot
+  // create a freshness anchor.
+  note        String?
+  confirmedBy String?
+  // Required, no DB default, and a required store parameter: a writer must
+  // supply the operator confirmation moment consciously; nothing fabricates
+  // one.
+  confirmedAt DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([organizationId, confirmedAt])
+}
+
 // ── AI Agent System: Outcome Tracking ──
 
 model RecommendationOutcome {
@@ -613,6 +663,22 @@ model RecommendationOutcome {
   confidence        String // "low" | "medium"
 
   cockpitRenderable Boolean @default(false)
+
+  // Slice-3 OutcomeLedger enrichments. Nullable: rows predating the fields
+  // stay NULL (honest absence); new rows always carry values. Value sets are
+  // enforced by CHECK constraints in raw SQL (migration
+  // 20260604200000_recommendation_outcome_enrichment); Prisma cannot express
+  // CHECK constraints in-schema. Keep this comment in sync.
+  // causalStrength: "directional" | "corroborated" | "inconclusive".
+  // The engine emits only directional|inconclusive until slice 4 wires the
+  // CRM/booking corroboration signal; "corroborated" is reserved.
+  causalStrength String?
+  // businessContextStable: "stable" | "unstable" | "unknown". Records
+  // "unknown" until the slice-4 operational-state source exists.
+  businessContextStable String?
+  // trustDelta: "up" | "none" | "down". Advisory display signal; rendered
+  // on the cockpit outcome feed, never auto-applied into scoring.
+  trustDelta String?
 
   metricSummary    Json
   copyTemplate     String?
@@ -1343,6 +1409,20 @@ model CreativeJob {
   // null = undecided (still in the feed); "kept" = on the shelf; "passed" = dismissed.
   reviewDecision  String?
   reviewDecidedAt DateTime?
+  // Slice-2 taste-sweep idempotency watermark: the OBSERVED reviewDecidedAt
+  // last captured (never wall-clock), so re-decisions stay strictly newer.
+  tasteCapturedAt DateTime?
+
+  // Meta publish (P2 parked draft package). Nullable — set by creative.job.publish.
+  // durableAssetUrl is the PR A contract (durable assembled-creative URL); publish
+  // fails loud CREATIVE_ASSET_NOT_DURABLE until it is populated.
+  metaVideoId       String?
+  metaCampaignId    String?
+  metaAdSetId       String?
+  metaCreativeId    String?
+  metaAdId          String?
+  metaPublishStatus String?
+  durableAssetUrl   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1921,7 +2001,9 @@ model Booking {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  @@unique([organizationId, contactId, service, startsAt])
+  // Active-booking uniqueness is a PARTIAL unique index (status NOT IN failed/cancelled),
+  // which Prisma 6 cannot express in-schema. It lives in raw SQL in migration
+  // 20260603120000_booking_partial_unique_active. Keep this comment in sync.
   @@index([organizationId, startsAt])
   @@index([organizationId, createdAt])
   @@index([contactId])
@@ -2023,6 +2105,71 @@ model PendingLeadRetry {
 
   @@index([organizationId, resolvedAt])
   @@index([nextRetryAt, resolvedAt])
+}
+
+// ---------------------------------------------------------------------------
+// ScheduledFollowUp — Alex-scheduled re-engagement nudges, fired by the
+// scheduled-follow-up-dispatch cron through PlatformIngress.submit. Modeled on
+// PendingLeadRetry. See docs/superpowers/specs/2026-06-01-alex-governed-followup-design.md
+// ---------------------------------------------------------------------------
+
+model ScheduledFollowUp {
+  id                   String    @id @default(uuid())
+  organizationId       String
+  contactId            String
+  conversationThreadId String?
+  sessionId            String?
+  deploymentId         String?
+  workUnitId           String?
+  channel              String
+  jurisdiction         String?
+  reason               String
+  note                 String?
+  templateIntentClass  String
+  dueAt                DateTime
+  status               String    @default("pending")
+  attempts             Int       @default(0)
+  dedupeKey            String    @unique
+  skipReason           String?
+  lastError            String?
+  nextRetryAt          DateTime?
+  touchNumber          Int       @default(1)
+  cadenceId            String?
+  sentAt               DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([status, dueAt])
+  @@index([organizationId, contactId])
+}
+
+// ---------------------------------------------------------------------------
+// ScheduledReminder — booking-driven appointment reminders (~24h pre-booking).
+// Delivery state lives here, not on Booking. Single-attempt: no
+// attempts/nextRetryAt. Dispatched by the reminder cron through
+// PlatformIngress.submit.
+// ---------------------------------------------------------------------------
+
+/// Idempotent queue for appointment reminders (~24h pre-booking). Delivery state
+/// lives here, not on Booking. Single-attempt: no attempts/nextRetryAt.
+model ScheduledReminder {
+  id                  String    @id @default(uuid())
+  organizationId      String
+  contactId           String
+  bookingId           String
+  startsAt            DateTime
+  timezone            String
+  channel             String    @default("whatsapp")
+  templateIntentClass String
+  status              String    @default("pending")
+  skipReason          String?
+  lastError           String?
+  sentAt              DateTime?
+  dedupeKey           String    @unique
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([bookingId])
 }
 
 // ---------------------------------------------------------------------------

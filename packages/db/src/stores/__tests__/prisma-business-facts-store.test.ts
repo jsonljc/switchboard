@@ -71,4 +71,71 @@ describe("PrismaBusinessFactsStore", () => {
       });
     });
   });
+
+  describe("getWithStatus", () => {
+    it("returns 'present' with parsed facts for a valid config", async () => {
+      const facts = makeFacts();
+      prisma.businessConfig.findUnique.mockResolvedValue({
+        organizationId: "org_1",
+        config: facts,
+      });
+      const result = await store.getWithStatus("org_1");
+      expect(result.status).toBe("present");
+      expect(result.facts).toEqual(facts);
+    });
+
+    it("returns 'missing' when no row exists", async () => {
+      prisma.businessConfig.findUnique.mockResolvedValue(null);
+      const result = await store.getWithStatus("org_1");
+      expect(result.status).toBe("missing");
+      expect(result.facts).toBeNull();
+    });
+
+    it("returns 'missing' when config is an empty object", async () => {
+      prisma.businessConfig.findUnique.mockResolvedValue({ organizationId: "org_1", config: {} });
+      expect((await store.getWithStatus("org_1")).status).toBe("missing");
+    });
+
+    it("returns 'malformed' (not missing) for a non-object array config", async () => {
+      prisma.businessConfig.findUnique.mockResolvedValue({ organizationId: "org_1", config: [] });
+      expect((await store.getWithStatus("org_1")).status).toBe("malformed");
+    });
+
+    it("returns 'malformed' with sanitized issues for an invalid config", async () => {
+      prisma.businessConfig.findUnique.mockResolvedValue({
+        organizationId: "org_1",
+        config: { businessName: "X" },
+      });
+      const result = await store.getWithStatus("org_1");
+      expect(result.status).toBe("malformed");
+      expect(result.facts).toBeNull();
+      expect(result.issues && result.issues.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("get (runtime degrade)", () => {
+    it("returns null and warns (sanitized: issues only, never the raw config)", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      prisma.businessConfig.findUnique.mockResolvedValue({
+        organizationId: "org_1",
+        config: {
+          businessName: "X",
+          escalationContact: { name: "A", channel: "whatsapp", address: "+65SECRET999" },
+        },
+      });
+      const result = await store.get("org_1");
+      expect(result).toBeNull();
+      expect(warn).toHaveBeenCalledWith(
+        "[BusinessFacts] malformed BusinessConfig.config",
+        expect.objectContaining({
+          organizationId: "org_1",
+          issues: expect.arrayContaining([
+            expect.objectContaining({ path: expect.any(String), code: expect.any(String) }),
+          ]),
+        }),
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain("+65SECRET999");
+      warn.mockRestore();
+    });
+  });
 });

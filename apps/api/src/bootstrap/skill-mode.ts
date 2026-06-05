@@ -17,6 +17,7 @@ import type {
 import type { ConsentService, ContactConsentReader, PlaybookReader } from "@switchboard/core";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
 import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
+import { resolveModelRouter } from "./model-router-factory.js";
 
 export interface SkillModeBootstrapResult {
   simulationExecutor: SkillExecutor;
@@ -65,8 +66,10 @@ export async function bootstrapSkillMode(
 
   const {
     loadSkill,
+    miraBuilder,
     SkillExecutorImpl,
     GovernanceHook,
+    TracePersistenceHook,
     DeterministicSafetyGateHook,
     ClaimClassifierHook,
     PdpaConsentGateHook,
@@ -79,6 +82,7 @@ export async function bootstrapSkillMode(
     createCalendarBookToolFactory,
     createEscalateToolFactory,
     createDelegateToolFactory,
+    createScheduleFollowUpToolFactory,
     BookingFailureHandler,
     createAgentDeploymentGovernanceResolver,
     InMemoryGovernancePostureCache,
@@ -92,8 +96,12 @@ export async function bootstrapSkillMode(
     renderHandoffTemplate,
   } = await import("@switchboard/core/skill-runtime");
   const { SkillMode, registerSkillIntents } = await import("@switchboard/core/platform");
-  const { HandoffPackageAssembler, HandoffNotifier, createConsentService } =
-    await import("@switchboard/core");
+  const {
+    HandoffPackageAssembler,
+    HandoffNotifier,
+    createConsentService,
+    recordGovernanceVerdictMetric,
+  } = await import("@switchboard/core");
   const {
     PrismaContactStore,
     PrismaOpportunityStore,
@@ -103,7 +111,11 @@ export async function bootstrapSkillMode(
     PrismaBusinessFactsStore,
     PrismaDeploymentStore,
     PrismaGovernanceVerdictStore,
+    PrismaExecutionTraceStore,
     PrismaKnowledgeEntryStore,
+    PrismaDeploymentMemoryStore,
+    PrismaMiraCreativeReadModelReader,
+    PrismaScheduledFollowUpStore,
     createPrismaApprovedComplianceClaimStore,
     createPrismaConsentStore,
     createPrismaContactConsentReader,
@@ -119,9 +131,22 @@ export async function bootstrapSkillMode(
 
   const skillsDir = new URL("../../../../skills", import.meta.url).pathname;
   const alexSkill = loadSkill("alex", skillsDir);
-  const skillsBySlug = new Map([[alexSkill.slug, alexSkill]]);
+  // Slice-4 brain: directory "mira" (product identity), frontmatter slug
+  // "creative" (runtime identity = the seeded deployment skillSlug; SkillMode
+  // keys BOTH the skill and builder lookups off deployment.skillSlug). The
+  // loader never cross-validates directory vs slug; this guard pins it.
+  const miraSkill = loadSkill("mira", skillsDir);
+  if (miraSkill.slug !== "creative" || miraSkill.slug === alexSkill.slug) {
+    throw new Error(
+      `skills/mira/SKILL.md must declare slug "creative" distinct from alex (got "${miraSkill.slug}")`,
+    );
+  }
+  const skillsBySlug = new Map([
+    [alexSkill.slug, alexSkill],
+    [miraSkill.slug, miraSkill],
+  ]);
 
-  registerSkillIntents(intentRegistry, [alexSkill]);
+  registerSkillIntents(intentRegistry, [alexSkill, miraSkill]);
 
   const contactStore = new PrismaContactStore(prismaClient);
   const opportunityStore = new PrismaOpportunityStore(prismaClient);
@@ -144,7 +169,13 @@ export async function bootstrapSkillMode(
   // ---------------------------------------------------------------------------
   const deploymentStore = new PrismaDeploymentStore(prismaClient);
   const governanceConfigResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
-  const governanceVerdictStore = new PrismaGovernanceVerdictStore(prismaClient);
+  // onWrite mirrors every persisted verdict into the dual-prom counter
+  // (switchboard_governance_verdicts_total) — the observe-bake read surface.
+  // NOTE: the slot is single-callback; the deferred lifecycle escalation hook
+  // (bootstrap/lifecycle.ts) plans to consume onWrite too — compose when it lands.
+  const governanceVerdictStore = new PrismaGovernanceVerdictStore(prismaClient, {
+    onWrite: recordGovernanceVerdictMetric,
+  });
   // Single shared posture cache — warm on first resolve, reused across both gates.
   const governancePostureCache = new InMemoryGovernancePostureCache();
   // Adapter: ConversationStatusSetter → direct conversationState updateMany.
@@ -281,7 +312,9 @@ export async function bootstrapSkillMode(
     opportunityStore: {
       findActiveByContact: async (orgId: string, contactId: string) => {
         const active = await opportunityStore.findActiveByContact(orgId, contactId);
-        return active.length > 0 ? { id: active[0]!.id } : null;
+        return active.length > 0
+          ? { id: active[0]!.id, estimatedValue: active[0]!.estimatedValue ?? null }
+          : null;
       },
       create: async (input: { organizationId: string; contactId: string; service: string }) => {
         const created = await opportunityStore.create({
@@ -301,14 +334,26 @@ export async function bootstrapSkillMode(
         outboxEvent: {
           create(args: { data: Record<string, unknown> }): Promise<unknown>;
         };
+        opportunity: {
+          updateMany(args: {
+            where: Record<string, unknown>;
+            data: Record<string, unknown>;
+          }): Promise<{ count: number }>;
+        };
       }) => Promise<unknown>,
     ) =>
-      prismaClient.$transaction((tx) => fn({ booking: tx.booking, outboxEvent: tx.outboxEvent })),
+      prismaClient.$transaction((tx) =>
+        fn({ booking: tx.booking, outboxEvent: tx.outboxEvent, opportunity: tx.opportunity }),
+      ),
     failureHandler,
+    defaultCurrency: "SGD",
   });
 
   const crmQueryFactory = createCrmQueryToolFactory(contactStore, activityStore);
   const crmWriteFactory = createCrmWriteToolFactory(opportunityStore, activityStore);
+  const scheduleFollowUpFactory = createScheduleFollowUpToolFactory({
+    followUpStore: new PrismaScheduledFollowUpStore(prismaClient),
+  });
 
   // Per-request tool factories — the executor materializes a fresh tool per
   // execution with a trusted SkillRequestContext closed in. These are the
@@ -320,6 +365,7 @@ export async function bootstrapSkillMode(
     ["escalate", escalateFactory],
   ]);
   if (delegateFactory) toolFactories.set("delegate", delegateFactory);
+  toolFactories.set("follow-up", scheduleFollowUpFactory);
 
   // Schema-only tool map for Anthropic tool registration & GovernanceHook.
   // Trust-bound tools are materialized with a synthetic context here to
@@ -336,6 +382,7 @@ export async function bootstrapSkillMode(
     ["escalate", escalateFactory(SCHEMA_ONLY_CTX)],
   ]);
   if (delegateFactory) toolsMap.set("delegate", delegateFactory(SCHEMA_ONLY_CTX));
+  toolsMap.set("follow-up", scheduleFollowUpFactory(SCHEMA_ONLY_CTX));
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
@@ -544,14 +591,94 @@ export async function bootstrapSkillMode(
     pdpaConsentGateHook,
     whatsAppWindowGateHook,
   ];
+  const modelRouter = resolveModelRouter();
+  logger.info(
+    modelRouter
+      ? "ModelRouter ENABLED — per-turn model tiering active for Alex"
+      : "ModelRouter disabled (set ALEX_MODEL_ROUTER_ENABLED=true to enable) — adapter default model in use",
+  );
+
+  // Per-execution telemetry recorder (tokens incl. cache, cost, model, latency).
+  // Wired as the isolated 8th executor arg (the `qualificationEvaluationHook`
+  // template) — invoked DIRECTLY by the executor, NOT via runAfterSkillHooks, so
+  // the dormant governance afterSkill gates stay dormant. Live executor only;
+  // the simulation executor omits it so sim/eval runs carry no trace hook.
+  const tracePersistenceHook = new TracePersistenceHook(
+    new PrismaExecutionTraceStore(prismaClient),
+    { trigger: "chat_message" },
+  );
+
   const skillExecutor = new SkillExecutorImpl(
     adapter,
     toolsMap,
-    undefined,
+    modelRouter,
     hooks,
     undefined,
     toolFactories,
     qualificationEvaluationHook,
+    tracePersistenceHook,
+  );
+
+  // Simulation executor: same adapter + tools, but with SimulationPolicyHook to block writes.
+  // Pass toolFactories so read-effect tools (e.g. calendar-book.slots.query) materialize
+  // against the simulation request's real orgId/SkillRequestContext rather than the
+  // schema-only synthetic context. SimulationPolicyHook still blocks write/external_send/
+  // external_mutation/irreversible operations.
+  const { SimulationPolicyHook } = await import("@switchboard/core/skill-runtime");
+  // A simulation must never perform real side effects. The delegate tool submits a
+  // real governed child WorkUnit (effectCategory "propose", which SimulationPolicyHook
+  // does not block), so exclude it from the simulation executor entirely. (It is also
+  // inert today because /simulate supplies no workUnitId — this makes that by-design.)
+  const simulationToolFactories = new Map(toolFactories);
+  simulationToolFactories.delete("delegate");
+  simulationToolFactories.delete("follow-up");
+  const simulationToolsMap = new Map(toolsMap);
+  simulationToolsMap.delete("delegate");
+  simulationToolsMap.delete("follow-up");
+  // Safety gate and claim classifier shared instances — same resolver/cache so simulation
+  // shares posture warm-hits from the main executor. SimulationPolicyHook trails last to
+  // block any write operations that survive governance filtering.
+  const simulationHooks = [
+    new GovernanceHook(simulationToolsMap),
+    safetyGateHook,
+    claimClassifierHook,
+    pdpaConsentGateHook,
+    whatsAppWindowGateHook,
+    new SimulationPolicyHook(),
+  ];
+  const simulationExecutor = new SkillExecutorImpl(
+    adapter,
+    simulationToolsMap,
+    undefined,
+    simulationHooks,
+    undefined,
+    simulationToolFactories,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Slice-4 compose executor (spec 3.4). Zero tools, zero hooks: the four
+  // conversation gates are afterSkill hooks that fire regardless of tool count,
+  // and on an internal compose they would corrupt the JSON verdict and write
+  // compliance handoff rows. Claim safety for briefs lives at the source (the
+  // SKILL.md boundaries) and downstream (desk review + mandatory publish
+  // approval). Trace telemetry stays: per-compose cost and latency are recorded
+  // under the brief_compose trigger. Constructed AFTER the simulation executor
+  // so the governance test's call-index identities (0=main, 1=simulation,
+  // 2=compose) stay stable.
+  // ---------------------------------------------------------------------------
+  const composeTracePersistenceHook = new TracePersistenceHook(
+    new PrismaExecutionTraceStore(prismaClient),
+    { trigger: "brief_compose" },
+  );
+  const composeExecutor = new SkillExecutorImpl(
+    adapter,
+    new Map(),
+    undefined,
+    [],
+    undefined,
+    undefined,
+    undefined,
+    composeTracePersistenceHook,
   );
 
   const builderRegistry = new BuilderRegistry();
@@ -583,9 +710,33 @@ export async function bootstrapSkillMode(
     };
   });
 
+  // Slice-4 brain builder, registered under the RUNTIME slug "creative"
+  // (= deployment skillSlug; SkillMode's builder lookup keys off it, never the
+  // directory name "mira"). The builder receives the WHOLE workUnit.parameters
+  // as `request` and zod-parses it itself (parse, don't cast) — do NOT "tidy"
+  // this to cherry-picked keys, or the riley_handoff recommendation context is
+  // silently dropped and every handoff compose abstains.
+  builderRegistry.register("creative", async (ctx) => {
+    const result = await miraBuilder(
+      {
+        orgId: ctx.workUnit.organizationId,
+        deploymentId: ctx.deployment.deploymentId,
+        request: ctx.workUnit.parameters,
+      },
+      ctx.stores,
+    );
+    return {
+      parameters: result.parameters,
+      metadata: { injectedPatternIds: result.injectedPatternIds },
+    };
+  });
+
   modeRegistry.register(
     new SkillMode({
       executor: skillExecutor,
+      // Slice-4: the compose surface gets the dedicated zero-hook executor;
+      // every other slug (alex) rides the default conversation executor.
+      executorBySlug: new Map([["creative", composeExecutor]]),
       skillsBySlug,
       builderRegistry,
       contextResolver,
@@ -619,6 +770,10 @@ export async function bootstrapSkillMode(
             activityStore.listByDeployment(orgId, deploymentId, opts),
         },
         businessFactsStore,
+        // Slice-4 brain readers (spec 3.3): brief-time memory + measured
+        // performance, consumed only by the "creative" builder.
+        deploymentMemoryReader: new PrismaDeploymentMemoryStore(prismaClient),
+        miraReadModelReader: new PrismaMiraCreativeReadModelReader(prismaClient),
       },
     }),
   );
@@ -651,40 +806,6 @@ export async function bootstrapSkillMode(
   }
 
   logger.info(`SkillMode registered with ${skillsBySlug.size} skills and ${toolsMap.size} tools`);
-
-  // Simulation executor: same adapter + tools, but with SimulationPolicyHook to block writes.
-  // Pass toolFactories so read-effect tools (e.g. calendar-book.slots.query) materialize
-  // against the simulation request's real orgId/SkillRequestContext rather than the
-  // schema-only synthetic context. SimulationPolicyHook still blocks write/external_send/
-  // external_mutation/irreversible operations.
-  const { SimulationPolicyHook } = await import("@switchboard/core/skill-runtime");
-  // A simulation must never perform real side effects. The delegate tool submits a
-  // real governed child WorkUnit (effectCategory "propose", which SimulationPolicyHook
-  // does not block), so exclude it from the simulation executor entirely. (It is also
-  // inert today because /simulate supplies no workUnitId — this makes that by-design.)
-  const simulationToolFactories = new Map(toolFactories);
-  simulationToolFactories.delete("delegate");
-  const simulationToolsMap = new Map(toolsMap);
-  simulationToolsMap.delete("delegate");
-  // Safety gate and claim classifier shared instances — same resolver/cache so simulation
-  // shares posture warm-hits from the main executor. SimulationPolicyHook trails last to
-  // block any write operations that survive governance filtering.
-  const simulationHooks = [
-    new GovernanceHook(simulationToolsMap),
-    safetyGateHook,
-    claimClassifierHook,
-    pdpaConsentGateHook,
-    whatsAppWindowGateHook,
-    new SimulationPolicyHook(),
-  ];
-  const simulationExecutor = new SkillExecutorImpl(
-    adapter,
-    simulationToolsMap,
-    undefined,
-    simulationHooks,
-    undefined,
-    simulationToolFactories,
-  );
 
   return { simulationExecutor, alexSkill, consentService, contactConsentReader };
 }

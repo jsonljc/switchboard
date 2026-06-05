@@ -40,7 +40,6 @@
   background: var(--week-author-color, hsl(var(--agent-alex)));
   color: #fff;
   font-family: var(--font-home-serif);
-  font-style: italic;
   font-size: 12px;
   font-weight: 600;
   display: inline-flex;
@@ -78,10 +77,6 @@
     font-variation-settings: "opsz" 22;
   }
 }
-.weeknoteBody em {
-  font-style: italic;
-  font-weight: 500;
-}
 .num {
   font-weight: 600;
   font-feature-settings: "tnum";
@@ -92,11 +87,10 @@
 .numDown {
   color: hsl(var(--destructive));
 }
-/* Editorial drop cap — only on the first paragraph of the note. */
+/* Editorial drop cap, only on the first paragraph of the note. */
 .weeknoteBody.dropcap::first-letter {
   font-family: var(--font-home-serif);
   font-variation-settings: "opsz" 72;
-  font-style: italic;
   font-size: 2.8em;
   font-weight: 500;
   float: left;
@@ -104,7 +98,7 @@
   padding: 0.06em 0.14em 0 0;
   color: var(--week-author-color, hsl(var(--agent-alex)));
 }
-/* Sign-off mark at the end — monogram + name. */
+/* Sign-off mark at the end: monogram + name. */
 .weeknoteSignoff {
   display: inline-flex;
   align-items: center;
@@ -114,21 +108,13 @@
   border-top: 1px solid var(--hair-soft);
   font-family: var(--font-home-serif);
   font-variation-settings: "opsz" 18;
-  font-style: italic;
   font-size: 17px;
   color: var(--ink-2);
   letter-spacing: -0.005em;
   font-weight: 400;
 }
-.weeknoteSignoff::before {
-  content: "—";
-  color: var(--ink-3);
-  margin-right: 2px;
-  font-style: normal;
-}
 .weeknoteSignoffMark {
   font-family: var(--font-home-serif);
-  font-style: italic;
   width: 26px;
   height: 26px;
   border-radius: 50%;
@@ -145,7 +131,6 @@
   font-family: var(--font-home-serif);
   font-variation-settings: "opsz" 16;
   font-size: 15px;
-  font-style: italic;
   line-height: 1.5;
   color: var(--ink-2);
   padding-top: 8px;
@@ -165,4 +150,7 @@
   outline: 2px solid hsl(var(--action));
   outline-offset: 2px;
 }
-.weeknote:hover { transform: translateY(-2px); border-color: var(--hair); }
+.weeknote:hover {
+  transform: translateY(-2px);
+  border-color: var(--hair);
+}

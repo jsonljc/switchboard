@@ -23,6 +23,7 @@ export type KeyResultState =
       spendCents: number | null;
       targets: MetricsViewModelWire["targets"] | null;
       scope: "lifetime" | "week" | null;
+      roi: MetricsViewModelWire["roi"] | null;
     }
   | { kind: "activation" }
   | { kind: "error" }
@@ -32,6 +33,7 @@ export type KeyResultState =
       hero: MetricsViewModelWire["hero"];
       spendCents: number | null;
       targets: MetricsViewModelWire["targets"];
+      roi: MetricsViewModelWire["roi"] | null;
     };
 
 export function selectKeyResult(input: {
@@ -50,6 +52,7 @@ export function selectKeyResult(input: {
       spendCents: pick?.spendCents ?? null,
       targets: pick?.targets ?? null,
       scope: all.data ? "lifetime" : week.data ? "week" : null,
+      roi: pick?.roi ?? null,
     };
   }
   if (coreSetupIncomplete(mission, agentKey)) return { kind: "activation" };
@@ -60,6 +63,7 @@ export function selectKeyResult(input: {
       hero: all.data.hero,
       spendCents: all.data.spendCents,
       targets: all.data.targets,
+      roi: all.data.roi ?? null,
     };
   if (week.data)
     return {
@@ -68,6 +72,7 @@ export function selectKeyResult(input: {
       hero: week.data.hero,
       spendCents: week.data.spendCents,
       targets: week.data.targets,
+      roi: week.data.roi ?? null,
     };
   return { kind: "error" };
 }

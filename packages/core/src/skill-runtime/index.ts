@@ -2,6 +2,7 @@ export { loadSkill } from "./skill-loader.js";
 export { SkillExecutorImpl } from "./skill-executor.js";
 export { GovernanceHook } from "./hooks/governance-hook.js";
 export { SimulationPolicyHook } from "./hooks/simulation-policy-hook.js";
+export { TracePersistenceHook } from "./hooks/trace-persistence-hook.js";
 export { DeterministicSafetyGateHook } from "./hooks/deterministic-safety-gate.js";
 export type { DeterministicSafetyGateHookDeps } from "./hooks/deterministic-safety-gate.js";
 export { PdpaConsentGateHook } from "./hooks/pdpa-consent-gate.js";
@@ -35,6 +36,7 @@ export {
   createWebScannerTool,
   createEscalateToolFactory,
   createDelegateToolFactory,
+  createScheduleFollowUpToolFactory,
 } from "./tools/index.js";
 export type {
   EscalateToolFactory,
@@ -43,6 +45,7 @@ export type {
   CalendarBookToolFactory,
   CrmWriteToolFactory,
   CalendarProviderFactory,
+  ScheduleFollowUpToolFactory,
 } from "./tools/index.js";
 export type {
   ChildWorkSubmitter,
@@ -53,6 +56,8 @@ export type {
 export { composeSkillRequestContext } from "./skill-request-context.js";
 export {
   alexBuilder,
+  miraBuilder,
+  hasSurfacedCreativeMemorySignal,
   salesPipelineBuilder,
   websiteProfilerBuilder,
   adOptimizerInteractiveBuilder,
@@ -109,6 +114,8 @@ export type {
   SkillToolFactory,
   SkillToolOperation,
   SkillExecutor,
+  SkillHook,
+  SkillHookContext,
   OutputFieldDeclaration,
   SkillExecutionTraceData,
   SkillExecutionTrace,

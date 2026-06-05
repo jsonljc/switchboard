@@ -23,6 +23,9 @@ describe("Auth Middleware", () => {
       app.get("/docs/json", async () => ({ spec: true }));
       app.get("/api/test", async () => ({ data: "secret" }));
       app.post("/api/actions/propose", async () => ({ ok: true }));
+      // Stub at the chat-approval-bridge path: the middleware EXCLUSION is
+      // under test here (exact path only), not the bridge route itself.
+      app.post("/api/internal/chat-approvals/respond", async () => ({ reached: true }));
       return app;
     }
 
@@ -90,6 +93,50 @@ describe("Auth Middleware", () => {
       const res = await app.inject({ method: "GET", url: "/docs/json" });
       expect(res.statusCode).toBe(200);
       await app.close();
+    });
+
+    describe("internal chat-approvals path exclusion (bridge spec 4.1)", () => {
+      it("the exact path bypasses API-key auth and reaches the route", async () => {
+        const app = await buildApp("test-key-1");
+        // No Authorization header at all: the middleware lets it through;
+        // the route itself answers (its own INTERNAL_API_SECRET auth lives
+        // in the real route, not this stub).
+        const res = await app.inject({
+          method: "POST",
+          url: "/api/internal/chat-approvals/respond",
+          payload: {},
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().reached).toBe(true);
+        await app.close();
+      });
+
+      it("a querystring variant stays behind API-key auth (no bypass)", async () => {
+        const app = await buildApp("test-key-1");
+        const res = await app.inject({
+          method: "POST",
+          url: "/api/internal/chat-approvals/respond?x=1",
+          payload: {},
+        });
+        expect(res.statusCode).toBe(401);
+        expect(res.json().error).toContain("Missing Authorization header");
+        await app.close();
+      });
+
+      it("a trailing-slash variant stays behind API-key auth (no bypass)", async () => {
+        const app = await buildApp("test-key-1");
+        const res = await app.inject({
+          method: "POST",
+          url: "/api/internal/chat-approvals/respond/",
+          payload: {},
+        });
+        // The global preHandler runs before route matching resolves; the
+        // variant is NOT in the exclusion list, so the middleware demands an
+        // API key (fail closed) before any 404 could surface.
+        expect(res.statusCode).toBe(401);
+        expect(res.json().error).toContain("Missing Authorization header");
+        await app.close();
+      });
     });
   });
 

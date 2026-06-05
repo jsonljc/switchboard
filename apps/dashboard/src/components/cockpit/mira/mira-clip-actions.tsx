@@ -28,13 +28,17 @@ export function MiraClipActions({
     approve.mutate(
       { jobId, action },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           setConfirm(null);
-          onResolve(jobId);
+          // A render parked over the spend threshold is NOT a resolution — keep the
+          // clip in the feed (a pending notice shows) instead of dismissing it.
+          if (!data?.pendingApproval) onResolve(jobId);
         },
       },
     );
   }
+
+  const pendingApproval = approve.data?.pendingApproval === true;
 
   const btn = {
     padding: "8px 12px",
@@ -61,7 +65,7 @@ export function MiraClipActions({
         }}
       >
         <span style={{ color: "#fff", fontSize: 12 }}>
-          Runs the next generation step. This may create provider cost
+          Runs the next render step. This may create provider cost
           {estimateQ.data ? ` (about $${estimateQ.data.basic.cost})` : ""}.
         </span>
         <div style={{ display: "flex", gap: 8 }}>
@@ -86,7 +90,7 @@ export function MiraClipActions({
         </div>
         {approve.isError && (
           <span style={{ color: "#fff", fontSize: 11 }}>
-            Couldn&apos;t update the draft — try again.
+            Couldn&apos;t update the draft. Try again.
           </span>
         )}
       </div>
@@ -125,7 +129,7 @@ export function MiraClipActions({
         </div>
         {approve.isError && (
           <span style={{ color: "#fff", fontSize: 11 }}>
-            Couldn&apos;t update the draft — try again.
+            Couldn&apos;t update the draft. Try again.
           </span>
         )}
       </div>
@@ -152,7 +156,7 @@ export function MiraClipActions({
           Pass
         </button>
         {decide.isError && (
-          <span style={{ color: "#fff", fontSize: 11 }}>Couldn&apos;t save — try again.</span>
+          <span style={{ color: "#fff", fontSize: 11 }}>Couldn&apos;t save. Try again.</span>
         )}
       </div>
     );
@@ -162,6 +166,11 @@ export function MiraClipActions({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
+      {pendingApproval && (
+        <span style={{ color: "#fff", fontSize: 11, maxWidth: 220, textAlign: "right" }}>
+          Queued for your approval. Over the auto-spend limit, nothing ran.
+        </span>
+      )}
       {reviewAction.canContinue &&
         (halted ? (
           <button

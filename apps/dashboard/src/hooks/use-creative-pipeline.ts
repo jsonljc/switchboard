@@ -46,6 +46,17 @@ export function useCreativeJob(id: string, initialData?: CreativeJobSummary) {
   });
 }
 
+/**
+ * Outcome of a continue/stop. A render whose cost exceeds the deployment's
+ * spend-approval threshold is PARKED by governance: the API answers with a
+ * PENDING_APPROVAL envelope (202) instead of the updated job, and the render has
+ * NOT happened. Surfacing it as a discriminated result (not the `{ job }` shape)
+ * stops the UI from treating a parked render as a completed one.
+ */
+export type ApproveStageResult =
+  | { pendingApproval: false; job: CreativeJobSummary; action: string }
+  | { pendingApproval: true; approvalRequest?: { id: string; bindingHash?: string } };
+
 export function useApproveStage() {
   const queryClient = useQueryClient();
   const keys = useScopedQueryKeys();
@@ -58,7 +69,7 @@ export function useApproveStage() {
       jobId: string;
       action: "continue" | "stop";
       productionTier?: "basic" | "pro";
-    }) => {
+    }): Promise<ApproveStageResult> => {
       const res = await fetch(`/api/dashboard/marketplace/creative-jobs/${jobId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -66,7 +77,15 @@ export function useApproveStage() {
       });
       if (!res.ok) throw new Error("Failed to update pipeline");
       const data = await res.json();
-      return data as { job: CreativeJobSummary; action: string };
+      // Governance parked this render above the spend threshold — NOT a completion.
+      if (data?.outcome === "PENDING_APPROVAL") {
+        return { pendingApproval: true, approvalRequest: data.approvalRequest };
+      }
+      return {
+        pendingApproval: false,
+        job: data.job as CreativeJobSummary,
+        action: data.action as string,
+      };
     },
     onSuccess: () => {
       if (keys) void queryClient.invalidateQueries({ queryKey: keys.creativeJobs.all() });

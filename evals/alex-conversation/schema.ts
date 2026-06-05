@@ -35,6 +35,21 @@ export const ConversationFixtureSchema = z
     vertical: z.literal("medspa"),
     locale: z.enum(["sg", "my"]),
     scenario: z.string().min(1),
+    /**
+     * Which BusinessFacts state to drive the (real) store with for this fixture.
+     * "operator" (default) = operator-approved facts present; "absent" = no
+     * BusinessConfig row → BUSINESS_FACTS renders empty → Alex must escalate, not
+     * fabricate. See run-conversation.ts resolveParameters.
+     */
+    businessFacts: z.enum(["operator", "absent"]).default("operator"),
+    /**
+     * Optional per-fixture mock-booking behavior for `calendar-book.booking.create`.
+     * Absent (default) = the mock books successfully; "pending" = the create parks
+     * for human approval (status:"pending_approval"); "slot_taken" = the create
+     * returns a retryable SLOT_TAKEN failure (overlap). Drives the offline
+     * duplicate/slot-taken + governed-close fixtures. See mock-tools.ts createMockTools.
+     */
+    mockBooking: z.enum(["success", "pending", "slot_taken"]).optional(),
     turns: z.array(z.union([LeadTurnSchema, AlexTurnSchema])).min(2),
     /** Optional funnel/agent stage (matrix coverage). Backward compatible. */
     stage: ConversationStageSchema.optional(),

@@ -1,11 +1,19 @@
-// packages/core/src/creative-pipeline/ugc/realism-scorer.ts
-// SP6: Full hybrid realism scorer — replaces SP5's minimal-qa.ts.
-// Uses Claude Vision for both hard checks and soft scores.
-// SP9 upgrades hard checks to specialized models (ArcFace, SyncNet, etc.).
+// packages/creative-pipeline/src/ugc/realism-scorer.ts
+// Realism QA for generated UGC video.
+//
+// Frame-based realism QA is REAL when deps are injected (slice-3 spec 3.1):
+// frames are extracted via ffmpeg and sent to the vision model as image
+// content blocks; the score carries `qaStatus: "evaluated"` and a
+// `computeDecision` verdict. Without deps, or on ANY infrastructure
+// shortfall, `evaluateRealism` returns the honest stub
+// (`qaStatus: "requires_human_review"`) so an un-evaluated asset can never
+// be auto-approved for spend. The QA prompt gates OBJECTIVE INTEGRITY only;
+// aesthetic judgment stays human.
 
-import { callClaude } from "../stages/call-claude.js";
+import { rmSync } from "fs";
 import { z } from "zod";
 import type { RealismScore, RealismSoftScores } from "@switchboard/schemas";
+import type { FrameExtractor } from "./frame-extractor.js";
 
 // ── Threshold Config ──
 
@@ -34,7 +42,20 @@ export const DEFAULT_QA_THRESHOLDS: QaThresholdConfig = {
     faceSimilarityMin: 0.7,
     ocrAccuracyMin: 0.8,
     voiceSimilarityMin: 0.75,
-    criticalArtifacts: ["face_drift", "product_warp", "hand_warp"],
+    // Slice-3 (spec 3.1): the frame evaluator's bounded vocabulary joins the
+    // critical set (config extension; decision LOGIC unchanged). A broken
+    // frame or garbled anatomy is exactly the objective integrity breach the
+    // fail gate exists for. `missing_subject` is the presence-check vehicle
+    // (human absent in a talking_head clip).
+    criticalArtifacts: [
+      "face_drift",
+      "product_warp",
+      "hand_warp",
+      "garbled_text",
+      "broken_frame",
+      "anatomical_error",
+      "missing_subject",
+    ],
   },
   softScoreDefaults: {
     reviewThreshold: 0.5,
@@ -49,41 +70,114 @@ export const DEFAULT_QA_THRESHOLDS: QaThresholdConfig = {
 
 // ── Input ──
 
+// `creatorReferenceUrl` is reserved for a future faceSimilarity reference
+// resolver (spec 3.1 leaves it unused in v1).
 export interface RealismScorerInput {
   videoUrl: string;
   creatorReferenceUrl?: string;
   specDescription: string;
   apiKey: string;
   thresholds?: QaThresholdConfig;
+  /** Spec format (e.g. "talking_head"); drives the presence check. */
+  format?: string;
+  /** Clip length for frame spacing; defaults inside the extractor. */
+  durationSec?: number;
 }
 
-// ── Claude output schema ──
+// ── Frame evaluator dependencies (slice-3 spec 3.1) ──
 
-const ClaudeRealismOutputSchema = z.object({
-  faceSimilarity: z.number().min(0).max(1).optional(),
-  ocrAccuracy: z.number().min(0).max(1).optional(),
+/**
+ * What the vision model returns for a frame set. Objective integrity ONLY:
+ * artifact flags from the bounded vocabulary, a presence check, and the
+ * frame-assessable soft dimensions. `audioNaturalness` is structurally absent
+ * (frames carry no audio) and must never be fabricated.
+ */
+export const VisionQaResultSchema = z.object({
   artifactFlags: z.array(z.string()),
-  visualRealism: z.number().min(0).max(1),
-  behavioralRealism: z.number().min(0).max(1),
-  ugcAuthenticity: z.number().min(0).max(1),
-  audioNaturalness: z.number().min(0).max(1),
+  humanPresent: z.boolean(),
+  softScores: z.object({
+    visualRealism: z.number().min(0).max(1).optional(),
+    behavioralRealism: z.number().min(0).max(1).optional(),
+    ugcAuthenticity: z.number().min(0).max(1).optional(),
+  }),
+  notes: z.string().optional(),
 });
+export type VisionQaResult = z.infer<typeof VisionQaResultSchema>;
+
+export interface RealismScorerDeps {
+  frameExtractor: FrameExtractor;
+  vision: (opts: {
+    images: string[];
+    userMessage: string;
+    schema: typeof VisionQaResultSchema;
+  }) => Promise<VisionQaResult>;
+}
+
+const QA_FLAG_VOCABULARY = [
+  "face_drift",
+  "product_warp",
+  "hand_warp",
+  "garbled_text",
+  "broken_frame",
+  "anatomical_error",
+] as const;
+
+/**
+ * The QA instruction. Pinned to OBJECTIVE INTEGRITY: artifacts, presence,
+ * legibility, cross-frame coherence. The aesthetics prohibition is part of
+ * the contract (LLM-as-judge is unreliable for creative aesthetic quality;
+ * taste stays human). Exported so a test can pin the prohibition textually.
+ */
+export function buildQaPrompt(input: RealismScorerInput): string {
+  return [
+    `You are a technical video-QA inspector. These are evenly spaced frames`,
+    `from a generated ad video (${input.specDescription}).`,
+    `Assess OBJECTIVE INTEGRITY ONLY:`,
+    `- artifactFlags: from this exact vocabulary, only when clearly present: ${QA_FLAG_VOCABULARY.join(", ")}.`,
+    `- humanPresent: is a human subject clearly visible in the frames?`,
+    `- softScores (0-1, technical integrity, NOT appeal): visualRealism (rendering is`,
+    `  photoreal and coherent), behavioralRealism (poses/motion plausible across frames),`,
+    `  ugcAuthenticity (handheld-native framing, not studio-artificial).`,
+    `Do not judge aesthetic appeal, creative quality, or persuasiveness; that is a human's`,
+    `job. Anything else noteworthy goes into notes (it gates nothing).`,
+    `Reply with JSON: {"artifactFlags": string[], "humanPresent": boolean,`,
+    `"softScores": {"visualRealism"?: number, "behavioralRealism"?: number,`,
+    `"ugcAuthenticity"?: number}, "notes"?: string}.`,
+  ].join("\n");
+}
 
 // ── Weighted soft score ──
 
+/**
+ * Weighted soft score, RENORMALIZED over the dimensions actually present
+ * (slice-3 contract change, spec 3.1): a frame evaluator cannot honestly
+ * score every dimension (frames carry no audio), and absent-as-0 would make
+ * `pass` unreachable or arbitrarily harder depending on which dimensions an
+ * evaluator can see. All-absent returns 0 (review). The safety gate against
+ * fabricated scores is deriveApprovalState's qaStatus check, not this curve.
+ */
 export function computeWeightedSoftScore(
   softScores: Partial<RealismSoftScores>,
   weights = DEFAULT_QA_THRESHOLDS.softScoreDefaults.weights,
 ): number {
-  return (
-    weights.visualRealism * (softScores.visualRealism ?? 0) +
-    weights.behavioralRealism * (softScores.behavioralRealism ?? 0) +
-    weights.ugcAuthenticity * (softScores.ugcAuthenticity ?? 0) +
-    weights.audioNaturalness * (softScores.audioNaturalness ?? 0)
-  );
+  const dims: Array<[keyof RealismSoftScores & keyof typeof weights, number | undefined]> = [
+    ["visualRealism", softScores.visualRealism],
+    ["behavioralRealism", softScores.behavioralRealism],
+    ["ugcAuthenticity", softScores.ugcAuthenticity],
+    ["audioNaturalness", softScores.audioNaturalness],
+  ];
+  let weighted = 0;
+  let presentWeight = 0;
+  for (const [dim, value] of dims) {
+    if (value !== undefined) {
+      weighted += weights[dim] * value;
+      presentWeight += weights[dim];
+    }
+  }
+  return presentWeight > 0 ? weighted / presentWeight : 0;
 }
 
-// ── Decision logic ──
+// ── Decision logic (applies once a real evaluator has produced scores) ──
 
 export function computeDecision(
   score: RealismScore,
@@ -123,87 +217,99 @@ export function computeDecision(
   return "pass";
 }
 
-// ── Prompt ──
+// ── QA result → persisted approval state ──
 
-function buildRealismPrompt(input: RealismScorerInput): {
-  systemPrompt: string;
-  userMessage: string;
-} {
-  const systemPrompt = `You are a UGC ad quality scorer. Evaluate the generated video across multiple dimensions.
-
-Score each dimension from 0.0 to 1.0:
-
-## Hard Checks
-- **faceSimilarity**: How closely does the face match the creator reference? (0 = completely different, 1 = identical). If no reference provided or no face visible, omit this field.
-- **ocrAccuracy**: If product text/logos are shown, how legible and accurate are they? (0 = illegible, 1 = perfect). If no text/logos shown, omit this field.
-- **artifactFlags**: List any visual artifacts detected. Valid flags: "face_drift", "hand_warp", "product_warp", "text_illegible", "uncanny_valley", "sync_mismatch", "lighting_inconsistency". Empty array if none.
-
-## Soft Scores (always score all 4)
-- **visualRealism**: Skin texture, lighting consistency, camera feel (0 = obviously CG, 1 = photorealistic)
-- **behavioralRealism**: Natural blink, mouth movement, head motion, gestures (0 = robotic, 1 = human)
-- **ugcAuthenticity**: Does this feel like a real person filmed this on their phone? (0 = studio production, 1 = authentic UGC)
-- **audioNaturalness**: Natural speech patterns, breath sounds, room tone, pauses (0 = synthetic, 1 = natural). Score 0.5 if no audio.
-
-Return a JSON object:
-{
-  "faceSimilarity": 0.85,
-  "ocrAccuracy": 0.9,
-  "artifactFlags": [],
-  "visualRealism": 0.8,
-  "behavioralRealism": 0.75,
-  "ugcAuthenticity": 0.9,
-  "audioNaturalness": 0.7
-}
-
-Respond ONLY with the JSON object.`;
-
-  let userMessage = `Score this UGC video for realism:
-
-**Video URL:** ${input.videoUrl}
-**Creative brief:** ${input.specDescription}`;
-
-  if (input.creatorReferenceUrl) {
-    userMessage += `\n**Creator reference image:** ${input.creatorReferenceUrl}`;
-  }
-
-  return { systemPrompt, userMessage };
+/**
+ * Map a QA result to the asset's persisted approval state.
+ *
+ * SAFETY INVARIANT: a creative may be auto-`approved` ONLY when the video was
+ * actually evaluated (`qaStatus === "evaluated"`) AND passed. Until real
+ * frame-based QA exists, scorers return `qaStatus: "requires_human_review"`, so
+ * this function routes everything to human review — an un-evaluated or fabricated
+ * score can never approve a creative for spend.
+ */
+export function deriveApprovalState(
+  score: RealismScore,
+): "approved" | "rejected" | "requires_human_review" {
+  if (score.qaStatus !== "evaluated") return "requires_human_review";
+  if (score.overallDecision === "pass") return "approved";
+  if (score.overallDecision === "fail") return "rejected";
+  return "requires_human_review";
 }
 
 // ── Main scorer ──
 
+const HONEST_STUB: RealismScore = {
+  hardChecks: { artifactFlags: [] },
+  softScores: {},
+  overallDecision: "review",
+  qaStatus: "requires_human_review",
+};
+
 /**
- * Full hybrid realism scorer (SP6).
- * Calls Claude Vision for both hard checks and soft scores in a single pass.
- * Applies configurable thresholds to produce pass/review/fail decision.
+ * Realism QA entry point (slice-3 spec 3.1).
+ *
+ * With `deps` present and the chain succeeding (frames extracted, vision call
+ * returns a schema-valid result), the score carries `qaStatus: "evaluated"`,
+ * populated hard/soft checks, and a `computeDecision` verdict;
+ * `deriveApprovalState` then gates approval on the real result.
+ *
+ * HONEST-STUB DISCIPLINE: without deps, or on ANY infrastructure shortfall
+ * (download/SSRF rejection, ffmpeg failure, vision failure, schema-invalid
+ * reply), this returns `qaStatus: "requires_human_review"` so the asset
+ * routes to a human; QA infrastructure problems never fabricate a verdict
+ * and never block the pipeline.
  */
-export async function evaluateRealism(input: RealismScorerInput): Promise<RealismScore> {
-  const thresholds = input.thresholds ?? DEFAULT_QA_THRESHOLDS;
-  const { systemPrompt, userMessage } = buildRealismPrompt(input);
+export async function evaluateRealism(
+  input: RealismScorerInput,
+  deps?: RealismScorerDeps,
+): Promise<RealismScore> {
+  if (!deps) return { ...HONEST_STUB };
 
-  const result = await callClaude({
-    apiKey: input.apiKey,
-    systemPrompt,
-    userMessage,
-    schema: ClaudeRealismOutputSchema,
-    maxTokens: 1024,
-  });
+  let workDir: string | undefined;
+  try {
+    const extracted = await deps.frameExtractor.extract(
+      input.videoUrl,
+      input.durationSec ?? 0, // extractor applies its own default clip length
+    );
+    workDir = extracted.workDir;
+    const result = await deps.vision({
+      images: extracted.frames,
+      userMessage: buildQaPrompt(input),
+      schema: VisionQaResultSchema,
+    });
 
-  const score: RealismScore = {
-    hardChecks: {
-      faceSimilarity: result.faceSimilarity,
-      ocrAccuracy: result.ocrAccuracy,
-      artifactFlags: result.artifactFlags,
-    },
-    softScores: {
-      visualRealism: result.visualRealism,
-      behavioralRealism: result.behavioralRealism,
-      ugcAuthenticity: result.ugcAuthenticity,
-      audioNaturalness: result.audioNaturalness,
-    },
-    overallDecision: "pass", // placeholder, computed below
-  };
+    const artifactFlags = [...result.artifactFlags];
+    if (input.format === "talking_head" && !result.humanPresent) {
+      artifactFlags.push("missing_subject");
+    }
 
-  score.overallDecision = computeDecision(score, thresholds);
-
-  return score;
+    const score: RealismScore = {
+      hardChecks: { artifactFlags },
+      // audioNaturalness stays structurally absent: frames carry no audio.
+      softScores: result.softScores,
+      overallDecision: "review",
+      qaStatus: "evaluated",
+      // Model observations; persisted operator context that gates nothing.
+      ...(result.notes ? { notes: result.notes } : {}),
+    };
+    return { ...score, overallDecision: computeDecision(score, input.thresholds) };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.warn(`frame QA unavailable for ${input.videoUrl} (routing to human review):`, reason);
+    // The degrade reason rides the persisted score so an operator can tell a
+    // vision/extraction outage from a genuinely ambiguous clip.
+    return { ...HONEST_STUB, notes: `qa unavailable: ${reason}` };
+  } finally {
+    // The extractor's temp dir (downloaded source + frames, up to the size
+    // cap) is consumed entirely within this call; a retry loop without
+    // cleanup would fill the host disk. Best-effort, never throws.
+    if (workDir) {
+      try {
+        rmSync(workDir, { recursive: true, force: true });
+      } catch {
+        // best-effort cleanup only
+      }
+    }
+  }
 }

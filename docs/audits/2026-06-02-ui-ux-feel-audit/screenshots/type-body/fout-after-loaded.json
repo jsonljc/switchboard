@@ -1,0 +1,142 @@
+{
+  "home": {
+    "[class*='quietText']": [
+      {
+        "lines": 1,
+        "fam": "Geist"
+      },
+      {
+        "lines": 1,
+        "fam": "Geist"
+      }
+    ],
+    "[class*='weeknoteBody']": [
+      {
+        "lines": 2,
+        "fam": "Fraunces"
+      }
+    ],
+    "[class*='btnPrimary']": [
+      {
+        "lines": 2,
+        "fam": "Geist"
+      }
+    ]
+  },
+  "inbox": {
+    ".decision-contact-quiet": [
+      {
+        "lines": 1,
+        "fam": "Geist"
+      },
+      {
+        "lines": 1,
+        "fam": "Geist"
+      },
+      {
+        "lines": 1,
+        "fam": "Geist"
+      }
+    ],
+    ".decision-title": [
+      {
+        "lines": 2,
+        "fam": "Fraunces"
+      },
+      {
+        "lines": 3,
+        "fam": "Fraunces"
+      },
+      {
+        "lines": 2,
+        "fam": "Fraunces"
+      }
+    ],
+    ".filter-chip": [
+      {
+        "lines": 2,
+        "fam": "Geist"
+      },
+      {
+        "lines": 2,
+        "fam": "Geist"
+      },
+      {
+        "lines": 2,
+        "fam": "Geist"
+      }
+    ]
+  },
+  "sheet": {
+    ".ds-datalines li": [],
+    ".ds-lead-interest": [
+      {
+        "lines": 1,
+        "fam": "Geist"
+      }
+    ],
+    ".ds-turn-bubble": [
+      {
+        "lines": 3,
+        "fam": "Geist"
+      },
+      {
+        "lines": 5,
+        "fam": "Geist"
+      },
+      {
+        "lines": 3,
+        "fam": "Geist"
+      }
+    ],
+    ".ds-action": [
+      {
+        "lines": 2,
+        "fam": "Geist"
+      },
+      {
+        "lines": 2,
+        "fam": "Geist"
+      }
+    ],
+    ".ds-qual-line": [
+      {
+        "lines": 1,
+        "fam": "Geist"
+      }
+    ]
+  },
+  "results": {
+    "[class*='stateBanner']": [],
+    "[class*='campaignCard']": []
+  },
+  "settings": {
+    "main p": [
+      {
+        "lines": 1,
+        "fam": "Geist"
+      },
+      {
+        "lines": 0,
+        "fam": "Geist"
+      },
+      {
+        "lines": 0,
+        "fam": "Geist"
+      },
+      {
+        "lines": 0,
+        "fam": "Geist"
+      },
+      {
+        "lines": 0,
+        "fam": "Geist"
+      },
+      {
+        "lines": 0,
+        "fam": "Geist"
+      }
+    ],
+    "main label": []
+  }
+}

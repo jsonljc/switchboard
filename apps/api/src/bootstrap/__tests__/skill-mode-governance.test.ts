@@ -16,15 +16,31 @@ const SkillExecutorImpl = vi.fn().mockImplementation(function (
   return this;
 });
 
+const tracePersistenceInstance = { name: "trace-persistence" };
+const TracePersistenceHook = vi.fn().mockImplementation(() => tracePersistenceInstance);
+
 vi.mock("@switchboard/core/skill-runtime", () => ({
-  loadSkill: vi.fn(() => ({
-    slug: "alex",
-    body: "You are Alex",
-    parameters: {},
-    tools: ["crm-write"],
-  })),
+  loadSkill: vi.fn((slug: string) =>
+    slug === "mira"
+      ? {
+          name: "Mira",
+          slug: "creative",
+          body: "Compose a brief",
+          parameters: [],
+          tools: [],
+          context: [],
+          intent: "creative.brief.compose",
+        }
+      : {
+          slug: "alex",
+          body: "You are Alex",
+          parameters: {},
+          tools: ["crm-write"],
+        },
+  ),
   SkillExecutorImpl,
   GovernanceHook,
+  TracePersistenceHook,
   DeterministicSafetyGateHook: vi
     .fn()
     .mockImplementation(() => ({ name: "deterministic-safety-gate" })),
@@ -58,6 +74,7 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   })),
   BookingFailureHandler: vi.fn().mockImplementation(() => ({})),
   alexBuilder: vi.fn(async () => ({})),
+  miraBuilder: vi.fn(async () => ({ parameters: {}, injectedPatternIds: [] })),
   createAgentDeploymentGovernanceResolver: vi.fn(() => vi.fn(async () => ({ status: "missing" }))),
   InMemoryGovernancePostureCache: vi.fn().mockImplementation(() => ({
     remember: vi.fn(),
@@ -77,6 +94,9 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   loadRewriteTemplates: vi.fn(() => []),
   splitSentences: vi.fn((text: string) => [text]),
   renderHandoffTemplate: vi.fn(() => "Handoff message"),
+  createScheduleFollowUpToolFactory: vi.fn(() => () => ({
+    operations: { schedule: { effectCategory: "write" } },
+  })),
 }));
 
 vi.mock("@switchboard/core/platform", () => ({
@@ -97,6 +117,8 @@ vi.mock("@switchboard/core", () => ({
     clearConsent: vi.fn(),
   })),
   loadRevocationKeywords: vi.fn(() => []),
+  recordGovernanceVerdictMetric: vi.fn(),
+  ModelRouter: class ModelRouter {},
 }));
 
 vi.mock("@switchboard/core/notifications", () => ({
@@ -145,8 +167,23 @@ vi.mock("@switchboard/db", () => ({
   createPrismaContactConsentReader: vi.fn(() => ({
     read: vi.fn(async () => null),
   })),
+  PrismaExecutionTraceStore: vi.fn().mockImplementation(() => ({
+    create: vi.fn(async () => {}),
+  })),
   PrismaKnowledgeEntryStore: vi.fn().mockImplementation(() => ({
     findActive: vi.fn(async () => []),
+  })),
+  PrismaDeploymentMemoryStore: vi.fn().mockImplementation(() => ({
+    listHighConfidence: vi.fn(async () => []),
+  })),
+  PrismaMiraCreativeReadModelReader: vi.fn().mockImplementation(() => ({
+    read: vi.fn(async () => ({ jobs: [], counts: {} })),
+  })),
+  PrismaScheduledFollowUpStore: vi.fn().mockImplementation(() => ({
+    findDue: vi.fn(async () => []),
+    markSent: vi.fn(async () => {}),
+    markSkipped: vi.fn(async () => {}),
+    markFailed: vi.fn(async () => {}),
   })),
 }));
 
@@ -211,8 +248,16 @@ describe("bootstrapSkillMode governance wiring", () => {
     const hookArg = GovernanceHook.mock.calls[0]![0];
     expect(hookArg).toBeInstanceOf(Map);
 
-    // SkillExecutorImpl was constructed (once for main, once for simulation)
-    expect(SkillExecutorImpl).toHaveBeenCalledTimes(2);
+    // SkillExecutorImpl was constructed (main, simulation, compose)
+    expect(SkillExecutorImpl).toHaveBeenCalledTimes(3);
+
+    // Slice-4 compose executor (calls[2]): zero tools, zero hooks, no router,
+    // its own TracePersistenceHook at the isolated 8th slot (spec 3.4).
+    const composeArgs = SkillExecutorImpl.mock.calls[2]!;
+    expect((composeArgs[1] as Map<string, unknown>).size).toBe(0);
+    expect(composeArgs[2]).toBeUndefined();
+    expect(composeArgs[3]).toEqual([]);
+    expect(composeArgs[7]).toBe(tracePersistenceInstance);
 
     // The GovernanceHook instance was passed to SkillExecutorImpl
     const executorArgs = SkillExecutorImpl.mock.calls[0]!;
@@ -220,6 +265,40 @@ describe("bootstrapSkillMode governance wiring", () => {
       (arg) => Array.isArray(arg) && arg.some((h) => h === governanceInstance),
     );
     expect(hooksArg).toBeDefined();
+  });
+
+  it("wires a ModelRouter into the production executor (arg-3) only when the flag is enabled", async () => {
+    process.env["ALEX_MODEL_ROUTER_ENABLED"] = "true";
+    try {
+      await bootstrapSkillMode({
+        prismaClient: buildPrismaClient(),
+        intentRegistry: {} as never,
+        modeRegistry: { register } as never,
+        logger: { info: vi.fn(), error: vi.fn() },
+      });
+
+      // calls[0] = production executor, calls[1] = simulation executor.
+      // The 3rd positional arg (index 2) is the `router`. Guards the original
+      // "router is always undefined" bug from silently regressing: production
+      // gets a router when the flag is on, simulation stays on the fallback.
+      expect(SkillExecutorImpl.mock.calls[0]![2]).toBeDefined();
+      expect(SkillExecutorImpl.mock.calls[1]![2]).toBeUndefined();
+      expect(SkillExecutorImpl.mock.calls[2]![2]).toBeUndefined();
+    } finally {
+      delete process.env["ALEX_MODEL_ROUTER_ENABLED"];
+    }
+  });
+
+  it("leaves the production executor router undefined when the flag is off", async () => {
+    delete process.env["ALEX_MODEL_ROUTER_ENABLED"];
+    await bootstrapSkillMode({
+      prismaClient: buildPrismaClient(),
+      intentRegistry: {} as never,
+      modeRegistry: { register } as never,
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+
+    expect(SkillExecutorImpl.mock.calls[0]![2]).toBeUndefined();
   });
 
   it("registers ClaimClassifierHook immediately after DeterministicSafetyGateHook in hook chain", async () => {
@@ -250,5 +329,64 @@ describe("bootstrapSkillMode governance wiring", () => {
     // spec §7 requires the two governance gates be adjacent so no other hook can
     // mutate `result.response` between them.
     expect(classifierIdx).toBe(deterministicIdx + 1);
+  });
+
+  it("wires the TracePersistenceHook into the production executor (arg-8) but not the simulation executor", async () => {
+    await bootstrapSkillMode({
+      prismaClient: buildPrismaClient(),
+      intentRegistry: {} as never,
+      modeRegistry: { register } as never,
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+
+    // The telemetry recorder is constructed exactly once (production only) and
+    // passed as the 8th positional arg (index 7) — the isolated `executionTraceHook`
+    // template, NOT a member of the governance `hooks` array. The simulation
+    // executor (calls[1]) omits it so eval/sim runs carry no trace hook.
+    expect(TracePersistenceHook).toHaveBeenCalledTimes(2);
+    expect(TracePersistenceHook.mock.calls[0]![1]).toEqual({ trigger: "chat_message" });
+    expect(TracePersistenceHook.mock.calls[1]![1]).toEqual({ trigger: "brief_compose" });
+    expect(SkillExecutorImpl.mock.calls[0]![7]).toBe(tracePersistenceInstance);
+    expect(SkillExecutorImpl.mock.calls[1]![7]).toBeUndefined();
+    expect(SkillExecutorImpl.mock.calls[2]![7]).toBe(tracePersistenceInstance);
+
+    // Guard the landmine: the recorder must NOT leak into the governance hooks
+    // array (arg index 3) — that array is what runAfterSkillHooks would activate.
+    const prodHooks = SkillExecutorImpl.mock.calls[0]![3] as Array<{ name?: string }>;
+    expect(prodHooks.some((h) => h.name === "trace-persistence")).toBe(false);
+  });
+
+  it("registers two skills under distinct slugs and maps the compose executor by the runtime slug", async () => {
+    await bootstrapSkillMode({
+      prismaClient: buildPrismaClient(),
+      intentRegistry: {} as never,
+      modeRegistry: { register } as never,
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+
+    // SkillMode is mocked as a config-capturing class; the registered instance
+    // carries the bootstrap's exact wiring.
+    const skillModeInstance = register.mock.calls.find(
+      (c) => (c[0] as { config?: { skillsBySlug?: Map<string, unknown> } }).config?.skillsBySlug,
+    )?.[0] as {
+      config: {
+        skillsBySlug: Map<string, unknown>;
+        executorBySlug: Map<string, unknown>;
+        stores: Record<string, unknown>;
+      };
+    };
+    expect(skillModeInstance).toBeDefined();
+    const { config } = skillModeInstance;
+    // Directory "mira" loads with frontmatter slug "creative" (the runtime
+    // identity = deployment skillSlug); a collision with alex must throw at boot.
+    expect(config.skillsBySlug.size).toBe(2);
+    expect(config.skillsBySlug.has("alex")).toBe(true);
+    expect(config.skillsBySlug.has("creative")).toBe(true);
+    // The compose executor is keyed by the RUNTIME slug, not the directory name.
+    expect(config.executorBySlug.get("creative")).toBeDefined();
+    expect(config.executorBySlug.get("mira")).toBeUndefined();
+    // The slice-4 readers ride SkillMode stores.
+    expect(config.stores["deploymentMemoryReader"]).toBeDefined();
+    expect(config.stores["miraReadModelReader"]).toBeDefined();
   });
 });

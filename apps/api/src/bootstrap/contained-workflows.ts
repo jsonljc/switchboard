@@ -9,6 +9,21 @@ import type { PlatformIngress, SubmitWorkResponse } from "@switchboard/core/plat
 import type { ChildWorkRequest } from "@switchboard/core/platform";
 import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
 import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
+import { buildFollowUpSendSubmitRequest } from "../services/workflows/followup-send-request.js";
+import { buildLeadIntakeIngressSubmitRequest } from "../services/workflows/lead-intake-request.js";
+import type { FollowUpSendSubmitInput } from "../services/cron/scheduled-follow-up-dispatch.js";
+import { buildReminderSendSubmitRequest } from "../services/workflows/reminder-send-request.js";
+import type { ReminderSendSubmitInput } from "../services/workflows/reminder-send-request.js";
+import {
+  buildRecommendationHandoffSubmitRequest,
+  type RecommendationHandoffSubmitInput,
+} from "../services/workflows/recommendation-handoff-request.js";
+import {
+  buildMiraBriefComposeSubmitRequest,
+  buildMiraConceptDraftSubmitRequest,
+  type MiraBriefComposeSubmitInput,
+  type MiraConceptDraftSubmitInput,
+} from "../services/workflows/mira-self-brief-request.js";
 
 interface ContainedWorkflowBootstrapDeps {
   prismaClient: unknown;
@@ -26,6 +41,48 @@ export interface ContainedWorkflowBootstrapResult {
    * preserve the "no parallel mutation paths" doctrine.
    */
   instantFormAdapter: InstantFormAdapter;
+  /**
+   * Top-level submit closure for the scheduled-follow-up dispatch cron. No
+   * parentWorkUnitId — cron-initiated work units are legitimate trace roots.
+   * Resolves the conversation deployment by intent and submits through
+   * PlatformIngress with trigger:"schedule".
+   */
+  submitScheduledFollowUp: (input: FollowUpSendSubmitInput) => Promise<SubmitWorkResponse>;
+  /**
+   * Top-level submit closure for the appointment-reminder dispatch cron. No
+   * parentWorkUnitId — cron-initiated work units are legitimate trace roots.
+   * Resolves the conversation deployment by intent and submits through
+   * PlatformIngress with trigger:"schedule".
+   */
+  submitScheduledReminder: (input: ReminderSendSubmitInput) => Promise<SubmitWorkResponse>;
+  /**
+   * Top-level submit closure for the Riley weekly-audit cron's agent handoff
+   * (Contract 3). Builds the canonical request (or returns null when Riley abstains)
+   * and submits through PlatformIngress with the resolved Riley deployment as the
+   * targetHint, parking for mandatory human approval via the seeded policy. No
+   * parentWorkUnitId — cron-initiated work units are legitimate trace roots.
+   */
+  submitRecommendationHandoff: (
+    input: RecommendationHandoffSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse | null>;
+  /**
+   * Top-level submit closures for the slice-4 mira brain. Compose is the
+   * read-class reasoning work unit; concept-draft is the draft-only child the
+   * weekly scan creates from a propose verdict. Both resolve the org's
+   * creative deployment by intent prefix when the caller has not already
+   * resolved it, and both carry the seeded system principal. The scan worker
+   * passes the deployment it resolved at floor time; the PR-4 handoff
+   * enrichment path lets the closure resolve it.
+   */
+  submitMiraBriefCompose: (
+    input: MiraBriefComposeSubmitInput,
+    deployment?: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse>;
+  submitMiraConceptDraft: (
+    input: MiraConceptDraftSubmitInput,
+    deployment?: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse>;
 }
 
 /**
@@ -77,14 +134,22 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/creative-job-submit-workflow.js");
   const { buildCreativeConceptDraftWorkflow } =
     await import("../services/workflows/creative-concept-draft-workflow.js");
+  const { buildRecommendationHandoffWorkflow } =
+    await import("../services/workflows/recommendation-handoff-workflow.js");
   const { buildCreativeJobDecisionWorkflow } =
     await import("../services/workflows/creative-job-decision-workflow.js");
   const { buildMetaLeadIntakeWorkflow } =
     await import("../services/workflows/meta-lead-intake-workflow.js");
   const { buildMetaLeadGreetingWorkflow } =
     await import("../services/workflows/meta-lead-greeting-workflow.js");
+  const { buildConversationFollowUpSendWorkflow } =
+    await import("../services/workflows/conversation-followup-send-workflow.js");
+  const { buildConversationReminderSendWorkflow } =
+    await import("../services/workflows/conversation-reminder-send-workflow.js");
   const { buildMetaLeadRecordInquiryWorkflow } =
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
+  const { buildCreativePublishWorkflow } =
+    await import("../services/workflows/creative-publish-workflow.js");
   const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
   const {
     PrismaLeadIntakeStore,
@@ -107,21 +172,9 @@ export async function bootstrapContainedWorkflows(
   const instantFormAdapter = new InstantFormAdapter({
     ingress: {
       submit: async (req) => {
-        const payload = req.payload as {
-          organizationId: string;
-          deploymentId: string;
-        };
-        const response = await platformIngress.submit({
-          organizationId: payload.organizationId,
-          actor: { id: "system:meta-lead-intake", type: "system" },
-          intent: req.intent,
-          parameters: req.payload as Record<string, unknown>,
-          trigger: "internal",
-          surface: { surface: "api" },
-          idempotencyKey: req.idempotencyKey,
-          targetHint: { deploymentId: payload.deploymentId },
-          ...(req.parentWorkUnitId ? { parentWorkUnitId: req.parentWorkUnitId } : {}),
-        });
+        // Seeded `system` principal (not a bespoke system:* id) so governance can
+        // resolve the actor's IdentitySpec — see lead-intake-request.ts.
+        const response = await platformIngress.submit(buildLeadIntakeIngressSubmitRequest(req));
         if (!response.ok) {
           return { ok: false };
         }
@@ -151,15 +204,120 @@ export async function bootstrapContainedWorkflows(
     ),
   });
 
+  // Riley→agent advisory handoff (Contract 3): on approval, routes a Riley creative
+  // recommendation to a draft-only creative.concept.draft child. Stateless handler
+  // (it submits the child through `services.submitChildWork`).
+  const recommendationHandoffWorkflow = buildRecommendationHandoffWorkflow();
+
+  // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
+  // difference between callers is how the WhatsApp 24h-window timestamp is resolved
+  // (follow-up: by threadId; reminder: by the contactId+org compound key), so each caller
+  // looks that up and passes it in.
+  type WhatsAppSendContext = {
+    consentGrantedAt: Date | string | null;
+    consentRevokedAt: Date | string | null;
+    pdpaJurisdiction: "SG" | "MY" | null;
+    messagingOptIn: boolean;
+    lastWhatsAppInboundAt: Date | null;
+    jurisdiction: "SG" | "MY" | null;
+    leadName: string;
+    businessName: string;
+    phone: string | null;
+  };
+  const buildWhatsAppSendContext = async (
+    prisma: import("@switchboard/db").PrismaClient,
+    orgId: string,
+    contactId: string,
+    lastWhatsAppInboundAt: Date | null,
+  ): Promise<WhatsAppSendContext> => {
+    const contact = await prisma.contact.findFirst({
+      where: { id: contactId, organizationId: orgId },
+      select: {
+        name: true,
+        phone: true,
+        messagingOptIn: true,
+        pdpaJurisdiction: true,
+        consentGrantedAt: true,
+        consentRevokedAt: true,
+      },
+    });
+    const org = await prisma.organizationConfig.findUnique({
+      where: { id: orgId },
+      select: { name: true },
+    });
+    return {
+      consentGrantedAt: contact?.consentGrantedAt ?? null,
+      consentRevokedAt: contact?.consentRevokedAt ?? null,
+      pdpaJurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
+      messagingOptIn: contact?.messagingOptIn ?? false,
+      lastWhatsAppInboundAt,
+      jurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
+      leadName: contact?.name ?? "there",
+      businessName: org?.name ?? "our clinic",
+      phone: contact?.phone ?? null,
+    };
+  };
+
+  const followUpSendHandler = buildConversationFollowUpSendWorkflow({
+    getSendContext: async (orgId, contactId, threadId) => {
+      const prisma = prismaClient as import("@switchboard/db").PrismaClient;
+      const thread =
+        threadId !== null
+          ? await prisma.conversationThread.findUnique({
+              where: { id: threadId },
+              select: { lastWhatsAppInboundAt: true },
+            })
+          : null;
+      return buildWhatsAppSendContext(
+        prisma,
+        orgId,
+        contactId,
+        thread?.lastWhatsAppInboundAt ?? null,
+      );
+    },
+    allowMarketingTemplate: process.env["FOLLOWUP_ALLOW_MARKETING_TEMPLATE"] === "true",
+  });
+
+  const reminderSendHandler = buildConversationReminderSendWorkflow({
+    getSendContext: async (orgId, contactId) => {
+      const prisma = prismaClient as import("@switchboard/db").PrismaClient;
+      const thread = await prisma.conversationThread.findUnique({
+        where: { contactId_organizationId: { contactId, organizationId: orgId } },
+        select: { lastWhatsAppInboundAt: true },
+      });
+      return buildWhatsAppSendContext(
+        prisma,
+        orgId,
+        contactId,
+        thread?.lastWhatsAppInboundAt ?? null,
+      );
+    },
+    allowMarketingTemplate: false,
+  });
+
+  // creative.job.publish: a thin dispatcher. It validates ownership, short-circuits an
+  // already-parked job, then hands the rate-limited Meta chain to the dead-lettered
+  // `creative-publish` Inngest function (deps wired in bootstrap/inngest.ts). The handler
+  // needs only the job store for the lookup + short-circuit.
+  const creativePublishWorkflow = buildCreativePublishWorkflow({
+    jobStore: new PrismaCreativeJobStore(
+      prismaClient as ConstructorParameters<typeof PrismaCreativeJobStore>[0],
+    ),
+  });
+
   const handlers = new Map<string, WorkflowHandler>([
     ["creative.job.submit", buildCreativeJobSubmitWorkflow(prismaClient)],
     ["creative.concept.draft", creativeConceptDraftWorkflow],
+    ["adoptimizer.recommendation.handoff", recommendationHandoffWorkflow],
     ["creative.job.continue", buildCreativeJobDecisionWorkflow(prismaClient, "continue")],
     ["creative.job.stop", buildCreativeJobDecisionWorkflow(prismaClient, "stop")],
+    ["creative.job.publish", creativePublishWorkflow],
     ["lead.intake", buildLeadIntakeWorkflow(leadIntakeHandler)],
     ["meta.lead.intake", buildMetaLeadIntakeWorkflow({ prisma: prismaClient, instantFormAdapter })],
     ["meta.lead.greeting.send", buildMetaLeadGreetingWorkflow()],
     ["meta.lead.inquiry.record", buildMetaLeadRecordInquiryWorkflow(prismaClient)],
+    ["conversation.followup.send", followUpSendHandler],
+    ["conversation.reminder.send", reminderSendHandler],
   ]);
 
   modeRegistry.register(new WorkflowMode({ handlers, services }));
@@ -194,6 +352,20 @@ export async function bootstrapContainedWorkflows(
       allowedTriggers: ["api"],
     },
     {
+      // Publish a kept creative as a self-contained PAUSED Meta draft package.
+      // approvalPolicy is DECORATIVE (the policy engine never reads it) — the real
+      // claim-safety gate is the seeded org-scoped require_approval(mandatory)
+      // policy for `creative.job.publish` (see db seed creative-governance.ts). We
+      // keep "always" here only as documented intent + the safe value if anything
+      // ever reads it. Spend-bearing/publish targets do NOT use
+      // system_auto_approved (that is the draft-only handoff below).
+      intent: "creative.job.publish",
+      workflowId: "creative.job.publish",
+      budgetClass: "standard",
+      approvalPolicy: "always",
+      allowedTriggers: ["api"],
+    },
+    {
       // Alex→Mira draft-only handoff. No spend (the handler never fires the
       // creative pipeline), reversible (just a CreativeJob draft row), and
       // internal-trigger-only (not reachable from the public API).
@@ -209,6 +381,20 @@ export async function bootstrapContainedWorkflows(
       budgetClass: "cheap",
       approvalPolicy: "none",
       approvalMode: "system_auto_approved",
+      allowedTriggers: ["internal"],
+    },
+    {
+      // Riley→agent advisory handoff (Contract 3). A Riley-initiated (system) edge
+      // that can lead to creative spend (it creates a Mira draft a human later
+      // funds), so it is deliberately NOT system_auto_approved — the seeded
+      // require_approval(mandatory) policy (db seed recommendation-handoff-
+      // governance.ts) parks it for a human. approvalPolicy here is decorative (the
+      // policy engine reads policyApprovalOverride, not this). Internal-trigger-only
+      // (not reachable from the public API).
+      intent: "adoptimizer.recommendation.handoff",
+      workflowId: "adoptimizer.recommendation.handoff",
+      budgetClass: "cheap",
+      approvalPolicy: "always",
       allowedTriggers: ["internal"],
     },
     {
@@ -239,6 +425,20 @@ export async function bootstrapContainedWorkflows(
       approvalPolicy: "none",
       allowedTriggers: ["internal"],
     },
+    {
+      intent: "conversation.followup.send",
+      workflowId: "conversation.followup.send",
+      budgetClass: "standard",
+      approvalPolicy: "none",
+      allowedTriggers: ["schedule"],
+    },
+    {
+      intent: "conversation.reminder.send",
+      workflowId: "conversation.reminder.send",
+      budgetClass: "standard",
+      approvalPolicy: "none",
+      allowedTriggers: ["schedule"],
+    },
   ];
 
   for (const reg of workflowIntents) {
@@ -261,5 +461,77 @@ export async function bootstrapContainedWorkflows(
 
   logger.info("Contained workflow mode registered");
 
-  return { instantFormAdapter };
+  const submitScheduledFollowUp = async (
+    input: FollowUpSendSubmitInput,
+  ): Promise<SubmitWorkResponse> => {
+    const deployment = await resolveDeploymentForIntent(
+      deploymentResolver,
+      input.organizationId,
+      "conversation.followup.send",
+    );
+    return platformIngress.submit(buildFollowUpSendSubmitRequest(input, deployment));
+  };
+
+  const submitScheduledReminder = async (
+    input: ReminderSendSubmitInput,
+  ): Promise<SubmitWorkResponse> => {
+    const deployment = await resolveDeploymentForIntent(
+      deploymentResolver,
+      input.organizationId,
+      "conversation.reminder.send",
+    );
+    return platformIngress.submit(buildReminderSendSubmitRequest(input, deployment));
+  };
+
+  // Riley → agent recommendation handoff (Contract 3). The deployment is resolved by
+  // the cron itself (it iterates the org's active ad-optimizer deployments and passes
+  // {deploymentId, skillSlug:"ad-optimizer"}), so the top-level resolver's intent-prefix
+  // slug derivation ("adoptimizer" ≠ seeded "ad-optimizer") never bites here.
+  const submitRecommendationHandoff = async (
+    input: RecommendationHandoffSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ): Promise<SubmitWorkResponse | null> => {
+    const req = buildRecommendationHandoffSubmitRequest(input, deployment);
+    // null ⇒ Riley abstained (evidence floor / learning lockout / unroutable). Do not
+    // submit — the builder owns this first-line abstention; the handler re-checks.
+    if (!req) return null;
+    return platformIngress.submit(req);
+  };
+
+  const submitMiraBriefCompose = async (
+    input: MiraBriefComposeSubmitInput,
+    deployment?: { deploymentId: string; skillSlug: string },
+  ): Promise<SubmitWorkResponse> => {
+    const resolved =
+      deployment ??
+      (await resolveDeploymentForIntent(
+        deploymentResolver,
+        input.organizationId,
+        "creative.brief.compose",
+      ));
+    return platformIngress.submit(buildMiraBriefComposeSubmitRequest(input, resolved));
+  };
+
+  const submitMiraConceptDraft = async (
+    input: MiraConceptDraftSubmitInput,
+    deployment?: { deploymentId: string; skillSlug: string },
+  ): Promise<SubmitWorkResponse> => {
+    const resolved =
+      deployment ??
+      (await resolveDeploymentForIntent(
+        deploymentResolver,
+        input.organizationId,
+        "creative.concept.draft",
+      ));
+    return platformIngress.submit(buildMiraConceptDraftSubmitRequest(input, resolved));
+  };
+
+  return {
+    instantFormAdapter,
+    submitScheduledFollowUp,
+    submitScheduledReminder,
+    submitRecommendationHandoff,
+    submitMiraBriefCompose,
+    submitMiraConceptDraft,
+  };
 }

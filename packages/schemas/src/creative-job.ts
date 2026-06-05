@@ -167,6 +167,7 @@ export const VideoProducerOutput = z.object({
       }),
     )
     .optional(),
+  durableAssetUrl: z.string().optional(),
 });
 export type VideoProducerOutput = z.infer<typeof VideoProducerOutput>;
 
@@ -192,6 +193,20 @@ export const CreativeBriefInput = z.object({
   generateReferenceImages: z.boolean().default(false),
 });
 export type CreativeBriefInput = z.infer<typeof CreativeBriefInput>;
+
+// ── Publish handoff input (Seam 2: Mira -> Ads) ──
+
+/**
+ * Seam 2 (Mira -> Ads) publish handoff payload. Deliberately minimal: the
+ * creative-publish workflow re-derives platforms, the durable asset, the Meta
+ * connection, and the page id from the persisted CreativeJob + connection.
+ * Keeping the input at { jobId } is what makes the publish seam idempotent and
+ * replay-safe (Governed Handoff Contract Freeze §4.2).
+ */
+export const CreativeJobPublishInput = z.object({
+  jobId: z.string().min(1),
+});
+export type CreativeJobPublishInput = z.infer<typeof CreativeJobPublishInput>;
 
 // ── Creative Job (full record) ──
 
@@ -220,7 +235,98 @@ export const CreativeJobSchema = z.object({
   ugcFailure: z.record(z.unknown()).nullable().optional(),
   reviewDecision: z.enum(["kept", "passed"]).nullable().optional(),
   reviewDecidedAt: z.coerce.date().nullable().optional(),
+  // Slice-2 taste-sweep idempotency watermark: the OBSERVED reviewDecidedAt
+  // last captured (never wall-clock now), so a re-decision during a sweep
+  // stays strictly newer and is re-observed next run.
+  tasteCapturedAt: z.coerce.date().nullable().optional(),
+  // Meta publish (P2 parked draft package). All nullable/optional — populated only
+  // by the creative.job.publish handler (and durableAssetUrl by PR A).
+  metaVideoId: z.string().nullable().optional(),
+  metaCampaignId: z.string().nullable().optional(),
+  metaAdSetId: z.string().nullable().optional(),
+  metaCreativeId: z.string().nullable().optional(),
+  metaAdId: z.string().nullable().optional(),
+  metaPublishStatus: z.string().nullable().optional(),
+  durableAssetUrl: z.string().nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
 export type CreativeJob = z.infer<typeof CreativeJobSchema>;
+
+// ── Measured past performance (slice-2 attribution sweep) ──
+
+/**
+ * The attribution sweep's typed write into `CreativeJob.pastPerformance`.
+ * `kind` is the discriminant against the brief-enrichment shape
+ * (`performance_history`, slice-2 PR-B): the two shapes share the one Json
+ * column and must NEVER cross-validate. Readers parse-do-not-cast and project
+ * nothing on failure.
+ */
+export const CreativePastPerformanceSchema = z.object({
+  kind: z.literal("measured_performance"),
+  version: z.literal(1),
+  /** ISO timestamp of the sweep that wrote this row. */
+  asOf: z.string(),
+  window: z.object({ from: z.string(), to: z.string(), days: z.number().int() }),
+  /**
+   * Derived from insight-row ABSENCE (Meta omits zero-delivery campaigns):
+   * absent row = "no_delivery" (the expected state for every parked ad),
+   * present row = "measured".
+   */
+  delivery: z.enum(["no_delivery", "measured"]),
+  join: z.object({
+    metaCampaignId: z.string(),
+    metaAdId: z.string().nullable(),
+    metaVideoId: z.string().nullable(),
+  }),
+  meta: z.object({
+    // Meta-attributed, major currency units as Meta reports.
+    spend: z.number(),
+    impressions: z.number(),
+    inlineLinkClicks: z.number(),
+    inlineLinkClickCtr: z.number(),
+    conversions: z.number(), // Meta-attributed conversions, NOT internal truth
+    cpm: z.number(),
+  }),
+  booked: z.object({
+    // Internal source of truth; BOTH fields aggregate over the SAME predicate
+    // (type "booked" AND value > 0), matching queryBookedStatsByCampaign, so
+    // the count can never be satisfied by zero-value bookings the sum excludes.
+    valueCents: z.number().int(), // CENTS, never pre-normalized
+    count: z.number().int(),
+  }),
+  /** null = "insufficient signal" (no value-positive booked records, or zero spend), never a fabricated 0. */
+  trueRoas: z.number().nullable(),
+  source: z.object({
+    insights: z.literal("meta_campaign_insights"),
+    conversions: z.literal("conversion_records"),
+  }),
+});
+export type CreativePastPerformance = z.infer<typeof CreativePastPerformanceSchema>;
+
+/**
+ * Brief-enrichment shape written at submit when the caller passed no explicit
+ * pastPerformance: the deployment's top measured creatives, aggregated for the
+ * NEXT brief (slice-2 spec 3.8). Shares the CreativeJob.pastPerformance column
+ * with CreativePastPerformanceSchema; the disjoint `kind` literals make
+ * cross-validation structurally impossible (mutual-rejection test).
+ */
+export const CreativePerformanceHistorySchema = z.object({
+  kind: z.literal("performance_history"),
+  version: z.literal(1),
+  generatedAt: z.string(),
+  topPerformers: z
+    .array(
+      z.object({
+        jobId: z.string(),
+        descriptor: z.string(), // "polished:question" vocabulary (spec 3.5)
+        trueRoas: z.number().nullable(),
+        spend: z.number(),
+        bookedValueCents: z.number().int(),
+        window: z.object({ from: z.string(), to: z.string() }),
+      }),
+    )
+    .max(3),
+  summary: z.string(),
+});
+export type CreativePerformanceHistory = z.infer<typeof CreativePerformanceHistorySchema>;

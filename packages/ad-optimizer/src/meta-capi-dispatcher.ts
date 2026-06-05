@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AdConversionDispatcher, DispatchResult } from "./ad-conversion-dispatcher.js";
 import type { ConversionEvent, ConversionStage } from "@switchboard/schemas";
+import { normalizeConversionValue } from "./conversion-value.js";
 
 const API_BASE = "https://graph.facebook.com/v21.0";
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -98,7 +99,9 @@ export class MetaCAPIDispatcher implements AdConversionDispatcher {
 
     let customData: { value: number; currency: string } | undefined;
     if (event.value != null && event.currency) {
-      customData = { value: event.value, currency: event.currency };
+      // ConversionEvent.value is stored in MINOR units (cents); Meta CAPI
+      // expects MAJOR currency units. Normalize only here, at the boundary.
+      customData = { value: normalizeConversionValue(event.value), currency: event.currency };
     } else if (event.value != null && !event.currency) {
       console.warn(
         "[MetaCAPIDispatcher] missing_currency_for_value, omitting custom_data",

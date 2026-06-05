@@ -8,6 +8,18 @@
   background: var(--ambient-cream, hsl(40 25% 94%));
 }
 
+/* Drawer title: the mini-inbox shares the inbox page's display voice
+   (sheet-title scale row: 22/600/-.018, opsz pinned for display character).
+   This unlayered component rule beats the shadcn SheetTitle utilities
+   (@layer utilities) by cascade-layer order; specificity is the fallback. */
+.inbox-drawer .drawer-title {
+  font-family: var(--font-display-app);
+  font-variation-settings: "opsz" 28;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+
 .inbox-item {
   position: relative;
 }

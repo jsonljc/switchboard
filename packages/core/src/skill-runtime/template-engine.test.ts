@@ -50,10 +50,11 @@ describe("interpolate", () => {
     expect(result).toBe("Value: ");
   });
 
-  it("throws SkillParameterError for missing nested field", () => {
-    expect(() =>
-      interpolate("{{CONFIG.missing}}", { CONFIG: { tone: "x" } }, [objectParam]),
-    ).toThrow(SkillParameterError);
+  it("returns empty string for missing nested field (grace: object present, field absent)", () => {
+    const result = interpolate("{{P.field}}", { P: {} }, [
+      { name: "P", required: true, type: "object" },
+    ]);
+    expect(result).toBe("");
   });
 
   it("validates enum values", () => {

@@ -24,7 +24,7 @@ describe("MiraBriefBox", () => {
     render(<MiraBriefBox />);
     typeLine("Summer Botox special");
     fireEvent.click(screen.getByRole("button", { name: /preview|make the draft/i }));
-    expect(screen.getByText(/got it — a draft ad/i)).toBeInTheDocument();
+    expect(screen.getByText(/got it\. a draft ad/i)).toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled(); // cost-confirm: never before [Make the draft]
   });
 
@@ -38,9 +38,21 @@ describe("MiraBriefBox", () => {
         promoting: "Summer Botox special",
         goal: "more_bookings",
         vibe: "warm",
+        mode: "polished",
       }),
     );
     expect(await screen.findByText(/mira is on it|started a draft/i)).toBeInTheDocument();
+  });
+
+  it("posts mode ugc when the Real-talk format chip is selected (slice-3 spec 3.4)", async () => {
+    render(<MiraBriefBox />);
+    typeLine("Summer Botox special");
+    fireEvent.click(screen.getByRole("button", { name: /real-talk/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^preview/i }));
+    fireEvent.click(screen.getByRole("button", { name: /make the draft/i }));
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ mode: "ugc" })),
+    );
   });
 
   it("redirects (never answers) and never submits when the line reads as an off-scope question", () => {
@@ -77,6 +89,8 @@ describe("MiraBriefBox", () => {
     fireEvent.click(screen.getByRole("button", { name: /^preview/i }));
     fireEvent.click(screen.getByRole("button", { name: /^tweak/i }));
     expect(screen.getByRole("button", { name: /^preview/i })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/summer botox special/i)).toHaveValue("Summer Botox special");
+    expect(screen.getByPlaceholderText(/summer botox special/i)).toHaveValue(
+      "Summer Botox special",
+    );
   });
 });

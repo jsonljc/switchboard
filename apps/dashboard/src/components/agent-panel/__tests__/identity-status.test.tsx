@@ -130,10 +130,10 @@ describe("IdentityStatus slot", () => {
       ],
     });
     const { container } = render(<IdentityStatus agentKey="riley" />);
-    // accent should be inside an <em> element with the verdictAccent class
-    const em = container.querySelector("em[class*='verdictAccent']");
-    expect(em).not.toBeNull();
-    expect(em?.textContent).toBe("Riley beat CPL target");
+    // accent should be inside a span carrying the verdictAccent class (weighted, never italic)
+    const accent = container.querySelector("span[class*='verdictAccent']");
+    expect(accent).not.toBeNull();
+    expect(accent?.textContent).toBe("Riley beat CPL target");
   });
 
   it("(b) health primary + presence secondary from a fresh signal (oldestOpenItemAgeHours < threshold)", () => {

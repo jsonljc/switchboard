@@ -2,13 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, BookOpen, Radio, Palette, Building2, CreditCard } from "lucide-react";
+import {
+  Users,
+  BookOpen,
+  Radio,
+  Palette,
+  Building2,
+  CreditCard,
+  ClipboardList,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const stripeEnabled = process.env.NEXT_PUBLIC_STRIPE_ENABLED === "true";
 
 const ALL_SIDEBAR_ITEMS = [
   { href: "/settings/playbook", label: "Your Playbook", icon: BookOpen },
+  { href: "/settings/business-facts", label: "Business facts", icon: ClipboardList },
   { href: "/settings/team", label: "Team", icon: Users },
   { href: "/settings/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/settings/channels", label: "Channels", icon: Radio },

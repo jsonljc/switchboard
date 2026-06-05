@@ -15,6 +15,18 @@ vi.mock("../inngest-client.js", () => ({
   },
 }));
 
+// Programmable production phase: the default (zero assets) matches what the
+// real phase produces with this file's empty creator pool; durable-asset
+// tests override per case.
+const { executeProductionPhaseMock } = vi.hoisted(() => ({
+  executeProductionPhaseMock: vi
+    .fn()
+    .mockResolvedValue({ assets: [], qaResults: {}, failedSpecs: [] }),
+}));
+vi.mock("../ugc/phases/production.js", () => ({
+  executeProductionPhase: executeProductionPhaseMock,
+}));
+
 function createMockStep() {
   return {
     run: vi.fn((_name: string, fn: () => unknown) => fn()),
@@ -30,6 +42,7 @@ function createMockDeps() {
       updateUgcPhase: vi.fn(),
       stopUgc: vi.fn(),
       failUgc: vi.fn(),
+      setDurableAsset: vi.fn(),
     },
     creatorStore: { findByDeployment: vi.fn().mockResolvedValue([]) },
     deploymentStore: {
@@ -159,16 +172,66 @@ describe("executeUgcPipeline", () => {
     expect(phaseCompleteEvents[3]![1].data.phase).toBe("delivery");
   });
 
-  it("matches approval event on both jobId and phase", async () => {
+  it("matches approval events on jobId ONLY (polished parity; slice-3 spec 3.3a)", async () => {
     await executeUgcPipeline(eventData, step as never, deps as never);
 
-    const firstWait = step.waitForEvent.mock.calls[0]!;
-    expect((firstWait as unknown[])[1]).toMatchObject({
-      event: "creative-pipeline/ugc-phase.approved",
-      match: "data.jobId",
+    // The decision workflow emits phase = the PERSISTED ugcPhase, which the
+    // runner sets to the NEXT phase before waiting; a phase `if` filter can
+    // therefore never match a governed approve (the latent bug this pins
+    // against). Waits are sequential (one active wait per job), so jobId-only
+    // matching cannot skip a later gate.
+    for (const call of step.waitForEvent.mock.calls) {
+      const opts = (call as unknown[])[1] as Record<string, unknown>;
+      expect(opts).toMatchObject({
+        event: "creative-pipeline/ugc-phase.approved",
+        match: "data.jobId",
+      });
+      expect(opts.if).toBeUndefined();
+    }
+  });
+
+  it("promotes the first non-rejected asset's durable url to the job (slice-3 spec 3.3f)", async () => {
+    executeProductionPhaseMock.mockResolvedValueOnce({
+      assets: [
+        { approvalState: "rejected", durableAssetUrl: undefined, outputs: {} },
+        {
+          approvalState: "approved",
+          durableAssetUrl: "https://durable.example.com/creative-assets/job_1/ugc-s2.mp4",
+          outputs: {},
+        },
+      ],
+      qaResults: {},
+      failedSpecs: [],
     });
-    // The `if` clause should filter by phase
-    expect(((firstWait as unknown[])[1] as Record<string, unknown>).if).toContain("planning");
+    await executeUgcPipeline(eventData, step as never, deps as never);
+    expect(deps.jobStore.setDurableAsset).toHaveBeenCalledWith(
+      "org_1",
+      "job_1",
+      "https://durable.example.com/creative-assets/job_1/ugc-s2.mp4",
+    );
+  });
+
+  it("does not set a durable url when no non-rejected asset carries one", async () => {
+    executeProductionPhaseMock.mockResolvedValueOnce({
+      assets: [{ approvalState: "rejected", durableAssetUrl: undefined, outputs: {} }],
+      qaResults: {},
+      failedSpecs: [{ specId: "s1", reason: "qa_failed" }],
+    });
+    await executeUgcPipeline(eventData, step as never, deps as never);
+    expect(deps.jobStore.setDurableAsset).not.toHaveBeenCalled();
+  });
+
+  it("a decision-workflow-shaped emit (persisted NEXT phase) resumes the wait", async () => {
+    // Simulate exactly what creative-job-decision-workflow sends after the
+    // planning gate: phase carries the persisted value ("scripting"), not the
+    // awaited phase. With jobId-only matching this resumes; with the old
+    // phase filter it timed out into stopUgc after 24h.
+    step.waitForEvent.mockResolvedValue({
+      data: { action: "continue", phase: "scripting" },
+    } as never);
+    await executeUgcPipeline(eventData, step as never, deps as never);
+    expect(deps.jobStore.stopUgc).not.toHaveBeenCalled();
+    expect(deps.jobStore.updateUgcPhase).toHaveBeenCalled();
   });
 });
 

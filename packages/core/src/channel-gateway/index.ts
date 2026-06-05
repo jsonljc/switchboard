@@ -19,7 +19,37 @@ export type {
   OperatorChannelBindingRecord,
 } from "./operator-channel-binding-store.js";
 export type { HandleApprovalResponseConfig } from "./types.js";
-export { APPROVER_ROLES } from "./handle-approval-response.js";
+export {
+  APPROVER_ROLES,
+  handleApprovalResponse,
+  replyForChannelOutcome,
+  NOT_FOUND_MSG,
+  STALE_MSG,
+  NOT_AUTHORIZED_MSG,
+  APPROVAL_LOOKUP_ERROR_MSG,
+  ALREADY_RESPONDED_MSG,
+  REJECT_SUCCESS_MSG,
+  APPROVAL_EXECUTION_ERROR_MSG,
+  APPROVE_EXECUTED_MSG,
+  APPROVE_DISPATCH_FAILED_MSG,
+  PARTIAL_APPROVAL_MSG,
+  SELF_APPROVAL_MSG,
+  ADMISSION_FAILED_MSG,
+} from "./handle-approval-response.js";
+export { respondToChannelApproval, refusalCodeForError } from "./respond-to-channel-approval.js";
+export type {
+  ChannelApprovalRespondRequest,
+  ChannelApprovalRespondOutcome,
+  ChannelApprovalRefusalCode,
+  ApprovalRespondTransport,
+  ChannelApprovalRespondDeps,
+} from "./respond-to-channel-approval.js";
+export type { InProcessApprovalResponseConfig, TransportApprovalResponseConfig } from "./types.js";
+export {
+  HttpApprovalRespondTransport,
+  BridgeTransportError,
+} from "./http-approval-respond-transport.js";
+export type { HttpApprovalRespondTransportOptions } from "./http-approval-respond-transport.js";
 export { ConversationLifecycleTracker } from "./conversation-lifecycle.js";
 export type {
   ConversationEndEvent,

@@ -12,6 +12,7 @@ import type {
   WatchOutputSchema as WatchOutput,
   AdSetLearningInput,
 } from "@switchboard/schemas";
+import { resetsLearningFor } from "../action-reset-classification.js";
 
 const CAMPAIGN_ID = "camp_001";
 
@@ -26,9 +27,10 @@ function makeInput(overrides: Partial<CampaignLearningInput> = {}): CampaignLear
 }
 
 function makeRecommendation(overrides: Partial<RecommendationOutput> = {}): RecommendationOutput {
+  const action = overrides.action ?? "scale";
   return {
     type: "recommendation",
-    action: "scale",
+    action,
     campaignId: CAMPAIGN_ID,
     campaignName: "Test Campaign",
     confidence: 0.85,
@@ -36,6 +38,7 @@ function makeRecommendation(overrides: Partial<RecommendationOutput> = {}): Reco
     estimatedImpact: "+20% conversions",
     steps: ["Increase budget by 20%"],
     learningPhaseImpact: "none",
+    resetsLearning: resetsLearningFor(action),
     ...overrides,
   };
 }
@@ -156,9 +159,10 @@ function makeAdSetInput(overrides: Partial<AdSetLearningInput> = {}): AdSetLearn
 }
 
 function makeV2Recommendation(overrides: Partial<RecommendationOutput> = {}): RecommendationOutput {
+  const action = overrides.action ?? "pause";
   return {
     type: "recommendation",
-    action: "pause",
+    action,
     campaignId: CAMPAIGN_ID,
     campaignName: "Test Campaign",
     confidence: 0.85,
@@ -166,6 +170,7 @@ function makeV2Recommendation(overrides: Partial<RecommendationOutput> = {}): Re
     estimatedImpact: "+20% conversions",
     steps: ["Pause the ad set"],
     learningPhaseImpact: "high",
+    resetsLearning: resetsLearningFor(action),
     ...overrides,
   };
 }
@@ -224,16 +229,22 @@ describe("LearningPhaseGuardV2", () => {
   // ── isDestructiveAction() tests ──
 
   describe("isDestructiveAction()", () => {
-    it("considers pause destructive", () => {
-      expect(guardV2.isDestructiveAction("pause")).toBe(true);
+    // The canonical ACTION_RESETS_LEARNING map now governs this predicate: an action
+    // is "destructive" (held during learning) iff it is classified resetsLearning:"yes".
+    // pause is classified "no" (an immediate pause does not reset Meta's learning), so
+    // it is intentionally NOT held here — this corrects the old hardcoded
+    // DESTRUCTIVE_ACTIONS set that included pause.
+    it("does NOT consider pause destructive (resetsLearning 'no' per canonical map)", () => {
+      expect(resetsLearningFor("pause")).toBe("no");
+      expect(guardV2.isDestructiveAction("pause")).toBe(false);
     });
 
     it("considers restructure destructive", () => {
       expect(guardV2.isDestructiveAction("restructure")).toBe(true);
     });
 
-    it("considers refresh_creative non-destructive", () => {
-      expect(guardV2.isDestructiveAction("refresh_creative")).toBe(false);
+    it("considers refresh_creative destructive (resetsLearning 'yes')", () => {
+      expect(guardV2.isDestructiveAction("refresh_creative")).toBe(true);
     });
 
     it("considers scale non-destructive", () => {
@@ -241,12 +252,51 @@ describe("LearningPhaseGuardV2", () => {
     });
   });
 
+  // ── V2 lockout reads the structured resetsLearning class ──
+
+  describe("V2 lockout holds ANY reset-class action during learning", () => {
+    const v2 = new LearningPhaseGuardV2();
+
+    it("holds refresh_creative (reset-class 'yes') during learning — not just pause/restructure", () => {
+      expect(resetsLearningFor("refresh_creative")).toBe("yes");
+      expect(v2.isDestructiveAction("refresh_creative")).toBe(true);
+    });
+
+    it("holds switch_optimization_event (reset-class 'yes')", () => {
+      expect(resetsLearningFor("switch_optimization_event")).toBe("yes");
+      expect(v2.isDestructiveAction("switch_optimization_event")).toBe(true);
+    });
+
+    it("holds the remaining reset-class 'yes' actions (add_creative, expand_targeting, consolidate)", () => {
+      expect(v2.isDestructiveAction("add_creative")).toBe(true);
+      expect(v2.isDestructiveAction("expand_targeting")).toBe(true);
+      expect(v2.isDestructiveAction("consolidate")).toBe(true);
+    });
+
+    it("does NOT hold non-resetting actions (hold / fix_signal_health / scale / review_budget / harden_capi_attribution)", () => {
+      expect(v2.isDestructiveAction("hold")).toBe(false);
+      expect(v2.isDestructiveAction("fix_signal_health")).toBe(false);
+      expect(v2.isDestructiveAction("scale")).toBe(false);
+      expect(v2.isDestructiveAction("review_budget")).toBe(false);
+      expect(v2.isDestructiveAction("harden_capi_attribution")).toBe(false);
+    });
+
+    it("does NOT hold pause (resetsLearning 'no' — an immediate pause does not reset learning)", () => {
+      expect(resetsLearningFor("pause")).toBe("no");
+      expect(v2.isDestructiveAction("pause")).toBe(false);
+    });
+
+    it("still holds restructure (reset-class 'yes', unchanged from the old set)", () => {
+      expect(v2.isDestructiveAction("restructure")).toBe(true);
+    });
+  });
+
   // ── gate() tests ──
 
   describe("gate()", () => {
-    it("gates destructive actions during learning state", () => {
+    it("gates destructive (reset-class) actions during learning state", () => {
       const status = guardV2.classifyState(makeAdSetInput({ learningStageStatus: "LEARNING" }));
-      const rec = makeV2Recommendation({ action: "pause" });
+      const rec = makeV2Recommendation({ action: "refresh_creative" });
 
       const result = guardV2.gate(rec, status);
 
@@ -256,9 +306,11 @@ describe("LearningPhaseGuardV2", () => {
       expect(watch.message).toContain("learning");
     });
 
-    it("allows non-destructive actions during learning state", () => {
+    it("allows non-resetting actions (pause) during learning state", () => {
+      // pause is resetsLearning:"no" per the canonical map, so the V2 gate no longer
+      // holds it (corrects the old DESTRUCTIVE_ACTIONS set).
       const status = guardV2.classifyState(makeAdSetInput({ learningStageStatus: "LEARNING" }));
-      const rec = makeV2Recommendation({ action: "refresh_creative" });
+      const rec = makeV2Recommendation({ action: "pause" });
 
       const result = guardV2.gate(rec, status);
 
@@ -266,9 +318,9 @@ describe("LearningPhaseGuardV2", () => {
       expect(result).toBe(rec);
     });
 
-    it("passes through for learning_limited state (even destructive)", () => {
+    it("passes through for learning_limited state (even reset-class actions)", () => {
       const status = guardV2.classifyState(makeAdSetInput({ learningStageStatus: "FAIL" }));
-      const rec = makeV2Recommendation({ action: "pause" });
+      const rec = makeV2Recommendation({ action: "refresh_creative" });
 
       const result = guardV2.gate(rec, status);
 

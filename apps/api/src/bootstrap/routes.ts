@@ -9,6 +9,7 @@ import { actionsRoutes } from "../routes/actions.js";
 import { actionLifecycleRoutes } from "../routes/action-lifecycle.js";
 import { executeRoutes } from "../routes/execute.js";
 import { approvalsRoutes } from "../routes/approvals.js";
+import { internalChatApprovalsRoutes } from "../routes/internal-chat-approvals.js";
 import { recommendationsRoutes } from "../routes/recommendations.js";
 import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
 import { decisionsRoutes } from "../routes/decisions.js";
@@ -32,6 +33,7 @@ import { escalationsRoutes } from "../routes/escalations.js";
 import { sessionRoutes } from "../routes/sessions.js";
 import { workflowRoutes } from "../routes/workflows.js";
 import { marketplaceRoutes } from "../routes/marketplace.js";
+import { marketplaceOperationalStateRoutes } from "../routes/marketplace-operational-state.js";
 import { marketplacePersonaRoutes } from "../routes/marketplace-persona.js";
 import { creativePipelineRoutes } from "../routes/creative-pipeline.js";
 import { onboardRoutes } from "../routes/onboard.js";
@@ -111,6 +113,9 @@ export async function registerRoutes(
   await app.register(actionLifecycleRoutes, { prefix: "/api/actions" });
   await app.register(executeRoutes, { prefix: "/api" });
   await app.register(approvalsRoutes, { prefix: "/api/approvals" });
+  // Internal chat-approval bridge: INTERNAL_API_SECRET-authenticated respond
+  // surface for the chat process (excluded from API-key auth by exact path).
+  await app.register(internalChatApprovalsRoutes, { prefix: "/api/internal/chat-approvals" });
   await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
   await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
   // decisionsRoutes registers two paths under /api/dashboard:
@@ -135,17 +140,25 @@ export async function registerRoutes(
   // Only registered when Prisma is available; deps wrap Prisma to fetch org-scoped audit
   // entries (×4 over-fetch for the in-TS agent filter) and batch ConversationMessage previews.
   if (app.prisma) {
-    const cockpitActivityDeps = buildCockpitActivityDeps(app.prisma);
+    // Riley outcome store backs both the dedicated outcomes route and the
+    // slice-3 activity-feed merge. Store filters cockpitRenderable=true at
+    // the SQL layer.
+    const { PrismaRecommendationOutcomeStore } = await import("@switchboard/db");
+    const recommendationOutcomeStore = new PrismaRecommendationOutcomeStore(app.prisma);
+    const listRenderableOutcomes = ({ orgId, limit }: { orgId: string; limit: number }) =>
+      recommendationOutcomeStore.listRenderableForOrg({ orgId, agentRole: "riley", limit });
+
+    const cockpitActivityDeps = {
+      ...buildCockpitActivityDeps(app.prisma),
+      listRenderableOutcomes,
+    };
     await app.register(cockpitActivityRoutes(cockpitActivityDeps), {
       prefix: "/api/dashboard",
     });
-    // Riley outcomes route: GET /api/cockpit/riley/outcomes
-    // Gated on Prisma; store filters cockpitRenderable=true at the SQL layer.
-    const { PrismaRecommendationOutcomeStore } = await import("@switchboard/db");
-    const recommendationOutcomeStore = new PrismaRecommendationOutcomeStore(app.prisma);
+    // Riley outcomes route: GET /api/cockpit/riley/outcomes (legacy/debug;
+    // the operator surface is the activity feed above)
     await registerRileyOutcomesRoute(app, {
-      listRenderable: ({ orgId, limit }) =>
-        recommendationOutcomeStore.listRenderableForOrg({ orgId, agentRole: "riley", limit }),
+      listRenderable: listRenderableOutcomes,
     });
   }
   // greetingRoutes: GET /api/dashboard/agents/:agentKey/greeting — agent-home greeting block
@@ -215,6 +228,7 @@ export async function registerRoutes(
   // not rename this prefix opportunistically; it is a wire contract consumed by the
   // dashboard. See docs/DOCTRINE.md → "Marketplace namespace (historical, but live)".
   await app.register(marketplaceRoutes, { prefix: "/api/marketplace" });
+  await app.register(marketplaceOperationalStateRoutes, { prefix: "/api/marketplace" });
   await app.register(marketplacePersonaRoutes, { prefix: "/api/marketplace" });
   await app.register(creativePipelineRoutes, { prefix: "/api/marketplace" });
   await app.register(onboardRoutes, { prefix: "/api/marketplace" });

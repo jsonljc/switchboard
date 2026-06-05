@@ -1,5 +1,14 @@
-import { ok } from "@switchboard/core/skill-runtime";
+import { ok, fail, pendingApproval } from "@switchboard/core/skill-runtime";
 import type { SkillTool, ToolResult } from "@switchboard/core/skill-runtime";
+
+/**
+ * Per-fixture booking behavior for the `calendar-book.booking.create` mock.
+ * "success" (default) books; "pending" parks for human approval; "slot_taken"
+ * returns a retryable SLOT_TAKEN failure (overlap). Mirrors the real tool's
+ * booked / pending_approval / SLOT_TAKEN outcomes so reschedule/cancel/slot-taken
+ * + governed-close fixtures can be driven deterministically.
+ */
+export type MockBookingBehavior = "success" | "pending" | "slot_taken";
 
 /**
  * One recorded tool invocation. The grader uses these to assert tool usage and
@@ -24,7 +33,7 @@ export interface RecordedToolCall {
  * array that records every operation invocation in order.
  *
  * The tool ids, operation names, effect categories, and input schemas mirror the
- * real Alex tools (crm-query / crm-write / calendar-book / escalate) so the LLM
+ * real Alex tools (crm-query / crm-write / calendar-book / escalate / follow-up) so the LLM
  * sees the same tool definitions production registers — but every `execute`
  * returns a benign `ok(...)` and performs no side effects. Because the eval
  * executor runs with NO governance hooks, write/external_mutation operations are
@@ -35,7 +44,7 @@ export interface MockTools {
   calls: RecordedToolCall[];
 }
 
-export function createMockTools(): MockTools {
+export function createMockTools(opts: { bookingBehavior?: MockBookingBehavior } = {}): MockTools {
   const calls: RecordedToolCall[] = [];
 
   const record = (toolId: string, operation: string, params: unknown): void => {
@@ -186,12 +195,12 @@ export function createMockTools(): MockTools {
           ],
         }),
       ),
-      "booking.create": recordingOp(
-        "calendar-book",
-        "booking.create",
-        "Book a calendar slot for a contact. Persists booking, creates calendar event, emits booked event via outbox.",
-        "external_mutation",
-        {
+      "booking.create": {
+        description:
+          "Book a calendar slot for a contact. Persists booking, creates calendar event, emits booked event via outbox.",
+        effectCategory: "external_mutation",
+        idempotent: true,
+        inputSchema: {
           type: "object",
           properties: {
             contactId: { type: "string" },
@@ -204,7 +213,53 @@ export function createMockTools(): MockTools {
           },
           required: ["contactId", "service", "slotStart", "slotEnd", "calendarId"],
         },
-        () => ({ bookingId: "mock-booking", status: "booked" }),
+        execute: async (params: unknown): Promise<ToolResult> => {
+          // Record the call FIRST so the oracle still sees a calendar-book call
+          // even when the booking parks for approval or the slot was taken.
+          record("calendar-book", "booking.create", params);
+          if (opts.bookingBehavior === "pending") {
+            return pendingApproval("APPROVAL_REQUIRED");
+          }
+          if (opts.bookingBehavior === "slot_taken") {
+            return fail("SLOT_TAKEN", "That time was just taken.", {
+              retryable: true,
+              data: { failureType: "slot_conflict" },
+              modelRemediation:
+                "Re-run calendar-book.slots.query and offer the next available times.",
+            });
+          }
+          return ok({ bookingId: "mock-booking", status: "confirmed" });
+        },
+      },
+      "booking.reschedule": recordingOp(
+        "calendar-book",
+        "booking.reschedule",
+        "Reschedule the contact's upcoming appointment to a new slot.",
+        "external_mutation",
+        {
+          type: "object",
+          properties: {
+            slotStart: { type: "string" },
+            slotEnd: { type: "string" },
+            calendarId: { type: "string" },
+            service: { type: "string" },
+          },
+          required: ["slotStart", "slotEnd", "calendarId"],
+        },
+        () => ({ bookingId: "mock-booking", status: "rescheduled" }),
+        false,
+      ),
+      "booking.cancel": recordingOp(
+        "calendar-book",
+        "booking.cancel",
+        "Cancel the contact's upcoming appointment.",
+        "external_mutation",
+        {
+          type: "object",
+          properties: { service: { type: "string" }, reason: { type: "string" } },
+        },
+        () => ({ bookingId: "mock-booking", status: "cancelled" }),
+        false,
       ),
     },
   };
@@ -228,6 +283,7 @@ export function createMockTools(): MockTools {
                 "complex_objection",
                 "negative_sentiment",
                 "compliance_concern",
+                "medical_safety",
                 "booking_failure",
                 "max_turns_exceeded",
               ],
@@ -249,11 +305,81 @@ export function createMockTools(): MockTools {
     },
   };
 
+  // Mirrors the real `follow-up` tool (skills/alex/SKILL.md + core
+  // skill-runtime/tools/schedule-follow-up.ts): id, operation name, effect
+  // category, and input schema match so the executor offers the same definition
+  // production registers. The mock only records the call (no scheduling).
+  const followUp: SkillTool = {
+    id: "follow-up",
+    operations: {
+      "followup.schedule": recordingOp(
+        "follow-up",
+        "followup.schedule",
+        "Schedule a single WhatsApp re-engagement follow-up for this lead, to be sent automatically later (only if consent, the messaging window, and an approved template all allow). Use when a qualified lead has gone quiet or hesitant. Do not schedule more than one follow-up per conversation.",
+        "write",
+        {
+          type: "object",
+          properties: {
+            reason: {
+              type: "string",
+              enum: [
+                "hesitation",
+                "price_concern",
+                "timing_not_now",
+                "awaiting_info",
+                "went_quiet",
+              ],
+            },
+            delay: {
+              type: "string",
+              enum: ["in_1_day", "in_3_days", "in_1_week"],
+            },
+            note: {
+              type: "string",
+              description: "Optional short context for the team (not sent to the customer).",
+            },
+          },
+          required: ["reason", "delay"],
+        },
+        () => ({
+          followUpId: "mock-followup",
+          scheduledFor: "2026-06-04T00:00:00.000Z",
+          status: "scheduled",
+        }),
+      ),
+    },
+  };
+
+  const delegate: SkillTool = {
+    id: "delegate",
+    operations: {
+      "task.delegate": recordingOp(
+        "delegate",
+        "task.delegate",
+        "Delegate a task to another agent (e.g. Mira for creative). Use for governed agent-to-agent handoffs.",
+        "write",
+        {
+          type: "object",
+          properties: {
+            targetAgent: { type: "string", description: "Target agent slug" },
+            taskDescription: { type: "string", description: "What to do" },
+            context: { type: "string", description: "Relevant context to pass" },
+          },
+          required: ["targetAgent", "taskDescription"],
+        },
+        () => ({ delegationId: "del_mock", status: "pending" }),
+        false,
+      ),
+    },
+  };
+
   const tools = new Map<string, SkillTool>([
     ["crm-query", crmQuery],
     ["crm-write", crmWrite],
     ["calendar-book", calendarBook],
     ["escalate", escalate],
+    ["follow-up", followUp],
+    ["delegate", delegate],
   ]);
 
   return { tools, calls };

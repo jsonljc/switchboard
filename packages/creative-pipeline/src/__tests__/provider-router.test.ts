@@ -77,6 +77,17 @@ describe("rankProviders", () => {
     }
   });
 
+  it("grants heygen a single-attempt limit; kling keeps the default (slice-3 spec 3.5)", () => {
+    const ranked = rankProviders(
+      { format: "talking_head", identityConstraints: { strategy: "reference_conditioning" } },
+      registry,
+    );
+    const heygen = ranked.find((r) => r.profile.provider === "heygen");
+    const kling = ranked.find((r) => r.profile.provider === "kling");
+    expect(heygen?.attemptLimit).toBe(1);
+    expect(kling?.attemptLimit).toBeUndefined();
+  });
+
   it("includes Seedance and Runway in default registry", () => {
     const registry = getDefaultProviderRegistry();
     expect(registry.find((p) => p.provider === "seedance")).toBeDefined();

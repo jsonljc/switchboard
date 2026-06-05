@@ -47,6 +47,72 @@ function hashSentence(sentence: string): string {
   return createHash("sha256").update(sentence.toLowerCase()).digest("hex").slice(0, 32);
 }
 
+const SUBSTANTIATION_STOPWORDS: ReadonlySet<string> = new Set([
+  "the",
+  "a",
+  "an",
+  "to",
+  "of",
+  "and",
+  "or",
+  "is",
+  "are",
+  "be",
+  "with",
+  "for",
+  "in",
+  "on",
+  "our",
+  "your",
+  "you",
+  "that",
+  "this",
+  "it",
+  "at",
+  "as",
+  "by",
+  "we",
+  "can",
+  "will",
+  "may",
+  "after",
+  "from",
+  "most",
+]);
+
+const NEGATION_RE = /\b(?:not|never|no|isn'?t|aren'?t|doesn'?t|don'?t|cannot|can'?t|without)\b/i;
+
+function significantTokens(textLower: string): string[] {
+  return textLower
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= 2 && !SUBSTANTIATION_STOPWORDS.has(t));
+}
+
+/**
+ * Conservative paraphrase tolerance (T1.2c): an approved claim matches a sentence
+ * when EVERY significant claim token is present in the sentence (order-independent)
+ * and the sentence is not negated. This catches reordered / word-inserted
+ * paraphrases without ever matching a sentence that omits a key claim term — the
+ * failure mode of a fuzzy matcher is a false positive (an unsubstantiated claim
+ * allowed), so containment is required at 1.0 plus a negation guard. Numbers are
+ * kept as significant tokens so "50%" never substantiates "80%". A >=2 significant
+ * token floor prevents a claim that reduces to one content word (e.g. "safe for
+ * you" -> ["safe"]) from being trivially satisfied by any sentence containing that
+ * word; such claims fall back to exact-substring only. Known bound: for a 2-token
+ * claim an unrelated sentence that happens to contain both words is still matched
+ * (acceptable — it is the under-escalation direction, runs only after the
+ * classifier flags a claim above the confidence floor, and only against the org's
+ * own approved list).
+ */
+function paraphraseMatches(sentenceLower: string, claimLower: string): boolean {
+  if (NEGATION_RE.test(sentenceLower)) return false;
+  const claimTokens = significantTokens(claimLower);
+  if (claimTokens.length < 2) return false;
+  const sentenceTokens = new Set(significantTokens(sentenceLower));
+  return claimTokens.every((t) => sentenceTokens.has(t));
+}
+
 function isStale(claim: ApprovedComplianceClaimRecord, now: Date): boolean {
   if (claim.validUntil && new Date(claim.validUntil).getTime() < now.getTime()) return true;
   if (new Date(claim.reviewedAt).getTime() < now.getTime() - STALENESS_WINDOW_MS) return true;
@@ -59,7 +125,10 @@ function matchClaim(
   now: Date,
 ): SubstantiationResolution | null {
   for (const claim of claims) {
-    if (!sentenceLower.includes(claim.claimText.toLowerCase())) continue;
+    const claimLower = claim.claimText.toLowerCase();
+    if (!sentenceLower.includes(claimLower) && !paraphraseMatches(sentenceLower, claimLower)) {
+      continue;
+    }
     if (isStale(claim, now)) {
       return {
         status: "stale",

@@ -1,7 +1,16 @@
 // packages/schemas/src/asset-record.ts
 import { z } from "zod";
 
-export const AssetApprovalState = z.enum(["pending", "approved", "rejected", "locked"]);
+// `requires_human_review` is the state produced for every freshly generated
+// asset until real frame-based QA exists (an un-evaluated/fabricated score must
+// never auto-`approved`). See creative-pipeline `deriveApprovalState`.
+export const AssetApprovalState = z.enum([
+  "pending",
+  "approved",
+  "rejected",
+  "requires_human_review",
+  "locked",
+]);
 export type AssetApprovalState = z.infer<typeof AssetApprovalState>;
 
 export const InputHashesSchema = z.object({
@@ -15,6 +24,12 @@ export const AssetOutputsSchema = z.object({
   videoUrl: z.string().optional(),
   imageUrl: z.string().optional(),
   audioUrl: z.string().optional(),
+  /**
+   * Provider CDN URL when `videoUrl` was replaced by a durable upload
+   * (slice-3 spec 3.3f). Provider URLs expire; durable ones feed review
+   * playback and publish.
+   */
+  sourceUrl: z.string().optional(),
   checksums: z.record(z.string()),
 });
 export type AssetOutputs = z.infer<typeof AssetOutputsSchema>;

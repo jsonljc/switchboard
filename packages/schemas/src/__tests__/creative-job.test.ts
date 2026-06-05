@@ -111,3 +111,65 @@ describe("CreativeJobSchema", () => {
     expect(CreativeJobSchema.safeParse(base).success).toBe(true);
   });
 });
+
+describe("CreativeJobSchema meta-publish fields", () => {
+  const BASE = {
+    id: "job_1",
+    taskId: "task_1",
+    organizationId: "org_1",
+    deploymentId: "dep_1",
+    productDescription: "Botox lunchtime refresh",
+    targetAudience: "women 30-50",
+    platforms: ["instagram"],
+    brandVoice: null,
+    productImages: [],
+    references: [],
+    pastPerformance: null,
+    generateReferenceImages: false,
+    currentStage: "complete",
+    stageOutputs: {},
+    stoppedAt: null,
+    mode: "polished",
+    createdAt: new Date("2026-06-01"),
+    updatedAt: new Date("2026-06-01"),
+  };
+
+  it("defaults the new meta-publish fields to undefined when omitted", () => {
+    const job = CreativeJobSchema.parse(BASE);
+    expect(job.metaAdId).toBeUndefined();
+    expect(job.metaPublishStatus).toBeUndefined();
+    expect(job.durableAssetUrl).toBeUndefined();
+  });
+
+  it("accepts populated meta-publish fields", () => {
+    const job = CreativeJobSchema.parse({
+      ...BASE,
+      metaVideoId: "vid_1",
+      metaCampaignId: "camp_1",
+      metaAdSetId: "set_1",
+      metaCreativeId: "cr_1",
+      metaAdId: "ad_1",
+      metaPublishStatus: "parked_paused",
+      durableAssetUrl: "https://cdn.example.com/a.mp4",
+    });
+    expect(job.metaAdId).toBe("ad_1");
+    expect(job.metaPublishStatus).toBe("parked_paused");
+    expect(job.durableAssetUrl).toBe("https://cdn.example.com/a.mp4");
+  });
+});
+
+describe("VideoProducerOutput.durableAssetUrl", () => {
+  it("accepts an optional durableAssetUrl", () => {
+    const parsed = VideoProducerOutput.parse({
+      tier: "pro",
+      clips: [],
+      durableAssetUrl: "https://cdn.example.com/creative-assets/job_1/u.mp4",
+    });
+    expect(parsed.durableAssetUrl).toBe("https://cdn.example.com/creative-assets/job_1/u.mp4");
+  });
+
+  it("treats durableAssetUrl as optional", () => {
+    const parsed = VideoProducerOutput.parse({ tier: "basic", clips: [] });
+    expect(parsed.durableAssetUrl).toBeUndefined();
+  });
+});

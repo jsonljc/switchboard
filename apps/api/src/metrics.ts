@@ -155,6 +155,59 @@ export function createPromMetrics(): SwitchboardMetrics {
       OUTCOME_PATTERN_LABELS,
       CONFIDENCE_BUCKETS,
     ),
+    slotQueryZeroResult: new PromCounter(
+      "switchboard_slot_query_zero_result_total",
+      "Alex slots.query calls that returned zero available slots",
+      ["orgId", "service"],
+    ),
+    rawErrorFallback: new PromCounter(
+      "switchboard_raw_error_fallback_total",
+      "Failed Alex turns where the raw error was suppressed and a neutral fallback sent",
+      ["deploymentId", "code"],
+    ),
+    bookingConfirmed: new PromCounter(
+      "switchboard_booking_confirmed_total",
+      "Bookings confirmed (calendar event created + booking persisted in the confirm tx)",
+      ["orgId"],
+    ),
+    bookingFailed: new PromCounter(
+      "switchboard_booking_failed_total",
+      "Booking attempts that failed; reason ∈ {provider_error, duplicate, confirmation_failed}",
+      ["orgId", "reason"],
+    ),
+    bookingStageAdvanced: new PromCounter(
+      "switchboard_booking_stage_advanced_total",
+      "Bookings where the linked opportunity was advanced to the booked stage",
+      ["orgId"],
+    ),
+    bookingSlotConflict: new PromCounter(
+      "switchboard_booking_slot_conflict_total",
+      "Booking attempts rejected because the slot was taken concurrently (retryable re-offer)",
+      ["orgId"],
+    ),
+    bookingReschedule: new PromCounter(
+      "switchboard_booking_reschedule_total",
+      "Bookings rescheduled to a new slot",
+      ["orgId"],
+    ),
+    bookingCancel: new PromCounter("switchboard_booking_cancel_total", "Bookings cancelled", [
+      "orgId",
+    ]),
+    skillLlmTokensTotal: new PromCounter(
+      "switchboard_skill_llm_tokens_total",
+      "LLM tokens per skill execution, labeled by model and kind (input/output/cache_read/cache_creation)",
+      ["model", "kind"],
+    ),
+    skillLlmCostUsdTotal: new PromCounter(
+      "switchboard_skill_llm_cost_usd_total",
+      "Per-execution LLM cost in USD, by model",
+      ["model"],
+    ),
+    governanceVerdictsRecorded: new PromCounter(
+      "switchboard_governance_verdicts_total",
+      "Governance gate verdicts persisted, by deployment, source guard, action, and audit level",
+      ["deployment_id", "source_guard", "action", "audit_level"],
+    ),
   };
 }
 

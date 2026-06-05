@@ -1,11 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
-import type { ApprovalStore } from "../storage/interfaces.js";
-import type { Principal } from "@switchboard/schemas";
 import type { ReplySink, HandleApprovalResponseConfig } from "./types.js";
 import type { ParsedApprovalResponsePayload } from "./approval-response-payload.js";
-import type { RespondToApprovalResult } from "../approval/respond-to-approval.js";
-import { respondToApproval } from "../approval/respond-to-approval.js";
-import { StaleVersionError } from "../approval/state-machine.js";
+import type { ApprovalStore } from "../storage/interfaces.js";
+import type { ChannelApprovalRespondOutcome } from "./respond-to-channel-approval.js";
+import { respondToChannelApproval } from "./respond-to-channel-approval.js";
 
 export const NOT_FOUND_MSG =
   "I couldn't find this approval. It may have expired, been completed, or been replaced. Open the latest approval and try again.";
@@ -22,25 +19,75 @@ export const APPROVAL_LOOKUP_ERROR_MSG =
 export const ALREADY_RESPONDED_MSG =
   "This approval was already handled. Open the dashboard to see the latest state.";
 
-export const APPROVE_SUCCESS_MSG = "Approved.";
 export const REJECT_SUCCESS_MSG = "Rejected.";
+
+// Honest outcome replies (chat-approval-seam spec section 3): the reply tracks
+// what actually happened, not what was requested.
+export const APPROVE_EXECUTED_MSG = "Approved. The action has run or is queued to run.";
+
+export const APPROVE_DISPATCH_FAILED_MSG =
+  "Approved, but the action did not run. It is waiting in your inbox as a Retry card. Approving it there retries it.";
+
+export const PARTIAL_APPROVAL_MSG =
+  "Your approval is recorded. More approvals are required before it runs.";
+
+export const SELF_APPROVAL_MSG =
+  "You cannot approve an action you initiated. Another operator must respond.";
+
+export const ADMISSION_FAILED_MSG =
+  "Approved, but execution could not start. Open the dashboard to see its current state.";
 
 export const APPROVAL_EXECUTION_ERROR_MSG =
   "I verified your authority but couldn't apply your response. The action remains pending. Please try the dashboard.";
 
-/**
- * Roles that authorize a Principal to respond to approvals from a bound channel. We
- * deliberately exclude `emergency_responder` here: emergency overrides exist for incident
- * response on the API/dashboard surface and do not belong on a chat surface, where the
- * caller can't see the broader system state required to use that role responsibly. Note
- * that the API approval route enforces no role check at all (it relies on
- * `request.principalIdFromAuth === body.respondedBy`); the chat surface is intentionally
- * stricter because the caller's authority is asserted via a binding lookup, not auth.
- */
-export const APPROVER_ROLES = ["approver", "operator", "admin"] as const;
+// Identity derivation (APPROVER_ROLES + binding + role check) lives with the
+// flow in respond-to-channel-approval.ts; re-exported here for compatibility.
+export { APPROVER_ROLES } from "./respond-to-channel-approval.js";
 
-function principalHasApproverRole(principal: Principal): boolean {
-  return principal.roles.some((r) => (APPROVER_ROLES as readonly string[]).includes(r));
+/**
+ * Honest outcome reply: the reply tracks what actually happened, not what was
+ * requested (chat-approval-seam spec section 3; bridge spec table 3.3).
+ * Success covers completed AND queued (the #860 mapping); a null execution on
+ * an approve means a quorum is still open.
+ */
+export function replyForChannelOutcome(outcome: ChannelApprovalRespondOutcome): string {
+  if (outcome.kind === "responded") {
+    if (outcome.action === "reject") return REJECT_SUCCESS_MSG;
+    if (outcome.executionSuccess === null) return PARTIAL_APPROVAL_MSG;
+    return outcome.executionSuccess ? APPROVE_EXECUTED_MSG : APPROVE_DISPATCH_FAILED_MSG;
+  }
+  switch (outcome.code) {
+    case "not_found":
+      return NOT_FOUND_MSG;
+    case "stale":
+    case "expired":
+      return STALE_MSG;
+    case "not_authorized":
+      return NOT_AUTHORIZED_MSG;
+    case "lookup_error":
+      return APPROVAL_LOOKUP_ERROR_MSG;
+    case "already_responded":
+    case "conflict":
+      return ALREADY_RESPONDED_MSG;
+    case "self_approval":
+      return SELF_APPROVAL_MSG;
+    case "admission_failed":
+      return ADMISSION_FAILED_MSG;
+    case "execution_error":
+      return APPROVAL_EXECUTION_ERROR_MSG;
+    default:
+      return unreachableRefusal(outcome.code);
+  }
+}
+
+/**
+ * Compile-time exhaustiveness: adding a ChannelApprovalRefusalCode member
+ * without a switch case above fails to type-check here. The runtime fallback
+ * covers non-TS callers (an unknown code renders the honest non-executing
+ * lookup-error copy instead of an undefined reply).
+ */
+function unreachableRefusal(_code: never): string {
+  return APPROVAL_LOOKUP_ERROR_MSG;
 }
 
 export async function handleApprovalResponse(params: {
@@ -55,106 +102,40 @@ export async function handleApprovalResponse(params: {
   const { payload, organizationId, channel, channelIdentifier, approvalStore, replySink, config } =
     params;
 
-  let approval: Awaited<ReturnType<ApprovalStore["getById"]>>;
-  try {
-    approval = await approvalStore.getById(payload.approvalId);
-  } catch {
-    await replySink.send(APPROVAL_LOOKUP_ERROR_MSG);
-    return;
-  }
-
-  if (!approval) {
-    await replySink.send(NOT_FOUND_MSG);
-    return;
-  }
-
-  if (approval.organizationId !== organizationId) {
-    await replySink.send(NOT_FOUND_MSG);
-    return;
-  }
-
-  // Pre-check approval state. Once an approval has been responded to or expired, retrying
-  // here is futile and confusing — the dashboard 409s on the same condition; chat needs a
-  // distinct reply so the user knows the action already landed (vs. a downstream failure).
-  if (approval.state.status !== "pending") {
-    await replySink.send(ALREADY_RESPONDED_MSG);
-    return;
-  }
-
-  const stored = approval.request.bindingHash;
-  const supplied = payload.bindingHash;
-
-  if (typeof stored !== "string" || stored.length === 0) {
-    await replySink.send(STALE_MSG);
-    return;
-  }
-
-  if (stored.length !== supplied.length) {
-    await replySink.send(STALE_MSG);
-    return;
-  }
-
-  const matches = timingSafeEqual(Buffer.from(stored, "utf8"), Buffer.from(supplied, "utf8"));
-  if (!matches) {
-    await replySink.send(STALE_MSG);
-    return;
-  }
-
-  // Hash matches — but channel-possession alone is NOT authority. We require an active
-  // OperatorChannelBinding to a Principal carrying an approver role. If the binding stack
-  // isn't wired (test or misconfigured deployment), fail closed.
-  if (!config) {
-    await replySink.send(NOT_AUTHORIZED_MSG);
-    return;
-  }
-
-  const binding = await config.bindingStore.findActiveBinding({
+  const request = {
+    approvalId: payload.approvalId,
+    action: payload.action,
+    bindingHash: payload.bindingHash,
     organizationId,
     channel,
     channelIdentifier,
-  });
-  if (!binding) {
-    await replySink.send(NOT_AUTHORIZED_MSG);
-    return;
-  }
+  };
 
-  const principal = await config.identityStore.getPrincipal(binding.principalId);
-  if (!principal || !principalHasApproverRole(principal)) {
-    await replySink.send(NOT_AUTHORIZED_MSG);
-    return;
-  }
-
-  let result: RespondToApprovalResult;
-  try {
-    result = await respondToApproval(
-      config.respondDeps,
-      {
-        approvalId: payload.approvalId,
-        action: payload.action,
-        respondedBy: binding.principalId,
-        bindingHash: supplied,
-      },
-      approval,
-    );
-  } catch (err) {
-    // Race: another responder mutated state between our pre-check and the lifecycle call.
-    // The lifecycle service surfaces this as either StaleVersionError (legacy path) or as
-    // a status-mismatch Error (lifecycle path: "Cannot approve: lifecycle status is ...").
-    if (err instanceof StaleVersionError) {
-      await replySink.send(ALREADY_RESPONDED_MSG);
+  if (config && "transport" in config) {
+    // Bridged topology: thin-forward the webhook-authenticated identity. The
+    // API re-derives the principal and runs the engine; no local lookups here
+    // (one authority, not two). A transport failure renders as a lookup
+    // error: honest (nothing verified, the dashboard works) and re-tap safe
+    // (a duplicate respond surfaces as already_responded).
+    let outcome: ChannelApprovalRespondOutcome;
+    try {
+      outcome = await config.transport.respond(request);
+    } catch {
+      await replySink.send(APPROVAL_LOOKUP_ERROR_MSG);
       return;
     }
-    if (err instanceof Error && /lifecycle status is "/.test(err.message)) {
-      await replySink.send(ALREADY_RESPONDED_MSG);
-      return;
-    }
-    await replySink.send(APPROVAL_EXECUTION_ERROR_MSG);
+    await replySink.send(replyForChannelOutcome(outcome));
     return;
   }
 
-  // Successful mutation — confirm to the operator. The result is intentionally not
-  // surfaced in detail here; the dashboard remains the canonical view for execution
-  // outcomes. Future work can enrich this reply (e.g. include booking time on approve).
-  void result;
-  await replySink.send(payload.action === "approve" ? APPROVE_SUCCESS_MSG : REJECT_SUCCESS_MSG);
+  const outcome = await respondToChannelApproval(
+    {
+      approvalStore,
+      bindingStore: config?.bindingStore ?? null,
+      identityStore: config?.identityStore ?? null,
+      respondDeps: config?.respondDeps ?? null,
+    },
+    request,
+  );
+  await replySink.send(replyForChannelOutcome(outcome));
 }

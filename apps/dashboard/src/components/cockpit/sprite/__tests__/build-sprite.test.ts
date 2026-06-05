@@ -3,6 +3,7 @@ import { buildSprite, mergeSprite, SPRITE_SIZE } from "../build-sprite";
 import type { SpriteCommand, SpriteState, VariantBundle } from "../types";
 import { ALEX_VARIANTS } from "../alex-variants";
 import { RILEY_VARIANTS } from "../riley-variants";
+import { MIRA_VARIANTS } from "../mira-variants";
 
 describe("buildSprite", () => {
   it("returns a 24×24 grid of '.' characters when given no commands", () => {
@@ -77,6 +78,7 @@ describe("mergeSprite", () => {
 const STATES: readonly SpriteState[] = ["idle", "draft", "sleep", "won"];
 const ALEX_KEYS = ["classic", "operator", "cozy", "agent"] as const;
 const RILEY_KEYS = ["analyst", "trader", "bot"] as const;
+const MIRA_KEYS = ["maker"];
 
 function validateBundle(bundle: VariantBundle, expectedKeys: readonly string[]): void {
   expect(Object.keys(bundle).sort()).toEqual([...expectedKeys].sort());
@@ -119,5 +121,11 @@ describe("ALEX_VARIANTS bundle shape", () => {
 describe("RILEY_VARIANTS bundle shape", () => {
   it("contains analyst | trader | bot with all 4 states each (incl. dormant won state)", () => {
     validateBundle(RILEY_VARIANTS, RILEY_KEYS);
+  });
+});
+
+describe("MIRA_VARIANTS bundle shape", () => {
+  it("contains maker with all 4 states", () => {
+    validateBundle(MIRA_VARIANTS, MIRA_KEYS);
   });
 });

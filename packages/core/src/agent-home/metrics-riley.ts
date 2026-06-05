@@ -16,6 +16,11 @@ const RILEY_VOICE = {
   flat: () => `Flat vs last week.`,
 };
 
+// Must match metrics-alex.ts EXCLUDE_STATUSES so Riley's CAC denominator stays in
+// lockstep with Alex's booking hero. Alex currently excludes only "cancelled".
+// If that list changes, change it in both files.
+const EXCLUDE_STATUSES = ["cancelled"] as const;
+
 export async function buildRileyMetricsViewModel(
   input: PerAgentBuilderInput,
 ): Promise<MetricsViewModel> {
@@ -24,6 +29,12 @@ export async function buildRileyMetricsViewModel(
   const heroValueP = countLeads(store, orgId, week.weekStart, week.weekEnd);
   const heroPrevP = countLeads(store, orgId, week.prevWeekStart, week.prevWeekEnd);
   const spendCentsP = store.getMetaSpendCents({ orgId, from: week.weekStart, to: week.weekEnd });
+  const bookingsP = store.countBookingsCreated({
+    orgId,
+    excludeStatuses: EXCLUDE_STATUSES,
+    from: week.weekStart,
+    to: week.weekEnd,
+  });
   const weeklyCountsP = Promise.all(
     week.weeklyBuckets.map((b) => countLeads(store, orgId, b.from, b.to)),
   );
@@ -31,10 +42,11 @@ export async function buildRileyMetricsViewModel(
     week.dailyBuckets.map((b) => countLeads(store, orgId, b.from, b.to)),
   );
 
-  const [heroValue, heroPrev, spendCents, weeklyCounts, dailyCounts] = await Promise.all([
+  const [heroValue, heroPrev, spendCents, bookings, weeklyCounts, dailyCounts] = await Promise.all([
     heroValueP,
     heroPrevP,
     spendCentsP,
+    bookingsP,
     weeklyCountsP,
     dailyCountsP,
   ]);
@@ -93,17 +105,12 @@ export async function buildRileyMetricsViewModel(
   if (spendCents === null) unavailableSources.push("ad-platform-spend");
 
   const spendDollars = spendCents !== null ? Math.round(spendCents / 100) : null;
-  const cpl =
-    spendCents !== null && heroValue > 0 ? Math.round(spendCents / 100 / heroValue) : null;
-  let cplDisplay = "—";
-  if (cpl !== null) cplDisplay = cpl === 0 ? "<$1 per lead" : `$${cpl} per lead`;
-  // Riley v1 reinterprets `targetCpbCents` as **target cost per lead** for the
-  // ROI comparator. The config key is shared with Alex (target cost per
-  // booking) for storage symmetry — one targetCpbCents value lives in
-  // AgentRoster's config column; the meaning is agent-side. Do not treat
-  // Riley's target as booking economics until Riley has booking attribution
-  // (future slice). Read via `getAgentTargets`; this file consumes the typed
-  // result, never reaches into config keys directly.
+  const cac = spendCents !== null && bookings > 0 ? Math.round(spendCents / 100 / bookings) : null;
+  let cacDisplay = "—";
+  if (cac !== null) cacDisplay = cac === 0 ? "<$1 per booked" : `$${cac} per booked`;
+  // `targetCpbCents` is the genuine target cost per BOOKING (cents), shared with Alex
+  // via AgentRoster config. Distinct from the audit engine's dollar-valued
+  // `targetCostPerBooked` (a different config surface); they are not unified here.
   const targetDollars =
     targets.targetCpbCents !== null ? Math.round(targets.targetCpbCents / 100) : null;
   const targetLabel = targetDollars !== null ? `target $${targetDollars}` : "—";
@@ -121,33 +128,27 @@ export async function buildRileyMetricsViewModel(
   ];
 
   const roi: RoiBar = (() => {
-    // Rule 1: spendCents === null
     if (spendCents === null) {
       return {
         degraded: true,
-        degradedHint: "Connect Meta Ads to see cost per lead",
-        label: "cost per lead",
+        degradedHint: "Connect Meta Ads to see cost per booked",
+        label: "cost per booked",
         comparator: { value: "—", target: targetLabel },
       };
     }
-    // Rule 2: spendCents !== null && leads <= 0
-    if (heroValue <= 0) {
+    if (bookings <= 0) {
       return {
         degraded: true,
-        degradedHint: "",
-        label: "cost per lead",
+        degradedHint: "No bookings attributed yet",
+        label: "cost per booked",
         comparator: { value: "—", target: targetLabel },
       };
     }
-    // Rules 3 + 4: spendCents !== null && leads > 0
     return {
       degraded: true,
       degradedHint: "",
-      label: "cost per lead",
-      comparator: {
-        value: cplDisplay,
-        target: targetLabel,
-      },
+      label: "cost per booked",
+      comparator: { value: cacDisplay, target: targetLabel },
     };
   })();
 
@@ -171,6 +172,7 @@ export async function buildRileyMetricsViewModel(
     spendCents,
     leads,
     qualifiedPct,
+    showed: 0,
     bookedDelta: bookedDeltaStr,
     leadsDelta: bookedDeltaStr,
     qualifiedDelta: formatPercentPointsDelta(qualifiedPct, qualifiedPrev),

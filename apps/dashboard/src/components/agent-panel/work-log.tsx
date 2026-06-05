@@ -1,6 +1,7 @@
 "use client";
 
 import { useAgentActivityCockpit } from "@/hooks/use-agent-activity-cockpit";
+import { QueryStates } from "@/components/query-states";
 import { composeActivityVoice } from "./lib/activity-voice";
 import { agentDisplay, type PanelAgentKey } from "./lib/agent-display";
 import { relativeTime } from "./lib/format";
@@ -40,88 +41,81 @@ export function WorkLog({ agentKey, onSeeAll }: WorkLogProps) {
   const activity = useAgentActivityCockpit(agentKey, { limit: MAX_ROWS });
   const display = agentDisplay[agentKey];
 
-  // ── Loading ──────────────────────────────────────────────────────────────────
-  // Guard: on cold mount (data undefined, isError false) the hook is still
-  // fetching. Show skeleton to honour the three-states-never-collapse invariant.
-  if (activity.isLoading) {
-    return (
-      <div className={styles.logSection} data-kind="loading" aria-busy="true">
-        <div className={styles.logSkeleton} />
-      </div>
-    );
-  }
-
-  // ── Error ────────────────────────────────────────────────────────────────────
-  // Never "0" or "no actions" — we genuinely don't know.
-  if (activity.isError || !activity.data) {
-    return (
-      <div className={styles.logSection}>
-        <p className={`${styles.logEmptyLine} ${styles.logEmptyErr}`}>
-          {"Couldn't load recent work"}
-        </p>
-      </div>
-    );
-  }
-
-  const { rows } = activity.data;
-  const cappedRows = rows.slice(0, MAX_ROWS);
-
-  // ── Empty ────────────────────────────────────────────────────────────────────
-  if (cappedRows.length === 0) {
-    return (
-      <div className={styles.logSection}>
-        <p className={styles.logEmptyLine}>{"No actions in the last 24 hours"}</p>
-      </div>
-    );
-  }
-
-  // ── Has rows ─────────────────────────────────────────────────────────────────
-  // Honest header: "{Name} handled {N} things recently"
-  // The wire provides no last-viewed timestamp, so we cannot say "since this
-  // morning" or "since you last looked". We key the header to the count of rows
-  // actually shown — factual, warm, no invented time anchor.
-  const n = cappedRows.length;
-  const headerText =
-    n === 1
-      ? `${display.name} handled 1 thing recently`
-      : `${display.name} handled ${n} things recently`;
-  const nowMs = Date.now();
-
+  // Route the loading/error/empty/data quad through <QueryStates>, which derives
+  // state from {data, error} only. useAgentActivityCockpit is `enabled: !!keys`,
+  // so during keys-pending isLoading is false; a plain `if (isLoading)` gate is
+  // skipped and falls through to a false "Couldn't load recent work". The
+  // {data, error} rule treats keys-pending as loading.
   return (
-    <div className={styles.logSection}>
-      {/* Section header */}
-      <div className={styles.logSectionH}>
-        <span className={styles.logSectionTitle}>{headerText}</span>
-      </div>
+    <QueryStates
+      query={activity}
+      isEmpty={(d) => d.rows.length === 0}
+      loading={
+        <div className={styles.logSection} data-kind="loading" aria-busy="true">
+          <div className={styles.logSkeleton} />
+        </div>
+      }
+      error={
+        <div className={styles.logSection}>
+          <p className={`${styles.logEmptyLine} ${styles.logEmptyErr}`}>
+            {"Couldn't load recent work"}
+          </p>
+        </div>
+      }
+      empty={
+        <div className={styles.logSection}>
+          <p className={styles.logEmptyLine}>{"No actions in the last 24 hours"}</p>
+        </div>
+      }
+    >
+      {({ rows }) => {
+        const cappedRows = rows.slice(0, MAX_ROWS);
+        // Honest header keyed to the count of rows actually shown; the wire
+        // provides no last-viewed timestamp, so we never invent a time anchor.
+        const n = cappedRows.length;
+        const headerText =
+          n === 1
+            ? `${display.name} handled 1 thing recently`
+            : `${display.name} handled ${n} things recently`;
+        const nowMs = Date.now();
 
-      {/* Row list */}
-      <div className={styles.apLog} role="list" aria-label="Recent activity">
-        {cappedRows.map((row, i) => {
-          const voice = composeActivityVoice(row);
-          // relativeTime uses the ISO timestamp from the row if available, else falls back to the
-          // formatted time string (which the translator may render as "14:32" or "Mon").
-          // We prefer timestampIso for accurate relative calculation.
-          const timeLabel = relativeTime(row.timestampIso ?? null, nowMs) ?? row.time;
-          return (
-            <div key={row.id ?? i} className={styles.apLogRow} role="listitem">
-              <span className={styles.apLogText}>{voice}</span>
-              <span className={styles.apLogTime}>{timeLabel}</span>
+        return (
+          <div className={styles.logSection}>
+            {/* Section header */}
+            <div className={styles.logSectionH}>
+              <span className={styles.logSectionTitle}>{headerText}</span>
             </div>
-          );
-        })}
-      </div>
 
-      {/* Footer: "See all in Results →" — quiet route-out affordance */}
-      <div className={styles.apLogFoot}>
-        <button
-          type="button"
-          className={styles.apLogFootLink}
-          onClick={onSeeAll}
-          aria-label="See all activity in Results"
-        >
-          See all in Results →
-        </button>
-      </div>
-    </div>
+            {/* Row list */}
+            <div className={styles.apLog} role="list" aria-label="Recent activity">
+              {cappedRows.map((row, i) => {
+                const voice = composeActivityVoice(row);
+                // relativeTime prefers timestampIso for accurate relative calc, else
+                // falls back to the formatted time string ("14:32" or "Mon").
+                const timeLabel = relativeTime(row.timestampIso ?? null, nowMs) ?? row.time;
+                return (
+                  <div key={row.id ?? i} className={styles.apLogRow} role="listitem">
+                    <span className={styles.apLogText}>{voice}</span>
+                    <span className={styles.apLogTime}>{timeLabel}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer: "See all in Results" quiet route-out affordance */}
+            <div className={styles.apLogFoot}>
+              <button
+                type="button"
+                className={styles.apLogFootLink}
+                onClick={onSeeAll}
+                aria-label="See all activity in Results"
+              >
+                See all in Results →
+              </button>
+            </div>
+          </div>
+        );
+      }}
+    </QueryStates>
   );
 }

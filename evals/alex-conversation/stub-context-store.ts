@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, parse } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PrismaBusinessFactsStore } from "@switchboard/db";
 import type { BusinessFacts, KnowledgeKind } from "@switchboard/schemas";
 
 /**
@@ -23,11 +24,6 @@ export interface StubKnowledgeStore {
     orgId: string,
     filters: Array<{ kind: KnowledgeKind; scope: string }>,
   ): Promise<StubKnowledgeRow[]>;
-}
-
-/** Structural shape of `BusinessFactsStoreForResolver` (not exported from core). */
-export interface StubBusinessFactsStore {
-  get(orgId: string): Promise<BusinessFacts | null>;
 }
 
 /**
@@ -73,7 +69,7 @@ export const SKILL_PACK_SCOPES: ReadonlyArray<{
  *
  * (`business-facts/operator-approved` -> BUSINESS_FACTS is ALSO required but the
  * resolver routes `business-facts` kind through a BusinessFactsStore, not
- * findActive — see createStubBusinessFactsStore below.)
+ * findActive — see createBusinessFactsStore below.)
  */
 const STUB_SCOPES: ReadonlyMap<string, string> = new Map([
   [
@@ -174,8 +170,24 @@ export function createStubBusinessFacts(): BusinessFacts {
   };
 }
 
-/** A stub `BusinessFactsStoreForResolver` returning {@link createStubBusinessFacts}. */
-export function createStubBusinessFactsStore(): StubBusinessFactsStore {
-  const facts = createStubBusinessFacts();
-  return { get: async (_orgId: string): Promise<BusinessFacts | null> => facts };
+/**
+ * Build the REAL PrismaBusinessFactsStore over a hand-built mock Prisma — no DB,
+ * no Postgres. This exercises the production read + `classifyBusinessFacts` +
+ * `BusinessFactsSchema.safeParse` + malformed-degrade path, exactly the seam the
+ * live Alex turn uses (apps/api/src/bootstrap/skill-mode.ts:133). Mirrors
+ * apps/api/src/__tests__/alex-business-facts-live-path.test.ts.
+ *
+ * @param config The BusinessConfig.config blob, or `null` for "no row" (absent).
+ *   `null` and `{}` classify as missing → `.get()` returns null → BUSINESS_FACTS="".
+ */
+export function createBusinessFactsStore(config: unknown | null): PrismaBusinessFactsStore {
+  const prisma = {
+    businessConfig: {
+      findUnique: async (_args: { where: { organizationId: string } }) =>
+        // `config` is the BusinessConfig column name PrismaBusinessFactsStore.get
+        // reads (row?.config). The key is load-bearing and NOT checked by `as never`.
+        config === null ? null : { organizationId: "eval-org", config },
+    },
+  };
+  return new PrismaBusinessFactsStore(prisma as never);
 }

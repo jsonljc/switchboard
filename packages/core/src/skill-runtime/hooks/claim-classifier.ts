@@ -1,5 +1,9 @@
 import type { GovernanceVerdict, GovernanceVerdictReason } from "@switchboard/schemas";
-import { resolveClaimClassifierConfig, type ClaimType } from "@switchboard/schemas";
+import {
+  resolveClaimClassifierConfig,
+  type ClaimClassifierConfig,
+  type ClaimType,
+} from "@switchboard/schemas";
 import type { SkillHook, SkillHookContext, SkillExecutionResult } from "../types.js";
 import type { AnthropicClaimClassifier } from "../../governance/classifier/anthropic-classifier.js";
 import type { SubstantiationResolver } from "../../governance/classifier/substantiation-resolver.js";
@@ -94,6 +98,58 @@ export class ClaimClassifierHook implements SkillHook {
     const sentences = this.deps.splitSentences(result.response);
     if (sentences.length === 0) return;
 
+    if (classifierConfig.mode === "observe") {
+      // Observe is telemetry-only: run the classification pipeline fire-and-forget so
+      // the lead-visible reply pays zero added latency (precedent: the #859 trace
+      // recorder on this same path). The pipeline gets a DETACHED shallow clone, so even
+      // a regression in the apply helpers cannot touch the live reply STRING (trace/
+      // toolCalls stay shared by reference; observe paths never write them).
+      const detached: SkillExecutionResult = { ...result };
+      const run = this.classifyAndApply({
+        ctx,
+        result: detached,
+        sentences,
+        classifierConfig,
+        jurisdiction,
+        clinicType,
+      }).catch((err) => {
+        console.error("[claim-classifier] observe pipeline failed", err);
+      });
+      this.pendingObserveRuns.add(run);
+      void run.finally(() => this.pendingObserveRuns.delete(run));
+      return;
+    }
+
+    await this.classifyAndApply({
+      ctx,
+      result,
+      sentences,
+      classifierConfig,
+      jurisdiction,
+      clinicType,
+    });
+  }
+
+  private readonly pendingObserveRuns = new Set<Promise<void>>();
+
+  /**
+   * Awaits any in-flight observe-mode classification pipelines. Tests use this
+   * for determinism; production never needs to await it (observe is telemetry).
+   */
+  async flushObserveRuns(): Promise<void> {
+    await Promise.allSettled([...this.pendingObserveRuns]);
+  }
+
+  private async classifyAndApply(args: {
+    ctx: SkillHookContext;
+    result: SkillExecutionResult;
+    sentences: readonly string[];
+    classifierConfig: ClaimClassifierConfig;
+    jurisdiction: "SG" | "MY";
+    clinicType: "medical" | "nonMedical";
+  }): Promise<void> {
+    const { ctx, result, sentences, classifierConfig, jurisdiction, clinicType } = args;
+
     const outcomes = await runClassifier({
       sentences,
       model: classifierConfig.model,
@@ -112,6 +168,7 @@ export class ClaimClassifierHook implements SkillHook {
           jurisdiction,
           deploymentId: ctx.deploymentId,
           latencyBudgetMs: classifierConfig.latencyBudgetMs,
+          confidenceThreshold: classifierConfig.confidenceThreshold,
         }),
       );
     }
@@ -150,8 +207,10 @@ export class ClaimClassifierHook implements SkillHook {
     jurisdiction: "SG" | "MY";
     deploymentId: string;
     latencyBudgetMs: number;
+    confidenceThreshold: number;
   }): Promise<SentenceAction> {
-    const { outcome, sentence, jurisdiction, deploymentId, latencyBudgetMs } = args;
+    const { outcome, sentence, jurisdiction, deploymentId, latencyBudgetMs, confidenceThreshold } =
+      args;
 
     if (outcome.status === "timeout") {
       return {
@@ -194,6 +253,12 @@ export class ClaimClassifierHook implements SkillHook {
     };
 
     if (result.claimType === "none") return { kind: "allow" };
+
+    // T1.1 confidence floor: a sub-threshold classification is not trusted to
+    // rewrite or escalate a turn. Below the floor we allow the sentence rather
+    // than acting on a guess. Applies uniformly to all non-"none" claim types;
+    // error/timeout outcomes above carry no confidence and still escalate.
+    if (result.confidence < confidenceThreshold) return { kind: "allow" };
 
     if (ESCALATE_ONLY.includes(result.claimType)) {
       return {

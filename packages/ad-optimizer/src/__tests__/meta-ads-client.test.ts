@@ -90,6 +90,34 @@ describe("MetaAdsClient", () => {
         dateStop: "2024-01-31",
       });
     });
+
+    it("serializes a filtering clause when provided (campaign-scoped insights)", async () => {
+      fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) });
+
+      await client.getCampaignInsights({
+        dateRange: { since: "2024-01-01", until: "2024-01-31" },
+        fields: ["spend"],
+        filtering: [{ field: "campaign.id", operator: "IN", value: ["camp_1", "camp_2"] }],
+      });
+
+      const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      const url = new URL(callUrl);
+      expect(url.searchParams.get("filtering")).toBe(
+        JSON.stringify([{ field: "campaign.id", operator: "IN", value: ["camp_1", "camp_2"] }]),
+      );
+    });
+
+    it("omits the filtering param when not provided", async () => {
+      fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) });
+
+      await client.getCampaignInsights({
+        dateRange: { since: "2024-01-01", until: "2024-01-31" },
+        fields: ["spend"],
+      });
+
+      const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(new URL(callUrl).searchParams.has("filtering")).toBe(false);
+    });
   });
 
   describe("getAdSetInsights", () => {
@@ -331,6 +359,62 @@ describe("MetaAdsClient", () => {
     });
   });
 
+  describe("createAdCreative", () => {
+    it("posts an object_story_spec with page_id + video_data and returns the id", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "cr_new_1" }),
+      });
+
+      const result = await client.createAdCreative({
+        name: "Mira draft creative",
+        pageId: "page_123",
+        videoId: "vid_999",
+        message: "Lunchtime refresh",
+        linkUrl: "https://clinic.example/book",
+        callToActionType: "BOOK_TRAVEL",
+      });
+
+      expect(result).toEqual({ id: "cr_new_1" });
+
+      const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(callUrl).toContain("act_123456/adcreatives");
+
+      const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
+      expect(body.object_story_spec.page_id).toBe("page_123");
+      expect(body.object_story_spec.video_data.video_id).toBe("vid_999");
+      expect(body.object_story_spec.video_data.call_to_action.type).toBe("BOOK_TRAVEL");
+      expect(body.object_story_spec.video_data.call_to_action.value.link).toBe(
+        "https://clinic.example/book",
+      );
+    });
+  });
+
+  describe("createAd", () => {
+    it("always sends status PAUSED and links the creative + ad set", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "ad_new_1" }),
+      });
+
+      const result = await client.createAd({
+        name: "Mira draft ad",
+        adSetId: "set_1",
+        creativeId: "cr_1",
+      });
+
+      expect(result).toEqual({ id: "ad_new_1" });
+
+      const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(callUrl).toContain("act_123456/ads");
+
+      const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
+      expect(body.status).toBe("PAUSED");
+      expect(body.adset_id).toBe("set_1");
+      expect(body.creative.creative_id).toBe("cr_1");
+    });
+  });
+
   describe("rate limiting", () => {
     it("enforces minimum interval between calls", async () => {
       fetchSpy.mockResolvedValue({
@@ -479,5 +563,74 @@ describe("MetaAdsClient", () => {
       expect(result).toBeNull();
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe("getCampaignInsights time_increment", () => {
+  it("adds time_increment to the query when provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [] }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+    await client.getCampaignInsights({
+      dateRange: { since: "2026-05-18", until: "2026-06-01" },
+      fields: ["campaign_id", "spend", "conversions"],
+      timeIncrement: 1,
+    });
+    const calledUrl = String(fetchMock.mock.calls[0]![0]);
+    expect(calledUrl).toContain("time_increment=1");
+  });
+
+  it("omits time_increment when not provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+    await client.getCampaignInsights({
+      dateRange: { since: "2026-05-25", until: "2026-06-01" },
+      fields: ["campaign_id"],
+    });
+    expect(String(fetchMock.mock.calls[0]![0])).not.toContain("time_increment");
+  });
+});
+
+describe("fractional conversions", () => {
+  it("preserves fractional conversions (parseFloat, not parseInt)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ campaign_id: "c_1", spend: "100", conversions: "2.5" }] }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+    const rows = await client.getCampaignInsights({
+      dateRange: { since: "2026-05-25", until: "2026-06-01" },
+      fields: ["campaign_id", "spend", "conversions"],
+    });
+    expect(rows[0]!.conversions).toBe(2.5);
+  });
+});
+
+describe("action_attribution_windows + actions passthrough", () => {
+  it("forwards action_attribution_windows and surfaces parsed actions", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { campaign_id: "c1", spend: "100", actions: [{ action_type: "lead", value: "4" }] },
+          ],
+        }),
+      ),
+    );
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+    const rows = await client.getCampaignInsights({
+      dateRange: { since: "2026-05-01", until: "2026-05-07" },
+      fields: ["campaign_id", "spend", "actions"],
+      actionAttributionWindows: ["7d_click"],
+    });
+    const url = fetchMock.mock.calls[0]![0] as string;
+    expect(url).toContain("action_attribution_windows");
+    expect(rows[0]!.actions?.find((a) => a.action_type === "lead")?.value).toBe("4");
+    fetchMock.mockRestore();
   });
 });

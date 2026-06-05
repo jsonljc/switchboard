@@ -7,13 +7,17 @@ import { render, screen, fireEvent } from "@testing-library/react";
 let activityData: { rows: unknown[] } | undefined = undefined;
 let activityIsLoading = false;
 let activityIsError = false;
+let activityError: unknown = null;
 
 vi.mock("@/hooks/use-agent-activity-cockpit", () => ({
   useAgentActivityCockpit: () => ({
     data: activityData,
     isLoading: activityIsLoading,
     isError: activityIsError,
-    error: null,
+    // Mirror the live hook: an errored query carries a non-null error object.
+    // QueryStates derives state from {data, error}, so without this an errored
+    // query would be indistinguishable from keys-pending (both data undefined).
+    error: activityError,
   }),
 }));
 
@@ -42,6 +46,7 @@ describe("WorkLog slot", () => {
     activityData = undefined;
     activityIsLoading = false;
     activityIsError = false;
+    activityError = null;
   });
 
   // ── Loading ──────────────────────────────────────────────────────────────────
@@ -62,6 +67,7 @@ describe("WorkLog slot", () => {
 
   it("error → 'Couldn't load recent work', never empty copy", () => {
     activityIsError = true;
+    activityError = new Error("activity fetch failed");
     activityData = undefined;
     render(<WorkLog agentKey="alex" />);
     expect(screen.getByText("Couldn't load recent work")).toBeInTheDocument();
@@ -69,12 +75,17 @@ describe("WorkLog slot", () => {
     expect(screen.queryByText(/^0/)).not.toBeInTheDocument();
   });
 
-  it("data is undefined (no error, no loading) → 'Couldn't load recent work'", () => {
+  it("keys-pending (data undefined, no error, isLoading false) → loading skeleton, not error", () => {
+    // Disabled query during keys-pending reports isLoading false, data undefined,
+    // error null. QueryStates derives from {data, error}, so this must show the
+    // skeleton, never a false "Couldn't load recent work" (the bug this fixes).
     activityIsError = false;
     activityIsLoading = false;
     activityData = undefined;
-    render(<WorkLog agentKey="alex" />);
-    expect(screen.getByText("Couldn't load recent work")).toBeInTheDocument();
+    activityError = null;
+    const { container } = render(<WorkLog agentKey="alex" />);
+    expect(container.querySelector("[aria-busy='true']")).not.toBeNull();
+    expect(screen.queryByText("Couldn't load recent work")).not.toBeInTheDocument();
   });
 
   // ── Empty ─────────────────────────────────────────────────────────────────────
@@ -232,6 +243,7 @@ describe("WorkLog slot", () => {
 
   it("footer is NOT present on error state", () => {
     activityIsError = true;
+    activityError = new Error("activity fetch failed");
     render(<WorkLog agentKey="alex" />);
     expect(screen.queryByText("See all in Results →")).not.toBeInTheDocument();
   });

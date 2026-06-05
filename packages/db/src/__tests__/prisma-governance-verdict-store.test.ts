@@ -92,6 +92,58 @@ describe("PrismaGovernanceVerdictStore", () => {
     );
   });
 
+  it("countByDeploymentAndClaim counts verdicts by sourceGuard + window", async () => {
+    const count = vi.fn(async () => 12);
+    const prismaWithCount = buildPrismaMock();
+    (prismaWithCount.governanceVerdict as never as Record<string, unknown>).count = count;
+    const store = new PrismaGovernanceVerdictStore(prismaWithCount as never);
+    const from = new Date("2026-05-25T00:00:00Z");
+    const to = new Date("2026-06-01T00:00:00Z");
+
+    const n = await store.countByDeploymentAndClaim({
+      deploymentId: "dep-1",
+      claimType: "safety-claim",
+      from,
+      to,
+    });
+
+    expect(n).toBe(12);
+    expect(count).toHaveBeenCalledWith({
+      where: {
+        deploymentId: "dep-1",
+        sourceGuard: "safety-claim",
+        decidedAt: { gte: from, lt: to },
+      },
+    });
+  });
+
+  it("countByDeploymentAndClaim filters by action when provided", async () => {
+    const count = vi.fn(async () => 5);
+    const prismaWithCount = buildPrismaMock();
+    (prismaWithCount.governanceVerdict as never as Record<string, unknown>).count = count;
+    const store = new PrismaGovernanceVerdictStore(prismaWithCount as never);
+    const from = new Date("2026-05-25T00:00:00Z");
+    const to = new Date("2026-06-01T00:00:00Z");
+
+    const n = await store.countByDeploymentAndClaim({
+      deploymentId: "dep-1",
+      claimType: "safety-claim",
+      action: "block",
+      from,
+      to,
+    });
+
+    expect(n).toBe(5);
+    expect(count).toHaveBeenCalledWith({
+      where: {
+        deploymentId: "dep-1",
+        sourceGuard: "safety-claim",
+        action: "block",
+        decidedAt: { gte: from, lt: to },
+      },
+    });
+  });
+
   describe("onWrite callback", () => {
     const buildCreatedRow = () => ({
       id: "v-onwrite",

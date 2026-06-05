@@ -11,10 +11,10 @@ import {
 describe("riley-config", () => {
   it("RILEY_ACCENT carries teal identity tokens (moved off amber in P0-B)", () => {
     expect(RILEY_ACCENT).toEqual({
-      base: "#3F8C86",
-      deep: "#215451",
-      soft: "#C5DFDD",
-      paper: "#EBF5F4",
+      base: "hsl(var(--agent-riley))",
+      deep: "hsl(var(--agent-riley-deep))",
+      soft: "hsl(var(--agent-riley) / 0.30)",
+      paper: "hsl(var(--agent-riley-tint))",
     });
   });
 
@@ -23,18 +23,18 @@ describe("riley-config", () => {
     expect(RILEY_MISSION_SUBTITLE.length).toBeGreaterThan(0);
   });
 
-  it("statusColor maps WATCHING to green, WAITING to amber, IDLE to grey, HALTED to red", () => {
-    expect(statusColor("WATCHING", false)).toBe("#3F7A36");
-    expect(statusColor("WAITING", false)).toBe("#B8782E");
-    expect(statusColor("IDLE", false)).toBe("#A39786");
-    expect(statusColor("HALTED", false)).toBe("#A03A2E");
+  it("statusColor maps WATCHING→positive, WAITING→action, IDLE→ink-4, HALTED→destructive", () => {
+    expect(statusColor("WATCHING", false)).toBe("hsl(var(--positive))");
+    expect(statusColor("WAITING", false)).toBe("hsl(var(--action))");
+    expect(statusColor("IDLE", false)).toBe("var(--ink-4)");
+    expect(statusColor("HALTED", false)).toBe("hsl(var(--destructive))");
   });
 
-  it("statusColor returns HALTED red when halted=true regardless of statusKey", () => {
-    expect(statusColor("WATCHING", true)).toBe("#A03A2E");
-    expect(statusColor("WAITING", true)).toBe("#A03A2E");
-    expect(statusColor("IDLE", true)).toBe("#A03A2E");
-    expect(statusColor("REVIEWING", true)).toBe("#A03A2E");
+  it("statusColor returns destructive when halted=true regardless of statusKey", () => {
+    expect(statusColor("WATCHING", true)).toBe("hsl(var(--destructive))");
+    expect(statusColor("WAITING", true)).toBe("hsl(var(--destructive))");
+    expect(statusColor("IDLE", true)).toBe("hsl(var(--destructive))");
+    expect(statusColor("REVIEWING", true)).toBe("hsl(var(--destructive))");
   });
 
   it("statusPulse does NOT pulse on WAITING in B.1 (REVIEWING is the only pulse case; deferred)", () => {
@@ -53,7 +53,7 @@ describe("riley-config", () => {
 
   it("RILEY_COMPOSER_PLACEHOLDER carries the locked Riley voice placeholder", () => {
     expect(RILEY_COMPOSER_PLACEHOLDER).toBe(
-      "Tell Riley what to do — pause the Cold Interests adset, raise daily budget to $200…",
+      "Tell Riley what to do. Pause the Cold Interests adset, raise daily budget to $200…",
     );
   });
 

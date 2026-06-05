@@ -1,5 +1,6 @@
-// packages/core/src/creative-pipeline/ugc/provider-router.ts
+// packages/creative-pipeline/src/ugc/provider-router.ts
 import type { ProviderCapabilityProfile } from "@switchboard/schemas";
+import { KLING_COST_PER_5S, HEYGEN_COST_PER_CLIP } from "../stages/cost-estimator.js";
 import type { ProviderPerformanceHistory } from "./provider-performance.js";
 
 // ── Types ──
@@ -13,7 +14,19 @@ export interface RankedProvider {
   profile: ProviderCapabilityProfile;
   score: number;
   estimatedCost: number;
+  /**
+   * Per-provider attempt cap (slice-3 spec 3.5): heygen gets ONE attempt
+   * before fallback (it ranks first for avatar talking-heads, and its
+   * submit-poll calls are minutes long; Kling-style triple attempts would
+   * let a heygen outage stall the whole production step). Absent = the
+   * spec's retryConfig.maxAttempts applies.
+   */
+  attemptLimit?: number;
 }
+
+const PROVIDER_ATTEMPT_LIMIT: Record<string, number> = {
+  heygen: 1,
+};
 
 // ── Default Provider Registry (Phase 1) ──
 
@@ -86,11 +99,16 @@ export function getDefaultProviderRegistry(): ProviderCapabilityProfile[] {
   ];
 }
 
-// ── Cost estimates (placeholder — SP7 adds real cost tracking) ──
+// ── Cost estimates ──
+// kling + heygen are ALIGNED to the cost-estimator constants (slice-3 specs
+// 3.3b/3.5): the production budget accumulator counts these per attempt, and
+// the governance spend estimate uses the estimator rates; the two must not
+// disagree. EXPORTED for the parity tests. Seedance/runway stay placeholders
+// until their providers are real.
 
-const ESTIMATED_COST: Record<string, number> = {
-  kling: 0.5,
-  heygen: 1.0,
+export const ESTIMATED_COST: Record<string, number> = {
+  kling: KLING_COST_PER_5S,
+  heygen: HEYGEN_COST_PER_CLIP,
   seedance: 0.6,
   runway: 0.8,
 };
@@ -159,6 +177,9 @@ export function rankProviders(
         profile,
         score,
         estimatedCost: ESTIMATED_COST[profile.provider] ?? 1.0,
+        ...(PROVIDER_ATTEMPT_LIMIT[profile.provider] !== undefined
+          ? { attemptLimit: PROVIDER_ATTEMPT_LIMIT[profile.provider] }
+          : {}),
       };
     })
     .sort((a, b) => b.score - a.score);

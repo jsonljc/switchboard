@@ -10,6 +10,7 @@ import { seedAlexSkillPack } from "../src/seed/seed-alex-skill-pack.js";
 import { seedMiraPilotOrgs } from "../src/seed/seed-mira-pilot-orgs.js";
 import { seedMiraDemoCreatives } from "../src/seed/seed-mira-demo-creatives.js";
 import { seedMiraCreativeDeployment } from "../src/seed/seed-mira-creative-deployment.js";
+import { seedRileyAdOptimizerDeployment } from "../src/seed/seed-riley-ad-optimizer-deployment.js";
 
 const prisma = new PrismaClient();
 
@@ -609,6 +610,15 @@ async function main() {
   // after seedMarketplace (depends on the performance-creative-director listing).
   await seedMiraCreativeDeployment(prisma, "org_dev");
   console.warn("Seeded Mira creative deployment for org_dev");
+
+  // ── Riley ad-optimizer deployment (Contract 3 cron prerequisite) ──
+  // org_dev already has the handoff governance + creative deployment + Mira
+  // enablement (above); this is the missing fifth piece (an ACTIVE ad-optimizer
+  // deployment) so the governed Riley -> Mira handoff can fire end-to-end on
+  // org_dev (the org /mira renders under dev-auth). org_demo keeps its own Riley
+  // deployment (seedDemoData) untouched. Must run after seedMarketplace.
+  await seedRileyAdOptimizerDeployment(prisma, "org_dev");
+  console.warn("Seeded Riley ad-optimizer deployment for org_dev");
 
   // ── Marketplace Demo Data ──
   console.warn("\n--- Marketplace Demo Data ---");

@@ -146,4 +146,99 @@ describe("PrismaConversionRecordStore", () => {
       expect(call.where.OR[1].occurredAt.gte).toBeInstanceOf(Date);
     });
   });
+
+  describe("queryBookedValueCentsByCampaign", () => {
+    const window = { from: new Date("2026-04-01"), to: new Date("2026-04-30") };
+
+    it("sums booked value (cents) per campaign, preserving cents (no /100)", async () => {
+      (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { sourceCampaignId: "c1", _sum: { value: 12345 } },
+        { sourceCampaignId: "c2", _sum: { value: 50000 } },
+      ]);
+      const result = await store.queryBookedValueCentsByCampaign({ orgId: "org_1", ...window });
+      expect(result.get("c1")).toBe(12345);
+      expect(result.get("c2")).toBe(50000);
+      expect(result.size).toBe(2);
+    });
+
+    it("filters to booked type, value>0, non-null campaign, and the window", async () => {
+      const groupBy = prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>;
+      groupBy.mockResolvedValue([]);
+      await store.queryBookedValueCentsByCampaign({ orgId: "org_1", ...window });
+      const where = groupBy.mock.calls[0]![0].where;
+      expect(where.type).toBe("booked");
+      expect(where.value).toEqual({ gt: 0 });
+      expect(where.sourceCampaignId).toEqual({ not: null });
+      expect(where.occurredAt.gte).toBeInstanceOf(Date);
+      expect(where.occurredAt.lte).toBeInstanceOf(Date);
+    });
+
+    it("scopes to campaignIds when provided", async () => {
+      const groupBy = prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>;
+      groupBy.mockResolvedValue([]);
+      await store.queryBookedValueCentsByCampaign({
+        orgId: "org_1",
+        ...window,
+        campaignIds: ["c1", "c2"],
+      });
+      expect(groupBy.mock.calls[0]![0].where.sourceCampaignId).toEqual({ in: ["c1", "c2"] });
+    });
+
+    it("omits campaigns with no attributed booked value — honest absence, not a fabricated 0", async () => {
+      (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { sourceCampaignId: "c1", _sum: { value: 0 } },
+        { sourceCampaignId: null, _sum: { value: 999 } },
+      ]);
+      const result = await store.queryBookedValueCentsByCampaign({ orgId: "org_1", ...window });
+      expect(result.has("c1")).toBe(false);
+      expect(result.size).toBe(0);
+    });
+  });
+
+  describe("queryBookedStatsByCampaign", () => {
+    const window = {
+      from: new Date("2026-05-01T00:00:00Z"),
+      to: new Date("2026-06-04T00:00:00Z"),
+    };
+
+    it("aggregates sum AND count over the same value-positive booked predicate", async () => {
+      (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { sourceCampaignId: "camp_1", _sum: { value: 25000 }, _count: { _all: 2 } },
+        { sourceCampaignId: null, _sum: { value: 100 }, _count: { _all: 1 } },
+      ]);
+
+      const out = await store.queryBookedStatsByCampaign({
+        orgId: "org_1",
+        ...window,
+        campaignIds: ["camp_1"],
+      });
+
+      expect(prisma.conversionRecord.groupBy).toHaveBeenCalledWith({
+        by: ["sourceCampaignId"],
+        where: {
+          organizationId: "org_1",
+          type: "booked",
+          value: { gt: 0 },
+          occurredAt: { gte: window.from, lte: window.to },
+          sourceCampaignId: { in: ["camp_1"] },
+        },
+        _sum: { value: true },
+        _count: { _all: true },
+      });
+      expect(out.get("camp_1")).toEqual({ valueCents: 25000, count: 2 });
+      expect(out.size).toBe(1); // null sourceCampaignId row dropped
+    });
+
+    it("omits the campaignIds filter (any non-null campaign) when not provided", async () => {
+      (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      await store.queryBookedStatsByCampaign({ orgId: "org_1", ...window });
+
+      expect(prisma.conversionRecord.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ sourceCampaignId: { not: null } }),
+        }),
+      );
+    });
+  });
 });

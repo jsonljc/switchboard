@@ -10,6 +10,7 @@ const mockStore = {
   delete: vi.fn(),
   updateStatus: vi.fn(),
   getByService: vi.fn(),
+  mergeCredentialsById: vi.fn(),
 };
 
 vi.mock("@switchboard/db", () => ({
@@ -327,6 +328,121 @@ describe("Connections API", () => {
       });
 
       expect(res.statusCode).toBe(404);
+    });
+  });
+
+  // ── PUT /api/connections/:id/meta-page-id ──────────────────────────
+
+  describe("PUT /api/connections/:id/meta-page-id", () => {
+    it("sets the page id and returns 200 with no credential material", async () => {
+      mockStore.mergeCredentialsById.mockResolvedValue("updated");
+
+      const res = await app.inject({
+        method: "PUT",
+        url: "/api/connections/conn_1/meta-page-id",
+        payload: { pageId: "123456789012345" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.connection).toEqual({ id: "conn_1", updated: true });
+      expect(JSON.stringify(body)).not.toContain("accessToken");
+      expect(mockStore.mergeCredentialsById).toHaveBeenCalledWith(
+        "conn_1",
+        "org_test",
+        "meta-ads",
+        {
+          pageId: "123456789012345",
+        },
+      );
+    });
+
+    it("trims surrounding whitespace from the page id", async () => {
+      mockStore.mergeCredentialsById.mockResolvedValue("updated");
+
+      const res = await app.inject({
+        method: "PUT",
+        url: "/api/connections/conn_1/meta-page-id",
+        payload: { pageId: "  123456789012345  " },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(mockStore.mergeCredentialsById).toHaveBeenCalledWith(
+        "conn_1",
+        "org_test",
+        "meta-ads",
+        {
+          pageId: "123456789012345",
+        },
+      );
+    });
+
+    it("returns 400 for a non-numeric page id and does not call the store", async () => {
+      const res = await app.inject({
+        method: "PUT",
+        url: "/api/connections/conn_1/meta-page-id",
+        payload: { pageId: "not-a-number" },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.toLowerCase()).toContain("numeric");
+      expect(mockStore.mergeCredentialsById).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 when the connection is missing or cross-org", async () => {
+      mockStore.mergeCredentialsById.mockResolvedValue("not_found");
+
+      const res = await app.inject({
+        method: "PUT",
+        url: "/api/connections/conn_x/meta-page-id",
+        payload: { pageId: "123456789012345" },
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error).toContain("not found");
+    });
+
+    it("returns 400 when the connection is not a meta-ads connection", async () => {
+      mockStore.mergeCredentialsById.mockResolvedValue("wrong_service");
+
+      const res = await app.inject({
+        method: "PUT",
+        url: "/api/connections/conn_1/meta-page-id",
+        payload: { pageId: "123456789012345" },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain("Meta Ads");
+    });
+
+    it("returns 503 when the encryption key is not set", async () => {
+      delete process.env["CREDENTIALS_ENCRYPTION_KEY"];
+
+      const res = await app.inject({
+        method: "PUT",
+        url: "/api/connections/conn_1/meta-page-id",
+        payload: { pageId: "123456789012345" },
+      });
+
+      expect(res.statusCode).toBe(503);
+      expect(res.json().error).toContain("CREDENTIALS_ENCRYPTION_KEY");
+    });
+
+    it("returns 403 with no organization context", async () => {
+      await app.close();
+      app = Fastify({ logger: false });
+      app.decorate("prisma", { _mock: true } as unknown as never);
+      app.decorate("storageContext", { cartridges: mockCartridges } as unknown as never);
+      app.decorateRequest("organizationIdFromAuth", undefined);
+      await app.register(connectionsRoutes, { prefix: "/api/connections" });
+
+      const res = await app.inject({
+        method: "PUT",
+        url: "/api/connections/conn_1/meta-page-id",
+        payload: { pageId: "123456789012345" },
+      });
+
+      expect(res.statusCode).toBe(403);
     });
   });
 });

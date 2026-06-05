@@ -18,6 +18,7 @@ const REASON_LABELS: Record<HandoffReason, string> = {
   complex_objection: "Tricky objection",
   negative_sentiment: "Tone turned",
   compliance_concern: "Compliance question",
+  medical_safety: "Medical red flag",
   booking_failure: "Booking didn't go through",
   escalation_timeout: "Waiting too long",
   missing_knowledge: "Needs your knowledge",
@@ -53,6 +54,10 @@ function SheetShell({
       data-open="true"
       role="dialog"
       aria-modal="true"
+      // Static accessible name: SheetShell wraps the skeleton/error/loaded states,
+      // and the skeleton + error states render no title to reference — so a
+      // constant aria-label (the dialog's purpose) names every state.
+      aria-label="Handoff detail"
     >
       <span className="sheet-handle" />
       <button type="button" className="sheet-close" onClick={onClose} aria-label="Close detail">

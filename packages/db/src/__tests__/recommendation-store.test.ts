@@ -9,6 +9,7 @@ function mockPrisma() {
     pendingActionRecord: {
       create: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
     },
@@ -277,7 +278,7 @@ describe("PrismaRecommendationStore", () => {
       (callback: (tx: unknown) => Promise<unknown>) => callback(prisma),
     );
 
-    (prisma.pendingActionRecord.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(row);
+    (prisma.pendingActionRecord.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(row);
     const updatedRow = {
       ...row,
       status: "acted",
@@ -292,6 +293,7 @@ describe("PrismaRecommendationStore", () => {
 
     const result = await store.applyAct({
       id: row.id,
+      orgId: "org-1",
       actor: { principalId: "user-1", type: "operator" },
       fromStatus: "pending",
       toStatus: "acted",
@@ -310,6 +312,52 @@ describe("PrismaRecommendationStore", () => {
     // Assert auditEntry.create was called with a valid sha256 entryHash
     const auditCall = (prisma.auditEntry.create as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(auditCall.data.entryHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("scopes applyAct's update and existence read by organizationId (cross-tenant guard)", async () => {
+    const row = makeDbRow({
+      id: "aaaaaaaa-0000-0000-0000-000000000099",
+      surface: "queue",
+      undoableUntil: null,
+      status: "pending",
+    });
+
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      (callback: (tx: unknown) => Promise<unknown>) => callback(prisma),
+    );
+    (prisma.pendingActionRecord.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(row);
+    (prisma.pendingActionRecord.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...row,
+      status: "acted",
+      resolvedBy: "user-1",
+      resolvedAt: new Date(),
+      parameters: { __recommendation: {} },
+    });
+    (prisma.auditEntry.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ id: "audit-x" });
+
+    await store.applyAct({
+      id: row.id,
+      orgId: "org-1",
+      actor: { principalId: "user-1", type: "operator" },
+      fromStatus: "pending",
+      toStatus: "acted",
+      note: undefined,
+    });
+
+    // The existence read is org-scoped (findFirst over {id, organizationId}) so a
+    // cross-tenant id resolves to "not found" before any mutation.
+    const findFirstCall = (prisma.pendingActionRecord.findFirst as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0];
+    expect(findFirstCall.where).toMatchObject({ id: row.id, organizationId: "org-1" });
+
+    // The UPDATE where carries organizationId too (defense-in-depth + store-mutation scanner).
+    const updateCall = (prisma.pendingActionRecord.update as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0];
+    expect(updateCall.where).toMatchObject({
+      id: row.id,
+      status: "pending",
+      organizationId: "org-1",
+    });
   });
 
   it("two acts on different rows produce different entryHashes", async () => {
@@ -333,7 +381,7 @@ describe("PrismaRecommendationStore", () => {
     );
 
     // First applyAct on rowA
-    (prisma.pendingActionRecord.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(rowA);
+    (prisma.pendingActionRecord.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(rowA);
     (prisma.pendingActionRecord.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ...rowA,
       status: "acted",
@@ -349,6 +397,7 @@ describe("PrismaRecommendationStore", () => {
 
     await store.applyAct({
       id: rowA.id,
+      orgId: "org-1",
       actor: { principalId: "u", type: "operator" },
       fromStatus: "pending",
       toStatus: "acted",
@@ -356,7 +405,7 @@ describe("PrismaRecommendationStore", () => {
     });
 
     // Second applyAct on rowB
-    (prisma.pendingActionRecord.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(rowB);
+    (prisma.pendingActionRecord.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(rowB);
     (prisma.pendingActionRecord.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ...rowB,
       status: "dismissed",
@@ -372,6 +421,7 @@ describe("PrismaRecommendationStore", () => {
 
     await store.applyAct({
       id: rowB.id,
+      orgId: "org-1",
       actor: { principalId: "u", type: "operator" },
       fromStatus: "pending",
       toStatus: "dismissed",
@@ -394,19 +444,20 @@ describe("PrismaRecommendationStore", () => {
       (callback: (tx: unknown) => Promise<unknown>) => callback(prisma),
     );
 
-    // findUnique for the initial lookup (before update attempt)
-    (prisma.pendingActionRecord.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(row);
+    // findFirst for the initial org-scoped lookup (before update attempt)
+    (prisma.pendingActionRecord.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(row);
     // update throws P2025 (record not found with that status)
     (prisma.pendingActionRecord.update as ReturnType<typeof vi.fn>).mockRejectedValueOnce({
       code: "P2025",
       message: "Record to update not found.",
     });
-    // findUnique for the stale re-read
-    (prisma.pendingActionRecord.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(row);
+    // findFirst for the org-scoped stale re-read
+    (prisma.pendingActionRecord.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(row);
 
     await expect(
       store.applyAct({
         id: row.id,
+        orgId: "org-1",
         actor: { principalId: "user-B", type: "operator" },
         fromStatus: "pending",
         toStatus: "dismissed",

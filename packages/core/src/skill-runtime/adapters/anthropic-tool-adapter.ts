@@ -14,6 +14,13 @@ import {
 // tool definitions and outgoing message history (tool_use blocks).
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TOKENS = 1024;
+// Live frontline default used ONLY when the model router is off
+// (ALEX_MODEL_ROUTER_ENABLED) so no profile is supplied. Intentionally just under
+// the router's premium/Sonnet slot (0.5, see model-router.ts) — DEFAULT_MODEL is
+// Sonnet — to curb unsubstantiated-claim variance on a compliance-sensitive agent.
+// TODO: once the router is enabled it supplies per-tier temps via params.profile;
+// the default then belongs with model policy (router/bootstrap), not this adapter.
+const DEFAULT_TEMPERATURE = 0.4;
 const PROVIDER = "anthropic";
 
 // Anthropic tool names must match ^[a-zA-Z0-9_-]{1,128}$. Internally the
@@ -112,6 +119,8 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
     tools: LLMToolDefinition[];
     maxTokens?: number;
     profile?: { model: string; maxTokens: number; temperature: number; timeoutMs: number };
+    /** Abort signal threaded to the SDK request so a deadline can cancel the call. */
+    signal?: AbortSignal;
   }): Promise<LLMResponse> {
     const anthropicMessages: Anthropic.MessageParam[] = params.messages.map((m) => ({
       role: m.role,
@@ -138,18 +147,29 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
           })
         : undefined;
 
-    const response = await this.client.messages.create({
-      model: params.profile?.model ?? DEFAULT_MODEL,
-      max_tokens: params.profile?.maxTokens ?? params.maxTokens ?? DEFAULT_MAX_TOKENS,
-      // Cache the system prompt; combined with the last-tool breakpoint above this
-      // caches the full tools+system static prefix (see anthropicTools comment).
-      system: [{ type: "text", text: params.system, cache_control: { type: "ephemeral" } }],
-      messages: anthropicMessages,
-      tools: anthropicTools,
-      ...(params.profile?.temperature !== undefined && {
-        temperature: params.profile.temperature,
-      }),
-    });
+    // Second arg = per-request options. `signal` lets the executor's per-call
+    // deadline abort the in-flight call (stop the output-token-burn leak), not
+    // just stop awaiting it. `timeout` plumbs the router's per-tier budget to the
+    // SDK. `maxRetries: 1` overrides the SDK default of 2 — one bounded retry for
+    // a transient 429/529/500, terminated by the abort deadline. Mirrors the
+    // claim-classifier's two-arg `messages.create(body, { signal })`.
+    const response = await this.client.messages.create(
+      {
+        model: params.profile?.model ?? DEFAULT_MODEL,
+        max_tokens: params.profile?.maxTokens ?? params.maxTokens ?? DEFAULT_MAX_TOKENS,
+        // Cache the system prompt; combined with the last-tool breakpoint above this
+        // caches the full tools+system static prefix (see anthropicTools comment).
+        system: [{ type: "text", text: params.system, cache_control: { type: "ephemeral" } }],
+        messages: anthropicMessages,
+        tools: anthropicTools,
+        temperature: params.profile?.temperature ?? DEFAULT_TEMPERATURE,
+      },
+      {
+        ...(params.signal ? { signal: params.signal } : {}),
+        ...(params.profile?.timeoutMs ? { timeout: params.profile.timeoutMs } : {}),
+        maxRetries: 1,
+      },
+    );
 
     // Translate content blocks. Unknown block types MUST surface as a typed
     // adapter error — silent coercion to empty text hides provider mismatches.
@@ -178,9 +198,12 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
     return {
       content,
       stopReason: response.stop_reason as LLMStopReason,
+      model: params.profile?.model ?? DEFAULT_MODEL,
       usage: {
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
+        cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+        cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
       },
     };
   }

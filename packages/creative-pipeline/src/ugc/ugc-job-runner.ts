@@ -1,7 +1,8 @@
-// packages/core/src/creative-pipeline/ugc/ugc-job-runner.ts
+// packages/creative-pipeline/src/ugc/ugc-job-runner.ts
 import { inngestClient } from "../inngest-client.js";
 import { shouldRequireApproval, UGC_PHASE_ORDER } from "./approval-config.js";
 import type { UgcPhase } from "./approval-config.js";
+import type { AssetStorageClient } from "../stages/video-producer.js";
 import type {
   CreativeJob,
   CreatorIdentity,
@@ -44,6 +45,8 @@ interface UgcJobStore {
     phase: string,
     error: Record<string, unknown>,
   ): Promise<CreativeJob>;
+  /** Mirrors the polished runner's durable-asset persist (slice-3 spec 3.3f). */
+  setDurableAsset(organizationId: string, id: string, url: string): Promise<CreativeJob>;
 }
 
 interface CreatorStore {
@@ -60,9 +63,16 @@ interface UgcPipelineDeps {
   deploymentStore: DeploymentStore;
   llmConfig?: { apiKey: string };
   klingClient?: unknown;
+  /** Real HeyGen client (slice-3 spec 3.5); absent = adapter throws, kling fallback. */
+  heygenClient?: unknown;
   assetStore?: unknown;
+  /** Durable storage for final assets (slice-3 spec 3.3f); injected from bootstrap. */
+  assetStorage?: AssetStorageClient;
 }
 
+// Step-memoized snapshot: JSON-safe DATA ONLY. Live client objects (kling,
+// heygen, asset stores, storage) ride DEPS instead; a class instance through
+// step.run would lose its methods on an Inngest replay.
 interface UgcPipelineContext {
   creatorPool: unknown[];
   trustLevel: number;
@@ -71,8 +81,6 @@ interface UgcPipelineContext {
   providerCapabilities: unknown[];
   creativeWeights: unknown;
   apiKey: string;
-  klingClient: unknown;
-  assetStore: unknown;
 }
 
 // ── Phase execution (no-op stubs for SP2) ──
@@ -98,6 +106,9 @@ async function executePhase(
     context: UgcPipelineContext;
     previousPhaseOutputs: Record<string, unknown>;
   },
+  // Live client objects ride DEPS, never the step-memoized context (step
+  // output is JSON; class instances would not survive a replay).
+  deps?: UgcPipelineDeps,
 ): Promise<Record<string, unknown>> {
   switch (phase) {
     case "planning": {
@@ -142,6 +153,7 @@ async function executePhase(
           creatorPoolIds: brief.creatorPoolIds ?? [],
           ugcFormat: brief.ugcFormat ?? "talking_head",
           brandVoice: brief.brandVoice ?? null,
+          productImages: brief.productImages ?? [],
         },
         creatorPool: ctx.context.creatorPool as CreatorIdentity[],
         creativeWeights: (ctx.context.creativeWeights as {
@@ -179,12 +191,17 @@ async function executePhase(
           costAuthority: "estimated",
         },
         deps: {
+          // ALL live client objects ride DEPS, never step-memoized context
+          // (a replayed context is plain JSON; class methods do not survive).
           providerClients: {
-            klingClient: ctx.context
-              .klingClient as ProductionInput["deps"]["providerClients"]["klingClient"],
+            klingClient:
+              deps?.klingClient as ProductionInput["deps"]["providerClients"]["klingClient"],
+            heygenClient:
+              deps?.heygenClient as ProductionInput["deps"]["providerClients"]["heygenClient"],
           },
-          assetStore: ctx.context.assetStore as ProductionInput["deps"]["assetStore"],
+          assetStore: deps?.assetStore as ProductionInput["deps"]["assetStore"],
           apiKey: ctx.context.apiKey,
+          assetStorage: deps?.assetStorage,
         },
       };
       return (await executeProductionPhase(productionInput)) as unknown as Record<string, unknown>;
@@ -220,8 +237,6 @@ async function preloadContext(
     providerCapabilities: [], // SP5 adds real provider registry
     creativeWeights: translateFrictions([] as FunnelFriction[]),
     apiKey: deps.llmConfig?.apiKey ?? "",
-    klingClient: deps.klingClient,
-    assetStore: deps.assetStore,
   };
 }
 
@@ -256,7 +271,7 @@ export async function executeUgcPipeline(
     let output: Record<string, unknown>;
     try {
       output = await step.run(`phase-${phase}`, () =>
-        executePhase(phase as UgcPhase, { job, context, previousPhaseOutputs: phaseOutputs }),
+        executePhase(phase as UgcPhase, { job, context, previousPhaseOutputs: phaseOutputs }, deps),
       );
     } catch (err) {
       // Terminal error — persist failure and emit event
@@ -287,6 +302,20 @@ export async function executeUgcPipeline(
       deps.jobStore.updateUgcPhase(eventData.organizationId, job.id, nextPhase, phaseOutputs),
     );
 
+    // After production, promote the first non-rejected asset's durable URL to
+    // the job (slice-3 spec 3.3f; mirrors the polished save-durable-asset
+    // step) so assertPublishable can find it for a kept UGC creative.
+    if (phase === "production") {
+      const assets = (output as { assets?: Array<Record<string, unknown>> }).assets ?? [];
+      const chosen = assets.find((a) => a.approvalState !== "rejected");
+      const durableAssetUrl = chosen?.durableAssetUrl;
+      if (typeof durableAssetUrl === "string" && durableAssetUrl.length > 0) {
+        await step.run("save-ugc-durable-asset", () =>
+          deps.jobStore.setDurableAsset(eventData.organizationId, job.id, durableAssetUrl),
+        );
+      }
+    }
+
     // Emit phase completion event
     await step.sendEvent(`emit-${phase}-complete`, {
       name: "creative-pipeline/ugc-phase.completed",
@@ -307,11 +336,17 @@ export async function executeUgcPipeline(
         deploymentType: context.deploymentType,
       })
     ) {
+      // jobId-only match (slice-3 spec 3.3a; polished parity). The decision
+      // workflow emits phase = the PERSISTED ugcPhase, which is the NEXT
+      // phase (saved above before this wait), so a phase `if` filter could
+      // never match a governed approve: every continue timed out into
+      // stopUgc. Waits are sequential (one active wait per job), so
+      // jobId-only matching cannot skip a later gate; the event's phase
+      // field stays in the payload for observability only.
       const approval = await step.waitForEvent(`wait-approval-${phase}`, {
         event: "creative-pipeline/ugc-phase.approved",
         timeout: APPROVAL_TIMEOUT,
         match: "data.jobId",
-        if: `async.data.phase == '${phase}'`,
       });
 
       if (!approval || approval.data.action === "stop") {

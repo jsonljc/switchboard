@@ -12,7 +12,7 @@ export function composeActivityVoice(row: ActivityRow): string {
     case "sent":
       return `I sent ${row.head}`;
     case "escalated":
-      return who ? `I escalated ${who} to you — ${row.head}` : `I escalated to you — ${row.head}`;
+      return who ? `I escalated ${who} to you, ${row.head}` : `I escalated to you, ${row.head}`;
     case "paused":
       return `I paused ${row.head}`;
     case "scaled":

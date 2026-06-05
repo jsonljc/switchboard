@@ -3,7 +3,7 @@
 import { useAgentGreeting } from "@/hooks/use-agent-greeting";
 import { useAgentState } from "@/hooks/use-agents";
 import { useHalt } from "@/components/layout/halt/halt-context";
-import { type PanelAgentKey } from "./lib/agent-display";
+import { AGENT_ROLE_FOR_KEY, type PanelAgentKey } from "./lib/agent-display";
 import { composeStatusLine } from "./lib/status-line";
 import styles from "./agent-panel.module.css";
 
@@ -15,15 +15,6 @@ import styles from "./agent-panel.module.css";
 const FALLING_BEHIND_HOURS: Record<Exclude<PanelAgentKey, "mira">, number> = {
   alex: 24,
   riley: 12,
-};
-
-/**
- * Maps canonical agent key → legacy agentRole string returned by /api/agents/state.
- * The state endpoint uses DerivedAgentState which has agentRole (not agentKey).
- */
-const AGENT_ROLE_FOR_KEY: Record<Exclude<PanelAgentKey, "mira">, string> = {
-  alex: "responder",
-  riley: "optimizer",
 };
 
 export interface IdentityStatusProps {
@@ -40,8 +31,7 @@ export function IdentityStatus({ agentKey }: IdentityStatusProps) {
   // Select this agent's state entry by agentRole. /api/agents/state returns the
   // derived shape (DerivedAgentStateEntry, keyed by agentRole) — modeled in
   // api-client-types so this reads type-safely with no runtime cast.
-  const agentRole =
-    agentKey !== "mira" ? AGENT_ROLE_FOR_KEY[agentKey as Exclude<PanelAgentKey, "mira">] : null;
+  const agentRole = agentKey !== "mira" ? (AGENT_ROLE_FOR_KEY[agentKey] ?? null) : null;
   const stateEntry =
     agentRole != null
       ? (agentStateQuery.data?.states.find((s) => s.agentRole === agentRole) ?? null)
@@ -83,15 +73,15 @@ export function IdentityStatus({ agentKey }: IdentityStatusProps) {
         </div>
       )}
 
-      {/* Verdict: all segments joined, accent → <em> */}
+      {/* Verdict: all segments joined, accent in a weighted span (no italics) */}
       <div className={styles.verdictBlock}>
         {segments.length > 0 ? (
           <p className={styles.verdictText}>
             {segments.map((seg, i) =>
               seg.kind === "accent" ? (
-                <em key={i} className={styles.verdictAccent}>
+                <span key={i} className={styles.verdictAccent}>
                   {seg.text}
-                </em>
+                </span>
               ) : (
                 <span key={i}>{seg.text}</span>
               ),

@@ -9,6 +9,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
     "@switchboard/core": "workspace:*",
+    "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",
     "zod": "^3.23.0"
   },

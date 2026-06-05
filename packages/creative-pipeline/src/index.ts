@@ -1,8 +1,12 @@
 export { inngestClient } from "./inngest-client.js";
 export type { CreativePipelineEvents } from "./inngest-client.js";
 export { createCreativeJobRunner, executeCreativePipeline } from "./creative-job-runner.js";
+export { extractCreativeDescriptor } from "./creative-descriptor.js";
+export type { CreativeDescriptor } from "./creative-descriptor.js";
+export type { CreativeMemoryProvider } from "./creative-memory.js";
 export { runStage, getNextStage, STAGE_ORDER } from "./stages/run-stage.js";
 export type { StageName, StageInput } from "./stages/run-stage.js";
+export type { AssetStorageClient } from "./stages/video-producer.js";
 export { callClaude, extractJson } from "./stages/call-claude.js";
 export { runTrendAnalyzer, buildTrendPrompt } from "./stages/trend-analyzer.js";
 export { runHookGenerator, buildHookPrompt } from "./stages/hook-generator.js";
@@ -10,7 +14,13 @@ export { runScriptWriter, buildScriptPrompt } from "./stages/script-writer.js";
 export { runStoryboardBuilder, buildStoryboardPrompt } from "./stages/storyboard-builder.js";
 export { DalleImageGenerator } from "./stages/image-generator.js";
 export type { ImageGenerator } from "./stages/image-generator.js";
-export { estimateCost } from "./stages/cost-estimator.js";
+export { estimateCost, estimateUgcCost } from "./stages/cost-estimator.js";
+export type {
+  CostEstimates,
+  TierEstimate,
+  StoryboardForEstimate,
+  UgcSpecForEstimate,
+} from "./stages/cost-estimator.js";
 export { createModeDispatcher, executeModeDispatch } from "./mode-dispatcher.js";
 export { createUgcJobRunner, executeUgcPipeline } from "./ugc/ugc-job-runner.js";
 export { shouldRequireApproval, DEFAULT_APPROVAL_CONFIG } from "./ugc/approval-config.js";
@@ -39,6 +49,7 @@ export type { QaThresholdConfig, RealismScorerInput } from "./ugc/realism-scorer
 export { executeProductionPhase } from "./ugc/phases/production.js";
 export type { ProductionInput, ProductionOutput } from "./ugc/phases/production.js";
 export { KlingClient } from "./stages/kling-client.js";
+export { HeyGenClient } from "./stages/heygen-client.js";
 export { createVideoProvider } from "./ugc/video-provider.js";
 export type {
   VideoProvider,

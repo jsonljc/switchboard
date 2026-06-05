@@ -6,6 +6,7 @@ import type {
   CampaignLearningInput,
   AdSetLearningInput,
 } from "@switchboard/schemas";
+import { resetsLearningFor } from "./action-reset-classification.js";
 
 // Re-export for backward compatibility
 export type { CampaignLearningInput };
@@ -107,8 +108,6 @@ export interface LearningLimitedDiagnosis {
   recommendation: "expand_targeting" | "consolidate" | "review_budget";
 }
 
-const DESTRUCTIVE_ACTIONS = new Set(["pause", "restructure"]);
-
 const STATE_MAP: Record<AdSetLearningInput["learningStageStatus"], LearningPhaseStatus["state"]> = {
   LEARNING: "learning",
   FAIL: "learning_limited",
@@ -149,9 +148,11 @@ export class LearningPhaseGuardV2 {
     };
   }
 
-  /** Returns true for actions that would reset learning phase. */
+  /** Returns true for actions that would RESET the learning phase (the structured
+   * resetsLearning:"yes" class), so they are held while an ad set is still learning.
+   * Pause/hold/measurement fixes do not reset learning and are not held here. */
   isDestructiveAction(action: string): boolean {
-    return DESTRUCTIVE_ACTIONS.has(action);
+    return resetsLearningFor(action as Parameters<typeof resetsLearningFor>[0]) === "yes";
   }
 
   /**
