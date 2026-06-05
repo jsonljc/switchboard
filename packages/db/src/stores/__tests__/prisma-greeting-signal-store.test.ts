@@ -55,19 +55,19 @@ function mockPrisma(creativeJobs: unknown[], lastOperatorTimestamp: Date | null 
 }
 
 describe("PrismaGreetingSignalStore — Mira (mocked Prisma)", () => {
-  it("getSignal: inboxCount === awaitingReview, derived from the read-model seam", async () => {
+  it("getSignal: inboxCount === readyToReviewCount from the desk model, derived from the read-model seam", async () => {
     const prisma = mockPrisma([
-      // awaiting_review (mid-pipeline with outputs)
+      // draft_ready (polished complete) → ready_to_review → counted
       {
         ...creativeJobBase,
         id: "a",
         organizationId: ORG_ID,
-        currentStage: "hooks",
-        stageOutputs: { trends: {} },
+        currentStage: "complete",
+        stageOutputs: { production: { videoUrl: "v1" } },
         createdAt: new Date("2026-05-26T10:00:00Z"),
         updatedAt: new Date("2026-05-26T10:00:00Z"),
       },
-      // in_progress (fresh, no outputs) — not counted as awaiting_review
+      // in_progress (fresh, no outputs) — not ready_to_review
       {
         ...creativeJobBase,
         id: "b",
@@ -111,15 +111,15 @@ describe("PrismaGreetingSignalStore — Mira (mocked Prisma)", () => {
     expect(signal.oldestOpenItemAgeHours).toBeNull();
   });
 
-  it("getTopItem: returns the oldest awaiting-review draft's title", async () => {
+  it("getTopItem: returns the oldest ready-to-review draft's title", async () => {
     const prisma = mockPrisma([
       {
         ...creativeJobBase,
         id: "newer",
         organizationId: ORG_ID,
         productDescription: "Newer draft",
-        currentStage: "hooks",
-        stageOutputs: { trends: {} },
+        currentStage: "complete",
+        stageOutputs: { production: { videoUrl: "v1" } },
         createdAt: new Date("2026-05-27T10:00:00Z"),
         updatedAt: new Date("2026-05-27T10:00:00Z"),
       },
@@ -128,8 +128,8 @@ describe("PrismaGreetingSignalStore — Mira (mocked Prisma)", () => {
         id: "older",
         organizationId: ORG_ID,
         productDescription: "Older draft",
-        currentStage: "hooks",
-        stageOutputs: { trends: {} },
+        currentStage: "complete",
+        stageOutputs: { production: { videoUrl: "v2" } },
         createdAt: new Date("2026-05-25T10:00:00Z"),
         updatedAt: new Date("2026-05-25T10:00:00Z"),
       },
@@ -149,6 +149,65 @@ describe("PrismaGreetingSignalStore — Mira (mocked Prisma)", () => {
     const topItem = await store.getTopItem(ORG_ID, "mira");
 
     expect(topItem).toBeNull();
+  });
+});
+
+describe("PrismaGreetingSignalStore — Mira count alignment with desk hero (mocked Prisma)", () => {
+  it("inboxCount uses readyToReviewCount (undecided draft_ready only), excluding kept/passed and mid-pipeline", async () => {
+    const prisma = mockPrisma([
+      // undecided draft_ready (polished complete) → ready_to_review → counted
+      {
+        ...creativeJobBase,
+        id: "rtr1",
+        organizationId: ORG_ID,
+        currentStage: "complete",
+        stageOutputs: { production: { videoUrl: "v1" } },
+        reviewDecision: null,
+        createdAt: new Date("2026-06-01T10:00:00Z"),
+        updatedAt: new Date("2026-06-01T10:00:00Z"),
+      },
+      // undecided draft_ready (polished complete) → ready_to_review → counted
+      {
+        ...creativeJobBase,
+        id: "rtr2",
+        organizationId: ORG_ID,
+        currentStage: "complete",
+        stageOutputs: { production: { videoUrl: "v2" } },
+        reviewDecision: null,
+        createdAt: new Date("2026-06-02T10:00:00Z"),
+        updatedAt: new Date("2026-06-02T10:00:00Z"),
+      },
+      // kept draft_ready → shelf (approved_draft); excluded from readyToReviewCount
+      {
+        ...creativeJobBase,
+        id: "kept1",
+        organizationId: ORG_ID,
+        currentStage: "complete",
+        stageOutputs: { production: { videoUrl: "v3" } },
+        reviewDecision: "kept",
+        createdAt: new Date("2026-06-01T08:00:00Z"),
+        updatedAt: new Date("2026-06-01T08:00:00Z"),
+      },
+      // mid-pipeline without video (awaiting_review, no draft yet) → in_production, not counted
+      {
+        ...creativeJobBase,
+        id: "mid1",
+        organizationId: ORG_ID,
+        currentStage: "hooks",
+        stageOutputs: { trends: {} },
+        reviewDecision: null,
+        createdAt: new Date("2026-06-01T06:00:00Z"),
+        updatedAt: new Date("2026-06-01T06:00:00Z"),
+      },
+    ]);
+    const store = new PrismaGreetingSignalStore(prisma);
+
+    const signal = await store.getSignal(ORG_ID, "mira");
+
+    // The desk hero's exact count: only the two undecided ready-to-review drafts.
+    expect(signal.inboxCount).toBe(2);
+    // kept and mid-pipeline are excluded.
+    expect(prisma.pendingActionRecord.count as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 });
 

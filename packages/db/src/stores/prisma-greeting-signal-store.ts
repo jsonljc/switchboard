@@ -7,7 +7,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type { AgentKey } from "@switchboard/schemas";
-import type { agentHome, MiraCreativeJobSummary } from "@switchboard/core";
+import { buildMiraDeskModel, type agentHome, type MiraCreativeJobSummary } from "@switchboard/core";
 import { PrismaMiraCreativeReadModelReader } from "./prisma-mira-creative-read-model-reader.js";
 
 // Greeting window timezone for the Mira read-model. M1 uses "UTC" here: greeting
@@ -107,7 +107,9 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
       : null;
 
     return {
-      inboxCount: readModel.counts.awaitingReview,
+      // The desk hero's exact count (undecided, ready-to-review drafts): the
+      // greeting must agree with the surface it sits above.
+      inboxCount: buildMiraDeskModel(readModel).readyToReviewCount,
       oldestOpenItemAgeHours,
       hoursSinceLastOperatorAction,
     };
@@ -155,14 +157,21 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
   }
 }
 
-// Oldest (earliest createdAt) awaiting-review job in the read-model window, or
-// null when none are awaiting review.
+// Oldest (earliest createdAt) ready-to-review job in the read-model window, or
+// null when none are ready to review. Mirrors the desk hero: counts undecided
+// draft_ready jobs and awaiting_review jobs that have a video draft. Excludes
+// kept/passed decisions so the age tracks the same population as inboxCount.
 function oldestAwaitingReview(
   jobs: readonly MiraCreativeJobSummary[],
 ): MiraCreativeJobSummary | null {
   let oldest: MiraCreativeJobSummary | null = null;
   for (const job of jobs) {
-    if (job.status !== "awaiting_review") continue;
+    // Only undecided jobs — mirrors buildMiraDeskModel's decision-first guard.
+    if (job.reviewDecision === "kept" || job.reviewDecision === "passed") continue;
+    const isReadyToReview =
+      job.status === "draft_ready" ||
+      (job.status === "awaiting_review" && typeof job.draft?.videoUrl === "string");
+    if (!isReadyToReview) continue;
     if (
       oldest === null ||
       new Date(job.createdAt).getTime() < new Date(oldest.createdAt).getTime()

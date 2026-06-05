@@ -15,6 +15,7 @@ describe("computeVariant", () => {
     busyThreshold: 5,
     busyAgeHoursThreshold: 24,
     countNoun: "leads",
+    countNounSingular: "lead",
   };
 
   const rileyConfig: GreetingAgentConfig = {
@@ -22,6 +23,7 @@ describe("computeVariant", () => {
     busyThreshold: 4,
     busyAgeHoursThreshold: 12,
     countNoun: "ad sets",
+    countNounSingular: "ad set",
   };
 
   it("returns 'welcome' when inbox is empty and no prior operator action", () => {
@@ -94,6 +96,7 @@ describe("buildSegments", () => {
     busyThreshold: 5,
     busyAgeHoursThreshold: 24,
     countNoun: "leads",
+    countNounSingular: "lead",
   };
 
   const rileyConfig: GreetingAgentConfig = {
@@ -101,6 +104,7 @@ describe("buildSegments", () => {
     busyThreshold: 4,
     busyAgeHoursThreshold: 12,
     countNoun: "ad sets",
+    countNounSingular: "ad set",
   };
 
   it("builds text-only segments for 'welcome' variant", () => {
@@ -166,7 +170,7 @@ describe("buildSegments", () => {
     expect(segments).toHaveLength(1);
     expect(segments[0]).toEqual({
       kind: "text",
-      text: "I've got a few leads lined up — ready when you are.",
+      text: "I've got a few leads lined up, ready when you are.",
     });
   });
 
@@ -267,6 +271,7 @@ describe("greeting — mira", () => {
     busyThreshold: 3,
     busyAgeHoursThreshold: 24,
     countNoun: "drafts",
+    countNounSingular: "draft",
   };
   it("welcome variant copy", () => {
     const seg = buildSegments(
@@ -295,6 +300,75 @@ describe("greeting — mira", () => {
     );
     expect(seg.map((s) => s.text).join("")).toContain("Spring promo");
     expect(seg.map((s) => s.text).join("")).toContain("review");
+  });
+});
+
+describe("busy-count pluralization", () => {
+  const miraConfig: GreetingAgentConfig = {
+    agentKey: "mira",
+    busyThreshold: 3,
+    busyAgeHoursThreshold: 24,
+    countNoun: "drafts",
+    countNounSingular: "draft",
+  };
+  const signal: GreetingSignal = {
+    inboxCount: 1,
+    oldestOpenItemAgeHours: 30,
+    hoursSinceLastOperatorAction: 1,
+  };
+  it("singularizes the busy noun at count 1", () => {
+    const segs = buildSegments("busy", signal, miraConfig, null);
+    expect(segs.map((s) => s.text).join("")).toBe("You've got 1 draft");
+  });
+  it("keeps the plural above 1", () => {
+    const segs = buildSegments("busy", { ...signal, inboxCount: 3 }, miraConfig, null);
+    expect(segs.map((s) => s.text).join("")).toBe("You've got 3 drafts");
+  });
+});
+
+describe("voice: greeting prose carries no em-dash", () => {
+  it("every variant/agent combination is em-dash free", () => {
+    const configs: GreetingAgentConfig[] = [
+      {
+        agentKey: "alex",
+        busyThreshold: 5,
+        busyAgeHoursThreshold: 24,
+        countNoun: "leads",
+        countNounSingular: "lead",
+      },
+      {
+        agentKey: "riley",
+        busyThreshold: 4,
+        busyAgeHoursThreshold: 12,
+        countNoun: "ad sets",
+        countNounSingular: "ad set",
+      },
+      {
+        agentKey: "mira",
+        busyThreshold: 3,
+        busyAgeHoursThreshold: 24,
+        countNoun: "drafts",
+        countNounSingular: "draft",
+      },
+    ];
+    const variants: Array<"welcome" | "quiet" | "busy" | "named-lead"> = [
+      "welcome",
+      "quiet",
+      "busy",
+      "named-lead",
+    ];
+    for (const config of configs) {
+      for (const variant of variants) {
+        const segs = buildSegments(
+          variant,
+          { inboxCount: 2, oldestOpenItemAgeHours: 1, hoursSinceLastOperatorAction: 1 },
+          config,
+          null,
+        );
+        const text = segs.map((s) => s.text).join("");
+        expect(text, `${config.agentKey}/${variant}`).not.toMatch(/—/);
+      }
+    }
   });
 });
 

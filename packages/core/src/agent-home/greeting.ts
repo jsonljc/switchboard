@@ -73,7 +73,10 @@ export interface GreetingAgentConfig {
   agentKey: AgentKey;
   busyThreshold: number;
   busyAgeHoursThreshold: number;
+  /** Plural noun for the busy count ("3 drafts"). */
   countNoun: string;
+  /** Singular form ("1 draft"). */
+  countNounSingular: string;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -86,18 +89,21 @@ const AGENT_CONFIGS: Record<AgentHomeKey, GreetingAgentConfig> = {
     busyThreshold: 5,
     busyAgeHoursThreshold: 24,
     countNoun: "leads",
+    countNounSingular: "lead",
   },
   riley: {
     agentKey: "riley",
     busyThreshold: 4,
     busyAgeHoursThreshold: 12,
     countNoun: "ad sets",
+    countNounSingular: "ad set",
   },
   mira: {
     agentKey: "mira",
     busyThreshold: 3,
     busyAgeHoursThreshold: 24,
     countNoun: "drafts",
+    countNounSingular: "draft",
   },
 };
 
@@ -153,7 +159,7 @@ export function buildSegments(
       return [
         {
           kind: "text",
-          text: "Ready to create. I'll bring you drafts to review — never published without you.",
+          text: "Ready to create. I'll bring you drafts to review. Never published without you.",
         },
       ];
     }
@@ -176,9 +182,10 @@ export function buildSegments(
   }
 
   if (variant === "busy") {
+    const noun = inboxCount === 1 ? config.countNounSingular : countNoun;
     return [
       { kind: "text", text: "You've got " },
-      { kind: "accent", text: `${inboxCount} ${countNoun}` },
+      { kind: "accent", text: `${inboxCount} ${noun}` },
     ];
   }
 
@@ -208,18 +215,18 @@ export function buildSegments(
         return [
           {
             kind: "text",
-            text: "I've got a few leads lined up — ready when you are.",
+            text: "I've got a few leads lined up, ready when you are.",
           },
         ];
       } else if (agentKey === "riley") {
         return [
           {
             kind: "text",
-            text: "A few items need review — let me know when you're ready.",
+            text: "A few items need review. Let me know when you're ready.",
           },
         ];
       } else if (agentKey === "mira") {
-        return [{ kind: "text", text: "A few drafts are ready for review — whenever you are." }];
+        return [{ kind: "text", text: "A few drafts are ready for review, whenever you are." }];
       }
       // Unreachable at runtime for known AgentHomeKey values; defensive fallthrough
       throw new Error(`Unhandled agentKey for named-lead (no topItem): ${agentKey}`);
