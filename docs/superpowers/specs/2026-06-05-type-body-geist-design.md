@@ -7,13 +7,13 @@
 
 **Route register inventory (the explicit map; `/` is always the authed Home, never the landing, which lives at /welcome):**
 
-| Register | Routes | Body face | Mechanism |
-| --- | --- | --- | --- |
-| Authed app (Geist) | `/`, /inbox, /results, /mira, /settings/*, /alex + /riley (redirects) | Geist | shell renders `.app-header`; rule matches |
-| Mercury (excluded) | /reports, /activity, /contacts, /automations | Inter | marker in `(mercury)/layout.tsx` |
-| Chrome-free authed | /onboarding/*, /operator/* | Inter | no `.app-header` rendered |
-| Pre-auth top-level | /login, /forgot-password, /reset-password, /post-auth | Inter | outside `(auth)`, no shell |
-| Public marketing | /welcome, /privacy, /terms | Inter | `(public)` group, no shell |
+| Register           | Routes                                                                 | Body face | Mechanism                                 |
+| ------------------ | ---------------------------------------------------------------------- | --------- | ----------------------------------------- |
+| Authed app (Geist) | `/`, /inbox, /results, /mira, /settings/\*, /alex + /riley (redirects) | Geist     | shell renders `.app-header`; rule matches |
+| Mercury (excluded) | /reports, /activity, /contacts, /automations                           | Inter     | marker in `(mercury)/layout.tsx`          |
+| Chrome-free authed | /onboarding/_, /operator/_                                             | Inter     | no `.app-header` rendered                 |
+| Pre-auth top-level | /login, /forgot-password, /reset-password, /post-auth                  | Inter     | outside `(auth)`, no shell                |
+| Public marketing   | /welcome, /privacy, /terms                                             | Inter     | `(public)` group, no shell                |
 
 ## 1. Problem (verified against main at `3dc12252`)
 
@@ -132,16 +132,16 @@ The TY2/TY3 precedent holds: keep each surface's tuned px sizes, land the spec's
 
 **Card-body voice (450, -.006em)** lands on the enumerated card reading-text set, all verified as inheriting sans with tuned sizes that stay:
 
-| Class | File | Today | Becomes |
-| --- | --- | --- | --- |
-| `.ds-datalines li` | inbox.css | 14px, inherit 400, -.003em | 450, -.006em |
-| `.ds-lead-interest`, `.ds-lead-source` | inbox.css | 13.5px, inherit 400 | 450, -.006em |
-| `.ds-lead-contact` | inbox.css | 13.5px, inherit 400 | 450, -.006em |
-| `.ds-qual-line` | inbox.css | 13px, inherit 400 | 450, -.006em |
-| `.decision-contact-quiet` | inbox.css | 12.5px, inherit 400, -.003em | 450, -.006em |
-| `.ds-contact-strip` | inbox.css | 13.5px, inherit 400 | 450, -.006em |
-| `.ds-turn-bubble` | inbox.css | 14px, inherit 400, -.003em | 450, -.006em |
-| `.quietText` | home.module.css | 14px, inherit 400, -.003em | 450, -.006em |
+| Class                                  | File            | Today                        | Becomes      |
+| -------------------------------------- | --------------- | ---------------------------- | ------------ |
+| `.ds-datalines li`                     | inbox.css       | 14px, inherit 400, -.003em   | 450, -.006em |
+| `.ds-lead-interest`, `.ds-lead-source` | inbox.css       | 13.5px, inherit 400          | 450, -.006em |
+| `.ds-lead-contact`                     | inbox.css       | 13.5px, inherit 400          | 450, -.006em |
+| `.ds-qual-line`                        | inbox.css       | 13px, inherit 400            | 450, -.006em |
+| `.decision-contact-quiet`              | inbox.css       | 12.5px, inherit 400, -.003em | 450, -.006em |
+| `.ds-contact-strip`                    | inbox.css       | 13.5px, inherit 400          | 450, -.006em |
+| `.ds-turn-bubble`                      | inbox.css       | 14px, inherit 400, -.003em   | 450, -.006em |
+| `.quietText`                           | home.module.css | 14px, inherit 400, -.003em   | 450, -.006em |
 
 NOT in the set, deliberately: status/error/empty banners (`.ds-banner`, `.inbox-error-banner`, `.inbox-empty`: status voice, not card body), chips/tags/links/pills (own tuned weights), `.toast` (overlay status), `.ds-head-needs` (tuned 500), and ALL settings/shadcn Tailwind text (face by inheritance only; utility metrics are their own system).
 
@@ -167,21 +167,21 @@ All proven to bite (red against a deliberate violation first), mirroring the TY2
 
 ## 5. What changes visually (screenshot matrix, 390px and 1280px)
 
-| Surface | What to verify |
-| --- | --- |
-| Home | quietText voice, buttons (Hanken to Geist), greeting/verdict/week-note serif UNCHANGED, eyebrows mono unchanged |
-| Inbox list | card sans text re-faced + 450 voice, serif titles unchanged, mono meta unchanged |
-| Approval sheet (real HIGH-RISK item) | datalines/lead facts at 450/-.006em, `.ds-action` tracking, Fraunces summary unchanged: the commit moment in the new face |
-| Handoff sheet | shared `.ds-*` regression |
-| Results | sans moments re-faced (incl. the 2 ex-Hanken declarations), mono value numerics UNCHANGED |
-| Agent panel open | the 27 ex-Hanken declarations re-voiced to Geist |
-| /mira desk | cockpit sans inherits Geist |
-| Settings (identity + one panel) | Tailwind text re-faced by inheritance, identity h1 Fraunces unchanged |
-| Inbox drawer + live-signal popover + toast (undo) | PORTALS carry the register face: the load-bearing scoping proof |
-| /reports, /activity, /contacts, /automations | NEGATIVE: computed-font census identical + pixel review (marker + module pins; census beats pixel-diff on live-data routes) |
-| /login + /welcome + one onboarding step | NEGATIVE: census identical AND pixel-identical (static pages, no `.app-header`; the landing is /welcome in `(public)`, never `/`) |
-| Open-overlay census (approval sheet, handoff sheet, drawer, popover, undo toast, agent panel) | computed font-family INSIDE each portal resolves Geist on an app route: the portal-coverage proof as data, not just shots |
-| Enumerated TY4 selectors | computed-style table: font-family resolves Geist, fontWeight 450/600 as specced, letter-spacing/font-size ratio within 0.0005em of -0.006/-0.01 (computed tracking returns px; normalize by font-size) |
+| Surface                                                                                       | What to verify                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Home                                                                                          | quietText voice, buttons (Hanken to Geist), greeting/verdict/week-note serif UNCHANGED, eyebrows mono unchanged                                                                                        |
+| Inbox list                                                                                    | card sans text re-faced + 450 voice, serif titles unchanged, mono meta unchanged                                                                                                                       |
+| Approval sheet (real HIGH-RISK item)                                                          | datalines/lead facts at 450/-.006em, `.ds-action` tracking, Fraunces summary unchanged: the commit moment in the new face                                                                              |
+| Handoff sheet                                                                                 | shared `.ds-*` regression                                                                                                                                                                              |
+| Results                                                                                       | sans moments re-faced (incl. the 2 ex-Hanken declarations), mono value numerics UNCHANGED                                                                                                              |
+| Agent panel open                                                                              | the 27 ex-Hanken declarations re-voiced to Geist                                                                                                                                                       |
+| /mira desk                                                                                    | cockpit sans inherits Geist                                                                                                                                                                            |
+| Settings (identity + one panel)                                                               | Tailwind text re-faced by inheritance, identity h1 Fraunces unchanged                                                                                                                                  |
+| Inbox drawer + live-signal popover + toast (undo)                                             | PORTALS carry the register face: the load-bearing scoping proof                                                                                                                                        |
+| /reports, /activity, /contacts, /automations                                                  | NEGATIVE: computed-font census identical + pixel review (marker + module pins; census beats pixel-diff on live-data routes)                                                                            |
+| /login + /welcome + one onboarding step                                                       | NEGATIVE: census identical AND pixel-identical (static pages, no `.app-header`; the landing is /welcome in `(public)`, never `/`)                                                                      |
+| Open-overlay census (approval sheet, handoff sheet, drawer, popover, undo toast, agent panel) | computed font-family INSIDE each portal resolves Geist on an app route: the portal-coverage proof as data, not just shots                                                                              |
+| Enumerated TY4 selectors                                                                      | computed-style table: font-family resolves Geist, fontWeight 450/600 as specced, letter-spacing/font-size ratio within 0.0005em of -0.006/-0.01 (computed tracking returns px; normalize by font-size) |
 
 ## 6. AA and FOUT verification
 
@@ -212,3 +212,16 @@ All proven to bite (red against a deliberate violation first), mirroring the TY2
 3. `--font-home-sans` alias collapse into `--font-body-app` once no consumer needs the legacy name.
 4. Help-overlay styling pass; ink-3 micro-label AA register call (both pre-existing, both recorded in TY3's evidence too).
 5. The cockpit's inline raw `"JetBrains Mono"` strings (render system mono today): fold into the cockpit's own cleanup when it next gets touched.
+
+## 10. Execution addenda (recorded outcomes, 2026-06-05 impl PR)
+
+1. **The census caught two in-register gaps the design inventory missed, both fixed and guarded.** (a) `inbox-design-base.css` declared a THIRD local token lie: `--sans: "Hanken Grotesk", ...` (a raw family no loader registers), so its five approval-sheet consumers (reason chip, confirm/resolve notes, suggested-use, composer textarea) silently rendered system sans; it now aliases `--font-body-app`, completing the inbox honesty set begun by TY2 (`--serif`) and TY3 (`--mono`). The design-time grep missed it through case sensitivity. (b) `decision-card.css` pinned `var(--font-sans)` on `.pill`/`.why-link`/`.thread-link`/`.dc-undo`, re-Intering the Home needs-you card inside the register; repointed to the token, and a new TY4 sweep guard bans module-CSS `--font-sans` pins (red on those four before the fix).
+2. **Swipe-card button conditional (3.5): JOINED.** It declares the same 14/600/-.005 voice; tracking aligned to -.01em alongside `.ds-action` and home `.btn`.
+3. **The guard file split at the eslint cap.** token-governance.test.ts crossed max-lines (605/600, a gate arch-check does not mirror for tests) when the TY4 block landed: shared mechanics extracted to `token-governance.lib.ts`, the TY4 suite moved to `type-body-governance.test.ts`, zero assertion changes.
+4. **FOUT gate: one residual, recorded.** Blocked-vs-loaded and before-vs-after wrap counts identical on every probed element except one settings paragraph (Inter and the size-adjusted fallback take 2 lines at 390px; loaded Geist takes 1). The TY2 line-count residual class, accepted.
+5. **Amber action button measured sub-AA on its REAL fill, pre-existing.** Center-inset pixel sampling of the enabled `.ds-action-primary`: white on rgb(179,129,77) = 3.44:1 on the branch, 3.51:1 on main (identical condition; the gloss material lightens the rendered fill below the token amber's 4.51 token-level pass). Out of scope for a type slice; recorded as a backlog finding in the evidence README (the live-ground-vs-token lesson, third occurrence).
+6. **/login is unreachable under DEV_BYPASS_AUTH** (redirects to Home), so its negative is structural (top-level route, no `.app-header`) plus the welcome/onboarding pixel proofs; the census row records the redirect honestly.
+7. **Negative proof exceeded the spec's bar:** all twelve legacy-route pairs (four Mercury routes, /welcome, /onboarding at 390 and 1280) diff at exactly 0 px; census family sets AND counts byte-identical.
+8. **The evidence run had to survive parallel-session port contention** (another session's dev servers on :3000/:3002/:3012, plus Next 16's per-project single-instance lock holding a stale claim): the dashboard ran on :3077 with ownership-verified restarts between refs. Recorded for the next slice's runbook.
+9. **db package integration tests failed locally** (advisory-lock/ledger/greeting class, shared-DB environment): the diff contains zero non-dashboard files, so the package is byte-identical to main; CI (mocked Prisma) is the arbiter.
+10. **Review round 2 (the /code-review pass + a fresh adversarial reviewer, convergent):** the guard sweeps were CSS-only while their claims covered the register (a planted TSX inline `fontFamily: "var(--font-sans)"` and a raw `"Geist"` stayed green): both sweeps now police governed TSX inline styles and the Tailwind `font-sans` utility, proven red-first. A route-inventory guard pins the four Mercury routes inside `(auth)/(mercury)/` (the marker's coverage contract; flattening a route out of the group would silently re-face it). Evidence precision: the negative-diff log is committed verbatim (the artifact set is the representative 1280 subset), the FOUT blocked-file `fam` label is recorded as requested-not-rendered, and the crashed-Mercury-route fallback is documented as deliberately wearing the app register (shell chrome, consistent with the cream rule). Declined with reasoning: reverting the guard-file split (the eslint cap was empirically hit at a measured 605, and the file sits at its cap), the `.dark`-stripper regex and walker memoization (pre-existing, moved verbatim), and the duplicated token-chain assertions (the TY2/TY3 house pattern keeps tokens.test and the governance suite independently red-able).

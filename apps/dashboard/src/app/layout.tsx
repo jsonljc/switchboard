@@ -5,8 +5,8 @@ import {
   Space_Mono,
   Source_Serif_4,
   JetBrains_Mono,
-  Hanken_Grotesk,
   Fraunces,
+  Geist,
 } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
@@ -52,13 +52,16 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-// Home "warm operational editorial" register (P1-A): Hanken Grotesk UI sans +
-// the Fraunces display serif below. Scoped to Home via the --font-home-*
-// stacks in globals.css; other surfaces keep Inter/Source Serif 4.
-const hanken = Hanken_Grotesk({
+// The authed app register's body face (locked direction, section 4 TYPE):
+// Geist, loaded as a VARIABLE font (no weight array) so the card-body 450 is
+// a real instance, not a synthetic cut (TY4 guard enforces this). Scoped to
+// the authed register by the body:has(.app-header) rule in globals.css;
+// legacy registers (login, landing, onboarding, Mercury, operator) keep Inter
+// via inter.className on <body> below. The previous Home grotesk loader is
+// retired: its declarations ride --font-home-sans, now an alias of this face.
+const geist = Geist({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-hanken",
+  variable: "--font-geist",
   display: "swap",
 });
 
@@ -90,7 +93,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${hanken.variable} ${fraunces.variable}`}
+      className={`${inter.variable} ${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${geist.variable} ${fraunces.variable}`}
       suppressHydrationWarning
     >
       <body className={inter.className}>

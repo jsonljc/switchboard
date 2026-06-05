@@ -275,9 +275,10 @@
 }
 .quietText {
   font-size: 14px;
+  font-weight: 450;
   color: var(--ink);
   line-height: 1.45;
-  letter-spacing: -0.003em;
+  letter-spacing: -0.006em;
 }
 .quietText b {
   font-weight: 600;
@@ -358,7 +359,7 @@
   font-family: var(--font-home-sans);
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   transition:
     transform 160ms var(--ease-home),

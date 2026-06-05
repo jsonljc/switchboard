@@ -1,0 +1,131 @@
+{
+  "overlays": {
+    "approval-sheet-body": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "13.5px",
+      "lsEm": -0.006
+    },
+    "inbox-drawer": {
+      "family": "Geist",
+      "weight": "400",
+      "note": "re-captured healthy: '3 pending across your team.'"
+    },
+    "live-signal-popover": {
+      "family": "Geist",
+      "weight": "400",
+      "size": "16px",
+      "lsEm": 0
+    },
+    "mercury-page-root": {
+      "family": "Inter",
+      "weight": "400",
+      "size": "15px",
+      "lsEm": 0
+    },
+    "approval-sheet-datalines": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "14px",
+      "lsEm": -0.006
+    },
+    "agent-panel-families": {
+      "Geist": 6,
+      "Fraunces": 2
+    }
+  },
+  "metrics": {
+    ".decision-contact-quiet": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "12.5px",
+      "lsEm": -0.006
+    },
+    ".filter-chip": {
+      "family": "Geist",
+      "weight": "500",
+      "size": "13.5px",
+      "lsEm": 0
+    },
+    ".ds-datalines li": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "14px",
+      "lsEm": -0.006
+    },
+    ".ds-lead-interest": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "13.5px",
+      "lsEm": -0.006
+    },
+    ".ds-lead-source": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "13.5px",
+      "lsEm": -0.006
+    },
+    ".ds-lead-contact": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "13.5px",
+      "lsEm": -0.006
+    },
+    ".ds-qual-line": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "13px",
+      "lsEm": -0.006
+    },
+    ".ds-contact-strip": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "13.5px",
+      "lsEm": -0.006
+    },
+    ".ds-turn-bubble": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "14px",
+      "lsEm": -0.006
+    },
+    ".ds-action": {
+      "family": "Geist",
+      "weight": "600",
+      "size": "14px",
+      "lsEm": -0.01
+    },
+    ".ds-summary": null,
+    ".ds-reason-chip": {
+      "family": "Geist",
+      "weight": "600",
+      "size": "12.5px",
+      "lsEm": -0.005
+    },
+    ".ds-confirm-note": null,
+    ".ds-suggested-use": {
+      "family": "Geist",
+      "weight": "600",
+      "size": "12.5px",
+      "lsEm": -0.005
+    },
+    "home .quietText": {
+      "family": "Geist",
+      "weight": "450",
+      "size": "14px",
+      "lsEm": -0.006
+    },
+    "home .btn": {
+      "family": "Geist",
+      "weight": "600",
+      "size": "14px",
+      "lsEm": -0.01
+    },
+    ".ds-summary (serif control)": {
+      "family": "Fraunces",
+      "weight": "600",
+      "size": "28px",
+      "lsEm": -0.018
+    }
+  }
+}

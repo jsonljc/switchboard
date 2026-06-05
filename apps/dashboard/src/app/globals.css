@@ -272,8 +272,14 @@
        material, composed with a live var() ring in swipe-decision-card). */
     --shadow-arm-base: 0 1px 0 rgba(80, 40, 0, 0.18), 0 2px 8px rgba(201, 123, 26, 0.25);
     --ease-home: cubic-bezier(0.22, 1, 0.36, 1);
-    /* Home editorial font stacks (wired in layout.tsx) */
-    --font-home-sans: var(--font-hanken), "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+    /* The authed app register's BODY face (TY4): Geist, loaded in layout.tsx
+       as a variable font. Applied at the register boundary by the body:has
+       rule at the end of this file. This is the ONE site allowed to name the
+       "Geist" fallback head; consumer CSS rides the token. --font-home-sans
+       is the legacy alias (zero churn for its consumers; the previous
+       Home grotesk retired); new code references --font-body-app directly. */
+    --font-body-app: var(--font-geist), "Geist", ui-sans-serif, system-ui, sans-serif;
+    --font-home-sans: var(--font-body-app);
     /* The ONE authed display semantic (TY3). Consumers reference this token
        (or one of the legacy aliases beneath it, kept so zero consumers churn).
        --font-display (DM Sans, bound in layout.tsx) is the LEGACY register
@@ -544,6 +550,10 @@
    legacy pages keep their existing background. */
 @layer components {
   body:has(.app-header) {
+    /* NOTE: the TY4 body-face rule (end of file) shares this .app-header hook
+       but ALSO excludes [data-register="mercury"]. The divergence is
+       deliberate: the canvas is shell-level (Mercury keeps the cream), the
+       FACE is register-level (Mercury keeps Inter). Edit one, re-check both. */
     background-color: var(--ambient-cream, hsl(40 25% 94%));
     /* Warm-riso paper grain (spec 2026-06-04-paper-grain-canvas): a second
        background layer multiplied into the cream. background-blend-mode blends
@@ -1394,4 +1404,18 @@
   .num {
     font-family: var(--mono);
   }
+}
+
+/* ===== TY4: the authed app register's body face =====
+   UNLAYERED on purpose: next/font's inter.className on <body> is an unlayered
+   (0,1,0) rule, and any @layer rule loses to it for font-family regardless of
+   specificity. This selector is unlayered (0,2,1): it beats the Inter binding
+   deterministically, order independent. body-level (not a shell wrapper) so
+   Radix portals (sheets, drawers, popovers, toasts) inherit the register face.
+   .app-header is the register hook (same condition as the cream + grain rule;
+   producers: editorial-auth-shell + the shell error boundary, guard-paired);
+   the (auth)/(mercury)/layout.tsx marker opts Mercury routes out wholesale so
+   every Mercury route keeps today's Inter end to end, portals included. */
+body:has(.app-header):not(:has([data-register="mercury"])) {
+  font-family: var(--font-body-app);
 }

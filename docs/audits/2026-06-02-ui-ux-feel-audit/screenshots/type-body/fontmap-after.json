@@ -1,0 +1,68 @@
+{
+  "home-authed": {
+    "Source Serif 4": 8,
+    "JetBrains Mono": 17,
+    "Geist": 29,
+    "Fraunces": 17
+  },
+  "inbox": {
+    "Source Serif 4": 5,
+    "JetBrains Mono": 27,
+    "Geist": 16,
+    "Fraunces": 8
+  },
+  "results": {
+    "Source Serif 4": 6,
+    "JetBrains Mono": 30,
+    "Geist": 18,
+    "Fraunces": 11
+  },
+  "mira": {
+    "Source Serif 4": 5,
+    "JetBrains Mono": 11,
+    "Geist": 36
+  },
+  "settings-identity": {
+    "Source Serif 4": 5,
+    "JetBrains Mono": 6,
+    "Geist": 96,
+    "Fraunces": 2
+  },
+  "mercury-reports": {
+    "Source Serif 4": 18,
+    "JetBrains Mono": 201,
+    "Inter": 73
+  },
+  "mercury-activity": {
+    "Source Serif 4": 5,
+    "JetBrains Mono": 6,
+    "Inter": 57,
+    "Space Mono": 222,
+    "ui-sans-serif": 1
+  },
+  "mercury-contacts": {
+    "Source Serif 4": 6,
+    "JetBrains Mono": 90,
+    "Inter": 66
+  },
+  "mercury-automations": {
+    "Source Serif 4": 6,
+    "JetBrains Mono": 54,
+    "Inter": 26
+  },
+  "preauth-login": {
+    "Source Serif 4": 8,
+    "JetBrains Mono": 17,
+    "Geist": 29,
+    "Fraunces": 17
+  },
+  "chromefree-onboarding": {
+    "ui-sans-serif": 2,
+    "Inter": 6
+  },
+  "public-welcome": {
+    "General Sans": 169,
+    "JetBrains Mono": 111,
+    "Georgia": 11
+  }
+}
