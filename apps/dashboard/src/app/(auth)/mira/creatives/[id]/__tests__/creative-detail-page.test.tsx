@@ -20,10 +20,6 @@ vi.mock("@/hooks/use-creative-pipeline", () => ({
 let halted = false;
 vi.mock("@/components/layout/halt/halt-context", () => ({ useHalt: () => ({ halted }) }));
 
-vi.mock("@/components/agent-avatar/printed-portrait-avatar", () => ({
-  PrintedPortraitAvatar: () => null,
-}));
-
 import { MiraCreativeDetailPage } from "../creative-detail-page";
 
 function summary(over: Partial<MiraCreativeJobSummary>): MiraCreativeJobSummary {
@@ -256,9 +252,10 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
       isLoading: false,
       isError: false,
     });
-    render(<MiraCreativeDetailPage id="j" />);
+    const { container } = render(<MiraCreativeDetailPage id="j" />);
     expect(screen.getByText("Drafted by Mira")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Spring promo");
+    expect(container.querySelector('[data-agent="mira"]')).not.toBeNull();
   });
 
   it("halt disables continue but not stop", () => {
