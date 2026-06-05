@@ -32,6 +32,7 @@ import { escalationsRoutes } from "../routes/escalations.js";
 import { sessionRoutes } from "../routes/sessions.js";
 import { workflowRoutes } from "../routes/workflows.js";
 import { marketplaceRoutes } from "../routes/marketplace.js";
+import { marketplaceOperationalStateRoutes } from "../routes/marketplace-operational-state.js";
 import { marketplacePersonaRoutes } from "../routes/marketplace-persona.js";
 import { creativePipelineRoutes } from "../routes/creative-pipeline.js";
 import { onboardRoutes } from "../routes/onboard.js";
@@ -223,6 +224,7 @@ export async function registerRoutes(
   // not rename this prefix opportunistically; it is a wire contract consumed by the
   // dashboard. See docs/DOCTRINE.md → "Marketplace namespace (historical, but live)".
   await app.register(marketplaceRoutes, { prefix: "/api/marketplace" });
+  await app.register(marketplaceOperationalStateRoutes, { prefix: "/api/marketplace" });
   await app.register(marketplacePersonaRoutes, { prefix: "/api/marketplace" });
   await app.register(creativePipelineRoutes, { prefix: "/api/marketplace" });
   await app.register(onboardRoutes, { prefix: "/api/marketplace" });
