@@ -137,8 +137,13 @@ export type { RevenueState, AssembleRevenueStateInput } from "./revenue-state.js
 // Riley v3 slice 2: the consolidated per-action contract (single source for the
 // sink booleans + reset class + evidence family), the mutating-ness question, and
 // the cross-campaign arbitrator (the eval harness drives it through the barrel).
-export { ACTION_CONTRACT, isMutating } from "./action-contract.js";
-export type { ActionContract } from "./action-contract.js";
+export {
+  ACTION_CONTRACT,
+  isMutating,
+  isPhaseCActionClassEligible,
+  PHASE_C_EXECUTION_SEAM,
+} from "./action-contract.js";
+export type { ActionContract, PhaseCExecutionContract } from "./action-contract.js";
 export {
   arbitrate,
   PROXIMITY_BY_TIER,
