@@ -1,0 +1,877 @@
+{
+  "summary": "Audit Mira UI/UX coherence vs the warm-newsprint app canon across 5 dimensions, then adversarially verify high findings",
+  "agentCount": 9,
+  "logs": [
+    "Fanning out 5 dimension auditors over Mira surfaces vs the app canon",
+    "Audit complete: 5/5 dimensions returned"
+  ],
+  "result": [
+    {
+      "dim": "tokens",
+      "review": {
+        "skill": "",
+        "summary": "Mira's surfaces split cleanly into two coherence tiers on Dimension A. The Home drill-in (mira-panel.tsx + agent-panel.module.css) is fully on-canon: Fraunces/Geist via --font-home-serif/-sans, the --ink-* ramp, the elevation ladder, hsl(var(--agent-mira*)) tints, var(--radius-*). But Mira's OWN cockpit (Director's Desk, the dark review feed, the creative-detail page) still reads as the pre-2026-06-03 cockpit register dropped into the newer editorial app. The color-token layer mostly passes governance because the cockpit `T` object and MIRA_ACCENT were migrated to hsl(var()) aliases (no legacy hex), but everything ABOVE color diverges: cards are flat hairline boxes at radius 8/4 with no shadow-ladder step (Home/Inbox cards are radius 18-20 + var(--shadow-card)); the type voice is a raw `fontFamily: \"JetBrains Mono\"` family-name lie (canon is var(--mono), the loaded face) with zero Fraunces display anywhere; and the avatar is the legacy cockpit SpriteFrame chip (and a flat letter-\"M\" in the panel) instead of the shared PrintedPortraitAvatar, which already ships a working Mira sprite and is used by Home + Inbox. The single biggest gap is the dark review feed: it paints raw #000 / #fff / rgba(...) literals with no token backing, and globals.css sanctions no full-#000 authed material (the only dark surface is the still-hidden warm-charcoal .dark toggle at 30 8% 8%), so the feed is an ungoverned one-off dark register. Identity discipline is also breached: violet (MIRA_ACCENT.deep) backs the feed \"Keep\" button and the brief-box selection chips, and the detail page hardcodes a #F6ECEC red wash. All these files ARE swept by collectGovernedFiles(), so the violations are the kind the hex/shadow guards would catch if the values were literal — they survive only because they hide behind the migrated T aliases (color) or because the type/avatar/radius dimensions are not yet guarded for inline-style TSX.",
+        "coherenceGrade": "C — color tokens largely on-canon via migrated T aliases, but surface material (radius/shadow), the dark-feed literals, the type-face lie, and the avatar primitive all still read as the old cockpit register inside the newer app.",
+        "findings": [
+          {
+            "id": "A1",
+            "title": "Dark review feed paints raw #000/#fff/rgba literals with no token backing; no full-dark authed material is sanctioned",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-feed-page.tsx",
+            "line": 38,
+            "evidence": "flexDirection: \"column\",\n        background: \"#000\",",
+            "canonRule": "globals.css defines NO full-#000 authed surface; the only dark material is the still-hidden .dark toggle at --background: 30 8% 8% (warm charcoal), grain off (globals.css:298, 571). Spec §4 dark variant = canvas #16140E, amber preserved — a warm charcoal, never pure black. token-governance.lib.ts collectGovernedFiles() sweeps components/cockpit/mira/*, but the EL1/color guards only catch box-shadow + brand-token literals, so these surface literals pass unseen.",
+            "recommendation": "Define a sanctioned dark-feed surface set in globals.css (warm charcoal per spec §4: a --feed-canvas / --feed-ink scale, or ride the .dark primitives) and consume via hsl(var(--x)). Replace #000/#fff/rgba(0,0,0,.55)/rgba(14,12,10,.92)/rgba(122,46,46,.95)/#777/#bbb/#555 across mira-feed-page.tsx, mira-clip-card.tsx, mira-clip-actions.tsx, mira-creative-feed.tsx and review/page.tsx:24 with tokens. Mirror inbox-design-base.css:16-73 (a scoped token set under a .mira-feed class).",
+            "effort": "slice"
+          },
+          {
+            "id": "A2",
+            "title": "Mira cockpit cards are flat hairline boxes at the cockpit radius (8/4), missing the editorial shadow ladder and radius scale",
+            "severity": "medium",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-ready-to-review.tsx",
+            "line": 13,
+            "evidence": "background: T.paper,\n        borderRadius: 8,\n        padding: 18,\n        border: `1px solid ${T.hair}`,",
+            "canonRule": "Canonical money/decision cards use radius 18-20 with box-shadow: var(--shadow-card) and 1px solid var(--hair-soft): team-band.module.css:56-58 (border-radius:18; box-shadow:var(--shadow-card)), agent-panel.module.css:284-287 (.heroCard radius-lg + shadow-card), inbox-design-base.css:191 (.decision --r-lg=20). Spec §4 radii ladder --r-md:14/--r-lg:18; EL1 ladder (globals.css:255-262) is the single elevation source.",
+            "recommendation": "Adopt the editorial card anatomy on the desk modules: borderRadius var(--radius-lg) (or 18), box-shadow: var(--shadow-card), border 1px solid var(--hair-soft). Replace the bare borderRadius:8 sections in mira-ready-to-review.tsx, mira-brief-box.tsx:84, mira-in-production-tray.tsx:34, mira-kept-shelf.tsx:18, and the radius:4 button/chip in mira-brief-box.tsx:67 + identity.tsx:159. Reference agent-panel.module.css:284-289.",
+            "effort": "slice"
+          },
+          {
+            "id": "A3",
+            "title": "Mira desk/feed render the legacy cockpit SpriteFrame chip, not the canonical PrintedPortraitAvatar (which already ships a Mira sprite)",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/identity.tsx",
+            "line": 72,
+            "evidence": "<SpriteFrame\n        bundle={bundle ?? {}}\n        variant={variant ?? \"__none__\"}  …  size={compact ? 52 : 64}",
+            "canonRule": "Spec §6: \"One frame everywhere: the printed portrait … This single treatment replaces the current fragmented avatar systems (the flat letter-discs on Home, the sprite faces in Inbox, the violet M square for Mira).\" The shared primitive PrintedPortraitAvatar already wires mira: { bundle: MIRA_VARIANTS, variant: DEFAULT_MIRA_VARIANT } (printed-portrait-avatar.tsx:25) and is the avatar on Home (team-band.tsx:85) and Inbox (inbox-agent-avatar.tsx:17). Mira's own desk+feed are the only consumers of the legacy Identity/SpriteFrame chip (rounded plate, ink fallback letter, no identity-ground halo).",
+            "recommendation": "Replace the SpriteFrame in the Identity header (or give Mira's desk/feed a header that uses PrintedPortraitAvatar agentKey=\"mira\" status=… halted=…) so Mira's own surfaces show the same printed-portrait frame as Home/Inbox. Reference team-band.tsx:84-94.",
+            "effort": "project"
+          },
+          {
+            "id": "A4",
+            "title": "Home drill-in shows a flat violet letter-\"M\" mark — the exact \"violet M square\" the spec says to retire",
+            "severity": "medium",
+            "file": "apps/dashboard/src/components/agent-panel/mira-panel.tsx",
+            "line": 19,
+            "evidence": "<div className={styles.notsetMark} aria-hidden=\"true\">\n          M\n        </div>",
+            "canonRule": "Spec §6 names \"the violet 'M' square for Mira\" as a fragmented avatar system the one printed-portrait frame replaces. agent-panel.module.css:201-215 .notsetMark renders a 84px violet-tint disc with a serif glyph, not the sprite. Alex/Riley panels (per spec §7) feed the printed-portrait frame fed by real status.",
+            "recommendation": "Render <PrintedPortraitAvatar agentKey=\"mira\" size={84} /> (or hero) in place of the letter-M .notsetMark in both the enabled and not-set-up branches of mira-panel.tsx. The sprite already exists (mira-variants.ts). Reference inbox-agent-avatar.tsx:17.",
+            "effort": "quick-win"
+          },
+          {
+            "id": "A5",
+            "title": "Mira surfaces use a raw \"JetBrains Mono\" family-name (the guarded \"raw-family lie\") and carry no Fraunces display face",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-ready-to-review.tsx",
+            "line": 24,
+            "evidence": "fontFamily: \"JetBrains Mono\",\n              fontSize: 10,\n              fontWeight: 700,",
+            "canonRule": "TY3 canon (token-governance.test.ts:620-624) requires the mono to alias the LOADED primitive var(--mono) (= var(--font-mono-editorial)); inbox-design-base.css:59 does this. A bare \"JetBrains Mono\" string is the exact font-load-failure lie the guard polices. Spec §4 type: display = Fraunces var(--font-display-app); body = Geist. NO Fraunces appears in any Mira cockpit file (grep: none). Titles render fontWeight:700 in the inherited body face instead of the display face — e.g. creative-detail-page.tsx:41, identity.tsx:84.",
+            "recommendation": "Add a `mono` and `display` key to the cockpit T object (T.mono = \"var(--mono)\", T.display = \"var(--font-display-app)\") and use them. Replace every fontFamily:\"JetBrains Mono\" (mira-ready-to-review.tsx:24, mira-in-production-tray.tsx:40+84, mira-kept-shelf.tsx:26, identity.tsx:105, creative-detail-page.tsx:105+238+313) with T.mono, and give section/draft titles the Fraunces display face. Reference inbox-design-base.css:57-59.",
+            "effort": "slice"
+          },
+          {
+            "id": "A6",
+            "title": "Violet identity ink backs interactive fills (feed \"Keep\" button, brief-box selection chips) — identity-as-action breach",
+            "severity": "medium",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-clip-actions.tsx",
+            "line": 145,
+            "evidence": "<button\n          style={{ ...btn, background: MIRA_ACCENT.deep }}\n          …\n          Keep",
+            "canonRule": "Spec §3 non-negotiable: \"Agent identity hues are identity only. Alex amber-coral, Riley plum-indigo, Mira violet. They never back an action button.\" mira-config.ts:9-13 itself states violet is IDENTITY ONLY. Reference: home.module.css:8 \"Agent identity color NEVER backs an action button — .btnPrimary is amber only\"; inbox-decision-card.tsx:43 \"Agent color is identity-only … never applied to a button.\" The brief-box selection chips also fill with MIRA_ACCENT.deep (mira-brief-box.tsx:62-64).",
+            "recommendation": "Decide whether Keep/selection are commits (→ amber, like every other action) or low-emphasis selection (→ neutral ink fill + violet hairline/dot for identity, not a violet fill). At minimum stop filling the button/chip background with MIRA_ACCENT.deep. Note agent-panel.module.css:807 .miraOpenCta is the one sanctioned violet pill (a soft drill-in, not a commit) — keep the boundary explicit.",
+            "effort": "slice"
+          },
+          {
+            "id": "A7",
+            "title": "Creative-detail stop-confirm hardcodes a #F6ECEC red wash, bypassing the risk/destructive token",
+            "severity": "low",
+            "file": "apps/dashboard/src/app/(auth)/mira/creatives/[id]/creative-detail-page.tsx",
+            "line": 305,
+            "evidence": "// Intentional red wash: #F6ECEC here (stop confirm on cream) …\n                background: \"#F6ECEC\",",
+            "canonRule": "Spec §4 semantic: high-risk = dusty terracotta --risk-tint #F5E8E3 / --risk-edge; globals.css ships --destructive / --negative (and the inbox uses a scoped --critical-tint with a token-debt:expires marker, inbox-design-base.css:50-51). A bare hex with only a code comment is not a sanctioned exemption. The generalized hex sweep (token-governance.test.ts:215) does not list #F6ECEC, but the spec's single-source intent is breached.",
+            "recommendation": "Introduce a --risk-tint primitive (spec value 38? per §4: #F5E8E3) in globals.css and consume hsl(var(--risk-tint)); or, if it must stay temporarily, add an inline `token-debt: … expires …` marker on the declaration line per the §3.3 contract (token-governance.test.ts:256-263). Reference inbox-design-base.css:50.",
+            "effort": "quick-win"
+          },
+          {
+            "id": "A8",
+            "title": "Hardcoded white button text (\"#fff\"/\"white\") instead of the action-foreground token",
+            "severity": "low",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-brief-box.tsx",
+            "line": 71,
+            "evidence": "border: `1px solid ${T.amberDeep}`,\n    background: T.amber,\n    color: \"#fff\",",
+            "canonRule": "The amber button's white text is a token: --action-foreground / --palette-action-fg (globals.css:19, 87), required for AA (token-governance.test.ts:51-61). Canonical buttons consume it: home.module.css:376 (.btnPrimary color: hsl(var(--action-foreground))), agent-panel.module.css:790. Mira repeats raw \"#fff\"/\"white\" on every amber button (mira-brief-box.tsx:64,71; mira-ready-to-review.tsx:60; creative-detail-page.tsx:178,272; mira-clip-actions.tsx:47).",
+            "recommendation": "Add T.actionFg = \"hsl(var(--action-foreground))\" to the cockpit token object and use it for amber-button text. This also makes the dark toggle correct (the primitive flips in .dark). Reference home.module.css:374-377.",
+            "effort": "quick-win"
+          }
+        ],
+        "referencePatterns": [
+          {
+            "pattern": "Canonical money/decision card anatomy: radius 18-20, var(--shadow-card) off the EL1 ladder, 1px solid var(--hair-soft)",
+            "file": "apps/dashboard/src/components/agent-panel/agent-panel.module.css",
+            "line": 284,
+            "note": ".heroCard — adopt for Mira desk modules in place of the flat radius-8 hairline boxes"
+          },
+          {
+            "pattern": "The one shared agent avatar (printed-portrait frame); already wires a real Mira sprite and is used identity-only on Home/Inbox",
+            "file": "apps/dashboard/src/components/agent-avatar/printed-portrait-avatar.tsx",
+            "line": 22,
+            "note": "SPRITES.mira = { bundle: MIRA_VARIANTS, variant: DEFAULT_MIRA_VARIANT } — replace the cockpit SpriteFrame chip and the panel letter-M with this"
+          },
+          {
+            "pattern": "Scoped token set that maps a ported register onto canonical vars: agent hues hsl(var(--agent-*)), --serif=display-app, --sans=body-app, --mono=loaded JetBrains",
+            "file": "apps/dashboard/src/components/inbox/inbox-design-base.css",
+            "line": 16,
+            "note": "The model for giving the dark feed a sanctioned, tokenized surface set instead of raw #000/#fff/rgba"
+          },
+          {
+            "pattern": "Amber-only action button with tokenized foreground + gloss; identity color explicitly never on an action",
+            "file": "apps/dashboard/src/components/home/home.module.css",
+            "line": 374,
+            "note": ".btnPrimary background hsl(var(--action)) / color hsl(var(--action-foreground)) — the model for Mira's amber buttons and the Keep/chip identity-vs-action decision"
+          },
+          {
+            "pattern": "Hero poster grain via background-blend-mode on the surface's OWN background (never a stacked layer); identity hues on ground only; governed by GR2",
+            "file": "apps/dashboard/src/components/home/team-band.module.css",
+            "line": 30,
+            "note": "If Mira's desk ever wants a textured hero, this is the sanctioned, AA-safe, governance-passing pattern"
+          },
+          {
+            "pattern": "Editorial token vocabulary single-source: ink ramp, agent hues, action amber, shadow ladder, Fraunces/Geist/JetBrains font tokens",
+            "file": "apps/dashboard/src/app/globals.css",
+            "line": 200,
+            "note": "Every Mira inline literal should resolve to one of these (or to a T.* alias that wraps one)"
+          }
+        ],
+        "openQuestions": [
+          "Is the review feed's dark register an intentional, sanctioned exception (TikTok-style full-screen video triage)? If yes, the canon gap is that globals.css ships no dark-feed token set and the token-governance guard does not sweep for a sanctioned dark material — the fix is to define + govern one, not to light-mode the feed. If no, the feed should adopt the cream/grain shell it already sits inside.",
+          "Should the feed 'Keep' gesture and the brief-box Goal/Vibe/format selections read as commits (amber) or as low-emphasis selection (neutral fill + violet identity dot)? This drives whether A6 is a recolor-to-amber or a recolor-to-neutral.",
+          "The cockpit Identity component is now consumed only by Mira's desk + feed (Alex/Riley routes appear retired/redirecting). Is Identity/SpriteFrame slated for removal in favor of a printed-portrait header, and is that the right vehicle to close A3 + A5 (display face) together?",
+          "token-governance does not yet guard inline-style TSX for the raw \"JetBrains Mono\" family-name, non-token radii, or missing display face. Should the guard be extended to sweep inline style objects (it already reads every governed .tsx), so A5/A2 become CI-enforceable rather than review-only?"
+        ]
+      },
+      "verdicts": [
+        {
+          "id": "A1",
+          "status": "confirmed",
+          "note": "Verified verbatim: mira-feed-page.tsx:38 `background: \"#000\",` (line 37 = `flexDirection: \"column\",`). Raw neutral literals confirmed across the dark-feed set: mira-feed-page.tsx:38 (#000); mira-clip-card.tsx:56 (#000), :77 (#bbb), :88/:90 + :104/:107 (rgba(0,0,0,0.55)/#fff); mira-clip-actions.tsx:61 (rgba(14,12,10,0.92)), :103 (rgba(122,46,46,0.95)), :152/:184/:191 (rgba(0,0,0,0.55)), :177 (#555); mira-creative-feed.tsx:49 (#000), :53/:60 (#777); review/page.tsx:24 (rgba(0,0,0,0.55)). Canon is real: globals.css:298 `.dark { --background: 30 8% 8% }` (warm charcoal), grain disabled at .dark body:has(.app-header) line 571; aesthetic-design-spec.md §4 dark = `canvas #16140E ... grain disabled`, never pure black (§3 ink ramp 'warm, never pure black'). Guard-gap claim accurate: token-governance.lib.ts:28 strips the `.dark { }` block from governed content and the sweeps (test.ts:215-267, EL1 311-353) only catch the enumerated legacy BRAND hexes + literal-color box-shadows, so neutral surface literals (#000/#fff/rgba neutrals) pass unseen. User-visible incoherence: a full pure-black authed surface inside a warm-newsprint app where the only sanctioned dark is warm charcoal. Recommendation (sanctioned --feed-* token set or ride .dark primitives, consumed via hsl(var())) closes it."
+        },
+        {
+          "id": "A3",
+          "status": "confirmed",
+          "note": "Verified verbatim: identity.tsx:72-79 renders `<SpriteFrame bundle={bundle ?? {}} variant={variant ?? \"__none__\"} ... size={compact ? 52 : 64} ...>`. Both Mira surfaces call <Identity> WITHOUT a bundle/variant prop (mira-desk-page.tsx:44-54, mira-feed-page.tsx:42-52), so the lookup fails and SpriteFrame renders the letter-monogram fallback (sprite-frame.tsx:45-52: rounded plate radius size*0.18, accentSoft ground, letter 'M', NO identity-ground/ink-offset halo). Canon real: aesthetic-design-spec.md §6 'One frame everywhere: the printed portrait ... replaces ... the violet \"M\" square for Mira'; printed-portrait-avatar.tsx:25 wires `mira: { bundle: MIRA_VARIANTS, variant: DEFAULT_MIRA_VARIANT }` (a real shipped sprite); team-band.tsx:85 and inbox-agent-avatar.tsx:17 are the PrintedPortraitAvatar consumers. Grep confirms PrintedPortraitAvatar is imported NOWHERE under components/cockpit or app/(auth)/mira. So Mira's own desk+feed are the only surfaces showing the legacy letter chip while Home/Inbox show the printed portrait — a real, user-visible avatar incoherence. Recommendation references team-band.tsx:84-94 correctly."
+        },
+        {
+          "id": "A5",
+          "status": "confirmed",
+          "note": "Verified verbatim: mira-ready-to-review.tsx:24 `fontFamily: \"JetBrains Mono\",` (lines 23-25 match). Raw-family string confirmed at all cited Mira/cockpit sites: mira-ready-to-review.tsx:24, mira-in-production-tray.tsx:40 & :84, mira-kept-shelf.tsx:26, identity.tsx:105, and creative-detail-page.tsx:105/:238/:313 (8 occurrences across cockpit+mira, matching grep count). Canon real: token-governance.test.ts:620-624 (TY3) asserts `--mono: var(--font-mono-editorial)` and the test title names a bare string the 'raw-family lie'; the guard only asserts this on inbox-design-base.css, so Mira's raw strings are unseen. Spec §4 type: display=Fraunces var(--font-display-app), body=Geist; grep confirms ZERO Fraunces/font-display-app anywhere in components/cockpit or lib/cockpit, and titles render in inherited body font at weight 700 (creative-detail-page.tsx:41 `fontSize: 20, fontWeight: 700`, identity.tsx:84 `fontSize ... 22, fontWeight: 600`). Two stale path references in the recommendation prose only (primary citation is exact): (a) creative-detail-page.tsx now lives at src/app/(auth)/mira/creatives/[id]/creative-detail-page.tsx, not components/cockpit/; its title is at line 41, not 'identity.tsx:84'. (b) cockpit/tokens.ts has no `T.mono`/`T.display` key yet (the recommended add). Finding and severity stand."
+        }
+      ],
+      "missedFindings": [
+        "mira-config.ts:17 — MIRA_ACCENT.soft = `hsl(var(--agent-mira) / 0.30)` paints the desk avatar background (identity.tsx:72 accentSoft) as a 30%-alpha violet, NOT the spec §4 opaque --mira-ground (#E9E1F6); a translucent identity ground over the cream plate is off-canon vs the printed-portrait ground treatment.",
+        "mira-panel.tsx:19 & :35 — the Home drill-in Mira panel body renders a flat letter-disc `M` (styles.notsetMark) for both enabled/not-set states instead of PrintedPortraitAvatar agentKey=\"mira\"; spec §6 explicitly retires the flat letter-disc, and the shared panel header (agent-panel.tsx:93) already uses InboxAgentAvatar, so this mark is an inconsistent fragment.",
+        "creative-detail-page.tsx:305 — the stop-confirm wash hardcodes `background: \"#F6ECEC\"` (a raw hex on a money/decision surface) instead of the tokenized risk tint (spec §4 --risk-tint #F5E8E3 / globals.css destructive-tint); a self-aware comment at :303-304 calls it 'intentional' but it is still an untokenized literal on a decision surface."
+      ]
+    },
+    {
+      "dim": "type-voice",
+      "review": {
+        "summary": "Lean six-finding verdict.",
+        "coherenceGrade": "D. Panel coherent, cockpit on the old register.",
+        "findings": [
+          {
+            "id": "B1",
+            "title": "Mira identity name is body face, not Fraunces with her deep ink",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/identity.tsx",
+            "line": 84,
+            "evidence": "fontSize 22, fontWeight 600, color T.ink",
+            "canonRule": "Canon agent-name headline is Fraunces plus deep ink: inbox ds-head-name var(--serif) 500 22px mira var(--violet-deep) (inbox.css:586-596); team-band var(--font-home-serif) (team-band.module.css:131).",
+            "recommendation": "Render displayName in --font-display-app 22/600, color agent-mira-deep. Identity is shared, thread the ink via a prop. Adopt inbox.css:586-596.",
+            "effort": "slice"
+          },
+          {
+            "id": "B2",
+            "title": "Cockpit eyebrows/subtitle use a raw JetBrains Mono string at weight 700, bypassing next/font",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-ready-to-review.tsx",
+            "line": 26,
+            "evidence": "fontFamily JetBrains Mono, fontSize 10, fontWeight 700",
+            "canonRule": "JetBrains loads only as next/font variable --font-mono-editorial weight 400/500/600 (layout.tsx:48), no global className, no 700. Canon uses var(--mono) (inbox-design-base.css:59; ds-eyebrow 500 inbox.css:528). Bare string matches only system-installed; 700 is faux-bold. Repeats identity.tsx:100/105, mira-in-production-tray.tsx:40/84, mira-kept-shelf.tsx:27, creative-detail-page.tsx:105/238/313.",
+            "recommendation": "Add mono var(--font-mono-editorial) to the cockpit T object (tokens.ts:6-8) and replace every raw JetBrains Mono with T.mono, and drop weight 700 to 600/500.",
+            "effort": "slice"
+          },
+          {
+            "id": "B4",
+            "title": "Ready-to-review hero numeral 36px is body face, not the display tabular face",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-ready-to-review.tsx",
+            "line": 36,
+            "evidence": "fontSize 36, fontWeight 600, fontVariantNumeric tabular-nums",
+            "canonRule": "Spec section 4: value numerics 26/600 are display tabular; the agent-panel heroValue renders the number in var(--font-home-serif) at 56px (agent-panel.module.css:312-314). This count carries no font-family, inheriting Geist.",
+            "recommendation": "Set fontFamily on this numeral to T.mono (matching .num globals.css:1404-1406) or --font-display-app to match heroValue. Keep tabular-nums.",
+            "effort": "quick-win"
+          },
+          {
+            "id": "B5",
+            "title": "Creative-detail h1 and brief-box h2 are body face, where Home, Inbox, Results use Fraunces",
+            "severity": "high",
+            "file": "apps/dashboard/src/app/(auth)/mira/creatives/[id]/creative-detail-page.tsx",
+            "line": 41,
+            "evidence": "h1 style fontSize 20, fontWeight 700, letterSpacing -0.01em, color T.ink",
+            "canonRule": "The detail surface uses a Fraunces headline per spec section 5; inbox ds-head-name is var(--serif) 22/500 (inbox.css:587). The panel notsetHeading is var(--font-home-serif) 28/500 (agent-panel.module.css:225-228). This detail h1 and the brief-box h2 at mira-brief-box.tsx:91 carry no font-family, inheriting Geist.",
+            "recommendation": "Give the detail h1 and brief-box h2 fontFamily var(--font-display-app), align weight to 500 to 600, and use the violet deep ink. Mirror inbox ds-head-name at inbox.css:586-593.",
+            "effort": "slice"
+          },
+          {
+            "id": "B6",
+            "title": "Mira server-built greeting renders prose em-dashes on her desk, unguarded cross-package copy",
+            "severity": "medium",
+            "file": "packages/core/src/agent-home/greeting.ts",
+            "line": 156,
+            "evidence": "the welcome text contains a spaced em-dash before never published without you",
+            "canonRule": "in-app-voice.md section 5 bans the em-dash AI tell in functional copy. This string plus greeting.ts:222 render live on the Mira desk via Identity line at mira-desk-page.tsx:48. The dashboard voice guard cannot see packages/core, so it is unguarded. The detail metadata title at page.tsx:5 is also an em-dash.",
+            "recommendation": "Replace the em-dashes with a period or restructure. Apply to greeting.ts:156, 211, 218, 222 and page.tsx:5. Consider a core-side copy lint since the dashboard corpus cannot reach this file.",
+            "effort": "quick-win"
+          },
+          {
+            "id": "B7",
+            "title": "Copy-bearing Mira cockpit components are absent from the in-app voice guard corpus",
+            "severity": "medium",
+            "file": "apps/dashboard/src/__tests__/in-app-voice.test.ts",
+            "line": 89,
+            "evidence": "corpus lists mira-creative-feed.tsx, mira-brief-box.tsx, mira-clip-actions.tsx",
+            "canonRule": "in-app-voice.md plus the audit standard: a missing copy file equals unguarded copy equals a finding. CORPUS lists 4 Mira files but omits mira-clip-card.tsx, mira-feed-page.tsx, mira-ready-to-review.tsx, mira-kept-shelf.tsx, and mira-in-production-tray.tsx, all copy-bearing.",
+            "recommendation": "Add those five files to CORPUS at in-app-voice.test.ts:89-111. They pass the rules today, so it is a no-cost ratchet against regression.",
+            "effort": "quick-win"
+          }
+        ]
+      },
+      "verdicts": [
+        {
+          "id": "B1",
+          "status": "confirmed",
+          "note": "Verified live: mira-desk-page.tsx:44-54 and mira-feed-page.tsx render <Identity displayName=\"Mira\">, and identity.tsx:83-88 styles the name {displayName} at fontSize:22, fontWeight:600, color:T.ink with NO font-family, so it inherits the Geist body face (globals.css body:has(.app-header) rule). Canon agent-name is Fraunces + deep ink: inbox.css:586-593 .ds-head-name { font-family: var(--serif); font-weight:500; font-size:22px } with line 596 [data-agent=\"mira\"]{ color: var(--violet-deep) }; team-band.module.css:131 .mateName { font-family: var(--font-home-serif) }. var(--serif) aliases var(--font-display-app)=Fraunces (inbox-design-base.css:58; globals.css:288). Recommendation sound and cheap: --violet-deep === hsl(var(--agent-mira-deep)) (inbox-design-base.css:37 -> globals.css:246 -> palette-violet-deep), and MIRA_ACCENT.deep (= hsl(var(--agent-mira-deep))) is already imported in sibling cockpit files, so the deep ink can be threaded via a prop with no new token. User-visible on the live /mira route."
+        },
+        {
+          "id": "B2",
+          "status": "corrected",
+          "correctedFile": "apps/dashboard/src/components/cockpit/mira/mira-ready-to-review.tsx",
+          "correctedLine": 24,
+          "note": "Confirmed at mira-ready-to-review.tsx:24-30: fontFamily:\"JetBrains Mono\", fontSize:10, fontWeight:700 (the cited line 26 is the fontWeight line; the fontFamily lie starts at line 24 - within tolerance, corrected for precision). Canon: layout.tsx loads JetBrains_Mono only as next/font variable --font-mono-editorial at weights [\"400\",\"500\",\"600\"] with no global className and no 700, so a bare \"JetBrains Mono\" string matches only a system-installed face and 700 is a synthetic faux-bold. Canon eyebrow is var(--mono) weight 500 (inbox.css:525-531 .ds-eyebrow). All enumerated repeats verified: identity.tsx:105, mira-in-production-tray.tsx:40 and :84, mira-kept-shelf.tsx:26 (finding said :27 - off by one), creative-detail-page.tsx:105, :238, :313. Critically the guards do NOT catch this: the TY3 mono-weight guard (token-governance.test.ts ~624) only scans .css files containing var(--mono) and explicitly `continue`s on non-css; the TY4 inline-font guard (type-body-governance.test.ts:98) only matches Geist|Hanken raw strings, not \"JetBrains Mono\". So the recommendation (add mono:\"var(--font-mono-editorial)\" to T, replace every raw string, drop 700->600/500) is correct and closes a real, ungoverned, user-visible faux-bold/system-font defect."
+        },
+        {
+          "id": "B4",
+          "status": "confirmed",
+          "note": "Verified at mira-ready-to-review.tsx:34-43: the count numeral is fontSize:36, fontWeight:600, fontVariantNumeric:\"tabular-nums\", color:T.ink with NO font-family, so it inherits Geist body. This is the desk's self-described 'one loud element ... big tabular numeral' (comment at lines 19-20), yet it is rendered in the body grotesk. Canon: spec section 4 line 90 'value numerics 26 / 600 / -.02em [display, tabular]'; agent-panel heroValue is var(--font-home-serif) 56px/500 (agent-panel.module.css:312-314, located at src/components/agent-panel/ not src/components/home/); the .num metric utility is var(--mono) (globals.css:1404-1406). Recommendation sound (set fontFamily to T.mono or --font-display-app, keep tabular-nums). User-visible."
+        },
+        {
+          "id": "B5",
+          "status": "confirmed",
+          "note": "Verified both heads. Detail h1 at creative-detail-page.tsx:41: fontSize:20, fontWeight:700, letterSpacing:\"-0.01em\", color:T.ink with NO font-family -> Geist body. Brief-box h2 at mira-brief-box.tsx:88-95: fontSize:15, fontWeight:600, color:T.ink with NO font-family -> Geist body. The cited file path for the detail page is correct. Canon: inbox.css:586-593 .ds-head-name var(--serif) 22/500; agent-panel.module.css:225-228 .notsetHeading var(--font-home-serif) 28px/500 (file lives at src/components/agent-panel/agent-panel.module.css, not the src/components/home/ path the finding's canonRule implies, but the rule itself is real and the values match). These are the surface headlines on a live cream route, so the body-face inheritance is a visible register break versus Home/Inbox/Results Fraunces headlines. Recommendation (font-family var(--font-display-app), weight 500/600, violet deep ink) is sound and consistent with B1."
+        }
+      ],
+      "missedFindings": [
+        "apps/dashboard/src/components/cockpit/mira/mira-brief-box.tsx:88-97 — the brief-box <h2> ('What should Mira make?') is the desk's primary section headline yet uses body face at fontSize:15/fontWeight:600 (no font-family); even after B5's fix it would sit BELOW the canonical section-headline scale (inbox/panel headings are 22-28px Fraunces), so the desk has no real display-scale headline at all — a register-altitude miss distinct from the font-family swap.",
+        "apps/dashboard/src/components/cockpit/mira/mira-in-production-tray.tsx:87 and mira-kept-shelf.tsx — per-item status/labels render the agent identity ink (MIRA_ACCENT.base = hsl(var(--agent-mira))) directly as body text color on the cream surface; spec section 3 ('Agent identity hues are identity only') reserves the hue for avatar/tints/edges, and the violet base (not -deep) likely fails AA as small body text on --surface, an unflagged identity-ink-as-text + contrast issue.",
+        "apps/dashboard/src/components/cockpit/identity.tsx:159 — the Halt/Resume control uses borderRadius:4 (and mira-brief-box.tsx btn/chip use radius 4) whereas the canonical radius scale is --r-xs:8 / --r-sm:11 (spec section 4 RADII) and the cockpit cards themselves use radius 8; the residual radius-4 on cockpit controls is a leftover of the pre-canon cockpit register not covered by the type-voice findings."
+      ]
+    },
+    {
+      "dim": "identity-components",
+      "review": {
+        "summary": "Mira's identity and component parity is split clean down the middle by which avatar primitive a surface uses. Where Mira appears INSIDE a canon surface (Home TeamBand, the shared AgentPanel SheetHeader), she correctly renders the canonical PrintedPortraitAvatar with her real maker sprite, live status pip, and halt awareness — fully coherent with Alex and Riley. But every surface Mira OWNS (the Director's Desk, the review feed, the creative detail page, and the MiraPanel drill-in body) predates the avatar system and still renders a violet letter \"M\": the desk and feed use the legacy cockpit Identity component with no sprite bundle (falling to its letter-monogram), the panel body paints a bespoke CSS \"M\" disc, and the detail page carries no identity at all. The consequence is that Mira's real maker sprite — including the draft-state mint-viewfinder-plus-REC-dot frame that is fully authored and wired into agentVisualState — is NEVER rendered on any of Mira's own surfaces; it only ever appears when another team's surface draws her. Status is honest-idle (desk/feed hardcode IDLE, and there is genuinely no mira row in /api/agents/state), so nothing is fabricated, but the surfaces also can never show \"working/drafting\" because they don't use the status-aware primitive. Component parity is the second gap: MiraPanel is a wholly separate component that lacks all four canonical panel slots (IdentityStatus/KeyResult/OpenDecisions/WorkLog are type-fenced with Exclude<PanelAgentKey,\"mira\">), and the feed/detail hand-roll their query states and confirm overlays with inline T.amber buttons and rgba() boxes instead of reusing QueryStates/ConnectionTrouble and the Inbox .ds-action ConfirmInline pattern. The single biggest gap: Mira's desk and feed headers show a flat violet \"M\" monogram in JetBrains Mono where the canon (and her own panel header, two clicks away) shows the printed-portrait pixel maker — the most visible \"previous register inside a newer app\" tell on the audited dimension.",
+        "coherenceGrade": "D — Mira reuses the canonical avatar exactly where another surface hosts her, but every surface she owns still renders a letter monogram and hand-rolls panel/confirm/query primitives the rest of the app shares.",
+        "findings": [
+          {
+            "id": "C1",
+            "title": "Desk + feed headers render a violet letter \"M\" monogram, not Mira's printed-portrait sprite",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-desk-page.tsx",
+            "line": 44,
+            "evidence": "<Identity statusKey=\"IDLE\" ... displayName=\"Mira\" avatarAccent={{ soft: MIRA_ACCENT.soft, deep: MIRA_ACCENT.deep }} />",
+            "canonRule": "\"One frame everywhere: the printed portrait... This single treatment replaces... the violet 'M' square for Mira\" + \"The printed-portrait frame becomes one shared avatar component used on Home, Inbox rows, the agent panel, and Mira's desk\" (/tmp/aesthetic-design-spec.md §6 line 146, §7 line 154). The cockpit Identity passes no sprite bundle, so SpriteFrame falls to its letter-monogram (identity.tsx:62 avatarLetter=displayName[0]; sprite-frame.tsx:45-52).",
+            "recommendation": "Stop using the cockpit Identity for Mira's desk header. Render PrintedPortraitAvatar agentKey=\"mira\" (size ~44, hero optional) beside a Fraunces name, mirroring the AgentPanel SheetHeader at agent-panel.tsx:93 (InboxAgentAvatar→PrintedPortraitAvatar) and the TeamBand at team-band.tsx:85-92. The maker sprite already ships (mira-variants.ts).",
+            "effort": "slice"
+          },
+          {
+            "id": "C2",
+            "title": "Review-feed header renders the same monogram \"M\" above the dark feed",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-feed-page.tsx",
+            "line": 42,
+            "evidence": "<Identity statusKey=\"IDLE\" ... displayName=\"Mira\" avatarAccent={{ soft: MIRA_ACCENT.soft, deep: MIRA_ACCENT.deep }} />",
+            "canonRule": "Same as C1 — printed portrait is the one frame everywhere, replacing the violet 'M' (/tmp/aesthetic-design-spec.md §6 line 146). No bundle passed → identity.tsx letter fallback.",
+            "recommendation": "Use PrintedPortraitAvatar for the feed's light header band (the feed body below stays the deliberate dark TikTok register). Same fix path as C1; reuse the SheetHeader composition from agent-panel.tsx:91-96.",
+            "effort": "slice"
+          },
+          {
+            "id": "C3",
+            "title": "Mira's maker sprite (and its draft viewfinder/REC frame) is never rendered on any surface Mira owns",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/sprite/mira-variants.ts",
+            "line": 148,
+            "evidence": "draft: [ { rows: M_DRAFT_1, dur: 220 }, { rows: M_DRAFT_2, dur: 220 } ],  // mint VIEWFINDER + REC dot",
+            "canonRule": "\"Mira needs a real sprite... clearly not a Riley recolor\" and the avatar is \"fed by real agent status (working, watching, asleep)... closes the 'soul offstage' gap\" (/tmp/aesthetic-design-spec.md §6 line 147, §7 line 154). agentVisualState maps working/analyzing→\"draft\" (agent-status-visual.ts:39-41), but no Mira-owned surface passes status=\"working\", so the draft frame is dead code on her surfaces; PrintedPortraitAvatar/InboxAgentAvatar appear in zero files under components/cockpit/mira/ or app/(auth)/mira/.",
+            "recommendation": "Once C1/C2 land, drive the desk/feed avatar's status from a real working signal (e.g. deskQ in-production count or a mira activity state) so the draft frame can fire, exactly as TeamBand passes status={agent.status} (team-band.tsx:89). Until a mira row exists in /api/agents/state, status=\"idle\" is the honest default.",
+            "effort": "slice"
+          },
+          {
+            "id": "C4",
+            "title": "MiraPanel drill-in renders a bespoke CSS \"M\" disc instead of the printed-portrait avatar",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/agent-panel/mira-panel.tsx",
+            "line": 19,
+            "evidence": "<div className={styles.notsetMark} aria-hidden=\"true\">\n          M\n        </div>",
+            "canonRule": "Printed portrait is the one frame used on \"the agent panel\" (/tmp/aesthetic-design-spec.md §7 line 154). The notsetMark is a hand-rolled 84px serif violet disc with a dashed ring (agent-panel.module.css:201-223). Note the panel's own SheetHeader already draws the correct PrintedPortraitAvatar for Mira (agent-panel.tsx:93), so the body monogram directly contradicts the header two lines up.",
+            "recommendation": "Drop notsetMark; reuse PrintedPortraitAvatar agentKey=\"mira\" (size ~84, hero) as the panel-body identity mark, matching how the header and TeamBand draw her. Delete the .notsetMark/.notsetMark::after rules.",
+            "effort": "quick-win"
+          },
+          {
+            "id": "C5",
+            "title": "MiraPanel lacks all four canonical panel slots and is structurally fenced out of them",
+            "severity": "medium",
+            "file": "apps/dashboard/src/components/agent-panel/agent-panel.tsx",
+            "line": 100,
+            "evidence": "{agentKey === \"mira\" ? (\n            <MiraPanel />\n          ) : ( <IdentityStatus/> <KeyResult/> <OpenDecisions/> <WorkLog/> ... )",
+            "canonRule": "Slot composition is the documented panel contract — IdentityStatus, KeyResult, OpenDecisions, WorkLog, freshness foot (agent-panel.tsx:57-63 docblock). Alex/Riley get all four; Mira is shunted to a monogram + one CTA. The slots are type-fenced: KeyResult/WorkLog props are agentKey: Exclude<PanelAgentKey, \"mira\"> (key-result.tsx:18, work-log.tsx:13), so Mira cannot opt in even where data exists.",
+            "recommendation": "Give Mira at least an IdentityStatus-style status line plus a KeyResult-shaped hero (e.g. drafts-ready count from useMiraDesk) and a route-out to /mira, reusing the slot shells rather than the notset block. If full parity is out of scope for M1, document the divergence in the docblock so it reads as intentional, not an unfinished stub.",
+            "effort": "project"
+          },
+          {
+            "id": "C6",
+            "title": "Feed hand-rolls loading/error/empty states instead of QueryStates + ConnectionTrouble",
+            "severity": "medium",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-creative-feed.tsx",
+            "line": 51,
+            "evidence": "if (isError) { return ( <div style={{ padding: 28, color: \"#777\" }}>Couldn&apos;t load your drafts. Pull to refresh.</div> ); }",
+            "canonRule": "ConnectionTrouble is the single offline-aware failure component and carries role=\"alert\" (query-states/states.tsx:52,69); the desk already routes through it (mira-desk-page.tsx:73). The feed's error/empty are plain divs with no role=alert and an ad-hoc gray, diverging from the shared error convention used in Inbox (inbox-error-state.tsx) and the desk.",
+            "recommendation": "Wrap the feed list in <QueryStates query={feedQ} loading=... error={<ConnectionTrouble agentName=\"Mira\" onRetry={...} />}> like the desk (mira-desk-page.tsx:70-74). The dark register can be preserved via a feed-scoped variant, but the error semantics (role=alert, honest copy) should be the shared component.",
+            "effort": "slice"
+          },
+          {
+            "id": "C7",
+            "title": "Clip-actions confirm overlays are hand-rolled rgba() boxes with inline T.amber buttons, not the Inbox confirm pattern",
+            "severity": "medium",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-clip-actions.tsx",
+            "line": 73,
+            "evidence": "<button style={{ ...btn, background: T.amber, color: \"#fff\", border: `1px solid ${T.amberDeep}` }} ... onClick={() => run(\"continue\")}>Confirm continue</button>",
+            "canonRule": "The commit moment is the most-finished, shared surface; Inbox's ApprovalDetailSheet uses the .ds-action / .ds-action-primary / .ds-action-secondary classes and a ConfirmInline arming pattern (approval-detail-sheet.tsx:65-72, 280-291; classes in inbox.css). The cost/stop confirms here re-implement that with bespoke inline-styled buttons and rgba(14,12,10,.92)/rgba(122,46,46,.95) boxes.",
+            "recommendation": "Reuse the .ds-action button classes and the ConfirmInline arming pattern for the continue/stop confirms so committing actions look identical to Inbox approvals. Amber stays the single action color (already correct via T.amber); the divergence is the bespoke chrome, not the hue.",
+            "effort": "slice"
+          },
+          {
+            "id": "C8",
+            "title": "Creative detail page carries no agent identity and a non-Fraunces hand-set heading",
+            "severity": "medium",
+            "file": "apps/dashboard/src/app/(auth)/mira/creatives/[id]/creative-detail-page.tsx",
+            "line": 41,
+            "evidence": "<h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: \"-0.01em\", color: T.ink }}>{job.title}</h1>",
+            "canonRule": "Display headlines are Fraunces upright via --font-display-app (token-governance.test.ts:582-595; spec §4 type scale, inbox title 30/700). Detail surfaces should carry the agent's printed-portrait byline like Inbox cards (\"agent byline with a small printed-portrait\", spec §5 line 136). This h1 uses the body font at a hand-set 20px and renders no Mira avatar; the page also re-implements its own continue/stop confirm (lines 208-362).",
+            "recommendation": "Add a Mira printed-portrait byline to the detail header and route the title through the Fraunces display token. Fold the continue/stop confirm onto the same .ds-action/ConfirmInline pattern recommended in C7 so detail and feed share one confirm.",
+            "effort": "slice"
+          },
+          {
+            "id": "C9",
+            "title": "Desk/feed/detail labels render in raw \"JetBrains Mono\" family instead of the loaded mono-editorial token",
+            "severity": "low",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-ready-to-review.tsx",
+            "line": 24,
+            "evidence": "fontFamily: \"JetBrains Mono\",",
+            "canonRule": "The canonical mono is --font-mono-editorial / var(--mono), aliasing the loaded JetBrains primitive so weights are real (token-governance.test.ts TY3 lines 620-643). Inline string \"JetBrains Mono\" bypasses the loaded next/font face and the token; it recurs in mira-in-production-tray.tsx:40,84, mira-kept-shelf.tsx:26, creative-detail-page.tsx:105,238,313, and the shared identity.tsx:105. The TY3 guard scans CSS, not inline TSX strings, so this is uncaught drift.",
+            "recommendation": "Replace inline \"JetBrains Mono\" with the mono-editorial token (e.g. via a CSS module class using var(--mono), or fontFamily: \"var(--font-mono-editorial)\"). Aligns Mira's eyebrow/label numerics with the loaded face used app-wide.",
+            "effort": "quick-win"
+          },
+          {
+            "id": "C10",
+            "title": "Desk/feed numerals are inline fontVariantNumeric, not the canonical .num metric utility",
+            "severity": "low",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-ready-to-review.tsx",
+            "line": 42,
+            "evidence": "fontSize: 36, fontWeight: 600, ... color: T.ink, fontVariantNumeric: \"tabular-nums\",",
+            "canonRule": "\".num is the canonical metric utility\" for tabular numerics (globals.css:1397-1404; spec §4 'tnum on ALL money/counts'). The ready-to-review hero count and detail spend/ROAS (creative-detail-page.tsx:127-133, 248-256) hand-set tabular-nums inline instead of the shared utility, a small divergence from how Results/Home render money.",
+            "recommendation": "Apply the .num utility (or a module class composing var(--font-body-app) + font-variant-numeric: tabular-nums) to the desk count and detail metrics so Mira's numerals match the Results/Home metric treatment.",
+            "effort": "quick-win"
+          }
+        ],
+        "openQuestions": [
+          "Is the MiraPanel monogram + single-CTA body an intentional M1 scope cut (Mira has no metrics/decisions/work-log endpoints yet) or an unfinished stub? The Exclude<PanelAgentKey,'mira'> fences on KeyResult/WorkLog suggest a deliberate architectural exclusion, but the spec lists the agent panel as a printed-portrait surface — confirm whether full slot parity is on the M1 roadmap (memory: project_mira_directors_desk_phase2 'NEXT = M1 enablement/governance backlog').",
+          "Should Mira's desk/feed status ever read 'working/drafting'? /api/agents/state is role-keyed (alex=responder, riley=optimizer) with no mira row, so today honest-idle is correct. If a mira activity signal is planned, C3's draft-frame wiring becomes live; if not, the maker draft state stays decorative and only fires via a manual status prop.",
+          "The review feed is deliberately dark (TikTok register) per the audit brief and is the one sanctioned non-warm-newsprint surface. Confirm the intended boundary: only the feed BODY is dark, while its header band and the desk/detail remain warm-newsprint — i.e. C1/C2/C6/C7 fixes apply the canon to the header/chrome without lightening the clip viewport."
+        ],
+        "referencePatterns": [
+          {
+            "pattern": "PrintedPortraitAvatar — THE avatar primitive (identity ground + ink-offset halo + pixel sprite + live status pip + halt-aware), the one frame Mira's surfaces must adopt",
+            "file": "apps/dashboard/src/components/agent-avatar/printed-portrait-avatar.tsx",
+            "line": 89,
+            "note": "Already supports Mira: SPRITES.mira = MIRA_VARIANTS/maker (line 25). Pass agentKey, size, hero, status, halted."
+          },
+          {
+            "pattern": "TeamBand — canonical hero composition: PrintedPortraitAvatar with live status + halt + featured motion for all three agents including Mira",
+            "file": "apps/dashboard/src/components/home/team-band.tsx",
+            "line": 85,
+            "note": "The reference for status-driven Mira identity (status={agent.status}, halted, allowMotion={featured}). C1/C2/C3 should mirror this."
+          },
+          {
+            "pattern": "AgentPanel SheetHeader — correct Mira avatar even inside the panel that then renders the monogram body; the in-repo proof the printed portrait works for Mira",
+            "file": "apps/dashboard/src/components/agent-panel/agent-panel.tsx",
+            "line": 93,
+            "note": "<InboxAgentAvatar agentKey={agentKey} size={44} /> wraps PrintedPortraitAvatar. C4 should make MiraPanel's body match its own header."
+          },
+          {
+            "pattern": "InboxAgentAvatar — thin tokenized adapter over PrintedPortraitAvatar (no pip); the no-hex, single-source agent-hue avatar the token guard enforces",
+            "file": "apps/dashboard/src/components/inbox/inbox-agent-avatar.tsx",
+            "line": 16,
+            "note": "Guarded by token-governance.test.ts:93-100 (must contain PrintedPortraitAvatar, no #4A3A66 Mira hex)."
+          },
+          {
+            "pattern": "QueryStates + ConnectionTrouble — the shared loading/error/empty contract (role=alert on failures, offline-aware, honest copy)",
+            "file": "apps/dashboard/src/components/query-states/states.tsx",
+            "line": 52,
+            "note": "Desk already uses it (mira-desk-page.tsx:70-74); the feed (C6) and detail (C8) should too."
+          },
+          {
+            "pattern": "ApprovalDetailSheet — canonical commit surface: PrintedPortrait byline + .ds-action button classes + ConfirmInline arming pattern",
+            "file": "apps/dashboard/src/components/inbox/approval-detail-sheet.tsx",
+            "line": 42,
+            "note": "The pattern Mira's clip-actions (C7) and detail confirm (C8) should adopt instead of bespoke rgba() overlays. .ds-action* classes live in inbox.css."
+          },
+          {
+            "pattern": "Shared panel slots — IdentityStatus / KeyResult / OpenDecisions / WorkLog, the composition Mira's drill-in lacks",
+            "file": "apps/dashboard/src/components/agent-panel/key-result.tsx",
+            "line": 18,
+            "note": "Type-fenced agentKey: Exclude<PanelAgentKey,'mira'> — lifting Mira into these (C5) requires either widening the type or new mira-shaped slot variants."
+          },
+          {
+            "pattern": "agentVisualState — pure status→sprite-state map (working/analyzing → \"draft\"), already routes Mira's draft frame; just needs a live status input on her surfaces",
+            "file": "apps/dashboard/src/components/agent-avatar/agent-status-visual.ts",
+            "line": 39,
+            "note": "Wiring exists end-to-end; only the desk/feed not passing status=\"working\" keeps the maker draft frame (mira-variants.ts:148) dark (C3)."
+          }
+        ]
+      },
+      "verdicts": [
+        {
+          "id": "C1",
+          "status": "confirmed",
+          "note": "Verified. apps/dashboard/src/components/cockpit/mira/mira-desk-page.tsx:44 opens <Identity ...> (props span L44-54) with avatarAccent={{soft:MIRA_ACCENT.soft, deep:MIRA_ACCENT.deep}} (violet, mira-config.ts:14-19 -> --agent-mira) and passes NO `bundle`. Identity defaults bundle to {} (identity.tsx:73) and computes avatarLetter=displayName[0]='M' (identity.tsx:62), so SpriteFrame hits its no-frames branch and renders the fallback letter span (sprite-frame.tsx:45-52). Canon real: /tmp/aesthetic-design-spec.md §6 L146 ('one frame everywhere... replaces ... the violet M square for Mira') and §7 L154 ('one shared avatar component used on Home, Inbox rows, the agent panel, and Miras desk'). Recommendation is buildable: PrintedPortraitAvatar ships Mira via MIRA_VARIANTS/DEFAULT_MIRA_VARIANT='maker' (printed-portrait-avatar.tsx:10,25; mira-config.ts:33), and TeamBand uses exactly that primitive (team-band.tsx:85). User-visible: a violet 'M' disc instead of Mira's pixel face on her primary desk header."
+        },
+        {
+          "id": "C2",
+          "status": "confirmed",
+          "note": "Verified. apps/dashboard/src/components/cockpit/mira/mira-feed-page.tsx:42 opens <Identity ...> (props span L42-52) with the same violet avatarAccent and NO bundle, so the same letter-'M' fallback fires (identity.tsx:62,73,79 -> sprite-frame.tsx:45-52). Note the header band sits on T.paper (L41), a LIGHT band above the deliberately-dark feed body (background:'#000', L38; MiraCreativeFeed below), so the recommendation to put a printed portrait in the light header while leaving the dark TikTok body alone is coherent with the spec's dark-variant intent. Canon same as C1 (spec §6 L146). Fix path mirrors agent-panel SheetHeader (agent-panel.tsx:91-96, InboxAgentAvatar->PrintedPortraitAvatar). User-visible."
+        },
+        {
+          "id": "C3",
+          "status": "corrected",
+          "correctedFile": "apps/dashboard/src/components/cockpit/sprite/mira-variants.ts",
+          "correctedLine": 78,
+          "note": "Substance CONFIRMED; verbatim-quote line corrected. The finding quotes line 148 'draft: [ {rows:M_DRAFT_1,...}, {rows:M_DRAFT_2,...} ], // mint VIEWFINDER + REC dot'. Line 148 does hold `draft: [` (states block L148-151), but the inline comment '// mint VIEWFINDER + REC dot' is a paraphrase, not a literal; the actual VIEWFINDER+REC-dot composition lives at L64-82 (VIEWFINDER const L64-77; M_DRAFT_1 = mergeSprite(M_BASE, [...VIEWFINDER, ..., [\"px\",20,3,\"R\"]]) at L78-82 — the 'R' = REC dot per palette L32). agentVisualState maps working/analyzing -> spriteState 'draft' (agent-avatar/agent-status-visual.ts:39-41), confirmed. And grep confirms PrintedPortraitAvatar/InboxAgentAvatar appear in ZERO files under components/cockpit/mira/ or app/(auth)/mira/, so the draft viewfinder frame is unreachable on every Mira-owned surface. The TeamBand-style status wiring (team-band.tsx:89 status={agent.status}) is the honest fix. Real incoherence: Mira's signature working animation never plays where she lives."
+        },
+        {
+          "id": "C4",
+          "status": "confirmed",
+          "note": "Verified. apps/dashboard/src/components/agent-panel/mira-panel.tsx:18-21 renders <div className={styles.notsetMark} aria-hidden>M</div> (and AGAIN at L35-37 for the not-set-up branch — both code paths show the disc, so any fix must touch both). .notsetMark (agent-panel.module.css:201-223) is a hand-rolled 84px round disc, bg hsl(var(--agent-mira-tint)), with a dashed-ring ::after (L217-223) — a bespoke monogram, not the printed-portrait frame. The header DOES already draw the correct primitive: agent-panel.tsx:93 InboxAgentAvatar agentKey={agentKey} size={44}, and InboxAgentAvatar is a thin adapter over PrintedPortraitAvatar (inbox-agent-avatar.tsx:3,17), so for Mira the header shows the real sprite while the body two lines down shows a CSS 'M' — a direct self-contradiction. Canon real (spec §7 L154 lists 'the agent panel'). Minor note on the finding's wording: the disc font is var(--font-home-serif) = --font-display-app = Fraunces (globals.css:289), so 'serif disc' is technically true, but the incoherence is the FRAME (CSS disc vs printed portrait), not the typeface. Recommendation buildable; quick-win. User-visible."
+        }
+      ],
+      "missedFindings": [
+        "apps/dashboard/src/components/agent-panel/mira-panel.tsx:35 — the SECOND .notsetMark 'M' disc (the 'Mira isnt set up yet' branch) is the same bespoke-monogram defect as C4 but is not cited; C4's fix is incomplete unless both L19 and L35 are replaced with PrintedPortraitAvatar.",
+        "apps/dashboard/src/components/cockpit/mira/mira-desk-page.tsx:65 — the entire desk shell renders inside a raw inline-styled <div> using the cockpit `T` family (T.bg/T.paper, L40,43) with a fixed 16px pad, never the warm-newsprint canvas + grain wrapper the Home/Inbox/Results surfaces use; the desk reads as the cockpit register's flat cream page, not the locked canvas-grain ground (spec §4 GRAIN L116-119, 'canvas only').",
+        "apps/dashboard/src/components/cockpit/identity.tsx:87,91 — the agent name in the shared cockpit Identity header is rendered in the inherited body font at 22px/600 (color:T.ink, letterSpacing -0.015em), NOT the Fraunces display face the canon assigns to agent name/poster titles (spec §4 SCALE: poster/inbox titles are [display] Fraunces; team-band.tsx uses .mateName); so Mira's desk/feed name reads in Geist where Home/Inbox set agent identity in Fraunces."
+      ]
+    },
+    {
+      "dim": "ux-flows",
+      "review": {
+        "coherenceGrade": "C: honest flows and sound desk IA, but the commit-moment interaction pattern, the avatar identity, the panel parity, and the surface register all diverge from the locked warm-newsprint canon.",
+        "summary": "Mira's UX flows are functionally honest (no-placeholder empties, friction-proportional Continue/Stop confirms, an opt-in 404 gate, a feed back affordance) but read as the previous cockpit register, not the locked warm-newsprint app the rest of the authed surfaces now speak. Biggest gap: the commit-moment fork. The review feed Keep/Pass fire instantly with no confirm, no optimistic-removal-with-undo, and no 409 already-handled reconciliation, while the Inbox commit pattern is optimistic plus Undo toast plus silent-409 (inbox-decision-item.tsx:42-52, use-recommendation-action.ts:25). Pass is irreversible from the UI yet zero-friction; only Keep is reversible via Un-keep, inverting friction-proportional-to-irreversibility. IA asymmetry: Alex and Riley have no per-agent route (panel-only from the Home TeamBand), Mira alone owns /mira but it is buried in the tools/More overflow (primary-nav.tsx is Home, Inbox, Results only), and the Home tile opens a stub panel while Alex and Riley get the 4-slot panel (agent-panel.tsx:100). Mira's desk and feed avatar renders the violet M letter monogram the spec said to retire (Identity gets no sprite bundle so SpriteFrame shows the letter) even though PrintedPortraitAvatar already ships a real Mira sprite. The full-dark feed is the loudest surface in a calm app on a decision screen. Desk module IA is sound but its chrome (JetBrains Mono eyebrows, radius 8, inline styles, no Fraunces) is the old register. Motion is the weakest spot: the feed autoplays video with no reduced-motion path of its own. Loading parity is thin. Net: the flows work; they read as a 2026-05-31 cockpit wearing newer tokens, not a member of the warm-newsprint crew.",
+        "findings": [
+          {
+            "id": "D1",
+            "title": "Feed Keep/Pass has no undo and no 409 reconciliation, breaking the canon commit-moment pattern",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-clip-actions.tsx",
+            "line": 140,
+            "evidence": "decide.mutate(id+decision, onSuccess: onResolve(jobId)) -- fires and dismisses, no toast/undo",
+            "canonRule": "Inbox commit pattern is optimistic plus Undo toast plus silent-409 (inbox-decision-item.tsx:42-52; use-recommendation-action.ts:25). aesthetic-design-spec.md section 5: the commit moment carries a branded Undo.",
+            "recommendation": "After Keep/Pass, show a Toast with an Undo that re-runs the reverse decision (decision=null for Keep); teach useReviewDecision to swallow 409 as silent-success like use-recommendation-action.ts:25. Un-keep at mira-kept-shelf.tsx:79-94 proves the reverse mutation already exists.",
+            "effort": "slice"
+          },
+          {
+            "id": "D2",
+            "title": "Pass is irreversible from the UI yet zero-friction while reversible Continue confirms",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-clip-actions.tsx",
+            "line": 151,
+            "evidence": "Pass button calls decideAndResolve(passed) directly, no confirm, no recovery path",
+            "canonRule": "Friction proportional to irreversibility: Stop = irreversible confirm, Continue = cost confirm. Keep is reversible via Un-keep (mira-kept-shelf.tsx:9) but no un-pass exists, while Continue confirms (mira-clip-actions.tsx:54-97).",
+            "recommendation": "Make Pass recoverable (undo toast per D1 or a Passed shelf symmetric to Kept) or add a light confirm, so the most-irreversible gesture is at least as deliberate as Continue's cost confirm.",
+            "effort": "slice"
+          },
+          {
+            "id": "D3",
+            "title": "Desk and feed identity avatar is the legacy letter-M, not the canonical printed-portrait sprite",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-desk-page.tsx",
+            "line": 44,
+            "evidence": "Identity is given displayName Mira and avatarAccent but NO bundle/variant, so SpriteFrame renders the letter fallback",
+            "canonRule": "aesthetic-design-spec.md section 6 line 146: the printed-portrait replaces the violet M square for Mira. Identity falls back to displayName[0] when no bundle is passed (identity.tsx:62, 72-80). PrintedPortraitAvatar already wires a real Mira sprite (printed-portrait-avatar.tsx:25).",
+            "recommendation": "Render the shared PrintedPortraitAvatar in the /mira and /mira/review headers (as team-band.tsx:85-94 and the inbox avatar do). The maker sprite in mira-variants.ts already exists; this also restores honest live status.",
+            "effort": "slice"
+          },
+          {
+            "id": "D4",
+            "title": "Mira's Home drill-in panel is a stub; Alex and Riley get the full 4-slot panel",
+            "severity": "high",
+            "file": "apps/dashboard/src/components/agent-panel/agent-panel.tsx",
+            "line": 100,
+            "evidence": "agentKey mira branch renders MiraPanel; the else branch renders IdentityStatus, KeyResult, OpenDecisions, WorkLog, freshness",
+            "canonRule": "aesthetic-design-spec.md section 7 line 154: one shared avatar and panel on Home, Inbox, the agent panel, and Mira's desk. The canon drill-in slots are agent-panel.tsx:57-64; Mira short-circuits to a one-line CTA with a hand-rolled M mark (mira-panel.tsx:16-30).",
+            "recommendation": "Give Mira at least IdentityStatus, a ready-to-review key result, and a drafts-awaiting-review list, ending in the Open workspace CTA, so the drill-in matches Alex/Riley structure. use-mira-desk.ts already exposes readyToReviewCount for the key-result slot.",
+            "effort": "project"
+          },
+          {
+            "id": "D5",
+            "title": "Full-dark feed takeover is the loudest surface in a warm app on a decision screen",
+            "severity": "medium",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-clip-card.tsx",
+            "line": 55,
+            "evidence": "section background is pure black with grey chrome; the feed page and skeleton are also black (mira-feed-page.tsx:38, mira-creative-feed.tsx:49)",
+            "canonRule": "aesthetic-design-spec.md section 2: decision surfaces are the calmest, no grain, trust lives here; section 3: at most one loud element. The canonical dark variant is warm charcoal, not raw black (spec section 4; token-governance.test.ts:443), and uses amber, not grey 777.",
+            "recommendation": "Either move review onto the warm app ground as a printed contact-sheet of clips, or re-skin the immersive surface to the canonical warm-charcoal dark tokens so the contrast reads as the app's own night mode. Document the choice in one place.",
+            "effort": "project"
+          },
+          {
+            "id": "D6",
+            "title": "/mira is reachable only via the secondary tools/More overflow and the Home tile; the masthead nav excludes it",
+            "severity": "medium",
+            "file": "apps/dashboard/src/components/layout/primary-nav.tsx",
+            "line": 5,
+            "evidence": "PrimaryNav ITEMS are Home, Inbox, Results only; no Mira entry",
+            "canonRule": "IA legibility. Alex/Riley have no route at all (Home opens AgentPanel; retired /alex and /riley redirect to /?agent= per home-page.tsx:69-72), while /mira lives only in app-sidebar.tsx:53 and tools-overflow.tsx:85, both gated on miraEnabled, never in the masthead.",
+            "recommendation": "Pick one coherent model: either Mira also opens as a panel from Home like Alex/Riley (with /mira as the deep surface), or all enabled agents earn a masthead/sidebar slot. Today Mira is the only agent with a route AND the only one whose route is buried.",
+            "effort": "slice"
+          },
+          {
+            "id": "D7",
+            "title": "Desk and feed chrome is the cockpit register: mono eyebrows, radius 8, inline styles, no Fraunces",
+            "severity": "medium",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-ready-to-review.tsx",
+            "line": 26,
+            "evidence": "eyebrow uses fontFamily JetBrains Mono, fontSize 10, uppercase; modules use radius 8 and inline styles (mira-brief-box.tsx:84)",
+            "canonRule": "aesthetic-design-spec.md sections 3-4: Fraunces display, Geist body, body-font meta labels; reference surfaces use CSS modules (home.module.css, inbox-design-base.css). Mira's mono eyebrow plus inherit body font plus radius 8 match the cockpit token note in mira-config.ts:7-13, not the app register.",
+            "recommendation": "Move eyebrows to the Geist meta-label scale and the Ready-to-review hero to Fraunces (the natural verdict moment, like Home verdict.tsx), onto a Mira CSS module so the token-governance sweeps (token-governance.test.ts TY2 and EL1) can police it; inline styles in tsx evade the CSS-only checks.",
+            "effort": "project"
+          },
+          {
+            "id": "D8",
+            "title": "The review feed autoplays video with no reduced-motion path, exceeding the calm-motion budget",
+            "severity": "medium",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-clip-card.tsx",
+            "line": 38,
+            "evidence": "useEffect plays the active clip and pauses others unconditionally; no prefers-reduced-motion read",
+            "canonRule": "aesthetic-design-spec.md section 3: at most one continuously-animated avatar per viewport; reduced motion strips all animation. The canon avatar reads the OS preference (printed-portrait-avatar.tsx:44-58). The feed autoplays looping video and scroll-snaps (mira-creative-feed.tsx:69) with no reduced-motion branch in cockpit/mira.",
+            "recommendation": "Gate autoplay and loop on a prefers-reduced-motion read (reuse the hook in printed-portrait-avatar.tsx:44-58): under reduce, show the paused poster frame with tap-to-play and soften scroll-snap; pass a static state to the feed Identity's StatusPill too.",
+            "effort": "slice"
+          },
+          {
+            "id": "D9",
+            "title": "Mira route loading shell is a 3-block gray skeleton vs Home's structured verdict and bento shell",
+            "severity": "low",
+            "file": "apps/dashboard/src/app/(auth)/mira/loading.tsx",
+            "line": 5,
+            "evidence": "MiraLoading returns MiraDeskSkeleton, which is three canvas-3 blocks omitting the brief box and header (mira-desk-skeleton.tsx:7-19)",
+            "canonRule": "Loading-shell parity. Home's route shell renders an eyebrow plus verdict plus a 4-cell bento via the shared Skeleton primitive ((home)/loading.tsx:5-19); the Mira shell previews neither the header nor the brief box.",
+            "recommendation": "Extend MiraDeskSkeleton to mirror the real desk order (header band, brief-box block, hero CTA, tray, shelf) using the shared Skeleton primitive like (home)/loading.tsx, so the route shell previews the actual composition.",
+            "effort": "quick-win"
+          },
+          {
+            "id": "D10",
+            "title": "Halt visibility is inconsistent: the desk hero CTA and detail page ignore halt that the brief box and feed honor",
+            "severity": "low",
+            "file": "apps/dashboard/src/components/cockpit/mira/mira-ready-to-review.tsx",
+            "line": 50,
+            "evidence": "the amber Review-drafts CTA reads useHalt nowhere; same on the detail page (creative-detail-page.tsx:166-205)",
+            "canonRule": "States canon: halt is first-class and must be legible where actions live. The brief box disables Preview with Resume Mira (mira-brief-box.tsx:220-222) and the feed disables Continue with a Halted button (mira-clip-actions.tsx:175-182), but the desk hero CTA and the detail-page Continue/Stop do not.",
+            "recommendation": "Read useHalt in mira-ready-to-review.tsx and creative-detail-page.tsx and present the same honest Asleep / Resume treatment the brief box and feed use, so halt is consistent across all four Mira surfaces.",
+            "effort": "slice"
+          }
+        ],
+        "referencePatterns": [
+          {
+            "pattern": "Commit-moment: optimistic action plus branded Undo toast plus silent-409 reconciliation",
+            "file": "apps/dashboard/src/components/inbox/inbox-decision-item.tsx",
+            "line": 42,
+            "note": "The canon decision-commit pattern Mira's Keep/Pass should adopt; pair with use-recommendation-action.ts:25 for the 409-silent leg."
+          },
+          {
+            "pattern": "One shared printed-portrait avatar fed by real agent status (Alex/Riley/Mira sprites)",
+            "file": "apps/dashboard/src/components/agent-avatar/printed-portrait-avatar.tsx",
+            "line": 89,
+            "note": "THE avatar primitive; already wires the real Mira sprite. Mira's desk/feed header should use this instead of the cockpit SpriteFrame letter fallback."
+          },
+          {
+            "pattern": "Full 4-slot agent drill-in panel: Identity, KeyResult, OpenDecisions, WorkLog, freshness",
+            "file": "apps/dashboard/src/components/agent-panel/agent-panel.tsx",
+            "line": 99,
+            "note": "The panel structure Alex/Riley get; Mira short-circuits to a stub. Model for raising the Mira panel to parity."
+          },
+          {
+            "pattern": "Hero poster tile with PrintedPortraitAvatar, identity-ink name, honest status, amber focus ring",
+            "file": "apps/dashboard/src/components/home/team-band.tsx",
+            "line": 84,
+            "note": "The warm-newsprint emotional-peak treatment; reference for re-skinning Mira's desk header and the entry tile."
+          },
+          {
+            "pattern": "Token-governance sweep (italic/hex/shadow/Fraunces/grain), CSS-only and evaded by inline styles",
+            "file": "apps/dashboard/src/app/__tests__/token-governance.test.ts",
+            "line": 555,
+            "note": "Explains why Mira's inline-style cockpit chrome passes CI yet diverges from canon; argues for moving Mira onto a CSS module so the guard can police it."
+          }
+        ],
+        "openQuestions": [
+          "Is the dark review feed a deliberate, signed-off product decision (immersive triage) or a leftover of the 2026-05-31 cockpit re-skin? The fix differs: re-skin to the canonical warm-charcoal dark tokens vs move review onto the warm app ground. No spec line endorses a pure-black surface.",
+          "Is the per-agent IA asymmetry intentional (Mira is the only agent with enough surface to merit a route) or transitional (Alex/Riley routes were retired and Mira's was never folded into the panel model)? This decides whether /mira should join the masthead or collapse into a panel like the others.",
+          "Is Pass meant to be recoverable? The desk copy makes Keep explicitly reversible (Un-keep) but is silent on Pass; the UI treats Pass as terminal but frictionless, which is internally inconsistent.",
+          "Does the mira-panel stub predate the 4-slot AgentPanel landing, i.e. is panel parity already on a backlog? The hand-rolled M mark in mira-panel.tsx:19 is also the retired letter-avatar treatment, suggesting it was written before the printed-portrait avatar shipped."
+        ]
+      },
+      "verdicts": [
+        {
+          "id": "D1",
+          "status": "confirmed",
+          "note": "Verified mira-clip-actions.tsx:140-141 `decideAndResolve` = `decide.mutate({id,decision},{onSuccess:()=>onResolve(jobId)})` — fire-and-dismiss, no toast/undo. Canon confirmed: inbox-decision-item.tsx:42-52 shows the branded Undo toast + 409-silent skip; use-recommendation-action.ts:25 swallows 409 as {silent:true}; aesthetic-design-spec.md:137 (section 5) mandates 'a branded Undo with a real countdown.' Contrast: use-review-decision.ts:22 does NOT swallow 409 (`if(!res.ok) throw`). Reverse mutation already exists at mira-kept-shelf.tsx:82 (`decision:null`). Recommendation closes a real, user-visible gap (Keep/Pass commit with no recovery, divergent from the app's commit-moment pattern)."
+        },
+        {
+          "id": "D2",
+          "status": "confirmed",
+          "note": "Verified mira-clip-actions.tsx:151-157: Pass button onClick=`decideAndResolve('passed')` with no confirm and no recovery. Continue confirms (lines 54-97, cost notice) and Stop confirms (lines 99-137, 'can't be undone'). Keep is reversible via Un-keep (mira-kept-shelf.tsx:79-94/`decision:null`) but no un-pass path exists, so Pass is the most-irreversible gesture yet the only zero-friction one — the friction-proportional-to-irreversibility inversion is real and user-visible. Note: line 151 is the Pass <button> open; onClick is line 154 (within ~15 lines)."
+        },
+        {
+          "id": "D3",
+          "status": "confirmed",
+          "note": "Verified mira-desk-page.tsx:44-54 passes displayName='Mira' + avatarAccent but NO bundle/variant to <Identity>. identity.tsx:62 computes avatarLetter=displayName[0]='M' and lines 72-79 pass `bundle??{}` / `variant??'__none__'` to SpriteFrame -> letter fallback. Same legacy path in mira-feed-page.tsx:42-52. Canon: aesthetic-design-spec.md:146 (section 6) — printed portrait replaces 'the violet M square for Mira'. printed-portrait-avatar.tsx:25 wires `mira:{bundle:MIRA_VARIANTS,variant:DEFAULT_MIRA_VARIANT}`; mira-config.ts:33 DEFAULT_MIRA_VARIANT='maker'; mira-variants.ts ships a real 24x24 sprite. team-band.tsx:85 and InboxAgentAvatar (inbox-agent-avatar.tsx:17) both use PrintedPortraitAvatar. Desk/feed use the older Identity/SpriteFrame primitive, not the canonical avatar -> letter-M renders. Confirmed."
+        },
+        {
+          "id": "D4",
+          "status": "confirmed",
+          "note": "Verified agent-panel.tsx:100-117: `agentKey==='mira'` renders <MiraPanel/>; else branch renders IdentityStatus(105)/KeyResult(107)/OpenDecisions(109)/WorkLog(111)/freshness-foot(113-115) — the four-slot panel. mira-panel.tsx:16-30 short-circuits to a one-line CTA with a hand-rolled 'M' mark; agent-panel.module.css:201-215 confirms .notsetMark is a Fraunces 'M' glyph in a tinted circle (NOT the printed-portrait sprite). Canon: aesthetic-design-spec.md:154 (section 7) — 'one shared avatar and panel on Home, Inbox, the agent panel, and Mira's desk.' use-mira-desk.ts exposes readyToReviewCount (used at mira-desk-page.tsx:78) for the key-result slot, so the recommendation is feasible. User-visible structural divergence (Mira's drill-in is a stub vs Alex/Riley's full panel). Confirmed."
+        }
+      ],
+      "missedFindings": [
+        "apps/dashboard/src/components/cockpit/mira/mira-clip-actions.tsx:145 — Keep button uses `background: MIRA_ACCENT.deep` (= hsl(var(--agent-mira-deep)), the Mira violet IDENTITY hue) as the fill for a primary commit action, violating aesthetic-design-spec.md:37-38 'One action color / agent identity hues ... never back an action button' (token-governance.test.ts:161 confirms hues are 'stripes/pip/low-info fills only'); the operator-amber T.amber is used for Continue (line 184) but NOT for Keep. Inline TSX so the CSS-token guard never catches it.",
+        "apps/dashboard/src/components/cockpit/mira/mira-clip-actions.tsx:117 / mira-feed-page.tsx:38 — review-feed surfaces still use raw literals off the token system: Stop confirm panel `background:'rgba(122,46,46,0.95)'` and Stop button `background:'#fff', color:T.red` (line 117), feed page `background:'#000'` (line 38), btn `color:'#fff'` (line 47); the dark feed is canonical-by-intent (spec:140) but the panel/button literals bypass the destructive/--ink token ladder, drifting from the unified token source.",
+        "apps/dashboard/src/components/cockpit/mira/mira-desk-page.tsx + mira-feed-page.tsx headers render the legacy cockpit `Identity` (Fraunces-less: identity.tsx:104-105 uses fontFamily 'JetBrains Mono' for the subtitle and a plain 22px name, not the Fraunces display + Geist body type system mandated by aesthetic-design-spec.md:81-82), so Mira's desk/feed mastheads read in the previous cockpit register vs the canon type system Home/Inbox now use."
+      ]
+    },
+    {
+      "dim": "reference-inventory",
+      "review": {
+        "coherenceGrade": "B-plus. Token system, avatar frame, type voice, and grain are tightly governed and broadly adopted, but the inbox register still carries literal-color values and the agent-panel drill-in skips the shared avatar primitive.",
+        "summary": "Dimension E catalogs the canon as implemented on the reference surfaces (Home, Inbox, Results, shared avatar and query-states), not a Mira audit. The canon is highly coherent and well-governed: one amber action color from the action primitive, identity hues that never back actions, a single PrintedPortraitAvatar frame already adopted by Home TeamBand and Inbox InboxAgentAvatar, a Fraunces display voice via the display-app and home-serif tokens with opsz optical sizing, mono eyebrows plus the .num tabular utility, a tokenized elevation ladder (shadow-1 through 5) plus the brand shadow-action-gloss for the one amber button, and the warm-riso grain in two forms: the body canvas blend keyed on app-header, and the lighter team-band grain poster variant. The honest-voice corpus is real and guarded. The biggest internal gap is that the inbox register inbox.css still hand-codes the white color literal at lines 213, 906, 1163, 1360, 1404 and raw rgba agent-hue edges at lines 628 to 630 instead of the action-foreground token and the tokenized agent vars, so the inbox action button and avatar text are not fully on the single token source the guard otherwise enforces. A secondary inconsistency: the agent-panel reference, the parity sibling for Mira Home drill-in, does not use PrintedPortraitAvatar at all (mira-panel.tsx renders a letter-disc notsetMark), and its miraOpenCta fills with the Mira identity hue, the one documented identity-on-an-action edge case in the canon itself. The five findings detail these adoption targets, and the referencePatterns array is the full target vocabulary a reskin should point at: page anatomy, card anatomy, the avatar frame and poster, action and decision UX, states, grain, and voice exemplars.",
+        "findings": [
+          {
+            "id": "E1",
+            "title": "Inbox primary action button hardcodes the white color literal instead of the action-foreground token",
+            "severity": "medium",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/inbox/inbox.css",
+            "line": 906,
+            "evidence": "ds-action-primary sets background to var amber and the text color to a literal white hex value rather than a token",
+            "canonRule": "The action foreground must reference the white primitive per token-governance.test.ts lines 51 to 53, which expects action-foreground to equal the palette action-fg var; globals.css defines that primitive as the single AA white source",
+            "recommendation": "Use the action-foreground token as Home btnPrimary already does at home.module.css line 376. The same fix applies to the other four white-literal occurrences at lines 213, 1163, 1360, 1404. The hex sweep does not flag the plain three-letter white, so this is uncaught drift to tokenize before a reskin clones it",
+            "effort": "quick-win"
+          },
+          {
+            "id": "E2",
+            "title": "Inbox agent-hue edges hand-coded as raw rgba rather than tokenized agent vars",
+            "severity": "low",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/inbox/inbox.css",
+            "line": 628,
+            "evidence": "the reason-chip edge for each agent uses a raw rgba triple, for example Mira at the legacy violet triple with a low alpha",
+            "canonRule": "Per-agent identity collapses to the single agent-alex, agent-riley, agent-mira definitions and is consumed tokenized; the guard bans re-forked agent hexes outside the primitive block per token-governance.test.ts lines 244 to 267, and inbox-design-base.css lines 31 to 38 already expose the agent hues as tokens",
+            "recommendation": "Express the edges with the agent hue token plus an alpha so the edge tracks the single primitive. The legacy coral and legacy Mira triples are values the guard removed elsewhere and survive here only because they are rgba, not hex",
+            "effort": "quick-win"
+          },
+          {
+            "id": "E3",
+            "title": "Agent-panel drill-in, the Mira Home-panel parity reference, does not use PrintedPortraitAvatar",
+            "severity": "medium",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/agent-panel/mira-panel.tsx",
+            "line": 19,
+            "evidence": "the panel renders a div with className notsetMark, aria-hidden true, containing only the letter M",
+            "canonRule": "One frame everywhere, the printed portrait, replaces the fragmented avatar systems including the violet M square for Mira, per aesthetic-design-spec.md section 6 line 146",
+            "recommendation": "The panel renders a letter-disc notsetMark at agent-panel.module.css line 201, a violet-tint circle with a serif M, instead of the canonical PrintedPortraitAvatar. Mira now ships a real sprite at mira-variants.ts with the maker default variant, so the drill-in should render PrintedPortraitAvatar for mira at hero or sheet scale. This is the exact violet-M-square the spec names as the fragmentation to retire",
+            "effort": "slice"
+          },
+          {
+            "id": "E4",
+            "title": "The Mira open-workspace CTA fills with the Mira identity hue, the one identity-on-action edge in the canon",
+            "severity": "low",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/agent-panel/agent-panel.module.css",
+            "line": 807,
+            "evidence": "miraOpenCta sets background to the agent-mira hue and text color to the action-foreground token",
+            "canonRule": "Agent identity hues are identity only and never back an action button, per aesthetic-design-spec.md section 3 line 38, reinforced by globals.css line 91 and home.module.css lines 349 to 351",
+            "recommendation": "This is the single place in the reference surfaces where an agent hue backs a clickable button, contradicting the non-negotiable. Either re-classify it as a quiet ghost link with ink text and no fill, like moduleMore, or make it the amber action. Note it so a reskin does NOT propagate a Mira-violet button as canon",
+            "effort": "quick-win"
+          },
+          {
+            "id": "E5",
+            "title": "Inbox tokens fork canvas and surface as literal hex, a deliberate workaround but a register seam to know",
+            "severity": "low",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/inbox/inbox-design-base.css",
+            "line": 19,
+            "evidence": "the inbox scope redeclares canvas, canvas-2, canvas-3 and surface as literal hex values rather than the canonical hsl-triple tokens",
+            "canonRule": "globals.css is the single token source and stores canvas and surface as raw HSL triples; the inbox header comment at inbox-design-base.css lines 3 to 13 explains it re-declares literal values scoped to the inbox surfaces to avoid the double-wrap transparent-render trap",
+            "recommendation": "This fork is documented and intentional. But the surface and canvas literals are a slight value drift from the canonical canvas token and will not follow dark mode. For a reskin, prefer rederiving these from the canvas token where the consumption form allows, or document that the inbox ground is intentionally a touch warmer than the app canvas",
+            "effort": "slice"
+          }
+        ],
+        "referencePatterns": [
+          {
+            "pattern": "Page width / content frame",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/app/globals.css",
+            "line": 398,
+            "note": "page-width is max-width 74rem auto-centered; the desktop app frame is the app-frame 1280px at line 291 consumed by app-body at line 616 as a 216px sidebar plus a fluid grid; the page shell uses col-wide 1080px at line 753"
+          },
+          {
+            "pattern": "Home column + bento split",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/home/home.module.css",
+            "line": 12,
+            "note": "the column is a mobile vertical stack with 22px gap, capped 640px at md, filling the shell at lg; the bento at line 36 becomes a main-plus-320px-rail grid at lg. The canonical one-column-then-rail rhythm"
+          },
+          {
+            "pattern": "Section module header",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/home/home.module.css",
+            "line": 163,
+            "note": "the moduleH is a lowercase serif h2 using the home-serif token opsz 22 weight 600 on a baseline row with a mono meta label and a hairline-soft bottom rule. The canonical section masthead"
+          },
+          {
+            "pattern": "Editorial masthead, Inbox H1",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/inbox/inbox.css",
+            "line": 26,
+            "note": "the inbox-pagehead h1 is Fraunces via the serif token opsz 48, 36 to 44px, weight 700, tight tracking. The page title moment, mirrored at Results by resultsTitle at results.module.css line 1263"
+          },
+          {
+            "pattern": "Card primitive, Home",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/home/home.module.css",
+            "line": 214,
+            "note": "the card is a surface ground, a hairline-soft border, radius 20px, padding 18px, box-shadow the shadow-card token which is ladder level 1. The canonical resting card"
+          },
+          {
+            "pattern": "Decision card ground + radii, Inbox",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/inbox/inbox-design-base.css",
+            "line": 186,
+            "note": "the inbox-queue decision is a surface ground, a hairline-soft border, radius r-lg 20px; hover holds the hairline so the swipe track stays edge-to-edge. Radii scale sm 8, md 14, lg 20, xl 28 at lines 62 to 66"
+          },
+          {
+            "pattern": "Results money card, opaque",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/results/results.module.css",
+            "line": 703,
+            "note": "the campaignCard is an OPAQUE canvas-2 background, guard-enforced so grain never sits behind money, a 1px border token, radius 6px. The calm Quiet-Modern money card"
+          },
+          {
+            "pattern": "PrintedPortraitAvatar frame",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/agent-avatar/printed-portrait-avatar.module.css",
+            "line": 23,
+            "note": "the portrait is an identity-tint ground plus a hard 1px ink-offset registration shadow in the agent deep ink plus an inset 1px hair hairline, radius 22 percent; the hero variant at line 91 bumps to a 2px offset and 1.5px edge. THE avatar primitive; props in printed-portrait-avatar.tsx line 60 are agentKey, size or fill, hero, status, halted, showPip, allowMotion"
+          },
+          {
+            "pattern": "Avatar adapters already adopted",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/inbox/inbox-agent-avatar.tsx",
+            "line": 16,
+            "note": "InboxAgentAvatar is a thin adapter over PrintedPortraitAvatar, size 22, no pip. The single tokenized agent-hue source; the guard asserts the old Mira hex is gone at token-governance.test.ts line 93. Adopt this, not a bespoke avatar"
+          },
+          {
+            "pattern": "TeamBand poster, identity peak",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/home/team-band.module.css",
+            "line": 30,
+            "note": "the poster is a canvas base plus three radial agent-tint grounds plus a linear surface wash plus the LIGHTER grain layer blended multiply; 18px radius, the shadow-card token. Names use the home-serif token weight 650 in the agent DEEP ink at lines 131 and 152, roles are mono-caps, status is ink-2 which is AA on the wash"
+          },
+          {
+            "pattern": "Verdict deep-ink accent",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/home/verdict.tsx",
+            "line": 21,
+            "note": "the hero verdict line emphasises the lead agent name with the agent DEEP ink inline, never the base hue which fails AA on grain and never amber. Display via the line class at home.module.css line 87 with the home-serif token opsz 60"
+          },
+          {
+            "pattern": "Primary amber action button, Inbox",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/inbox/inbox.css",
+            "line": 903,
+            "note": "the ds-action-primary is an amber fill which is the action token, box-shadow the shadow-action-gloss which is brand gloss NOT elevation, 14px weight 600, pill radius, hover to amber-deep with a 1px lift. Base ds-action at line 884"
+          },
+          {
+            "pattern": "Primary amber button, Home, tokenized text",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/home/home.module.css",
+            "line": 374,
+            "note": "the btnPrimary is an action fill, an action-foreground text correctly tokenized here, box-shadow the shadow-action-gloss; focus-visible at line 370 is a 2px solid action-colored outline with 2px offset. The clean reference for tokenized amber text"
+          },
+          {
+            "pattern": "Secondary, ghost, dismiss buttons",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/inbox/inbox.css",
+            "line": 912,
+            "note": "the ds-action-secondary is a surface ground plus a 1px hair at line 912; the ds-action-dismiss is transparent with ink-3 text at line 919. Home equivalents are btnSecondary, canvas-2 plus hair, and btnGhost transparent at home.module.css lines 386 to 402"
+          },
+          {
+            "pattern": "Risk pill, ink and amber only",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/inbox/inbox.css",
+            "line": 364,
+            "note": "the risk-pill is mono 9.5px caps, transparent ground, 1px hair, pill; tone escalates in the ink ramp only, low ink-3 to high ink-1, missing to amber at line 390. No alarm red; the canonical risk affordance"
+          },
+          {
+            "pattern": "Approval commit sheet, money moment",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/inbox/approval-detail-sheet.tsx",
+            "line": 184,
+            "note": "the structure is ds-head with avatar, deep-ink name, needs-your-okay, risk pill; then ds-proposal eyebrow plus serif summary; then ds-pending what-this-changes before-and-after grid; then ds-risk chips; then ds-actions footer with dismiss, secondary, primary and a data-armed flag. The most-finished surface"
+          },
+          {
+            "pattern": "Swipe affordance + armed amber button",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/decisions/swipe-decision-card.tsx",
+            "line": 133,
+            "note": "the data-armed flag arms the amber commit button, the arm-pulse uses the shadow-arm-base plus a live ring; the reveal label is approve-on-swipe when canSwipeApprove else swipe-primes-tap-to-commit at line 150. The canonical swipe-vs-confirm gate"
+          },
+          {
+            "pattern": "Optimistic approve + branded Undo",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/home/needs-you-card.tsx",
+            "line": 62,
+            "note": "handleApprove fires the primary action, skips the toast on a 409 silent result, else raises an Approved toast with a ToastAction Undo wired to the undo action. The canonical commit-plus-undo loop"
+          },
+          {
+            "pattern": "Empty, all-clear and error states",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/query-states/states.tsx",
+            "line": 88,
+            "note": "AllClear is a calm role status. ConnectionTrouble at line 52 is role alert, offline-aware, first-person honest with an amber text-action retry. The state vocabulary every surface should reuse"
+          },
+          {
+            "pattern": "Body canvas grain rule, cream and riso",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/app/globals.css",
+            "line": 552,
+            "note": "the body-has-app-header rule is the ambient-cream ground plus the warm-riso SVG grain at baseFrequency point88 and a calibrated low alpha blended via background-blend-mode multiply; dark at line 571 and reduced-motion at line 576 drop the grain and keep the cream. The register hook is app-header"
+          },
+          {
+            "pattern": "Poster grain variant, the grain custom prop",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/home/team-band.module.css",
+            "line": 37,
+            "note": "the poster carries its OWN grain as a file-local grain url at a lower alpha than the canvas, layered into background-image and blended multiply; dark and reduced-motion set the grain prop to none at lines 65 to 71. The pattern for any identity poster ground"
+          },
+          {
+            "pattern": "Mono eyebrow and label plus .num numerics",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/home/home.module.css",
+            "line": 61,
+            "note": "the eyebrow is mono 10.5px, wide tracking, uppercase, ink-3, with a hairline rule after; numerics use the num utility at globals.css line 1404 which is the mono face plus tabular-nums. Results metrics follow at heroRevenueNum results.module.css line 55"
+          },
+          {
+            "pattern": "Voice, honest first-person strings",
+            "file": "/Users/jasonli/switchboard/apps/dashboard/src/components/query-states/states.tsx",
+            "line": 72,
+            "note": "five canon exemplars: I cannot reach the agent right now and Nothing you have approved is lost at states.tsx lines 71 to 73; You are all caught up at states.tsx line 89; One last check at approval-detail-sheet.tsx line 55; Review her latest creative drafts and decide what moves forward at mira-panel.tsx line 24; consults booked not generated at this-week.tsx line 96. All first-person, attribution verbs, no em-dash, no generate"
+          }
+        ],
+        "openQuestions": [
+          "Guard guardrails to carry into a reskin recommendation, the anti-patterns the canon bans: no font-style italic, no em or i elements, no inline italic on governed surfaces per token-governance.test.ts lines 558 to 580 and spec section 3; no legacy display token DM Sans on authed surfaces, use the display-app token per test TY3 line 645; no box-shadow with a literal color outside globals.css, use the shadow ladder, and never a built-in Tailwind shadow utility on authed surfaces per test EL1 lines 324 to 388; the action-bright token never backs text per test line 160; the grain is canvas-only and must be off on money cards per test line 450, in dark, and under reduced-motion; the em-dash and the verb generate are banned in agent-voice copy per in-app-voice.test.ts",
+          "The body grain register hook differs between rules: the FACE rule excludes the mercury register but the canvas-plus-grain rule does not, globals.css line 552 versus line 1419. A reskin that moves Mira onto the canonical register must ensure the Mira shell renders app-header and is not marked as the mercury register, or it silently keeps the cream but loses or wrongly keeps the Geist face. Confirm which shell Mira routes mount under",
+          "The home-serif and display-app tokens are aliases of the same Fraunces token at globals.css lines 288 to 289, and the home-sans token aliases the body-app token which is Geist. The catalog cites both names as they appear in the reference files; a reskin should standardize on the display-app and body-app names per the globals.css comments rather than the home-prefixed legacy aliases",
+          "The canonical card radius is not single-valued: Home card is 20px at home.module.css line 214 and Inbox decision is r-lg 20px, but Results campaignCard is 6px at results.module.css line 709 and the legacy editorial win and tile are 6px at globals.css lines 939 and 1168. A real internal divergence, generous 20px on Home and Inbox versus tight 6px on Results and legacy-editorial; a reskin target should pick the intended radius deliberately rather than assume one value"
+        ]
+      },
+      "verdicts": [],
+      "missedFindings": []
+    }
+  ]
+}
