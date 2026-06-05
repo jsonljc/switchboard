@@ -2408,6 +2408,15 @@ git commit -m "docs(plans): record slice-4b verification evidence"
 
 ---
 
+## Real-app verification evidence (recorded 2026-06-05)
+
+Environment note: the standard shared dev DB has `subscriptionStatus: "none"` and no `entitlementOverride` for `org_dev`, so the billing guard (402 "Active subscription required") blocks EVERY mutating API route in local dev, not just this slice's. Mutating shared-DB billing state was out of bounds, so verification ran on a scratch database (`switchboard_4b`: migrate deploy + seed + `entitlementOverride=true` there only), with this branch's API on :3000 and dashboard on :3012 (a parallel session held :3002; left untouched). The scratch DB was dropped after verification.
+
+- BEFORE (screenshot): section renders "Never confirmed. Riley treats operational context as unknown until you confirm it."; all three selects at "Not confirming"; both confirm checkboxes unchecked; submit disabled; no "Everything still accurate" button. `SELECT count(*)` = 0.
+- SAVE via the real UI (Staffing = Shortfall; Confirm current promotions; window 2026-06-01 to 2026-06-15 labelled "june glow"): success toast "Operational state confirmed"; freshness line "Last confirmed 5 Jun 2026, 8:31 am by principal_dev"; form prefilled from the latest confirmation; "Everything still accurate" appeared. Row 1: `staffing=shortfall`, `promoWindows=[{start: 2026-05-31T16:00:00.000Z, end: 2026-06-15T16:00:00.000Z, label: "june glow"}]` (exact half-open org-tz day boundaries: June 1 00:00 SGT / June 16 00:00 SGT), `confirmedBy=principal_dev` (the real auth principal), server-side `confirmedAt 00:31:08.718Z`.
+- APPEND PROOF: clicking "Everything still accurate" produced a SECOND row with byte-identical state and a fresh `confirmedAt 00:31:36.191Z`. Two saves = two rows; nothing updated in place.
+- Incidental notes: the API initially ran a stale pre-Task-1 dist (404 on the new route); rebuilt and restarted. A browser console warning "Select is changing from uncontrolled to controlled" appears on first dimension selection (Radix value undefined to value); cosmetic, matching the UNSET-sentinel design.
+
 ## Self-review (spec/handoff coverage)
 
 - Spec 2.1 net-new paragraph (operator-editable operational-state source): Task 5 editor writes through Task 1's route into the 4a store; no other writer.
