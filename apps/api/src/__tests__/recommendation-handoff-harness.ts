@@ -298,7 +298,10 @@ export interface FullLoopHarness {
 
 export function buildHarness(
   policies: Policy[],
-  opts: { lifecycleService?: ApprovalLifecycleService } = {},
+  opts: {
+    lifecycleService?: ApprovalLifecycleService;
+    approvalNotifier?: import("@switchboard/core/notifications").ApprovalNotifier;
+  } = {},
 ): FullLoopHarness {
   const intentRegistry = new IntentRegistry();
   intentRegistry.register(handoffRegistration());
@@ -360,6 +363,7 @@ export function buildHarness(
     deploymentResolver: deploymentResolver(),
     traceStore,
     lifecycleService: opts.lifecycleService,
+    approvalNotifier: opts.approvalNotifier,
   });
   ref.ingress = ingress;
 
