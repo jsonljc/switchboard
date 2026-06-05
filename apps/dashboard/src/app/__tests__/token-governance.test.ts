@@ -2,7 +2,13 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { contrastRatio } from "@/lib/tokens/contrast";
-import { css, collectGovernedFiles, rel, typeVoiceGoverned } from "./token-governance.lib";
+import {
+  css,
+  collectGovernedFiles,
+  rel,
+  typeVoiceGoverned,
+  tokenValue,
+} from "./token-governance.lib";
 
 /**
  * Token drift-guard (spec §3.4). Reads globals.css and asserts the governance
@@ -10,13 +16,6 @@ import { css, collectGovernedFiles, rel, typeVoiceGoverned } from "./token-gover
  * because the dashboard ESLint "lint" is stubbed and CI format:check is *.ts-only,
  * so CSS/token changes are otherwise not gated.
  */
-
-/** First (:root / light) definition of a CSS custom property in globals.css. */
-function tokenValue(name: string): string {
-  const m = css.match(new RegExp(`--${name}\\s*:\\s*([^;]+);`));
-  if (!m) throw new Error(`token --${name} is not defined in globals.css`);
-  return m[1].trim();
-}
 
 const RAW_HSL_TRIPLE = /^-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?%\s+-?\d+(?:\.\d+)?%$/;
 

@@ -68,6 +68,7 @@
     /* ─── Semantic ─── */
     --destructive: 0 38% 40%;
     --destructive-foreground: 0 0% 98%;
+    --risk-tint: var(--palette-risk-tint); /* destructive-confirm ground (consumed hsl(var())) */
     --positive: 152 28% 32%;
     --positive-foreground: 0 0% 98%;
     --positive-subtle: 152 22% 94%;
@@ -89,7 +90,6 @@
     --action-hover: var(--palette-action-hover);
     --action-subtle: var(--palette-action-subtle);
     --action-tint: var(--palette-action-tint);
-    --risk-tint: var(--palette-risk-tint); /* destructive-confirm ground (consumed hsl(var())) */
     /* Per-agent IDENTITY ONLY — never on action buttons */
     --agent-alex: var(--palette-coral);
     --agent-riley: var(--palette-teal);

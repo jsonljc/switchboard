@@ -40,6 +40,9 @@ export function MiraClipActions({
 
   const pendingApproval = approve.data?.pendingApproval === true;
 
+  // btn.color is intentionally a literal white: these buttons sit on the dark
+  // feed overlays (scrims/confirm boxes), not on app surfaces. Amber-ground
+  // buttons override with T.actionFg. A later PR tokenizes the night register.
   const btn = {
     padding: "8px 12px",
     borderRadius: 8,
@@ -181,7 +184,10 @@ export function MiraClipActions({
             Halted
           </button>
         ) : (
-          <button style={{ ...btn, background: T.amber }} onClick={() => setConfirm("continue")}>
+          <button
+            style={{ ...btn, background: T.amber, color: T.actionFg }}
+            onClick={() => setConfirm("continue")}
+          >
             Continue draft
           </button>
         ))}

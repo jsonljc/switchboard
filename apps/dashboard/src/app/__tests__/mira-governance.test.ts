@@ -1,11 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { collectGovernedFiles, rel, typeVoiceGoverned, css } from "./token-governance.lib";
-
-function tokenValue(name: string): string {
-  const m = css.match(new RegExp(`--${name}\\s*:\\s*([^;]+);`));
-  if (!m) throw new Error(`token --${name} is not defined in globals.css`);
-  return m[1].trim();
-}
+import { collectGovernedFiles, rel, typeVoiceGoverned, tokenValue } from "./token-governance.lib";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mira reskin A2: raw font-family string guard. next/font loads JetBrains Mono
