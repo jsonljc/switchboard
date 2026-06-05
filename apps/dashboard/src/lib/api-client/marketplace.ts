@@ -97,6 +97,35 @@ export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
     );
   }
 
+  async getLatestOperationalState(deploymentId: string) {
+    return this.request<{
+      confirmation: {
+        id: string;
+        organizationId: string;
+        state: Record<string, unknown>;
+        confirmedBy: string | null;
+        confirmedAt: string;
+        createdAt: string;
+      } | null;
+    }>(`/api/marketplace/deployments/${deploymentId}/operational-state`);
+  }
+
+  async recordOperationalState(deploymentId: string, state: Record<string, unknown>) {
+    return this.request<{
+      confirmation: {
+        id: string;
+        organizationId: string;
+        state: Record<string, unknown>;
+        confirmedBy: string | null;
+        confirmedAt: string;
+        createdAt: string;
+      };
+    }>(`/api/marketplace/deployments/${deploymentId}/operational-state`, {
+      method: "POST",
+      body: JSON.stringify(state),
+    });
+  }
+
   async listFacebookAdAccounts(deploymentId: string) {
     return this.request<{
       accounts: Array<{
