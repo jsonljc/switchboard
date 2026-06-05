@@ -1,6 +1,6 @@
 // packages/core/src/creative-pipeline/ugc/provider-router.ts
 import type { ProviderCapabilityProfile } from "@switchboard/schemas";
-import { KLING_COST_PER_5S } from "../stages/cost-estimator.js";
+import { KLING_COST_PER_5S, HEYGEN_COST_PER_CLIP } from "../stages/cost-estimator.js";
 import type { ProviderPerformanceHistory } from "./provider-performance.js";
 
 // ── Types ──
@@ -100,15 +100,15 @@ export function getDefaultProviderRegistry(): ProviderCapabilityProfile[] {
 }
 
 // ── Cost estimates ──
-// kling is ALIGNED to the cost-estimator constants (slice-3 spec 3.3b): the
-// production budget accumulator counts these per attempt, and the governance
-// spend estimate uses the estimator rates; the two must not disagree.
-// EXPORTED for the parity test. Non-kling entries stay placeholders until
-// their providers are real (heygen aligns in PR-4).
+// kling + heygen are ALIGNED to the cost-estimator constants (slice-3 specs
+// 3.3b/3.5): the production budget accumulator counts these per attempt, and
+// the governance spend estimate uses the estimator rates; the two must not
+// disagree. EXPORTED for the parity tests. Seedance/runway stay placeholders
+// until their providers are real.
 
 export const ESTIMATED_COST: Record<string, number> = {
   kling: KLING_COST_PER_5S,
-  heygen: 1.0,
+  heygen: HEYGEN_COST_PER_CLIP,
   seedance: 0.6,
   runway: 0.8,
 };

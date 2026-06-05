@@ -9,6 +9,12 @@
  */
 export const KLING_COST_PER_5S = 0.35;
 export const KLING_COST_PER_10S = 0.7;
+/**
+ * Approximate HeyGen cost per avatar clip (slice-3 spec 3.5): order $1/clip
+ * at current API credit pricing for short-form avatar video. The router's
+ * ranking table aligns to this constant (parity-tested).
+ */
+export const HEYGEN_COST_PER_CLIP = 1.0;
 const ELEVENLABS_COST_PER_1K_CHARS = 0.3;
 const WHISPER_COST_PER_MINUTE = 0.006;
 const AVG_CHARS_PER_SCRIPT = 500;
@@ -39,24 +45,34 @@ export interface UgcSpecForEstimate {
 }
 
 /**
- * UGC render cost: one clip per spec, duration-mapped Kling rates. This is
- * the governance spend signal for the approve-INTO-production continue and
- * the estimate readback; UGC is untiered. The description names the allowed
- * providers (kling-only in v1; PR-4 widens per spec).
+ * Per-provider per-clip rate. Kling's boundary matches its adapter's
+ * mapDuration (video-provider.ts): <=7s specs RENDER as 5s clips, so they
+ * must be BILLED as 5s clips, or the governance estimate over-states 2x for
+ * the 5-7s range scripting's midpoint durations commonly produce.
+ */
+function providerClipRate(provider: string, durationSec: number): number {
+  if (provider === "heygen") return HEYGEN_COST_PER_CLIP;
+  return durationSec > 7 ? KLING_COST_PER_10S : KLING_COST_PER_5S;
+}
+
+/**
+ * UGC render cost: one clip per spec, billed at the MAX rate across the
+ * spec's allowed providers (slice-3 spec 3.5: conservative parking; an
+ * avatar-capable spec MAY render on heygen, so governance parks on the
+ * dearest allowed rate and the operator never under-approves). This is the
+ * governance spend signal for the approve-INTO-production continue and the
+ * estimate readback; UGC is untiered.
  */
 export function estimateUgcCost(specs: UgcSpecForEstimate[]): TierEstimate {
   if (specs.length === 0) {
     return { cost: 0, description: "No clips to produce" };
   }
-  // Boundary matches the kling adapter's mapDuration (video-provider.ts):
-  // <=7s specs RENDER as 5s clips, so they must be BILLED as 5s clips, or the
-  // governance estimate over-states 2x for the 5-7s range scripting's
-  // midpoint durations commonly produce.
-  const cost = specs.reduce(
-    (sum, spec) =>
-      sum + (spec.renderTargets.durationSec > 7 ? KLING_COST_PER_10S : KLING_COST_PER_5S),
-    0,
-  );
+  const cost = specs.reduce((sum, spec) => {
+    const rates = spec.providersAllowed.map((p) =>
+      providerClipRate(p, spec.renderTargets.durationSec),
+    );
+    return sum + (rates.length > 0 ? Math.max(...rates) : KLING_COST_PER_5S);
+  }, 0);
   const providers = [...new Set(specs.flatMap((s) => s.providersAllowed))].sort().join(", ");
   return {
     cost: Math.round(cost * 100) / 100,

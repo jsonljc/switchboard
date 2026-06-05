@@ -63,6 +63,8 @@ interface UgcPipelineDeps {
   deploymentStore: DeploymentStore;
   llmConfig?: { apiKey: string };
   klingClient?: unknown;
+  /** Real HeyGen client (slice-3 spec 3.5); absent = adapter throws, kling fallback. */
+  heygenClient?: unknown;
   assetStore?: unknown;
   /** Durable storage for final assets (slice-3 spec 3.3f); injected from bootstrap. */
   assetStorage?: AssetStorageClient;
@@ -191,6 +193,10 @@ async function executePhase(
           providerClients: {
             klingClient: ctx.context
               .klingClient as ProductionInput["deps"]["providerClients"]["klingClient"],
+            // Live client objects ride DEPS, never step-memoized context
+            // (slice-3 spec 3.5; same rule as assetStorage).
+            heygenClient:
+              deps?.heygenClient as ProductionInput["deps"]["providerClients"]["heygenClient"],
           },
           assetStore: ctx.context.assetStore as ProductionInput["deps"]["assetStore"],
           apiKey: ctx.context.apiKey,
