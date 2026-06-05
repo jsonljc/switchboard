@@ -36,18 +36,20 @@ describe("useReviewDecision", () => {
   });
 
   it("returns the server payload on plain success", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ id: "job1", decision: "kept" }), { status: 200 }),
-        ),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ id: "job1", decision: "kept" }), { status: 200 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useReviewDecision(), { wrapper });
     result.current.mutate({ id: "job1", decision: "kept" });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toMatchObject({ id: "job1", decision: "kept" });
     expect(result.current.data?.silent).toBeUndefined();
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/dashboard/agents/mira/creatives/job1/decision",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

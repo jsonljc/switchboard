@@ -11,11 +11,14 @@ export function MiraClipActions({
   jobId,
   reviewAction,
   onResolve,
+  onDecided,
 }: {
   jobId: string;
   reviewAction: MiraReviewAction;
   /** Called after a Continue/Stop mutation succeeds → feed dismisses + advances. */
   onResolve: (jobId: string) => void;
+  /** Called after Keep/Pass commits; silent = the server said already-decided (409). */
+  onDecided: (jobId: string, decision: "kept" | "passed", silent: boolean) => void;
 }) {
   const approve = useApproveStage();
   const decide = useReviewDecision();
@@ -140,7 +143,10 @@ export function MiraClipActions({
 
   if (reviewAction.label === "review_draft") {
     const decideAndResolve = (decision: "kept" | "passed") =>
-      decide.mutate({ id: jobId, decision }, { onSuccess: () => onResolve(jobId) });
+      decide.mutate(
+        { id: jobId, decision },
+        { onSuccess: (data) => onDecided(jobId, decision, data.silent === true) },
+      );
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
         <button

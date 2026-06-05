@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, act, fireEvent } from "@testing-library/react";
+import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MiraCreativeJobSummary } from "@switchboard/core";
+import type React from "react";
 
 // ---------------------------------------------------------------------------
 // Controllable IntersectionObserver — override BEFORE any component imports so
@@ -32,6 +33,9 @@ global.IntersectionObserver = FakeIO;
 
 // ---------------------------------------------------------------------------
 
+const toastSpy = vi.fn();
+vi.mock("@/components/ui/use-toast", () => ({ useToast: () => ({ toast: toastSpy }) }));
+
 const feed = vi.fn();
 vi.mock("@/hooks/use-mira-feed", () => ({ useMiraFeed: () => feed() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -48,6 +52,12 @@ vi.mock("@/hooks/use-creative-pipeline", () => ({
 }));
 vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null, status: "loading" }) }));
 vi.mock("@/hooks/use-query-keys", () => ({ useScopedQueryKeys: () => null }));
+
+// Controllable decide mock — tests can replace the mutate fn per-case.
+let decideMutate = vi.fn();
+vi.mock("@/hooks/use-review-decision", () => ({
+  useReviewDecision: () => ({ mutate: decideMutate, isPending: false, isError: false }),
+}));
 
 import { MiraCreativeFeed } from "../mira-creative-feed";
 
@@ -78,7 +88,27 @@ function clip(id: string): MiraCreativeJobSummary {
   };
 }
 
+/** A draft_ready clip whose actions show Keep / Pass. */
+function draftClip(id: string): MiraCreativeJobSummary {
+  return {
+    id,
+    title: `Draft ${id}`,
+    stage: "production",
+    status: "draft_ready",
+    draft: { videoUrl: `https://x/${id}.mp4` },
+    reviewAction: { canContinue: false, canStop: false, label: "review_draft" },
+    source: { engine: "legacy_creative_job", mode: "polished" },
+    createdAt: "2026-05-27T00:00:00Z",
+    updatedAt: "2026-05-27T00:00:00Z",
+  };
+}
+
 describe("MiraCreativeFeed", () => {
+  beforeEach(() => {
+    toastSpy.mockClear();
+    decideMutate = vi.fn();
+  });
+
   it("renders a card per job", () => {
     feed.mockReturnValue({
       data: {
@@ -212,5 +242,105 @@ describe("MiraCreativeFeed", () => {
     expect(screen.getAllByTestId("mira-clip")).toHaveLength(1);
     expect(screen.queryByText("Clip a")).toBeNull();
     expect(screen.getByText("Clip b")).toBeInTheDocument();
+  });
+
+  it("keep raises an undo toast", async () => {
+    feed.mockReturnValue({
+      data: {
+        jobs: [draftClip("d1")],
+        counts: {},
+        feed: { reviewableCount: 1, renderingCount: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    // Simulate decide.mutate calling its onSuccess with a non-silent result.
+    decideMutate = vi.fn(
+      (
+        _args: unknown,
+        opts?: { onSuccess?: (data: { id: string; decision: string; silent?: boolean }) => void },
+      ) => opts?.onSuccess?.({ id: "d1", decision: "kept" }),
+    );
+
+    renderFeed();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^keep/i }));
+    });
+
+    await waitFor(() => expect(toastSpy).toHaveBeenCalled());
+    expect(toastSpy.mock.calls[0][0].title).toBe("Kept");
+    expect(toastSpy.mock.calls[0][0].action).toBeTruthy();
+  });
+
+  it("a silent (409) decision dismisses without a toast", async () => {
+    feed.mockReturnValue({
+      data: {
+        jobs: [draftClip("d2")],
+        counts: {},
+        feed: { reviewableCount: 1, renderingCount: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    // Simulate decide.mutate calling its onSuccess with silent: true (409 path).
+    decideMutate = vi.fn(
+      (
+        _args: unknown,
+        opts?: { onSuccess?: (data: { id: string; decision: string; silent?: boolean }) => void },
+      ) => opts?.onSuccess?.({ id: "d2", decision: "passed", silent: true }),
+    );
+
+    renderFeed();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^pass/i }));
+    });
+
+    // Clip dismissed (resolved set removes it)
+    await waitFor(() => expect(screen.queryByTestId("mira-clip")).not.toBeInTheDocument());
+    expect(toastSpy).not.toHaveBeenCalled();
+  });
+
+  it("undo restores the clip", async () => {
+    feed.mockReturnValue({
+      data: {
+        jobs: [draftClip("d3")],
+        counts: {},
+        feed: { reviewableCount: 1, renderingCount: 0 },
+      },
+      isLoading: false,
+      isError: false,
+    });
+    // First call (keep): fires onSuccess immediately. Second call (undo): also fires onSuccess.
+    decideMutate = vi
+      .fn()
+      .mockImplementationOnce(
+        (
+          _args: unknown,
+          opts?: { onSuccess?: (data: { id: string; decision: string; silent?: boolean }) => void },
+        ) => opts?.onSuccess?.({ id: "d3", decision: "kept" }),
+      )
+      .mockImplementationOnce(
+        (
+          _args: unknown,
+          opts?: { onSuccess?: (data: { id: string; decision: string; silent?: boolean }) => void },
+        ) => opts?.onSuccess?.({ id: "d3", decision: null }),
+      );
+
+    renderFeed();
+
+    // Click Keep — clip is hidden and toast fires
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^keep/i }));
+    });
+    await waitFor(() => expect(toastSpy).toHaveBeenCalled());
+
+    // Invoke the Undo action from the toast payload
+    const toastArg = toastSpy.mock.calls[0][0] as { action: React.ReactElement };
+    await act(async () => {
+      toastArg.action.props.onClick();
+    });
+
+    // Clip should reappear
+    await waitFor(() => expect(screen.getAllByTestId("mira-clip")).toHaveLength(1));
   });
 });
