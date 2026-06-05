@@ -2274,7 +2274,19 @@ git commit -m "docs(plans): record slice-4c verification evidence"
 - Placeholder scan: every code step shows complete code; the one execution-time adaptation (Task 7 seed shape) is bounded and named, with the assert surface fixed.
 - Type consistency: `OperationalStateProvider` (ad-optimizer) vs `OperationalStateReader` (core) are deliberately distinct names for distinct contracts (getLatest vs window read); `deriveBusinessContextFreshness` / `resolveBusinessContextFreshness` / `deriveBusinessContextStability` / `operationalStateConfirmations` / `getLatestOperationalState` used identically across tasks; `OPERATIONAL_STATE_VOUCH_DAYS`/`_MS` consistent.
 
-## Verification evidence (to be recorded at execution)
+## Verification evidence (recorded 2026-06-05 at execution)
 
-- (Task 7 three-verdict real-engine proof lines)
-- (Task 8 gate outputs + grep proofs)
+Task 7 real-engine proof (scratch DB `switchboard_4c`: migrate deploy clean, all migrations applied; script run from `apps/api/` for workspace resolution, with `PrismaClient` imported via the `@switchboard/db` re-export because the root manifest lacks db/core deps; DB dropped + script deleted after, tree clean):
+
+```
+[4c-proof] org-4c-stable: businessContextStable=stable trustDelta=up (wanted stable) OK [written=1]
+[4c-proof] org-4c-unstable: businessContextStable=unstable trustDelta=none (wanted unstable) OK [written=1]
+[4c-proof] org-4c-unknown: businessContextStable=unknown trustDelta=up (wanted unknown) OK [written=1]
+[4c-proof] freshness org-4c-stable: latest=found fresh=false OK
+[4c-proof] freshness org-4c-unstable: latest=found fresh=true OK
+[4c-proof] freshness org-4c-unknown: latest=none fresh=false OK
+```
+
+exit 0. Proven on the real engine: the 4a SQL window predicates and getLatest read, the stability derivation, the trustDelta demotion (none on the unstable window, up on stable/unknown), the DB CHECK acceptance of `stable`/`unstable`, and the full DI chain.
+
+(Task 8 gate outputs + grep proofs recorded below at the verification sweep.)
