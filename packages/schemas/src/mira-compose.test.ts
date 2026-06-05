@@ -94,4 +94,14 @@ describe("parseMiraComposeOutput", () => {
     const r = parseMiraComposeOutput(JSON.stringify(valid).slice(0, 40));
     expect(r.ok).toBe(false);
   });
+
+  it("returns ok:false on prose-prefixed JSON (bad week, never a bad draft)", () => {
+    const r = parseMiraComposeOutput("Here is the brief:\n" + JSON.stringify(valid));
+    expect(r.ok).toBe(false);
+  });
+
+  it("returns ok:false on JSON with trailing commentary", () => {
+    const r = parseMiraComposeOutput(JSON.stringify(valid) + "\nLet me know if this works.");
+    expect(r.ok).toBe(false);
+  });
 });

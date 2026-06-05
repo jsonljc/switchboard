@@ -60,7 +60,7 @@ interface MemoryRow {
 }
 
 function describeSegment(mode: string, segment: string): string {
-  if (mode === "polished") return HOOK_PHRASE[segment] ?? `${segment} hooks`;
+  if (mode === "polished") return HOOK_PHRASE[segment] ?? `${segment.replace(/_/g, " ")} hooks`;
   return `${segment.replace(/_/g, " ")} structure`;
 }
 
@@ -82,28 +82,33 @@ export function hasSurfacedCreativeMemorySignal(rows: MemoryRow[]): boolean {
 function renderTasteContext(rows: MemoryRow[]): { lines: string[]; keys: string[] } {
   const lines: string[] = [];
   const keys: string[] = [];
+  // revenue_proven rows render FIRST: listHighConfidence orders by raw
+  // confidence only, and the measured-evidence signal the skill is told to
+  // weight for money questions must never be the one the shared cap drops
+  // (review finding on spec 3.3).
   for (const row of rows) {
     if (lines.length >= MAX_TASTE_LINES) break;
-    if (!row.canonicalKey) continue;
-    if (row.category === "taste") {
-      const m = TASTE_KEY.exec(row.canonicalKey);
-      if (!m) continue;
-      const verb = m[1] === "kept" ? "keeps" : "passes on";
-      const noun = m[1] === "kept" ? "keeps" : "passes";
-      lines.push(
-        `In ${MODE_LABEL[m[2]!]} mode, the operator consistently ${verb} ` +
-          `${describeSegment(m[2]!, m[3]!)} (${row.sourceCount} ${noun}).`,
-      );
-      keys.push(row.canonicalKey);
-    } else if (row.category === "revenue_proven") {
-      const m = REVENUE_PROVEN_KEY.exec(row.canonicalKey);
-      if (!m) continue;
-      lines.push(
-        `Measured winner in ${MODE_LABEL[m[1]!]} mode: ` +
-          `${describeSegment(m[1]!, m[2]!)} (${row.sourceCount} sources).`,
-      );
-      keys.push(row.canonicalKey);
-    }
+    if (!row.canonicalKey || row.category !== "revenue_proven") continue;
+    const m = REVENUE_PROVEN_KEY.exec(row.canonicalKey);
+    if (!m) continue;
+    lines.push(
+      `Measured winner in ${MODE_LABEL[m[1]!]} mode: ` +
+        `${describeSegment(m[1]!, m[2]!)} (${row.sourceCount} sources).`,
+    );
+    keys.push(row.canonicalKey);
+  }
+  for (const row of rows) {
+    if (lines.length >= MAX_TASTE_LINES) break;
+    if (!row.canonicalKey || row.category !== "taste") continue;
+    const m = TASTE_KEY.exec(row.canonicalKey);
+    if (!m) continue;
+    const verb = m[1] === "kept" ? "keeps" : "passes on";
+    const noun = m[1] === "kept" ? "keeps" : "passes";
+    lines.push(
+      `In ${MODE_LABEL[m[2]!]} mode, the operator consistently ${verb} ` +
+        `${describeSegment(m[2]!, m[3]!)} (${row.sourceCount} ${noun}).`,
+    );
+    keys.push(row.canonicalKey);
   }
   return { lines, keys };
 }
@@ -137,10 +142,21 @@ function renderPerformanceContext(model: MiraCreativeReadModel): string {
       const roas = p.trueRoas === null ? "n/a" : String(p.trueRoas);
       const decision = j.reviewDecision ? `, operator ${j.reviewDecision}` : "";
       lines.push(
-        `"${j.title}" (${j.source.mode}): true ROAS ${roas}, $${p.spend} spend, ` +
+        `"${j.title}" (${j.source.mode}): true ROAS ${roas}, $${p.spend.toFixed(2)} spend, ` +
           `${dollars(p.bookedValueCents)} booked from ${p.bookedCount} bookings${decision}.`,
       );
     }
+  }
+
+  // Up to two recent negative examples (spec 3.3): what the operator passed
+  // on or stopped is judgment signal, not just the aggregate count.
+  const recentNegatives = model.jobs
+    .filter((j) => j.reviewDecision === "passed" || j.status === "stopped")
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+    .slice(0, 2);
+  for (const j of recentNegatives) {
+    const label = j.status === "stopped" ? "Stopped" : "Recently passed";
+    lines.push(`${label}: "${j.title}" (${j.source.mode}).`);
   }
 
   const kept = model.jobs.filter((j) => j.reviewDecision === "kept").length;
@@ -220,15 +236,26 @@ export const miraBuilder = async (
     CURRENT_DATETIME = formatDatetime(now, FALLBACK_TZ);
   }
 
-  const [memoryRows, readModel] = await Promise.all([
-    deploymentMemoryReader.listHighConfidence(
-      config.orgId,
-      config.deploymentId,
-      SURFACING_THRESHOLD.minConfidence,
-      SURFACING_THRESHOLD.minSourceCount,
-    ),
-    miraReadModelReader.read(config.orgId, { now, timezone }),
-  ]);
+  let memoryRows: MemoryRow[];
+  let readModel: MiraCreativeReadModel;
+  try {
+    [memoryRows, readModel] = await Promise.all([
+      deploymentMemoryReader.listHighConfidence(
+        config.orgId,
+        config.deploymentId,
+        SURFACING_THRESHOLD.minConfidence,
+        SURFACING_THRESHOLD.minSourceCount,
+      ),
+      miraReadModelReader.read(config.orgId, { now, timezone }),
+    ]);
+  } catch (err) {
+    // Failure honesty (spec 3.3): a context read failing fails the compose
+    // loudly; no silent empty context pretending signal was consulted.
+    throw new ParameterResolutionError(
+      "mira-memory-read-failed",
+      `Compose context read failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   const taste = renderTasteContext(memoryRows);
   const counts = readModel.counts;

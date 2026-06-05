@@ -19,15 +19,17 @@ const emptyModel: MiraCreativeReadModel = {
 };
 
 function makeFacts(overrides: Partial<Record<string, unknown>> = {}) {
+  // Shapes mirror BusinessFactsSchema (object-valued openingHours/bookingPolicies,
+  // enum escalation channel) so renderBusinessFacts coverage is realistic.
   return {
     businessName: "Glow Clinic",
     timezone: "Asia/Singapore",
-    locations: [],
-    services: [],
-    openingHours: [],
-    bookingPolicies: [],
+    locations: [{ name: "Orchard", address: "1 Orchard Rd" }],
+    services: [{ name: "Botox", description: "Anti-wrinkle treatment" }],
+    openingHours: {},
+    bookingPolicies: {},
     additionalFaqs: [],
-    escalationContact: { name: "Ops", channel: "phone", address: "+65 0000 0000" },
+    escalationContact: { name: "Ops", channel: "whatsapp", address: "+65 0000 0000" },
     ...overrides,
   };
 }
@@ -232,6 +234,91 @@ describe("miraBuilder", () => {
     expect(trigger).toContain("increase_budget");
     expect(trigger).toContain("camp_9");
     expect(trigger).toContain("100 clicks");
+  });
+
+  it("renders revenue-proven rows FIRST so the cap never drops measured winners", async () => {
+    // Worst case: 12+ taste rows outrank the revenue row on raw confidence
+    // (listHighConfidence orders by confidence only), revenue row sorted LAST.
+    const rows = [
+      ...Array.from({ length: 14 }, (_, i) => ({
+        id: `t${i}`,
+        category: "taste",
+        canonicalKey: `taste:kept_polished_segment_${i}`,
+        sourceCount: 3,
+        confidence: 0.9,
+      })),
+      {
+        id: "r1",
+        category: "revenue_proven",
+        canonicalKey: "revenue_proven:polished_question",
+        sourceCount: 4,
+        confidence: 0.67,
+      },
+    ];
+    const stores = makeStores({
+      deploymentMemoryReader: { listHighConfidence: vi.fn().mockResolvedValue(rows) },
+    });
+    const result = await miraBuilder(weeklyConfig, stores);
+    expect(result.parameters["TASTE_CONTEXT"] as string).toContain("Measured winner");
+    expect(result.injectedPatternIds[0]).toBe("revenue_proven:polished_question");
+    expect(result.injectedPatternIds).toHaveLength(12);
+  });
+
+  it("wraps a reader throw in ParameterResolutionError (failure honesty)", async () => {
+    const stores = makeStores({
+      miraReadModelReader: { read: vi.fn().mockRejectedValue(new Error("db down")) },
+    });
+    await expect(miraBuilder(weeklyConfig, stores)).rejects.toMatchObject({
+      name: "ParameterResolutionError",
+      code: "mira-memory-read-failed",
+    });
+  });
+
+  it("renders recent negative examples (passed and stopped jobs)", async () => {
+    const model = {
+      jobs: [
+        {
+          id: "j1",
+          title: "Glossy promo",
+          stage: "complete",
+          status: "draft_ready",
+          reviewAction: { canContinue: false, canStop: false, label: "" },
+          source: { engine: "legacy_creative_job", mode: "polished" },
+          createdAt: "2026-06-01T00:00:00Z",
+          updatedAt: "2026-06-03T00:00:00Z",
+          reviewDecision: "passed",
+        },
+        {
+          id: "j2",
+          title: "Confession clip",
+          stage: "complete",
+          status: "stopped",
+          reviewAction: { canContinue: false, canStop: false, label: "" },
+          source: { engine: "legacy_creative_job", mode: "ugc" },
+          createdAt: "2026-06-01T00:00:00Z",
+          updatedAt: "2026-06-04T00:00:00Z",
+          reviewDecision: null,
+        },
+      ],
+      counts: {
+        total: 2,
+        shippedThisWeek: 0,
+        shippedPrevWeek: 0,
+        inFlight: 0,
+        awaitingReview: 0,
+        stopped: 1,
+      },
+    } as unknown as MiraCreativeReadModel;
+    const stores = makeStores({ miraReadModelReader: { read: vi.fn().mockResolvedValue(model) } });
+    const result = await miraBuilder(weeklyConfig, stores);
+    const perf = result.parameters["PERFORMANCE_CONTEXT"] as string;
+    expect(perf).toContain('Stopped: "Confession clip" (ugc).');
+    expect(perf).toContain('Recently passed: "Glossy promo" (polished).');
+  });
+
+  it("renders business facts content into BUSINESS_FACTS", async () => {
+    const result = await miraBuilder(weeklyConfig, makeStores());
+    expect(result.parameters["BUSINESS_FACTS"] as string).toContain("Glow Clinic");
   });
 
   it("caps taste lines at 12", async () => {

@@ -77,6 +77,11 @@ export class SkillMode implements ExecutionMode {
       // inject_as name a builder also sets.
       const mergedParameters = { ...parameters, ...contextVariables };
 
+      // NOTE: this lookup uses the resolved `slug` (deployment.skillSlug with a
+      // legacy fallback) while the builder lookup below uses deployment.skillSlug
+      // ONLY. The divergence is intentional: production always resolves a
+      // deployment, and the legacy intent-prefix slug ("creative.brief") never
+      // matches an executorBySlug key, so it falls back to the default executor.
       const executor = this.config.executorBySlug?.get(slug) ?? this.config.executor;
       const result = await executor.execute({
         skill,

@@ -50,7 +50,7 @@ parameters:
 
   - name: CURRENT_DATETIME
     type: string
-    required: false
+    required: true
     description: >
       Current date and time in the business timezone. Use this as the
       reference for "today" and all recency judgments. Never guess the date.
