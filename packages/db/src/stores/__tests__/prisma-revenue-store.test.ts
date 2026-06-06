@@ -104,6 +104,13 @@ describe("PrismaRevenueStore", () => {
         txClient as never,
       );
       expect(txClient.lifecycleRevenueEvent.findFirst).toHaveBeenCalledTimes(1);
+      // Axis MUST match the DB partial-unique: (organizationId, externalReference) — not opportunityId
+      expect(txClient.lifecycleRevenueEvent.findFirst).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          externalReference: "pi_existing",
+        },
+      });
       expect(txClient.lifecycleRevenueEvent.create).not.toHaveBeenCalled();
       expect(prisma.lifecycleRevenueEvent.findFirst).not.toHaveBeenCalled();
       expect(result.externalReference).toBe("pi_existing"); // returned by the tx mock findFirst

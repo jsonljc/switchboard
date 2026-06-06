@@ -7,6 +7,7 @@ function makeMockPrisma() {
   return {
     receipt: {
       create: vi.fn().mockResolvedValue({}),
+      findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
     },
   };
@@ -90,5 +91,46 @@ describe("PrismaReceiptStore", () => {
       orderBy: { createdAt: "desc" },
     });
     expect(result[0]!.id).toBe("rcpt-1");
+  });
+
+  describe("mint — idempotency guard on externalRef", () => {
+    it("returns the existing row and skips create when findFirst hits on (org, kind, externalRef)", async () => {
+      const existingRow = makeRow({ externalRef: "ch_stripe_123", kind: "payment" });
+      const mintWithRef = {
+        ...mintInput,
+        kind: "payment" as const,
+        externalRef: "ch_stripe_123",
+      };
+
+      // First call: no existing row — creates
+      prisma.receipt.findFirst.mockResolvedValueOnce(null);
+      prisma.receipt.create.mockResolvedValueOnce(existingRow);
+      await store.mint(mintWithRef);
+
+      // Second call: findFirst returns the existing row — create must NOT fire
+      prisma.receipt.findFirst.mockResolvedValueOnce(existingRow);
+      const result = await store.mint(mintWithRef);
+
+      expect(prisma.receipt.create).toHaveBeenCalledTimes(1);
+      expect(prisma.receipt.findFirst).toHaveBeenCalledTimes(2);
+      expect(prisma.receipt.findFirst).toHaveBeenLastCalledWith({
+        where: {
+          organizationId: "org-1",
+          kind: "payment",
+          externalRef: "ch_stripe_123",
+        },
+      });
+      expect(result.externalRef).toBe("ch_stripe_123");
+      expect(result.id).toBe("rcpt-1");
+    });
+
+    it("does NOT call findFirst for calendar receipts with null externalRef (skips guard)", async () => {
+      // mintInput has no externalRef (defaults to null / undefined)
+      prisma.receipt.create.mockResolvedValueOnce(makeRow());
+      await store.mint(mintInput);
+
+      expect(prisma.receipt.findFirst).not.toHaveBeenCalled();
+      expect(prisma.receipt.create).toHaveBeenCalledTimes(1);
+    });
   });
 });

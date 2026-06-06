@@ -23,8 +23,13 @@ describe.skipIf(!process.env["DATABASE_URL"])("payment.record_verified replay (r
     const receipts = new PrismaReceiptStore(prisma);
     const outbox = new PrismaOutboxStore(prisma);
 
-    // NOTE: seed Organization/Contact/Opportunity/Booking rows the FKs need here,
-    // reusing the existing api integration-test seed helpers, then set these ids.
+    // FK rows (Organization/Contact/Opportunity/Booking) must be seeded before this
+    // test can assert revCount/receiptCount. No shared api integration-test seed helper
+    // exists yet (seeding is deferred to the pilot runbook). The CI-runnable proof of
+    // the idempotency guard lives in:
+    //   packages/db/src/stores/__tests__/prisma-receipt-store.test.ts  (mint dedup)
+    //   packages/db/src/stores/__tests__/prisma-revenue-store.test.ts  (record dedup)
+    // This test is kept as the Postgres-gated gate for when seeding is added.
     const orgId = "itest-org";
     const externalReference = "pi_replay_1";
 

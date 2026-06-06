@@ -60,11 +60,13 @@ export class PrismaRevenueStore implements RevenueStore {
 
   async record(input: RecordRevenueInput, tx?: PrismaDbClient): Promise<LifecycleRevenueEvent> {
     const client = tx ?? this.prisma;
-    // Idempotency: if externalReference is provided, return existing record instead of duplicating
+    // Idempotency: axis MUST match the DB partial-unique (organizationId, externalReference).
+    // externalReference is the globally-unique PSP charge id, so org-scoping is correct and
+    // broader than the old opp-scoping — it catches replays even when opportunityId drifts.
     if (input.externalReference) {
       const existing = await client.lifecycleRevenueEvent.findFirst({
         where: {
-          opportunityId: input.opportunityId,
+          organizationId: input.organizationId,
           externalReference: input.externalReference,
         },
       });

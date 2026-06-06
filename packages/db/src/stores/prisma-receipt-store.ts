@@ -12,6 +12,23 @@ export class PrismaReceiptStore implements ReceiptStore {
 
   async mint(input: MintReceiptInput, tx?: PrismaDbClient): Promise<Receipt> {
     const client = tx ?? this.prisma;
+    // Idempotency: an externally-referenced receipt (PSP chargeId / external event id) dedupes on
+    // the (organizationId, kind, externalRef) partial-unique. A replayed charge must be a no-op,
+    // not a P2002 tx-abort. Calendar receipts have a NULL externalRef (dedup is a 1B concern), so
+    // they skip this guard. We findFirst-before-create rather than catch P2002, because mint runs
+    // inside the handler's $transaction and Postgres aborts the tx on first error; a rare concurrent
+    // replay loser aborts and the PSP retry then no-ops here.
+    if (input.externalRef) {
+      const existing = await client.receipt.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          kind: input.kind,
+          externalRef: input.externalRef,
+        },
+      });
+      if (existing) return mapRowToReceipt(existing);
+    }
+
     const created = await client.receipt.create({
       data: {
         id: randomUUID(),
