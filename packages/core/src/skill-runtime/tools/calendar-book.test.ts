@@ -434,6 +434,37 @@ describe("createCalendarBookToolFactory", () => {
     );
   });
 
+  it("booking.create passes ctx.workUnitId as workTraceId on the booking row", async () => {
+    const toolWithWu = factory({ ...TRUSTED_CTX, contactId: "ct_1", workUnitId: "wu_book_1" });
+    bookingStore.create.mockResolvedValue({ id: "bk_1" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+    calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+    await toolWithWu.operations["booking.create"]!.execute({
+      service: "botox",
+      slotStart: "2026-06-01T10:00:00Z",
+      slotEnd: "2026-06-01T10:30:00Z",
+      calendarId: "primary",
+    });
+    expect(bookingStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({ workTraceId: "wu_book_1" }),
+    );
+  });
+
+  it("booking.create passes workTraceId null when ctx.workUnitId is absent", async () => {
+    bookingStore.create.mockResolvedValue({ id: "bk_1" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+    calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+    await tool.operations["booking.create"]!.execute({
+      service: "botox",
+      slotStart: "2026-06-01T10:00:00Z",
+      slotEnd: "2026-06-01T10:30:00Z",
+      calendarId: "primary",
+    });
+    expect(bookingStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({ workTraceId: null }),
+    );
+  });
+
   it("booking.create fails closed when ctx.contactId is absent", async () => {
     tool = factory({ ...TRUSTED_CTX, contactId: undefined });
     const result = await tool.operations["booking.create"]!.execute({

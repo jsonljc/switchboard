@@ -265,6 +265,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               endsAt: new Date(input.slotEnd),
               attendeeName,
               attendeeEmail,
+              workTraceId: ctx.workUnitId ?? null,
             });
           } catch (err) {
             // Concurrent booking won the overlap race (store guard). Recoverable:
