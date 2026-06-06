@@ -12,6 +12,8 @@ function makeMockPrisma() {
       aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 }, _count: { id: 0 } }),
       groupBy: vi.fn().mockResolvedValue([]),
     },
+    conversionRecord: { findMany: vi.fn().mockResolvedValue([]) },
+    receipt: { findMany: vi.fn().mockResolvedValue([]) },
   };
 }
 
@@ -359,6 +361,165 @@ describe("PrismaRevenueStore", () => {
         totalAmount: 0,
         count: 0,
       });
+    });
+  });
+
+  describe("paidVisitsByCampaign", () => {
+    const FROM = new Date("2026-06-01T00:00:00Z");
+    const TO = new Date("2026-06-30T23:59:59Z");
+
+    function paidEvent(overrides: Record<string, unknown> = {}) {
+      return makeRevenueEvent({
+        type: "deposit",
+        status: "confirmed",
+        verified: true,
+        amount: 50000, // cents
+        bookingId: "bk-1",
+        origin: "live",
+        ...overrides,
+      });
+    }
+
+    it("returns one row per verified paid visit, scoped to organizationId + verified:true", async () => {
+      prisma.lifecycleRevenueEvent.findMany.mockResolvedValue([
+        paidEvent({ id: "r1", bookingId: "bk-1" }),
+        paidEvent({ id: "r2", bookingId: "bk-2", amount: 12000 }),
+      ]);
+      prisma.conversionRecord.findMany.mockResolvedValue([
+        { bookingId: "bk-1", sourceCampaignId: "camp-1" },
+        { bookingId: "bk-2", sourceCampaignId: "camp-2" },
+      ]);
+      prisma.receipt.findMany.mockResolvedValue([
+        { bookingId: "bk-1", provider: "stripe", tier: "T1_FETCH_BACK" },
+        { bookingId: "bk-2", provider: "stripe", tier: "T1_FETCH_BACK" },
+      ]);
+
+      const rows = await store.paidVisitsByCampaign({
+        orgId: "org-1",
+        from: FROM,
+        to: TO,
+        isProduction: true,
+      });
+
+      expect(rows).toHaveLength(2);
+      const where = prisma.lifecycleRevenueEvent.findMany.mock.calls[0]![0].where;
+      expect(where.organizationId).toBe("org-1");
+      expect(where.verified).toBe(true);
+    });
+
+    it("returns CENTS (no division): a 50000-cent event yields amountCents 50000", async () => {
+      prisma.lifecycleRevenueEvent.findMany.mockResolvedValue([
+        paidEvent({ id: "r1", amount: 50000 }),
+      ]);
+      prisma.conversionRecord.findMany.mockResolvedValue([
+        { bookingId: "bk-1", sourceCampaignId: "camp-1" },
+      ]);
+      prisma.receipt.findMany.mockResolvedValue([
+        { bookingId: "bk-1", provider: "stripe", tier: "T1_FETCH_BACK" },
+      ]);
+
+      const rows = await store.paidVisitsByCampaign({
+        orgId: "org-1",
+        from: FROM,
+        to: TO,
+        isProduction: true,
+      });
+      expect(rows[0]!.amountCents).toBe(50000);
+    });
+
+    it("in production, EXCLUDES a Noop payment and a non-live row; keeps the real T1 live row", async () => {
+      prisma.lifecycleRevenueEvent.findMany.mockResolvedValue([
+        paidEvent({ id: "good", bookingId: "bk-good", origin: "live" }),
+        paidEvent({ id: "noop", bookingId: "bk-noop", origin: "live" }),
+        paidEvent({ id: "seed", bookingId: "bk-seed", origin: "seed" }),
+      ]);
+      prisma.conversionRecord.findMany.mockResolvedValue([
+        { bookingId: "bk-good", sourceCampaignId: "camp-1" },
+        { bookingId: "bk-noop", sourceCampaignId: "camp-1" },
+        { bookingId: "bk-seed", sourceCampaignId: "camp-1" },
+      ]);
+      prisma.receipt.findMany.mockResolvedValue([
+        { bookingId: "bk-good", provider: "stripe", tier: "T1_FETCH_BACK" },
+        { bookingId: "bk-noop", provider: "noop", tier: "T3_ADMIN_AUDIT" },
+        { bookingId: "bk-seed", provider: "stripe", tier: "T1_FETCH_BACK" },
+      ]);
+
+      const rows = await store.paidVisitsByCampaign({
+        orgId: "org-1",
+        from: FROM,
+        to: TO,
+        isProduction: true,
+      });
+      // origin filter is applied IN the prisma WHERE in prod:
+      const where = prisma.lifecycleRevenueEvent.findMany.mock.calls[0]![0].where;
+      expect(where.origin).toBe("live");
+      // and the noop-provider row is dropped post-join:
+      expect(rows.map((r) => r.bookingId)).toEqual(["bk-good"]);
+    });
+
+    it("outside production, keeps verified rows regardless of provider/origin (local exercise)", async () => {
+      prisma.lifecycleRevenueEvent.findMany.mockResolvedValue([
+        paidEvent({ id: "noop", bookingId: "bk-noop", origin: "demo" }),
+      ]);
+      prisma.conversionRecord.findMany.mockResolvedValue([
+        { bookingId: "bk-noop", sourceCampaignId: "camp-1" },
+      ]);
+      prisma.receipt.findMany.mockResolvedValue([
+        { bookingId: "bk-noop", provider: "noop", tier: "T3_ADMIN_AUDIT" },
+      ]);
+
+      const rows = await store.paidVisitsByCampaign({
+        orgId: "org-1",
+        from: FROM,
+        to: TO,
+        isProduction: false,
+      });
+      const where = prisma.lifecycleRevenueEvent.findMany.mock.calls[0]![0].where;
+      expect(where.origin).toBeUndefined(); // no origin filter outside prod
+      expect(rows).toHaveLength(1);
+    });
+
+    it("derives attributionBasis: ctwa_captured with a campaign, campaign_missing without", async () => {
+      prisma.lifecycleRevenueEvent.findMany.mockResolvedValue([
+        paidEvent({ id: "r1", bookingId: "bk-1" }),
+        paidEvent({ id: "r2", bookingId: "bk-2" }),
+      ]);
+      prisma.conversionRecord.findMany.mockResolvedValue([
+        { bookingId: "bk-1", sourceCampaignId: "camp-1" },
+        { bookingId: "bk-2", sourceCampaignId: null },
+      ]);
+      prisma.receipt.findMany.mockResolvedValue([
+        { bookingId: "bk-1", provider: "stripe", tier: "T1_FETCH_BACK" },
+        { bookingId: "bk-2", provider: "stripe", tier: "T1_FETCH_BACK" },
+      ]);
+
+      const rows = await store.paidVisitsByCampaign({
+        orgId: "org-1",
+        from: FROM,
+        to: TO,
+        isProduction: true,
+      });
+      const byBooking = Object.fromEntries(rows.map((r) => [r.bookingId, r]));
+      expect(byBooking["bk-1"]!.attributionBasis).toBe("ctwa_captured");
+      expect(byBooking["bk-1"]!.sourceCampaignId).toBe("camp-1");
+      expect(byBooking["bk-2"]!.attributionBasis).toBe("campaign_missing");
+      expect(byBooking["bk-2"]!.sourceCampaignId).toBeNull();
+    });
+
+    it("scopes the ConversionRecord join by organizationId too", async () => {
+      prisma.lifecycleRevenueEvent.findMany.mockResolvedValue([
+        paidEvent({ id: "r1", bookingId: "bk-1" }),
+      ]);
+      prisma.conversionRecord.findMany.mockResolvedValue([
+        { bookingId: "bk-1", sourceCampaignId: "camp-1" },
+      ]);
+      prisma.receipt.findMany.mockResolvedValue([
+        { bookingId: "bk-1", provider: "stripe", tier: "T1_FETCH_BACK" },
+      ]);
+
+      await store.paidVisitsByCampaign({ orgId: "org-1", from: FROM, to: TO, isProduction: true });
+      expect(prisma.conversionRecord.findMany.mock.calls[0]![0].where.organizationId).toBe("org-1");
+      expect(prisma.receipt.findMany.mock.calls[0]![0].where.organizationId).toBe("org-1");
     });
   });
 
