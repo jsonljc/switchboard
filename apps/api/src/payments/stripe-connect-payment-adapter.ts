@@ -176,3 +176,19 @@ function isStripeResourceMissing(err: unknown): boolean {
     (err as { code?: unknown }).code === "resource_missing"
   );
 }
+
+/**
+ * Verify a Connect webhook payload's signature using the PER-ORG Connect
+ * webhook secret (separate from the billing STRIPE_WEBHOOK_SECRET). This is
+ * the seam the payments-webhook route's `verifyPaymentWebhookSignature` calls;
+ * it is intentionally a standalone function, NOT a PaymentPort method. Stripe's
+ * StripeSignatureVerificationError propagates on a tampered body/signature.
+ */
+export function verifyConnectWebhookSignature(
+  client: StripeConnectClient,
+  rawBody: string | Buffer,
+  signature: string,
+  connectWebhookSecret: string,
+): Stripe.Event {
+  return client.webhooks.constructEvent(rawBody, signature, connectWebhookSecret);
+}

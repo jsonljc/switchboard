@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   StripeConnectPaymentAdapter,
+  verifyConnectWebhookSignature,
   type StripeConnectClient,
 } from "./stripe-connect-payment-adapter.js";
 
@@ -203,5 +204,51 @@ describe("StripeConnectPaymentAdapter.createDepositLink idempotency", () => {
     expect(firstKey).toBe("deposit_bk_42");
     expect(secondKey).toBe("deposit_bk_42");
     expect(firstKey).toBe(secondKey);
+  });
+});
+
+describe("verifyConnectWebhookSignature", () => {
+  it("returns the constructed event using the per-org Connect secret", () => {
+    const fakeEvent = { id: "evt_1", type: "payment_intent.succeeded" };
+    const constructEvent = vi.fn(() => fakeEvent);
+    const client = {
+      checkout: { sessions: { create: vi.fn() } },
+      paymentIntents: { retrieve: vi.fn() },
+      webhooks: { constructEvent },
+    } as unknown as StripeConnectClient;
+
+    const event = verifyConnectWebhookSignature(
+      client,
+      '{"id":"evt_1"}',
+      "t=1,v1=goodsig",
+      "whsec_connect_secret",
+    );
+
+    expect(event).toBe(fakeEvent);
+    expect(constructEvent).toHaveBeenCalledWith(
+      '{"id":"evt_1"}',
+      "t=1,v1=goodsig",
+      "whsec_connect_secret",
+    );
+  });
+
+  it("rethrows when the signature is tampered (constructEvent throws)", () => {
+    const constructEvent = vi.fn(() => {
+      throw new Error("No signatures found matching the expected signature for payload");
+    });
+    const client = {
+      checkout: { sessions: { create: vi.fn() } },
+      paymentIntents: { retrieve: vi.fn() },
+      webhooks: { constructEvent },
+    } as unknown as StripeConnectClient;
+
+    expect(() =>
+      verifyConnectWebhookSignature(
+        client,
+        '{"id":"evt_1"}',
+        "t=1,v1=BADSIG",
+        "whsec_connect_secret",
+      ),
+    ).toThrow(/No signatures found/);
   });
 });
