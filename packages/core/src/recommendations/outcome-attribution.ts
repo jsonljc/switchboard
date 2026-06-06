@@ -9,6 +9,7 @@ import type {
   CausalStrength,
   MetaInsightsProvider,
   OperationalStateReader,
+  OrgBookedStatsReader,
   OrgBookedWindowStats,
   RecommendationOutcomeStore,
   RileyOutcomeRow,
@@ -206,6 +207,8 @@ export interface RileyOutcomeRunSummary {
   skippedExisting: number;
   outcomesWritten: number;
   renderable: number;
+  /** Slice-4d: rows whose causalStrength earned "corroborated" this run. */
+  corroborated: number;
   hidden: number;
   hiddenByFlag: {
     meta_data_missing: number;
@@ -224,6 +227,16 @@ export interface RunRileyOutcomeAttributionInput {
    * every row records businessContextStable "unknown" (honest absence).
    */
   operationalStateReader?: OperationalStateReader;
+  /**
+   * Optional (slice 4d). Org-level windowed booked stats, the CRM-side
+   * second estimate for the corroboration predicate. Absent ⇒ the
+   * corroborated arm is unjudgeable and every row derives exactly as
+   * slice 4c. Read failures PROPAGATE (Inngest retries): outcome rows are
+   * insert-once, and freezing "directional" on a transient blip would
+   * permanently under-record an earnable corroboration (the 4c
+   * operationalStateReader asymmetry, same loop, same reasoning).
+   */
+  orgBookedStatsReader?: OrgBookedStatsReader;
   orgId: string;
   now: Date;
 }
@@ -236,6 +249,7 @@ export async function runRileyOutcomeAttribution(
     insightsProvider,
     outcomeStore,
     operationalStateReader,
+    orgBookedStatsReader,
     orgId,
     now,
   } = input;
@@ -245,6 +259,7 @@ export async function runRileyOutcomeAttribution(
     skippedExisting: 0,
     outcomesWritten: 0,
     renderable: 0,
+    corroborated: 0,
     hidden: 0,
     hiddenByFlag: {
       meta_data_missing: 0,
@@ -293,6 +308,28 @@ export async function runRileyOutcomeAttribution(
       ? await operationalStateReader.getConfirmationsOverlappingWindow(orgId, preStart, postEnd)
       : undefined;
 
+    // Slice 4d: org-level booked stats for the two sub-windows, the exact
+    // instants of the Meta window reads below. Pause-only (the refresh
+    // corroboration arm is a recorded deferral), so a kind that cannot use
+    // the result never pays the DB cost or carries its failure risk. Cheap
+    // indexed DB reads placed before the quota-bearing Meta calls; failures
+    // propagate like every other provider in this loop.
+    const orgBookedStats =
+      orgBookedStatsReader && candidate.actionKind === "pause"
+        ? {
+            preWindow: await orgBookedStatsReader.getBookedStatsForOrgWindow({
+              organizationId: orgId,
+              startInclusive: preStart,
+              endExclusive: anchorAt,
+            }),
+            postWindow: await orgBookedStatsReader.getBookedStatsForOrgWindow({
+              organizationId: orgId,
+              startInclusive: anchorAt,
+              endExclusive: postEnd,
+            }),
+          }
+        : undefined;
+
     // Meta windows — let provider errors propagate to trigger Inngest retry
     const [preWindow, postWindow] = await Promise.all([
       insightsProvider.getWindowMetrics({
@@ -313,6 +350,7 @@ export async function runRileyOutcomeAttribution(
       postWindow,
       overlaps,
       ...(operationalStateConfirmations !== undefined ? { operationalStateConfirmations } : {}),
+      ...(orgBookedStats !== undefined ? { orgBookedStats } : {}),
     });
 
     try {
@@ -330,6 +368,7 @@ export async function runRileyOutcomeAttribution(
       throw err;
     }
     summary.outcomesWritten++;
+    if (row.causalStrength === "corroborated") summary.corroborated++;
     if (row.cockpitRenderable) {
       summary.renderable++;
     } else {

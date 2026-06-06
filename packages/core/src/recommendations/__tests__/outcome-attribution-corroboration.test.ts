@@ -10,9 +10,17 @@
 // Predicate-level boundary pins (floors, band, tolerance, reasons) live in
 // outcome-corroboration.test.ts.
 // ---------------------------------------------------------------------------
-import { describe, it, expect } from "vitest";
-import { attributeOneRecommendation } from "../outcome-attribution.js";
-import type { AttributableRecommendation, WindowMetrics } from "../outcome-attribution-types.js";
+import { describe, it, expect, vi } from "vitest";
+import { attributeOneRecommendation, runRileyOutcomeAttribution } from "../outcome-attribution.js";
+import type {
+  AttributableRecommendation,
+  AttributableRecommendationStore,
+  MetaInsightsProvider,
+  OrgBookedWindowStats,
+  RecommendationOutcomeStore,
+  RileyOutcomeRow,
+  WindowMetrics,
+} from "../outcome-attribution-types.js";
 import type { OperationalState, OperationalStateConfirmation } from "@switchboard/schemas";
 
 const REC: AttributableRecommendation = {
@@ -233,5 +241,147 @@ describe("attributeOneRecommendation: slice-4d corroborated arm", () => {
       ...directionalTwin,
       causalStrength: "x",
     });
+  });
+});
+
+describe("runRileyOutcomeAttribution: org-booked-stats reader threading (slice 4d)", () => {
+  function makeDeps(candidates: AttributableRecommendation[]) {
+    const inserted: RileyOutcomeRow[] = [];
+    const recommendationStore: AttributableRecommendationStore = {
+      findAttributableCandidates: vi.fn().mockResolvedValue(candidates),
+      findOverlapsForCampaign: vi.fn().mockResolvedValue([]),
+    };
+    const outcomeStore: RecommendationOutcomeStore = {
+      insert: vi.fn(async (row: RileyOutcomeRow) => {
+        inserted.push(row);
+      }),
+      existsByRecommendationId: vi.fn().mockResolvedValue(false),
+    };
+    const insightsProvider: MetaInsightsProvider = {
+      getWindowMetrics: vi
+        .fn()
+        .mockResolvedValueOnce(w(10000, 0.02, 7, 100000))
+        .mockResolvedValueOnce(w(800, 0.02, 7, 80000)),
+    };
+    return { recommendationStore, outcomeStore, insightsProvider, inserted };
+  }
+
+  function makeReader(stats: OrgBookedWindowStats) {
+    return {
+      getBookedStatsForOrgWindow: vi.fn(
+        async (_args: { organizationId: string; startInclusive: Date; endExclusive: Date }) =>
+          stats,
+      ),
+    };
+  }
+
+  it("queries the reader with the EXACT Meta sub-window instants for a pause candidate and threads a corroborated verdict", async () => {
+    const { recommendationStore, outcomeStore, insightsProvider, inserted } = makeDeps([REC]);
+    const reader = makeReader({ bookedValueCents: 50000, bookedCount: 5 });
+
+    const summary = await runRileyOutcomeAttribution({
+      recommendationStore,
+      insightsProvider,
+      outcomeStore,
+      orgBookedStatsReader: reader,
+      orgId: "org-1",
+      now: new Date("2026-05-10T12:00:00Z"),
+    });
+
+    // REC (pause, windowDays 7, resolvedAt 2026-05-01T12:00Z):
+    // pre [2026-04-24T12:00Z, 2026-05-01T12:00Z), post [2026-05-01T12:00Z, 2026-05-08T12:00Z).
+    expect(reader.getBookedStatsForOrgWindow).toHaveBeenCalledTimes(2);
+    expect(reader.getBookedStatsForOrgWindow).toHaveBeenNthCalledWith(1, {
+      organizationId: "org-1",
+      startInclusive: new Date("2026-04-24T12:00:00Z"),
+      endExclusive: new Date("2026-05-01T12:00:00Z"),
+    });
+    expect(reader.getBookedStatsForOrgWindow).toHaveBeenNthCalledWith(2, {
+      organizationId: "org-1",
+      startInclusive: new Date("2026-05-01T12:00:00Z"),
+      endExclusive: new Date("2026-05-08T12:00:00Z"),
+    });
+    // The two reads PARTITION at the anchor (pre.endExclusive ===
+    // post.startInclusive): with the store's half-open gte/lt predicate an
+    // instant-of-anchor booking lands in exactly the post window, and an
+    // instant-of-postEnd booking in neither. No double-count, no gap.
+    const calls = reader.getBookedStatsForOrgWindow.mock.calls;
+    expect(calls[0]?.[0]?.endExclusive).toEqual(calls[1]?.[0]?.startInclusive);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]?.causalStrength).toBe("corroborated");
+    expect(summary.corroborated).toBe(1);
+  });
+
+  it("does not query the reader for refresh_creative candidates (pause-only arm)", async () => {
+    const refreshRec: AttributableRecommendation = { ...REC, actionKind: "refresh_creative" };
+    const { recommendationStore, outcomeStore, insightsProvider } = makeDeps([refreshRec]);
+    const reader = makeReader({ bookedValueCents: 50000, bookedCount: 5 });
+
+    await runRileyOutcomeAttribution({
+      recommendationStore,
+      insightsProvider,
+      outcomeStore,
+      orgBookedStatsReader: reader,
+      orgId: "org-1",
+      now: new Date("2026-05-20T12:00:00Z"),
+    });
+
+    expect(reader.getBookedStatsForOrgWindow).not.toHaveBeenCalled();
+  });
+
+  it("records directional with no reader wired (back-compat byte-identity) and counts zero corroborated", async () => {
+    const { recommendationStore, outcomeStore, insightsProvider, inserted } = makeDeps([REC]);
+
+    const summary = await runRileyOutcomeAttribution({
+      recommendationStore,
+      insightsProvider,
+      outcomeStore,
+      orgId: "org-1",
+      now: new Date("2026-05-10T12:00:00Z"),
+    });
+
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]?.causalStrength).toBe("directional");
+    expect(summary.corroborated).toBe(0);
+  });
+
+  it("propagates reader failures so Inngest retries (insert-once rows must not freeze an earnable corroboration)", async () => {
+    const { recommendationStore, outcomeStore, insightsProvider } = makeDeps([REC]);
+    const reader = {
+      getBookedStatsForOrgWindow: vi.fn(
+        async (_args: { organizationId: string; startInclusive: Date; endExclusive: Date }) => {
+          throw new Error("db blip");
+        },
+      ),
+    };
+
+    await expect(
+      runRileyOutcomeAttribution({
+        recommendationStore,
+        insightsProvider,
+        outcomeStore,
+        orgBookedStatsReader: reader,
+        orgId: "org-1",
+        now: new Date("2026-05-10T12:00:00Z"),
+      }),
+    ).rejects.toThrow("db blip");
+    expect(outcomeStore.insert).not.toHaveBeenCalled();
+  });
+
+  it("does not query the reader for candidates skipped by the idempotency pre-check", async () => {
+    const { recommendationStore, outcomeStore, insightsProvider } = makeDeps([REC]);
+    (outcomeStore.existsByRecommendationId as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    const reader = makeReader({ bookedValueCents: 50000, bookedCount: 5 });
+
+    await runRileyOutcomeAttribution({
+      recommendationStore,
+      insightsProvider,
+      outcomeStore,
+      orgBookedStatsReader: reader,
+      orgId: "org-1",
+      now: new Date("2026-05-10T12:00:00Z"),
+    });
+
+    expect(reader.getBookedStatsForOrgWindow).not.toHaveBeenCalled();
   });
 });
