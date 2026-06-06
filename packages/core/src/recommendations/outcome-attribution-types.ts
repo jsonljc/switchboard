@@ -15,9 +15,11 @@ export type VisibilityFlag =
 /**
  * Slice-3 enrichment enums (Riley v3 OutcomeLedger, spec section 2.5).
  *
- * causalStrength: "corroborated" is RESERVED for the slice-4 CRM/booking
- * agreement signal; the attribution engine must never emit it before that
- * signal exists (honesty floor, spec section 7.5).
+ * causalStrength: "corroborated" (emitted since slice 4d) means a SECOND,
+ * INDEPENDENT booked-value estimate agrees with the directional outcome
+ * under explicit judgeability floors (outcome-corroboration.ts). It does
+ * NOT mean causal proof: no consumer, copy surface, or future scoring
+ * change may treat it as one (the whole system's bar is not overclaiming).
  */
 export type CausalStrength = "directional" | "corroborated" | "inconclusive";
 
@@ -47,6 +49,15 @@ export interface WindowMetrics {
   ctr: number;
   /** Number of daily rows actually observed in the window (used for sparse detection). */
   dailyRowCount: number;
+  /**
+   * Slice-4d: org-level (ad-account-level) spend for the SAME window, in
+   * cents. Populated when the provider fetches account-scope data (the
+   * apps/api adapter does: its Graph call already returns every campaign and
+   * this is the sum BEFORE the campaign filter). Optional: a provider that
+   * cannot supply it leaves the corroboration predicate unjudgeable (honest
+   * absence, never fabricated; spec 4d F1).
+   */
+  accountSpendCents?: number;
 }
 
 export interface InsightsWindowQuery {
@@ -78,6 +89,32 @@ export interface OperationalStateReader {
     windowStart: Date,
     windowEnd: Date,
   ): Promise<OperationalStateConfirmation[]>;
+}
+
+/**
+ * Slice-4d: org-level windowed booked stats, the CRM-side independent second
+ * estimate for the corroboration predicate (spec 2.5: "read from the
+ * booked-value/CRM side"). Implementation is
+ * PrismaConversionRecordStore.getBookedStatsForOrgWindow in @switchboard/db,
+ * injected at the app layer (core is Layer 3 and cannot import db). A counted
+ * booking is type:"booked" AND value > 0 (the same predicate as the summed
+ * value, so the count can never be satisfied by zero-value rows the sum
+ * excludes); the window is HALF-OPEN [startInclusive, endExclusive),
+ * mirroring the engine's Meta window queries. Values are CENTS end to end.
+ * Zeros are honest absence: they fail the corroboration floors, they are
+ * never an error.
+ */
+export interface OrgBookedWindowStats {
+  bookedValueCents: number;
+  bookedCount: number;
+}
+
+export interface OrgBookedStatsReader {
+  getBookedStatsForOrgWindow(args: {
+    organizationId: string;
+    startInclusive: Date;
+    endExclusive: Date;
+  }): Promise<OrgBookedWindowStats>;
 }
 
 /**
