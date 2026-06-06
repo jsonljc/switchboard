@@ -38,12 +38,13 @@ import type { HandoffCampaignContext } from "./recommendation-handoff-dispatch.j
  *
  * HONEST INPUT SET (recorded in the plan, spec 7.7 discipline): action, urgency,
  * and the captured per-campaign handoff context. revenueState is deliberately NOT
- * an input (no live ownership gate reads it). The governance approval mode is NOT
- * honestly available at this Layer-2 site (the gate's verdict is per-request at
- * act/submit time in core; the seeded handoff policy parks mandatory approval; an
- * injected snapshot would be a fabricated read): it becomes the live discriminator
- * only in Phase-C, reserved alongside riley_self (which today's report wire
- * rejects; see EmittableOwnershipClassSchema).
+ * an input (no live ownership gate reads it), and neither is any governance-mode
+ * snapshot (the gate's verdict is per-request at act/submit time in core; an
+ * injected snapshot would be a fabricated read). riley_self therefore does NOT
+ * come from this classifier at all: since the Phase-C pause wiring it is applied
+ * by deriveOwnershipAnnotations from the sink's PARK FACT (pauseParkedIndex, the
+ * one honestly-known run-specific signal; see that function's doc), never from
+ * gate eligibility alone.
  *
  * Ownership ANNOTATES; it gates nothing.
  */

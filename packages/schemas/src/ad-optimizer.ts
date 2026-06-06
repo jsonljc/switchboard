@@ -341,8 +341,10 @@ export const AuditReportSchema = z.object({
   // ADDITIVE like arbitration above; it never filters emission or handoff. One
   // entry per recommendations[] element, same order (index = array position; the
   // same disambiguation rule as arbitration: campaignId+action is not unique).
-  // campaignId+action are carried for human legibility. The EMITTABLE enum is
-  // deliberate: today's wire rejects riley_self (see OwnershipClassSchema).
+  // campaignId+action are carried for human legibility. The wire accepts
+  // riley_self since the Phase-C pause wiring, STRICT-TRUTH gated: the runner
+  // emits it only for a pause whose submit actually parked this run (see the
+  // enum comment above).
   ownership: z
     .array(
       z.object({
