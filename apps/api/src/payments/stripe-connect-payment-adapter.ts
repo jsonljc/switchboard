@@ -121,7 +121,58 @@ export class StripeConnectPaymentAdapter implements PaymentPort {
     };
   }
 
-  async retrievePayment(_externalReference: string): Promise<VerifiedPayment | null> {
-    throw new Error("retrievePayment not implemented yet");
+  async retrievePayment(externalReference: string): Promise<VerifiedPayment | null> {
+    let intent: Stripe.Response<Stripe.PaymentIntent>;
+    try {
+      intent = await this.client.paymentIntents.retrieve(externalReference, undefined, {
+        stripeAccount: this.connectedAccountId,
+      });
+    } catch (err) {
+      // A missing PaymentIntent is a not-found, not a crash — let the caller
+      // (the webhook route) treat it as "nothing to record".
+      if (isStripeResourceMissing(err)) return null;
+      throw err;
+    }
+
+    return {
+      provider: "stripe",
+      externalReference: intent.id,
+      // amount/currency are the AUTHORITATIVE Stripe values — never a body amount.
+      // Stripe amount is already minor units (cents); currency is lowercase ISO.
+      // Do NOT re-multiply — a 100x bug destroys trust (spec §12).
+      amountCents: intent.amount,
+      currency: intent.currency,
+      status: mapPaymentIntentStatus(intent.status),
+    };
   }
+}
+
+/**
+ * Map Stripe's PaymentIntent.Status onto the VerifiedPayment status union.
+ * RECONCILIATION: real VerifiedPayment status is pending|paid|failed|refunded
+ * (1A-4a schema). "succeeded" maps to "paid" (NOT "verified" — the plan's
+ * snippet assumed a different enum; the real schema has no "verified" value).
+ */
+export function mapPaymentIntentStatus(
+  status: Stripe.PaymentIntent.Status,
+): VerifiedPayment["status"] {
+  switch (status) {
+    case "succeeded":
+      return "paid";
+    case "canceled":
+      return "failed";
+    default:
+      // requires_payment_method | requires_confirmation | requires_action
+      // | processing | requires_capture
+      return "pending";
+  }
+}
+
+function isStripeResourceMissing(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "resource_missing"
+  );
 }
