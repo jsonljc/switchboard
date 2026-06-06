@@ -67,3 +67,38 @@ describe("StripeConnectPaymentAdapter.createDepositLink", () => {
     expect(params.mode).toBe("payment");
   });
 });
+
+// Task 2: Regression guard — re-issuing a deposit for the SAME bookingId must
+// send the IDENTICAL Stripe-side idempotencyKey so Stripe deduplicates the
+// Session and money is never double-charged. This is the RequestOptions key,
+// distinct from the DB unique on externalReference owned by 1A-4a.
+describe("StripeConnectPaymentAdapter.createDepositLink idempotency", () => {
+  it("reuses the deterministic key `deposit_${bookingId}` on re-issue", async () => {
+    const { client, createSession } = makeFakeClient();
+    const adapter = new StripeConnectPaymentAdapter({
+      client,
+      connectedAccountId,
+      successUrl: "https://app/success",
+      cancelUrl: "https://app/cancel",
+    });
+
+    const input = {
+      organizationId: "org_1",
+      bookingId: "bk_42",
+      amountCents: 5000,
+      currency: "sgd",
+    };
+
+    await adapter.createDepositLink(input);
+    await adapter.createDepositLink(input);
+
+    expect(createSession).toHaveBeenCalledTimes(2);
+    const firstKey = (createSession.mock.calls[0] as [unknown, Record<string, unknown>])[1]
+      .idempotencyKey;
+    const secondKey = (createSession.mock.calls[1] as [unknown, Record<string, unknown>])[1]
+      .idempotencyKey;
+    expect(firstKey).toBe("deposit_bk_42");
+    expect(secondKey).toBe("deposit_bk_42");
+    expect(firstKey).toBe(secondKey);
+  });
+});
