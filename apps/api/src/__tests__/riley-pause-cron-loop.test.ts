@@ -138,21 +138,39 @@ describe("riley pause cron loop (real audit -> real ingress -> real approve -> M
   it("DEFAULT POSTURE: flag absent = zero pause submits even with the submitter wired", async () => {
     const world = buildPauseLifecycleWorld();
     const parked: ParkedPause[] = [];
-    await executeWeeklyAudit(
-      step as Parameters<typeof executeWeeklyAudit>[0],
-      buildPauseCronDeps({ world, parked }),
-    );
+    const savedReports: unknown[] = [];
+    const deps = buildPauseCronDeps({ world, parked });
+    deps.saveAuditReport = async (_id, report) => {
+      savedReports.push(report);
+    };
+    await executeWeeklyAudit(step as Parameters<typeof executeWeeklyAudit>[0], deps);
     expect(parked).toHaveLength(0);
     expect(world.harness.metaCalls).toHaveLength(0);
+    // STRICT TRUTH: no park, no claim. The flag-off report never says riley_self.
+    const ownership = (savedReports[0] as { ownership?: Array<{ ownership: string }> }).ownership;
+    expect(ownership?.some((o) => o.ownership === "riley_self")).toBe(false);
   });
 
   it("FLAG ON: parks exactly one pause with the seam idempotency key; approve pauses Meta", async () => {
     const world = buildPauseLifecycleWorld();
     const parked: ParkedPause[] = [];
-    await executeWeeklyAudit(
-      step as Parameters<typeof executeWeeklyAudit>[0],
-      buildPauseCronDeps({ world, parked, pauseSelfExecutionEnabled: true }),
-    );
+    const savedReports: unknown[] = [];
+    const deps = buildPauseCronDeps({ world, parked, pauseSelfExecutionEnabled: true });
+    deps.saveAuditReport = async (_id, report) => {
+      savedReports.push(report);
+    };
+    await executeWeeklyAudit(step as Parameters<typeof executeWeeklyAudit>[0], deps);
+
+    // STRICT-TRUTH ownership (PR-3): the persisted report claims riley_self for
+    // exactly the recommendation whose submit ACTUALLY parked, end to end.
+    const ownership = (
+      savedReports[0] as {
+        ownership?: Array<{ action: string; ownership: string }>;
+      }
+    ).ownership;
+    const rileyOwned = ownership?.filter((o) => o.ownership === "riley_self") ?? [];
+    expect(rileyOwned).toHaveLength(1);
+    expect(rileyOwned[0]?.action).toBe("pause");
 
     expect(parked).toHaveLength(1);
     expect(parked[0]!.parked).toBe(true);

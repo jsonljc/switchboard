@@ -636,17 +636,6 @@ export class AuditRunner {
           })
         : undefined;
 
-    // Step 8e (Riley v3, spec 2.2 net-new item 1): per-recommendation ownership
-    // annotation, ADDITIVE like arbitration above; it never filters emission or
-    // handoff. Reads the always-built per-campaign evidence context.
-    const ownership =
-      recommendations.length > 0
-        ? deriveOwnershipAnnotations({
-            recommendations,
-            handoffContextByCampaign: campaignEvidenceByCampaign,
-          })
-        : undefined;
-
     // Phase-C: the arbitration primary's index WHEN that primary is a pause.
     // The sink dispatches the pause submitter only at this index (primary-only
     // self-submission is structural, parent spec section 3).
@@ -658,6 +647,7 @@ export class AuditRunner {
     // Step 9: Emit recommendations to the v1 pipeline (queue / shadow / dropped).
     // Graceful degradation: skipped when no emitter is wired so existing
     // analysis-only callers keep working.
+    let pauseParkedIndex: number | undefined;
     if (this.recommendationEmitter) {
       const auditRunId = `audit:${this.config.accountId}:${dateRange.since}:${dateRange.until}`;
       // Constructor invariant: recommendationEmissionContext is always defined
@@ -680,6 +670,7 @@ export class AuditRunner {
         // provider returned no per-campaign funnel (graceful — no economics line).
         ...(campaignEconomics ? { campaignEconomics } : {}),
       });
+      pauseParkedIndex = sinkResult.pauseParkedIndex;
       // v1: log the rollup. v1.5 will write a first-class activity-trail event
       // (deferred — AgentEvent requires deploymentId not yet in AuditConfig).
       console.warn(
@@ -688,6 +679,22 @@ export class AuditRunner {
           (this.rileyPauseSubmitter ? ` pauseParked=${sinkResult.pauseParkedIndex ?? "none"}` : ""),
       );
     }
+
+    // Step 9b (Riley v3, spec 2.2 net-new item 1; moved below the sink for the
+    // Phase-C STRICT-TRUTH widening): per-recommendation ownership annotation,
+    // ADDITIVE; it never filters emission or handoff. Reads the always-built
+    // per-campaign evidence context PLUS the sink's park fact, so riley_self is
+    // emitted only for a pause that ACTUALLY parked this run. The report at
+    // Step 10 is the only consumer, so the move is observation-equivalent for
+    // every other field.
+    const ownership =
+      recommendations.length > 0
+        ? deriveOwnershipAnnotations({
+            recommendations,
+            handoffContextByCampaign: campaignEvidenceByCampaign,
+            pauseParkedIndex,
+          })
+        : undefined;
 
     // Step 10: Assemble report
     const totalSpend = currentInsights.reduce((sum, i) => sum + i.spend, 0);
