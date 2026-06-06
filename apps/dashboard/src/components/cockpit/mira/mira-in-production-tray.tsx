@@ -9,8 +9,8 @@ import {
   PROBLEM_COPY,
   DESK_COPY,
 } from "@/lib/cockpit/mira/desk-copy";
-import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
 import { T } from "@/components/cockpit/tokens";
+import styles from "./mira-desk.module.css";
 
 // Mode-honest progress label: ugc reads its phase (the polished stage column
 // is frozen for ugc jobs); a pre-video approval gate beats both.
@@ -25,28 +25,8 @@ function itemStatusCopy(it: MiraDeskItem): string {
 // message only when something is wrong. No engineering-console detail.
 export function MiraInProductionTray({ items }: { items: MiraDeskItem[] }) {
   return (
-    <section
-      aria-label={DESK_COPY.inProductionTitle}
-      style={{
-        background: T.paper,
-        borderRadius: 8,
-        padding: 16,
-        border: `1px solid ${T.hair}`,
-      }}
-    >
-      <h2
-        style={{
-          margin: "0 0 8px",
-          fontFamily: T.mono,
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-          color: T.ink3,
-        }}
-      >
-        {DESK_COPY.inProductionTitle}
-      </h2>
+    <section aria-label={DESK_COPY.inProductionTitle} className={styles.card}>
+      <h2 className={styles.moduleH}>{DESK_COPY.inProductionTitle}</h2>
       {items.length === 0 ? (
         <p style={{ margin: 0, fontSize: 13, color: T.ink3 }}>{DESK_COPY.inProductionEmpty}</p>
       ) : (
@@ -84,7 +64,7 @@ export function MiraInProductionTray({ items }: { items: MiraDeskItem[] }) {
                   fontFamily: T.mono,
                   fontSize: 12,
                   letterSpacing: "0.02em",
-                  color: it.problem ? T.red : MIRA_ACCENT.base,
+                  color: it.problem ? T.red : T.ink2,
                 }}
               >
                 {itemStatusCopy(it)}

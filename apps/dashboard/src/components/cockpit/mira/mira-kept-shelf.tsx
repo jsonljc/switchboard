@@ -5,34 +5,15 @@ import { useReviewDecision } from "@/hooks/use-review-decision";
 import { DESK_COPY } from "@/lib/cockpit/mira/desk-copy";
 import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
 import { T } from "@/components/cockpit/tokens";
+import styles from "./mira-desk.module.css";
 
 // Quietest module. Read-mostly: each kept draft has a subtle un-keep (reversible).
 // `handoff_unavailable` is conveyed ONLY by the neutral sub-copy — never a red chip.
 export function MiraKeptShelf({ items }: { items: MiraDeskItem[] }) {
   const decide = useReviewDecision();
   return (
-    <section
-      aria-label={DESK_COPY.keptTitle}
-      style={{
-        background: "transparent",
-        borderRadius: 8,
-        padding: 16,
-        border: `1px solid ${T.hair}`,
-      }}
-    >
-      <h2
-        style={{
-          margin: "0 0 2px",
-          fontFamily: T.mono,
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-          color: T.ink3,
-        }}
-      >
-        {DESK_COPY.keptTitle}
-      </h2>
+    <section aria-label={DESK_COPY.keptTitle} className={styles.shelfCard}>
+      <h2 className={styles.moduleH}>{DESK_COPY.keptTitle}</h2>
       <p style={{ margin: "0 0 10px", fontSize: 12, color: T.ink3 }}>{DESK_COPY.keptSub}</p>
       {items.length === 0 ? (
         <p style={{ margin: 0, fontSize: 13, color: T.ink3 }}>{DESK_COPY.keptEmpty}</p>

@@ -1,0 +1,40 @@
+/* apps/dashboard/src/components/cockpit/mira/mira-desk.module.css
+   Desk module anatomy: the canonical resting card (Home .card family) on the
+   warm canvas: surface ground, soft hairline, radius 18 (spec §4 r-lg), ladder
+   shadow. Module titles speak the serif moduleH voice (Home home.module.css
+   .moduleH); the hero keeps a mono eyebrow + big mono numeral (KPI block). */
+.card {
+  background: hsl(var(--surface));
+  border: 1px solid var(--hair-soft);
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
+  padding: 18px;
+}
+.shelfCard {
+  composes: card;
+  background: transparent;
+  box-shadow: none;
+}
+.moduleH {
+  margin: 0 0 10px;
+  font-family: var(--font-display-app);
+  font-variation-settings: "opsz" 24;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  line-height: 1.1;
+  color: var(--ink);
+  text-transform: lowercase;
+}
+.moduleHSentence {
+  composes: moduleH;
+  text-transform: none;
+}
+.eyebrow {
+  font-family: var(--font-mono-editorial);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}

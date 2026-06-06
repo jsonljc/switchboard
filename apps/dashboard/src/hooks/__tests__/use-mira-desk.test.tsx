@@ -29,4 +29,11 @@ describe("useMiraDesk", () => {
     const { result } = renderHook(() => useMiraDesk(), { wrapper });
     await waitFor(() => expect(result.current.data?.readyToReviewCount).toBe(3));
   });
+
+  it("does not fetch when disabled (panel for a non-enabled org)", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch");
+    renderHook(() => useMiraDesk(false), { wrapper });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

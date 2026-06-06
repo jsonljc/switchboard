@@ -17,6 +17,9 @@ vi.mock("@/hooks/use-creative-pipeline", () => ({
   useCostEstimate: () => mockEstimate(),
 }));
 
+let halted = false;
+vi.mock("@/components/layout/halt/halt-context", () => ({ useHalt: () => ({ halted }) }));
+
 import { MiraCreativeDetailPage } from "../creative-detail-page";
 
 function summary(over: Partial<MiraCreativeJobSummary>): MiraCreativeJobSummary {
@@ -40,6 +43,7 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     mockEstimate.mockReset();
     mockEstimate.mockReturnValue({ data: null });
     mockApprove.data = undefined;
+    halted = false;
   });
 
   it("renders the frame-QA line per verdict (slice-3), labeled as technical QA", () => {
@@ -237,6 +241,36 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     render(<MiraCreativeDetailPage id="j" />);
     expect(screen.getByText(/load this draft/i)).toBeTruthy();
     expect(screen.queryByText(/Draft not found/i)).toBeNull();
+  });
+
+  it("shows the drafted-by byline and the display headline", () => {
+    mockCreative.mockReturnValue({
+      data: summary({
+        status: "draft_ready",
+        reviewAction: { canContinue: false, canStop: false, label: "review_draft" },
+      }),
+      isLoading: false,
+      isError: false,
+    });
+    const { container } = render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.getByText("Drafted by Mira")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Spring promo");
+    expect(container.querySelector('[data-agent="mira"]')).not.toBeNull();
+  });
+
+  it("halt disables continue but not stop", () => {
+    halted = true;
+    mockCreative.mockReturnValue({
+      data: summary({
+        reviewAction: { canContinue: true, canStop: true, label: "continue_draft" },
+        draft: { videoUrl: "https://x/p.mp4" },
+      }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.getByRole("button", { name: "Halted" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Stop draft" })).toBeEnabled();
   });
 
   describe("performance block (slice-2 measured attribution)", () => {

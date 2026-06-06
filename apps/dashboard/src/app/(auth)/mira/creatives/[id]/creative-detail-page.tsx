@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useMiraCreative } from "@/hooks/use-mira-creative";
 import { useApproveStage, useCostEstimate } from "@/hooks/use-creative-pipeline";
+import { useHalt } from "@/components/layout/halt/halt-context";
+import { PrintedPortraitAvatar } from "@/components/agent-avatar/printed-portrait-avatar";
 import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
 import { STAGE_COPY, UGC_PHASE_COPY } from "@/lib/cockpit/mira/desk-copy";
 import { T } from "@/components/cockpit/tokens";
@@ -10,6 +12,7 @@ import { T } from "@/components/cockpit/tokens";
 export function MiraCreativeDetailPage({ id }: { id: string }) {
   const jobQ = useMiraCreative(id);
   const approve = useApproveStage();
+  const { halted } = useHalt();
   const [confirm, setConfirm] = useState<null | "continue" | "stop">(null);
   const job = jobQ.data;
 
@@ -38,7 +41,31 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
         Draft only. Not published. Nothing goes live without you.
       </div>
 
-      <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em", color: T.ink }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <PrintedPortraitAvatar agentKey="mira" size={22} showPip={false} />
+        <span
+          style={{
+            fontFamily: T.mono,
+            fontSize: 11,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: T.ink3,
+          }}
+        >
+          Drafted by Mira
+        </span>
+      </div>
+
+      <h1
+        style={{
+          margin: 0,
+          fontFamily: T.display,
+          fontSize: 26,
+          fontWeight: 600,
+          letterSpacing: "-0.015em",
+          color: T.ink,
+        }}
+      >
         {job.title}
       </h1>
 
@@ -167,21 +194,37 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {confirm === null && (
             <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              {canContinue && (
-                <button
-                  disabled={approve.isPending}
-                  onClick={() => setConfirm("continue")}
-                  style={{
-                    padding: "10px 16px",
-                    borderRadius: 8,
-                    background: T.amber,
-                    color: T.actionFg,
-                    border: `1px solid ${T.amberDeep}`,
-                  }}
-                >
-                  Continue draft
-                </button>
-              )}
+              {canContinue &&
+                (halted ? (
+                  <button
+                    disabled
+                    title="Resume Mira to continue drafts."
+                    style={{
+                      padding: "10px 16px",
+                      borderRadius: 8,
+                      background: T.ink5,
+                      color: T.ink3,
+                      border: "none",
+                      cursor: "not-allowed",
+                    }}
+                  >
+                    Halted
+                  </button>
+                ) : (
+                  <button
+                    disabled={approve.isPending}
+                    onClick={() => setConfirm("continue")}
+                    style={{
+                      padding: "10px 16px",
+                      borderRadius: 8,
+                      background: T.amber,
+                      color: T.actionFg,
+                      border: `1px solid ${T.amberDeep}`,
+                    }}
+                  >
+                    Continue draft
+                  </button>
+                ))}
               {canStop && (
                 <button
                   disabled={approve.isPending}

@@ -5,7 +5,6 @@ import type { MiraReviewAction } from "@switchboard/core";
 import { useApproveStage, useCostEstimate } from "@/hooks/use-creative-pipeline";
 import { useHalt } from "@/components/layout/halt/halt-context";
 import { useReviewDecision } from "@/hooks/use-review-decision";
-import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
 import { T } from "@/components/cockpit/tokens";
 
 export function MiraClipActions({
@@ -145,7 +144,12 @@ export function MiraClipActions({
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" }}>
         <button
-          style={{ ...btn, background: MIRA_ACCENT.deep }}
+          style={{
+            ...btn,
+            background: T.amber,
+            color: T.actionFg,
+            border: `1px solid ${T.amberDeep}`,
+          }}
           disabled={decide.isPending}
           onClick={() => decideAndResolve("kept")}
         >

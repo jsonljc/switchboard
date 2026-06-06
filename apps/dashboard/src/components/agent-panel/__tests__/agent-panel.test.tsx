@@ -58,6 +58,9 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/hooks/use-mira-enabled", () => ({
   useMiraEnabled: () => ({ enabled: false, isLoading: false }),
 }));
+vi.mock("@/hooks/use-mira-desk", () => ({
+  useMiraDesk: vi.fn().mockReturnValue({ data: undefined }),
+}));
 // useIsDesktop drives the Sheet `side` (right on desktop, bottom otherwise).
 // Default false so the other shell tests render the unchanged bottom sheet.
 vi.mock("@/hooks/use-is-desktop", () => ({ useIsDesktop: vi.fn(() => false) }));
