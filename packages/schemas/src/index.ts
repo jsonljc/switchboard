@@ -67,6 +67,9 @@ export * from "./pipeline-board.js";
 // Contacts browse projection (surface-agnostic /contacts list view-model)
 export * from "./contacts.js";
 
+// Canonical E.164 phone helpers (normalizer, validator)
+export * from "./phone.js";
+
 // Event types (RoutedEventEnvelope, createEventEnvelope)
 export * from "./event-types.js";
 
