@@ -86,8 +86,43 @@ const publishCard: ParkedApprovalSummarizer = ({ parameters }) => {
   };
 };
 
+const pauseCard: ParkedApprovalSummarizer = ({ parameters }) => {
+  const campaignId = str(parameters, "campaignId") ?? "an active campaign";
+  const rationale = str(parameters, "rationale");
+  const evidence = obj(parameters, "evidence");
+  const clicks = num(evidence, "clicks");
+  const conversions = num(evidence, "conversions");
+  const days = num(evidence, "days");
+
+  const dataLines: Array<string | string[]> = [];
+  if (clicks !== null && conversions !== null && days !== null) {
+    dataLines.push(`Evidence: ${clicks} clicks, ${conversions} conversions over ${days} days`);
+  }
+  dataLines.push("Pauses the campaign on Meta immediately after you approve");
+  dataLines.push("Reversible: Resume the campaign in Ads Manager to undo (no learning reset)");
+
+  return {
+    humanSummary: rationale
+      ? `Riley wants to pause campaign ${campaignId}: ${rationale}`
+      : `Riley wants to pause campaign ${campaignId}.`,
+    dataLines,
+    presentation: { primaryLabel: "Approve pause" },
+    riskContract: {
+      // A pause stops live delivery on Meta: external + financial spend-state
+      // mutation. High risk so the card renders with full confirmation weight;
+      // platform-state reversible (resume in Ads Manager), recorded in the line above.
+      riskLevel: "high",
+      externalEffect: true,
+      financialEffect: true,
+      clientFacing: false,
+      requiresConfirmation: true,
+    },
+  };
+};
+
 const PARKED_INTENT_CARDS: Record<string, ParkedApprovalSummarizer> = {
   "adoptimizer.recommendation.handoff": handoffCard,
+  "adoptimizer.campaign.pause": pauseCard,
   "creative.job.publish": publishCard,
 };
 
