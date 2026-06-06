@@ -19,6 +19,10 @@ import {
   type RecommendationHandoffSubmitInput,
 } from "../services/workflows/recommendation-handoff-request.js";
 import {
+  buildRileyPauseSubmitRequest,
+  type RileyPauseSubmitInput,
+} from "../services/workflows/riley-pause-submit-request.js";
+import {
   buildMiraBriefComposeSubmitRequest,
   buildMiraConceptDraftSubmitRequest,
   type MiraBriefComposeSubmitInput,
@@ -64,6 +68,17 @@ export interface ContainedWorkflowBootstrapResult {
    */
   submitRecommendationHandoff: (
     input: RecommendationHandoffSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse | null>;
+  /**
+   * Top-level submit closure for the Phase-C pause initiator. Builds the canonical
+   * request (or returns null when Riley abstains: class/floor legs in the builder)
+   * and submits through PlatformIngress with the resolved Riley deployment as the
+   * targetHint, parking for mandatory human approval via the seeded policy. No
+   * parentWorkUnitId - cron-initiated work units are legitimate trace roots.
+   */
+  submitRileyPause: (
+    input: RileyPauseSubmitInput,
     deployment: { deploymentId: string; skillSlug: string },
   ) => Promise<SubmitWorkResponse | null>;
   /**
@@ -554,6 +569,21 @@ export async function bootstrapContainedWorkflows(
     return platformIngress.submit(req);
   };
 
+  // Phase-C pause initiator. Deployment resolution mirrors the handoff: the cron
+  // iterates Riley's active ad-optimizer deployments and passes
+  // {deploymentId, skillSlug:"ad-optimizer"}; never the intent-prefix fallback.
+  const submitRileyPause = async (
+    input: RileyPauseSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ): Promise<SubmitWorkResponse | null> => {
+    const req = buildRileyPauseSubmitRequest(input, deployment);
+    // null ⇒ Riley abstained (class eligibility / recommendation floor / raised
+    // execution floor). Do not submit — the builder owns this first-line
+    // abstention; the executor re-checks as defense in depth.
+    if (!req) return null;
+    return platformIngress.submit(req);
+  };
+
   const submitMiraBriefCompose = async (
     input: MiraBriefComposeSubmitInput,
     deployment?: { deploymentId: string; skillSlug: string },
@@ -587,6 +617,7 @@ export async function bootstrapContainedWorkflows(
     submitScheduledFollowUp,
     submitScheduledReminder,
     submitRecommendationHandoff,
+    submitRileyPause,
     submitMiraBriefCompose,
     submitMiraConceptDraft,
   };
