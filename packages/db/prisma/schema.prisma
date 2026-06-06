@@ -1959,6 +1959,12 @@ model WorkTrace {
   // via unnest() against ConversionRecord.
   injectedPatternIds String[] @default([])
 
+  // Spec-1A chain weld: lineage/index columns. Nullable; legacy rows stay NULL
+  // (honest absence). In WorkTrace EXCLUDED_BASE (work-trace-hash.ts) so they
+  // are not part of the content hash.
+  contactId            String?
+  conversationThreadId String?
+
   // Timestamps
   requestedAt           DateTime
   governanceCompletedAt DateTime
@@ -1975,6 +1981,8 @@ model WorkTrace {
   @@index([traceId])
   @@index([requestedAt])
   @@index([approvalId])
+  @@index([organizationId, contactId])
+  @@index([organizationId, conversationThreadId])
 }
 
 // ---------------------------------------------------------------------------
