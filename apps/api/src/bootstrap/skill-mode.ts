@@ -17,6 +17,7 @@ import type {
 import type { ConsentService, ContactConsentReader, PlaybookReader } from "@switchboard/core";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
 import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
+import { receiptTierForCalendarProvider } from "./receipt-tier.js";
 import { resolveModelRouter } from "./model-router-factory.js";
 
 export interface SkillModeBootstrapResult {
@@ -353,10 +354,7 @@ export async function bootstrapSkillMode(
       ),
     failureHandler,
     defaultCurrency: "SGD",
-    receiptTierForProvider: (provider) =>
-      isNoopCalendarProvider(provider) || provider.constructor.name === "LocalCalendarProvider"
-        ? "T3_ADMIN_AUDIT"
-        : "T1_FETCH_BACK",
+    receiptTierForProvider: receiptTierForCalendarProvider,
     isProduction: process.env["NODE_ENV"] === "production",
   });
 

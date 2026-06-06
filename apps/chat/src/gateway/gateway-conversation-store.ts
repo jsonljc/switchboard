@@ -28,6 +28,11 @@ export class PrismaGatewayConversationStore implements GatewayConversationStore 
     const contactId = identity?.contactId ?? `visitor-${sessionId}`;
     const orgId = identity?.organizationId ?? "gateway";
 
+    // Safe today only because WhatsApp (the sole contact-resolving channel) resolves
+    // identity on turn 1, so this find-by-agentContext and the create/fetch-by-contactId
+    // below always share a key. A second contact-resolving channel that resolves identity
+    // on a LATER turn would fork history (find ignores contactId); that needs thread-identity
+    // reconciliation on resolve, not just narrowing this where-clause.
     let thread = await this.prisma.conversationThread.findFirst({
       where: {
         agentContext: {

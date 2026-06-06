@@ -46,6 +46,12 @@ export function buildCalendarReceiptData(args: BuildCalendarReceiptArgs): Calend
     opportunityId: args.opportunityId ?? null,
     workTraceId: args.workTraceId ?? null,
     capturedBy: "calendar-book",
+    // 1A note: calendar receipts intentionally carry no externalRef, so the
+    // (organizationId, kind, externalRef) partial-unique does not dedupe them and a
+    // confirm-failure + same-slot retry can mint a second `booked` receipt. Harmless
+    // in the prove leg (no receipt-counting consumer). Before 1B consumes receipts,
+    // populate externalRef from calendarEventId — that is also the T1_FETCH_BACK
+    // verification key — so the partial-unique dedupes (handle the resulting P2002).
     evidence: {
       kind: "calendar",
       basis: "calendar_confirmed",
