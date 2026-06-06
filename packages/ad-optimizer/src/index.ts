@@ -195,3 +195,7 @@ export type {
 // callback). The candidate/context/dispatch helpers stay package-internal (relative
 // imports), so they are deliberately NOT re-exported from the barrel.
 export type { RecommendationHandoffSubmitter } from "./recommendation-handoff-dispatch.js";
+// Phase-C pause initiator seam: candidate decision is package-internal; only the
+// submitter type + builder cross the boundary (apps/api wires the callback).
+export { buildRileyPauseCandidate } from "./riley-pause-dispatch.js";
+export type { RileyPauseCandidate, RileyPauseSubmitter } from "./riley-pause-dispatch.js";
