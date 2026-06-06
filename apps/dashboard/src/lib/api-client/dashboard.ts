@@ -11,6 +11,7 @@ import type {
   PipelineBoardResponse,
   PipelineBoardOpportunity,
   OpportunityStage,
+  PaidVisitRow,
 } from "@switchboard/schemas";
 import { createIdempotencyKey } from "@/lib/idempotency";
 import { SwitchboardAgentsClient } from "./agents";
@@ -84,6 +85,20 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
       method: "POST",
       body: JSON.stringify(body),
     });
+  }
+
+  async getPaidVisitsByCampaign(
+    orgId: string,
+    params: { from: string; to: string },
+  ): Promise<{ paidVisits: PaidVisitRow[] }> {
+    const search = new URLSearchParams({
+      detail: "paid-visits",
+      from: params.from,
+      to: params.to,
+    });
+    return this.request<{ paidVisits: PaidVisitRow[] }>(
+      `/api/${orgId}/revenue/by-campaign?${search.toString()}`,
+    );
   }
 
   // ── Contacts (Mercury /contacts list) ──
