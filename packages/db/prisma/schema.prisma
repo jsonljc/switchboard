@@ -1743,6 +1743,7 @@ model Contact {
   organizationId       String
   name                 String?
   phone                String?
+  phoneE164            String?
   email                String?
   primaryChannel       String    @default("whatsapp")
   firstTouchChannel    String?
@@ -1788,6 +1789,7 @@ model Contact {
   @@index([organizationId])
   @@index([organizationId, stage])
   @@index([organizationId, phone])
+  @@index([organizationId, phoneE164])
   @@index([organizationId, lastActivityAt])
   @@index([organizationId, leadgenId])
   @@index([organizationId, sourceType, createdAt])
