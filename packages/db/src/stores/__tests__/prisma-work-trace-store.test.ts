@@ -348,6 +348,22 @@ describe("PrismaWorkTraceStore.persist — lineage columns (Spec-1A)", () => {
     expect(created.contactId).toBeNull();
     expect(created.conversationThreadId).toBeNull();
   });
+
+  it("stores the lineage a Booking can chain-join on (Booking.workTraceId -> WorkTrace.workUnitId -> contactId/conversationThreadId)", async () => {
+    const trace = {
+      ...baseTrace(),
+      workUnitId: "wu_chain",
+      contactId: "ct_chain",
+      conversationThreadId: "thr_chain",
+    };
+    await store.persist(trace);
+    const created = (createSpy.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    // A Booking row with workTraceId = 'wu_chain' joins to this row by workUnitId
+    // and reaches the Contact + ConversationThread in one hop.
+    expect(created.workUnitId).toBe("wu_chain");
+    expect(created.contactId).toBe("ct_chain");
+    expect(created.conversationThreadId).toBe("thr_chain");
+  });
 });
 
 describe("PrismaWorkTraceStore.claim (D1 idempotency claim primitive)", () => {
