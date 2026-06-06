@@ -197,6 +197,8 @@ describe("Payments webhook org resolution + charge re-fetch", () => {
   });
 });
 
+// Task 3: pins the idempotency contract — same provider message id must produce the same
+// idempotencyKey ("psp-<id>") on both calls so PlatformIngress deduplicates to one record.
 describe("Payments webhook replay (idempotency at ingress)", () => {
   let saved: string | undefined;
   beforeEach(() => {
