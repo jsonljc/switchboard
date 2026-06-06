@@ -83,6 +83,7 @@ import { synthesizeCreativeBrief } from "../services/workflows/creative-brief-sy
 import { resolveHandoffBrief } from "../services/workflows/handoff-brief-enrichment.js";
 import type { RecommendationHandoffSubmitInput } from "../services/workflows/recommendation-handoff-request.js";
 import type { RileyPauseSubmitInput } from "../services/workflows/riley-pause-submit-request.js";
+import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
@@ -364,66 +365,13 @@ export async function registerInngest(
     }
   };
 
-  // Phase-C pause initiator. The cron (via the audit-runner sink) calls this for
-  // the arbitration-primary pause of a flag-on org. Submits through PlatformIngress,
-  // parking for mandatory approval. Returns PARK TRUTH for strict-truth ownership.
-  // Best-effort: failures are caught and logged; the weekly audit never breaks.
-  const rileyPauseSubmitter: RileyPauseSubmitter = async (candidate) => {
-    if (!options.submitRileyPause) return { parked: false };
-    try {
-      const res = await options.submitRileyPause(
-        {
-          organizationId: candidate.organizationId,
-          recommendationId: candidate.recommendationId,
-          campaignId: candidate.campaignId,
-          rationale: candidate.rationale,
-          evidence: candidate.evidence,
-        },
-        { deploymentId: candidate.deploymentId, skillSlug: "ad-optimizer" },
-      );
-      if (res === null) return { parked: false }; // builder abstained (class/floor)
-      if (!res.ok) {
-        if (res.error.type === "entitlement_required") {
-          // NAMED skip: an unentitled org is an honest, visible skip, never a
-          // silent no-op that reads as "Riley chose not to act".
-          app.log.warn(
-            `[inngest] riley pause skip:org_not_entitled org=${candidate.organizationId} rec=${candidate.recommendationId}`,
-          );
-          return { parked: false };
-        }
-        app.log.error(
-          `[inngest] riley pause submit error type=${res.error.type} rec=${candidate.recommendationId}: ${res.error.message}`,
-        );
-        return { parked: false };
-      }
-      // Phantom-success gotcha: branch on approvalRequired membership BEFORE
-      // reading the result as a success.
-      if ("approvalRequired" in res && res.approvalRequired) {
-        app.log.info(
-          `[inngest] riley pause parked for approval rec=${candidate.recommendationId} lifecycle=${res.lifecycleId ?? "?"}`,
-        );
-        return { parked: true };
-      }
-      if (res.result.outcome === "failed") {
-        // ok:true + outcome failed = governance DENY. Visible, loud.
-        app.log.error(
-          `[inngest] riley pause submit denied/failed rec=${candidate.recommendationId}: ${res.result.error?.code ?? "unknown"}`,
-        );
-        return { parked: false };
-      }
-      // The mandatory policy means park-or-deny; reaching here means the gate
-      // relaxed. Loud: investigate governance seeding before anything else.
-      app.log.error(
-        `[inngest] riley pause UNEXPECTEDLY executed without approval rec=${candidate.recommendationId} outcome=${res.result.outcome} - investigate governance seeding`,
-      );
-      return { parked: false };
-    } catch (err) {
-      app.log.warn(
-        `[inngest] riley pause submit threw for rec=${candidate.recommendationId}: ${String(err)}`,
-      );
-      return { parked: false };
-    }
-  };
+  // Phase-C pause initiator: the testable factory owns the branch order
+  // (approvalRequired-before-result, entitlement named skip, loud deny +
+  // unexpected-execute alarms). See bootstrap/riley-pause-submitter.ts.
+  const rileyPauseSubmitter: RileyPauseSubmitter = buildRileyPauseSubmitter({
+    submitRileyPause: options.submitRileyPause,
+    log: app.log,
+  });
 
   const adOptimizerDeps: CronDependencies = {
     listActiveDeployments: async () => {
