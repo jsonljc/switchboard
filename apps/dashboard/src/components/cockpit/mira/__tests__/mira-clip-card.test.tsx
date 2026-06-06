@@ -66,4 +66,21 @@ describe("MiraClipCard", () => {
     fireEvent.click(screen.getByText("Spring promo"));
     expect(push).toHaveBeenCalledWith("/mira/creatives/j1");
   });
+
+  it("does not autoplay under prefers-reduced-motion", async () => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    );
+    const play = vi.fn().mockResolvedValue(undefined);
+    window.HTMLMediaElement.prototype.play = play;
+    render(<MiraClipCard job={clip()} isActive onResolve={() => {}} onDecided={() => {}} />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(play).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });

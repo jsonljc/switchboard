@@ -29,5 +29,6 @@ export function useMiraFeed(limit = 20) {
     isLoading: query.isLoading,
     isError: query.isError,
     error: (query.error as Error | null) ?? null,
+    refetch: query.refetch,
   };
 }

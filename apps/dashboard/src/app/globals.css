@@ -30,6 +30,16 @@
     --palette-violet-deep: 256 31% 45%;
     --palette-violet-tint: 255 33% 95%;
     --palette-risk-tint: 14 45% 93%; /* dusty terracotta wash, spec §4 high-risk ground */
+    /* Night register (the ONE sanctioned dark surface: Mira's review feed body).
+       Warm charcoal derived from the spec's dark variant (#16140E family),
+       never pure black. Chrome around the feed stays on the light canvas. */
+    --palette-night-canvas: 45 22% 7%;
+    --palette-night-surface: 45 14% 12%;
+    --palette-night-ink: 40 30% 94%;
+    --palette-night-ink-2: 42 12% 74%;
+    --palette-night-ink-3: 43 9% 60%;
+    --palette-night-scrim: 45 22% 4%;
+    --palette-night-risk: 0 42% 34%;
     --palette-editorial-accent: 20 90% 55%; /* bright editorial orange (Mercury/reports) — NOT the action amber */
     --palette-editorial-accent-soft: 20 60% 50%; /* softened editorial orange */
     /* warm-neutral ink ramp — ONE canonical text/neutral scale (T5, by role) */
@@ -69,6 +79,14 @@
     --destructive: 0 38% 40%;
     --destructive-foreground: 0 0% 98%;
     --risk-tint: var(--palette-risk-tint); /* destructive-confirm ground (consumed hsl(var())) */
+    /* Night register semantics: consumed hsl(var(--night-*)) on feed surfaces only. */
+    --night-canvas: var(--palette-night-canvas);
+    --night-surface: var(--palette-night-surface);
+    --night-ink: var(--palette-night-ink);
+    --night-ink-2: var(--palette-night-ink-2);
+    --night-ink-3: var(--palette-night-ink-3);
+    --night-scrim: var(--palette-night-scrim);
+    --night-risk: var(--palette-night-risk);
     --positive: 152 28% 32%;
     --positive-foreground: 0 0% 98%;
     --positive-subtle: 152 22% 94%;

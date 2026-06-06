@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { MiraCreativeJobSummary } from "@switchboard/core";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { MiraClipActions } from "./mira-clip-actions";
 
 function statusLabel(status: MiraCreativeJobSummary["status"]): string {
@@ -35,16 +36,24 @@ export function MiraClipCard({
 }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const reducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (isActive) void el.play().catch(() => {});
+    // Live media-query read inside the effect (hydration-safe: effects render no
+    // markup) so a reduced-motion user never gets even one autoplay frame; the
+    // hook keeps the two-pass value for reactive re-runs on preference change.
+    const reduceNow =
+      reducedMotion ||
+      (typeof window !== "undefined" &&
+        !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    if (isActive && !reduceNow) void el.play().catch(() => {});
     else el.pause();
     return () => {
       el.pause();
     };
-  }, [isActive]);
+  }, [isActive, reducedMotion]);
 
   return (
     <section
@@ -54,7 +63,7 @@ export function MiraClipCard({
         height: "100%",
         width: "100%",
         scrollSnapAlign: "start",
-        background: "#000",
+        background: "hsl(var(--night-canvas))",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -77,7 +86,9 @@ export function MiraClipCard({
           style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }}
         />
       ) : (
-        <div style={{ color: "#bbb", fontSize: 14 }}>This clip didn&apos;t load.</div>
+        <div style={{ color: "hsl(var(--night-ink-2))", fontSize: 14 }}>
+          This clip didn&apos;t load.
+        </div>
       )}
 
       {/* status chip */}
@@ -88,8 +99,8 @@ export function MiraClipCard({
           left: 14,
           padding: "4px 10px",
           borderRadius: 999,
-          background: "rgba(0,0,0,0.55)",
-          color: "#fff",
+          background: "hsl(var(--night-scrim) / 0.7)",
+          color: "hsl(var(--night-ink))",
           fontSize: 12,
         }}
       >
@@ -108,7 +119,7 @@ export function MiraClipCard({
           textAlign: "left",
           background: "transparent",
           border: "none",
-          color: "#fff",
+          color: "hsl(var(--night-ink))",
           font: "inherit",
           cursor: "pointer",
         }}
