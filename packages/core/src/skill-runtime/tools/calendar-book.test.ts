@@ -631,15 +631,18 @@ describe("createCalendarBookToolFactory", () => {
       contact: Record<string, unknown> | null;
       opportunity: { id: string; estimatedValue?: number | null } | null;
     }) {
-      const captured: { payload?: Record<string, unknown> } = {};
+      const captured: { payload?: Record<string, unknown>; eventId?: unknown } = {};
       const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
         cb({
           booking: { update: vi.fn().mockResolvedValue({}) },
           outboxEvent: {
-            create: vi.fn(async (args: { data: { payload: Record<string, unknown> } }) => {
-              captured.payload = args.data.payload;
-              return { id: "ob_1" };
-            }),
+            create: vi.fn(
+              async (args: { data: { eventId: unknown; payload: Record<string, unknown> } }) => {
+                captured.eventId = args.data.eventId;
+                captured.payload = args.data.payload;
+                return { id: "ob_1" };
+              },
+            ),
           },
           opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
           receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
@@ -730,6 +733,48 @@ describe("createCalendarBookToolFactory", () => {
         customer: { email: "walkin@example.com", phone: null },
         attribution: { fbclid: null, lead_id: null },
       });
+    });
+
+    it("uses a deterministic booked eventId (evt_booked_<bookingId>), never a random UUID", async () => {
+      const { tool: t, captured } = buildToolWithCapture({
+        contact: {
+          id: "ct_1",
+          name: "Jane",
+          email: "jane@example.com",
+          phone: "+6591234567",
+          attribution: null,
+        },
+        opportunity: { id: "opp_1", estimatedValue: 1000 },
+      });
+      await t.operations["booking.create"]!.execute({
+        service: "botox",
+        slotStart: "2026-06-01T10:00:00Z",
+        slotEnd: "2026-06-01T10:30:00Z",
+        calendarId: "primary",
+      });
+      // bookingStore.create in buildToolWithCapture resolves { id: "bk_1" }
+      expect(captured.eventId).toBe("evt_booked_bk_1");
+    });
+
+    it("stamps booked occurredAt from the external slotStart, not the in-app write clock (clock-game defense)", async () => {
+      const { tool: t, captured } = buildToolWithCapture({
+        contact: {
+          id: "ct_1",
+          name: "Jane",
+          email: "jane@example.com",
+          phone: "+6591234567",
+          attribution: null,
+        },
+        opportunity: { id: "opp_1", estimatedValue: 1000 },
+      });
+      const slotStart = "2026-06-01T10:00:00.000Z";
+      await t.operations["booking.create"]!.execute({
+        service: "botox",
+        slotStart,
+        slotEnd: "2026-06-01T10:30:00Z",
+        calendarId: "primary",
+      });
+      expect(captured.payload?.occurredAt).toBe(slotStart);
     });
   });
 

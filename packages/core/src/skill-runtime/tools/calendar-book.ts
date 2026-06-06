@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { SkillTool, SkillRequestContext } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
@@ -354,7 +353,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           // 3. On success: confirm booking + write outbox in one transaction
           let stageAdvanced = false;
           try {
-            const eventId = randomUUID();
+            const eventId = `evt_booked_${booking.id}`;
             await deps.runTransaction(async (tx) => {
               await tx.booking.update({
                 where: { id: booking.id },
@@ -379,7 +378,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                     sourceAdId: conversion.sourceAdId,
                     customer: conversion.customer,
                     attribution: conversion.attribution,
-                    occurredAt: new Date().toISOString(),
+                    occurredAt: new Date(input.slotStart).toISOString(),
                     source: "calendar-book",
                     metadata: {
                       bookingId: booking.id,
