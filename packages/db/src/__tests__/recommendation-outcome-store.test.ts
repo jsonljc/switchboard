@@ -227,6 +227,31 @@ describe("PrismaRecommendationOutcomeStore.listRenderableForOrg", () => {
       trustDelta: null,
     });
   });
+
+  it("projects corroborated through the read model (the slice-4d writer value is legal on the read side)", async () => {
+    const prisma = buildPrismaMock();
+    (prisma.recommendationOutcome.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: "outcome-corroborated",
+        recommendationId: "rec-11",
+        actionKind: "pause",
+        windowEndedAt: new Date("2026-05-08T12:00:00Z"),
+        copyTemplate: "pause.spend.fell",
+        copyValues: { deltaPct: -92, windowDays: 7 },
+        causalStrength: "corroborated",
+        businessContextStable: "unknown",
+        trustDelta: "up",
+        recommendation: { targetEntities: { campaignId: "camp-A" }, parameters: {} },
+      },
+    ]);
+    const store = new PrismaRecommendationOutcomeStore(prisma as never);
+    const out = await store.listRenderableForOrg({ orgId: "org-1", agentRole: "riley", limit: 50 });
+    expect(out[0]).toMatchObject({
+      causalStrength: "corroborated",
+      businessContextStable: "unknown",
+      trustDelta: "up",
+    });
+  });
 });
 
 describe("extractCampaignIdentity", () => {

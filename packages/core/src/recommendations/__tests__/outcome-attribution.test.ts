@@ -341,44 +341,10 @@ describe("attributeOneRecommendation — slice-3 enrichments (honesty floors)", 
     }
   });
 
-  it("never emits corroborated (reserved for the slice-4 corroboration signal)", () => {
-    const stableSet = [osConfirm("2026-04-20T09:00:00.000Z", OS_FULL_NORMAL)];
-    const unstableSet = [
-      osConfirm("2026-04-20T09:00:00.000Z", OS_FULL_NORMAL),
-      osConfirm("2026-05-02T09:00:00.000Z", { ...OS_FULL_NORMAL, inventory: "outage" }),
-    ];
-    const fixtures = [
-      { preWindow: w(10000, 0.02), postWindow: w(800, 0.02), overlaps: [] },
-      { preWindow: w(10000, 0.02), postWindow: w(11000, 0.02), overlaps: [] },
-      { preWindow: null, postWindow: w(800, 0.02), overlaps: [] },
-      { preWindow: w(0, 0.02), postWindow: w(800, 0.02), overlaps: [] },
-      { preWindow: w(10000, 0.02), postWindow: w(9700, 0.02), overlaps: [] },
-      {
-        preWindow: w(10000, 0.02),
-        postWindow: w(800, 0.02),
-        overlaps: [{ id: "rec-2", actionKind: "pause" as const }],
-      },
-      // Slice 4c: the corroborated honesty floor holds WITH operational-state
-      // confirmations present too; a stable window is still not an
-      // independent second estimate (Decision F defers the CRM/booking arm).
-      {
-        preWindow: w(10000, 0.02),
-        postWindow: w(800, 0.02),
-        overlaps: [],
-        operationalStateConfirmations: stableSet,
-      },
-      {
-        preWindow: w(10000, 0.02),
-        postWindow: w(800, 0.02),
-        overlaps: [],
-        operationalStateConfirmations: unstableSet,
-      },
-    ];
-    for (const f of fixtures) {
-      const row = attributeOneRecommendation({ candidate: REC, ...f });
-      expect(["directional", "inconclusive"]).toContain(row.causalStrength);
-    }
-  });
+  // Slice 4d: the corroborated-arm pins (the deliberate flip of the slice-3
+  // never-emits-corroborated sweep) live in
+  // outcome-attribution-corroboration.test.ts, split out to respect the
+  // 600-line lint ceiling on this file.
 });
 
 describe("runRileyOutcomeAttribution — orchestration", () => {

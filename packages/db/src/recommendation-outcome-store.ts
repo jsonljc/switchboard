@@ -213,8 +213,9 @@ function projectReadModel(row: {
       cv && typeof cv.deltaPct === "number" && typeof cv.windowDays === "number"
         ? { deltaPct: cv.deltaPct, windowDays: cv.windowDays }
         : null,
-    // "corroborated" is legal on the READ side: reading a future slice-4
-    // value is not fabricating it (the engine never writes it this slice).
+    // All three causal-strength values are legal on the read side; the
+    // engine emits "corroborated" since slice 4d (independent booking-side
+    // agreement under floors, not causal proof).
     causalStrength: narrowEnum(row.causalStrength, [
       "directional",
       "corroborated",

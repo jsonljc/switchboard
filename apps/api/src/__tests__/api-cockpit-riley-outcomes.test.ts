@@ -28,7 +28,8 @@ const SAMPLE_ROWS: RecommendationOutcomeReadModel[] = [
     copyValues: { deltaPct: -92, windowDays: 7 },
     campaignId: "camp-A",
     campaignName: "Campaign A",
-    causalStrength: "directional",
+    // Slice 4d: corroborated read models flow the legacy route unchanged.
+    causalStrength: "corroborated",
     businessContextStable: "unknown",
     trustDelta: "up",
   },

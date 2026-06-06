@@ -43,6 +43,8 @@ export type {
   InsightsWindowQuery,
   MetaInsightsProvider,
   OperationalStateReader,
+  OrgBookedStatsReader,
+  OrgBookedWindowStats,
   AttributableRecommendation,
   AttributableRecommendationStore,
   RileyOutcomeRow,

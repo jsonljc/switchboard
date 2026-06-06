@@ -6,6 +6,7 @@ import {
   type AttributableRecommendationStore,
   type MetaInsightsProvider,
   type OperationalStateReader,
+  type OrgBookedStatsReader,
   type RecommendationOutcomeStore,
   type RileyOutcomeRunSummary,
 } from "@switchboard/core";
@@ -90,6 +91,9 @@ export interface BindRileyOutcomeOrchestratorDeps {
   /** Slice 4c: the 4a operational-state window read (PrismaOperationalStateStore).
    * Absent ⇒ every outcome row records businessContextStable "unknown". */
   operationalStateReader?: OperationalStateReader;
+  /** Slice 4d: org-level windowed booked stats (PrismaConversionRecordStore).
+   * Absent ⇒ the corroborated arm is unjudgeable; rows are byte-identical. */
+  orgBookedStatsReader?: OrgBookedStatsReader;
 }
 
 /**
@@ -110,6 +114,7 @@ export function bindRileyOutcomeOrchestrator(deps: BindRileyOutcomeOrchestratorD
       ...(deps.operationalStateReader
         ? { operationalStateReader: deps.operationalStateReader }
         : {}),
+      ...(deps.orgBookedStatsReader ? { orgBookedStatsReader: deps.orgBookedStatsReader } : {}),
       orgId: args.orgId,
       now: args.now,
     });
