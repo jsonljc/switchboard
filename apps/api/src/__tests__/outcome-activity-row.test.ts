@@ -68,4 +68,13 @@ describe("translateOutcomeToActivityRow", () => {
     expect(translateOutcomeToActivityRow({ ...BASE, copyTemplate: null })).toBeNull();
     expect(translateOutcomeToActivityRow({ ...BASE, copyValues: null })).toBeNull();
   });
+
+  it("renders a corroborated row byte-identically to its directional twin (causalStrength is not operator copy; riley v3 slice 4d)", () => {
+    const directional = translateOutcomeToActivityRow(BASE);
+    const corroborated = translateOutcomeToActivityRow({
+      ...BASE,
+      causalStrength: "corroborated",
+    });
+    expect(corroborated).toEqual(directional);
+  });
 });
