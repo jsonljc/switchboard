@@ -158,6 +158,7 @@ export * from "./pcd-identity.js";
 export * from "./recommendations.js";
 // Riley -> agent recommendation handoff payload (Governed Handoff Contract Freeze §4.3)
 export * from "./recommendation-handoff.js";
+export * from "./riley-pause-execution.js";
 
 // Reports v1 view-model (operator deep-dive surface)
 export * from "./reports/v1.js";

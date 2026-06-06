@@ -30,6 +30,36 @@ describe("summarizeParkedIntent", () => {
     expect(s!.riskContract).toMatchObject({ riskLevel: "medium", requiresConfirmation: true });
   });
 
+  it("humanizes the parked Riley pause with campaign, rationale, evidence, rollback note", () => {
+    const s = summarizeParkedIntent({
+      intent: "adoptimizer.campaign.pause",
+      organizationId: "org_dev",
+      actorId: "system",
+      parameters: {
+        recommendationId: "rec_1",
+        actionType: "pause",
+        campaignId: "camp-7",
+        rationale: "sustained spend with zero booked revenue",
+        evidence: { clicks: 1000, conversions: 100, days: 30 },
+      },
+    });
+    expect(s).not.toBeNull();
+    expect(s!.humanSummary).toMatch(/Riley wants to pause/);
+    expect(s!.humanSummary).toContain("camp-7");
+    expect(s!.humanSummary).toContain("sustained spend");
+    const flat = (s!.dataLines ?? []).map((l) => (Array.isArray(l) ? l.join(" ") : l)).join("\n");
+    expect(flat).toContain("1000 clicks");
+    expect(flat).toContain("Resume");
+    expect(s!.presentation?.primaryLabel).toBe("Approve pause");
+    // A pause mutates live spend state on Meta: external + financial, high risk.
+    expect(s!.riskContract).toMatchObject({
+      riskLevel: "high",
+      externalEffect: true,
+      financialEffect: true,
+      requiresConfirmation: true,
+    });
+  });
+
   it("notes the learning phase when active", () => {
     const s = summarizeParkedIntent({
       intent: "adoptimizer.recommendation.handoff",

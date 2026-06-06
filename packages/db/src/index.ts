@@ -169,6 +169,14 @@ export {
   buildRecommendationHandoffApprovalPolicyInput,
 } from "./seed/recommendation-handoff-governance.js";
 export {
+  RILEY_PAUSE_ALLOW_POLICY_RULE,
+  rileyPauseAllowPolicyId,
+  buildRileyPauseAllowPolicyInput,
+  RILEY_PAUSE_APPROVAL_POLICY_RULE,
+  rileyPauseApprovalPolicyId,
+  buildRileyPauseApprovalPolicyInput,
+} from "./seed/riley-pause-governance.js";
+export {
   seedAlexSkillPack,
   assertAlexSkillPackSeeded,
   ALEX_SKILL_PACK_SCOPES,

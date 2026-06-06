@@ -1,4 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
+import {
+  buildRileyPauseAllowPolicyInput,
+  buildRileyPauseApprovalPolicyInput,
+} from "./riley-pause-governance.js";
 
 /** The marketplace listing that backs Riley. Seeded by seedMarketplace (slug "ad-optimizer"). */
 export const AD_OPTIMIZER_LISTING_SLUG = "ad-optimizer";
@@ -65,5 +69,27 @@ export async function seedRileyAdOptimizerDeployment(
     },
     create: { organizationId: orgId, listingId: listing.id, ...config },
     update: config,
+  });
+
+  // Phase-C pause self-execution governance (adoptimizer.campaign.pause): a
+  // workflow intent default-denies without an allow policy, and a Riley-initiated
+  // pause mutates live spend state, so seed the allow + mandatory-approval
+  // policies together (mirrors the handoff gate; never one without the other).
+  // The per-org dispatch flag (governanceSettings.pauseSelfExecutionEnabled) is
+  // deliberately NOT seeded: the governed path is armed, the initiator stays OFF
+  // until an operator flips the org via scripts/riley-pause-flag.ts (auditable).
+  // Idempotent on the deterministic per-org policy ids.
+  const { id: pauseAllowId, ...pauseAllowData } = buildRileyPauseAllowPolicyInput(orgId);
+  await prisma.policy.upsert({
+    where: { id: pauseAllowId },
+    create: { id: pauseAllowId, ...pauseAllowData },
+    update: pauseAllowData,
+  });
+
+  const { id: pauseApprovalId, ...pauseApprovalData } = buildRileyPauseApprovalPolicyInput(orgId);
+  await prisma.policy.upsert({
+    where: { id: pauseApprovalId },
+    create: { id: pauseApprovalId, ...pauseApprovalData },
+    update: pauseApprovalData,
   });
 }

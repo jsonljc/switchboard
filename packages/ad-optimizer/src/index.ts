@@ -144,6 +144,11 @@ export {
   PHASE_C_EXECUTION_SEAM,
 } from "./action-contract.js";
 export type { ActionContract, PhaseCExecutionContract } from "./action-contract.js";
+// Phase-C wiring: raised execution floor for the self-submitted pause.
+export {
+  RILEY_PAUSE_EXECUTION_EVIDENCE_FLOOR,
+  meetsRileyPauseExecutionFloor,
+} from "./riley-pause-execution-floor.js";
 export {
   arbitrate,
   PROXIMITY_BY_TIER,
