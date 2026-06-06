@@ -27,6 +27,8 @@ function buildMockPrisma(opts: { listingExists?: boolean; listingId?: string } =
   const { listingExists = true, listingId = "listing_riley_1" } = opts;
   const deploymentUpserts: DeploymentUpsertArgs[] = [];
 
+  const policyUpserts: Array<{ where: { id: string }; create: Record<string, unknown> }> = [];
+
   const mock = {
     agentListing: {
       findUnique: vi.fn(async (args: FindUniqueArgs) =>
@@ -39,10 +41,18 @@ function buildMockPrisma(opts: { listingExists?: boolean; listingId?: string } =
         return { id: "deploy_riley_1" };
       }),
     },
+    policy: {
+      upsert: vi.fn(async (args: { where: { id: string }; create: Record<string, unknown> }) => {
+        policyUpserts.push(args);
+        return {};
+      }),
+    },
     _deploymentUpserts: deploymentUpserts,
+    _policyUpserts: policyUpserts,
   };
   return mock as unknown as PrismaClient & {
     _deploymentUpserts: DeploymentUpsertArgs[];
+    _policyUpserts: Array<{ where: { id: string }; create: Record<string, unknown> }>;
   };
 }
 
@@ -113,5 +123,15 @@ describe("seedRileyAdOptimizerDeployment", () => {
     );
     // Must fail loudly BEFORE attempting any deployment write.
     expect(noListing._deploymentUpserts).toHaveLength(0);
+    expect(noListing._policyUpserts).toHaveLength(0);
+  });
+
+  it("seeds the pause allow + mandatory approval policies alongside the deployment (Phase-C)", async () => {
+    await seedRileyAdOptimizerDeployment(prisma, "org_dev");
+    const ids = prisma._policyUpserts.map((c) => c.where.id);
+    expect(ids).toEqual([
+      "policy_allow_riley_pause_org_dev",
+      "policy_require_approval_riley_pause_org_dev",
+    ]);
   });
 });
