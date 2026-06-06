@@ -363,6 +363,13 @@ describe("PrismaRevenueStore", () => {
   });
 
   describe("sumByCampaign", () => {
+    it("sumByCampaign filters to origin 'live' (excludes seed/demo revenue from the owner read)", async () => {
+      const groupBy = prisma.lifecycleRevenueEvent.groupBy as ReturnType<typeof vi.fn>;
+      groupBy.mockResolvedValue([]);
+      await store.sumByCampaign("org-1");
+      expect(groupBy.mock.calls[0]![0].where.origin).toBe("live");
+    });
+
     it("groups revenue by campaign without date range", async () => {
       prisma.lifecycleRevenueEvent.groupBy.mockResolvedValue([
         { sourceCampaignId: "camp-1", _sum: { amount: 30000 }, _count: { id: 6 } },
@@ -376,6 +383,7 @@ describe("PrismaRevenueStore", () => {
         where: {
           organizationId: "org-1",
           status: "confirmed",
+          origin: "live",
           sourceCampaignId: {
             not: null,
           },
@@ -418,6 +426,7 @@ describe("PrismaRevenueStore", () => {
         where: {
           organizationId: "org-1",
           status: "confirmed",
+          origin: "live",
           sourceCampaignId: {
             not: null,
           },

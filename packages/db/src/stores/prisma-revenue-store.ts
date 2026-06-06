@@ -154,6 +154,7 @@ export class PrismaRevenueStore implements RevenueStore {
     const where: Record<string, unknown> = {
       organizationId: orgId,
       status: "confirmed",
+      origin: "live",
       sourceCampaignId: {
         not: null,
       },
