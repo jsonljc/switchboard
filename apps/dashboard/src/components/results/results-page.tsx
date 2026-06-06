@@ -19,9 +19,11 @@ import { WorthIt } from "./worth-it";
 import { DetailsDisclosure } from "./details-disclosure";
 import { FunnelSection } from "./funnel-section";
 import { CampaignsSection } from "./campaigns-section";
+import { PaidVisitsSection } from "./paid-visits-section";
 import { ManagedComparison } from "./managed-comparison";
 import { Colophon } from "./colophon";
 import { MetaConnectBanner, ErrorBanner, FirstRunNote, ResultsSkeleton } from "./states";
+import { usePaidVisits } from "@/app/(auth)/(mercury)/reports/hooks/use-paid-visits";
 import styles from "./results.module.css";
 
 export function ResultsPage() {
@@ -29,6 +31,7 @@ export function ResultsPage() {
   const [panelAgent, setPanelAgent] = useState<PanelAgentKey | null>(null);
   const { window: w, setWindow } = useReportWindow();
   const { data, isFetching, error, refresh } = useReportData(w);
+  const { paidVisits } = usePaidVisits(w);
   const liveMode = isMercuryToolLive("reports");
 
   // ── Cache-age state machine (mirrors reports-page.tsx §4.2) ───────────────
@@ -109,6 +112,7 @@ export function ResultsPage() {
                     <FunnelSection funnel={model.funnel} narrative={model.funnelNarrative} />
                   )}
                   {!showNoMeta && <CampaignsSection campaigns={model.campaigns} layout={layout} />}
+                  {!showNoMeta && <PaidVisitsSection visits={paidVisits ?? []} />}
                   {model.managedComparison && <ManagedComparison data={model.managedComparison} />}
                 </DetailsDisclosure>
               )}
