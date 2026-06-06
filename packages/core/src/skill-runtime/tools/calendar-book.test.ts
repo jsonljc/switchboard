@@ -45,6 +45,9 @@ function makeRunTransaction() {
       opportunity: {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
+      receipt: {
+        create: vi.fn().mockResolvedValue({ id: "rcpt_1" }),
+      },
     }),
   );
 }
@@ -110,6 +113,8 @@ describe("createCalendarBookToolFactory", () => {
       failureHandler: failureHandler as never,
       contactStore: contactStore as never,
       defaultCurrency: "SGD",
+      receiptTierForProvider: () => "T1_FETCH_BACK",
+      isProduction: false,
     });
     tool = factory({ ...TRUSTED_CTX, contactId: "ct_1" });
   });
@@ -327,6 +332,57 @@ describe("createCalendarBookToolFactory", () => {
     );
   });
 
+  it("mints a booked CalendarReceipt in the confirm transaction", async () => {
+    const receiptCreateSpy = vi.fn().mockResolvedValue({ id: "rcpt_1" });
+    let capturedTx: { receipt: { create: typeof receiptCreateSpy } } | undefined;
+    const capturingRunTx = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        booking: {
+          update: vi
+            .fn()
+            .mockResolvedValue({ id: "bk_1", status: "confirmed", calendarEventId: "gcal_1" }),
+        },
+        outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
+        opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        receipt: { create: receiptCreateSpy },
+      };
+      capturedTx = tx;
+      return fn(tx);
+    });
+    const t = createCalendarBookToolFactory({
+      calendarProviderFactory: calendarProviderFactory as never,
+      isCalendarProviderConfigured: isCalendarProviderConfigured as never,
+      bookingStore: bookingStore as never,
+      opportunityStore: opportunityStore as never,
+      runTransaction: capturingRunTx as never,
+      failureHandler: failureHandler as never,
+      contactStore: contactStore as never,
+      defaultCurrency: "SGD",
+      receiptTierForProvider: () => "T1_FETCH_BACK",
+      isProduction: false,
+    })({ ...TRUSTED_CTX, contactId: "ct_1" });
+    bookingStore.create.mockResolvedValue({ id: "bk_1" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+    calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+
+    const result = await t.operations["booking.create"]!.execute({
+      service: "botox",
+      slotStart: "2026-07-01T10:00:00Z",
+      slotEnd: "2026-07-01T11:00:00Z",
+      calendarId: "cal-1",
+    });
+
+    expect(result.status).toBe("success");
+    expect(capturedTx).toBeDefined();
+    expect(receiptCreateSpy).toHaveBeenCalledTimes(1);
+    const arg = receiptCreateSpy.mock.calls[0]![0] as {
+      data: { status: string; kind: string; tier: string };
+    };
+    expect(arg.data.status).toBe("booked");
+    expect(arg.data.kind).toBe("calendar");
+    expect(arg.data.tier).toBe("T1_FETCH_BACK");
+  });
+
   describe("booking.create opportunity stage advance", () => {
     // Build a tool whose runTransaction exposes the opportunity.updateMany spy
     // (asserts the monotonic stage-advance args / no-op) plus booking-counter
@@ -338,6 +394,7 @@ describe("createCalendarBookToolFactory", () => {
           booking: { update: vi.fn().mockResolvedValue({}) },
           outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
           opportunity: { updateMany: updateManySpy },
+          receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
         }),
       );
       bookingStore.create.mockResolvedValue({ id: "bk_1" });
@@ -356,6 +413,8 @@ describe("createCalendarBookToolFactory", () => {
         failureHandler: failureHandler as never,
         contactStore: contactStore as never,
         defaultCurrency: "SGD",
+        receiptTierForProvider: () => "T1_FETCH_BACK",
+        isProduction: false,
       })({ ...TRUSTED_CTX, contactId: "ct_1" });
       return { tool: t, updateManySpy, confirmedSpy, advancedSpy };
     }
@@ -583,6 +642,7 @@ describe("createCalendarBookToolFactory", () => {
             }),
           },
           opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+          receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
         }),
       );
       bookingStore.create.mockResolvedValue({ id: "bk_1" });
@@ -599,6 +659,8 @@ describe("createCalendarBookToolFactory", () => {
         failureHandler: failureHandler as never,
         contactStore: { findById: vi.fn().mockResolvedValue(setup.contact) } as never,
         defaultCurrency: "SGD",
+        receiptTierForProvider: () => "T1_FETCH_BACK",
+        isProduction: false,
       })({ ...TRUSTED_CTX, contactId: "ct_1" });
       return { tool: t, captured };
     }

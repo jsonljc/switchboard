@@ -12,6 +12,8 @@ import type { CalendarProvider, AttributionChain } from "@switchboard/schemas";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
 import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
 import { buildRescheduleOperations } from "./calendar-reschedule.js";
+import { buildCalendarReceiptData } from "../../receipts/mint-calendar-receipt.js";
+import type { ReceiptTier } from "@switchboard/schemas";
 
 interface BookingStoreSubset {
   create(input: {
@@ -79,6 +81,7 @@ type TransactionFn = (
         data: Record<string, unknown>;
       }): Promise<{ count: number }>;
     };
+    receipt: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
   }) => Promise<unknown>,
 ) => Promise<unknown>;
 
@@ -117,6 +120,17 @@ interface CalendarBookToolDeps {
   /** ISO-4217 default currency for booked-conversion value (cents). Temporary
    *  injected dep until per-org currency is wired. */
   defaultCurrency: string;
+  /**
+   * Maps a resolved CalendarProvider to the receipt tier that should be
+   * minted for this booking. Injected by apps/api — core must not read
+   * process.env directly.
+   */
+  receiptTierForProvider: (provider: CalendarProvider) => ReceiptTier;
+  /**
+   * Whether the app is running in production mode. Injected by apps/api —
+   * core must not read process.env directly.
+   */
+  isProduction: boolean;
 }
 
 const NOT_CONFIGURED_REMEDIATION =
@@ -377,6 +391,20 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                   },
                 },
               });
+              // Mint a booked CalendarReceipt in the same durable tx so
+              // the receipt is never orphaned from the booking confirmation.
+              const requestedTier = deps.receiptTierForProvider(provider);
+              const providerTrusted = requestedTier !== "T3_ADMIN_AUDIT";
+              const receiptData = buildCalendarReceiptData({
+                bookingId: booking.id,
+                organizationId: orgId,
+                opportunityId,
+                calendarEventId: calendarResult.calendarEventId ?? null,
+                providerTrusted,
+                requestedTier,
+                isProduction: deps.isProduction,
+              });
+              await tx.receipt.create({ data: receiptData as unknown as Record<string, unknown> });
               // Monotonic stage advance in the same durable tx: a confirmed
               // booking always implies a booked opp. updateMany never throws on
               // count:0 and the `notIn` guard skips an already-advanced opp, so a

@@ -340,13 +340,24 @@ export async function bootstrapSkillMode(
             data: Record<string, unknown>;
           }): Promise<{ count: number }>;
         };
+        receipt: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
       }) => Promise<unknown>,
     ) =>
       prismaClient.$transaction((tx) =>
-        fn({ booking: tx.booking, outboxEvent: tx.outboxEvent, opportunity: tx.opportunity }),
+        fn({
+          booking: tx.booking,
+          outboxEvent: tx.outboxEvent,
+          opportunity: tx.opportunity,
+          receipt: tx.receipt,
+        }),
       ),
     failureHandler,
     defaultCurrency: "SGD",
+    receiptTierForProvider: (provider) =>
+      isNoopCalendarProvider(provider) || provider.constructor.name === "LocalCalendarProvider"
+        ? "T3_ADMIN_AUDIT"
+        : "T1_FETCH_BACK",
+    isProduction: process.env["NODE_ENV"] === "production",
   });
 
   const crmQueryFactory = createCrmQueryToolFactory(contactStore, activityStore);
