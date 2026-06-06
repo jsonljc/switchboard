@@ -6,6 +6,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { PrismaRevenueStore } from "@switchboard/db";
 import { z } from "zod";
+import type { PaidVisitRow } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { requireIdempotencyKey } from "../utils/idempotency-key.js";
 import { ingressErrorToReply } from "../utils/ingress-error-to-reply.js";
@@ -26,6 +27,30 @@ const RecordRevenueInputSchema = z.object({
   sourceCampaignId: z.string().nullable().optional(),
   sourceAdId: z.string().nullable().optional(),
 });
+
+/**
+ * Convert a store row (raw amountCents) to a PaidVisitRow (amountMajor).
+ * This is the ONLY place the ÷100 conversion happens — never in the store,
+ * never in the dashboard. Hard unit boundary: 50000 cents → 500 major.
+ */
+export function toPaidVisitRow(row: {
+  bookingId: string;
+  amountCents: number;
+  currency: string;
+  sourceCampaignId: string | null;
+  attributionBasis: "ctwa_captured" | "campaign_missing";
+  paidAt: Date;
+}): PaidVisitRow {
+  return {
+    bookingId: row.bookingId,
+    amountMajor: row.amountCents / 100, // cents → major units EXACTLY ONCE
+    currency: row.currency,
+    campaignId: row.sourceCampaignId,
+    campaignName: row.sourceCampaignId, // human label is the campaign id until a name-lookup ships
+    attributionBasis: row.attributionBasis,
+    paidAt: row.paidAt.toISOString(),
+  };
+}
 
 export const revenueRoutes: FastifyPluginAsync = async (app) => {
   // Dev/test mode (authDisabled): populate organizationIdFromAuth + principalIdFromAuth
@@ -111,6 +136,8 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // GET /:orgId/revenue/by-campaign — revenue grouped by campaign
+  // With ?detail=paid-visits: returns per-visit rows (amountMajor = cents/100, done once here).
+  // Default (no detail param): returns existing { campaigns } aggregate — unchanged.
   app.get("/:orgId/revenue/by-campaign", async (request, reply) => {
     if (!app.prisma) {
       return reply.code(503).send({ error: "Database not available", statusCode: 503 });
@@ -120,6 +147,21 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
     if (!orgId) return;
 
     const store = new PrismaRevenueStore(app.prisma);
+    const { detail } = request.query as { detail?: string };
+
+    if (detail === "paid-visits") {
+      const to = new Date();
+      const from = new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const visits = await store.paidVisitsByCampaign({
+        orgId,
+        from,
+        to,
+        isProduction: process.env["NODE_ENV"] === "production",
+      });
+      const paidVisits = visits.map(toPaidVisitRow);
+      return reply.send({ paidVisits });
+    }
+
     const campaigns = await store.sumByCampaign(orgId);
     return reply.send({ campaigns });
   });
