@@ -1,3 +1,7 @@
+// DEFERRED — not yet registered into the runtime.
+// The per-org payment-port factory is constructed and wired into the skill runtime when the
+// live Stripe Connect adapter lands (PR 1A-4d). Until then, createPaymentPortFactory is
+// defined + tested but intentionally not called at server startup. It is not dead code.
 import type { PaymentPort } from "@switchboard/schemas";
 import { NoopPaymentAdapter } from "./noop-payment-adapter.js";
 
