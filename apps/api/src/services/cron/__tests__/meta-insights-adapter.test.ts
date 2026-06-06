@@ -146,3 +146,54 @@ describe("createMetaInsightsProviderForOrg — getCampaignInsights call shape", 
     expect(getCampaignInsightsSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("createMetaInsightsProviderForOrg — account-level spend enrichment (riley v3 slice 4d)", () => {
+  beforeEach(() => {
+    getCampaignInsightsSpy.mockReset();
+  });
+
+  it("sums accountSpendCents across ALL campaigns in the same Graph response (zero extra calls)", async () => {
+    getCampaignInsightsSpy.mockResolvedValue([
+      { campaignId: "camp-42", spend: 10.5, inlineLinkClickCtr: 0.02 },
+      { campaignId: "camp-42", spend: 4.5, inlineLinkClickCtr: 0.03 },
+      { campaignId: "camp-99", spend: 5.25, inlineLinkClickCtr: 0.01 },
+    ]);
+    const provider = createMetaInsightsProviderForOrg("org-1", makeFakePrisma());
+
+    const metrics = await provider.getWindowMetrics(makeQuery());
+
+    expect(getCampaignInsightsSpy).toHaveBeenCalledTimes(1);
+    // Campaign-level: 10.50 + 4.50 dollars = 1500 cents (unchanged behavior).
+    expect(metrics?.spendCents).toBe(1500);
+    // Account-level: 10.50 + 4.50 + 5.25 dollars = 2025 cents, summed BEFORE
+    // the campaign filter (the same dollars-to-cents conversion).
+    expect(metrics?.accountSpendCents).toBe(2025);
+  });
+
+  it("never narrows the Graph request to one campaign (accountSpendCents depends on the account-wide fetch)", async () => {
+    getCampaignInsightsSpy.mockResolvedValue([
+      { campaignId: "camp-42", spend: 10.5, inlineLinkClickCtr: 0.02 },
+    ]);
+    const provider = createMetaInsightsProviderForOrg("org-1", makeFakePrisma());
+
+    await provider.getWindowMetrics(makeQuery());
+
+    // MetaAdsClient.getCampaignInsights SUPPORTS a campaignId filtering
+    // param; a future "optimization" passing it would silently turn
+    // accountSpendCents into campaign spend and destroy corroboration.
+    const callArgs = getCampaignInsightsSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArgs).not.toHaveProperty("campaignId");
+    expect(callArgs).not.toHaveProperty("filtering");
+  });
+
+  it("still returns null when the requested campaign has no rows even if account rows exist (account data alone never fabricates a campaign window)", async () => {
+    getCampaignInsightsSpy.mockResolvedValue([
+      { campaignId: "camp-99", spend: 5.25, inlineLinkClickCtr: 0.01 },
+    ]);
+    const provider = createMetaInsightsProviderForOrg("org-1", makeFakePrisma());
+
+    const metrics = await provider.getWindowMetrics(makeQuery());
+
+    expect(metrics).toBeNull();
+  });
+});
