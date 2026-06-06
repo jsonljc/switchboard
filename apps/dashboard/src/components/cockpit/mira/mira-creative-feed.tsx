@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMiraFeed } from "@/hooks/use-mira-feed";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
+import { useToast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import { useReviewDecision } from "@/hooks/use-review-decision";
 import { MiraClipCard } from "./mira-clip-card";
 
 export function MiraCreativeFeed() {
@@ -13,6 +16,8 @@ export function MiraCreativeFeed() {
   const containerRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const keys = useScopedQueryKeys();
+  const { toast } = useToast();
+  const decide = useReviewDecision();
 
   const jobs = (data?.jobs ?? []).filter((j) => !resolved.has(j.id));
   const safeActive = jobs.length > 0 ? Math.min(activeIndex, jobs.length - 1) : 0;
@@ -21,6 +26,36 @@ export function MiraCreativeFeed() {
     setResolved((prev) => new Set(prev).add(jobId));
     setActiveIndex((i) => Math.min(i, Math.max(0, jobs.length - 2)));
     if (keys) void queryClient.invalidateQueries({ queryKey: keys.miraFeed.list() });
+  }
+
+  function undoDecision(jobId: string) {
+    decide.mutate(
+      { id: jobId, decision: null },
+      {
+        onSuccess: () => {
+          setResolved((prev) => {
+            const next = new Set(prev);
+            next.delete(jobId);
+            return next;
+          });
+        },
+      },
+    );
+  }
+
+  function handleDecided(jobId: string, decision: "kept" | "passed", silent: boolean) {
+    const job = jobs.find((j) => j.id === jobId);
+    handleResolve(jobId);
+    if (silent) return; // already decided elsewhere: no undo to offer
+    toast({
+      title: decision === "kept" ? "Kept" : "Passed",
+      description: job?.title,
+      action: (
+        <ToastAction altText="Undo" onClick={() => undoDecision(jobId)}>
+          Undo
+        </ToastAction>
+      ),
+    });
   }
 
   // Update the active (in-view) clip on scroll. IntersectionObserver is the
@@ -70,7 +105,12 @@ export function MiraCreativeFeed() {
     >
       {jobs.map((job, i) => (
         <div key={job.id} data-clip-index={i} style={{ height: "100%", scrollSnapAlign: "start" }}>
-          <MiraClipCard job={job} isActive={i === safeActive} onResolve={handleResolve} />
+          <MiraClipCard
+            job={job}
+            isActive={i === safeActive}
+            onResolve={handleResolve}
+            onDecided={handleDecided}
+          />
         </div>
       ))}
     </div>

@@ -36,7 +36,14 @@ describe("MiraClipActions", () => {
   });
 
   it("Continue requires confirm before mutating", () => {
-    render(<MiraClipActions jobId="j1" reviewAction={reviewable} onResolve={vi.fn()} />);
+    render(
+      <MiraClipActions
+        jobId="j1"
+        reviewAction={reviewable}
+        onResolve={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /continue draft/i }));
     expect(approveMock.mutate).not.toHaveBeenCalled(); // opened the confirm, not the mutation
     fireEvent.click(screen.getByRole("button", { name: /confirm continue/i }));
@@ -47,7 +54,14 @@ describe("MiraClipActions", () => {
   });
 
   it("Stop requires an irreversible confirm", () => {
-    render(<MiraClipActions jobId="j1" reviewAction={reviewable} onResolve={vi.fn()} />);
+    render(
+      <MiraClipActions
+        jobId="j1"
+        reviewAction={reviewable}
+        onResolve={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /^stop draft$/i }));
     expect(screen.getByText(/can't be undone/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /confirm stop/i }));
@@ -59,7 +73,14 @@ describe("MiraClipActions", () => {
 
   it("halted: Continue disabled + labeled, Stop still available", () => {
     halted = true;
-    render(<MiraClipActions jobId="j1" reviewAction={reviewable} onResolve={vi.fn()} />);
+    render(
+      <MiraClipActions
+        jobId="j1"
+        reviewAction={reviewable}
+        onResolve={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
     expect(screen.getByRole("button", { name: /halted/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /^stop draft$/i })).toBeEnabled();
   });
@@ -67,7 +88,14 @@ describe("MiraClipActions", () => {
   it("continue success resolves the clip", () => {
     approveMock.mutate = vi.fn((_args, opts) => opts?.onSuccess?.());
     const onResolve = vi.fn();
-    render(<MiraClipActions jobId="j2" reviewAction={reviewable} onResolve={onResolve} />);
+    render(
+      <MiraClipActions
+        jobId="j2"
+        reviewAction={reviewable}
+        onResolve={onResolve}
+        onDecided={vi.fn()}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /continue draft/i }));
     fireEvent.click(screen.getByRole("button", { name: /confirm continue/i }));
     expect(onResolve).toHaveBeenCalledWith("j2");
@@ -77,7 +105,14 @@ describe("MiraClipActions", () => {
     approveMock.mutate = vi.fn((_args, opts) => opts?.onSuccess?.({ pendingApproval: true }));
     approveMock.data = { pendingApproval: true };
     const onResolve = vi.fn();
-    render(<MiraClipActions jobId="j4" reviewAction={reviewable} onResolve={onResolve} />);
+    render(
+      <MiraClipActions
+        jobId="j4"
+        reviewAction={reviewable}
+        onResolve={onResolve}
+        onDecided={vi.fn()}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /continue draft/i }));
     fireEvent.click(screen.getByRole("button", { name: /confirm continue/i }));
     // Parked, not resolved — the clip stays and a pending notice shows.
@@ -89,7 +124,14 @@ describe("MiraClipActions", () => {
     approveMock.mutate = vi.fn((_args, opts) => opts?.onError?.());
     approveMock.isError = true;
     const onResolve = vi.fn();
-    render(<MiraClipActions jobId="j3" reviewAction={reviewable} onResolve={onResolve} />);
+    render(
+      <MiraClipActions
+        jobId="j3"
+        reviewAction={reviewable}
+        onResolve={onResolve}
+        onDecided={vi.fn()}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /continue draft/i }));
     fireEvent.click(screen.getByRole("button", { name: /confirm continue/i }));
     expect(screen.getByText(/try again/i)).toBeInTheDocument();
@@ -102,21 +144,49 @@ describe("MiraClipActions — Keep/Pass on review_draft", () => {
   const reviewable = { canContinue: false, canStop: false, label: "review_draft" as const };
 
   it("renders Keep + Pass (not Continue/Stop) for a draft_ready clip", () => {
-    render(<MiraClipActions jobId="j" reviewAction={reviewable} onResolve={vi.fn()} />);
+    render(
+      <MiraClipActions
+        jobId="j"
+        reviewAction={reviewable}
+        onResolve={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
     expect(screen.getByRole("button", { name: /^keep/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^pass/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /continue/i })).not.toBeInTheDocument();
   });
 
-  it("keeps the draft and resolves the clip", () => {
-    const onResolve = vi.fn();
-    render(<MiraClipActions jobId="j" reviewAction={reviewable} onResolve={onResolve} />);
+  it("keep fires onDecided with the decision and non-silent flag", () => {
+    const onDecided = vi.fn();
+    decideMock.mockImplementationOnce(
+      (
+        _args: unknown,
+        opts?: { onSuccess?: (data: { id: string; decision: string; silent?: boolean }) => void },
+      ) => opts?.onSuccess?.({ id: "j", decision: "kept" }),
+    );
+    render(
+      <MiraClipActions
+        jobId="j"
+        reviewAction={reviewable}
+        onResolve={vi.fn()}
+        onDecided={onDecided}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /^keep/i }));
     expect(decideMock).toHaveBeenCalledWith({ id: "j", decision: "kept" }, expect.anything());
+    expect(onDecided).toHaveBeenCalledWith("j", "kept", false);
   });
 
   it("keep commits in amber, never the identity violet", () => {
-    render(<MiraClipActions jobId="j" reviewAction={reviewable} onResolve={vi.fn()} />);
+    render(
+      <MiraClipActions
+        jobId="j"
+        reviewAction={reviewable}
+        onResolve={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
     const keep = screen.getByRole("button", { name: "Keep" });
     // assert on the attribute: jsdom's CSSStyleDeclaration normalization of
     // hsl(var()) values is version-dependent, the raw attribute is stable

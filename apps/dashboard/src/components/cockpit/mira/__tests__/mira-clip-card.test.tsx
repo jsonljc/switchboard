@@ -38,7 +38,9 @@ afterEach(() => push.mockReset());
 
 describe("MiraClipCard", () => {
   it("renders the video and a mode-correct status chip", () => {
-    const { container } = render(<MiraClipCard job={clip()} isActive onResolve={vi.fn()} />);
+    const { container } = render(
+      <MiraClipCard job={clip()} isActive onResolve={vi.fn()} onDecided={vi.fn()} />,
+    );
     expect(container.querySelector("video")?.getAttribute("src")).toBe("https://x/v.mp4");
     expect(screen.getByText(/awaiting review|in draft/i)).toBeInTheDocument();
     expect(screen.getByText(/UGC/i)).toBeInTheDocument();
@@ -47,16 +49,20 @@ describe("MiraClipCard", () => {
   it("active clip plays; inactive clip pauses", () => {
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play");
     const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause");
-    const { rerender } = render(<MiraClipCard job={clip()} isActive onResolve={vi.fn()} />);
+    const { rerender } = render(
+      <MiraClipCard job={clip()} isActive onResolve={vi.fn()} onDecided={vi.fn()} />,
+    );
     expect(playSpy).toHaveBeenCalled();
-    rerender(<MiraClipCard job={clip()} isActive={false} onResolve={vi.fn()} />);
+    rerender(
+      <MiraClipCard job={clip()} isActive={false} onResolve={vi.fn()} onDecided={vi.fn()} />,
+    );
     expect(pauseSpy).toHaveBeenCalled();
     playSpy.mockRestore();
     pauseSpy.mockRestore();
   });
 
   it("tapping the title navigates to detail", () => {
-    render(<MiraClipCard job={clip()} isActive onResolve={vi.fn()} />);
+    render(<MiraClipCard job={clip()} isActive onResolve={vi.fn()} onDecided={vi.fn()} />);
     fireEvent.click(screen.getByText("Spring promo"));
     expect(push).toHaveBeenCalledWith("/mira/creatives/j1");
   });

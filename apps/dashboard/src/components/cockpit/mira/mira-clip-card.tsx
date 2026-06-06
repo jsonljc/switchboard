@@ -19,16 +19,19 @@ function statusLabel(status: MiraCreativeJobSummary["status"]): string {
 /**
  * One full-bleed clip page. `isActive` drives autoplay (only the in-view clip
  * plays). `onResolve` is called after Continue/Stop succeeds so the feed can
- * dismiss the clip and advance.
+ * dismiss the clip and advance. `onDecided` is called after Keep/Pass so the
+ * feed can raise an undo toast.
  */
 export function MiraClipCard({
   job,
   isActive,
   onResolve,
+  onDecided,
 }: {
   job: MiraCreativeJobSummary;
   isActive: boolean;
   onResolve: (jobId: string) => void;
+  onDecided: (jobId: string, decision: "kept" | "passed", silent: boolean) => void;
 }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -116,7 +119,12 @@ export function MiraClipCard({
 
       {/* action rail */}
       <div style={{ position: "absolute", right: 14, bottom: 24 }}>
-        <MiraClipActions jobId={job.id} reviewAction={job.reviewAction} onResolve={onResolve} />
+        <MiraClipActions
+          jobId={job.id}
+          reviewAction={job.reviewAction}
+          onResolve={onResolve}
+          onDecided={onDecided}
+        />
       </div>
     </section>
   );
