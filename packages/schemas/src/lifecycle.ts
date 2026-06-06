@@ -104,6 +104,7 @@ export const ContactSchema = z.object({
   organizationId: z.string().min(1),
   name: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
+  phoneE164: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
   primaryChannel: z.enum(["whatsapp", "telegram", "dashboard"]),
   firstTouchChannel: z.string().nullable().optional(),
