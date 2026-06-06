@@ -942,6 +942,11 @@ export async function registerInngest(
       createInsightsProvider: (orgId) => createMetaInsightsProviderForOrg(orgId, app.prisma!),
       outcomeStore: recommendationOutcomeStore,
       operationalStateReader: operationalStateStore,
+      // Slice 4d: the CRM-side second estimate for outcome corroboration.
+      // The store instance already exists for the audit's booked-value
+      // provider; its getBookedStatsForOrgWindow satisfies the core reader
+      // interface structurally.
+      orgBookedStatsReader: bookedValueByCampaignStore,
     }),
     readEnabledFlag: () => process.env["RILEY_OUTCOME_ATTRIBUTION_ENABLED"] === "true",
     logger: app.log,
