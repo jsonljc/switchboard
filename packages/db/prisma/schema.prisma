@@ -1841,15 +1841,20 @@ model LifecycleRevenueEvent {
   status            String      @default("confirmed")
   recordedBy        String
   externalReference String?
+  bookingId         String?
   verified          Boolean     @default(false)
   sourceCampaignId  String?
   sourceAdId        String?
   recordedAt        DateTime    @default(now())
   createdAt         DateTime    @default(now())
 
+  // The (organizationId, externalReference) WHERE externalReference IS NOT NULL
+  // partial unique lives in raw SQL (Prisma 6 cannot express it) in migration
+  // 20260606130000_lre_booking_and_external_ref_unique. Keep this comment in sync.
   @@index([organizationId])
   @@index([opportunityId])
   @@index([organizationId, recordedAt])
+  @@index([organizationId, bookingId])
 }
 
 model OwnerTask {

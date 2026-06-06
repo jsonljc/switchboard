@@ -17,6 +17,8 @@ export interface RecordRevenueInput {
   status?: "pending" | "confirmed" | "refunded" | "failed";
   recordedBy: "owner" | "staff" | "stripe" | "integration";
   externalReference?: string | null;
+  /** Welds a verified payment to its booking row (spec 1A chain). */
+  bookingId?: string | null;
   verified?: boolean;
   sourceCampaignId?: string | null;
   sourceAdId?: string | null;

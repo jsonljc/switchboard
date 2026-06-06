@@ -175,6 +175,7 @@ export const LifecycleRevenueEventSchema = z.object({
   status: RevenueStatusSchema.default("confirmed"),
   recordedBy: RecordedBySchema,
   externalReference: z.string().nullable().optional(),
+  bookingId: z.string().nullable().optional(),
   verified: z.boolean().default(false),
   sourceCampaignId: z.string().nullable().optional(),
   sourceAdId: z.string().nullable().optional(),

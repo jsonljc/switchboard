@@ -16,6 +16,7 @@ interface RecordRevenueInput {
   status?: "pending" | "confirmed" | "refunded" | "failed";
   recordedBy: "owner" | "staff" | "stripe" | "integration";
   externalReference?: string | null;
+  bookingId?: string | null;
   verified?: boolean;
   sourceCampaignId?: string | null;
   sourceAdId?: string | null;
@@ -85,6 +86,7 @@ export class PrismaRevenueStore implements RevenueStore {
         status: input.status ?? "confirmed",
         recordedBy: input.recordedBy,
         externalReference: input.externalReference ?? null,
+        bookingId: input.bookingId ?? null,
         verified: input.verified ?? false,
         sourceCampaignId: input.sourceCampaignId ?? null,
         sourceAdId: input.sourceAdId ?? null,
@@ -276,6 +278,7 @@ function mapRowToRevenueEvent(row: {
   status: string;
   recordedBy: string;
   externalReference: string | null;
+  bookingId: string | null;
   verified: boolean;
   sourceCampaignId: string | null;
   sourceAdId: string | null;
@@ -293,6 +296,7 @@ function mapRowToRevenueEvent(row: {
     status: row.status as "pending" | "confirmed" | "refunded" | "failed",
     recordedBy: row.recordedBy as "owner" | "staff" | "stripe" | "integration",
     externalReference: row.externalReference,
+    bookingId: row.bookingId,
     verified: row.verified,
     sourceCampaignId: row.sourceCampaignId,
     sourceAdId: row.sourceAdId,

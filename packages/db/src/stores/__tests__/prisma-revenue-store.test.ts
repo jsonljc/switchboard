@@ -27,6 +27,7 @@ function makeRevenueEvent(overrides: Record<string, unknown> = {}) {
     status: "confirmed",
     recordedBy: "stripe",
     externalReference: "pi_abc123",
+    bookingId: null,
     verified: true,
     sourceCampaignId: "camp-1",
     sourceAdId: "ad-1",
@@ -110,6 +111,27 @@ describe("PrismaRevenueStore", () => {
   });
 
   describe("record", () => {
+    it("forwards bookingId into create data and round-trips it", async () => {
+      const created = makeRevenueEvent({ bookingId: "book-1" });
+      prisma.lifecycleRevenueEvent.create.mockResolvedValue(created);
+
+      const result = await store.record({
+        organizationId: "org-1",
+        contactId: "contact-1",
+        opportunityId: "opp-1",
+        amount: 5000,
+        type: "deposit",
+        recordedBy: "stripe",
+        verified: true,
+        bookingId: "book-1",
+      });
+
+      expect(prisma.lifecycleRevenueEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ bookingId: "book-1" }),
+      });
+      expect(result.bookingId).toBe("book-1");
+    });
+
     it("records a new revenue event with all fields", async () => {
       const input = {
         organizationId: "org-1",
