@@ -76,7 +76,21 @@ Note: lint-staged may reformat markdown on commit; if the commit reports modifie
 - Create: `packages/core/src/recommendations/outcome-corroboration.ts`
 - Modify: `packages/core/src/recommendations/index.ts`
 
-- [ ] **Step 1.1: Add the two type seams to `outcome-attribution-types.ts`**
+- [ ] **Step 1.1: Add the two type seams to `outcome-attribution-types.ts` and the not-causal-proof comment**
+
+REPLACE the existing `CausalStrength` doc comment block (currently "Slice-3 enrichment enums... must never emit it before that signal exists (honesty floor, spec section 7.5).") with:
+
+```ts
+/**
+ * Slice-3 enrichment enums (Riley v3 OutcomeLedger, spec section 2.5).
+ *
+ * causalStrength: "corroborated" (emitted since slice 4d) means a SECOND,
+ * INDEPENDENT booked-value estimate agrees with the directional outcome
+ * under explicit judgeability floors (outcome-corroboration.ts). It does
+ * NOT mean causal proof: no consumer, copy surface, or future scoring
+ * change may treat it as one (the whole system's bar is not overclaiming).
+ */
+```
 
 In the `WindowMetrics` interface, add after `dailyRowCount: number;`:
 
@@ -124,13 +138,14 @@ export interface OrgBookedStatsReader {
 
 - [ ] **Step 1.2: Write the failing tests for the pure predicate**
 
-Create `packages/core/src/recommendations/__tests__/outcome-corroboration.test.ts`:
+Every assertion pins the exact `reason` code, not just the upgrade (rollout debugging never reconstructs why corroboration stayed off). Create `packages/core/src/recommendations/__tests__/outcome-corroboration.test.ts`:
 
 ```ts
 import { describe, it, expect } from "vitest";
 import {
   CORROBORATION_MIN_BOOKINGS_PER_WINDOW,
   CORROBORATION_RATIO_HOLD_TOLERANCE,
+  CORROBORATION_SPEND_CONTINUITY_CEILING,
   CORROBORATION_SPEND_CONTINUITY_FLOOR,
   deriveCorroboration,
   type DeriveCorroborationInput,
@@ -139,8 +154,8 @@ import {
 /**
  * Baseline passing input (every test perturbs exactly one dimension):
  * pause, clean favorable delta, context unknown, account spend 100000c pre /
- * 80000c post (continuity 0.8 >= 0.5), bookings 5/5, booked value 50000c pre
- * (ratio 0.5) / 45000c post (ratio 0.5625 >= 0.8 * 0.5 = 0.4).
+ * 80000c post (continuity 0.8, inside [0.5, 1.5]), bookings 5/5, booked
+ * value 50000c pre (ratio 0.5) / 45000c post (ratio 0.5625 >= 0.8 * 0.5 = 0.4).
  */
 function passing(): DeriveCorroborationInput {
   return {
@@ -157,114 +172,145 @@ function passing(): DeriveCorroborationInput {
   };
 }
 
+const CORROBORATED = { causalStrengthUpgrade: "corroborated", reason: "corroborated" } as const;
+
+function rejected(reason: string): { causalStrengthUpgrade: null; reason: string } {
+  return { causalStrengthUpgrade: null, reason };
+}
+
 describe("deriveCorroboration: constants", () => {
-  it("pins the floors and tolerance (spec 4d section 2)", () => {
+  it("pins the floors, band, and tolerance (spec 4d section 2)", () => {
     expect(CORROBORATION_MIN_BOOKINGS_PER_WINDOW).toBe(3);
     expect(CORROBORATION_SPEND_CONTINUITY_FLOOR).toBe(0.5);
+    expect(CORROBORATION_SPEND_CONTINUITY_CEILING).toBe(1.5);
     expect(CORROBORATION_RATIO_HOLD_TOLERANCE).toBe(0.8);
   });
 });
 
 describe("deriveCorroboration: the passing case and the agreement boundary", () => {
   it("corroborates the baseline (favorable pause, floors met, ratio held)", () => {
-    expect(deriveCorroboration(passing())).toBe(true);
+    expect(deriveCorroboration(passing())).toEqual(CORROBORATED);
   });
 
   it("corroborates when booking efficiency IMPROVED (the expected waste-pause outcome)", () => {
     const input = passing();
     input.orgBookedStats!.postWindow.bookedValueCents = 90000;
-    expect(deriveCorroboration(input)).toBe(true);
+    expect(deriveCorroboration(input)).toEqual(CORROBORATED);
   });
 
   it("corroborates at exactly the hold boundary (post ratio = 0.8 x pre ratio)", () => {
     const input = passing();
     // pre ratio 0.5; threshold 0.4; post spend 80000 => booked exactly 32000.
     input.orgBookedStats!.postWindow.bookedValueCents = 32000;
-    expect(deriveCorroboration(input)).toBe(true);
+    expect(deriveCorroboration(input)).toEqual(CORROBORATED);
   });
 
-  it("does not corroborate just below the hold boundary", () => {
+  it("degrades just below the hold boundary (the second estimate does not agree)", () => {
     const input = passing();
     input.orgBookedStats!.postWindow.bookedValueCents = 31999;
-    expect(deriveCorroboration(input)).toBe(false);
+    expect(deriveCorroboration(input)).toEqual(rejected("ratio_degraded"));
   });
 });
 
 describe("deriveCorroboration: preconditions (P1-P4)", () => {
   it("never corroborates refresh_creative, even with passing inputs (recorded deferral, spec 4d section 6)", () => {
-    expect(deriveCorroboration({ ...passing(), actionKind: "refresh_creative" })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), actionKind: "refresh_creative" })).toEqual(
+      rejected("not_pause"),
+    );
   });
 
   it("never corroborates a flagged row (no clean first estimate)", () => {
-    expect(deriveCorroboration({ ...passing(), visibilityFlagCount: 1 })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), visibilityFlagCount: 1 })).toEqual(
+      rejected("visibility_flagged"),
+    );
   });
 
   it("never corroborates without a computed delta", () => {
-    expect(deriveCorroboration({ ...passing(), deltaPct: null })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), deltaPct: null })).toEqual(
+      rejected("missing_delta"),
+    );
   });
 
   it("never corroborates an unfavorable pause (spend rose: nothing to corroborate)", () => {
-    expect(deriveCorroboration({ ...passing(), deltaPct: 10 })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), deltaPct: 10 })).toEqual(
+      rejected("unfavorable_direction"),
+    );
   });
 
   it("never corroborates a zero delta (not favorable)", () => {
-    expect(deriveCorroboration({ ...passing(), deltaPct: 0 })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), deltaPct: 0 })).toEqual(
+      rejected("unfavorable_direction"),
+    );
   });
 
   it("never corroborates over an operator-confirmed unstable window (both estimates confounded)", () => {
-    expect(deriveCorroboration({ ...passing(), businessContextStable: "unstable" })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), businessContextStable: "unstable" })).toEqual(
+      rejected("unstable_context"),
+    );
   });
 
   it("corroborates over a stable window (operator confirmation strengthens, never blocks)", () => {
-    expect(deriveCorroboration({ ...passing(), businessContextStable: "stable" })).toBe(true);
+    expect(deriveCorroboration({ ...passing(), businessContextStable: "stable" })).toEqual(
+      CORROBORATED,
+    );
   });
 });
 
 describe("deriveCorroboration: judgeability floors (F1-F3, the no-fabrication set)", () => {
   it("unjudgeable when the booking reader was absent (F1)", () => {
-    expect(deriveCorroboration({ ...passing(), orgBookedStats: undefined })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), orgBookedStats: undefined })).toEqual(
+      rejected("missing_booking_stats"),
+    );
   });
 
   it("unjudgeable when pre-window account spend is missing (F1)", () => {
-    expect(deriveCorroboration({ ...passing(), preAccountSpendCents: undefined })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), preAccountSpendCents: undefined })).toEqual(
+      rejected("missing_account_spend"),
+    );
   });
 
   it("unjudgeable when post-window account spend is missing (F1)", () => {
-    expect(deriveCorroboration({ ...passing(), postAccountSpendCents: undefined })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), postAccountSpendCents: undefined })).toEqual(
+      rejected("missing_account_spend"),
+    );
   });
 
   it("unjudgeable from a 0-booking window (the spec's literal floor)", () => {
     const input = passing();
     input.orgBookedStats!.postWindow = { bookedValueCents: 0, bookedCount: 0 };
-    expect(deriveCorroboration(input)).toBe(false);
+    expect(deriveCorroboration(input)).toEqual(rejected("sparse_bookings"));
   });
 
   it("unjudgeable below the booking floor in the PRE window (2 < 3)", () => {
     const input = passing();
     input.orgBookedStats!.preWindow.bookedCount = 2;
-    expect(deriveCorroboration(input)).toBe(false);
+    expect(deriveCorroboration(input)).toEqual(rejected("sparse_bookings"));
   });
 
   it("unjudgeable below the booking floor in the POST window (2 < 3)", () => {
     const input = passing();
     input.orgBookedStats!.postWindow.bookedCount = 2;
-    expect(deriveCorroboration(input)).toBe(false);
+    expect(deriveCorroboration(input)).toEqual(rejected("sparse_bookings"));
   });
 
   it("judgeable at exactly the booking floor (3 per window)", () => {
     const input = passing();
     input.orgBookedStats!.preWindow.bookedCount = 3;
     input.orgBookedStats!.postWindow.bookedCount = 3;
-    expect(deriveCorroboration(input)).toBe(true);
+    expect(deriveCorroboration(input)).toEqual(CORROBORATED);
   });
 
   it("unjudgeable with zero pre-window account spend (no ratio exists)", () => {
-    expect(deriveCorroboration({ ...passing(), preAccountSpendCents: 0 })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), preAccountSpendCents: 0 })).toEqual(
+      rejected("spend_continuity_failed"),
+    );
   });
 
   it("unjudgeable when account spend collapsed past the continuity floor (the 4c degeneracy, F3)", () => {
     // Single-campaign org: post account spend ~ post campaign spend ~ 0.
-    expect(deriveCorroboration({ ...passing(), postAccountSpendCents: 800 })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), postAccountSpendCents: 800 })).toEqual(
+      rejected("spend_continuity_failed"),
+    );
   });
 
   it("judgeable at exactly the continuity floor (post = 0.5 x pre)", () => {
@@ -272,11 +318,43 @@ describe("deriveCorroboration: judgeability floors (F1-F3, the no-fabrication se
     input.postAccountSpendCents = 50000;
     // Keep the ratio held: pre ratio 0.5, threshold 0.4; post 50000c spend
     // needs >= 20000c booked; baseline post booked 45000c passes.
-    expect(deriveCorroboration(input)).toBe(true);
+    expect(deriveCorroboration(input)).toEqual(CORROBORATED);
   });
 
   it("unjudgeable just below the continuity floor", () => {
-    expect(deriveCorroboration({ ...passing(), postAccountSpendCents: 49999 })).toBe(false);
+    expect(deriveCorroboration({ ...passing(), postAccountSpendCents: 49999 })).toEqual(
+      rejected("spend_continuity_failed"),
+    );
+  });
+
+  it("judgeable at exactly the continuity ceiling (post = 1.5 x pre)", () => {
+    const input = passing();
+    input.postAccountSpendCents = 150000;
+    // Ratio must still hold at the bigger denominator: threshold 0.4 of pre
+    // ratio 0.5 needs >= 60000c booked on 150000c post spend.
+    input.orgBookedStats!.postWindow.bookedValueCents = 60000;
+    expect(deriveCorroboration(input)).toEqual(CORROBORATED);
+  });
+
+  it("unjudgeable just above the continuity ceiling (a scaled-up account is a different regime)", () => {
+    expect(deriveCorroboration({ ...passing(), postAccountSpendCents: 150001 })).toEqual(
+      rejected("spend_continuity_failed"),
+    );
+  });
+});
+
+describe("deriveCorroboration: explicit ratio guards (defensive; unreachable from the live reader)", () => {
+  it("unjudgeable when pre-window booked value is non-positive (preRatio > 0 must not depend on a store predicate)", () => {
+    const input = passing();
+    // bookedCount stays 5: only schema/store drift could produce this shape.
+    input.orgBookedStats!.preWindow.bookedValueCents = 0;
+    expect(deriveCorroboration(input)).toEqual(rejected("invalid_booked_value"));
+  });
+
+  it("unjudgeable when post-window booked value is negative (corrupt data must not certify)", () => {
+    const input = passing();
+    input.orgBookedStats!.postWindow.bookedValueCents = -100;
+    expect(deriveCorroboration(input)).toEqual(rejected("invalid_booked_value"));
   });
 });
 
@@ -284,11 +362,11 @@ describe("deriveCorroboration: cents discipline", () => {
   it("compares cents over cents (a dollars-vs-cents mixup on one side would flip the verdict)", () => {
     const input = passing();
     // If post booked value were misread as dollars (45000 -> 450), the ratio
-    // would collapse 100x and the verdict would flip to false. Pin the true
-    // cents reading.
-    expect(deriveCorroboration(input)).toBe(true);
+    // would collapse 100x and the verdict would flip. Pin the true cents
+    // reading and the flipped misreading.
+    expect(deriveCorroboration(input).causalStrengthUpgrade).toBe("corroborated");
     input.orgBookedStats!.postWindow.bookedValueCents = 450;
-    expect(deriveCorroboration(input)).toBe(false);
+    expect(deriveCorroboration(input)).toEqual(rejected("ratio_degraded"));
   });
 });
 ```
@@ -353,6 +431,18 @@ export const CORROBORATION_MIN_BOOKINGS_PER_WINDOW = 3;
 export const CORROBORATION_SPEND_CONTINUITY_FLOOR = 0.5;
 
 /**
+ * The anti-mix-shift ceiling, the floor's mirror: a major post-anchor
+ * scale-up (another campaign launched or scaled hard) changes the
+ * statistic's regime just as surely as a collapse, and a ratio that "held"
+ * across a doubled account is agreement about a different account. v1
+ * limitation, recorded: the band checks the account-level denominator only;
+ * campaign-mix shift WITHIN the band, organic-demand spikes, cross-channel
+ * campaigns, and in-window seasonality are not detected here (the
+ * operator-confirmed unstable block catches the operator-visible subset).
+ */
+export const CORROBORATION_SPEND_CONTINUITY_CEILING = 1.5;
+
+/**
  * "Held" tolerance: the post-window booked-revenue-per-dollar ratio must be
  * at least this fraction of the pre-window ratio. Wider than the
  * single-metric noise floors (5%/10%) because this is a ratio of ratios over
@@ -361,6 +451,32 @@ export const CORROBORATION_SPEND_CONTINUITY_FLOOR = 0.5;
  * cannot honestly be called "held".
  */
 export const CORROBORATION_RATIO_HOLD_TOLERANCE = 0.8;
+
+/**
+ * Why corroboration did or did not hold. "corroborated" is the only reason
+ * that upgrades; every other value names the first gate that rejected, in
+ * evaluation order. Exists so tests pin exact failure modes and rollout
+ * debugging never reconstructs why corroborated stayed off.
+ */
+export type CorroborationReason =
+  | "corroborated"
+  | "not_pause"
+  | "visibility_flagged"
+  | "missing_delta"
+  | "unfavorable_direction"
+  | "unstable_context"
+  | "missing_booking_stats"
+  | "missing_account_spend"
+  | "sparse_bookings"
+  | "spend_continuity_failed"
+  | "invalid_booked_value"
+  | "ratio_degraded";
+
+export interface CorroborationVerdict {
+  /** "corroborated" when the second estimate agrees under floors; null otherwise. */
+  causalStrengthUpgrade: "corroborated" | null;
+  reason: CorroborationReason;
+}
 
 export interface DeriveCorroborationInput {
   actionKind: AttributableKind;
@@ -377,33 +493,39 @@ export interface DeriveCorroborationInput {
   orgBookedStats: { preWindow: OrgBookedWindowStats; postWindow: OrgBookedWindowStats } | undefined;
 }
 
+function reject(reason: Exclude<CorroborationReason, "corroborated">): CorroborationVerdict {
+  return { causalStrengthUpgrade: null, reason };
+}
+
 /**
- * True when the booking-side second estimate exists, is judgeable, and
- * agrees. Self-contained honesty: every precondition and floor is re-checked
- * here (defense in depth, mirroring operational-stability.ts), so no caller
- * can reach the agreement test with a flagged row or a missing input.
+ * The reasoned corroboration verdict. Self-contained honesty: every
+ * precondition and floor is re-checked here (defense in depth, mirroring
+ * operational-stability.ts), so no caller can reach the agreement test with
+ * a flagged row or a missing input. Callers that persist consume only
+ * causalStrengthUpgrade; the reason is for tests and rollout debugging.
  */
-export function deriveCorroboration(input: DeriveCorroborationInput): boolean {
+export function deriveCorroboration(input: DeriveCorroborationInput): CorroborationVerdict {
   // P1: pause-only. refresh_creative is a recorded deferral (spec 4d
   // section 6): per-campaign booking sparsity, lag contamination without a
   // differencing majority, and weak agreement semantics.
-  if (input.actionKind !== "pause") return false;
+  if (input.actionKind !== "pause") return reject("not_pause");
   // P2: the first estimate must exist and be clean (the row would be
   // directional today).
-  if (input.visibilityFlagCount > 0 || input.deltaPct === null) return false;
+  if (input.visibilityFlagCount > 0) return reject("visibility_flagged");
+  if (input.deltaPct === null) return reject("missing_delta");
   // P3: favorable only (pause's favorableDirection is "down"). An
   // unfavorable pause failed on its own metric; there is no effect for the
   // booking side to corroborate.
-  if (input.deltaPct >= 0) return false;
+  if (input.deltaPct >= 0) return reject("unfavorable_direction");
   // P4: affirmative operator-confirmed disruption confounds the booking-side
   // estimate exactly as it confounds the Meta-side delta. "unknown" does NOT
   // block: the booking signal's independence does not depend on operator
   // attestation.
-  if (input.businessContextStable === "unstable") return false;
+  if (input.businessContextStable === "unstable") return reject("unstable_context");
   // F1: both inputs must exist; absence is unjudgeable, never an error.
-  if (input.orgBookedStats === undefined) return false;
+  if (input.orgBookedStats === undefined) return reject("missing_booking_stats");
   if (input.preAccountSpendCents === undefined || input.postAccountSpendCents === undefined) {
-    return false;
+    return reject("missing_account_spend");
   }
   const { preWindow, postWindow } = input.orgBookedStats;
   // F2: sparse-booking floor, each window independently.
@@ -411,20 +533,31 @@ export function deriveCorroboration(input: DeriveCorroborationInput): boolean {
     preWindow.bookedCount < CORROBORATION_MIN_BOOKINGS_PER_WINDOW ||
     postWindow.bookedCount < CORROBORATION_MIN_BOOKINGS_PER_WINDOW
   ) {
-    return false;
+    return reject("sparse_bookings");
   }
-  // F3: spend continuity (the anti-degeneracy floor).
-  if (input.preAccountSpendCents <= 0) return false;
+  // F3: spend continuity, both directions (the comparable-regime band).
+  if (input.preAccountSpendCents <= 0) return reject("spend_continuity_failed");
   if (
     input.postAccountSpendCents <
-    CORROBORATION_SPEND_CONTINUITY_FLOOR * input.preAccountSpendCents
+      CORROBORATION_SPEND_CONTINUITY_FLOOR * input.preAccountSpendCents ||
+    input.postAccountSpendCents >
+      CORROBORATION_SPEND_CONTINUITY_CEILING * input.preAccountSpendCents
   ) {
-    return false;
+    return reject("spend_continuity_failed");
+  }
+  // Explicit ratio guards (defensive: the live reader's value > 0 predicate
+  // makes these unreachable via F2, but the invariant preRatio > 0 must not
+  // depend on a store predicate surviving future schema changes).
+  if (preWindow.bookedValueCents <= 0 || postWindow.bookedValueCents < 0) {
+    return reject("invalid_booked_value");
   }
   // A1: the agreement test. Cents over cents on both sides; dimensionless.
   const preRatio = preWindow.bookedValueCents / input.preAccountSpendCents;
   const postRatio = postWindow.bookedValueCents / input.postAccountSpendCents;
-  return postRatio >= CORROBORATION_RATIO_HOLD_TOLERANCE * preRatio;
+  if (postRatio < CORROBORATION_RATIO_HOLD_TOLERANCE * preRatio) {
+    return reject("ratio_degraded");
+  }
+  return { causalStrengthUpgrade: "corroborated", reason: "corroborated" };
 }
 ```
 
@@ -744,9 +877,10 @@ const businessContextStable: BusinessContextStability = deriveBusinessContextSta
 // change causal semantics. Slice 4d: a clean favorable pause delta whose
 // org-level booking-side second estimate is judgeable and AGREES earns
 // "corroborated" (spec 2.5's independent-agreement bar); every absence,
-// floor failure, or disagreement leaves the slice-3 value untouched. The
-// directional/inconclusive boundary is unchanged.
-const corroborationHolds = deriveCorroboration({
+// floor failure, or disagreement leaves the slice-3 value untouched (the
+// verdict's reason field exists for tests and debugging; only the upgrade
+// is consumed here). The directional/inconclusive boundary is unchanged.
+const corroboration = deriveCorroboration({
   actionKind: candidate.actionKind,
   visibilityFlagCount: flags.length,
   deltaPct,
@@ -757,9 +891,7 @@ const corroborationHolds = deriveCorroboration({
 });
 const causalStrength: CausalStrength =
   flags.length === 0 && deltaPct !== null
-    ? corroborationHolds
-      ? "corroborated"
-      : "directional"
+    ? (corroboration.causalStrengthUpgrade ?? "directional")
     : "inconclusive";
 ```
 
@@ -862,6 +994,12 @@ describe("runRileyOutcomeAttribution: org-booked-stats reader threading (slice 4
       startInclusive: new Date("2026-05-01T12:00:00Z"),
       endExclusive: new Date("2026-05-08T12:00:00Z"),
     });
+    // The two reads PARTITION at the anchor (pre.endExclusive ===
+    // post.startInclusive): with the store's half-open gte/lt predicate an
+    // instant-of-anchor booking lands in exactly the post window, and an
+    // instant-of-postEnd booking in neither. No double-count, no gap.
+    const calls = (reader.getBookedStatsForOrgWindow as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0]?.[0]?.endExclusive).toEqual(calls[1]?.[0]?.startInclusive);
     expect(inserted).toHaveLength(1);
     expect(inserted[0]?.causalStrength).toBe("corroborated");
     expect(summary.corroborated).toBe(1);
@@ -1221,7 +1359,23 @@ describe("createMetaInsightsProviderForOrg — account-level spend enrichment (r
     expect(metrics?.accountSpendCents).toBe(2025);
   });
 
-  it("still returns null when the requested campaign has no rows (account data alone never fabricates a window)", async () => {
+  it("never narrows the Graph request to one campaign (accountSpendCents depends on the account-wide fetch)", async () => {
+    getCampaignInsightsSpy.mockResolvedValue([
+      { campaignId: "camp-42", spend: 10.5, inlineLinkClickCtr: 0.02 },
+    ]);
+    const provider = createMetaInsightsProviderForOrg("org-1", makeFakePrisma());
+
+    await provider.getWindowMetrics(makeQuery());
+
+    // MetaAdsClient.getCampaignInsights SUPPORTS a campaignId filtering
+    // param; a future "optimization" passing it would silently turn
+    // accountSpendCents into campaign spend and destroy corroboration.
+    const callArgs = getCampaignInsightsSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArgs).not.toHaveProperty("campaignId");
+    expect(callArgs).not.toHaveProperty("filtering");
+  });
+
+  it("still returns null when the requested campaign has no rows even if account rows exist (account data alone never fabricates a campaign window)", async () => {
     getCampaignInsightsSpy.mockResolvedValue([
       { campaignId: "camp-99", spend: 5.25, inlineLinkClickCtr: 0.01 },
     ]);
@@ -1576,7 +1730,7 @@ git push -u origin feat/riley-4d-corroborated-outcomes
 gh pr create --title "feat(core,db,api): riley v3 slice 4d corroborated outcome arm" --body "$(cat <<'EOF'
 ## Summary
 - The outcome ledger earns the type-reserved `corroborated` arm of `causalStrength`: a favorable directional pause outcome upgrades when the org-level booking-side second estimate is judgeable and agrees (spec 2.5's independent-agreement bar; the 4c Decision-F formulation).
-- Predicate (pure `outcome-corroboration.ts`): pause-only; clean favorable delta; not operator-confirmed unstable; reader + account spend present; >=3 valued bookings in EACH sub-window; account post-spend >= 0.5 x pre-spend (the anti-degeneracy floor); booked-revenue-per-ad-dollar held within 0.8x.
+- Predicate (pure `outcome-corroboration.ts`, returns a REASONED verdict for rollout debugging; rows store only causalStrength): pause-only; clean favorable delta; not operator-confirmed unstable; reader + account spend present; >=3 valued bookings in EACH sub-window; account post-spend inside [0.5x, 1.5x] of pre-spend (the comparable-regime band: collapse AND scale-up both unjudgeable); explicit booked-value guards; booked-revenue-per-ad-dollar held within 0.8x. "Corroborated" = independent outcome-side agreement under floors, NOT causal proof (pinned in the type docs).
 - Org spend rides the EXISTING Meta window read (summed before the campaign filter; zero new Graph calls); org bookings via a new `OrgBookedStatsReader` implemented on `PrismaConversionRecordStore` (half-open gte/lt windows, CENTS passthrough).
 - The slice-3 corroborated-never-emitted sweep test flips DELIBERATELY into positive pins + no-fabrication negatives (sparse bookings, absent reader/spend, degenerate continuity, disagreement, unfavorable, flagged, unstable, refresh_creative).
 - Consumer sweep pinned: feed translator, read model, legacy route, summary counter; trustDelta derivation and operator copy byte-untouched.
