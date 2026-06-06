@@ -102,7 +102,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
         >
           <span
             style={{
-              fontFamily: "JetBrains Mono",
+              fontFamily: T.mono,
               fontSize: 10,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -175,7 +175,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     padding: "10px 16px",
                     borderRadius: 8,
                     background: T.amber,
-                    color: "white",
+                    color: T.actionFg,
                     border: `1px solid ${T.amberDeep}`,
                   }}
                 >
@@ -235,7 +235,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 >
                   <span
                     style={{
-                      fontFamily: "JetBrains Mono",
+                      fontFamily: T.mono,
                       fontSize: 10,
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
@@ -269,7 +269,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     padding: "10px 16px",
                     borderRadius: 8,
                     background: T.amber,
-                    color: "white",
+                    color: T.actionFg,
                     border: `1px solid ${T.amberDeep}`,
                   }}
                 >
@@ -300,9 +300,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 gap: 10,
                 padding: 14,
                 borderRadius: 8,
-                // Intentional red wash: #F6ECEC here (stop confirm on cream) vs the
-                // feed's rgba(122,46,46) on black (mira-clip-actions.tsx) — both deliberate.
-                background: "#F6ECEC",
+                background: "hsl(var(--risk-tint))",
               }}
             >
               <span
@@ -310,7 +308,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 6,
-                  fontFamily: "JetBrains Mono",
+                  fontFamily: T.mono,
                   fontSize: 10,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
@@ -338,7 +336,7 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                     padding: "10px 16px",
                     borderRadius: 8,
                     background: T.red,
-                    color: "white",
+                    color: T.actionFg,
                     border: "none",
                   }}
                 >

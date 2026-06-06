@@ -20,3 +20,15 @@ describe("cockpit tokens are themeable (T2)", () => {
     expect(T.paper).toBe("hsl(var(--surface))");
   });
 });
+
+describe("cockpit T tokens (mira reskin additions)", () => {
+  it("exposes the loaded mono face as a var token (never a raw family name)", () => {
+    expect(T.mono).toBe("var(--font-mono-editorial)");
+  });
+  it("exposes the app display face (Fraunces)", () => {
+    expect(T.display).toBe("var(--font-display-app)");
+  });
+  it("exposes the AA action foreground", () => {
+    expect(T.actionFg).toBe("hsl(var(--action-foreground))");
+  });
+});

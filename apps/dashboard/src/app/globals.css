@@ -29,6 +29,7 @@
     --palette-violet: 270 45% 58%;       /* Mira identity */
     --palette-violet-deep: 256 31% 45%;
     --palette-violet-tint: 255 33% 95%;
+    --palette-risk-tint: 14 45% 93%; /* dusty terracotta wash, spec §4 high-risk ground */
     --palette-editorial-accent: 20 90% 55%; /* bright editorial orange (Mercury/reports) — NOT the action amber */
     --palette-editorial-accent-soft: 20 60% 50%; /* softened editorial orange */
     /* warm-neutral ink ramp — ONE canonical text/neutral scale (T5, by role) */
@@ -67,6 +68,7 @@
     /* ─── Semantic ─── */
     --destructive: 0 38% 40%;
     --destructive-foreground: 0 0% 98%;
+    --risk-tint: var(--palette-risk-tint); /* destructive-confirm ground (consumed hsl(var())) */
     --positive: 152 28% 32%;
     --positive-foreground: 0 0% 98%;
     --positive-subtle: 152 22% 94%;

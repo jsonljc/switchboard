@@ -7,7 +7,12 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type { AgentKey } from "@switchboard/schemas";
-import type { agentHome, MiraCreativeJobSummary } from "@switchboard/core";
+import {
+  buildMiraDeskModel,
+  deriveDeskItemState,
+  type agentHome,
+  type MiraCreativeJobSummary,
+} from "@switchboard/core";
 import { PrismaMiraCreativeReadModelReader } from "./prisma-mira-creative-read-model-reader.js";
 
 // Greeting window timezone for the Mira read-model. M1 uses "UTC" here: greeting
@@ -98,7 +103,7 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
       }),
     ]);
 
-    const oldest = oldestAwaitingReview(readModel.jobs);
+    const oldest = oldestReadyToReview(readModel.jobs);
     const oldestOpenItemAgeHours = oldest
       ? (now - new Date(oldest.createdAt).getTime()) / (1000 * 60 * 60)
       : null;
@@ -107,7 +112,9 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
       : null;
 
     return {
-      inboxCount: readModel.counts.awaitingReview,
+      // The desk hero's exact count (undecided, ready-to-review drafts): the
+      // greeting must agree with the surface it sits above.
+      inboxCount: buildMiraDeskModel(readModel).readyToReviewCount,
       oldestOpenItemAgeHours,
       hoursSinceLastOperatorAction,
     };
@@ -148,21 +155,23 @@ export class PrismaGreetingSignalStore implements agentHome.GreetingSignalStore 
       timezone: MIRA_GREETING_TIMEZONE,
       visibleLimit: MIRA_GREETING_VISIBLE_LIMIT,
     });
-    const oldest = oldestAwaitingReview(readModel.jobs);
+    const oldest = oldestReadyToReview(readModel.jobs);
     if (!oldest) return null;
     const ageHours = (now - new Date(oldest.createdAt).getTime()) / (1000 * 60 * 60);
     return { name: oldest.title, ageLabel: formatAgeLabel(ageHours) };
   }
 }
 
-// Oldest (earliest createdAt) awaiting-review job in the read-model window, or
-// null when none are awaiting review.
-function oldestAwaitingReview(
+// Oldest undecided ready-to-review job: the SAME cohort the desk hero counts
+// (single-sourced via core's deriveDeskItemState so count and age can never
+// silently diverge again).
+function oldestReadyToReview(
   jobs: readonly MiraCreativeJobSummary[],
 ): MiraCreativeJobSummary | null {
   let oldest: MiraCreativeJobSummary | null = null;
   for (const job of jobs) {
-    if (job.status !== "awaiting_review") continue;
+    if (job.reviewDecision === "kept" || job.reviewDecision === "passed") continue;
+    if (deriveDeskItemState(job) !== "ready_to_review") continue;
     if (
       oldest === null ||
       new Date(job.createdAt).getTime() < new Date(oldest.createdAt).getTime()

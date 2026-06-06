@@ -21,9 +21,9 @@ export function MiraReadyToReview({ count }: { count: number }) {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
           <span
             style={{
-              fontFamily: "JetBrains Mono",
+              fontFamily: T.mono,
               fontSize: 10,
-              fontWeight: 700,
+              fontWeight: 600,
               letterSpacing: "0.12em",
               textTransform: "uppercase",
               color: T.ink3,
@@ -34,6 +34,7 @@ export function MiraReadyToReview({ count }: { count: number }) {
           <span
             style={{
               marginTop: 4,
+              fontFamily: T.mono,
               fontSize: 36,
               fontWeight: 600,
               letterSpacing: "-0.01em",
@@ -57,7 +58,7 @@ export function MiraReadyToReview({ count }: { count: number }) {
               padding: "10px 16px",
               borderRadius: 8,
               background: T.amber,
-              color: "#fff",
+              color: T.actionFg,
               border: `1px solid ${T.amberDeep}`,
               textDecoration: "none",
               fontSize: 13,

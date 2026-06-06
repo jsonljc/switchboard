@@ -37,9 +37,9 @@ export function MiraInProductionTray({ items }: { items: MiraDeskItem[] }) {
       <h2
         style={{
           margin: "0 0 8px",
-          fontFamily: "JetBrains Mono",
+          fontFamily: T.mono,
           fontSize: 10,
-          fontWeight: 700,
+          fontWeight: 600,
           letterSpacing: "0.12em",
           textTransform: "uppercase",
           color: T.ink3,
@@ -81,7 +81,7 @@ export function MiraInProductionTray({ items }: { items: MiraDeskItem[] }) {
               </Link>
               <span
                 style={{
-                  fontFamily: "JetBrains Mono",
+                  fontFamily: T.mono,
                   fontSize: 12,
                   letterSpacing: "0.02em",
                   color: it.problem ? T.red : MIRA_ACCENT.base,

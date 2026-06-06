@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { MiraCreativeDetailPage } from "./creative-detail-page";
 
 export const metadata: Metadata = {
-  title: "Draft — Mira",
+  title: "Draft · Mira",
   description: "Draft-only review for a single creative. Nothing is published without you.",
 };
 

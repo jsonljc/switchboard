@@ -38,6 +38,13 @@ export function collectGovernedFiles(): Array<{ path: string; content: string }>
 export const rel = (p: string): string =>
   p.includes("/src/") ? p.slice(p.indexOf("/src/") + 1) : p;
 
+/** First (:root / light) definition of a CSS custom property in globals.css. */
+export function tokenValue(name: string): string {
+  const m = css.match(new RegExp(`--${name}\\s*:\\s*([^;]+);`));
+  if (!m) throw new Error(`token --${name} is not defined in globals.css`);
+  return m[1].trim();
+}
+
 /** Registers with their own type voice (never governed by app type guards). */
 export const TYPE_VOICE_EXEMPT = ["(mercury)/", "components/landing/"];
 export const typeVoiceGoverned = (p: string): boolean =>
