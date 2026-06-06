@@ -7,6 +7,7 @@ import type {
   AttributionChain,
   MessagingOptInSource,
 } from "@switchboard/schemas";
+import { normalizeToE164 } from "@switchboard/schemas";
 import { StaleVersionError } from "@switchboard/core";
 
 // ---------------------------------------------------------------------------
@@ -86,6 +87,7 @@ export class PrismaContactStore implements ContactStore {
     const id = randomUUID();
     const now = new Date();
     const messagingOptIn = input.messagingOptIn ?? false;
+    const phoneE164 = normalizeToE164(input.phone ?? null);
 
     const created = await this.prisma.contact.create({
       data: {
@@ -93,6 +95,7 @@ export class PrismaContactStore implements ContactStore {
         organizationId: input.organizationId,
         name: input.name ?? null,
         phone: input.phone ?? null,
+        phoneE164,
         email: input.email ?? null,
         primaryChannel: input.primaryChannel,
         firstTouchChannel: input.firstTouchChannel ?? null,
@@ -126,11 +129,9 @@ export class PrismaContactStore implements ContactStore {
   }
 
   async findByPhone(orgId: string, phone: string): Promise<Contact | null> {
+    const e164 = normalizeToE164(phone);
     const row = await this.prisma.contact.findFirst({
-      where: {
-        organizationId: orgId,
-        phone,
-      },
+      where: e164 ? { organizationId: orgId, phoneE164: e164 } : { organizationId: orgId, phone },
     });
 
     if (!row) return null;
@@ -382,6 +383,7 @@ function mapRowToContact(row: {
   organizationId: string;
   name: string | null;
   phone: string | null;
+  phoneE164?: string | null;
   email: string | null;
   primaryChannel: string;
   firstTouchChannel: string | null;
@@ -403,6 +405,7 @@ function mapRowToContact(row: {
     organizationId: row.organizationId,
     name: row.name,
     phone: row.phone,
+    phoneE164: row.phoneE164 ?? null,
     email: row.email,
     primaryChannel: row.primaryChannel as "whatsapp" | "telegram" | "dashboard",
     firstTouchChannel: row.firstTouchChannel,
