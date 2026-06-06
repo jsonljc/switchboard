@@ -1,6 +1,100 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import { toPaidVisitRow } from "../revenue.js";
+
+// ─── Minimal test app for the GET /:orgId/revenue/by-campaign route ─────────
+
+const mockPaidVisitsByCampaign = vi.fn();
+const mockSumByCampaign = vi.fn();
+
+vi.mock("@switchboard/db", () => ({
+  PrismaRevenueStore: vi.fn().mockImplementation(() => ({
+    paidVisitsByCampaign: mockPaidVisitsByCampaign,
+    sumByCampaign: mockSumByCampaign,
+  })),
+}));
+
+import Fastify from "fastify";
+import { revenueRoutes } from "../revenue.js";
+
+async function buildRouteApp() {
+  const app = Fastify();
+  app.decorateRequest("organizationIdFromAuth", undefined);
+  app.decorateRequest("principalIdFromAuth", undefined);
+  // orgId / actorId are typed as non-nullable string in the FastifyRequest interface
+  // (set by requireOrg preHandlers at runtime). Provide string defaults here.
+  app.decorateRequest("orgId", "");
+  app.decorateRequest("actorId", "");
+  app.addHook("onRequest", async (request) => {
+    request.organizationIdFromAuth = (request.headers["x-org-id"] as string) ?? "org-test";
+  });
+  app.decorate("prisma", {} as unknown as typeof app.prisma);
+  app.decorate("platformIngress", undefined as unknown as typeof app.platformIngress);
+  await app.register(revenueRoutes, { prefix: "/api" });
+  return app;
+}
+
+describe("GET /:orgId/revenue/by-campaign?detail=paid-visits — window params", () => {
+  it("uses provided from/to when both are valid ISO strings", async () => {
+    mockPaidVisitsByCampaign.mockResolvedValue([]);
+    const app = await buildRouteApp();
+    const from = "2026-01-01T00:00:00.000Z";
+    const to = "2026-01-31T00:00:00.000Z";
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/org-test/revenue/by-campaign?detail=paid-visits&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      headers: { "x-org-id": "org-test" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockPaidVisitsByCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: new Date(from),
+        to: new Date(to),
+      }),
+    );
+  });
+
+  it("falls back to a 90-day window when from/to are absent", async () => {
+    mockPaidVisitsByCampaign.mockResolvedValue([]);
+    const before = Date.now();
+    const app = await buildRouteApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/org-test/revenue/by-campaign?detail=paid-visits`,
+      headers: { "x-org-id": "org-test" },
+    });
+    const after = Date.now();
+    expect(res.statusCode).toBe(200);
+    const call = (mockPaidVisitsByCampaign as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as {
+      from: Date;
+      to: Date;
+    };
+    const windowMs = call.to.getTime() - call.from.getTime();
+    // Should be approximately 90 days (allow ±1 second for test runtime)
+    expect(windowMs).toBeGreaterThanOrEqual(89 * 24 * 60 * 60 * 1000);
+    expect(windowMs).toBeLessThanOrEqual(90 * 24 * 60 * 60 * 1000 + 1000);
+    expect(call.to.getTime()).toBeGreaterThanOrEqual(before);
+    expect(call.to.getTime()).toBeLessThanOrEqual(after + 100);
+  });
+
+  it("falls back to 90-day window when from/to are unparseable", async () => {
+    mockPaidVisitsByCampaign.mockResolvedValue([]);
+    const app = await buildRouteApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/api/org-test/revenue/by-campaign?detail=paid-visits&from=not-a-date&to=also-not-a-date`,
+      headers: { "x-org-id": "org-test" },
+    });
+    expect(res.statusCode).toBe(200);
+    const call = (mockPaidVisitsByCampaign as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as {
+      from: Date;
+      to: Date;
+    };
+    const windowMs = call.to.getTime() - call.from.getTime();
+    expect(windowMs).toBeGreaterThanOrEqual(89 * 24 * 60 * 60 * 1000);
+    expect(windowMs).toBeLessThanOrEqual(90 * 24 * 60 * 60 * 1000 + 1000);
+  });
+});
 
 const RecordRevenueInputSchema = z.object({
   contactId: z.string(),

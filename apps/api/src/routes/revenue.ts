@@ -150,8 +150,13 @@ export const revenueRoutes: FastifyPluginAsync = async (app) => {
     const { detail } = request.query as { detail?: string };
 
     if (detail === "paid-visits") {
-      const to = new Date();
-      const from = new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const defaultTo = new Date();
+      const defaultFrom = new Date(defaultTo.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const { from: fromQs, to: toQs } = request.query as { from?: string; to?: string };
+      const parsedFrom = fromQs ? new Date(fromQs) : null;
+      const parsedTo = toQs ? new Date(toQs) : null;
+      const from = parsedFrom && !Number.isNaN(parsedFrom.getTime()) ? parsedFrom : defaultFrom;
+      const to = parsedTo && !Number.isNaN(parsedTo.getTime()) ? parsedTo : defaultTo;
       const visits = await store.paidVisitsByCampaign({
         orgId,
         from,
