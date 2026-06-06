@@ -98,6 +98,21 @@ describe("normalizeWorkUnit", () => {
     expect(result.priority).toBe("high");
   });
 
+  it("normalizeWorkUnit carries contactId + conversationThreadId from the request", () => {
+    const wu = normalizeWorkUnit(
+      { ...baseRequest, contactId: "ct_1", conversationThreadId: "thr_1" },
+      "skill",
+    );
+    expect(wu.contactId).toBe("ct_1");
+    expect(wu.conversationThreadId).toBe("thr_1");
+  });
+
+  it("normalizeWorkUnit leaves lineage undefined when the request omits it", () => {
+    const wu = normalizeWorkUnit(baseRequest, "skill");
+    expect(wu.contactId).toBeUndefined();
+    expect(wu.conversationThreadId).toBeUndefined();
+  });
+
   it("preserves parentWorkUnitId and idempotencyKey", () => {
     const requestWithOptionals: SubmitWorkRequest = {
       ...baseRequest,
