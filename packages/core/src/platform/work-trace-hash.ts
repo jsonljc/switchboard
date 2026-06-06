@@ -20,6 +20,13 @@ const EXCLUDED_BASE = [
   // Excluded so the column's @default([]) backfill on pre-PR-3.2c rows does
   // not break their original contentHash verification.
   "injectedPatternIds",
+  // Spec-1A chain weld: lineage/index columns (the Contact and
+  // ConversationThread this work unit acted on). Downstream-derivable from
+  // parameters, never the executed input. Excluded so the new nullable
+  // columns leave every existing row's contentHash byte-identical — same
+  // treatment as injectedPatternIds, no hashInputVersion bump.
+  "contactId",
+  "conversationThreadId",
 ] as const;
 
 export const WORK_TRACE_HASH_EXCLUDED_FIELDS_V1 = [

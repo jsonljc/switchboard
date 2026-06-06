@@ -93,4 +93,17 @@ export interface WorkTrace {
    * Persisted at finalization; populated upstream from BuiltContext.injectedPatternIds.
    */
   injectedPatternIds?: string[];
+  /**
+   * Lineage column (Spec-1A chain weld): the Contact this work unit acted on.
+   * In EXCLUDED_BASE (work-trace-hash.ts) — an index/lineage field, never part
+   * of trace integrity (it is downstream-derivable from parameters, never the
+   * executed input). Populated at submit from the resolved contact identity.
+   */
+  contactId?: string;
+  /**
+   * Lineage column (Spec-1A chain weld): the ConversationThread this work unit
+   * ran inside. In EXCLUDED_BASE — index/lineage only, never hashed. Populated
+   * at submit from the server-resolved thread id.
+   */
+  conversationThreadId?: string;
 }
