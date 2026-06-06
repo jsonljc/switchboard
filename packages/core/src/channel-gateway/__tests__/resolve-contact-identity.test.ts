@@ -108,4 +108,24 @@ describe("resolveContactIdentity", () => {
       channel: "widget",
     });
   });
+
+  it("normalizes a bare wa_id before lookup so it resolves an existing +-stored contact (no second contact)", async () => {
+    const store = makeStore({
+      findByPhone: vi.fn().mockResolvedValue({ id: "ctwa-contact-id" }),
+    });
+    const result = await resolveContactIdentity({
+      channel: "whatsapp",
+      sessionId: "6591234567",
+      organizationId: "org-1",
+      contactStore: store,
+    });
+
+    expect(store.findByPhone).toHaveBeenCalledWith("org-1", "+6591234567");
+    expect(store.create).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      contactId: "ctwa-contact-id",
+      phone: "+6591234567",
+      channel: "whatsapp",
+    });
+  });
 });

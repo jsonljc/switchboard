@@ -221,6 +221,7 @@ export class ChannelGateway {
           sessionId: message.sessionId,
           organizationId: resolved.organizationId,
           contactStore: this.config.contactStore,
+          region: undefined,
         })
       : { contactId: null, phone: null, channel: message.channel };
 

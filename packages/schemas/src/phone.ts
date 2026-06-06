@@ -50,6 +50,16 @@ export function normalizeToE164(
     return E164.test(candidate) ? candidate : null;
   }
 
+  // Raw E.164 without the leading + (WhatsApp wa_ids arrive in this format:
+  // e.g. "6591234567" = +65 country code + 8-digit local). Safe to normalise
+  // for numbers ≥10 digits (shortest realistic country+subscriber), because the
+  // E.164 pattern is strict (1-9 lead digit). Must come AFTER region-specific
+  // checks so bare 8-digit SG mobiles still resolve via +65, not +91234567.
+  if (/^\d{10,15}$/.test(cleaned)) {
+    const candidate = `+${cleaned}`;
+    if (E164.test(candidate)) return candidate;
+  }
+
   // Refuse to guess.
   return null;
 }

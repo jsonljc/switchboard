@@ -43,4 +43,7 @@ describe("normalizeToE164", () => {
   it("does not treat a 7-digit number as an SG mobile (wrong length)", () => {
     expect(normalizeToE164("1234567")).toBeNull();
   });
+  it("normalizes a raw E.164 without leading + (WhatsApp wa_id format)", () => {
+    expect(normalizeToE164("6591234567")).toBe("+6591234567");
+  });
 });
