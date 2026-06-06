@@ -176,6 +176,8 @@ export {
   rileyPauseApprovalPolicyId,
   buildRileyPauseApprovalPolicyInput,
 } from "./seed/riley-pause-governance.js";
+export { setRileyPauseSelfExecution } from "./seed/riley-pause-flag-toggle.js";
+export type { CapabilityAuditRecorder } from "./seed/riley-pause-flag-toggle.js";
 export {
   seedAlexSkillPack,
   assertAlexSkillPackSeeded,

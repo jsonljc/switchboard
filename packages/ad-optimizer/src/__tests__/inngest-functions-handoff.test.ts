@@ -19,6 +19,7 @@ vi.mock("inngest", () => ({
 
 import { executeWeeklyAudit, type CronDependencies } from "../inngest-functions.js";
 import type { RecommendationHandoffSubmitter } from "../recommendation-handoff-dispatch.js";
+import type { RileyPauseSubmitter } from "../riley-pause-dispatch.js";
 
 function makeStep() {
   return { run: vi.fn((_name: string, fn: () => unknown) => fn()) };
@@ -57,5 +58,49 @@ describe("executeWeeklyAudit — Riley -> agent handoff threading", () => {
   it("omits the submitter from the AuditRunner when not configured (back-compat)", async () => {
     await executeWeeklyAudit(makeStep() as never, makeDeps());
     expect(auditRunnerCtor.mock.calls[0]![0].recommendationHandoffSubmitter).toBeUndefined();
+  });
+});
+
+describe("executeWeeklyAudit — Phase-C pause submitter (capability-passing as enforcement)", () => {
+  beforeEach(() => {
+    auditRunnerCtor.mockClear();
+  });
+
+  const pauseSubmitter: RileyPauseSubmitter = vi.fn(async () => ({ parked: true }));
+
+  it("threads rileyPauseSubmitter ONLY for a deployment with pauseSelfExecutionEnabled true", async () => {
+    const deps = makeDeps({
+      listActiveDeployments: vi.fn().mockResolvedValue([
+        { id: "dep-on", organizationId: "org-1", inputConfig: {}, pauseSelfExecutionEnabled: true },
+        { id: "dep-off", organizationId: "org-2", inputConfig: {} },
+        {
+          id: "dep-false",
+          organizationId: "org-3",
+          inputConfig: {},
+          pauseSelfExecutionEnabled: false,
+        },
+      ]),
+      rileyPauseSubmitter: pauseSubmitter,
+    });
+    await executeWeeklyAudit(makeStep() as never, deps);
+    expect(auditRunnerCtor).toHaveBeenCalledTimes(3);
+    expect(auditRunnerCtor.mock.calls[0]![0].rileyPauseSubmitter).toBe(pauseSubmitter);
+    expect(auditRunnerCtor.mock.calls[1]![0].rileyPauseSubmitter).toBeUndefined();
+    expect(auditRunnerCtor.mock.calls[2]![0].rileyPauseSubmitter).toBeUndefined();
+  });
+
+  it("never threads the pause submitter when the dep is absent, even for a flag-on deployment", async () => {
+    const deps = makeDeps({
+      listActiveDeployments: vi.fn().mockResolvedValue([
+        {
+          id: "dep-on",
+          organizationId: "org-1",
+          inputConfig: {},
+          pauseSelfExecutionEnabled: true,
+        },
+      ]),
+    });
+    await executeWeeklyAudit(makeStep() as never, deps);
+    expect(auditRunnerCtor.mock.calls[0]![0].rileyPauseSubmitter).toBeUndefined();
   });
 });

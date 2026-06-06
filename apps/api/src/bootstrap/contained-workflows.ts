@@ -19,6 +19,10 @@ import {
   type RecommendationHandoffSubmitInput,
 } from "../services/workflows/recommendation-handoff-request.js";
 import {
+  buildRileyPauseSubmitRequest,
+  type RileyPauseSubmitInput,
+} from "../services/workflows/riley-pause-submit-request.js";
+import {
   buildMiraBriefComposeSubmitRequest,
   buildMiraConceptDraftSubmitRequest,
   type MiraBriefComposeSubmitInput,
@@ -64,6 +68,17 @@ export interface ContainedWorkflowBootstrapResult {
    */
   submitRecommendationHandoff: (
     input: RecommendationHandoffSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse | null>;
+  /**
+   * Top-level submit closure for the Phase-C pause initiator. Builds the canonical
+   * request (or returns null when Riley abstains: class/floor legs in the builder)
+   * and submits through PlatformIngress with the resolved Riley deployment as the
+   * targetHint, parking for mandatory human approval via the seeded policy. No
+   * parentWorkUnitId - cron-initiated work units are legitimate trace roots.
+   */
+  submitRileyPause: (
+    input: RileyPauseSubmitInput,
     deployment: { deploymentId: string; skillSlug: string },
   ) => Promise<SubmitWorkResponse | null>;
   /**
@@ -150,21 +165,16 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
   const { buildCreativePublishWorkflow } =
     await import("../services/workflows/creative-publish-workflow.js");
-  const { buildRileyPauseExecutionWorkflow } =
-    await import("../services/workflows/riley-pause-execution-workflow.js");
-  const { RILEY_PAUSE_INTENT } =
-    await import("../services/workflows/riley-pause-submit-request.js");
+  const { buildRileyPauseExecutorHandler } = await import("./riley-pause-executor.js");
   const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
   const {
     PrismaLeadIntakeStore,
     PrismaAgentTaskStore,
     PrismaCreativeJobStore,
     PrismaDeploymentStore,
-    PrismaDeploymentConnectionStore,
     PrismaOrgAgentEnablementStore,
-    decryptCredentials,
   } = await import("@switchboard/db");
-  const { InstantFormAdapter, MetaAdsClient } = await import("@switchboard/ad-optimizer");
+  const { InstantFormAdapter } = await import("@switchboard/ad-optimizer");
 
   // Single source of truth for Contact creation from leads (CTWA + Instant Form).
   // The meta.lead.intake workflow orchestrates the IF webhook (Graph fetch +
@@ -216,36 +226,9 @@ export async function bootstrapContainedWorkflows(
   const recommendationHandoffWorkflow = buildRecommendationHandoffWorkflow();
 
   // Phase-C pause executor: on approval, pauses the campaign on Meta with the
-  // org's own meta-ads credentials. Org isolation INSIDE the resolver closure:
-  // the deployment row's organizationId must equal the work unit's before any
-  // credential decrypts (defense in depth behind the org-scoped resolver). A
-  // missing deployment row maps to org_mismatch too: a vanished deployment must
-  // not pause anything, and the loud failure is the safe direction.
-  const pauseConnectionStore = new PrismaDeploymentConnectionStore(
-    prismaClient as ConstructorParameters<typeof PrismaDeploymentConnectionStore>[0],
-  );
-  const pauseDeploymentStore = new PrismaDeploymentStore(
-    prismaClient as ConstructorParameters<typeof PrismaDeploymentStore>[0],
-  );
-  const rileyPauseExecutionWorkflow = buildRileyPauseExecutionWorkflow({
-    getDeploymentCredentials: async (organizationId, deploymentId) => {
-      const deployment = await pauseDeploymentStore.findById(deploymentId);
-      if (!deployment || deployment.organizationId !== organizationId) {
-        return { kind: "org_mismatch" as const };
-      }
-      const conn = await pauseConnectionStore.findByDeploymentAndType(deploymentId, "meta-ads");
-      if (!conn) return { kind: "none" as const };
-      const creds = decryptCredentials(conn.credentials);
-      return {
-        kind: "ok" as const,
-        credentials: {
-          accessToken: creds.accessToken as string,
-          accountId: creds.accountId as string,
-        },
-      };
-    },
-    createAdsClient: (creds) => new MetaAdsClient(creds),
-  });
+  // org's own meta-ads credentials. Wiring (incl. the org-isolation credential
+  // resolver) lives in bootstrap/riley-pause-executor.ts.
+  const rileyPauseExecutor = await buildRileyPauseExecutorHandler(prismaClient);
 
   // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
   // difference between callers is how the WhatsApp 24h-window timestamp is resolved
@@ -347,7 +330,7 @@ export async function bootstrapContainedWorkflows(
     ["creative.job.submit", buildCreativeJobSubmitWorkflow(prismaClient)],
     ["creative.concept.draft", creativeConceptDraftWorkflow],
     ["adoptimizer.recommendation.handoff", recommendationHandoffWorkflow],
-    [RILEY_PAUSE_INTENT, rileyPauseExecutionWorkflow],
+    [rileyPauseExecutor.intent, rileyPauseExecutor.handler],
     ["creative.job.continue", buildCreativeJobDecisionWorkflow(prismaClient, "continue")],
     ["creative.job.stop", buildCreativeJobDecisionWorkflow(prismaClient, "stop")],
     ["creative.job.publish", creativePublishWorkflow],
@@ -447,8 +430,8 @@ export async function bootstrapContainedWorkflows(
       // decorative platform-wide (zero non-test consumers); real containment is
       // the typed builder + internal-only trigger + the executor's fail-closed
       // Zod parse. Internal-trigger-only (not reachable from the public API).
-      intent: RILEY_PAUSE_INTENT,
-      workflowId: RILEY_PAUSE_INTENT,
+      intent: rileyPauseExecutor.intent,
+      workflowId: rileyPauseExecutor.intent,
       budgetClass: "cheap",
       approvalPolicy: "always",
       allowedTriggers: ["internal"],
@@ -554,6 +537,21 @@ export async function bootstrapContainedWorkflows(
     return platformIngress.submit(req);
   };
 
+  // Phase-C pause initiator. Deployment resolution mirrors the handoff: the cron
+  // iterates Riley's active ad-optimizer deployments and passes
+  // {deploymentId, skillSlug:"ad-optimizer"}; never the intent-prefix fallback.
+  const submitRileyPause = async (
+    input: RileyPauseSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ): Promise<SubmitWorkResponse | null> => {
+    const req = buildRileyPauseSubmitRequest(input, deployment);
+    // null ⇒ Riley abstained (class eligibility / recommendation floor / raised
+    // execution floor). Do not submit — the builder owns this first-line
+    // abstention; the executor re-checks as defense in depth.
+    if (!req) return null;
+    return platformIngress.submit(req);
+  };
+
   const submitMiraBriefCompose = async (
     input: MiraBriefComposeSubmitInput,
     deployment?: { deploymentId: string; skillSlug: string },
@@ -587,6 +585,7 @@ export async function bootstrapContainedWorkflows(
     submitScheduledFollowUp,
     submitScheduledReminder,
     submitRecommendationHandoff,
+    submitRileyPause,
     submitMiraBriefCompose,
     submitMiraConceptDraft,
   };

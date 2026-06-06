@@ -695,6 +695,12 @@ export async function buildServer() {
         deployment: { deploymentId: string; skillSlug: string },
       ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse | null>)
     | undefined;
+  let submitRileyPause:
+    | ((
+        input: import("./services/workflows/riley-pause-submit-request.js").RileyPauseSubmitInput,
+        deployment: { deploymentId: string; skillSlug: string },
+      ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse | null>)
+    | undefined;
   let submitMiraBriefCompose:
     | ((
         input: import("./services/workflows/mira-self-brief-request.js").MiraBriefComposeSubmitInput,
@@ -721,6 +727,7 @@ export async function buildServer() {
     submitScheduledFollowUp = result.submitScheduledFollowUp;
     submitScheduledReminder = result.submitScheduledReminder;
     submitRecommendationHandoff = result.submitRecommendationHandoff;
+    submitRileyPause = result.submitRileyPause;
     submitMiraBriefCompose = result.submitMiraBriefCompose;
     submitMiraConceptDraft = result.submitMiraConceptDraft;
   }
@@ -914,6 +921,7 @@ export async function buildServer() {
     submitScheduledFollowUp,
     submitScheduledReminder,
     submitRecommendationHandoff,
+    submitRileyPause,
     submitMiraBriefCompose,
     submitMiraConceptDraft,
   });

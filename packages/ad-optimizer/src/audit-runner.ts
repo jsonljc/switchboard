@@ -34,6 +34,7 @@ import {
   type HandoffCampaignContext,
   type RecommendationHandoffSubmitter,
 } from "./recommendation-handoff-dispatch.js";
+import type { RileyPauseSubmitter } from "./riley-pause-dispatch.js";
 import { computeAuditEconomicsSections } from "./analyzers/source-reallocation.js";
 import { arbitrate } from "./analyzers/opportunity-arbitrator.js";
 import type {
@@ -192,6 +193,11 @@ export interface AuditDependencies {
   bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
   /** Optional bootstrap callback: routes each emitted creative rec (post-abstention) to a governed Mira draft. */
   recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
+  /** Optional (Phase-C). Routes the arbitration-PRIMARY pause to the governed
+   * pause intent (parking for mandatory approval). Capability = permission: the
+   * cron passes it ONLY for deployments whose
+   * governanceSettings.pauseSelfExecutionEnabled is true (both default OFF). */
+  rileyPauseSubmitter?: RileyPauseSubmitter;
   /** Optional (slice 4c). Feeds RevenueState.businessContextFreshness; read
    * POST-ABORT only. Absent ⇒ freshness stays "unknown" (back-compat: the
    * eval harness and analysis-only callers are unaffected). */
@@ -276,6 +282,7 @@ export class AuditRunner {
   private readonly coverageValidator?: AuditDependencies["coverageValidator"];
   private readonly bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
   private readonly recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
+  private readonly rileyPauseSubmitter?: RileyPauseSubmitter;
   private readonly operationalStateProvider?: OperationalStateProvider;
 
   constructor(deps: AuditDependencies) {
@@ -293,6 +300,7 @@ export class AuditRunner {
     this.coverageValidator = deps.coverageValidator;
     this.bookedValueByCampaignProvider = deps.bookedValueByCampaignProvider;
     this.recommendationHandoffSubmitter = deps.recommendationHandoffSubmitter;
+    this.rileyPauseSubmitter = deps.rileyPauseSubmitter;
     this.operationalStateProvider = deps.operationalStateProvider;
 
     if (deps.recommendationEmitter && !deps.recommendationEmissionContext) {
@@ -311,11 +319,12 @@ export class AuditRunner {
     // Inclusive window length (weekly window since = until - 6 ⇒ 7 days) for handoff evidence.
     const windowDays =
       Math.round((Date.parse(dateRange.until) - Date.parse(dateRange.since)) / 86_400_000) + 1;
-    // Per-campaign handoff-gate context (evidence + learning phase), captured for
-    // EVERY run since Riley v3 ownership reads it (Step 8e). The sink still
-    // receives it only alongside a submitter (see Step 9), so the sink-visible
-    // contract and the handoff path are byte-identical to pre-ownership behavior.
-    const handoffContextByCampaign = new Map<string, HandoffCampaignContext>();
+    // Per-campaign evidence + learning-phase context (the handoff-gate shape),
+    // captured for EVERY run since Riley v3 ownership reads it (Step 8e). It now
+    // feeds the handoff abstention AND the Phase-C pause dispatch, hence the
+    // neutral name. The sink still receives it only alongside a submitter (see
+    // Step 9), so analysis-only callers are byte-identical to before.
+    const campaignEvidenceByCampaign = new Map<string, HandoffCampaignContext>();
 
     // Gate 0 (Phase-A): data-sufficiency abstention. When a coverage validator is
     // injected and tracked-source coverage is below the sufficiency floor, Riley
@@ -509,7 +518,7 @@ export class AuditRunner {
       // Task 8 Step 4: derived from the already-fetched `learningStatus` — no extra Graph call.
       const learningPhaseActive = deriveLearningPhaseActive(learningStatus.state);
       if (learningPhaseActive) campaignsInLearning++;
-      handoffContextByCampaign.set(
+      campaignEvidenceByCampaign.set(
         insight.campaignId,
         handoffContextFromInsight(insight, windowDays, learningPhaseActive),
       );
@@ -629,10 +638,21 @@ export class AuditRunner {
 
     // Step 8e (Riley v3, spec 2.2 net-new item 1): per-recommendation ownership
     // annotation, ADDITIVE like arbitration above; it never filters emission or
-    // handoff. Reads the always-built per-campaign handoff context.
+    // handoff. Reads the always-built per-campaign evidence context.
     const ownership =
       recommendations.length > 0
-        ? deriveOwnershipAnnotations({ recommendations, handoffContextByCampaign })
+        ? deriveOwnershipAnnotations({
+            recommendations,
+            handoffContextByCampaign: campaignEvidenceByCampaign,
+          })
+        : undefined;
+
+    // Phase-C: the arbitration primary's index WHEN that primary is a pause.
+    // The sink dispatches the pause submitter only at this index (primary-only
+    // self-submission is structural, parent spec section 3).
+    const pausePrimaryIndex =
+      arbitration?.primary && arbitration.primary.action === "pause"
+        ? arbitration.primary.index
         : undefined;
 
     // Step 9: Emit recommendations to the v1 pipeline (queue / shadow / dropped).
@@ -649,9 +669,12 @@ export class AuditRunner {
         emit: this.recommendationEmitter,
         emissionContext: this.recommendationEmissionContext!,
         recommendationHandoffSubmitter: this.recommendationHandoffSubmitter,
-        handoffContextByCampaign: this.recommendationHandoffSubmitter
-          ? handoffContextByCampaign
-          : undefined,
+        rileyPauseSubmitter: this.rileyPauseSubmitter,
+        pausePrimaryIndex,
+        campaignEvidenceByCampaign:
+          this.recommendationHandoffSubmitter || this.rileyPauseSubmitter
+            ? campaignEvidenceByCampaign
+            : undefined,
         // PR2 Gate-4: per-campaign economics (built above) so each rec's approval
         // card surfaces its own CPL / cost-per-booked / true ROAS. Omitted when the
         // provider returned no per-campaign funnel (graceful — no economics line).
@@ -661,7 +684,8 @@ export class AuditRunner {
       // (deferred — AgentEvent requires deploymentId not yet in AuditConfig).
       console.warn(
         `[ad-optimizer] Riley reviewed ${recommendations.length} candidates -> ` +
-          `queue=${sinkResult.routedQueue} shadow=${sinkResult.routedShadow} dropped=${sinkResult.dropped}`,
+          `queue=${sinkResult.routedQueue} shadow=${sinkResult.routedShadow} dropped=${sinkResult.dropped}` +
+          (this.rileyPauseSubmitter ? ` pauseParked=${sinkResult.pauseParkedIndex ?? "none"}` : ""),
       );
     }
 

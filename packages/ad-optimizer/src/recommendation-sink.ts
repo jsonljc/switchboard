@@ -12,6 +12,7 @@ import {
   type HandoffCampaignContext,
   type RecommendationHandoffSubmitter,
 } from "./recommendation-handoff-dispatch.js";
+import { buildRileyPauseCandidate, type RileyPauseSubmitter } from "./riley-pause-dispatch.js";
 
 /**
  * Sink that bridges ad-optimizer's RecommendationOutput[] (audit-runner output)
@@ -89,11 +90,13 @@ export interface RunRecommendationSinkArgs {
   campaignEconomics?: { rows: CampaignEconomicsRow[] };
   /**
    * Per-campaign evidence + learning-phase context the audit captured during its
-   * per-campaign loop, keyed by campaignId. Required (alongside
-   * `recommendationHandoffSubmitter`) to assemble a Riley -> agent handoff; absent
-   * for analysis-only callers (no handoff).
+   * per-campaign loop, keyed by campaignId. Feeds the handoff abstention AND the
+   * Phase-C pause dispatch; absent for analysis-only callers. (Renamed from
+   * handoffContextByCampaign when the pause initiator landed; the
+   * HandoffCampaignContext TYPE name is unchanged — it still describes the
+   * handoff-gate context shape both consumers read.)
    */
-  handoffContextByCampaign?: Map<string, HandoffCampaignContext>;
+  campaignEvidenceByCampaign?: Map<string, HandoffCampaignContext>;
   /**
    * Optional. When provided, each EMITTED (non-dropped) creative recommendation that
    * clears the handoff abstention is routed to a governed Mira draft (parking for
@@ -102,12 +105,27 @@ export interface RunRecommendationSinkArgs {
    * never breaks emission/routing.
    */
   recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
+  /**
+   * Optional (Phase-C). When provided, the arbitration-PRIMARY pause (and only
+   * it) is routed to the governed pause intent via this bootstrap-injected
+   * callback, parking for mandatory human approval. Capability = permission:
+   * the runner receives this only for flag-on deployments. Best-effort.
+   */
+  rileyPauseSubmitter?: RileyPauseSubmitter;
+  /** The arbitration primary's index WHEN that primary is a pause; undefined otherwise. */
+  pausePrimaryIndex?: number;
 }
 
 export interface RunRecommendationSinkResult {
   routedQueue: number;
   routedShadow: number;
   dropped: number;
+  /**
+   * Index (entry identity) of the recommendation whose pause submit ACTUALLY
+   * parked this run; undefined when nothing parked. Strict-truth riley_self
+   * ownership reads this (park fact, not gate eligibility).
+   */
+  pauseParkedIndex?: number;
 }
 
 /**
@@ -401,7 +419,9 @@ export async function runRecommendationSink(
   for (const row of args.campaignEconomics?.rows ?? [])
     economicsByCampaign.set(row.campaignId, row);
 
-  for (const rec of args.recommendations) {
+  let pauseParkedIndex: number | undefined;
+
+  for (const [index, rec] of args.recommendations.entries()) {
     const expiresAt = new Date(Date.now() + URGENCY_TO_EXPIRY_HOURS[rec.urgency] * 60 * 60 * 1000);
     const riskContract = emittedRiskContractFor(rec.action, rec.urgency);
     const result = await args.emit(
@@ -455,7 +475,7 @@ export async function runRecommendationSink(
           rationale: humanizeRecommendation(rec),
           surface: result.surface,
         },
-        context: args.handoffContextByCampaign?.get(rec.campaignId),
+        context: args.campaignEvidenceByCampaign?.get(rec.campaignId),
         organizationId: args.orgId,
         deploymentId: args.emissionContext.deploymentId ?? "",
       });
@@ -469,7 +489,45 @@ export async function runRecommendationSink(
         }
       }
     }
+
+    // Phase-C pause self-submission: route the arbitration-PRIMARY pause (and only
+    // it) to the governed pause intent. Gated on a persisted id, the captured
+    // context, class eligibility + the raised execution floor (in
+    // buildRileyPauseCandidate). Best-effort: a pause submit failure never breaks
+    // emission/routing; the ingress idempotency key backstops a retry double-submit.
+    // The submitter's park truth feeds strict-truth riley_self ownership.
+    if (args.rileyPauseSubmitter && result.id) {
+      const pauseCandidate = buildRileyPauseCandidate({
+        emitted: {
+          recommendationId: result.id,
+          actionType: rec.action,
+          campaignId: rec.campaignId,
+          rationale: humanizeRecommendation(rec),
+          surface: result.surface,
+        },
+        index,
+        primaryPauseIndex: args.pausePrimaryIndex,
+        context: args.campaignEvidenceByCampaign?.get(rec.campaignId),
+        organizationId: args.orgId,
+        deploymentId: args.emissionContext.deploymentId ?? "",
+      });
+      if (pauseCandidate) {
+        try {
+          const outcome = await args.rileyPauseSubmitter(pauseCandidate);
+          if (outcome.parked) pauseParkedIndex = index;
+        } catch (err) {
+          console.warn(
+            `[ad-optimizer] Riley pause submit threw for rec=${pauseCandidate.recommendationId}: ${String(err)}`,
+          );
+        }
+      }
+    }
   }
 
-  return { routedQueue, routedShadow, dropped };
+  return {
+    routedQueue,
+    routedShadow,
+    dropped,
+    ...(pauseParkedIndex !== undefined ? { pauseParkedIndex } : {}),
+  };
 }

@@ -506,7 +506,7 @@ describe("runRecommendationSink — Riley -> agent handoff dispatch", () => {
       recommendations: [refreshRec()],
       emit: emitOk("rec_db_1"),
       emissionContext: { cronId: "test-cron", deploymentId: "dep_riley" },
-      handoffContextByCampaign: ctx(),
+      campaignEvidenceByCampaign: ctx(),
       recommendationHandoffSubmitter,
     });
     expect(recommendationHandoffSubmitter).toHaveBeenCalledTimes(1);
@@ -530,7 +530,7 @@ describe("runRecommendationSink — Riley -> agent handoff dispatch", () => {
       recommendations: [refreshRec()],
       emit: emitOk(null, "dropped"),
       emissionContext: { cronId: "test-cron", deploymentId: "dep_riley" },
-      handoffContextByCampaign: ctx(),
+      campaignEvidenceByCampaign: ctx(),
       recommendationHandoffSubmitter,
     });
     expect(recommendationHandoffSubmitter).not.toHaveBeenCalled();
@@ -544,7 +544,7 @@ describe("runRecommendationSink — Riley -> agent handoff dispatch", () => {
       recommendations: [baseRec({ action: "pause", campaignId: "c-1" })],
       emit: emitOk("rec_db_2"),
       emissionContext: { cronId: "test-cron", deploymentId: "dep_riley" },
-      handoffContextByCampaign: ctx(),
+      campaignEvidenceByCampaign: ctx(),
       recommendationHandoffSubmitter,
     });
     expect(recommendationHandoffSubmitter).not.toHaveBeenCalled();
@@ -558,7 +558,7 @@ describe("runRecommendationSink — Riley -> agent handoff dispatch", () => {
       recommendations: [refreshRec()],
       emit: vi.fn(async () => ({ surface: "queue" }) as EmitOutcome),
       emissionContext: { cronId: "test-cron", deploymentId: "dep_riley" },
-      handoffContextByCampaign: ctx(),
+      campaignEvidenceByCampaign: ctx(),
       recommendationHandoffSubmitter,
     });
     expect(recommendationHandoffSubmitter).not.toHaveBeenCalled();
@@ -572,7 +572,7 @@ describe("runRecommendationSink — Riley -> agent handoff dispatch", () => {
       recommendations: [refreshRec()],
       emit: emitOk("rec_db_3"),
       emissionContext: { cronId: "test-cron" },
-      handoffContextByCampaign: ctx(),
+      campaignEvidenceByCampaign: ctx(),
       recommendationHandoffSubmitter,
     });
     expect(recommendationHandoffSubmitter).not.toHaveBeenCalled();
@@ -588,7 +588,7 @@ describe("runRecommendationSink — Riley -> agent handoff dispatch", () => {
       recommendations: [refreshRec()],
       emit: emitOk("rec_db_4"),
       emissionContext: { cronId: "test-cron", deploymentId: "dep_riley" },
-      handoffContextByCampaign: ctx(),
+      campaignEvidenceByCampaign: ctx(),
       recommendationHandoffSubmitter,
     });
     expect(result.routedQueue).toBe(1);

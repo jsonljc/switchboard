@@ -77,10 +77,13 @@ import type {
   SignalHealthCronDependencies,
   InstantFormAdapter,
   RecommendationHandoffSubmitter,
+  RileyPauseSubmitter,
 } from "@switchboard/ad-optimizer";
 import { synthesizeCreativeBrief } from "../services/workflows/creative-brief-synthesis.js";
 import { resolveHandoffBrief } from "../services/workflows/handoff-brief-enrichment.js";
 import type { RecommendationHandoffSubmitInput } from "../services/workflows/recommendation-handoff-request.js";
+import type { RileyPauseSubmitInput } from "../services/workflows/riley-pause-submit-request.js";
+import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
@@ -173,6 +176,17 @@ export interface RegisterInngestOptions {
    */
   submitRecommendationHandoff?: (
     input: RecommendationHandoffSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse | null>;
+  /**
+   * Top-level submit closure for the Phase-C pause initiator. Built in
+   * bootstrapContainedWorkflows and threaded here so the cron submits through
+   * the same PlatformIngress front door. Returns null when Riley abstains
+   * (class eligibility / floors in the builder). No parentWorkUnitId — cron
+   * work units are trace roots.
+   */
+  submitRileyPause?: (
+    input: RileyPauseSubmitInput,
     deployment: { deploymentId: string; skillSlug: string },
   ) => Promise<SubmitWorkResponse | null>;
   /**
@@ -351,6 +365,14 @@ export async function registerInngest(
     }
   };
 
+  // Phase-C pause initiator: the testable factory owns the branch order
+  // (approvalRequired-before-result, entitlement named skip, loud deny +
+  // unexpected-execute alarms). See bootstrap/riley-pause-submitter.ts.
+  const rileyPauseSubmitter: RileyPauseSubmitter = buildRileyPauseSubmitter({
+    submitRileyPause: options.submitRileyPause,
+    log: app.log,
+  });
+
   const adOptimizerDeps: CronDependencies = {
     listActiveDeployments: async () => {
       const listing = await listingStore.findBySlug("ad-optimizer");
@@ -360,6 +382,12 @@ export async function registerInngest(
         id: d.id,
         organizationId: d.organizationId,
         inputConfig: (d.inputConfig as Record<string, unknown>) ?? {},
+        // Phase-C per-org dispatch flag. Strict === true: absent/null/anything
+        // else stays OFF. Flips only via scripts/riley-pause-flag.ts (audited).
+        pauseSelfExecutionEnabled:
+          ((d.governanceSettings as Record<string, unknown> | null)?.[
+            "pauseSelfExecutionEnabled"
+          ] ?? false) === true,
       }));
     },
     getDeploymentCredentials: async (deploymentId) => {
@@ -403,6 +431,12 @@ export async function registerInngest(
     recommendationEmitter: rileyRecommendationEmitter,
     bookedValueByCampaignProvider: bookedValueByCampaignStore,
     recommendationHandoffSubmitter,
+    // Kill switch: RILEY_PAUSE_SELF_EXECUTION_ENABLED=true wires the pause
+    // initiator; default absent = the deploy is dark (the per-deployment
+    // governanceSettings flag then gates per org). Both default OFF.
+    ...(process.env["RILEY_PAUSE_SELF_EXECUTION_ENABLED"] === "true"
+      ? { rileyPauseSubmitter }
+      : {}),
     getLatestOperationalState: (organizationId) => operationalStateStore.getLatest(organizationId),
   };
 
