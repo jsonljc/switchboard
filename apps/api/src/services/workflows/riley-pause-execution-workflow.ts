@@ -194,6 +194,8 @@ export function buildRileyPauseExecutionWorkflow(deps: RileyPauseExecutionDeps):
         };
       }
 
+      // Non-null is safe: isPhaseCActionClassEligible("pause") above requires the
+      // seam entry to exist (its first leg is `seam !== undefined`).
       const seam = PHASE_C_EXECUTION_SEAM.pause!;
       return {
         outcome: "completed",

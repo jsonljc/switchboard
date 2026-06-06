@@ -233,8 +233,7 @@ export async function bootstrapContainedWorkflows(
       if (!deployment || deployment.organizationId !== organizationId) {
         return { kind: "org_mismatch" as const };
       }
-      const connections = await pauseConnectionStore.listByDeployment(deploymentId);
-      const conn = connections.find((c) => c.type === "meta-ads");
+      const conn = await pauseConnectionStore.findByDeploymentAndType(deploymentId, "meta-ads");
       if (!conn) return { kind: "none" as const };
       const creds = decryptCredentials(conn.credentials);
       return {
