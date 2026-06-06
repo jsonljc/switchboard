@@ -6,6 +6,8 @@ export { createCalendarBookToolFactory } from "./calendar-book.js";
 export type { CalendarBookToolFactory, CalendarProviderFactory } from "./calendar-book.js";
 export { createEscalateToolFactory } from "./escalate.js";
 export type { EscalateToolFactory } from "./escalate.js";
+export { createDepositLinkToolFactory } from "./deposit-link.js";
+export type { DepositLinkToolFactory } from "./deposit-link.js";
 export { createDelegateToolFactory } from "./delegate.js";
 export type { DelegateToolFactory, DelegateToolDeps } from "./delegate.js";
 export { createScheduleFollowUpToolFactory } from "./schedule-follow-up.js";
