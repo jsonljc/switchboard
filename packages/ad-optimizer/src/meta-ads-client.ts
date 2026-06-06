@@ -362,6 +362,25 @@ export class MetaAdsClient {
     await this.post(`/${campaignId}`, { status });
   }
 
+  /**
+   * Read one campaign's status (Phase-C pause executor pre-read). Degrades to
+   * null on any error: the pause write itself is the honest test; a status-read
+   * blip must not block an approved pause.
+   */
+  async getCampaignStatus(
+    campaignId: string,
+  ): Promise<{ status: string; effectiveStatus: string } | null> {
+    try {
+      const response = await this.get(`/${campaignId}?fields=status,effective_status`);
+      return {
+        status: String(response.status ?? ""),
+        effectiveStatus: String(response.effective_status ?? ""),
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async getAdCampaignId(adId: string): Promise<string | null> {
     const cached = this.adCampaignCache.get(adId);
     if (cached !== undefined) return cached;

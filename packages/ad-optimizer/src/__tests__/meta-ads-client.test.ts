@@ -564,6 +564,41 @@ describe("MetaAdsClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe("getCampaignStatus (Phase-C pause executor pre-read)", () => {
+    it("reads status + effective_status for one campaign", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "camp_1", status: "ACTIVE", effective_status: "ACTIVE" }),
+      });
+
+      const result = await client.getCampaignStatus("camp_1");
+
+      expect(result).toEqual({ status: "ACTIVE", effectiveStatus: "ACTIVE" });
+      const callUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(callUrl).toBe(`${BASE_URL}/camp_1?fields=status,effective_status`);
+    });
+
+    it("returns null on a Meta error (degrade, do not throw: the write is the honest test)", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: { message: "nope", type: "x", code: 100 } }),
+      });
+
+      const result = await client.getCampaignStatus("camp_1");
+
+      expect(result).toBeNull();
+    });
+
+    it("returns null when fetch itself rejects", async () => {
+      fetchSpy.mockRejectedValueOnce(new Error("network down"));
+
+      const result = await client.getCampaignStatus("camp_1");
+
+      expect(result).toBeNull();
+    });
+  });
 });
 
 describe("getCampaignInsights time_increment", () => {
