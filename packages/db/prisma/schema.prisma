@@ -1845,6 +1845,7 @@ model LifecycleRevenueEvent {
   verified          Boolean     @default(false)
   sourceCampaignId  String?
   sourceAdId        String?
+  origin            String      @default("live")
   recordedAt        DateTime    @default(now())
   createdAt         DateTime    @default(now())
 
@@ -2011,6 +2012,7 @@ model Booking {
   createdByType   String    @default("agent")
   sourceChannel   String?
   workTraceId     String?
+  origin          String    @default("live")
   rescheduledAt   DateTime?
   rescheduleCount Int       @default(0)
   createdAt       DateTime  @default(now())
@@ -2058,6 +2060,7 @@ model ConversionRecord {
   sourceChannel     String?
   agentDeploymentId String?
   bookingId         String?
+  origin            String   @default("live")
   metadata          Json     @default("{}")
   occurredAt        DateTime
   createdAt         DateTime @default(now())
