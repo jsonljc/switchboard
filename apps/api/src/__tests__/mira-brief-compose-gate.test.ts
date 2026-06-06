@@ -69,8 +69,14 @@ function composeRegistration(): IntentRegistration {
   const captured: IntentRegistration[] = [];
   const registry = { register: (r: IntentRegistration) => captured.push(r) };
   registerSkillIntents(registry as unknown as IntentRegistry, [loadSkill("mira", SKILLS_DIR)]);
-  expect(captured).toHaveLength(1);
-  return captured[0]!;
+  // The registrar emits the base intent plus an auto-generated `${slug}.respond`
+  // companion (the managed-inbound entry point added in PR 1A-0), so the real Mira
+  // SKILL.md now registers two intents. Assert both and return the base compose
+  // registration the gate asserts against (drift on the base intent still reds this).
+  expect(captured).toHaveLength(2);
+  const compose = captured.find((r) => r.intent === "creative.brief.compose");
+  expect(compose).toBeDefined();
+  return compose!;
 }
 
 function policyFrom(rule: Record<string, unknown>, overrides: Partial<Policy> = {}): Policy {
