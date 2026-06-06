@@ -128,4 +128,26 @@ describe("resolveContactIdentity", () => {
       channel: "whatsapp",
     });
   });
+
+  it("falls back to the raw sessionId when normalizeToE164 cannot normalize (refuse-to-guess)", async () => {
+    const store = makeStore();
+    const result = await resolveContactIdentity({
+      channel: "whatsapp",
+      sessionId: "abc-not-a-number",
+      organizationId: "org-1",
+      contactStore: store,
+    });
+
+    // findByPhone must be called with the raw sessionId, not null/empty
+    expect(store.findByPhone).toHaveBeenCalledWith("org-1", "abc-not-a-number");
+    // On a miss, create must also use the raw sessionId as the phone value
+    expect(store.create).toHaveBeenCalledWith(
+      expect.objectContaining({ phone: "abc-not-a-number" }),
+    );
+    expect(result).toEqual({
+      contactId: "new-contact-id",
+      phone: "abc-not-a-number",
+      channel: "whatsapp",
+    });
+  });
 });
