@@ -10,6 +10,8 @@ import type {
   ManagedComparisonData,
   ManagedComparisonPair,
   Delta,
+  PaidVisitRow,
+  AttributionBasis,
 } from "../reports/v1.js";
 import { REPORT_WINDOWS, DEFAULT_REPORT_WINDOW } from "../reports/v1.js";
 
@@ -137,5 +139,36 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
   it("CostBreakdown has paid/alt/saving as numbers", () => {
     const b: CostBreakdown = { paid: 100, alt: 8000, saving: 7900 };
     expect(b.alt - b.paid).toBe(b.saving);
+  });
+});
+
+describe("PaidVisitRow (1A-6)", () => {
+  it("accepts a ctwa_captured paid visit row in major units", () => {
+    const basis: AttributionBasis = "ctwa_captured";
+    const row: PaidVisitRow = {
+      bookingId: "bk-1",
+      amountMajor: 500,
+      currency: "SGD",
+      campaignId: "camp-1",
+      campaignName: "camp-1",
+      attributionBasis: basis,
+      paidAt: "2026-06-01T00:00:00.000Z",
+    };
+    expect(row.amountMajor).toBe(500);
+    expect(row.attributionBasis).toBe("ctwa_captured");
+  });
+
+  it("allows campaign_missing with null campaign fields", () => {
+    const row: PaidVisitRow = {
+      bookingId: "bk-2",
+      amountMajor: 120.5,
+      currency: "SGD",
+      campaignId: null,
+      campaignName: null,
+      attributionBasis: "campaign_missing",
+      paidAt: "2026-06-02T00:00:00.000Z",
+    };
+    expect(row.campaignId).toBeNull();
+    expect(row.attributionBasis).toBe("campaign_missing");
   });
 });
