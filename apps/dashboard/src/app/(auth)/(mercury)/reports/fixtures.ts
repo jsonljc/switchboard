@@ -4,6 +4,7 @@
 import {
   type ReportDataV1,
   type ReportWindow,
+  type PaidVisitRow,
   REPORT_WINDOWS,
   DEFAULT_REPORT_WINDOW,
 } from "@switchboard/schemas";
@@ -389,3 +390,35 @@ export const FIXTURES_BY_WINDOW: Record<ReportWindow, ReportDataV1> = {
   "THIS MONTH": goodFixture,
   "THIS QUARTER": problemFixture,
 };
+
+// ─── Paid-visits fixture — Aurora Aesthetics, SGD amounts in major units ────
+// Two CTWA-captured rows with real campaign names; one campaign_missing row.
+export const PAID_VISITS_FIXTURE: PaidVisitRow[] = [
+  {
+    bookingId: "bk-aurora-001",
+    amountMajor: 250,
+    currency: "SGD",
+    campaignId: "spring-hydrafacial",
+    campaignName: "Botox Awareness — CTWA",
+    attributionBasis: "ctwa_captured",
+    paidAt: "2026-06-01T10:30:00.000Z",
+  },
+  {
+    bookingId: "bk-aurora-002",
+    amountMajor: 480.5,
+    currency: "SGD",
+    campaignId: "filler-retargeting",
+    campaignName: "Filler Retargeting",
+    attributionBasis: "ctwa_captured",
+    paidAt: "2026-06-03T14:15:00.000Z",
+  },
+  {
+    bookingId: "bk-aurora-003",
+    amountMajor: 180,
+    currency: "SGD",
+    campaignId: null,
+    campaignName: null,
+    attributionBasis: "campaign_missing",
+    paidAt: "2026-06-04T09:00:00.000Z",
+  },
+];
