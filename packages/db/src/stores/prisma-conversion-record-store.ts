@@ -41,6 +41,7 @@ interface RecordInput {
   occurredAt: Date;
   source: string;
   metadata: Record<string, unknown>;
+  origin?: "live" | "seed" | "demo";
 }
 
 export class PrismaConversionRecordStore {
@@ -65,6 +66,7 @@ export class PrismaConversionRecordStore {
         bookingId,
         metadata: event.metadata as Record<string, string | number | boolean | null>,
         occurredAt: event.occurredAt,
+        origin: event.origin ?? "live",
       },
       update: {},
     });
@@ -232,6 +234,7 @@ export class PrismaConversionRecordStore {
       where: {
         organizationId: query.orgId,
         type: "booked",
+        origin: "live",
         value: { gt: 0 },
         occurredAt: { gte: query.from, lte: query.to },
         sourceCampaignId: query.campaignIds ? { in: query.campaignIds } : { not: null },
@@ -269,6 +272,7 @@ export class PrismaConversionRecordStore {
       where: {
         organizationId: query.orgId,
         type: "booked",
+        origin: "live",
         value: { gt: 0 },
         occurredAt: { gte: query.from, lte: query.to },
         sourceCampaignId: query.campaignIds ? { in: query.campaignIds } : { not: null },
