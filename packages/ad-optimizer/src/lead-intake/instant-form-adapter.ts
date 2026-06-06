@@ -66,6 +66,7 @@ export function buildInstantFormIntake(
 export interface InstantFormAdapterDeps {
   ingress: IngressLike;
   now: () => Date;
+  region?: "SG" | "MY";
 }
 
 /**
@@ -92,7 +93,7 @@ export class InstantFormAdapter {
     lead: InstantFormLead,
     opts: { parentWorkUnitId?: string } = {},
   ): Promise<InstantFormIngestResult | null> {
-    const intake = buildInstantFormIntake(lead, { now: this.deps.now });
+    const intake = buildInstantFormIntake(lead, { now: this.deps.now, region: this.deps.region });
     if (!intake) return null;
     const response = await this.deps.ingress.submit({
       intent: "lead.intake",

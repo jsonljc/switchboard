@@ -189,4 +189,28 @@ describe("InstantFormAdapter", () => {
     const out = await adapter.ingest(makeLead());
     expect(out).toBeNull();
   });
+
+  it("threads region through to the builder: 0-prefixed MY number normalizes to +60", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outputs: { contactId: "contact_my_1", duplicate: false } },
+    });
+    const adapter = new InstantFormAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+      region: "MY",
+    });
+    const lead = makeLead({
+      fieldData: [{ name: "phone_number", values: ["0123456789"] }],
+    });
+    const out = await adapter.ingest(lead);
+    expect(out).toEqual({ contactId: "contact_my_1", duplicate: false });
+    expect(submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          contact: expect.objectContaining({ phone: "+60123456789" }),
+        }),
+      }),
+    );
+  });
 });
