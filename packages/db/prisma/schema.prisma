@@ -2064,6 +2064,37 @@ model ConversionRecord {
 }
 
 // ---------------------------------------------------------------------------
+// Receipt — shared proof primitive (calendar | payment). isPaidVisit reads tier+status.
+// The (organizationId, kind, externalRef) PARTIAL UNIQUE (WHERE externalRef IS NOT NULL)
+// is raw SQL in migration 20260606120000_add_receipt (Prisma 6 cannot express partial
+// unique in-schema; same pattern as Booking 20260603120000). Keep this comment in sync.
+// ---------------------------------------------------------------------------
+
+model Receipt {
+  id             String    @id @default(uuid())
+  organizationId String
+  kind           String // calendar | payment
+  tier           String // T1_FETCH_BACK | T2_PROVIDER_SIGNATURE | T3_ADMIN_AUDIT
+  status         String // booked | held | paid | void
+  bookingId      String?
+  opportunityId  String?
+  revenueEventId String?
+  connectionId   String?
+  provider       String?
+  externalRef    String?
+  amount         Int?
+  currency       String?
+  evidence       Json
+  capturedBy     String
+  verifiedAt     DateTime?
+  workTraceId    String?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, bookingId])
+  @@index([organizationId, kind, status])
+}
+
+// ---------------------------------------------------------------------------
 // DispatchLog — ad platform delivery tracking
 // ---------------------------------------------------------------------------
 
