@@ -21,6 +21,17 @@ The owner's job this serves: *make more money, and know which spend produced it.
 - **Read surface before the act leg.** The owner-facing "paid visits by ad" surface (1A-6) ships in the prove milestone and is **decoupled** from Riley execution. (The original PR-7 conflated the read surface with feeding Riley's input; those split — read surface → 1A, reallocation-input wiring → 1B.)
 - **Noop payment adapter first; live Stripe Connect is the immediate fast-follow** behind the same `PaymentPort`. Noop proves the mechanics without Stripe-Connect onboarding or a payment-ready pilot clinic.
 
+## 2a. Design-review revisions (2026-06-06)
+
+After a plan review, six changes are LOCKED and supersede any conflicting detail in §5/§9/§10 below:
+
+1. **1A-0 live-path preflight precedes everything** — confirm/fix the `alex.respond` intent registration and a real managed-inbound smoke test before building the prove leg (otherwise the whole chain may 503). This is the Phase-0 precondition from the architecture map.
+2. **The payment PR is split** into `1A-4a` (PaymentPort + Noop deposit issuance), `1A-4b` (verified writer + `LifecycleRevenueEvent.bookingId` weld), `1A-4c` (PSP webhook ingress-receiver), `1A-4d` (live Stripe Connect) — for reviewability. The Spec-1A sequence is therefore: **1A-0, 1A-1, 1A-2, 1A-3, 1A-4a, 1A-4b, 1A-4c, 1A-4d, 1A-5, 1A-6**.
+3. **Noop/Local can never be production-countable** — a `provider="noop"` payment is written tier **T3 DEGRADED** and the read/metric EXCLUDES it when `origin="live"` in production (mirrors the calendar Noop/Local T3 prod-assert). Noop exercises the write path; it is never a real paid visit.
+4. **A calendar-confirmed booking is `booked`, not `held`** — `Receipt.status` enum is `booked|held|paid|void`; a CalendarReceipt is `status="booked"`, `basis="calendar_confirmed"`, `isPaidVisit→{paid:false, held:false}`. Only a verified PaymentReceipt is `paid`; deposit-paid is the held/paid signal.
+5. **E.164 refuses to guess** — infer a market (+65/+60) only from an explicit region/market signal threaded from the calling adapter; an ambiguous/0-prefixed number with no region returns `null` (wrong-merge is worse than no-merge). A 0-prefixed MY number without a region must NOT default to +60.
+6. **Honest labels + explicit seed origin** — read rows carry an `attributionBasis` (`ctwa_captured | campaign_missing | copied_from_contact`) and render "linked to campaign Y via CTWA attribution", never "proven came from campaign Y" (cryptographic ClickEvidence is a later spec); and every seed/demo factory stamps `origin` explicitly (`seed`/`demo`), never relying on the `live` default.
+
 ## 3. In scope
 
 1. **Heal the two-contact split** — one canonical E.164 normalizer in `@switchboard/schemas` (L1), called at `ctwa-adapter`, `instant-form-adapter`, `resolve-contact-identity`, and `lead-intake-store`, plus normalized `findByPhone`, so the CTWA Contact carrying attribution **is** the Contact a booking resolves against. The prove leg is null until this lands. (The campaign-id resolver is a small companion fix — `buildBookedConversionPayload` already reads `attribution.sourceCampaignId`.)
@@ -31,7 +42,7 @@ The owner's job this serves: *make more money, and know which spend produced it.
 6. **Owner read surface (prove leg, decoupled)** — extend `GET /:orgId/revenue/by-campaign` to filter `verified=true` and join via `bookingId`; one "paid visits by ad" dashboard panel reusing `campaigns-section.tsx`. Depends only on verified paid data + the chain — **not** on Riley execution.
 7. **Riley act-leg that EXECUTES (act milestone)** — a structured budget-delta producer in `ad-optimizer`; a new `adoptimizer.campaign.reallocate` workflow intent cloned from the proven `recommendation-handoff` contract + a seeded `require_approval(mandatory)` policy; `MetaAdsClient.getCampaign` + `updateCampaignBudget` (new; keep `updateCampaignStatus`'s ACTIVE-throw for pause); a read-modify-**re-read** executor returning an `ExecutionReceipt` persisted to `WorkTrace.executionOutputs`; outcome ledger re-keyed off `executedAt` (not bare `status='acted'`).
 8. **Wire PAID value into the reallocation input (act milestone)** — `queryPaidValueCentsByCampaign` (cents, absent key = no value, never 0); prefer it for `trueRoas` (booked as labeled fallback) so Riley reallocates toward verified paid dollars.
-9. **Existing-PMS paid path (architecture B, Spec-1C)** — implement `getBooking` via Google `events.get`; wire per-deployment Google OAuth in `calendar-provider-factory` (stored-but-unused today); `paid` maxes at `held` via calendar evidence, reaching `paid` only via human `operator.record_revenue` with an external PMS/POS reference (T3). Reuses the 1A+1B spine unchanged.
+9. **Existing-PMS paid path (architecture B, Spec-1C)** — implement `getBooking` via Google `events.get`; wire per-deployment Google OAuth in `calendar-provider-factory` (stored-but-unused today); calendar evidence yields `booked` (not `held`); `held`/`paid` come only via human `operator.record_revenue` with an external PMS/POS reference (T3). Reuses the 1A+1B spine unchanged.
 
 ## 4. Out of scope (deferred, with reason)
 
@@ -66,7 +77,7 @@ The **Booking row is the single common anchor**, so one SQL query reconstructs `
 **Parametrization lives in exactly one place** — a per-org discriminator (`no_pms | existing_pms`, an explicit `OrganizationConfig` field, **not** derived from `clinicType`) selects the mint path feeding the shared `Receipt`:
 
 - **A (no-PMS):** `PaymentPort` issues a first-party deposit link on a confirmed booking; the PSP webhook re-fetches the charge and mints `PaymentReceipt(kind=payment, verified, T1)` → `isPaidVisit.paid=true`. Attribution is first-party.
-- **B (existing-PMS):** `calendar-book` re-fetches the external event via `getBooking` and mints `CalendarReceipt(kind=calendar)` whose status maxes at `held` → `isPaidVisit.held=true, paid=false`; reaches `paid=true` only via human `operator.record_revenue` with an external ref (T3).
+- **B (existing-PMS):** `calendar-book` re-fetches the external event via `getBooking` and mints `CalendarReceipt(kind=calendar)` with status `booked` (calendar-confirmed) → `isPaidVisit.held=false, paid=false`; reaches `held`/`paid` only via human `operator.record_revenue` with an external ref (T3).
 
 The structured verdict `{paid, held, tier, basis, degraded}` keeps this honest: the dashboard distinguishes "paid $X — deposit captured (A)" vs "paid $X — operator-confirmed against PMS ref (B)" vs "attended — calendar-confirmed, payment unverified." **Riley consumes only `paid:true` value**, so the same reallocation math serves both.
 
@@ -90,7 +101,7 @@ The structured verdict `{paid, held, tier, basis, degraded}` keeps this honest: 
 - `Booking`: add `origin String @default("live")`. (`workTraceId` exists; populate it.)
 - `ConversionRecord`: add `origin String @default("live")` + `externalRef String? @unique`. (`bookingId` exists; populate it.)
 - `LifecycleRevenueEvent`: add `bookingId String?` + index + `origin String @default("live")` + **partial unique** `(organizationId, externalReference) WHERE externalReference IS NOT NULL` (today no DB unique — replayable).
-- `Receipt` (new): `id, organizationId, kind, tier, status (held|paid|void), bookingId?, opportunityId?, revenueEventId?, connectionId?, provider?, externalRef?, amount Int?, currency?, evidence Json (Zod-discriminated by kind, no any), capturedBy, verifiedAt?, workTraceId?, createdAt`. Indexes `(organizationId, bookingId)`, `(organizationId, kind, status)`; partial unique `(organizationId, kind, externalRef) WHERE externalRef IS NOT NULL`.
+- `Receipt` (new): `id, organizationId, kind, tier, status (booked|held|paid|void), provider?, bookingId?, opportunityId?, revenueEventId?, connectionId?, provider?, externalRef?, amount Int?, currency?, evidence Json (Zod-discriminated by kind, no any), capturedBy, verifiedAt?, workTraceId?, createdAt`. Indexes `(organizationId, bookingId)`, `(organizationId, kind, status)`; partial unique `(organizationId, kind, externalRef) WHERE externalRef IS NOT NULL`.
 - `PendingActionRecord` (1B): add `executionWorkUnitId String?` + `executedAt DateTime?` + `@@index([organizationId, status, executedAt])`. Populate existing always-null `RecommendationOutcome.executableWorkUnitId`.
 - `OrganizationConfig`: add `clinicArchitecture (no_pms | existing_pms)` — distinct from `clinicType`.
 
