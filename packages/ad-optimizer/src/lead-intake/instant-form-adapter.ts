@@ -1,4 +1,5 @@
 import type { LeadIntake } from "@switchboard/schemas";
+import { normalizeToE164 } from "@switchboard/schemas";
 import type { IngressLike } from "./ctwa-adapter.js";
 
 /**
@@ -22,10 +23,8 @@ const stringOrUndefined = (v: unknown): string | undefined =>
 const fieldValue = (lead: InstantFormLead, name: string): string | undefined =>
   stringOrUndefined(lead.fieldData.find((f) => f.name === name)?.values[0]);
 
-const normalizePhone = (raw: string | undefined): string | undefined => {
-  if (!raw) return undefined;
-  return raw.startsWith("+") ? raw : `+${raw}`;
-};
+const normalizePhone = (raw: string | undefined, region?: "SG" | "MY"): string | undefined =>
+  normalizeToE164(raw, region) ?? undefined;
 
 /**
  * Pure builder: maps a Meta Instant Form lead into a `LeadIntake` payload,
@@ -35,10 +34,10 @@ const normalizePhone = (raw: string | undefined): string | undefined => {
  */
 export function buildInstantFormIntake(
   lead: InstantFormLead,
-  opts: { now: () => Date },
+  opts: { now: () => Date; region?: "SG" | "MY" },
 ): LeadIntake | null {
   const email = fieldValue(lead, "email");
-  const phone = normalizePhone(fieldValue(lead, "phone_number"));
+  const phone = normalizePhone(fieldValue(lead, "phone_number"), opts.region);
   const name = fieldValue(lead, "full_name");
 
   if (!email && !phone) return null;

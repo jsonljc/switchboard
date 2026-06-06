@@ -28,12 +28,12 @@ describe("buildInstantFormIntake", () => {
     expect(intake!.idempotencyKey).toBe("leadgen:999");
   });
 
-  it("normalizes phone to E.164 by adding + prefix when missing", () => {
+  it("normalizes phone to E.164 by adding +65 prefix to a bare SG mobile", () => {
     const intake = buildInstantFormIntake(
       makeLead({
         fieldData: [
           { name: "email", values: ["a@b.com"] },
-          { name: "phone_number", values: ["6591234567"] },
+          { name: "phone_number", values: ["91234567"] },
         ],
       }),
       { now: () => new Date("2026-04-26T00:00:00Z") },
@@ -88,6 +88,38 @@ describe("buildInstantFormIntake", () => {
       { now: () => new Date("2026-04-26T00:00:00Z") },
     );
     expect(intake).toBeNull();
+  });
+
+  it("normalizes a bare SG 8-digit phone field to +65 via the canonical normalizer", () => {
+    const intake = buildInstantFormIntake(
+      {
+        leadgenId: "lg-1",
+        organizationId: "o1",
+        deploymentId: "d1",
+        fieldData: [{ name: "phone_number", values: ["91234567"] }],
+      },
+      { now: () => new Date("2026-04-26T00:00:00Z") },
+    );
+    expect(intake).not.toBeNull();
+    expect(intake!.contact.phone).toBe("+6591234567");
+  });
+
+  it("still ingests when phone is un-normalizable but an email is present", () => {
+    const intake = buildInstantFormIntake(
+      {
+        leadgenId: "lg-2",
+        organizationId: "o1",
+        deploymentId: "d1",
+        fieldData: [
+          { name: "phone_number", values: ["not-a-phone"] },
+          { name: "email", values: ["a@b.com"] },
+        ],
+      },
+      { now: () => new Date("2026-04-26T00:00:00Z") },
+    );
+    expect(intake).not.toBeNull();
+    expect(intake!.contact.email).toBe("a@b.com");
+    expect(intake!.contact.phone).toBeUndefined();
   });
 });
 
