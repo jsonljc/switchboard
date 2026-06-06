@@ -44,6 +44,11 @@ import {
   type OutboxWriter,
   type RunInTransaction,
 } from "./operator-intents/revenue.js";
+import {
+  buildRecordVerifiedPaymentHandler,
+  RECORD_VERIFIED_PAYMENT_INTENT,
+  type ReceiptWriter,
+} from "./operator-intents/record-verified-payment.js";
 import { buildActOnRecommendationHandler } from "./operator-intents/recommendation.js";
 import {
   buildConfirmDisqualificationHandler,
@@ -70,6 +75,10 @@ export {
 } from "./operator-intents/shared.js";
 export { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
 export { buildRecordRevenueHandler } from "./operator-intents/revenue.js";
+export {
+  buildRecordVerifiedPaymentHandler,
+  RECORD_VERIFIED_PAYMENT_INTENT,
+} from "./operator-intents/record-verified-payment.js";
 export { buildActOnRecommendationHandler } from "./operator-intents/recommendation.js";
 export {
   buildConfirmDisqualificationHandler,
@@ -92,6 +101,9 @@ interface OperatorIntentsBootstrapDeps {
   revenueStore?: RevenueStore;
   outboxWriter?: OutboxWriter;
   runInTransaction?: RunInTransaction;
+  /** Required (with revenueStore+outboxWriter+runInTransaction) to register the
+   *  payment.record_verified intent. Writes the verified payment Receipt. */
+  receiptWriter?: ReceiptWriter;
   logger?: { info(msg: string): void };
 }
 
@@ -125,6 +137,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     revenueStore,
     outboxWriter,
     runInTransaction,
+    receiptWriter,
     logger,
   } = deps;
 
@@ -168,6 +181,18 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     );
   }
 
+  if (receiptWriter && revenueStore && outboxWriter && runInTransaction) {
+    handlers.set(
+      RECORD_VERIFIED_PAYMENT_INTENT,
+      buildRecordVerifiedPaymentHandler(
+        receiptWriter,
+        revenueStore,
+        outboxWriter,
+        runInTransaction,
+      ),
+    );
+  }
+
   modeRegistry.register(new OperatorMutationMode({ handlers }));
 
   if (opportunityStore) {
@@ -188,13 +213,17 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
   if (revenueStore && outboxWriter && runInTransaction) {
     registerOperatorIntent(intentRegistry, RECORD_REVENUE_INTENT);
   }
+  if (receiptWriter && revenueStore && outboxWriter && runInTransaction) {
+    registerOperatorIntent(intentRegistry, RECORD_VERIFIED_PAYMENT_INTENT);
+  }
 
   const intentCount =
     (opportunityStore ? 1 : 0) +
     (recommendationStore ? 1 : 0) +
     (disqualificationHook ? 2 : 0) +
     (consentService ? 3 : 0) +
-    (revenueStore && outboxWriter && runInTransaction ? 1 : 0);
+    (revenueStore && outboxWriter && runInTransaction ? 1 : 0) +
+    (receiptWriter && revenueStore && outboxWriter && runInTransaction ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );
