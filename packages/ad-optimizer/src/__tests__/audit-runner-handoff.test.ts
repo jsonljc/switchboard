@@ -236,6 +236,60 @@ describe("AuditRunner — Phase-C pause submitter threading", () => {
     expect(sinkArgs.pausePrimaryIndex).toBeUndefined();
   });
 
+  it("report ownership reads the sink's PARK FACT: riley_self at exactly the parked index", async () => {
+    (runRecommendationSink as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      routedQueue: 2,
+      routedShadow: 0,
+      dropped: 0,
+      pauseParkedIndex: 1,
+    });
+    const insight = makeCampaignInsight({
+      campaignId: "camp-1",
+      inlineLinkClicks: 320,
+      conversions: 50,
+      spend: 20_000,
+    });
+    const deps = buildMockDeps([insight]);
+    (deps.insightsProvider.getTargetBreachStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      periodsAboveTarget: 8,
+      granularity: "daily",
+      isApproximate: false,
+    });
+    const report = await new AuditRunner({
+      ...deps,
+      recommendationEmitter: vi.fn(async () => ({ surface: "queue" as const, id: "rec_1" })),
+      recommendationEmissionContext: { cronId: "cron", deploymentId: "dep_riley" },
+      rileyPauseSubmitter: vi.fn(async () => ({ parked: true })),
+    }).run(RANGE);
+
+    const riley = report.ownership?.filter((o) => o.ownership === "riley_self") ?? [];
+    expect(riley).toHaveLength(1);
+    expect(riley[0]?.index).toBe(1);
+  });
+
+  it("no park fact (sink returns none) = no riley_self anywhere in the report", async () => {
+    const insight = makeCampaignInsight({
+      campaignId: "camp-1",
+      inlineLinkClicks: 320,
+      conversions: 50,
+      spend: 20_000,
+    });
+    const deps = buildMockDeps([insight]);
+    (deps.insightsProvider.getTargetBreachStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      periodsAboveTarget: 8,
+      granularity: "daily",
+      isApproximate: false,
+    });
+    const report = await new AuditRunner({
+      ...deps,
+      recommendationEmitter: vi.fn(async () => ({ surface: "queue" as const, id: "rec_1" })),
+      recommendationEmissionContext: { cronId: "cron", deploymentId: "dep_riley" },
+      rileyPauseSubmitter: vi.fn(async () => ({ parked: false })),
+    }).run(RANGE);
+
+    expect(report.ownership?.some((o) => o.ownership === "riley_self")).toBe(false);
+  });
+
   it("pausePrimaryIndex points at the pause when the arbitrator ranks it primary", async () => {
     // CPA critically over target (spend 20000 / 50 conversions = 400 = 4x the 100
     // target) + a >=7-day daily breach window emits add_creative AND pause on the

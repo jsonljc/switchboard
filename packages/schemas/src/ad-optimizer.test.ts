@@ -168,13 +168,12 @@ describe("AuditReportSchema ownership (Riley v3, spec 2.2 net-new item 1)", () =
     expect(r.ownership?.[2]?.ownership).toBe("mira_handoff");
   });
 
-  it("REJECTS riley_self on today's report wire (Phase-C widens this deliberately)", () => {
-    expect(() =>
-      AuditReportSchema.parse({
-        ...baseReport,
-        ownership: [{ campaignId: "c1", action: "pause", index: 0, ownership: "riley_self" }],
-      }),
-    ).toThrow();
+  it("ACCEPTS riley_self on the report wire (the Phase-C widening event, strict-truth gated)", () => {
+    const r = AuditReportSchema.parse({
+      ...baseReport,
+      ownership: [{ campaignId: "c1", action: "pause", index: 0, ownership: "riley_self" }],
+    });
+    expect(r.ownership?.[0]?.ownership).toBe("riley_self");
   });
 
   it("rejects an unknown ownership class and a negative index", () => {
@@ -192,16 +191,17 @@ describe("AuditReportSchema ownership (Riley v3, spec 2.2 net-new item 1)", () =
     ).toThrow();
   });
 
-  it("pins the two enums against drift: reserved = emittable + riley_self", () => {
-    expect(OwnershipClassSchema.options).toEqual([
-      ...EmittableOwnershipClassSchema.options,
-      "riley_self",
-    ]);
+  it("pins the two enums as IDENTICAL after the Phase-C widening (riley_self is emittable)", () => {
+    // #923 reserved riley_self; the pause wiring session widened the emittable
+    // set to it. Both names stay exported (consumers reference each); this pin
+    // makes any future divergence a visible decision, not drift.
+    expect(OwnershipClassSchema.options).toEqual(EmittableOwnershipClassSchema.options);
     expect(EmittableOwnershipClassSchema.options).toEqual([
       "operator_swipe",
       "operator_approval",
       "mira_handoff",
       "human_escalation",
+      "riley_self",
     ]);
   });
 });

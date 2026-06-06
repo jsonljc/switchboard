@@ -38,12 +38,13 @@ import type { HandoffCampaignContext } from "./recommendation-handoff-dispatch.j
  *
  * HONEST INPUT SET (recorded in the plan, spec 7.7 discipline): action, urgency,
  * and the captured per-campaign handoff context. revenueState is deliberately NOT
- * an input (no live ownership gate reads it). The governance approval mode is NOT
- * honestly available at this Layer-2 site (the gate's verdict is per-request at
- * act/submit time in core; the seeded handoff policy parks mandatory approval; an
- * injected snapshot would be a fabricated read): it becomes the live discriminator
- * only in Phase-C, reserved alongside riley_self (which today's report wire
- * rejects; see EmittableOwnershipClassSchema).
+ * an input (no live ownership gate reads it), and neither is any governance-mode
+ * snapshot (the gate's verdict is per-request at act/submit time in core; an
+ * injected snapshot would be a fabricated read). riley_self therefore does NOT
+ * come from this classifier at all: since the Phase-C pause wiring it is applied
+ * by deriveOwnershipAnnotations from the sink's PARK FACT (pauseParkedIndex, the
+ * one honestly-known run-specific signal; see that function's doc), never from
+ * gate eligibility alone.
  *
  * Ownership ANNOTATES; it gates nothing.
  */
@@ -96,15 +97,27 @@ export interface OwnershipAnnotation {
 export function deriveOwnershipAnnotations(args: {
   recommendations: ReadonlyArray<RecommendationOutput>;
   handoffContextByCampaign?: ReadonlyMap<string, HandoffCampaignContext> | undefined;
+  /** STRICT-TRUTH riley_self (Phase-C): the index whose pause submit ACTUALLY
+   * PARKED this run (the sink's pauseParkedIndex). The park fact is the only
+   * discriminator: gate eligibility alone (flag on, class eligible, floor met)
+   * never relabels, so a flag-on-but-failed submit honestly stays
+   * operator_approval. deriveOwnership itself is unchanged: every other
+   * eligibility check already happened upstream of the park. */
+  pauseParkedIndex?: number | undefined;
 }): OwnershipAnnotation[] {
   return args.recommendations.map((r, index) => ({
     campaignId: r.campaignId,
     action: r.action,
     index,
-    ownership: deriveOwnership({
-      action: r.action,
-      urgency: r.urgency,
-      handoffContext: args.handoffContextByCampaign?.get(r.campaignId),
-    }),
+    ownership:
+      args.pauseParkedIndex !== undefined && index === args.pauseParkedIndex
+        ? // A parked self-execution is Riley-owned; the approval ceremony is the
+          // gate (the same shape as mira_handoff's parked draft).
+          "riley_self"
+        : deriveOwnership({
+            action: r.action,
+            urgency: r.urgency,
+            handoffContext: args.handoffContextByCampaign?.get(r.campaignId),
+          }),
   }));
 }

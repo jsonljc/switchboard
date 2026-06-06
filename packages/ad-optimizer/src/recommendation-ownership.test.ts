@@ -230,7 +230,10 @@ describe("deriveOwnershipAnnotations: total, ordered, index-faithful", () => {
     expect(out[0]?.ownership).toBe("operator_swipe");
   });
 
-  it("never emits riley_self across a mixed candidate set (annotation-level sweep)", () => {
+  it("never emits riley_self without a PARK FACT, across a mixed candidate set (strict truth)", () => {
+    // Gate eligibility alone is never enough: with pauseParkedIndex absent
+    // (flag off, env off, denied, entitlement-skipped, abstained, park failed),
+    // no candidate set under any context yields riley_self.
     const recommendations = ALL_ACTIONS.flatMap((action) =>
       ALL_URGENCIES.map((urgency) => rec({ action, urgency, campaignId: "c-all" })),
     );
@@ -244,5 +247,57 @@ describe("deriveOwnershipAnnotations: total, ordered, index-faithful", () => {
         expect(entry.ownership).not.toBe("riley_self");
       }
     }
+  });
+});
+
+describe("deriveOwnershipAnnotations: strict-truth riley_self (the park fact)", () => {
+  it("riley_self for exactly the recommendation whose pause submit parked", () => {
+    const recommendations = [
+      rec({ action: "pause", campaignId: "c-1", urgency: "immediate" }),
+      rec({ action: "refresh_creative", campaignId: "c-2", urgency: "this_week" }),
+    ];
+    const out = deriveOwnershipAnnotations({
+      recommendations,
+      handoffContextByCampaign: new Map([
+        ["c-1", PASSING_CONTEXT],
+        ["c-2", PASSING_CONTEXT],
+      ]),
+      pauseParkedIndex: 0,
+    });
+    expect(out[0]).toEqual({
+      campaignId: "c-1",
+      action: "pause",
+      index: 0,
+      ownership: "riley_self",
+    });
+    // The other entries are untouched by the park fact.
+    expect(out[1]?.ownership).toBe("mira_handoff");
+  });
+
+  it("the park fact only relabels its own index, even with duplicate pause candidates", () => {
+    const recommendations = [
+      rec({ action: "pause", campaignId: "c-1", urgency: "immediate" }),
+      rec({ action: "pause", campaignId: "c-2", urgency: "immediate" }),
+    ];
+    const out = deriveOwnershipAnnotations({ recommendations, pauseParkedIndex: 1 });
+    expect(out[0]?.ownership).toBe("human_escalation"); // pause default tier, no park
+    expect(out[1]?.ownership).toBe("riley_self");
+  });
+
+  it("undefined parked index is byte-identical to the pre-widening output", () => {
+    const recommendations = [
+      rec({ action: "pause", campaignId: "c-1", urgency: "immediate" }),
+      rec({ action: "refresh_creative", campaignId: "c-2", urgency: "this_week" }),
+    ];
+    const contexts = new Map([["c-2", PASSING_CONTEXT]]);
+    expect(
+      deriveOwnershipAnnotations({ recommendations, handoffContextByCampaign: contexts }),
+    ).toEqual(
+      deriveOwnershipAnnotations({
+        recommendations,
+        handoffContextByCampaign: contexts,
+        pauseParkedIndex: undefined,
+      }),
+    );
   });
 });

@@ -41,23 +41,24 @@ export type UrgencySchema = z.infer<typeof UrgencySchema>;
 // submitter wiring, and deployment resolution are dispatch mechanics annotated
 // elsewhere when a consumer needs them).
 //
-// EmittableOwnershipClassSchema is what today's advisory derivation can produce
-// and what the report wire accepts. OwnershipClassSchema additionally reserves
-// riley_self as the documented Phase-C target (the governed permit path); the
-// Phase-C wiring session widens the report field to it deliberately. A test pins
-// reserved = emittable + riley_self so the two cannot drift.
+// EmittableOwnershipClassSchema is what the derivation can produce and what the
+// report wire accepts. The Phase-C pause wiring session widened it to include
+// riley_self under STRICT TRUTH: the runner emits it only for a recommendation
+// whose pause submit ACTUALLY PARKED this run (the sink's pauseParkedIndex),
+// never from gate-eligibility alone (flag off, env off, denied, entitlement-
+// skipped, abstained, or park-failed all stay operator_approval). The two enums
+// are now identical; both names stay exported (consumers reference each) and a
+// test pins them together so any future divergence is a decision, not drift.
 export const EmittableOwnershipClassSchema = z.enum([
   "operator_swipe",
   "operator_approval",
   "mira_handoff",
   "human_escalation",
+  "riley_self",
 ]);
 export type EmittableOwnershipClassSchema = z.infer<typeof EmittableOwnershipClassSchema>;
 
-export const OwnershipClassSchema = z.enum([
-  ...EmittableOwnershipClassSchema.options,
-  "riley_self",
-]);
+export const OwnershipClassSchema = EmittableOwnershipClassSchema;
 export type OwnershipClassSchema = z.infer<typeof OwnershipClassSchema>;
 
 export const EconomicTierSchema = z.enum(["booked_cac", "cpl", "cpc"]);
@@ -340,8 +341,10 @@ export const AuditReportSchema = z.object({
   // ADDITIVE like arbitration above; it never filters emission or handoff. One
   // entry per recommendations[] element, same order (index = array position; the
   // same disambiguation rule as arbitration: campaignId+action is not unique).
-  // campaignId+action are carried for human legibility. The EMITTABLE enum is
-  // deliberate: today's wire rejects riley_self (see OwnershipClassSchema).
+  // campaignId+action are carried for human legibility. The wire accepts
+  // riley_self since the Phase-C pause wiring, STRICT-TRUTH gated: the runner
+  // emits it only for a pause whose submit actually parked this run (see the
+  // enum comment above).
   ownership: z
     .array(
       z.object({
