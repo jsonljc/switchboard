@@ -207,6 +207,13 @@ export interface IncomingChannelMessage {
    */
   principalId?: string;
   text: string;
+  /**
+   * Stable provider message id (WhatsApp wamid, Telegram message_id). When the
+   * adapter supplies it, the gateway derives the ingress idempotencyKey from it
+   * so a redelivered webhook dedups at PlatformIngress.submit (org-scoped trace
+   * lookup). Omit when the provider gives no stable id.
+   */
+  providerMessageId?: string;
   visitor?: { name?: string; email?: string };
 }
 

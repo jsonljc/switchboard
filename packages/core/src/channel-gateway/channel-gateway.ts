@@ -327,6 +327,11 @@ export class ChannelGateway {
       },
       trigger: "chat" as const,
       surface: { surface: "chat", sessionId: message.sessionId },
+      ...(message.providerMessageId
+        ? {
+            idempotencyKey: `${resolved.organizationId}:${message.channel}:${message.providerMessageId}`,
+          }
+        : {}),
       targetHint: {
         skillSlug: resolved.skillSlug,
         deploymentId: resolved.deploymentId,

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, it, expect, vi } from "vitest";
 import { ChannelGateway } from "../channel-gateway.js";
 import type {
@@ -442,6 +443,84 @@ describe("ChannelGateway", () => {
     )?.[0] as { workTraceId?: string } | undefined;
     expect(userCallArg).toBeDefined();
     expect(userCallArg!.workTraceId).toBeUndefined();
+  });
+
+  it("derives the ingress idempotencyKey from the provider message id (wamid)", async () => {
+    type SubmitResult = {
+      ok: boolean;
+      result: { outcome: string; outputs: { response: string }; summary: string; traceId: string };
+      workUnit: { id: string; traceId: string };
+    };
+    const submitSpy = vi
+      .fn<(req: { idempotencyKey?: string }) => Promise<SubmitResult>>()
+      .mockResolvedValue({
+        ok: true,
+        result: { outcome: "completed", outputs: { response: "hi" }, summary: "s", traceId: "t1" },
+        workUnit: { id: "wu-1", traceId: "t1" },
+      });
+    const config = createMockConfig({ platformIngress: { submit: submitSpy as never } });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid123",
+      sessionId: "sess-1",
+      text: "Hello",
+      providerMessageId: "wamid.ABC",
+    };
+    await gateway.handleIncoming(message, { send: vi.fn() });
+    expect(submitSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: "org-1:web_widget:wamid.ABC" }),
+    );
+  });
+
+  it("sends the SAME idempotencyKey when the same wamid is delivered twice (gateway dedup proof)", async () => {
+    type SubmitResult = {
+      ok: boolean;
+      result: { outcome: string; outputs: { response: string }; summary: string; traceId: string };
+      workUnit: { id: string; traceId: string };
+    };
+    const submitSpy = vi
+      .fn<(req: { idempotencyKey?: string }) => Promise<SubmitResult>>()
+      .mockResolvedValue({
+        ok: true,
+        result: { outcome: "completed", outputs: { response: "hi" }, summary: "s", traceId: "t1" },
+        workUnit: { id: "wu-1", traceId: "t1" },
+      });
+    const config = createMockConfig({ platformIngress: { submit: submitSpy as never } });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid123",
+      sessionId: "sess-1",
+      text: "Hello",
+      providerMessageId: "wamid.DUP",
+    };
+    await gateway.handleIncoming(message, { send: vi.fn() });
+    await gateway.handleIncoming(message, { send: vi.fn() });
+    const keys = submitSpy.mock.calls.map((c) => c[0].idempotencyKey);
+    expect(keys).toEqual(["org-1:web_widget:wamid.DUP", "org-1:web_widget:wamid.DUP"]);
+  });
+
+  it("omits idempotencyKey when no provider message id is supplied (backward compat)", async () => {
+    type SubmitResult = {
+      ok: boolean;
+      result: { outcome: string; outputs: { response: string }; summary: string; traceId: string };
+      workUnit: { id: string; traceId: string };
+    };
+    const submitSpy = vi
+      .fn<(req: { idempotencyKey?: string }) => Promise<SubmitResult>>()
+      .mockResolvedValue({
+        ok: true,
+        result: { outcome: "completed", outputs: { response: "hi" }, summary: "s", traceId: "t1" },
+        workUnit: { id: "wu-1", traceId: "t1" },
+      });
+    const config = createMockConfig({ platformIngress: { submit: submitSpy as never } });
+    const gateway = new ChannelGateway(config);
+    await gateway.handleIncoming(
+      { channel: "web_widget", token: "sw_valid123", sessionId: "sess-1", text: "Hello" },
+      { send: vi.fn() },
+    );
+    expect(submitSpy.mock.calls[0]![0].idempotencyKey).toBeUndefined();
   });
 });
 
