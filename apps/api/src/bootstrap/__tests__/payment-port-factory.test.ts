@@ -7,26 +7,26 @@ const silentLogger = { info: () => {}, error: () => {} };
 
 describe("createPaymentPortFactory: input validation", () => {
   it("rejects with ORG_ID_REQUIRED when orgId is empty string", async () => {
-    const factory = createPaymentPortFactory({ logger: silentLogger, env: {} });
+    const factory = createPaymentPortFactory({ logger: silentLogger });
     await expect(factory("")).rejects.toThrow(/ORG_ID_REQUIRED/);
   });
 
   it("rejects with ORG_ID_REQUIRED when orgId is whitespace-only", async () => {
-    const factory = createPaymentPortFactory({ logger: silentLogger, env: {} });
+    const factory = createPaymentPortFactory({ logger: silentLogger });
     await expect(factory("   ")).rejects.toThrow(/ORG_ID_REQUIRED/);
   });
 });
 
 describe("createPaymentPortFactory: Noop fallback", () => {
   it("returns NoopPaymentAdapter when no Stripe env is configured", async () => {
-    const factory = createPaymentPortFactory({ logger: silentLogger, env: {} });
+    const factory = createPaymentPortFactory({ logger: silentLogger });
     expect(isNoopPaymentAdapter(await factory("org-A"))).toBe(true);
   });
 });
 
 describe("createPaymentPortFactory: memoization", () => {
   it("returns the same Promise for the same orgId across calls", async () => {
-    const factory = createPaymentPortFactory({ logger: silentLogger, env: {} });
+    const factory = createPaymentPortFactory({ logger: silentLogger });
     const p1 = factory("org-A");
     const p2 = factory("org-A");
     expect(p1).toBe(p2);
@@ -34,7 +34,7 @@ describe("createPaymentPortFactory: memoization", () => {
   });
 
   it("returns independent ports for different orgIds", async () => {
-    const factory = createPaymentPortFactory({ logger: silentLogger, env: {} });
+    const factory = createPaymentPortFactory({ logger: silentLogger });
     const [a, b] = await Promise.all([factory("org-A"), factory("org-B")]);
     expect(a).not.toBe(b);
   });
@@ -51,7 +51,6 @@ describe("createPaymentPortFactory: rejection eviction", () => {
     });
     const factory = createPaymentPortFactory({
       logger: silentLogger,
-      env: {},
       resolveForOrg: resolver,
     });
     await expect(factory("org-A")).rejects.toThrow(/transient init failure/);

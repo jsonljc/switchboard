@@ -1,7 +1,7 @@
-// DEFERRED — not yet registered into the runtime.
-// The per-org payment-port factory is constructed and wired into the skill runtime when the
-// live Stripe Connect adapter lands (PR 1A-4d). Until then, createPaymentPortFactory is
-// defined + tested but intentionally not called at server startup. It is not dead code.
+// Registered at server startup in app.ts (PR 1A-4d) inside `if (prismaClient)` and exposed as
+// `app.paymentPortFactory`, which the payments webhook resolves charges through. Selects the
+// Stripe Connect adapter when the org has a connected `stripe` Connection with full per-org
+// creds, else returns Noop (fail-closed — never a global env secret).
 import Stripe from "stripe";
 import type { PaymentPort } from "@switchboard/schemas";
 import { decryptCredentials as defaultDecryptCredentials } from "@switchboard/db";
@@ -17,12 +17,6 @@ export type PaymentPortFactory = (orgId: string) => Promise<PaymentPort>;
 export interface PaymentPortFactoryDeps {
   // Matches the bootstrap logger shape used by calendar-provider-factory.ts.
   logger: { info(msg: string): void; error(msg: string): void };
-  // Optional env injection for tests; falls back to process.env at call sites
-  // in PR 1A-4b when the Stripe branch lands.
-  env?: {
-    STRIPE_SECRET_KEY?: string;
-    STRIPE_CONNECT_ACCOUNT_ID?: string;
-  };
   // Optional override so tests can force a transient construction failure and
   // assert the rejected promise is evicted from the cache. Defaults to the
   // Noop resolver below.
@@ -98,6 +92,10 @@ async function resolveForOrg(deps: PaymentPortFactoryDeps, orgId: string): Promi
         return new StripeConnectPaymentAdapter({
           client: buildStripeClient(creds.secretKey),
           connectedAccountId: creds.connectedAccountId,
+          // GO-LIVE: replace these placeholders with the org's real success/cancel redirect
+          // URLs before enabling a live Stripe Connection. Inert until then — deposit-link
+          // issuance is deferred; the live webhook path uses only retrievePayment, which
+          // never reads these.
           successUrl: "https://switchboard.local/payment/success",
           cancelUrl: "https://switchboard.local/payment/cancel",
         });
@@ -108,8 +106,8 @@ async function resolveForOrg(deps: PaymentPortFactoryDeps, orgId: string): Promi
     }
   }
 
-  // Fall through to Noop — every org that lacks a connected Stripe Connection
-  // gets DEGRADED (T2) posture. Never a real paid visit.
+  // Fall through to Noop — every org that lacks a connected Stripe Connection gets a
+  // DEGRADED (T3) noop payment posture that is never a production-countable paid visit.
   deps.logger.info(`Payment[${orgId}]: using NoopPaymentAdapter (Stripe Connect not configured)`);
   return new NoopPaymentAdapter();
 }
