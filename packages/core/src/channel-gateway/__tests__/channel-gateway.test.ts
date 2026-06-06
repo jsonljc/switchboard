@@ -577,4 +577,48 @@ describe("ChannelGateway identity resolution", () => {
     expect(submitCall.parameters.phone).toBeUndefined();
     expect(submitCall.parameters.channel).toBe("whatsapp");
   });
+
+  it("WhatsApp: top-level contactId and conversationThreadId are set on the submit request (WorkTrace lineage)", async () => {
+    // Regression test for the chain-weld plumbing:
+    // CanonicalSubmitRequest.contactId / .conversationThreadId must be server-resolved
+    // at the gateway, not derived from parameters, so WorkTrace stores non-NULL lineage.
+    const contactStore = makeContactStore();
+    const submitSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        outcome: "completed",
+        outputs: { response: "ok" },
+        summary: "ok",
+      },
+      workUnit: { id: "wu-1", traceId: "trace-1" },
+    });
+    const config = makeConfig({
+      contactStore,
+      platformIngress: { submit: submitSpy },
+      conversationStore: {
+        getOrCreateBySession: vi.fn().mockResolvedValue({
+          conversationId: "thread-abc",
+          messages: [],
+        }),
+        addMessage: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+    const gateway = new ChannelGateway(config);
+
+    await gateway.handleIncoming(
+      {
+        channel: "whatsapp",
+        token: "tok",
+        sessionId: "+6599999999",
+        text: "book me in",
+      },
+      replySink,
+    );
+
+    expect(submitSpy).toHaveBeenCalledTimes(1);
+    const req = submitSpy.mock.calls[0]![0];
+    // Top-level lineage fields (not inside parameters) must be populated:
+    expect(req.contactId).toBe("contact-new");
+    expect(req.conversationThreadId).toBe("thread-abc");
+  });
 });

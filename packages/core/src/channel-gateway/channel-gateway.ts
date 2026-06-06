@@ -333,6 +333,11 @@ export class ChannelGateway {
         channel: message.channel,
         token: message.token,
       },
+      // Spec-1A chain weld: server-resolved lineage for WorkTrace columns.
+      // These are NOT derived from parameters — they are populated here so
+      // normalizeWorkUnit can persist them without an extra join.
+      contactId: identity.contactId ?? undefined,
+      conversationThreadId: conversationId,
     };
 
     // 8. Submit through PlatformIngress and dispatch response
