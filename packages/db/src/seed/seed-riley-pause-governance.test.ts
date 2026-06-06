@@ -39,31 +39,41 @@ describe("riley pause governance seed builders", () => {
 
 describe("seedRileyAdOptimizerDeployment seeds the pause policies", () => {
   it("upserts deployment + allow + mandatory approval policies; never seeds the dispatch flag", async () => {
-    const upsertPolicy = vi.fn().mockResolvedValue({});
-    const upsertDeployment = vi.fn().mockResolvedValue({ id: "dep_1" });
+    // Typed implementations so mock.calls is a typed tuple array (an arg-less
+    // vi.fn() makes calls `any[][]` and breaks the package BUILD, not just lint).
+    const upsertPolicy = vi.fn(
+      async (_args: {
+        where: { id: string };
+        create: Record<string, unknown>;
+        update: Record<string, unknown>;
+      }) => ({}),
+    );
+    const upsertDeployment = vi.fn(
+      async (_args: {
+        where: Record<string, unknown>;
+        create: { governanceSettings: Record<string, unknown> };
+        update: Record<string, unknown>;
+      }) => ({ id: "dep_1" }),
+    );
     const prisma = {
-      agentListing: { findUnique: vi.fn().mockResolvedValue({ id: "listing_1" }) },
+      agentListing: { findUnique: vi.fn(async () => ({ id: "listing_1" })) },
       agentDeployment: { upsert: upsertDeployment },
       policy: { upsert: upsertPolicy },
     };
     await seedRileyAdOptimizerDeployment(prisma as never, "org_1");
 
-    const ids = upsertPolicy.mock.calls.map((c: [{ where: { id: string } }]) => c[0].where.id);
+    const ids = upsertPolicy.mock.calls.map((c) => c[0].where.id);
     expect(ids).toContain(rileyPauseAllowPolicyId("org_1"));
     expect(ids).toContain(rileyPauseApprovalPolicyId("org_1"));
     const approvalCall = upsertPolicy.mock.calls.find(
-      (c: [{ where: { id: string } }]) => c[0].where.id === rileyPauseApprovalPolicyId("org_1"),
+      (c) => c[0].where.id === rileyPauseApprovalPolicyId("org_1"),
     )!;
-    expect(
-      (approvalCall[0] as { create: { approvalRequirement: string } }).create.approvalRequirement,
-    ).toBe("mandatory");
+    expect((approvalCall[0].create as { approvalRequirement: string }).approvalRequirement).toBe(
+      "mandatory",
+    );
 
     // The per-org dispatch flag is capability assignment: the seed must NOT set it.
-    const depCreate = (
-      upsertDeployment.mock.calls[0]![0] as {
-        create: { governanceSettings: Record<string, unknown> };
-      }
-    ).create;
+    const depCreate = upsertDeployment.mock.calls[0]![0].create;
     expect(depCreate.governanceSettings).not.toHaveProperty("pauseSelfExecutionEnabled");
   });
 });
