@@ -33,7 +33,8 @@ describe("registerSkillIntents", () => {
     ];
     registerSkillIntents(registry, skills);
 
-    expect(registry.size).toBe(2);
+    // 2 declared intents + 2 {slug}.respond intents = 4 total
+    expect(registry.size).toBe(4);
     expect(registry.lookup("skill-a.run")).toBeDefined();
     expect(registry.lookup("skill-b.run")).toBeDefined();
   });
@@ -45,7 +46,8 @@ describe("registerSkillIntents", () => {
     ];
     registerSkillIntents(registry, skills);
 
-    expect(registry.size).toBe(1);
+    // 1 declared intent + 1 {slug}.respond = 2 total (skill without intent is skipped)
+    expect(registry.size).toBe(2);
     expect(registry.lookup("with-intent.run")).toBeDefined();
   });
 

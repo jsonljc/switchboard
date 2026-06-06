@@ -44,5 +44,21 @@ export function registerSkillIntents(registry: IntentRegistry, skills: SkillDefi
     };
 
     registry.register(registration);
+
+    // The managed inbound chain (ChannelGateway.handleIncoming → PlatformIngress)
+    // submits `${resolved.skillSlug}.respond` (channel-gateway.ts:313, trigger
+    // "chat"). The declared skill.intent (e.g. "alex.run") is kept for cron/API
+    // callers (e.g. mira's "creative.brief.compose"), but without an explicit
+    // `${slug}.respond` registration that inbound submit returns intent_not_found
+    // (platform-ingress.ts:163). Register it too, skipping the duplicate when the
+    // declared intent already is `${slug}.respond` (IntentRegistry.register throws
+    // on a repeat — intent-registry.ts:8-10).
+    const respondIntent = `${skill.slug}.respond`;
+    if (respondIntent !== skill.intent) {
+      registry.register({
+        ...registration,
+        intent: respondIntent,
+      });
+    }
   }
 }
