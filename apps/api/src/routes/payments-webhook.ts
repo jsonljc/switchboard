@@ -38,7 +38,73 @@ export const paymentsWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(401).send({ error: "Invalid signature", statusCode: 401 });
     }
 
-    // Org resolution + re-fetch + submit are added in Tasks 2-3.
-    return reply.code(200).send({ received: true });
+    // Parse the verified body. Shape is the PSP event envelope; we only read the
+    // ids and the connected-account id needed to route — NEVER the amount.
+    const payload = request.body as {
+      id?: string;
+      data?: { object?: { id?: string; account?: string } };
+    };
+    const providerMessageId = payload.id;
+    const chargeId = payload.data?.object?.id;
+    const connectedAccountId = payload.data?.object?.account;
+    if (!providerMessageId || !chargeId || !connectedAccountId) {
+      return reply.code(200).send({ received: true, skipped: true, reason: "unparseable" });
+    }
+
+    // Resolve org AFTER verification, from the connected-account id. serviceId is
+    // pinned to "stripe" so a forged account id cannot cross services.
+    let organizationId: string | null = null;
+    if (app.prisma) {
+      const connection = await app.prisma.connection.findFirst({
+        where: { serviceId: "stripe", externalAccountId: connectedAccountId },
+      });
+      organizationId = connection?.organizationId ?? null;
+    }
+    if (!organizationId) {
+      app.log.warn({ connectedAccountId }, "No org for payments webhook account, skipping");
+      return reply.code(200).send({ received: true, skipped: true, reason: "no_org" });
+    }
+
+    // Per-org fetch-back. Fail closed if the factory is not wired (1A-4a) rather
+    // than trusting the body amount.
+    if (!app.paymentPortFactory) {
+      app.log.error("paymentPortFactory not configured; cannot verify charge");
+      return reply.code(503).send({ error: "Payment verification unavailable", statusCode: 503 });
+    }
+    const port = await app.paymentPortFactory(organizationId);
+    const charge = await port.retrievePayment(chargeId);
+    if (!charge) {
+      app.log.warn({ chargeId }, "Charge not found on re-fetch; skipping");
+      return reply.code(200).send({ received: true, skipped: true, reason: "charge_not_found" });
+    }
+
+    // Submit the verified writer through ingress. idempotencyKey from the provider
+    // message id => a replay is deduped at PlatformIngress (platform-ingress.ts).
+    // The amount is the RE-FETCHED amountCents; provider is carried so the 1A-4b
+    // handler can degrade a Noop provider (R1).
+    const result = await app.platformIngress.submit({
+      intent: "payment.record_verified",
+      parameters: {
+        externalReference: charge.externalReference,
+        amountCents: charge.amountCents,
+        currency: charge.currency,
+        provider: charge.provider,
+      },
+      actor: { id: "system", type: "service" },
+      organizationId,
+      trigger: "api",
+      surface: { surface: "api" },
+      idempotencyKey: `psp-${providerMessageId}`,
+    });
+
+    if (!result.ok) {
+      app.log.error({ error: result.error }, "payment.record_verified submission failed");
+      return reply.code(500).send({ error: result.error.message, statusCode: 500 });
+    }
+    return reply.code(200).send({
+      received: true,
+      workUnitId: result.workUnit.id,
+      traceId: result.workUnit.traceId,
+    });
   });
 };
