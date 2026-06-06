@@ -554,6 +554,15 @@ export async function buildServer() {
     app.decorate("orgAgentEnablementStore", orgAgentEnablementStore);
   }
 
+  // Per-org PaymentPort factory — selects the Stripe Connect adapter when the org
+  // has a connected 'stripe' Connection with full Connect creds; falls back to the
+  // Noop adapter (DEGRADED) otherwise. Fail-closed: never uses a global env secret.
+  // The /api/webhooks/payments/webhook route 503s when this is missing.
+  if (prismaClient) {
+    const { createPaymentPortFactory } = await import("./bootstrap/payment-port-factory.js");
+    app.decorate("paymentPortFactory", createPaymentPortFactory({ prismaClient, logger: app.log }));
+  }
+
   // Report cache store + report projection stores for /api/dashboard/reports
   if (prismaClient) {
     const {
