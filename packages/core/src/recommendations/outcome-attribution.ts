@@ -1,6 +1,7 @@
 import type { OperationalStateConfirmation } from "@switchboard/schemas";
 import { KIND_CONFIG, type AttributableKind } from "./outcome-attribution-config.js";
 import { deriveBusinessContextStability } from "./operational-stability.js";
+import { deriveCorroboration } from "./outcome-corroboration.js";
 import type {
   AttributableRecommendation,
   AttributableRecommendationStore,
@@ -8,6 +9,7 @@ import type {
   CausalStrength,
   MetaInsightsProvider,
   OperationalStateReader,
+  OrgBookedWindowStats,
   RecommendationOutcomeStore,
   RileyOutcomeRow,
   TrustDelta,
@@ -29,6 +31,13 @@ export interface AttributeOneInput {
    * source wired, zero confirmations. Both derive "unknown" (honest absence).
    */
   operationalStateConfirmations?: OperationalStateConfirmation[];
+  /**
+   * Slice-4d: org-level booked stats for the two attribution sub-windows
+   * (pre [preStart, anchorAt), post [anchorAt, postEnd), the exact instants
+   * of the Meta window reads). undefined = no reader wired; the corroborated
+   * arm is unjudgeable and the row is byte-identical to slice-4c output.
+   */
+  orgBookedStats?: { preWindow: OrgBookedWindowStats; postWindow: OrgBookedWindowStats };
 }
 
 export function attributeOneRecommendation(input: AttributeOneInput): RileyOutcomeRow {
@@ -105,23 +114,38 @@ export function attributeOneRecommendation(input: AttributeOneInput): RileyOutco
   const confidence: "low" | "medium" = cockpitRenderable ? config.confidence : "low";
 
   // 7. Slice-3 enrichments (advisory; spec sections 2.5, 7.4, 7.5).
-  // causalStrength is derived from the flags/delta directly, not from
-  // cockpitRenderable, so a future renderability change cannot silently
-  // change causal semantics. "corroborated" requires the slice-4
-  // CRM/booking-agreement signal and is never emitted here.
-  const causalStrength: CausalStrength =
-    flags.length === 0 && deltaPct !== null ? "directional" : "inconclusive";
-  // Slice 4c: real verdict from the operator operational-state confirmations
-  // overlapping the FULL attribution window (pre+post span). No source / no
-  // confirmations ⇒ "unknown" (honest absence), never a fabricated "stable".
-  // "corroborated" stays unemitted: the CRM/booking-agreement signal is
-  // deferred (plan Decision F); a stable window is context, not an
-  // independent second estimate.
+  // Slice 4c: real stability verdict from the operator operational-state
+  // confirmations overlapping the FULL attribution window (pre+post span).
+  // No source / no confirmations ⇒ "unknown" (honest absence), never a
+  // fabricated "stable". Derived before causalStrength because the slice-4d
+  // corroboration predicate refuses to certify agreement over a window with
+  // affirmative disruption evidence.
   const businessContextStable: BusinessContextStability = deriveBusinessContextStability({
     confirmations: input.operationalStateConfirmations ?? [],
     windowStartedAt,
     windowEndedAt,
   });
+  // causalStrength is derived from the flags/delta directly, not from
+  // cockpitRenderable, so a future renderability change cannot silently
+  // change causal semantics. Slice 4d: a clean favorable pause delta whose
+  // org-level booking-side second estimate is judgeable and AGREES earns
+  // "corroborated" (spec 2.5's independent-agreement bar); every absence,
+  // floor failure, or disagreement leaves the slice-3 value untouched (the
+  // verdict's reason field exists for tests and debugging; only the upgrade
+  // is consumed here). The directional/inconclusive boundary is unchanged.
+  const corroboration = deriveCorroboration({
+    actionKind: candidate.actionKind,
+    visibilityFlagCount: flags.length,
+    deltaPct,
+    businessContextStable,
+    preAccountSpendCents: preWindow?.accountSpendCents,
+    postAccountSpendCents: postWindow?.accountSpendCents,
+    orgBookedStats: input.orgBookedStats,
+  });
+  const causalStrength: CausalStrength =
+    flags.length === 0 && deltaPct !== null
+      ? (corroboration.causalStrengthUpgrade ?? "directional")
+      : "inconclusive";
 
   let copyTemplate: string | null = null;
   let copyValues: { deltaPct: number; windowDays: number } | null = null;
