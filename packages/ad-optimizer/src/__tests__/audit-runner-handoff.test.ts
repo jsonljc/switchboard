@@ -172,7 +172,7 @@ describe("AuditRunner — Riley -> agent handoff threading", () => {
     expect(runRecommendationSink).toHaveBeenCalledTimes(1);
     const sinkArgs = (runRecommendationSink as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(sinkArgs.recommendationHandoffSubmitter).toBe(submitter);
-    const ctx = sinkArgs.handoffContextByCampaign as Map<string, HandoffCampaignContext>;
+    const ctx = sinkArgs.campaignEvidenceByCampaign as Map<string, HandoffCampaignContext>;
     expect(ctx.get("camp-1")).toEqual({
       evidence: { clicks: 320, conversions: 50, days: 7 },
       learningPhaseActive: false,
@@ -188,6 +188,84 @@ describe("AuditRunner — Riley -> agent handoff threading", () => {
 
     const sinkArgs = (runRecommendationSink as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(sinkArgs.recommendationHandoffSubmitter).toBeUndefined();
-    expect(sinkArgs.handoffContextByCampaign).toBeUndefined();
+    expect(sinkArgs.campaignEvidenceByCampaign).toBeUndefined();
+  });
+});
+
+describe("AuditRunner — Phase-C pause submitter threading", () => {
+  beforeEach(() => {
+    (runRecommendationSink as ReturnType<typeof vi.fn>).mockClear();
+  });
+
+  it("threads the pause submitter + evidence context even when the HANDOFF submitter is absent", async () => {
+    const pauseSubmitter = vi.fn(async () => ({ parked: true }));
+    const insight = makeCampaignInsight({
+      campaignId: "camp-1",
+      inlineLinkClicks: 320,
+      conversions: 50,
+    });
+    await new AuditRunner({
+      ...buildMockDeps([insight]),
+      recommendationEmitter: vi.fn(async () => ({ surface: "queue" as const, id: "rec_1" })),
+      recommendationEmissionContext: { cronId: "cron", deploymentId: "dep_riley" },
+      rileyPauseSubmitter: pauseSubmitter,
+    }).run(RANGE);
+
+    const sinkArgs = (runRecommendationSink as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(sinkArgs.rileyPauseSubmitter).toBe(pauseSubmitter);
+    const ctx = sinkArgs.campaignEvidenceByCampaign as Map<string, HandoffCampaignContext>;
+    expect(ctx.get("camp-1")).toEqual({
+      evidence: { clicks: 320, conversions: 50, days: 7 },
+      learningPhaseActive: false,
+    });
+  });
+
+  it("pausePrimaryIndex is undefined when the arbitration primary is not a pause", async () => {
+    // The default healthy fixture yields no pause recommendation, so whatever the
+    // primary is (if any), it is not a pause; the sink must receive undefined and
+    // therefore never dispatch the pause submitter (primary-only is structural).
+    const pauseSubmitter = vi.fn(async () => ({ parked: true }));
+    await new AuditRunner({
+      ...buildMockDeps([makeCampaignInsight()]),
+      recommendationEmitter: vi.fn(async () => ({ surface: "queue" as const, id: "rec_1" })),
+      recommendationEmissionContext: { cronId: "cron", deploymentId: "dep_riley" },
+      rileyPauseSubmitter: pauseSubmitter,
+    }).run(RANGE);
+
+    const sinkArgs = (runRecommendationSink as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(sinkArgs.pausePrimaryIndex).toBeUndefined();
+  });
+
+  it("pausePrimaryIndex points at the pause when the arbitrator ranks it primary", async () => {
+    // CPA critically over target (spend 20000 / 50 conversions = 400 = 4x the 100
+    // target) + a >=7-day daily breach window emits add_creative AND pause on the
+    // same campaign; the same-campaign conflict penalty hits both equally and
+    // add_creative additionally carries the resetsLearning penalty, so the
+    // arbitrator ranks the PAUSE primary. This pins the real co-emission path the
+    // initiator depends on.
+    const pauseSubmitter = vi.fn(async () => ({ parked: true }));
+    const insight = makeCampaignInsight({
+      campaignId: "camp-1",
+      inlineLinkClicks: 320,
+      conversions: 50,
+      spend: 20_000,
+    });
+    const deps = buildMockDeps([insight]);
+    (deps.insightsProvider.getTargetBreachStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      periodsAboveTarget: 8,
+      granularity: "daily",
+      isApproximate: false,
+    });
+    await new AuditRunner({
+      ...deps,
+      recommendationEmitter: vi.fn(async () => ({ surface: "queue" as const, id: "rec_1" })),
+      recommendationEmissionContext: { cronId: "cron", deploymentId: "dep_riley" },
+      rileyPauseSubmitter: pauseSubmitter,
+    }).run(RANGE);
+
+    const sinkArgs = (runRecommendationSink as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(sinkArgs.pausePrimaryIndex).toBeDefined();
+    const recs = sinkArgs.recommendations as Array<{ action: string }>;
+    expect(recs[sinkArgs.pausePrimaryIndex as number]!.action).toBe("pause");
   });
 });
