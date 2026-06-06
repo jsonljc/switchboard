@@ -128,6 +128,7 @@ export * from "./temporal-fact.js";
 
 export * from "./conversion.js";
 export * from "./calendar.js";
+export * from "./receipt.js";
 export * from "./crm.js";
 
 // CRM Outcome types (shared across ad-optimizer + db)
