@@ -7,6 +7,7 @@ function makePrisma() {
       upsert: vi.fn(),
       groupBy: vi.fn(),
       count: vi.fn(),
+      aggregate: vi.fn(),
     },
   };
 }
@@ -239,6 +240,59 @@ describe("PrismaConversionRecordStore", () => {
           where: expect.objectContaining({ sourceCampaignId: { not: null } }),
         }),
       );
+    });
+  });
+
+  describe("getBookedStatsForOrgWindow (riley v3 slice 4d)", () => {
+    it("aggregates valued bookings org-wide over the HALF-OPEN window (gte/lt, the engine's Meta-window convention)", async () => {
+      (prisma.conversionRecord.aggregate as ReturnType<typeof vi.fn>).mockResolvedValue({
+        _sum: { value: 45000 },
+        _count: { _all: 5 },
+      });
+
+      const result = await store.getBookedStatsForOrgWindow({
+        organizationId: "org-1",
+        startInclusive: new Date("2026-04-24T12:00:00Z"),
+        endExclusive: new Date("2026-05-01T12:00:00Z"),
+      });
+
+      expect(prisma.conversionRecord.aggregate).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          type: "booked",
+          value: { gt: 0 },
+          occurredAt: {
+            gte: new Date("2026-04-24T12:00:00Z"),
+            lt: new Date("2026-05-01T12:00:00Z"),
+          },
+        },
+        _sum: { value: true },
+        _count: { _all: true },
+      });
+      // CENTS passthrough: the stored value is already cents; no conversion here.
+      expect(result).toEqual({ bookedValueCents: 45000, bookedCount: 5 });
+    });
+
+    it("returns honest zeros for an org with no valued bookings in the window (fails the floors, never an error)", async () => {
+      (prisma.conversionRecord.aggregate as ReturnType<typeof vi.fn>).mockResolvedValue({
+        _sum: { value: null },
+        _count: { _all: 0 },
+      });
+
+      const result = await store.getBookedStatsForOrgWindow({
+        organizationId: "org-1",
+        startInclusive: new Date("2026-05-01T12:00:00Z"),
+        endExclusive: new Date("2026-05-08T12:00:00Z"),
+      });
+
+      expect(result).toEqual({ bookedValueCents: 0, bookedCount: 0 });
+    });
+
+    it("satisfies @switchboard/core's OrgBookedStatsReader structurally (the DI seam)", () => {
+      // Type-level pin: assignment compiles only while the method name and
+      // shape match the core interface the bootstrap injects this store into.
+      const reader: import("@switchboard/core").OrgBookedStatsReader = store;
+      expect(typeof reader.getBookedStatsForOrgWindow).toBe("function");
     });
   });
 });

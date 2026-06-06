@@ -291,6 +291,44 @@ export class PrismaConversionRecordStore {
     }
     return result;
   }
+
+  /**
+   * Org-level windowed booked stats for the outcome ledger's corroboration
+   * predicate (Riley v3 slice 4d). Sum and count aggregate over the SAME
+   * predicate (`type:"booked"` AND `value > 0`), org-wide: campaign
+   * attribution is deliberately NOT required, because the CRM-side second
+   * estimate must be independent of Meta attribution and
+   * partially-attributed orgs still book real revenue.
+   *
+   * The window is HALF-OPEN [startInclusive, endExclusive), mirroring the
+   * attribution engine's Meta window queries so an instant-of-anchor booking
+   * lands in exactly one sub-window (deliberate divergence from
+   * queryBookedValueCentsByCampaign's inclusive `lte`).
+   *
+   * Values stay in CENTS (ConversionRecord.value); zeros are honest absence
+   * (they fail the corroboration floors upstream), never an error.
+   * Structurally satisfies @switchboard/core's OrgBookedStatsReader.
+   */
+  async getBookedStatsForOrgWindow(args: {
+    organizationId: string;
+    startInclusive: Date;
+    endExclusive: Date;
+  }): Promise<{ bookedValueCents: number; bookedCount: number }> {
+    const result = await this.prisma.conversionRecord.aggregate({
+      where: {
+        organizationId: args.organizationId,
+        type: "booked",
+        value: { gt: 0 },
+        occurredAt: { gte: args.startInclusive, lt: args.endExclusive },
+      },
+      _sum: { value: true },
+      _count: { _all: true },
+    });
+    return {
+      bookedValueCents: result._sum.value ?? 0,
+      bookedCount: result._count._all,
+    };
+  }
 }
 
 function emptyFunnel(dateRange: DateRange): FunnelCounts {
