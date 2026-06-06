@@ -104,8 +104,10 @@ function pauseTraceStore(): WorkTraceStore {
 
 export function buildPauseLifecycleWorld(opts?: {
   /** Optional billing-entitlement stub; absent = entitlement gate not wired
-   * (PR-1 loop tests). The cron loop's named-skip leg wires an unentitled one. */
-  entitlementResolver?: import("@switchboard/core").BillingEntitlementResolver;
+   * (PR-1 loop tests). The cron loop's named-skip leg wires an unentitled one.
+   * Typed via the ingress config's own field (the resolver interface is not on
+   * core's public barrel). */
+  entitlementResolver?: ConstructorParameters<typeof PlatformIngress>[0]["entitlementResolver"];
 }) {
   const metaCalls: Array<{ campaignId: string; status: string }> = [];
   const sabotage = { failNext: false };

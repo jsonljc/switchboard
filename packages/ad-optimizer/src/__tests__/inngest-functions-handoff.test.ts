@@ -91,16 +91,14 @@ describe("executeWeeklyAudit — Phase-C pause submitter (capability-passing as 
 
   it("never threads the pause submitter when the dep is absent, even for a flag-on deployment", async () => {
     const deps = makeDeps({
-      listActiveDeployments: vi
-        .fn()
-        .mockResolvedValue([
-          {
-            id: "dep-on",
-            organizationId: "org-1",
-            inputConfig: {},
-            pauseSelfExecutionEnabled: true,
-          },
-        ]),
+      listActiveDeployments: vi.fn().mockResolvedValue([
+        {
+          id: "dep-on",
+          organizationId: "org-1",
+          inputConfig: {},
+          pauseSelfExecutionEnabled: true,
+        },
+      ]),
     });
     await executeWeeklyAudit(makeStep() as never, deps);
     expect(auditRunnerCtor.mock.calls[0]![0].rileyPauseSubmitter).toBeUndefined();
