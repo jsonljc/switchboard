@@ -82,6 +82,7 @@ export type CorroborationReason =
   | "unstable_context"
   | "missing_booking_stats"
   | "missing_account_spend"
+  | "non_finite_input"
   | "sparse_bookings"
   | "spend_continuity_failed"
   | "invalid_booked_value"
@@ -143,6 +144,25 @@ export function deriveCorroboration(input: DeriveCorroborationInput): Corroborat
     return reject("missing_account_spend");
   }
   const { preWindow, postWindow } = input.orgBookedStats;
+  // Finite guard, BEFORE any comparison gate: every reject below is a
+  // numeric comparison, and every comparison with NaN is false, so without
+  // this guard a single malformed upstream value (Meta returns spend as
+  // strings; parseFloat of a non-numeric sentinel is NaN) would sail past
+  // every floor to a fabricated "corroborated". Review-caught; the one
+  // degenerate value the floors cannot catch by comparison.
+  if (
+    ![
+      input.deltaPct,
+      input.preAccountSpendCents,
+      input.postAccountSpendCents,
+      preWindow.bookedValueCents,
+      preWindow.bookedCount,
+      postWindow.bookedValueCents,
+      postWindow.bookedCount,
+    ].every(Number.isFinite)
+  ) {
+    return reject("non_finite_input");
+  }
   // F2: sparse-booking floor, each window independently.
   if (
     preWindow.bookedCount < CORROBORATION_MIN_BOOKINGS_PER_WINDOW ||

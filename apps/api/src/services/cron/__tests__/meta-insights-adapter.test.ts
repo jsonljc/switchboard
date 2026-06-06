@@ -186,6 +186,23 @@ describe("createMetaInsightsProviderForOrg — account-level spend enrichment (r
     expect(callArgs).not.toHaveProperty("filtering");
   });
 
+  it("omits accountSpendCents when any row's spend is non-finite (honest absence beats a poisoned sum)", async () => {
+    // MetaAdsClient parses Graph spend strings with parseFloat; a non-numeric
+    // sentinel ("N/A", "") yields NaN, and one NaN row poisons the whole
+    // account sum. The predicate treats absence as unjudgeable
+    // (missing_account_spend); a NaN would be comparison-blind. Review-caught.
+    getCampaignInsightsSpy.mockResolvedValue([
+      { campaignId: "camp-42", spend: 10.5, inlineLinkClickCtr: 0.02 },
+      { campaignId: "camp-99", spend: NaN, inlineLinkClickCtr: 0.01 },
+    ]);
+    const provider = createMetaInsightsProviderForOrg("org-1", makeFakePrisma());
+
+    const metrics = await provider.getWindowMetrics(makeQuery());
+
+    expect(metrics?.spendCents).toBe(1050);
+    expect(metrics).not.toHaveProperty("accountSpendCents");
+  });
+
   it("still returns null when the requested campaign has no rows even if account rows exist (account data alone never fabricates a campaign window)", async () => {
     getCampaignInsightsSpy.mockResolvedValue([
       { campaignId: "camp-99", spend: 5.25, inlineLinkClickCtr: 0.01 },

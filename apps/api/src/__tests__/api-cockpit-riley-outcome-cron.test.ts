@@ -37,6 +37,7 @@ function buildDeps() {
       skippedExisting: 0,
       outcomesWritten: 0,
       renderable: 0,
+      corroborated: 0,
       hidden: 0,
       hiddenByFlag: {
         meta_data_missing: 0,

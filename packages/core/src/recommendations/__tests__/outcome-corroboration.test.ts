@@ -200,6 +200,48 @@ describe("deriveCorroboration: judgeability floors (F1-F3, the no-fabrication se
   });
 });
 
+describe("deriveCorroboration: non-finite inputs never fabricate (NaN is comparison-blind)", () => {
+  // Every reject gate is a numeric comparison, and every comparison with NaN
+  // is false: without an explicit finite guard, a single malformed upstream
+  // value (Meta returns spend as strings; parseFloat("N/A") is NaN) would
+  // sail past every floor to a fabricated "corroborated". Review-caught.
+  it("rejects NaN pre-window account spend", () => {
+    expect(deriveCorroboration({ ...passing(), preAccountSpendCents: NaN })).toEqual(
+      rejected("non_finite_input"),
+    );
+  });
+
+  it("rejects NaN post-window account spend", () => {
+    expect(deriveCorroboration({ ...passing(), postAccountSpendCents: NaN })).toEqual(
+      rejected("non_finite_input"),
+    );
+  });
+
+  it("rejects a NaN delta (a poisoned campaign spend must not reach the agreement test)", () => {
+    expect(deriveCorroboration({ ...passing(), deltaPct: NaN })).toEqual(
+      rejected("non_finite_input"),
+    );
+  });
+
+  it("rejects NaN booked value", () => {
+    const input = passing();
+    input.orgBookedStats!.postWindow.bookedValueCents = NaN;
+    expect(deriveCorroboration(input)).toEqual(rejected("non_finite_input"));
+  });
+
+  it("rejects Infinity account spend (degenerate, not judgeable)", () => {
+    expect(
+      deriveCorroboration({ ...passing(), postAccountSpendCents: Number.POSITIVE_INFINITY }),
+    ).toEqual(rejected("non_finite_input"));
+  });
+
+  it("rejects NaN booked count", () => {
+    const input = passing();
+    input.orgBookedStats!.preWindow.bookedCount = NaN;
+    expect(deriveCorroboration(input)).toEqual(rejected("non_finite_input"));
+  });
+});
+
 describe("deriveCorroboration: explicit ratio guards (defensive; unreachable from the live reader)", () => {
   it("unjudgeable when pre-window booked value is non-positive (preRatio > 0 must not depend on a store predicate)", () => {
     const input = passing();

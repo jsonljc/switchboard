@@ -220,6 +220,23 @@ describe("attributeOneRecommendation: slice-4d corroborated arm", () => {
     expect(row.trustDelta).toBe("none");
   });
 
+  it("persists accountSpendCents inside the metricSummary windows verbatim (the corroboration denominator stays auditable on the row)", () => {
+    // DOCUMENTED CONTRACT CHANGE (review-surfaced): once the live adapter
+    // populates WindowMetrics.accountSpendCents, every row's persisted
+    // metricSummary carries it, for ALL kinds, corroborated or not. That is
+    // deliberate: the row preserves the exact denominator evidence its
+    // causal-strength verdict was judged against. No read model exposes
+    // metricSummary, so no consumer narrows on its shape.
+    const row = attributeOneRecommendation({
+      candidate: REC,
+      preWindow: w(10000, 0.02, 7, 100000),
+      postWindow: w(800, 0.02, 7, 80000),
+      overlaps: [],
+    });
+    expect(row.metricSummary.preWindow?.accountSpendCents).toBe(100000);
+    expect(row.metricSummary.postWindow?.accountSpendCents).toBe(80000);
+  });
+
   it("keeps the corroborated row byte-identical to its directional twin everywhere but causalStrength", () => {
     const base = {
       candidate: REC,

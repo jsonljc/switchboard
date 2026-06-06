@@ -62,7 +62,11 @@ export function createMetaInsightsProviderForOrg(
 
       // Slice 4d: org-level spend rides the SAME Graph response (this call
       // already returns every campaign; the sum happens BEFORE the campaign
-      // filter). Same dollars-to-cents conversion as the campaign sum.
+      // filter). Same dollars-to-cents conversion as the campaign sum. A
+      // non-finite sum (Meta spend strings parse with parseFloat; a
+      // non-numeric sentinel is NaN, and one NaN row poisons the whole sum)
+      // is reported as ABSENCE: the corroboration predicate treats a missing
+      // account spend as unjudgeable, never as agreement.
       const accountSpendCents = Math.round(insights.reduce((sum, r) => sum + r.spend, 0) * 100);
 
       // Filter to the requested campaign
@@ -73,7 +77,12 @@ export function createMetaInsightsProviderForOrg(
       const ctr = rows.reduce((sum, r) => sum + r.inlineLinkClickCtr, 0) / rows.length;
       const dailyRowCount = rows.length;
 
-      return { spendCents, ctr, dailyRowCount, accountSpendCents };
+      return {
+        spendCents,
+        ctr,
+        dailyRowCount,
+        ...(Number.isFinite(accountSpendCents) ? { accountSpendCents } : {}),
+      };
     },
   };
 }
