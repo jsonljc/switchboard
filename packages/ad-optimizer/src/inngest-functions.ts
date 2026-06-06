@@ -13,6 +13,7 @@ import type { SignalHealthReport, SignalHealthReportProvider } from "./signal-he
 import type { RecommendationEmitter } from "./recommendation-sink.js";
 import type { CoverageReport } from "./onboarding/coverage-validator.js";
 import type { RecommendationHandoffSubmitter } from "./recommendation-handoff-dispatch.js";
+import type { RileyPauseSubmitter } from "./riley-pause-dispatch.js";
 
 interface DeploymentInfo {
   id: string;
@@ -27,6 +28,11 @@ interface DeploymentInfo {
     /** Attribution windows pinned for `conversionActionType` (e.g. ["7d_click"]). */
     attributionWindows?: string[];
   };
+  /** Phase-C per-org dispatch flag (governanceSettings.pauseSelfExecutionEnabled,
+   * mapped by apps/api). Absent/false = the pause submitter is never threaded
+   * into this deployment's AuditRunner. Default OFF; flips only via the audited
+   * scripts/riley-pause-flag.ts toggle. */
+  pauseSelfExecutionEnabled?: boolean;
 }
 
 interface DeploymentCredentials {
@@ -91,6 +97,16 @@ export interface CronDependencies {
    * PlatformIngress. Absent ⇒ the weekly audit produces no Riley -> agent handoffs.
    */
   recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
+  /**
+   * Optional (Phase-C). Routes the arbitration-PRIMARY pause to the governed
+   * pause intent (parking for mandatory approval). Wired by apps/api ONLY under
+   * the RILEY_PAUSE_SELF_EXECUTION_ENABLED env kill switch; threaded into each
+   * org's AuditRunner ONLY when that deployment's
+   * governanceSettings.pauseSelfExecutionEnabled is true (capability-passing as
+   * enforcement; both default OFF). Absent = the weekly audit self-submits no
+   * pauses. ad-optimizer (Layer 2) never imports PlatformIngress.
+   */
+  rileyPauseSubmitter?: RileyPauseSubmitter;
   /**
    * Optional (slice 4c). Latest operator operational-state confirmation per
    * org, feeding RevenueState.businessContextFreshness in the weekly audit.
@@ -248,6 +264,12 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
           : {}),
         ...(deps.recommendationHandoffSubmitter
           ? { recommendationHandoffSubmitter: deps.recommendationHandoffSubmitter }
+          : {}),
+        // Phase-C: capability-passing as enforcement. The pause submitter reaches
+        // a deployment's runner ONLY when its per-org flag is on (and the dep
+        // itself exists only under the env kill switch). Both default OFF.
+        ...(deps.rileyPauseSubmitter && deployment.pauseSelfExecutionEnabled
+          ? { rileyPauseSubmitter: deps.rileyPauseSubmitter }
           : {}),
         ...(deps.getLatestOperationalState
           ? { operationalStateProvider: { getLatest: deps.getLatestOperationalState } }
