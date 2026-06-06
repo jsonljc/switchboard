@@ -183,6 +183,10 @@ export interface GatewayConversationStore {
     deploymentId: string,
     channel: string,
     sessionId: string,
+    /** Spec-1A chain weld: resolved identity used to key the thread. When
+     *  omitted, or when contactId is null, the store falls back to the
+     *  legacy visitor-/gateway literals (no resolvable contact). */
+    identity?: { organizationId: string; contactId: string | null },
   ): Promise<{
     conversationId: string;
     messages: Array<{ role: string; content: string }>;

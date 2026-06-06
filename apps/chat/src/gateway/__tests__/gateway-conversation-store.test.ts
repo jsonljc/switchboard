@@ -173,3 +173,61 @@ describe("PrismaGatewayConversationStore", () => {
     });
   });
 });
+
+function makePrisma(createSpy: ReturnType<typeof vi.fn>) {
+  return {
+    conversationThread: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: createSpy,
+      update: vi.fn().mockResolvedValue({}),
+    },
+    conversationMessage: {
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({}),
+    },
+    conversationState: { findUnique: vi.fn().mockResolvedValue(null) },
+  } as unknown as import("@switchboard/db").PrismaClient;
+}
+
+describe("PrismaGatewayConversationStore thread re-key", () => {
+  let createSpy: ReturnType<typeof vi.fn>;
+  let store: PrismaGatewayConversationStore;
+
+  beforeEach(() => {
+    createSpy = vi.fn().mockResolvedValue({ id: "thr_1" });
+    store = new PrismaGatewayConversationStore(makePrisma(createSpy));
+  });
+
+  it("keys the new thread off the resolved contactId + organizationId when identity is provided", async () => {
+    await store.getOrCreateBySession("dep_1", "whatsapp", "+6591234567", {
+      organizationId: "org_real",
+      contactId: "ct_real",
+    });
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ contactId: "ct_real", organizationId: "org_real" }),
+      }),
+    );
+  });
+
+  it("falls back to visitor-/gateway literals when identity is absent (no resolvable contact)", async () => {
+    await store.getOrCreateBySession("dep_1", "web", "sess_x");
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ contactId: "visitor-sess_x", organizationId: "gateway" }),
+      }),
+    );
+  });
+
+  it("falls back to the visitor- literal when identity.contactId is null", async () => {
+    await store.getOrCreateBySession("dep_1", "whatsapp", "sess_y", {
+      organizationId: "org_real",
+      contactId: null,
+    });
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ contactId: "visitor-sess_y", organizationId: "org_real" }),
+      }),
+    );
+  });
+});
