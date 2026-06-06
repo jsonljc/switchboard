@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
-import {
-  buildRileyPauseSubmitRequest,
-  UNWIRED_RILEY_PAUSE_INTENT,
-} from "../riley-pause-submit-request.js";
+import { buildRileyPauseSubmitRequest, RILEY_PAUSE_INTENT } from "../riley-pause-submit-request.js";
 import { buildRecommendationHandoffSubmitRequest } from "../recommendation-handoff-request.js";
+import { RILEY_PAUSE_EXECUTION_EVIDENCE_FLOOR } from "@switchboard/ad-optimizer";
 
 // Destructive-family floor is { clicks: 50, conversions: 5, days: 7 }; this clears it.
 const base = {
@@ -16,12 +14,12 @@ const base = {
 
 const dep = { deploymentId: "dep_riley", skillSlug: "ad-optimizer" };
 
-describe("buildRileyPauseSubmitRequest (PHASE-C seam, unwired)", () => {
+describe("buildRileyPauseSubmitRequest (PHASE-C, wired)", () => {
   it("maps a pause recommendation onto the governed-path conventions", () => {
     const req = buildRileyPauseSubmitRequest(base, dep);
     expect(req).not.toBeNull();
     expect(req!.actor).toEqual({ id: "system", type: "system" });
-    expect(req!.intent).toBe(UNWIRED_RILEY_PAUSE_INTENT);
+    expect(req!.intent).toBe(RILEY_PAUSE_INTENT);
     expect(req!.trigger).toBe("internal");
     expect(req!.surface).toEqual({ surface: "api" });
     expect(req!.idempotencyKey).toBe("mutate:riley:rec_9:pause");
@@ -45,6 +43,23 @@ describe("buildRileyPauseSubmitRequest (PHASE-C seam, unwired)", () => {
       dep,
     );
     expect(req).toBeNull();
+  });
+
+  it("returns null below the RAISED execution floor even when the recommendation floor passes", () => {
+    // Clears destructive {50,5,7} but NOT execution {100,10,7}.
+    const req = buildRileyPauseSubmitRequest(
+      { ...base, evidence: { clicks: 99, conversions: 9, days: 7 } },
+      dep,
+    );
+    expect(req).toBeNull();
+  });
+
+  it("submits at exactly the execution floor", () => {
+    const req = buildRileyPauseSubmitRequest(
+      { ...base, evidence: RILEY_PAUSE_EXECUTION_EVIDENCE_FLOOR },
+      dep,
+    );
+    expect(req).not.toBeNull();
   });
 
   it("is intentionally pause-only: no action parameter exists to widen it", () => {
