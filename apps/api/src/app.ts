@@ -773,7 +773,9 @@ export async function buildServer() {
   if (prismaClient) {
     const { bootstrapOperatorIntents } = await import("./bootstrap/operator-intents.js");
     const { PrismaOutboxStore } = await import("@switchboard/db");
+    const { PrismaReceiptStore } = await import("@switchboard/db");
     const prismaOutbox = new PrismaOutboxStore(prismaClient);
+    const prismaReceipts = new PrismaReceiptStore(prismaClient);
     bootstrapOperatorIntents({
       intentRegistry,
       modeRegistry,
@@ -787,6 +789,9 @@ export async function buildServer() {
           prismaOutbox.write(eventId, type, payload, tx as never).then(() => {}),
       },
       runInTransaction: (fn) => prismaClient.$transaction((tx) => fn(tx)),
+      receiptWriter: {
+        write: (input, tx) => prismaReceipts.mint(input, tx as never).then(() => {}),
+      },
       logger: app.log,
     });
   }
