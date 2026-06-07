@@ -28,8 +28,11 @@ export interface AttributeOneInput {
   /**
    * Slice-4c: operator operational-state confirmations overlapping the FULL
    * attribution window (the getConfirmationsOverlappingWindow contract:
-   * governing + in-window, oldest first). undefined = no source wired; [] =
-   * source wired, zero confirmations. Both derive "unknown" (honest absence).
+   * governing + in-window, oldest first). Slice-4e: plus any confirmations
+   * recorded after windowEndedAt up to the attribution moment (the widened
+   * orchestrator read); the derivation admits their dated intervals as
+   * disruption-only evidence. undefined = no source wired; [] = source
+   * wired, zero confirmations. Both derive "unknown" (honest absence).
    */
   operationalStateConfirmations?: OperationalStateConfirmation[];
   /**
@@ -225,6 +228,9 @@ export interface RunRileyOutcomeAttributionInput {
   /**
    * Optional (slice 4c). The 4a operational-state window read; absent ⇒
    * every row records businessContextStable "unknown" (honest absence).
+   * Slice 4e: the call's end bound is the attribution moment (clamped to
+   * never fall below postEnd), admitting late-recorded confirmations as
+   * disruption-only evidence.
    */
   operationalStateReader?: OperationalStateReader;
   /**
@@ -304,8 +310,17 @@ export async function runRileyOutcomeAttribution(
     // provider error here: outcome rows are insert-once, so writing "unknown"
     // on a transient blip would freeze it forever; the Inngest retry derives
     // it right instead.
+    // Slice 4e: the read's end bound widens from postEnd to the attribution
+    // moment, so confirmations recorded AFTER the window closed (the
+    // settlement lag guarantees >= 24h of post-window time for every live
+    // candidate) are admitted: their dated promo/closure intervals may reach
+    // back into the measured window. The derivation buckets rows by
+    // confirmedAt and admits late rows as disruption-only interval evidence.
+    // Clamped so the read is never narrower than the shipped 4c read, even
+    // for a direct caller violating the settlement-lag invariant.
+    const lateHorizon = now.getTime() > postEnd.getTime() ? now : postEnd;
     const operationalStateConfirmations = operationalStateReader
-      ? await operationalStateReader.getConfirmationsOverlappingWindow(orgId, preStart, postEnd)
+      ? await operationalStateReader.getConfirmationsOverlappingWindow(orgId, preStart, lateHorizon)
       : undefined;
 
     // Slice 4d: org-level booked stats for the two sub-windows, the exact
