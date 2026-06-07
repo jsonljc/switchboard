@@ -44,6 +44,7 @@ function harness(overrides?: {
   creds?: { accessToken: string; accountId: string } | null | "org_mismatch";
   campaignStatus?: { status: string; effectiveStatus: string } | null;
   updateCampaignStatus?: ReturnType<typeof vi.fn>;
+  markRecommendationActed?: ReturnType<typeof vi.fn>;
 }) {
   const updateCampaignStatus =
     overrides?.updateCampaignStatus ?? vi.fn().mockResolvedValue(undefined);
@@ -53,6 +54,16 @@ function harness(overrides?: {
       overrides?.campaignStatus === undefined
         ? { status: "ACTIVE", effectiveStatus: "ACTIVE" }
         : overrides.campaignStatus,
+    );
+  const markRecommendationActed =
+    overrides?.markRecommendationActed ??
+    vi.fn(
+      async (_args: {
+        organizationId: string;
+        recommendationId: string;
+        executableWorkUnitId: string;
+        executedAt: Date;
+      }) => ({ transitioned: true as const }),
     );
   const deps = {
     getDeploymentCredentials: vi.fn(async (organizationId: string, _deploymentId: string) => {
@@ -67,9 +78,10 @@ function harness(overrides?: {
       };
     }),
     createAdsClient: vi.fn().mockReturnValue({ updateCampaignStatus, getCampaignStatus }),
+    markRecommendationActed,
     now: () => NOW,
   };
-  return { deps, updateCampaignStatus, getCampaignStatus };
+  return { deps, updateCampaignStatus, getCampaignStatus, markRecommendationActed };
 }
 
 describe("riley pause execution workflow", () => {
@@ -109,6 +121,7 @@ describe("riley pause execution workflow", () => {
     expect(result.outcome).toBe("failed");
     expect(result.error?.code).toBe("INVALID_PAUSE_INPUT");
     expect(h.updateCampaignStatus).not.toHaveBeenCalled();
+    expect(h.markRecommendationActed).not.toHaveBeenCalled();
   });
 
   it("abstains below the execution floor (completed no-op, never a phantom pause)", async () => {
@@ -133,6 +146,7 @@ describe("riley pause execution workflow", () => {
       reason: "below_execution_floor",
     });
     expect(h.updateCampaignStatus).not.toHaveBeenCalled();
+    expect(h.markRecommendationActed).not.toHaveBeenCalled();
   });
 
   it("does not pause when the approval is stale (requestedAt older than the cap)", async () => {
@@ -153,6 +167,7 @@ describe("riley pause execution workflow", () => {
       RILEY_PAUSE_MAX_APPROVAL_AGE_HOURS,
     );
     expect(h.updateCampaignStatus).not.toHaveBeenCalled();
+    expect(h.markRecommendationActed).not.toHaveBeenCalled();
   });
 
   it("executes at just under the age cap (boundary)", async () => {
@@ -164,6 +179,7 @@ describe("riley pause execution workflow", () => {
     const result = await handler.execute(workUnit({ requestedAt: freshEnough }), services);
     expect(result.outcome).toBe("completed");
     expect(result.outputs).toMatchObject({ paused: true });
+    expect(h.markRecommendationActed).toHaveBeenCalledTimes(1);
   });
 
   it("fails LOUDLY when the deployment belongs to another org (security signal, not a skip)", async () => {
@@ -173,6 +189,7 @@ describe("riley pause execution workflow", () => {
     expect(result.outcome).toBe("failed");
     expect(result.error?.code).toBe("DEPLOYMENT_ORG_MISMATCH");
     expect(h.updateCampaignStatus).not.toHaveBeenCalled();
+    expect(h.markRecommendationActed).not.toHaveBeenCalled();
   });
 
   it("does not pause when the campaign is already paused (records previousStatus)", async () => {
@@ -187,6 +204,7 @@ describe("riley pause execution workflow", () => {
       previousStatus: "PAUSED",
     });
     expect(h.updateCampaignStatus).not.toHaveBeenCalled();
+    expect(h.markRecommendationActed).not.toHaveBeenCalled();
   });
 
   it("does not pause a deleted/archived campaign (not pausable)", async () => {
@@ -200,6 +218,7 @@ describe("riley pause execution workflow", () => {
       reason: "campaign_not_pausable",
     });
     expect(h.updateCampaignStatus).not.toHaveBeenCalled();
+    expect(h.markRecommendationActed).not.toHaveBeenCalled();
   });
 
   it("proceeds with previousStatus unknown when the status read degrades (the write is the honest test)", async () => {
@@ -209,6 +228,7 @@ describe("riley pause execution workflow", () => {
     expect(result.outcome).toBe("completed");
     expect(result.outputs).toMatchObject({ paused: true, previousStatus: "unknown" });
     expect(h.updateCampaignStatus).toHaveBeenCalledTimes(1);
+    expect(h.markRecommendationActed).toHaveBeenCalledTimes(1);
   });
 
   it("fails honestly when the org has no meta-ads connection", async () => {
@@ -217,6 +237,7 @@ describe("riley pause execution workflow", () => {
     const result = await handler.execute(workUnit(), services);
     expect(result.outcome).toBe("failed");
     expect(result.error?.code).toBe("NO_META_CONNECTION");
+    expect(h.markRecommendationActed).not.toHaveBeenCalled();
   });
 
   it("fails honestly when the Meta write throws (drives recovery_required upstream)", async () => {
@@ -228,5 +249,101 @@ describe("riley pause execution workflow", () => {
     expect(result.outcome).toBe("failed");
     expect(result.error?.code).toBe("META_PAUSE_FAILED");
     expect(result.error?.message).toContain("boom");
+    expect(h.markRecommendationActed).not.toHaveBeenCalled();
+  });
+});
+
+describe("slice 4f: recommendation transition on the truthful success leg ONLY", () => {
+  it("transitions after a real Meta write: exact args, execution-time anchor, outputs truth", async () => {
+    const h = harness();
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const result = await handler.execute(workUnit(), services);
+    expect(result.outcome).toBe("completed");
+    expect(h.markRecommendationActed).toHaveBeenCalledTimes(1);
+    expect(h.markRecommendationActed).toHaveBeenCalledWith({
+      organizationId: "org_1",
+      recommendationId: "rec_1",
+      executableWorkUnitId: "wu_pause_1",
+      executedAt: NOW,
+    });
+    expect(result.outputs).toMatchObject({
+      paused: true,
+      metaWriteAccepted: true,
+      recommendationTransition: "acted",
+      executedAt: NOW.toISOString(),
+    });
+  });
+
+  it("anchors on the execution clock even when requestedAt is ~47h stale (within the cap)", async () => {
+    const h = harness();
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const staleButValid = new Date(NOW.getTime() - 47 * 60 * 60 * 1000).toISOString();
+    await handler.execute(workUnit({ requestedAt: staleButValid }), services);
+    const call = h.markRecommendationActed.mock.calls[0]![0] as { executedAt: Date };
+    expect(call.executedAt).toEqual(NOW); // NOT requestedAt
+  });
+
+  it("a benign lost race (not_pending) preserves the success result and records it", async () => {
+    const h = harness({
+      markRecommendationActed: vi.fn(async (_args: { recommendationId: string }) => ({
+        transitioned: false as const,
+        reason: "not_pending" as const,
+      })),
+    });
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const result = await handler.execute(workUnit(), services);
+    expect(result.outcome).toBe("completed");
+    expect(result.outputs).toMatchObject({
+      paused: true,
+      metaWriteAccepted: true,
+      recommendationTransition: "not_pending",
+    });
+  });
+
+  it("records not_found DISTINCTLY from not_pending", async () => {
+    const h = harness({
+      markRecommendationActed: vi.fn(async (_args: { recommendationId: string }) => ({
+        transitioned: false as const,
+        reason: "not_found" as const,
+      })),
+    });
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const result = await handler.execute(workUnit(), services);
+    expect(result.outcome).toBe("completed");
+    expect(result.outputs).toMatchObject({ recommendationTransition: "not_found" });
+  });
+
+  it("a thrown transition error never fails the work unit, and is LOUD (greppable console.error)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const h = harness({
+        markRecommendationActed: vi.fn(async (_args: { recommendationId: string }) => {
+          throw new Error("db down");
+        }),
+      });
+      const handler = buildRileyPauseExecutionWorkflow(h.deps);
+      const result = await handler.execute(workUnit(), services);
+      expect(result.outcome).toBe("completed");
+      expect(result.outputs).toMatchObject({
+        paused: true,
+        metaWriteAccepted: true,
+        recommendationTransition: "error",
+      });
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const line = String(errorSpy.mock.calls[0]![0]);
+      expect(line).toContain("[riley-pause] failed to mark recommendation acted");
+      expect(line).toContain("rec_1");
+      expect(line).toContain("wu_pause_1");
+      expect(line).toContain("db down");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("already-paused pre-read skip NEVER transitions (no spend change from THIS work unit)", async () => {
+    const h = harness({ campaignStatus: { status: "PAUSED", effectiveStatus: "PAUSED" } });
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    await handler.execute(workUnit(), services);
+    expect(h.markRecommendationActed).not.toHaveBeenCalled();
   });
 });

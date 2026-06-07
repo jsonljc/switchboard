@@ -127,6 +127,13 @@ export interface AttributableRecommendation {
   campaignId: string;
   actionKind: AttributableKind;
   resolvedAt: Date;
+  /**
+   * Slice 4f: WorkUnit.id of the machine execution that acted this
+   * recommendation (stashed by markActedByExecution); null for
+   * operator-acted rows. Required (not optional) so every constructor
+   * site decides explicitly.
+   */
+  executableWorkUnitId: string | null;
 }
 
 /**

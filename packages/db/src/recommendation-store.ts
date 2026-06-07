@@ -26,9 +26,17 @@ interface RecommendationParams {
     note?: string | null;
     presentation?: unknown;
     riskContract?: RecommendationRiskContract;
+    /** Slice 4f: WorkUnit.id of the machine execution that acted this rec. */
+    executedWorkUnitId?: string;
   };
   [key: string]: unknown;
 }
+
+/** Result of the machine-execution transition (slice 4f). "not_pending" and
+ * "not_found" are benign first-writer-wins no-ops, never errors. */
+export type MarkActedByExecutionResult =
+  | { transitioned: true }
+  | { transitioned: false; reason: "not_found" | "not_pending" };
 
 /**
  * Project a Prisma `pendingActionRecord` row into the canonical `Recommendation`
@@ -274,6 +282,95 @@ export class PrismaRecommendationStore implements RecommendationStore {
         },
       });
       return rowToRecommendation(updated);
+    });
+  }
+
+  /**
+   * Machine-execution transition (Riley Phase-C slice 4f): marks a
+   * recommendation acted AFTER the platform actually executed it (Meta write
+   * accepted). The MACHINE sibling of applyAct above, deliberately mirroring
+   * its tx shape with three differences: conditional updateMany instead of
+   * update (a lost race returns count 0 and MUST be a benign no-op, never a
+   * throw: operator acted/dismissed concurrently, lazy expiry won, or a retry
+   * already transitioned); resolvedAt is the caller's execution clock (the
+   * outcome-attribution anchor), not new Date(); resolvedBy is the caller's
+   * machine sentinel, never a human principal. The status predicate is the
+   * serialization point against applyAct, so the parameters merge cannot
+   * clobber a concurrent operator write: two writers cannot both pass it.
+   * The intent guard keeps this method off workflow approval rows, which
+   * share the PendingActionRecord table.
+   */
+  async markActedByExecution(args: {
+    id: string;
+    organizationId: string;
+    executableWorkUnitId: string;
+    resolvedBy: string;
+    executedAt: Date;
+  }): Promise<MarkActedByExecutionResult> {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.pendingActionRecord.findFirst({
+        where: {
+          id: args.id,
+          organizationId: args.organizationId,
+          intent: { startsWith: RECOMMENDATION_INTENT_PREFIX },
+        },
+      });
+      if (!existing) return { transitioned: false, reason: "not_found" };
+
+      const params = (existing.parameters ?? {}) as RecommendationParams;
+      const updatedMeta = {
+        ...(params.__recommendation ?? {}),
+        executedWorkUnitId: args.executableWorkUnitId,
+      };
+      const updated = await tx.pendingActionRecord.updateMany({
+        where: {
+          id: args.id,
+          organizationId: args.organizationId,
+          status: "pending",
+          intent: { startsWith: RECOMMENDATION_INTENT_PREFIX },
+        },
+        data: {
+          status: "acted",
+          resolvedAt: args.executedAt,
+          resolvedBy: args.resolvedBy,
+          parameters: { ...params, __recommendation: updatedMeta } as object,
+        },
+      });
+      if (updated.count === 0) return { transitioned: false, reason: "not_pending" };
+
+      await tx.auditEntry.create({
+        data: {
+          eventType: "recommendation.act",
+          actorType: "system",
+          actorId: args.resolvedBy,
+          entityType: "recommendation",
+          entityId: args.id,
+          riskCategory: existing.riskLevel,
+          summary: existing.humanSummary,
+          snapshot: {
+            from: "pending",
+            to: "acted",
+            note: null,
+            executableWorkUnitId: args.executableWorkUnitId,
+          } as object,
+          evidencePointers: [] as object,
+          // ts = the EXECUTION clock, not Date.now(): this slice anchors truth
+          // at execution time and the hash input must not silently depend on a
+          // second wall clock (review-requested). Uniqueness is unaffected
+          // (buildEntryHash salts with a random UUID), which also makes the ts
+          // source non-black-box-testable; this comment is the record.
+          // applyAct keeps Date.now() because its event clock IS the wall clock.
+          entryHash: buildEntryHash({
+            id: args.id,
+            fromStatus: "pending",
+            toStatus: "acted",
+            principalId: args.resolvedBy,
+            ts: args.executedAt.getTime(),
+          }),
+          organizationId: existing.organizationId,
+        },
+      });
+      return { transitioned: true };
     });
   }
 

@@ -16,6 +16,7 @@ const REC: AttributableRecommendation = {
   campaignId: "camp-A",
   actionKind: "pause",
   resolvedAt: new Date("2026-05-01T12:00:00Z"),
+  executableWorkUnitId: null,
 };
 
 function w(spendCents: number, ctr: number, dailyRowCount = 7): WindowMetrics {

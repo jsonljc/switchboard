@@ -372,6 +372,54 @@ describe("PrismaAttributableRecommendationStore.findAttributableCandidates", () 
     const wrongCutoff = new Date(now.getTime() - 24 * MS_PER_HOUR - 14 * MS_PER_DAY);
     expect(cutoff.getTime()).not.toBe(wrongCutoff.getTime());
   });
+
+  it("threads the executedWorkUnitId stash into the candidate (slice 4f, machine-acted row)", async () => {
+    const prisma = buildPrismaMock();
+    (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: "rec_m",
+        organizationId: "org-1",
+        resolvedAt: new Date("2026-05-01T12:00:00Z"), // 13.8d before now: eligible
+        parameters: { __recommendation: { action: "pause", executedWorkUnitId: "wu_42" } },
+        targetEntities: { campaignId: "camp-A" },
+      },
+    ]);
+    const store = new PrismaAttributableRecommendationStore(prisma as never);
+    const out = await store.findAttributableCandidates({
+      organizationId: "org-1",
+      now: new Date("2026-05-15T07:00:00Z"),
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ id: "rec_m", executableWorkUnitId: "wu_42" });
+  });
+
+  it("operator-acted rows (no stash) project null; a non-string stash projects null", async () => {
+    const prisma = buildPrismaMock();
+    (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        id: "rec_o",
+        organizationId: "org-1",
+        resolvedAt: new Date("2026-05-01T12:00:00Z"),
+        parameters: { __recommendation: { action: "pause" } },
+        targetEntities: { campaignId: "camp-A" },
+      },
+      {
+        id: "rec_bad",
+        organizationId: "org-1",
+        resolvedAt: new Date("2026-05-01T12:00:00Z"),
+        parameters: { __recommendation: { action: "pause", executedWorkUnitId: 7 } },
+        targetEntities: { campaignId: "camp-A" },
+      },
+    ]);
+    const store = new PrismaAttributableRecommendationStore(prisma as never);
+    const out = await store.findAttributableCandidates({
+      organizationId: "org-1",
+      now: new Date("2026-05-15T07:00:00Z"),
+    });
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ id: "rec_o", executableWorkUnitId: null });
+    expect(out[1]).toMatchObject({ id: "rec_bad", executableWorkUnitId: null });
+  });
 });
 
 describe("PrismaAttributableRecommendationStore.findOverlapsForCampaign", () => {
