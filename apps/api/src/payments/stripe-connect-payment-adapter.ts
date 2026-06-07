@@ -134,6 +134,14 @@ export class StripeConnectPaymentAdapter implements PaymentPort {
       throw err;
     }
 
+    // Recover bookingId from PaymentIntent metadata written by createDepositLink
+    // (payment_intent_data.metadata.bookingId). This is the only server-side
+    // link between the PSP charge and the Booking row — the webhook route MUST
+    // NOT trust any body field for this mapping.
+    const rawBookingId = intent.metadata?.["bookingId"];
+    const bookingId =
+      typeof rawBookingId === "string" && rawBookingId.length > 0 ? rawBookingId : null;
+
     return {
       provider: "stripe",
       externalReference: intent.id,
@@ -143,6 +151,7 @@ export class StripeConnectPaymentAdapter implements PaymentPort {
       amountCents: intent.amount,
       currency: intent.currency,
       status: mapPaymentIntentStatus(intent.status),
+      bookingId,
     };
   }
 }

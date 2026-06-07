@@ -38,6 +38,12 @@ export type DepositLink = z.infer<typeof DepositLinkSchema>;
  * writer (PR 1A-4) trusts THIS object's amount, never a webhook body. A payment
  * whose `provider` is 'noop' is DEGRADED and must never be counted as a real
  * (T1) production paid visit (spec §3, R1).
+ *
+ * `bookingId` is the PSP-metadata-recovered booking linkage (populated from
+ * PaymentIntent.metadata.bookingId on Stripe, or from the deterministic
+ * `noop_pay_${bookingId}` prefix on Noop). Null when the PSP metadata does not
+ * carry a booking reference — the webhook route 200-skips such charges rather
+ * than emitting a partial record or a ZodError 500.
  */
 export const VerifiedPaymentSchema = z.object({
   provider: z.string().min(1),
@@ -45,6 +51,7 @@ export const VerifiedPaymentSchema = z.object({
   amountCents: z.number().int().nonnegative(),
   currency: z.string().min(1),
   status: PaymentStatusSchema,
+  bookingId: z.string().nullable(),
 });
 export type VerifiedPayment = z.infer<typeof VerifiedPaymentSchema>;
 

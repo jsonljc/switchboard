@@ -38,12 +38,21 @@ export class NoopPaymentAdapter implements PaymentPort {
       // verified writer's not-found branch is exercisable.
       return null;
     }
+    // Recover bookingId from the deterministic prefix `noop_pay_${bookingId}`.
+    // This mirrors the Stripe adapter which recovers bookingId from PaymentIntent
+    // metadata — the webhook route needs it to resolve contact/opportunity without
+    // trusting any body field.
+    const NOOP_PREFIX = "noop_pay_";
+    const bookingId = externalReference.startsWith(NOOP_PREFIX)
+      ? externalReference.slice(NOOP_PREFIX.length)
+      : null;
     return {
       provider: "noop",
       externalReference,
       amountCents: issued.amountCents,
       currency: issued.currency,
       status: "paid",
+      bookingId,
     };
   }
 }

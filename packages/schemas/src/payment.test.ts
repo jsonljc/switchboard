@@ -9,9 +9,23 @@ describe("VerifiedPaymentSchema", () => {
       currency: "SGD",
       status: "paid",
       externalReference: "noop_pay_bk_1",
+      bookingId: "bk_1",
     });
     expect(parsed.provider).toBe("noop");
     expect(parsed.amountCents).toBe(5000);
+    expect(parsed.bookingId).toBe("bk_1");
+  });
+
+  it("accepts bookingId=null (charge with no metadata linkage)", () => {
+    const parsed = VerifiedPaymentSchema.parse({
+      provider: "stripe",
+      amountCents: 5000,
+      currency: "sgd",
+      status: "paid",
+      externalReference: "pi_abc",
+      bookingId: null,
+    });
+    expect(parsed.bookingId).toBeNull();
   });
 
   it("rejects a negative amountCents", () => {
@@ -22,6 +36,7 @@ describe("VerifiedPaymentSchema", () => {
         currency: "SGD",
         status: "paid",
         externalReference: "noop_pay_bk_1",
+        bookingId: null,
       }),
     ).toThrow();
   });

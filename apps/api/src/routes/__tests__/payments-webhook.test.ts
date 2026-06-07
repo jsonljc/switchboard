@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import rawBody from "fastify-raw-body";
 import { createHmac } from "node:crypto";
 import { paymentsWebhookRoutes } from "../payments-webhook.js";
+import { RecordVerifiedPaymentParametersSchema } from "../operator-intents-schemas-payment.js";
 
 // PSP payments webhook ingress-receiver. Mirrors ad-optimizer-signature.test.ts:
 // the route must verify an HMAC over the RAW body (STRIPE_WEBHOOK_SECRET) and
@@ -116,6 +117,7 @@ async function buildResolvingApp(opts: {
   connectionOrgId: string | null;
   retrievePayment: ReturnType<typeof vi.fn>;
   submit: ReturnType<typeof vi.fn>;
+  bookingFindFirst?: ReturnType<typeof vi.fn>;
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   await app.register(rawBody, { field: "rawBody", global: false });
@@ -123,6 +125,9 @@ async function buildResolvingApp(opts: {
     connection: {
       findFirst: async () =>
         opts.connectionOrgId ? { organizationId: opts.connectionOrgId } : null,
+    },
+    booking: {
+      findFirst: opts.bookingFindFirst ?? vi.fn(async () => null),
     },
   } as never);
   app.decorate("platformIngress", { submit: opts.submit } as never);
@@ -170,13 +175,20 @@ describe("Payments webhook org resolution + charge re-fetch", () => {
   it("re-fetches the charge by id and submits the RE-FETCHED amount, never the body amount", async () => {
     const retrievePayment = vi.fn(async (id: string) => ({
       externalReference: id,
+      bookingId: "bk-1",
       amountCents: 5000,
       currency: "sgd",
       provider: "stripe",
       status: "paid" as const,
     }));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c1", opportunityId: "opp1" }));
     const { submit, calls } = makeSubmitSpy();
-    const app = await buildResolvingApp({ connectionOrgId: "org-1", retrievePayment, submit });
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-1",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
     const payload = bodyWithCharge("evt_amt", "ch_amt", "acct_org1", 9999);
     const res = await app.inject({
       method: "POST",
@@ -213,13 +225,20 @@ describe("Payments webhook replay (idempotency at ingress)", () => {
   it("replaying the same provider message id dedups to one ingress record", async () => {
     const retrievePayment = vi.fn(async (id: string) => ({
       externalReference: id,
+      bookingId: "bk-replay",
       amountCents: 5000,
       currency: "sgd",
       provider: "stripe",
       status: "paid" as const,
     }));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c-r", opportunityId: "opp-r" }));
     const { submit, calls } = makeSubmitSpy();
-    const app = await buildResolvingApp({ connectionOrgId: "org-1", retrievePayment, submit });
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-1",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
     const payload = bodyWithCharge("evt_replay", "ch_replay", "acct_org1", 5000);
     const headers = {
       "content-type": "application/json",
@@ -247,6 +266,164 @@ describe("Payments webhook replay (idempotency at ingress)", () => {
     expect((first.json() as { workUnitId: string }).workUnitId).toBe(
       (second.json() as { workUnitId: string }).workUnitId,
     );
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contract-pin: submitted parameters must satisfy RecordVerifiedPaymentParametersSchema
+// RED before fix (missing contactId/opportunityId/bookingId) → GREEN after.
+// ---------------------------------------------------------------------------
+describe("Payments webhook contract-pin: submitted params satisfy handler schema", () => {
+  let saved: string | undefined;
+  beforeEach(() => {
+    saved = process.env["STRIPE_WEBHOOK_SECRET"];
+    process.env["STRIPE_WEBHOOK_SECRET"] = SECRET;
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env["STRIPE_WEBHOOK_SECRET"];
+    else process.env["STRIPE_WEBHOOK_SECRET"] = saved;
+  });
+
+  it("happy path: submitted parameters satisfy RecordVerifiedPaymentParametersSchema", async () => {
+    const retrievePayment = vi.fn(async (id: string) => ({
+      externalReference: id,
+      bookingId: "bk-contract",
+      amountCents: 7500,
+      currency: "sgd",
+      provider: "stripe",
+      status: "paid" as const,
+    }));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c1", opportunityId: "opp1" }));
+    const { submit, calls } = makeSubmitSpy();
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-contract",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const payload = bodyWithCharge("evt_contract", "ch_contract", "acct_contract", 9999);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhooks/payments/webhook",
+      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(submit).toHaveBeenCalledTimes(1);
+    const params = (calls[0] as Record<string, unknown>)["parameters"];
+    // The core assertion: the schema the handler validates against must pass.
+    expect(RecordVerifiedPaymentParametersSchema.safeParse(params).success).toBe(true);
+    expect(params).toMatchObject({
+      contactId: "c1",
+      opportunityId: "opp1",
+      bookingId: "bk-contract",
+      amountCents: 7500, // RE-FETCHED, not body's 9999
+      provider: "stripe",
+    });
+    await app.close();
+  });
+
+  it("skips (200, no submit) when charge.bookingId is null", async () => {
+    const retrievePayment = vi.fn(async (id: string) => ({
+      externalReference: id,
+      bookingId: null,
+      amountCents: 5000,
+      currency: "sgd",
+      provider: "stripe",
+      status: "paid" as const,
+    }));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c1", opportunityId: "opp1" }));
+    const { submit } = makeSubmitSpy();
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-1",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const payload = bodyWithCharge("evt_nobk", "ch_nobk", "acct_org1", 5000);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhooks/payments/webhook",
+      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      received: true,
+      skipped: true,
+      reason: "no_booking_linkage",
+    });
+    expect(submit).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("skips (200, no submit) when booking.findFirst returns null", async () => {
+    const retrievePayment = vi.fn(async (id: string) => ({
+      externalReference: id,
+      bookingId: "bk-missing",
+      amountCents: 5000,
+      currency: "sgd",
+      provider: "stripe",
+      status: "paid" as const,
+    }));
+    const bookingFindFirst = vi.fn(async () => null);
+    const { submit } = makeSubmitSpy();
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-1",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const payload = bodyWithCharge("evt_norow", "ch_norow", "acct_org1", 5000);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhooks/payments/webhook",
+      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      received: true,
+      skipped: true,
+      reason: "booking_not_resolvable",
+    });
+    expect(submit).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("skips (200, no submit) when booking.contactId is null", async () => {
+    const retrievePayment = vi.fn(async (id: string) => ({
+      externalReference: id,
+      bookingId: "bk-nocontact",
+      amountCents: 5000,
+      currency: "sgd",
+      provider: "stripe",
+      status: "paid" as const,
+    }));
+    // Booking exists but contactId is null (guard against orphaned bookings)
+    const bookingFindFirst = vi.fn(async () => ({ contactId: null, opportunityId: "opp1" }));
+    const { submit } = makeSubmitSpy();
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-1",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const payload = bodyWithCharge("evt_noc", "ch_noc", "acct_org1", 5000);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhooks/payments/webhook",
+      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      received: true,
+      skipped: true,
+      reason: "booking_not_resolvable",
+    });
+    expect(submit).not.toHaveBeenCalled();
     await app.close();
   });
 });
