@@ -317,12 +317,18 @@ interface PrismaCandidateRow {
 function projectBaseCandidate(row: PrismaCandidateRow): AttributableRecommendation | null {
   if (!row.resolvedAt) return null;
 
-  const params = (row.parameters ?? {}) as { __recommendation?: { action?: string } };
+  const params = (row.parameters ?? {}) as {
+    __recommendation?: { action?: string; executedWorkUnitId?: unknown };
+  };
   const kind = params.__recommendation?.action;
   if (!isAttributableKind(kind)) return null;
 
   const identity = extractCampaignIdentity(row);
   if (!identity) return null;
+
+  // Slice 4f: machine executions stash their WorkUnit.id; operator-acted
+  // rows have no stash. Tolerant read: anything non-string is honest null.
+  const stashed = params.__recommendation?.executedWorkUnitId;
 
   return {
     id: row.id,
@@ -330,6 +336,7 @@ function projectBaseCandidate(row: PrismaCandidateRow): AttributableRecommendati
     campaignId: identity.campaignId,
     actionKind: kind,
     resolvedAt: row.resolvedAt,
+    executableWorkUnitId: typeof stashed === "string" ? stashed : null,
   };
 }
 

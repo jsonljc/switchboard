@@ -175,7 +175,7 @@ export function attributeOneRecommendation(input: AttributeOneInput): RileyOutco
 
   return {
     recommendationId: candidate.id,
-    executableWorkUnitId: null,
+    executableWorkUnitId: candidate.executableWorkUnitId,
     organizationId: candidate.organizationId,
     agentRole: "riley",
     actionKind: candidate.actionKind,
