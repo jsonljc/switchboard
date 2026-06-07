@@ -338,17 +338,17 @@ externalReference/bookingId`; contact/opportunity resolved server-side from the
 | J7 crons       | S-13, S-14, S-15, S-16 | 4     |
 | J3/J5 payments | S-17, S-18             | 2     |
 
-| Verdict            | Count  | Seam IDs                                                                                      |
-| ------------------ | ------ | --------------------------------------------------------------------------------------------- |
-| OK                 | 12     | S-01, S-02, S-03, S-04, S-05, S-06, S-07, S-08, S-09, S-10, S-13, S-15                        |
-| SUSPECTED          | 5      | S-11, S-14, S-16, S-18 (+ S-08/S-17 latent phantom-success, called out but not failing today) |
-| UNVERIFIED-COMPLEX | 1      | S-12                                                                                          |
-| **Total**          | **18** |                                                                                               |
+| Verdict            | Count  | Seam IDs                                                                     |
+| ------------------ | ------ | ---------------------------------------------------------------------------- |
+| OK                 | 13     | S-01, S-02, S-03, S-04, S-05, S-06, S-07, S-08, S-09, S-10, S-13, S-15, S-17 |
+| SUSPECTED          | 4      | S-11, S-14, S-16, S-18                                                       |
+| UNVERIFIED-COMPLEX | 1      | S-12                                                                         |
+| **Total**          | **18** |                                                                              |
 
 Note: S-08 and S-17 are verdict OK today (the `system_auto_approved`
 short-circuit makes the unhandled `approvalRequired` branch unreachable) but
-carry a documented latent phantom-success structure; they are listed under OK in
-the count and flagged in-line for the live walkthrough.
+carry documented latent phantom-success concerns; they are counted as OK per
+their current safety but flagged in-line for the live walkthrough.
 
 ### SUSPECTED list (feeds the live walkthrough)
 
