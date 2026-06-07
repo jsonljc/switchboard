@@ -1,0 +1,51 @@
+==================================================================
+J1-S2 DB ROWS — fresh org provisioning (PRE lazy-config-read)
+Org: org_4f796695-7022-4718-838f-71c50b879ad2   Captured: 2026-06-07T15:04:52Z
+==================================================================
+
+----- OrganizationConfig -----
+-[ RECORD 1 ]-------+-----------------------------------------
+id                  | org_4f796695-7022-4718-838f-71c50b879ad2
+name                | audit-pilot@example.com
+runtimeType         | managed
+governanceProfile   | guarded
+onboardingComplete  | f
+provisioningStatus  | pending
+subscriptionStatus  | none
+entitlementOverride | f
+businessHours       | 
+
+----- Principal -----
+-[ RECORD 1 ]--+-----------------------------------------------
+id             | principal_e85f5ccc-61ee-48fa-8b1d-f4a87dc083f9
+type           | user
+name           | audit-pilot@example.com
+organizationId | org_4f796695-7022-4718-838f-71c50b879ad2
+roles          | {operator,admin,approver}
+
+----- DashboardUser -----
+-[ RECORD 1 ]--+-----------------------------------------------
+id             | db7b1725-ec28-48ad-ad9a-c0b6d4183ca7
+email          | audit-pilot@example.com
+emailVerified  | 2026-06-07 15:04:31.996
+organizationId | org_4f796695-7022-4718-838f-71c50b879ad2
+principalId    | principal_e85f5ccc-61ee-48fa-8b1d-f4a87dc083f9
+
+----- IdentitySpec -----
+                    id                     |                  principalId                   |              organizationId              |               name               
+-------------------------------------------+------------------------------------------------+------------------------------------------+----------------------------------
+ spec_c55989cb-90fd-44ac-8ec8-14864a768931 | principal_e85f5ccc-61ee-48fa-8b1d-f4a87dc083f9 | org_4f796695-7022-4718-838f-71c50b879ad2 | audit-pilot@example.com Identity
+(1 row)
+
+----- OrgAgentEnablement -----
+                  orgId                   | agentKey | status  
+------------------------------------------+----------+---------
+ org_4f796695-7022-4718-838f-71c50b879ad2 | riley    | enabled
+ org_4f796695-7022-4718-838f-71c50b879ad2 | alex     | enabled
+(2 rows)
+
+----- AgentDeployment (PRE lazy read) -----
+ id | organizationId | listingId | status | skillSlug 
+----+----------------+-----------+--------+-----------
+(0 rows)
+

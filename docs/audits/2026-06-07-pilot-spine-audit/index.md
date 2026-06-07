@@ -19,35 +19,35 @@ PASS / FAIL / STUB / NO-OP / MISSING.
 One row per journey step. `verdict` ∈ PASS / FAIL / STUB / NO-OP / MISSING / (blank = not yet run).
 `artifact` links the evidence file under `evidence/`.
 
-| step  | description | verdict | artifact |
-| ----- | ----------- | ------- | -------- |
-| J1-S1 |             |         |          |
-| J1-S2 |             |         |          |
-| J1-S3 |             |         |          |
-| J1-S4 |             |         |          |
-| J2-S1 |             |         |          |
-| J2-S2 |             |         |          |
-| J2-S3 |             |         |          |
-| J2-S4 |             |         |          |
-| J3-S1 |             |         |          |
-| J3-S2 |             |         |          |
-| J3-S3 |             |         |          |
-| J3-S4 |             |         |          |
-| J3-S5 |             |         |          |
-| J3-S6 |             |         |          |
-| J4-S1 |             |         |          |
-| J4-S2 |             |         |          |
-| J4-S3 |             |         |          |
-| J5-S1 |             |         |          |
-| J5-S2 |             |         |          |
-| J5-S3 |             |         |          |
-| J6-S1 |             |         |          |
-| J6-S2 |             |         |          |
-| J6-S3 |             |         |          |
-| J7-S1 |             |         |          |
-| J7-S2 |             |         |          |
-| J7-S3 |             |         |          |
-| J7-S4 |             |         |          |
+| step  | description                                                                                                                                        | verdict                                                                                       | artifact                                                            |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| J1-S1 | Self-serve signup (`POST /api/auth/register`) provisions a fresh org                                                                               | PASS                                                                                          | `evidence/j1-register-response.json`                                |
+| J1-S2 | Provisioned rows for the fresh org (OrgConfig, Principal, DashboardUser, IdentitySpec, OrgAgentEnablement×2); Alex `AgentDeployment` absent (lazy) | PASS (rows created) / STUB (AgentDeployment lazy, unreachable while login broken — F-09)      | `evidence/j1-db-rows.txt`                                           |
+| J1-S3 | Login with auth ON                                                                                                                                 | FAIL — Auth.js v5 `UntrustedHost`/500 under local-prod posture; auto-rescued on Vercel (F-09) | `evidence/j1-login-blocked.png`, `evidence/j1-login-auth-error.txt` |
+| J1-S4 | Fresh org reaches a working state with zero founder intervention                                                                                   | FAIL — unentitled (F-02) + no `businessHours`/calendar (F-01) + login blocked locally (F-09)  | `evidence/j1-db-rows.txt`                                           |
+| J2-S1 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J2-S2 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J2-S3 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J2-S4 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J3-S1 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J3-S2 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J3-S3 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J3-S4 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J3-S5 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J3-S6 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J4-S1 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J4-S2 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J4-S3 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J5-S1 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J5-S2 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J5-S3 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J6-S1 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J6-S2 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J6-S3 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J7-S1 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J7-S2 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J7-S3 |                                                                                                                                                    |                                                                                               |                                                                     |
+| J7-S4 |                                                                                                                                                    |                                                                                               |                                                                     |
 
 ---
 
@@ -118,6 +118,7 @@ depends on an incidental config-read for deployment creation rather than an expl
 - [F-01](findings/F-01-business-hours-no-producer.md) — `OrganizationConfig.businessHours` has no product writer; fresh orgs get NoopCalendarProvider (bookings disabled).
 - [F-02](findings/F-02-fresh-org-entitlement-blocked.md) — fresh org is `entitled:false`; every mutating action 402s and no producer entitles it (Stripe off, no signup trial/override).
 - [F-05](findings/F-05-launch-mode-divergent-default.md) — `NEXT_PUBLIC_LAUNCH_MODE` code-unset default is `waitlist` (403 signup) while `.env.example` says `public`; blocks signup if the prod env var is unset.
+- [F-09](findings/F-09-login-untrusted-host-local-prod.md) — login BROKEN under local/non-Vercel production build: Auth.js v5 `UntrustedHost` (500 on every auth endpoint) because `authConfig` never sets `trustHost` and the repo uses legacy `NEXTAUTH_*` env names; auto-rescued on Vercel via the platform-injected `VERCEL` env. Exercised + reproduced (J1-S3).
 
 ### Embarrasses pilot
 
@@ -140,4 +141,9 @@ _(none from this pass)_
 
 Record any deviation from the plan/spec made during execution, with rationale.
 
-_(none yet)_
+- **D-01 (J1):** login could not be exercised through the live UI — auth is BROKEN under the
+  production posture (F-09 `UntrustedHost`). An isolated second dashboard instance with
+  `AUTH_TRUST_HOST=true` (to simulate Vercel's auto-trust and capture the authed screenshot +
+  exercise the post-login lazy `AgentDeployment` chain) was attempted but blocked by the
+  environment safety classifier; not forced. No manual DB writes were made — the fresh org and
+  all child rows came solely from the live signup route. Full detail: `evidence/deviations.md`.
