@@ -241,11 +241,21 @@ export function buildRileyPauseExecutionWorkflow(deps: RileyPauseExecutionDeps):
           executedAt,
         });
         recommendationTransition = transition.transitioned ? "acted" : transition.reason;
+        if (recommendationTransition === "not_found") {
+          // not_pending is the benign first-writer-won race and stays
+          // silent; not_found after a SUCCESSFUL Meta write is suspicious
+          // (stale/deleted/cross-org/bad recommendation id) and deserves a
+          // searchable signal without failing the work unit.
+          console.warn(
+            `[riley-pause] recommendation not found after successful pause org=${workUnit.organizationId} rec=${input.recommendationId} workUnit=${workUnit.id}`,
+          );
+        }
       } catch (err) {
         // LOUD: "Meta paused but attribution linkage failed" must be
         // discoverable/alertable, never just trace-archaeology. The benign
-        // not_pending/not_found legs above are expected product behavior
-        // (first writer won) and are deliberately not error-logged.
+        // not_pending leg above is expected product behavior (first writer
+        // won) and stays silent; not_found is warn-logged above (suspicious,
+        // never fatal).
         recommendationTransition = "error";
         console.error(
           `[riley-pause] failed to mark recommendation acted org=${workUnit.organizationId} rec=${input.recommendationId} workUnit=${workUnit.id}: ${err instanceof Error ? err.message : String(err)}`,

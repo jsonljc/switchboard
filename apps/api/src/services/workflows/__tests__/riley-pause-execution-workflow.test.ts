@@ -283,34 +283,54 @@ describe("slice 4f: recommendation transition on the truthful success leg ONLY",
     expect(call.executedAt).toEqual(NOW); // NOT requestedAt
   });
 
-  it("a benign lost race (not_pending) preserves the success result and records it", async () => {
-    const h = harness({
-      markRecommendationActed: vi.fn(async (_args: { recommendationId: string }) => ({
-        transitioned: false as const,
-        reason: "not_pending" as const,
-      })),
-    });
-    const handler = buildRileyPauseExecutionWorkflow(h.deps);
-    const result = await handler.execute(workUnit(), services);
-    expect(result.outcome).toBe("completed");
-    expect(result.outputs).toMatchObject({
-      paused: true,
-      metaWriteAccepted: true,
-      recommendationTransition: "not_pending",
-    });
+  it("a benign lost race (not_pending) preserves the success result and records it, silently", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const h = harness({
+        markRecommendationActed: vi.fn(async (_args: { recommendationId: string }) => ({
+          transitioned: false as const,
+          reason: "not_pending" as const,
+        })),
+      });
+      const handler = buildRileyPauseExecutionWorkflow(h.deps);
+      const result = await handler.execute(workUnit(), services);
+      expect(result.outcome).toBe("completed");
+      expect(result.outputs).toMatchObject({
+        paused: true,
+        metaWriteAccepted: true,
+        recommendationTransition: "not_pending",
+      });
+      // First writer won: expected product behavior, no log noise.
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
-  it("records not_found DISTINCTLY from not_pending", async () => {
-    const h = harness({
-      markRecommendationActed: vi.fn(async (_args: { recommendationId: string }) => ({
-        transitioned: false as const,
-        reason: "not_found" as const,
-      })),
-    });
-    const handler = buildRileyPauseExecutionWorkflow(h.deps);
-    const result = await handler.execute(workUnit(), services);
-    expect(result.outcome).toBe("completed");
-    expect(result.outputs).toMatchObject({ recommendationTransition: "not_found" });
+  it("records not_found DISTINCTLY from not_pending and warns (suspicious after a successful write)", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const h = harness({
+        markRecommendationActed: vi.fn(async (_args: { recommendationId: string }) => ({
+          transitioned: false as const,
+          reason: "not_found" as const,
+        })),
+      });
+      const handler = buildRileyPauseExecutionWorkflow(h.deps);
+      const result = await handler.execute(workUnit(), services);
+      expect(result.outcome).toBe("completed");
+      expect(result.outputs).toMatchObject({ recommendationTransition: "not_found" });
+      // not_pending = benign first-writer-won; not_found after a SUCCESSFUL
+      // Meta pause means stale/deleted/cross-org/bad recommendation id and
+      // must be searchable without failing the work unit.
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const line = String(warnSpy.mock.calls[0]![0]);
+      expect(line).toContain("[riley-pause] recommendation not found after successful pause");
+      expect(line).toContain("rec_1");
+      expect(line).toContain("wu_pause_1");
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it("a thrown transition error never fails the work unit, and is LOUD (greppable console.error)", async () => {
