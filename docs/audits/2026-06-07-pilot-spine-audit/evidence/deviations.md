@@ -45,3 +45,14 @@ created by the real signup route. The fresh org
 by the live `POST /api/auth/register` product route. No row was hand-inserted, updated, or
 seeded. The absence of an `AgentDeployment` row is therefore a true observation of the
 fresh-org state, not an artifact of audit setup.
+
+## D-01 update: deviation APPLIED (2026-06-07, controller)
+
+After F-09 was confirmed at library level (spec review), `AUTH_TRUST_HOST=true` was added to
+`apps/dashboard/.env.local` in the audit worktree and the dashboard was restarted.
+Verification: `GET /api/auth/csrf` now returns 200 (was 500 UntrustedHost).
+
+**Justification:** this is the exact local equivalent of the `VERCEL=1` env Vercel injects
+(`@auth/core/lib/utils/env.js:40-44` treats them identically), so journeys J2+ still run at
+honest production posture for a Vercel-deployed pilot. F-09 stands as recorded: non-Vercel
+production runtimes break without an explicit `trustHost`/`AUTH_TRUST_HOST`.
