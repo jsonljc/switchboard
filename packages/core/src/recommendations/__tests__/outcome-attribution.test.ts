@@ -538,7 +538,7 @@ describe("runRileyOutcomeAttribution: operational-state reader threading (slice 
     return { recommendationStore, outcomeStore, insightsProvider, inserted };
   }
 
-  it("queries the reader with the FULL attribution window and threads the verdict into the inserted row", async () => {
+  it("queries the reader from window start through the attribution moment and threads the verdict into the inserted row", async () => {
     const { recommendationStore, outcomeStore, insightsProvider, inserted } = makeOrchestratorDeps([
       REC,
     ]);
@@ -557,12 +557,13 @@ describe("runRileyOutcomeAttribution: operational-state reader threading (slice 
       now: new Date("2026-05-10T12:00:00Z"),
     });
 
-    // The read is the 4a contract verbatim: (org, windowStartedAt, windowEndedAt),
-    // the full pre+post span (anchor ± windowDays).
+    // The read spans (windowStartedAt, now]: the 4a span-parametric contract
+    // with the slice-4e late horizon, so confirmations recorded after the
+    // window closed are admissible as disruption-only evidence.
     expect(reader.getConfirmationsOverlappingWindow).toHaveBeenCalledWith(
       "org-1",
       new Date("2026-04-24T12:00:00Z"),
-      new Date("2026-05-08T12:00:00Z"),
+      new Date("2026-05-10T12:00:00Z"),
     );
     expect(inserted).toHaveLength(1);
     expect(inserted[0]?.businessContextStable).toBe("stable");

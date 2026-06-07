@@ -23,6 +23,15 @@ import type { BusinessContextStability } from "./outcome-attribution-types.js";
  * endExclusive at postEnd, so the verdict covers exactly the measured
  * pre/post span.
  *
+ * Since slice 4e the input may ALSO contain confirmations recorded after
+ * windowEndedAt (the orchestrator widens the read's end bound to the
+ * attribution moment). Such late rows are bucketed out internally and admit
+ * DISRUPTION-ONLY evidence through their dated promo/closure intervals:
+ * geometry alone, never scalars, never the declaration-change detector,
+ * never certification. The asymmetry is structural, not policed:
+ * certification reads only the governing row, and a late row can never
+ * govern (governing requires confirmedAt <= windowStartedAt).
+ *
  * The verdict applies the DIFFERENCING principle: a pre/post delta is
  * comparable when the context did not CHANGE across the window. A condition
  * constant across the whole window (a promo running throughout, a staffing
@@ -52,7 +61,12 @@ import type { BusinessContextStability } from "./outcome-attribution-types.js";
  *   fabricated "stable").
  */
 export interface DeriveBusinessContextStabilityInput {
-  /** Confirmations overlapping the window (governing + in-window, oldest first). */
+  /**
+   * Confirmations overlapping the window (governing + in-window, oldest
+   * first) plus, since slice 4e, any rows recorded after windowEndedAt that
+   * exist at attribution time (the widened orchestrator read). Bucketing is
+   * internal; late rows contribute dated-interval disruption evidence only.
+   */
   confirmations: OperationalStateConfirmation[];
   windowStartedAt: Date;
   windowEndedAt: Date;
@@ -131,6 +145,34 @@ function overlappingSubsetKey(
     .join(",");
 }
 
+/**
+ * Interval-geometry disruption rules, shared verbatim by the
+ * governing/in-window walk and the slice-4e late pass so the two can never
+ * drift:
+ * - a closure interval overlapping the window disrupts (the closure
+ *   carve-out has no covers-exemption: a closed business transacts nothing,
+ *   so constancy does not rescue it);
+ * - a promo interval overlapping but NOT covering the window disrupts
+ *   (partial overlap breaks pre/post comparability), while a promo covering
+ *   the ENTIRE window is constant background that differences out;
+ * - an interval with unparseable bounds disrupts (fail-safe toward
+ *   "unstable", never toward fabricated stability; see hasParseableBounds).
+ */
+function declaredIntervalsDisrupt(state: OperationalState, wsMs: number, weMs: number): boolean {
+  for (const closure of state.closures ?? []) {
+    if (!hasParseableBounds(closure) || overlapsWindow(closure, wsMs, weMs)) return true;
+  }
+  for (const promo of state.promoWindows ?? []) {
+    if (
+      !hasParseableBounds(promo) ||
+      (overlapsWindow(promo, wsMs, weMs) && !coversWindow(promo, wsMs, weMs))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function deriveBusinessContextStability(
   input: DeriveBusinessContextStabilityInput,
 ): BusinessContextStability {
@@ -158,38 +200,36 @@ export function deriveBusinessContextStability(
   // STORE contract (governing at-or-before windowStart; in-window rows in
   // (windowStart, windowEnd]), which governs which ROWS are candidates;
   // interval geometry against the measured half-open span lives in the
-  // helpers above.
+  // helpers above. A NaN confirmedAt compares false against every bound and
+  // lands in NO bucket (ignored): unreachable from the store (malformed rows
+  // already degrade to absence) and deliberate for direct callers; the
+  // fail-toward-unstable rule (hasParseableBounds) covers garbage DECLARED
+  // interval bounds, not the bucketing axis.
   const atOrBefore = sorted.filter((c) => c.confirmedAt.getTime() <= wsMs);
   const governing = atOrBefore.at(-1) ?? null;
   const inWindow = sorted.filter((c) => {
     const t = c.confirmedAt.getTime();
     return t > wsMs && t <= weMs;
   });
+  // Slice 4e: rows recorded after the window closed, STRICTLY after
+  // windowEndedAt (a row AT windowEndedAt is an in-window row, the shipped
+  // 4c bucketing; the buckets partition with no gap and no double-count).
+  // Processed by the late pass below only: never walked, never governing.
+  const late = sorted.filter((c) => c.confirmedAt.getTime() > weMs);
   const ordered = [...(governing ? [governing] : []), ...inWindow];
 
   let disrupted = false;
 
   for (const c of ordered) {
-    // 1. Closure carve-out. Every row in the walked set has derived validity
-    //    overlapping the window (governing row or in-window row), so any
-    //    temporarily_closed declaration was in force over part of it; a
-    //    closure interval is checked against its own operator-declared
-    //    bounds (it may lie entirely outside the window).
+    // 1. Closure carve-out, scalar leg. Every row in the walked set has
+    //    derived validity overlapping the window (governing row or in-window
+    //    row), so any temporarily_closed declaration was in force over part
+    //    of it.
     if (c.state.operatingStatus === "temporarily_closed") disrupted = true;
-    for (const closure of c.state.closures ?? []) {
-      if (!hasParseableBounds(closure) || overlapsWindow(closure, wsMs, weMs)) disrupted = true;
-    }
-    // 2. Promo comparability: overlapping the window is fine ONLY when the
-    //    promo covers the ENTIRE window (running throughout pre and post);
-    //    starting or ending inside it breaks the delta.
-    for (const promo of c.state.promoWindows ?? []) {
-      if (
-        !hasParseableBounds(promo) ||
-        (overlapsWindow(promo, wsMs, weMs) && !coversWindow(promo, wsMs, weMs))
-      ) {
-        disrupted = true;
-      }
-    }
+    // 2. Declared-interval geometry (closure overlap always disrupts; a
+    //    promo disrupts unless it covers the ENTIRE window), shared verbatim
+    //    with the slice-4e late pass below so the two can never drift.
+    if (declaredIntervalsDisrupt(c.state, wsMs, weMs)) disrupted = true;
   }
 
   // 3. Mid-window regime changes. Walk declarations in order; a dimension
@@ -221,9 +261,26 @@ export function deriveBusinessContextStability(
     }
   }
 
+  // 4. Late-interval retroactive evidence (slice 4e). A confirmation
+  //    recorded AFTER windowEnd has zero validity overlap with the window,
+  //    but its promoWindows/closures are operator-DATED facts whose spans
+  //    may reach back into the measured window ("promo ran June 1-7",
+  //    confirmed June 16; attribution runs >= 24h after windowEnd, so late
+  //    rows exist for every live candidate). Admission is geometry-only and
+  //    disruption-only: scalars are never read (they describe the regime
+  //    from confirmedAt forward, and backward reach from an undated scalar
+  //    is the forbidden retroactive transition inference); the
+  //    declaration-change detector never runs here (a late declaration
+  //    change happened after the window, not inside it); certification
+  //    below reads only the governing row. Late evidence can therefore flip
+  //    unknown -> unstable and stable -> unstable, never the reverse.
+  for (const c of late) {
+    if (declaredIntervalsDisrupt(c.state, wsMs, weMs)) disrupted = true;
+  }
+
   if (disrupted) return "unstable";
 
-  // 4. Affirmative certification: the window must have OPENED under fresh,
+  // 5. Affirmative certification: the window must have OPENED under fresh,
   //    complete, confirmed knowledge. No governing row (the window's start
   //    is uncovered), a stale governing row, or unconfirmed dimensions leave
   //    the verdict "unknown": honest absence, never fabricated stability.
