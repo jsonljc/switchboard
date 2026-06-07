@@ -200,7 +200,11 @@ export function deriveBusinessContextStability(
   // STORE contract (governing at-or-before windowStart; in-window rows in
   // (windowStart, windowEnd]), which governs which ROWS are candidates;
   // interval geometry against the measured half-open span lives in the
-  // helpers above.
+  // helpers above. A NaN confirmedAt compares false against every bound and
+  // lands in NO bucket (ignored): unreachable from the store (malformed rows
+  // already degrade to absence) and deliberate for direct callers; the
+  // fail-toward-unstable rule (hasParseableBounds) covers garbage DECLARED
+  // interval bounds, not the bucketing axis.
   const atOrBefore = sorted.filter((c) => c.confirmedAt.getTime() <= wsMs);
   const governing = atOrBefore.at(-1) ?? null;
   const inWindow = sorted.filter((c) => {
