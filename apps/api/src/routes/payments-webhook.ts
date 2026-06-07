@@ -78,13 +78,40 @@ export const paymentsWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send({ received: true, skipped: true, reason: "charge_not_found" });
     }
 
+    // A charge with no PSP-metadata booking linkage cannot be attributed to a
+    // contact or opportunity. 200-skip so redeliveries don't error-storm (never 500).
+    if (!charge.bookingId) {
+      app.log.warn({ chargeId }, "Charge carries no bookingId in metadata; skipping");
+      return reply.code(200).send({ received: true, skipped: true, reason: "no_booking_linkage" });
+    }
+
+    // Server-side booking lookup to resolve contact/opportunity. The booking
+    // row is the authoritative join — never read contactId/opportunityId from
+    // the webhook body (forgeable) or the charge metadata (not stored there).
+    const booking = app.prisma
+      ? await app.prisma.booking.findFirst({
+          where: { id: charge.bookingId, organizationId },
+          select: { contactId: true, opportunityId: true },
+        })
+      : null;
+    if (!booking || !booking.contactId || !booking.opportunityId) {
+      app.log.warn({ bookingId: charge.bookingId }, "Booking not resolvable for payment; skipping");
+      return reply
+        .code(200)
+        .send({ received: true, skipped: true, reason: "booking_not_resolvable" });
+    }
+
     // Submit the verified writer through ingress. idempotencyKey from the provider
     // message id => a replay is deduped at PlatformIngress (platform-ingress.ts).
     // The amount is the RE-FETCHED amountCents; provider is carried so the 1A-4b
-    // handler can degrade a Noop provider (R1).
+    // handler can degrade a Noop provider (R1). contactId/opportunityId/bookingId
+    // are resolved server-side from the Booking row (never from the body).
     const result = await app.platformIngress.submit({
       intent: "payment.record_verified",
       parameters: {
+        contactId: booking.contactId,
+        opportunityId: booking.opportunityId,
+        bookingId: charge.bookingId,
         externalReference: charge.externalReference,
         amountCents: charge.amountCents,
         currency: charge.currency,
