@@ -130,7 +130,10 @@ export function buildPauseLifecycleWorld(opts?: {
     markActedByExecution: async (args) => {
       if (
         args.id !== recommendationRow.id ||
-        args.organizationId !== recommendationRow.organizationId
+        args.organizationId !== recommendationRow.organizationId ||
+        // Mirror the real method's recommendation-intent guard (fidelity:
+        // the db method refuses workflow rows sharing the table).
+        !recommendationRow.intent.startsWith("recommendation.")
       ) {
         return { transitioned: false, reason: "not_found" };
       }
