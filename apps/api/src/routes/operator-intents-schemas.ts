@@ -86,7 +86,7 @@ export const RecordRevenueParametersSchema = z.object({
   amount: z.number().positive(),
   currency: z.string().length(3).default("SGD"),
   type: z.enum(["payment", "deposit", "invoice", "refund"]).default("payment"),
-  recordedBy: z.enum(["owner", "staff", "stripe", "integration"]).default("owner"),
+  recordedBy: z.enum(["owner", "staff"]).default("owner"),
   externalReference: z.string().nullable().optional(),
   sourceCampaignId: z.string().nullable().optional(),
   sourceAdId: z.string().nullable().optional(),

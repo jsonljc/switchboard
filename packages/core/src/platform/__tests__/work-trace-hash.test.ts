@@ -40,7 +40,7 @@ describe("work-trace-hash", () => {
     expect(WORK_TRACE_HASH_VERSION).toBe(WORK_TRACE_HASH_VERSION_LATEST);
   });
 
-  it("v1 excluded set excludes contentHash, traceVersion, lockedAt, ingressPath, hashInputVersion, injectedPatternIds", () => {
+  it("v1 excluded set excludes contentHash, traceVersion, lockedAt, ingressPath, hashInputVersion, injectedPatternIds, contactId, conversationThreadId", () => {
     expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V1).toEqual(
       expect.arrayContaining([
         "contentHash",
@@ -49,12 +49,14 @@ describe("work-trace-hash", () => {
         "ingressPath",
         "hashInputVersion",
         "injectedPatternIds",
+        "contactId",
+        "conversationThreadId",
       ]),
     );
-    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V1.length).toBe(6);
+    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V1.length).toBe(8);
   });
 
-  it("v2 excluded set excludes contentHash, traceVersion, lockedAt, hashInputVersion, injectedPatternIds (NOT ingressPath)", () => {
+  it("v2 excluded set excludes contentHash, traceVersion, lockedAt, hashInputVersion, injectedPatternIds, contactId, conversationThreadId (NOT ingressPath)", () => {
     expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2).toEqual(
       expect.arrayContaining([
         "contentHash",
@@ -62,15 +64,47 @@ describe("work-trace-hash", () => {
         "lockedAt",
         "hashInputVersion",
         "injectedPatternIds",
+        "contactId",
+        "conversationThreadId",
       ]),
     );
     expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2).not.toContain("ingressPath");
-    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2.length).toBe(5);
+    expect(WORK_TRACE_HASH_EXCLUDED_FIELDS_V2.length).toBe(7);
   });
 
   it("changing injectedPatternIds does not change the hash (excluded — analytics-only)", () => {
     const a = baseTrace({ injectedPatternIds: ["pat_a"] });
     const b = baseTrace({ injectedPatternIds: ["pat_b", "pat_c"] });
+    expect(computeWorkTraceContentHash(a, 1)).toBe(computeWorkTraceContentHash(b, 1));
+  });
+
+  it("changing WorkTrace.contactId does not change the hash (lineage column — excluded)", () => {
+    const a = baseTrace({ contactId: "ct_a" });
+    const b = baseTrace({ contactId: "ct_b" });
+    expect(computeWorkTraceContentHash(a, 1)).toBe(computeWorkTraceContentHash(b, 1));
+  });
+
+  it("changing WorkTrace.conversationThreadId does not change the hash (lineage column — excluded)", () => {
+    const a = baseTrace({ conversationThreadId: "thr_a" });
+    const b = baseTrace({ conversationThreadId: "thr_b" });
+    expect(computeWorkTraceContentHash(a, 1)).toBe(computeWorkTraceContentHash(b, 1));
+  });
+
+  it("a trace WITH the lineage columns hashes identical to the same trace WITHOUT them", () => {
+    const without = baseTrace();
+    const with_ = baseTrace({ contactId: "ct_1", conversationThreadId: "thr_1" });
+    expect(computeWorkTraceContentHash(with_, 1)).toBe(computeWorkTraceContentHash(without, 1));
+  });
+
+  it("changing parameters.contactId (trusted execution bag) DOES change the hash", () => {
+    const a = baseTrace({ parameters: { contactId: "ct_a" } });
+    const b = baseTrace({ parameters: { contactId: "ct_b" } });
+    expect(computeWorkTraceContentHash(a, 1)).not.toBe(computeWorkTraceContentHash(b, 1));
+  });
+
+  it("lineage column differs but trusted-bag contactId equal → hash unchanged", () => {
+    const a = baseTrace({ contactId: "lineage_a", parameters: { contactId: "ct_same" } });
+    const b = baseTrace({ contactId: "lineage_b", parameters: { contactId: "ct_same" } });
     expect(computeWorkTraceContentHash(a, 1)).toBe(computeWorkTraceContentHash(b, 1));
   });
 

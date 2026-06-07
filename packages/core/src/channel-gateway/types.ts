@@ -183,6 +183,10 @@ export interface GatewayConversationStore {
     deploymentId: string,
     channel: string,
     sessionId: string,
+    /** Spec-1A chain weld: resolved identity used to key the thread. When
+     *  omitted, or when contactId is null, the store falls back to the
+     *  legacy visitor-/gateway literals (no resolvable contact). */
+    identity?: { organizationId: string; contactId: string | null },
   ): Promise<{
     conversationId: string;
     messages: Array<{ role: string; content: string }>;
@@ -203,6 +207,13 @@ export interface IncomingChannelMessage {
    */
   principalId?: string;
   text: string;
+  /**
+   * Stable provider message id (WhatsApp wamid, Telegram message_id). When the
+   * adapter supplies it, the gateway derives the ingress idempotencyKey from it
+   * so a redelivered webhook dedups at PlatformIngress.submit (org-scoped trace
+   * lookup). Omit when the provider gives no stable id.
+   */
+  providerMessageId?: string;
   visitor?: { name?: string; email?: string };
 }
 

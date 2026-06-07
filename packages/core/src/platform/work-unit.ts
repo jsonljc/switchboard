@@ -23,6 +23,8 @@ export interface WorkUnit {
   traceId: string;
   trigger: Trigger;
   priority: Priority;
+  contactId?: string;
+  conversationThreadId?: string;
 }
 
 export function normalizeWorkUnit(
@@ -44,5 +46,7 @@ export function normalizeWorkUnit(
     traceId: request.traceId ?? createId(),
     trigger: request.trigger,
     priority: request.priority ?? "normal",
+    contactId: request.contactId,
+    conversationThreadId: request.conversationThreadId,
   };
 }

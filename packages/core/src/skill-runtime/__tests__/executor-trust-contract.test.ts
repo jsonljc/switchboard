@@ -113,6 +113,8 @@ describe("Executor + factory trust contract (AI-1)", () => {
       failureHandler: { handle: vi.fn() } as never,
       contactStore: { findById: vi.fn().mockResolvedValue(null) } as never,
       defaultCurrency: "SGD",
+      receiptTierForProvider: () => "T1_FETCH_BACK",
+      isProduction: false,
     });
 
     const adapter = makeAdapter([

@@ -30,6 +30,12 @@ export interface CanonicalSubmitRequest {
   priority?: "low" | "normal" | "high";
   targetHint?: TargetHint;
   suggestedMode?: ExecutionModeName;
+  /** Spec-1A chain weld: resolved Contact for this submit (lineage column on
+   *  WorkTrace). Server-resolved, never LLM-supplied. */
+  contactId?: string;
+  /** Spec-1A chain weld: resolved ConversationThread for this submit (lineage
+   *  column on WorkTrace). Server-resolved at submit. */
+  conversationThreadId?: string;
 }
 
 export interface AuthoritativeDeploymentResolver {

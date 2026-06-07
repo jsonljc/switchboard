@@ -23,6 +23,7 @@ function makeContact(overrides: Record<string, unknown> = {}) {
     organizationId: "org-1",
     name: "John Doe",
     phone: "+6591234567",
+    phoneE164: "+6591234567",
     email: "john@example.com",
     primaryChannel: "whatsapp",
     firstTouchChannel: "facebook",
@@ -226,10 +227,7 @@ describe("PrismaContactStore", () => {
 
       expect(result).toBeNull();
       expect(prisma.contact.findFirst).toHaveBeenCalledWith({
-        where: {
-          organizationId: "org-1",
-          phone: "+6599999999",
-        },
+        where: { organizationId: "org-1", phoneE164: "+6599999999" },
       });
     });
 

@@ -116,6 +116,8 @@ export function buildWorkTrace(input: TraceInput): WorkTrace {
     completedAt,
     ingressPath: input.ingressPath ?? "platform_ingress",
     hashInputVersion: WORK_TRACE_HASH_VERSION_LATEST,
+    contactId: workUnit.contactId,
+    conversationThreadId: workUnit.conversationThreadId,
   };
 }
 
@@ -167,5 +169,7 @@ export function buildClaimTrace(input: ClaimTraceInput): WorkTrace {
     executionStartedAt: input.executionStartedAt,
     ingressPath: "platform_ingress",
     hashInputVersion: WORK_TRACE_HASH_VERSION_LATEST,
+    contactId: workUnit.contactId,
+    conversationThreadId: workUnit.conversationThreadId,
   };
 }

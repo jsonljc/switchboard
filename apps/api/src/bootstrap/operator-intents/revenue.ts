@@ -44,6 +44,7 @@ export function buildRecordRevenueHandler(
             currency: params.currency,
             type: params.type,
             recordedBy: params.recordedBy,
+            verified: false,
             externalReference: params.externalReference ?? null,
             sourceCampaignId: params.sourceCampaignId ?? null,
             sourceAdId: params.sourceAdId ?? null,

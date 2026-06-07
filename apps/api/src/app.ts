@@ -554,6 +554,15 @@ export async function buildServer() {
     app.decorate("orgAgentEnablementStore", orgAgentEnablementStore);
   }
 
+  // Per-org PaymentPort factory — selects the Stripe Connect adapter when the org
+  // has a connected 'stripe' Connection with full Connect creds; falls back to the
+  // Noop adapter (DEGRADED) otherwise. Fail-closed: never uses a global env secret.
+  // The /api/webhooks/payments/webhook route 503s when this is missing.
+  if (prismaClient) {
+    const { createPaymentPortFactory } = await import("./bootstrap/payment-port-factory.js");
+    app.decorate("paymentPortFactory", createPaymentPortFactory({ prismaClient, logger: app.log }));
+  }
+
   // Report cache store + report projection stores for /api/dashboard/reports
   if (prismaClient) {
     const {
@@ -780,7 +789,9 @@ export async function buildServer() {
   if (prismaClient) {
     const { bootstrapOperatorIntents } = await import("./bootstrap/operator-intents.js");
     const { PrismaOutboxStore } = await import("@switchboard/db");
+    const { PrismaReceiptStore } = await import("@switchboard/db");
     const prismaOutbox = new PrismaOutboxStore(prismaClient);
+    const prismaReceipts = new PrismaReceiptStore(prismaClient);
     bootstrapOperatorIntents({
       intentRegistry,
       modeRegistry,
@@ -794,6 +805,9 @@ export async function buildServer() {
           prismaOutbox.write(eventId, type, payload, tx as never).then(() => {}),
       },
       runInTransaction: (fn) => prismaClient.$transaction((tx) => fn(tx)),
+      receiptWriter: {
+        write: (input, tx) => prismaReceipts.mint(input, tx as never).then(() => {}),
+      },
       logger: app.log,
     });
   }

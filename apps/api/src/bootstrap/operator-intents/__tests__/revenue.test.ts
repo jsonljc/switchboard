@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { StoreTransactionContext } from "@switchboard/core";
 import { buildRecordRevenueHandler } from "../revenue.js";
+import { RecordRevenueParametersSchema } from "../../../routes/operator-intents-schemas.js";
 
 // Sentinel transaction context — a unique object reference used to prove
 // that both store calls receive the exact same tx handle.
@@ -154,6 +155,29 @@ describe("buildRecordRevenueHandler", () => {
     expect(result.outputs?.event).toEqual(event);
   });
 
+  it("forces verified:false — only the PSP fetch-back path may set verified=true", async () => {
+    const revenueStore = {
+      record: vi.fn().mockResolvedValue({ id: "rev_1", amount: 100, currency: "SGD" }),
+    };
+    const outboxWriter = { write: vi.fn().mockResolvedValue(undefined) };
+    const handler = buildRecordRevenueHandler(revenueStore as never, outboxWriter, sentinelRunner);
+    await handler.execute({
+      organizationId: "org_a",
+      actor: { id: "u1", type: "user" },
+      parameters: {
+        contactId: "c1",
+        amount: 100,
+        currency: "SGD",
+        type: "payment",
+        recordedBy: "owner",
+      },
+    } as never);
+    expect(revenueStore.record).toHaveBeenCalledWith(
+      expect.objectContaining({ verified: false }),
+      SENTINEL_TX,
+    );
+  });
+
   it("passes the supplied opportunityId through to store and outbox unchanged", async () => {
     const event = { id: "rev_2", amount: 250, currency: "USD" };
     const revenueStore = { record: vi.fn().mockResolvedValue(event) };
@@ -198,5 +222,34 @@ describe("buildRecordRevenueHandler", () => {
     );
     expect(result.outcome).toBe("completed");
     expect(result.outputs?.event).toEqual(event);
+  });
+});
+
+describe("RecordRevenueParametersSchema recordedBy narrowing", () => {
+  it("rejects stripe and integration (operator cannot self-assert a verified-looking source)", () => {
+    expect(
+      RecordRevenueParametersSchema.safeParse({
+        contactId: "c1",
+        amount: 100,
+        recordedBy: "stripe",
+      }).success,
+    ).toBe(false);
+    expect(
+      RecordRevenueParametersSchema.safeParse({
+        contactId: "c1",
+        amount: 100,
+        recordedBy: "integration",
+      }).success,
+    ).toBe(false);
+  });
+  it("accepts owner and staff", () => {
+    expect(
+      RecordRevenueParametersSchema.safeParse({ contactId: "c1", amount: 100, recordedBy: "owner" })
+        .success,
+    ).toBe(true);
+    expect(
+      RecordRevenueParametersSchema.safeParse({ contactId: "c1", amount: 100, recordedBy: "staff" })
+        .success,
+    ).toBe(true);
   });
 });

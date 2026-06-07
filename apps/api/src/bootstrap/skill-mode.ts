@@ -17,6 +17,7 @@ import type {
 import type { ConsentService, ContactConsentReader, PlaybookReader } from "@switchboard/core";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
 import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
+import { receiptTierForCalendarProvider } from "./receipt-tier.js";
 import { resolveModelRouter } from "./model-router-factory.js";
 
 export interface SkillModeBootstrapResult {
@@ -340,13 +341,21 @@ export async function bootstrapSkillMode(
             data: Record<string, unknown>;
           }): Promise<{ count: number }>;
         };
+        receipt: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
       }) => Promise<unknown>,
     ) =>
       prismaClient.$transaction((tx) =>
-        fn({ booking: tx.booking, outboxEvent: tx.outboxEvent, opportunity: tx.opportunity }),
+        fn({
+          booking: tx.booking,
+          outboxEvent: tx.outboxEvent,
+          opportunity: tx.opportunity,
+          receipt: tx.receipt,
+        }),
       ),
     failureHandler,
     defaultCurrency: "SGD",
+    receiptTierForProvider: receiptTierForCalendarProvider,
+    isProduction: process.env["NODE_ENV"] === "production",
   });
 
   const crmQueryFactory = createCrmQueryToolFactory(contactStore, activityStore);

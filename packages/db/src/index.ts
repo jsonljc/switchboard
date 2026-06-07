@@ -71,6 +71,7 @@ export type { ContactReader, ContactReaderRecord } from "./stores/prisma-contact
 export { PrismaOperatorChannelBindingStore } from "./stores/prisma-operator-channel-binding-store.js";
 export { PrismaOpportunityStore } from "./stores/prisma-opportunity-store.js";
 export { PrismaRevenueStore } from "./stores/prisma-revenue-store.js";
+export { PrismaReceiptStore } from "./stores/prisma-receipt-store.js";
 export { PrismaOwnerTaskStore } from "./stores/prisma-owner-task-store.js";
 export { PrismaListingStore } from "./stores/prisma-listing-store.js";
 export { PrismaDeploymentStore } from "./stores/prisma-deployment-store.js";

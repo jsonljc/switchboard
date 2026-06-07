@@ -45,6 +45,9 @@ function makeRunTransaction() {
       opportunity: {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
+      receipt: {
+        create: vi.fn().mockResolvedValue({ id: "rcpt_1" }),
+      },
     }),
   );
 }
@@ -110,6 +113,8 @@ describe("createCalendarBookToolFactory", () => {
       failureHandler: failureHandler as never,
       contactStore: contactStore as never,
       defaultCurrency: "SGD",
+      receiptTierForProvider: () => "T1_FETCH_BACK",
+      isProduction: false,
     });
     tool = factory({ ...TRUSTED_CTX, contactId: "ct_1" });
   });
@@ -327,6 +332,57 @@ describe("createCalendarBookToolFactory", () => {
     );
   });
 
+  it("mints a booked CalendarReceipt in the confirm transaction", async () => {
+    const receiptCreateSpy = vi.fn().mockResolvedValue({ id: "rcpt_1" });
+    let capturedTx: { receipt: { create: typeof receiptCreateSpy } } | undefined;
+    const capturingRunTx = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = {
+        booking: {
+          update: vi
+            .fn()
+            .mockResolvedValue({ id: "bk_1", status: "confirmed", calendarEventId: "gcal_1" }),
+        },
+        outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
+        opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        receipt: { create: receiptCreateSpy },
+      };
+      capturedTx = tx;
+      return fn(tx);
+    });
+    const t = createCalendarBookToolFactory({
+      calendarProviderFactory: calendarProviderFactory as never,
+      isCalendarProviderConfigured: isCalendarProviderConfigured as never,
+      bookingStore: bookingStore as never,
+      opportunityStore: opportunityStore as never,
+      runTransaction: capturingRunTx as never,
+      failureHandler: failureHandler as never,
+      contactStore: contactStore as never,
+      defaultCurrency: "SGD",
+      receiptTierForProvider: () => "T1_FETCH_BACK",
+      isProduction: false,
+    })({ ...TRUSTED_CTX, contactId: "ct_1" });
+    bookingStore.create.mockResolvedValue({ id: "bk_1" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+    calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+
+    const result = await t.operations["booking.create"]!.execute({
+      service: "botox",
+      slotStart: "2026-07-01T10:00:00Z",
+      slotEnd: "2026-07-01T11:00:00Z",
+      calendarId: "cal-1",
+    });
+
+    expect(result.status).toBe("success");
+    expect(capturedTx).toBeDefined();
+    expect(receiptCreateSpy).toHaveBeenCalledTimes(1);
+    const arg = receiptCreateSpy.mock.calls[0]![0] as {
+      data: { status: string; kind: string; tier: string };
+    };
+    expect(arg.data.status).toBe("booked");
+    expect(arg.data.kind).toBe("calendar");
+    expect(arg.data.tier).toBe("T1_FETCH_BACK");
+  });
+
   describe("booking.create opportunity stage advance", () => {
     // Build a tool whose runTransaction exposes the opportunity.updateMany spy
     // (asserts the monotonic stage-advance args / no-op) plus booking-counter
@@ -338,6 +394,7 @@ describe("createCalendarBookToolFactory", () => {
           booking: { update: vi.fn().mockResolvedValue({}) },
           outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
           opportunity: { updateMany: updateManySpy },
+          receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
         }),
       );
       bookingStore.create.mockResolvedValue({ id: "bk_1" });
@@ -356,6 +413,8 @@ describe("createCalendarBookToolFactory", () => {
         failureHandler: failureHandler as never,
         contactStore: contactStore as never,
         defaultCurrency: "SGD",
+        receiptTierForProvider: () => "T1_FETCH_BACK",
+        isProduction: false,
       })({ ...TRUSTED_CTX, contactId: "ct_1" });
       return { tool: t, updateManySpy, confirmedSpy, advancedSpy };
     }
@@ -431,6 +490,37 @@ describe("createCalendarBookToolFactory", () => {
         attendeeName: "Jane Tan",
         attendeeEmail: "jane@example.com",
       }),
+    );
+  });
+
+  it("booking.create passes ctx.workUnitId as workTraceId on the booking row", async () => {
+    const toolWithWu = factory({ ...TRUSTED_CTX, contactId: "ct_1", workUnitId: "wu_book_1" });
+    bookingStore.create.mockResolvedValue({ id: "bk_1" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+    calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+    await toolWithWu.operations["booking.create"]!.execute({
+      service: "botox",
+      slotStart: "2026-06-01T10:00:00Z",
+      slotEnd: "2026-06-01T10:30:00Z",
+      calendarId: "primary",
+    });
+    expect(bookingStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({ workTraceId: "wu_book_1" }),
+    );
+  });
+
+  it("booking.create passes workTraceId null when ctx.workUnitId is absent", async () => {
+    bookingStore.create.mockResolvedValue({ id: "bk_1" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+    calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+    await tool.operations["booking.create"]!.execute({
+      service: "botox",
+      slotStart: "2026-06-01T10:00:00Z",
+      slotEnd: "2026-06-01T10:30:00Z",
+      calendarId: "primary",
+    });
+    expect(bookingStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({ workTraceId: null }),
     );
   });
 
@@ -541,17 +631,21 @@ describe("createCalendarBookToolFactory", () => {
       contact: Record<string, unknown> | null;
       opportunity: { id: string; estimatedValue?: number | null } | null;
     }) {
-      const captured: { payload?: Record<string, unknown> } = {};
+      const captured: { payload?: Record<string, unknown>; eventId?: unknown } = {};
       const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
         cb({
           booking: { update: vi.fn().mockResolvedValue({}) },
           outboxEvent: {
-            create: vi.fn(async (args: { data: { payload: Record<string, unknown> } }) => {
-              captured.payload = args.data.payload;
-              return { id: "ob_1" };
-            }),
+            create: vi.fn(
+              async (args: { data: { eventId: unknown; payload: Record<string, unknown> } }) => {
+                captured.eventId = args.data.eventId;
+                captured.payload = args.data.payload;
+                return { id: "ob_1" };
+              },
+            ),
           },
           opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+          receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
         }),
       );
       bookingStore.create.mockResolvedValue({ id: "bk_1" });
@@ -568,6 +662,8 @@ describe("createCalendarBookToolFactory", () => {
         failureHandler: failureHandler as never,
         contactStore: { findById: vi.fn().mockResolvedValue(setup.contact) } as never,
         defaultCurrency: "SGD",
+        receiptTierForProvider: () => "T1_FETCH_BACK",
+        isProduction: false,
       })({ ...TRUSTED_CTX, contactId: "ct_1" });
       return { tool: t, captured };
     }
@@ -637,6 +733,48 @@ describe("createCalendarBookToolFactory", () => {
         customer: { email: "walkin@example.com", phone: null },
         attribution: { fbclid: null, lead_id: null },
       });
+    });
+
+    it("uses a deterministic booked eventId (evt_booked_<bookingId>), never a random UUID", async () => {
+      const { tool: t, captured } = buildToolWithCapture({
+        contact: {
+          id: "ct_1",
+          name: "Jane",
+          email: "jane@example.com",
+          phone: "+6591234567",
+          attribution: null,
+        },
+        opportunity: { id: "opp_1", estimatedValue: 1000 },
+      });
+      await t.operations["booking.create"]!.execute({
+        service: "botox",
+        slotStart: "2026-06-01T10:00:00Z",
+        slotEnd: "2026-06-01T10:30:00Z",
+        calendarId: "primary",
+      });
+      // bookingStore.create in buildToolWithCapture resolves { id: "bk_1" }
+      expect(captured.eventId).toBe("evt_booked_bk_1");
+    });
+
+    it("stamps booked occurredAt from the external slotStart, not the in-app write clock (clock-game defense)", async () => {
+      const { tool: t, captured } = buildToolWithCapture({
+        contact: {
+          id: "ct_1",
+          name: "Jane",
+          email: "jane@example.com",
+          phone: "+6591234567",
+          attribution: null,
+        },
+        opportunity: { id: "opp_1", estimatedValue: 1000 },
+      });
+      const slotStart = "2026-06-01T10:00:00.000Z";
+      await t.operations["booking.create"]!.execute({
+        service: "botox",
+        slotStart,
+        slotEnd: "2026-06-01T10:30:00Z",
+        calendarId: "primary",
+      });
+      expect(captured.payload?.occurredAt).toBe(slotStart);
     });
   });
 

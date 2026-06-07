@@ -21,6 +21,39 @@ describe("PrismaConversionRecordStore", () => {
     store = new PrismaConversionRecordStore(prisma as never);
   });
 
+  it("defaults origin to 'live' on create when omitted", async () => {
+    const upsertMock = prisma.conversionRecord.upsert as ReturnType<typeof vi.fn>;
+    upsertMock.mockResolvedValue({ id: "cr_o1" });
+    await store.record({
+      eventId: "evt-o1",
+      organizationId: "org-1",
+      contactId: "ct-1",
+      type: "booked",
+      value: 100,
+      occurredAt: new Date("2026-05-14T10:00:00Z"),
+      source: "calendar-book",
+      metadata: {},
+    });
+    expect(upsertMock.mock.calls[0]![0].create.origin).toBe("live");
+  });
+
+  it("passes an explicit origin through to create (seed/demo provenance)", async () => {
+    const upsertMock = prisma.conversionRecord.upsert as ReturnType<typeof vi.fn>;
+    upsertMock.mockResolvedValue({ id: "cr_o2" });
+    await store.record({
+      eventId: "evt-o2",
+      organizationId: "org-1",
+      contactId: "ct-1",
+      type: "booked",
+      value: 100,
+      occurredAt: new Date("2026-05-14T10:00:00Z"),
+      source: "seed",
+      metadata: {},
+      origin: "seed",
+    });
+    expect(upsertMock.mock.calls[0]![0].create.origin).toBe("seed");
+  });
+
   it("records a conversion event idempotently via upsert", async () => {
     (prisma.conversionRecord.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "cr_1" });
 
@@ -185,6 +218,13 @@ describe("PrismaConversionRecordStore", () => {
       expect(groupBy.mock.calls[0]![0].where.sourceCampaignId).toEqual({ in: ["c1", "c2"] });
     });
 
+    it("filters to origin 'live' so seed/demo booked rows are excluded", async () => {
+      const groupBy = prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>;
+      groupBy.mockResolvedValue([]);
+      await store.queryBookedValueCentsByCampaign({ orgId: "org_1", ...window });
+      expect(groupBy.mock.calls[0]![0].where.origin).toBe("live");
+    });
+
     it("omits campaigns with no attributed booked value — honest absence, not a fabricated 0", async () => {
       (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
         { sourceCampaignId: "c1", _sum: { value: 0 } },
@@ -219,6 +259,7 @@ describe("PrismaConversionRecordStore", () => {
         where: {
           organizationId: "org_1",
           type: "booked",
+          origin: "live",
           value: { gt: 0 },
           occurredAt: { gte: window.from, lte: window.to },
           sourceCampaignId: { in: ["camp_1"] },
@@ -228,6 +269,13 @@ describe("PrismaConversionRecordStore", () => {
       });
       expect(out.get("camp_1")).toEqual({ valueCents: 25000, count: 2 });
       expect(out.size).toBe(1); // null sourceCampaignId row dropped
+    });
+
+    it("filters to origin 'live'", async () => {
+      const groupBy = prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>;
+      groupBy.mockResolvedValue([]);
+      await store.queryBookedStatsByCampaign({ orgId: "org_1", ...window });
+      expect(groupBy.mock.calls[0]![0].where.origin).toBe("live");
     });
 
     it("omits the campaignIds filter (any non-null campaign) when not provided", async () => {

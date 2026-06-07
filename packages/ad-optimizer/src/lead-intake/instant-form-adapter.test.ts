@@ -28,12 +28,12 @@ describe("buildInstantFormIntake", () => {
     expect(intake!.idempotencyKey).toBe("leadgen:999");
   });
 
-  it("normalizes phone to E.164 by adding + prefix when missing", () => {
+  it("normalizes phone to E.164 by adding +65 prefix to a bare SG mobile", () => {
     const intake = buildInstantFormIntake(
       makeLead({
         fieldData: [
           { name: "email", values: ["a@b.com"] },
-          { name: "phone_number", values: ["6591234567"] },
+          { name: "phone_number", values: ["91234567"] },
         ],
       }),
       { now: () => new Date("2026-04-26T00:00:00Z") },
@@ -88,6 +88,38 @@ describe("buildInstantFormIntake", () => {
       { now: () => new Date("2026-04-26T00:00:00Z") },
     );
     expect(intake).toBeNull();
+  });
+
+  it("normalizes a bare SG 8-digit phone field to +65 via the canonical normalizer", () => {
+    const intake = buildInstantFormIntake(
+      {
+        leadgenId: "lg-1",
+        organizationId: "o1",
+        deploymentId: "d1",
+        fieldData: [{ name: "phone_number", values: ["91234567"] }],
+      },
+      { now: () => new Date("2026-04-26T00:00:00Z") },
+    );
+    expect(intake).not.toBeNull();
+    expect(intake!.contact.phone).toBe("+6591234567");
+  });
+
+  it("still ingests when phone is un-normalizable but an email is present", () => {
+    const intake = buildInstantFormIntake(
+      {
+        leadgenId: "lg-2",
+        organizationId: "o1",
+        deploymentId: "d1",
+        fieldData: [
+          { name: "phone_number", values: ["not-a-phone"] },
+          { name: "email", values: ["a@b.com"] },
+        ],
+      },
+      { now: () => new Date("2026-04-26T00:00:00Z") },
+    );
+    expect(intake).not.toBeNull();
+    expect(intake!.contact.email).toBe("a@b.com");
+    expect(intake!.contact.phone).toBeUndefined();
   });
 });
 
@@ -156,5 +188,29 @@ describe("InstantFormAdapter", () => {
     const adapter = new InstantFormAdapter({ ingress: { submit }, now: () => new Date() });
     const out = await adapter.ingest(makeLead());
     expect(out).toBeNull();
+  });
+
+  it("threads region through to the builder: 0-prefixed MY number normalizes to +60", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outputs: { contactId: "contact_my_1", duplicate: false } },
+    });
+    const adapter = new InstantFormAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+      region: "MY",
+    });
+    const lead = makeLead({
+      fieldData: [{ name: "phone_number", values: ["0123456789"] }],
+    });
+    const out = await adapter.ingest(lead);
+    expect(out).toEqual({ contactId: "contact_my_1", duplicate: false });
+    expect(submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          contact: expect.objectContaining({ phone: "+60123456789" }),
+        }),
+      }),
+    );
   });
 });

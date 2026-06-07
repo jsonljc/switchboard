@@ -1,3 +1,4 @@
+import { normalizeToE164 } from "@switchboard/schemas";
 import type { GatewayContactStore } from "./types.js";
 
 export interface ResolvedContactIdentity {
@@ -11,14 +12,18 @@ export async function resolveContactIdentity(args: {
   sessionId: string;
   organizationId: string;
   contactStore: GatewayContactStore;
+  region?: "SG" | "MY";
 }): Promise<ResolvedContactIdentity> {
-  const { channel, sessionId, organizationId, contactStore } = args;
+  const { channel, sessionId, organizationId, contactStore, region } = args;
 
   if (channel !== "whatsapp") {
     return { contactId: null, phone: null, channel };
   }
 
-  const phone = sessionId;
+  // Normalize the WhatsApp wa_id to canonical E.164 so a bare id resolves the
+  // same Contact a +-stored CTWA lead created. Fall back to the raw id when the
+  // number cannot be normalized without guessing a country (refuse-to-guess).
+  const phone = normalizeToE164(sessionId, region) ?? sessionId;
   const existing = await contactStore.findByPhone(organizationId, phone);
   if (existing) {
     return { contactId: existing.id, phone, channel };

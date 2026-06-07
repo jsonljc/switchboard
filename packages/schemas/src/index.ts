@@ -67,6 +67,9 @@ export * from "./pipeline-board.js";
 // Contacts browse projection (surface-agnostic /contacts list view-model)
 export * from "./contacts.js";
 
+// Canonical E.164 phone helpers (normalizer, validator)
+export * from "./phone.js";
+
 // Event types (RoutedEventEnvelope, createEventEnvelope)
 export * from "./event-types.js";
 
@@ -125,6 +128,8 @@ export * from "./temporal-fact.js";
 
 export * from "./conversion.js";
 export * from "./calendar.js";
+export * from "./payment.js";
+export * from "./receipt.js";
 export * from "./crm.js";
 
 // CRM Outcome types (shared across ad-optimizer + db)

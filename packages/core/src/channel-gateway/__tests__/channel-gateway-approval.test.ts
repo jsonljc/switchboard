@@ -416,10 +416,13 @@ describe("ChannelGateway approval-payload interception", () => {
         { send: vi.fn().mockResolvedValue(undefined) },
       );
 
+      // The session id (not principalId) is used for the thread key; the 4th arg
+      // carries identity (Spec-1A chain weld: contactId + organizationId for the session).
       expect(config.conversationStore.getOrCreateBySession).toHaveBeenCalledWith(
         "dep-1",
         "slack",
         "C67890",
+        expect.objectContaining({ organizationId: expect.any(String) }),
       );
     });
   });

@@ -16,13 +16,23 @@ export class PrismaGatewayConversationStore implements GatewayConversationStore 
     deploymentId: string,
     channel: string,
     sessionId: string,
+    identity?: { organizationId: string; contactId: string | null },
   ): Promise<{
     conversationId: string;
     messages: Array<{ role: string; content: string }>;
   }> {
-    const contactId = `visitor-${sessionId}`;
-    const orgId = "gateway";
+    // Spec-1A chain weld: key the thread off the resolver-provided contact/org
+    // so the ConversationThread is the SAME row a booking later resolves
+    // against. The visitor-/gateway literals remain ONLY as the fallback for a
+    // session with no resolvable contact (identity absent or contactId null).
+    const contactId = identity?.contactId ?? `visitor-${sessionId}`;
+    const orgId = identity?.organizationId ?? "gateway";
 
+    // Safe today only because WhatsApp (the sole contact-resolving channel) resolves
+    // identity on turn 1, so this find-by-agentContext and the create/fetch-by-contactId
+    // below always share a key. A second contact-resolving channel that resolves identity
+    // on a LATER turn would fork history (find ignores contactId); that needs thread-identity
+    // reconciliation on resolve, not just narrowing this where-clause.
     let thread = await this.prisma.conversationThread.findFirst({
       where: {
         agentContext: {

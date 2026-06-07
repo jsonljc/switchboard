@@ -140,6 +140,8 @@
   reason: "Conversation log read/admin endpoints; conversation messages enter via the chat gateway, not this route."
 - path: "apps/api/src/routes/ad-optimizer.ts"
   reason: "Meta CTWA lead webhook — inbound webhook receiver; lead intake is dispatched via LeadIntakeHandler through ingress on the worker side."
+- path: "apps/api/src/routes/payments-webhook.ts"
+  reason: "PSP payments webhook — inbound ingress-receiver; calls app.platformIngress.submit(payment.record_verified), but the 2-hop import scan misses the dynamic resolution through @switchboard/core/platform (same as ad-optimizer.ts)."
 - path: "apps/api/src/routes/agent-home/mira-decision.ts"
   reason: "Mira keep/pass review verdict — sets reviewDecision (kept/passed/null) on a draft CreativeJob; draft-only, reversible, no cross-agent writes, not a governed revenue action."
 - path: "apps/api/src/routes/website-scan.ts"

@@ -40,6 +40,7 @@ import { onboardRoutes } from "../routes/onboard.js";
 import { storefrontRoutes } from "../routes/storefront.js";
 import { deploymentMemoryRoutes } from "../routes/deployment-memory.js";
 import { adOptimizerRoutes } from "../routes/ad-optimizer.js";
+import { paymentsWebhookRoutes } from "../routes/payments-webhook.js";
 import { facebookOAuthRoutes } from "../routes/facebook-oauth.js";
 import { whatsappTestRoutes } from "../routes/whatsapp-test.js";
 import { whatsappOnboardingRoutes } from "../routes/whatsapp-onboarding.js";
@@ -213,6 +214,7 @@ export async function registerRoutes(
   await app.register(tokenUsageRoutes, { prefix: "/api/token-usage" });
   await app.register(competenceRoutes, { prefix: "/api/competence" });
   await app.register(webhooksRoutes, { prefix: "/api/webhooks" });
+  await app.register(paymentsWebhookRoutes, { prefix: "/api/webhooks" });
   await app.register(governanceRoutes, { prefix: "/api/governance" });
   await app.register(conversationsRoutes, { prefix: "/api/conversations" });
   await app.register(agentsRoutes, { prefix: "/api/agents" });

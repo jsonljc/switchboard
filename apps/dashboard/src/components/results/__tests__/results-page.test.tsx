@@ -7,6 +7,32 @@ vi.mock("@/hooks/use-query-keys", () => ({ useScopedQueryKeys: () => null }));
 vi.mock("@/hooks/use-connections", () => ({
   useConnections: () => ({ data: undefined, isLoading: false }),
 }));
+vi.mock("@/app/(auth)/(mercury)/reports/hooks/use-paid-visits", () => ({
+  usePaidVisits: () => ({
+    paidVisits: [
+      {
+        bookingId: "bk-test-001",
+        amountMajor: 250,
+        currency: "SGD",
+        campaignId: "botox-awareness",
+        campaignName: "Botox Awareness — CTWA",
+        attributionBasis: "ctwa_captured",
+        paidAt: "2026-06-01T10:30:00.000Z",
+      },
+      {
+        bookingId: "bk-test-002",
+        amountMajor: 180,
+        currency: "SGD",
+        campaignId: null,
+        campaignName: null,
+        attributionBasis: "campaign_missing",
+        paidAt: "2026-06-04T09:00:00.000Z",
+      },
+    ],
+    isLoading: false,
+    error: null,
+  }),
+}));
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -74,6 +100,14 @@ describe("ResultsPage (fixture mode, default THIS MONTH)", () => {
       "aria-expanded",
       "false",
     );
+  });
+  it("renders paid-visits rows inside the details disclosure (fixture mode)", () => {
+    const { container } = mount();
+    // The disclosure starts collapsed; open it to reveal the PaidVisitsSection content.
+    fireEvent.click(screen.getByRole("button", { name: /see the details/i }));
+    expect(container.textContent).toContain("Botox Awareness");
+    expect(container.textContent).toContain("CTWA attribution");
+    expect(container.textContent).toContain("campaign not captured");
   });
 });
 

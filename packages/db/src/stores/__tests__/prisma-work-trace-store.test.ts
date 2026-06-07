@@ -311,6 +311,61 @@ describe("PrismaWorkTraceStore.recordOperatorMutation", () => {
   });
 });
 
+describe("PrismaWorkTraceStore.persist — lineage columns (Spec-1A)", () => {
+  let createSpy: ReturnType<typeof vi.fn>;
+  let store: PrismaWorkTraceStore;
+
+  beforeEach(() => {
+    createSpy = vi.fn().mockResolvedValue(undefined);
+    const tx = { workTrace: { create: createSpy } };
+    const prisma = {
+      $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
+    } as unknown as ConstructorParameters<typeof PrismaWorkTraceStore>[0];
+    store = new PrismaWorkTraceStore(prisma, {
+      auditLedger: { record: vi.fn().mockResolvedValue(undefined) } as never,
+      operatorAlerter: { alert: vi.fn().mockResolvedValue(undefined) } as never,
+    });
+  });
+
+  function baseTrace() {
+    return makeTrace();
+  }
+
+  it("persist forwards contactId + conversationThreadId into the workTrace.create data", async () => {
+    await store.persist({
+      ...baseTrace(),
+      contactId: "ct_chain_1",
+      conversationThreadId: "thr_chain_1",
+    });
+    const created = (createSpy.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    expect(created.contactId).toBe("ct_chain_1");
+    expect(created.conversationThreadId).toBe("thr_chain_1");
+  });
+
+  it("persist writes null lineage columns when absent", async () => {
+    await store.persist(baseTrace());
+    const created = (createSpy.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    expect(created.contactId).toBeNull();
+    expect(created.conversationThreadId).toBeNull();
+  });
+
+  it("stores the lineage a Booking can chain-join on (Booking.workTraceId -> WorkTrace.workUnitId -> contactId/conversationThreadId)", async () => {
+    const trace = {
+      ...baseTrace(),
+      workUnitId: "wu_chain",
+      contactId: "ct_chain",
+      conversationThreadId: "thr_chain",
+    };
+    await store.persist(trace);
+    const created = (createSpy.mock.calls[0]![0] as { data: Record<string, unknown> }).data;
+    // A Booking row with workTraceId = 'wu_chain' joins to this row by workUnitId
+    // and reaches the Contact + ConversationThread in one hop.
+    expect(created.workUnitId).toBe("wu_chain");
+    expect(created.contactId).toBe("ct_chain");
+    expect(created.conversationThreadId).toBe("thr_chain");
+  });
+});
+
 describe("PrismaWorkTraceStore.claim (D1 idempotency claim primitive)", () => {
   function makeClaimStore(create: ReturnType<typeof vi.fn>) {
     const mockPrisma = {

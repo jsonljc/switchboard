@@ -187,11 +187,24 @@ export class ChannelGateway {
       return;
     }
 
-    // 3. Get/create conversation
+    // 3. Resolve contact identity FIRST (Spec-1A chain weld), then get/create
+    // the conversation so the thread is keyed off the resolved contact/org.
+    // No-op (contactId null) when contactStore is unwired or channel != whatsapp.
+    const identity = this.config.contactStore
+      ? await resolveContactIdentity({
+          channel: message.channel,
+          sessionId: message.sessionId,
+          organizationId: resolved.organizationId,
+          contactStore: this.config.contactStore,
+          region: undefined,
+        })
+      : { contactId: null, phone: null, channel: message.channel };
+
     const { conversationId, messages: history } = await conversationStore.getOrCreateBySession(
       resolved.deploymentId,
       message.channel,
       message.sessionId,
+      { organizationId: resolved.organizationId, contactId: identity.contactId },
     );
 
     // 4. Persist incoming message
@@ -214,16 +227,7 @@ export class ChannelGateway {
       }
     }
 
-    // 4c. Resolve contact identity (no-op when contactStore not wired or non-WhatsApp channel)
-    const identity = this.config.contactStore
-      ? await resolveContactIdentity({
-          channel: message.channel,
-          sessionId: message.sessionId,
-          organizationId: resolved.organizationId,
-          contactStore: this.config.contactStore,
-        })
-      : { contactId: null, phone: null, channel: message.channel };
-
+    // 4c. (Identity already resolved in step 3 above for the chain weld.)
     // 4d. WhatsApp opt-out keyword detection — terminal branch.
     // STOP / UNSUBSCRIBE / OPT OUT records the opt-out, replies confirmation,
     // and skips skill dispatch. Required for WhatsApp Business API compliance.
@@ -323,12 +327,22 @@ export class ChannelGateway {
       },
       trigger: "chat" as const,
       surface: { surface: "chat", sessionId: message.sessionId },
+      ...(message.providerMessageId
+        ? {
+            idempotencyKey: `${resolved.organizationId}:${message.channel}:${message.providerMessageId}`,
+          }
+        : {}),
       targetHint: {
         skillSlug: resolved.skillSlug,
         deploymentId: resolved.deploymentId,
         channel: message.channel,
         token: message.token,
       },
+      // Spec-1A chain weld: server-resolved lineage for WorkTrace columns.
+      // These are NOT derived from parameters — they are populated here so
+      // normalizeWorkUnit can persist them without an extra join.
+      contactId: identity.contactId ?? undefined,
+      conversationThreadId: conversationId,
     };
 
     // 8. Submit through PlatformIngress and dispatch response

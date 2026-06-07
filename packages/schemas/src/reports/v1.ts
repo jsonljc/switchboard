@@ -76,6 +76,32 @@ export interface CampaignRow {
   roas: number;
 }
 
+/**
+ * How a paid visit was tied to its campaign (1A-6, honest labeling per spec §11).
+ * - ctwa_captured: the booking's ConversionRecord carried a non-null sourceCampaignId
+ *   (the click-to-WhatsApp attribution survived the unified Contact).
+ * - campaign_missing: no campaign was captured for this booking — render honestly,
+ *   never as attributed.
+ * - copied_from_contact: reserved for the later contact-fallback path (not emitted
+ *   by the 1A-6 read query; cryptographic ClickEvidence is a later spec).
+ */
+export type AttributionBasis = "ctwa_captured" | "campaign_missing" | "copied_from_contact";
+
+/**
+ * One individually-verified PAID visit attributed to the ad that produced it.
+ * `amountMajor` is in MAJOR currency units (dollars) — the API converts the
+ * stored cents EXACTLY ONCE. This is a per-receipt row, never an aggregate.
+ */
+export interface PaidVisitRow {
+  bookingId: string;
+  amountMajor: number;
+  currency: string;
+  campaignId: string | null;
+  campaignName: string | null;
+  attributionBasis: AttributionBasis;
+  paidAt: string;
+}
+
 export interface ReportCampaignInsight {
   campaignId: string;
   campaignName: string;

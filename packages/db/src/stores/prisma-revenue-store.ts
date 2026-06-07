@@ -16,6 +16,7 @@ interface RecordRevenueInput {
   status?: "pending" | "confirmed" | "refunded" | "failed";
   recordedBy: "owner" | "staff" | "stripe" | "integration";
   externalReference?: string | null;
+  bookingId?: string | null;
   verified?: boolean;
   sourceCampaignId?: string | null;
   sourceAdId?: string | null;
@@ -59,11 +60,13 @@ export class PrismaRevenueStore implements RevenueStore {
 
   async record(input: RecordRevenueInput, tx?: PrismaDbClient): Promise<LifecycleRevenueEvent> {
     const client = tx ?? this.prisma;
-    // Idempotency: if externalReference is provided, return existing record instead of duplicating
+    // Idempotency: axis MUST match the DB partial-unique (organizationId, externalReference).
+    // externalReference is the globally-unique PSP charge id, so org-scoping is correct and
+    // broader than the old opp-scoping — it catches replays even when opportunityId drifts.
     if (input.externalReference) {
       const existing = await client.lifecycleRevenueEvent.findFirst({
         where: {
-          opportunityId: input.opportunityId,
+          organizationId: input.organizationId,
           externalReference: input.externalReference,
         },
       });
@@ -85,6 +88,7 @@ export class PrismaRevenueStore implements RevenueStore {
         status: input.status ?? "confirmed",
         recordedBy: input.recordedBy,
         externalReference: input.externalReference ?? null,
+        bookingId: input.bookingId ?? null,
         verified: input.verified ?? false,
         sourceCampaignId: input.sourceCampaignId ?? null,
         sourceAdId: input.sourceAdId ?? null,
@@ -150,6 +154,7 @@ export class PrismaRevenueStore implements RevenueStore {
     const where: Record<string, unknown> = {
       organizationId: orgId,
       status: "confirmed",
+      origin: "live",
       sourceCampaignId: {
         not: null,
       },
@@ -195,6 +200,107 @@ export class PrismaRevenueStore implements RevenueStore {
       sourceCampaignId: r.sourceCampaignId,
       totalAmount: r.totalAmount,
     }));
+  }
+
+  /**
+   * One row per individually-verified PAID visit, joined to its campaign via
+   * bookingId. Returns amount in CENTS (the caller converts to major units
+   * exactly once). Per spec R1: in production, only origin="live" rows backed by
+   * a non-Noop T1 payment receipt count — a Noop/degraded payment can exercise
+   * the write path but must never surface here as a real paid visit.
+   */
+  async paidVisitsByCampaign(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+    isProduction: boolean;
+  }): Promise<
+    Array<{
+      bookingId: string;
+      amountCents: number;
+      currency: string;
+      sourceCampaignId: string | null;
+      attributionBasis: "ctwa_captured" | "campaign_missing";
+      paidAt: Date;
+    }>
+  > {
+    const where: Record<string, unknown> = {
+      organizationId: input.orgId,
+      verified: true,
+      bookingId: { not: null },
+      recordedAt: { gte: input.from, lt: input.to },
+    };
+    // Anti-fixture: in production only live-origin revenue is countable.
+    if (input.isProduction) where.origin = "live";
+
+    const events = await this.prisma.lifecycleRevenueEvent.findMany({
+      where,
+      select: { bookingId: true, amount: true, currency: true, recordedAt: true, origin: true },
+      orderBy: { recordedAt: "desc" },
+    });
+    if (events.length === 0) return [];
+
+    const bookingIds = [
+      ...new Set(events.map((e) => e.bookingId).filter((b): b is string => b !== null)),
+    ];
+
+    // Campaign attribution comes from the booked ConversionRecord (org-scoped).
+    const conversions = await this.prisma.conversionRecord.findMany({
+      where: { organizationId: input.orgId, bookingId: { in: bookingIds } },
+      select: { bookingId: true, sourceCampaignId: true },
+    });
+    const campaignByBooking = new Map<string, string | null>();
+    for (const c of conversions) {
+      if (c.bookingId && !campaignByBooking.has(c.bookingId)) {
+        campaignByBooking.set(c.bookingId, c.sourceCampaignId);
+      }
+    }
+
+    // Payment-receipt provenance (org-scoped) — drives the Noop/degraded exclusion.
+    const receipts = await this.prisma.receipt.findMany({
+      where: { organizationId: input.orgId, kind: "payment", bookingId: { in: bookingIds } },
+      select: { bookingId: true, provider: true, tier: true },
+    });
+    const receiptByBooking = new Map<string, { provider: string | null; tier: string }>();
+    for (const r of receipts) {
+      if (r.bookingId && !receiptByBooking.has(r.bookingId)) {
+        receiptByBooking.set(r.bookingId, { provider: r.provider, tier: r.tier });
+      }
+    }
+
+    const rows: Array<{
+      bookingId: string;
+      amountCents: number;
+      currency: string;
+      sourceCampaignId: string | null;
+      attributionBasis: "ctwa_captured" | "campaign_missing";
+      paidAt: Date;
+    }> = [];
+    for (const e of events) {
+      const bookingId = e.bookingId;
+      if (!bookingId) continue;
+      if (input.isProduction) {
+        // Defensive post-join guard: origin must be "live" (the WHERE already
+        // constrains this in DB; this guard ensures correctness in tests/mocks).
+        if (e.origin !== "live") continue;
+        const receipt = receiptByBooking.get(bookingId);
+        // Production-countable paid visit requires a real T1 fetch-back receipt
+        // from a non-Noop provider. Anything else is degraded and excluded.
+        if (!receipt || receipt.provider === "noop" || receipt.tier !== "T1_FETCH_BACK") {
+          continue;
+        }
+      }
+      const campaign = campaignByBooking.get(bookingId) ?? null;
+      rows.push({
+        bookingId,
+        amountCents: e.amount,
+        currency: e.currency,
+        sourceCampaignId: campaign,
+        attributionBasis: campaign ? "ctwa_captured" : "campaign_missing",
+        paidAt: e.recordedAt,
+      });
+    }
+    return rows;
   }
 
   async revenueWithFirstTouch(input: { orgId: string; from: Date; to: Date }): Promise<
@@ -276,6 +382,7 @@ function mapRowToRevenueEvent(row: {
   status: string;
   recordedBy: string;
   externalReference: string | null;
+  bookingId: string | null;
   verified: boolean;
   sourceCampaignId: string | null;
   sourceAdId: string | null;
@@ -293,6 +400,7 @@ function mapRowToRevenueEvent(row: {
     status: row.status as "pending" | "confirmed" | "refunded" | "failed",
     recordedBy: row.recordedBy as "owner" | "staff" | "stripe" | "integration",
     externalReference: row.externalReference,
+    bookingId: row.bookingId,
     verified: row.verified,
     sourceCampaignId: row.sourceCampaignId,
     sourceAdId: row.sourceAdId,

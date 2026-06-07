@@ -1,4 +1,5 @@
 import type { LeadIntake } from "@switchboard/schemas";
+import { normalizeToE164 } from "@switchboard/schemas";
 
 /**
  * Parsed WhatsApp inbound message shape used by the CTWA adapter.
@@ -34,6 +35,7 @@ export interface IngressLike {
 export interface CtwaAdapterDeps {
   ingress: IngressLike;
   now: () => Date;
+  region?: "SG" | "MY";
   resolveCampaignId?: (adId: string) => Promise<string | null>;
 }
 
@@ -43,7 +45,7 @@ export interface CtwaAdapterDeps {
  */
 export function buildCtwaIntake(
   msg: ParsedWhatsappMessage,
-  opts: { now: () => Date },
+  opts: { now: () => Date; region?: "SG" | "MY" },
 ): LeadIntake | null {
   const stringOrUndefined = (v: unknown): string | undefined =>
     typeof v === "string" && v ? v : undefined;
@@ -51,7 +53,9 @@ export function buildCtwaIntake(
   const ctwaClid = stringOrUndefined(msg.metadata["ctwaClid"]);
   if (!ctwaClid) return null;
 
-  const normalizedPhone = msg.from.startsWith("+") ? msg.from : `+${msg.from}`;
+  const normalizedPhone =
+    normalizeToE164(msg.from, opts.region) ??
+    (msg.from.startsWith("+") ? msg.from : `+${msg.from}`);
 
   return {
     source: "ctwa",
@@ -81,7 +85,7 @@ export class CtwaAdapter {
     msg: ParsedWhatsappMessage,
     opts: { parentWorkUnitId?: string } = {},
   ): Promise<void> {
-    const intake = buildCtwaIntake(msg, { now: this.deps.now });
+    const intake = buildCtwaIntake(msg, { now: this.deps.now, region: this.deps.region });
     if (!intake) return;
 
     if (

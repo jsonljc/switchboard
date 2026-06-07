@@ -1743,6 +1743,7 @@ model Contact {
   organizationId       String
   name                 String?
   phone                String?
+  phoneE164            String?
   email                String?
   primaryChannel       String    @default("whatsapp")
   firstTouchChannel    String?
@@ -1788,6 +1789,7 @@ model Contact {
   @@index([organizationId])
   @@index([organizationId, stage])
   @@index([organizationId, phone])
+  @@index([organizationId, phoneE164])
   @@index([organizationId, lastActivityAt])
   @@index([organizationId, leadgenId])
   @@index([organizationId, sourceType, createdAt])
@@ -1839,15 +1841,21 @@ model LifecycleRevenueEvent {
   status            String      @default("confirmed")
   recordedBy        String
   externalReference String?
+  bookingId         String?
   verified          Boolean     @default(false)
   sourceCampaignId  String?
   sourceAdId        String?
+  origin            String      @default("live")
   recordedAt        DateTime    @default(now())
   createdAt         DateTime    @default(now())
 
+  // The (organizationId, externalReference) WHERE externalReference IS NOT NULL
+  // partial unique lives in raw SQL (Prisma 6 cannot express it) in migration
+  // 20260606130000_lre_booking_and_external_ref_unique. Keep this comment in sync.
   @@index([organizationId])
   @@index([opportunityId])
   @@index([organizationId, recordedAt])
+  @@index([organizationId, bookingId])
 }
 
 model OwnerTask {
@@ -1957,6 +1965,12 @@ model WorkTrace {
   // via unnest() against ConversionRecord.
   injectedPatternIds String[] @default([])
 
+  // Spec-1A chain weld: lineage/index columns. Nullable; legacy rows stay NULL
+  // (honest absence). In WorkTrace EXCLUDED_BASE (work-trace-hash.ts) so they
+  // are not part of the content hash.
+  contactId            String?
+  conversationThreadId String?
+
   // Timestamps
   requestedAt           DateTime
   governanceCompletedAt DateTime
@@ -1973,6 +1987,8 @@ model WorkTrace {
   @@index([traceId])
   @@index([requestedAt])
   @@index([approvalId])
+  @@index([organizationId, contactId])
+  @@index([organizationId, conversationThreadId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1996,6 +2012,7 @@ model Booking {
   createdByType   String    @default("agent")
   sourceChannel   String?
   workTraceId     String?
+  origin          String    @default("live")
   rescheduledAt   DateTime?
   rescheduleCount Int       @default(0)
   createdAt       DateTime  @default(now())
@@ -2043,6 +2060,7 @@ model ConversionRecord {
   sourceChannel     String?
   agentDeploymentId String?
   bookingId         String?
+  origin            String   @default("live")
   metadata          Json     @default("{}")
   occurredAt        DateTime
   createdAt         DateTime @default(now())
@@ -2051,6 +2069,37 @@ model ConversionRecord {
   @@index([organizationId, sourceCampaignId])
   @@index([contactId])
   @@index([bookingId])
+}
+
+// ---------------------------------------------------------------------------
+// Receipt — shared proof primitive (calendar | payment). isPaidVisit reads tier+status.
+// The (organizationId, kind, externalRef) PARTIAL UNIQUE (WHERE externalRef IS NOT NULL)
+// is raw SQL in migration 20260606120000_add_receipt (Prisma 6 cannot express partial
+// unique in-schema; same pattern as Booking 20260603120000). Keep this comment in sync.
+// ---------------------------------------------------------------------------
+
+model Receipt {
+  id             String    @id @default(uuid())
+  organizationId String
+  kind           String // calendar | payment
+  tier           String // T1_FETCH_BACK | T2_PROVIDER_SIGNATURE | T3_ADMIN_AUDIT
+  status         String // booked | held | paid | void
+  bookingId      String?
+  opportunityId  String?
+  revenueEventId String?
+  connectionId   String?
+  provider       String?
+  externalRef    String?
+  amount         Int?
+  currency       String?
+  evidence       Json
+  capturedBy     String
+  verifiedAt     DateTime?
+  workTraceId    String?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, bookingId])
+  @@index([organizationId, kind, status])
 }
 
 // ---------------------------------------------------------------------------

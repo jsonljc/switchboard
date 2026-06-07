@@ -251,3 +251,28 @@ describe("buildClaimTrace (D1 idempotency claim)", () => {
     expect(t.governanceOutcome).toBe("execute");
   });
 });
+
+describe("buildWorkTrace / buildClaimTrace — lineage columns (Spec-1A)", () => {
+  const baseDecision = executeDecision;
+
+  it("buildWorkTrace copies contactId + conversationThreadId from the WorkUnit", () => {
+    const trace = buildWorkTrace({
+      workUnit: { ...baseWorkUnit, contactId: "ct_1", conversationThreadId: "thr_1" },
+      governanceDecision: baseDecision,
+      governanceCompletedAt: "2026-06-06T00:00:00.000Z",
+    });
+    expect(trace.contactId).toBe("ct_1");
+    expect(trace.conversationThreadId).toBe("thr_1");
+  });
+
+  it("buildClaimTrace copies contactId + conversationThreadId from the WorkUnit", () => {
+    const trace = buildClaimTrace({
+      workUnit: { ...baseWorkUnit, contactId: "ct_1", conversationThreadId: "thr_1" },
+      governanceDecision: baseDecision,
+      governanceCompletedAt: "2026-06-06T00:00:00.000Z",
+      executionStartedAt: "2026-06-06T00:00:00.010Z",
+    });
+    expect(trace.contactId).toBe("ct_1");
+    expect(trace.conversationThreadId).toBe("thr_1");
+  });
+});

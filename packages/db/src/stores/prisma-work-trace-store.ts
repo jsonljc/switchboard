@@ -267,6 +267,8 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       executionSummary: trace.executionSummary ?? null,
       executionOutputs: trace.executionOutputs ? JSON.stringify(trace.executionOutputs) : null,
       injectedPatternIds: trace.injectedPatternIds ?? [],
+      contactId: trace.contactId ?? null,
+      conversationThreadId: trace.conversationThreadId ?? null,
 
       modeMetrics: trace.modeMetrics ? JSON.stringify(trace.modeMetrics) : null,
       qualificationSignals: trace.qualificationSignals
@@ -460,6 +462,8 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
         ? (JSON.parse(row.executionOutputs) as Record<string, unknown>)
         : undefined,
       injectedPatternIds: row.injectedPatternIds ?? [],
+      contactId: row.contactId ?? undefined,
+      conversationThreadId: row.conversationThreadId ?? undefined,
 
       modeMetrics: row.modeMetrics
         ? (JSON.parse(row.modeMetrics) as Record<string, unknown>)

@@ -178,6 +178,7 @@ export function registerManagedWebhookRoutes(app: FastifyInstance, deps: Managed
           // phone). Approval responses bind on this; conversations key on sessionId.
           principalId: incoming.principalId,
           text: incoming.text,
+          providerMessageId: rawMessageId ?? undefined,
         },
         replySink,
       );

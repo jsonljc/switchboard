@@ -1,4 +1,5 @@
 import type { LeadIntakeStore } from "@switchboard/core";
+import { normalizeToE164 } from "@switchboard/schemas";
 import type { PrismaDbClient } from "../prisma-db.js";
 
 interface UpsertContactInput {
@@ -70,6 +71,7 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
     const primaryChannel = input.channel ?? "whatsapp";
     const now = new Date();
     const messagingOptIn = input.messagingOptIn ?? false;
+    const phoneE164 = normalizeToE164(input.phone ?? null);
 
     const row = await this.prisma.contact.upsert({
       where: {
@@ -81,6 +83,7 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
       create: {
         organizationId: input.organizationId,
         phone: input.phone ?? null,
+        phoneE164,
         email: input.email ?? null,
         primaryChannel,
         firstTouchChannel: primaryChannel,

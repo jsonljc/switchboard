@@ -241,6 +241,9 @@ export * from "./operator/index.js";
 // Lifecycle (Contact, Opportunity, Revenue, OwnerTask)
 export * from "./lifecycle/index.js";
 
+// Receipts (Receipt store iface, isPaidVisit verdict, calendar-receipt mint helper)
+export * from "./receipts/index.js";
+
 // Conversation Lifecycle (Phase 3a — snapshot, transitions, precedence)
 export * from "./conversation-lifecycle/index.js";
 
