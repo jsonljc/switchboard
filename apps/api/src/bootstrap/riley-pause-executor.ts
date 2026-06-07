@@ -1,8 +1,37 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
+import type { MarkActedByExecutionResult } from "@switchboard/db";
 import {
   buildRileyPauseExecutionWorkflow,
+  RILEY_PAUSE_EXECUTION_RESOLVED_BY,
   type RileyPauseCredsResult,
+  type RileyPauseExecutionDeps,
 } from "../services/workflows/riley-pause-execution-workflow.js";
+
+/**
+ * Slice 4f: the executor-facing transition dep over the db store. Extracted
+ * and exported so the sentinel + arg mapping are unit-testable without
+ * network (the real MetaAdsClient blocks reaching the success leg in
+ * bootstrap-level tests). The type-only db import above is erased at build
+ * time, so it cannot defeat this module's lazy dynamic-import intent.
+ */
+export function buildMarkRecommendationActed(store: {
+  markActedByExecution(args: {
+    id: string;
+    organizationId: string;
+    executableWorkUnitId: string;
+    resolvedBy: string;
+    executedAt: Date;
+  }): Promise<MarkActedByExecutionResult>;
+}): RileyPauseExecutionDeps["markRecommendationActed"] {
+  return (args) =>
+    store.markActedByExecution({
+      id: args.recommendationId,
+      organizationId: args.organizationId,
+      executableWorkUnitId: args.executableWorkUnitId,
+      resolvedBy: RILEY_PAUSE_EXECUTION_RESOLVED_BY,
+      executedAt: args.executedAt,
+    });
+}
 
 /**
  * Bootstrap wiring for the Phase-C pause executor (extracted from
@@ -20,8 +49,12 @@ export async function buildRileyPauseExecutorHandler(prismaClient: unknown): Pro
 }> {
   const { RILEY_PAUSE_INTENT } =
     await import("../services/workflows/riley-pause-submit-request.js");
-  const { PrismaDeploymentConnectionStore, PrismaDeploymentStore, decryptCredentials } =
-    await import("@switchboard/db");
+  const {
+    PrismaDeploymentConnectionStore,
+    PrismaDeploymentStore,
+    PrismaRecommendationStore,
+    decryptCredentials,
+  } = await import("@switchboard/db");
   const { MetaAdsClient } = await import("@switchboard/ad-optimizer");
 
   const connectionStore = new PrismaDeploymentConnectionStore(
@@ -29,6 +62,9 @@ export async function buildRileyPauseExecutorHandler(prismaClient: unknown): Pro
   );
   const deploymentStore = new PrismaDeploymentStore(
     prismaClient as ConstructorParameters<typeof PrismaDeploymentStore>[0],
+  );
+  const recommendationStore = new PrismaRecommendationStore(
+    prismaClient as ConstructorParameters<typeof PrismaRecommendationStore>[0],
   );
 
   const handler = buildRileyPauseExecutionWorkflow({
@@ -52,6 +88,7 @@ export async function buildRileyPauseExecutorHandler(prismaClient: unknown): Pro
       };
     },
     createAdsClient: (creds) => new MetaAdsClient(creds),
+    markRecommendationActed: buildMarkRecommendationActed(recommendationStore),
   });
 
   return { intent: RILEY_PAUSE_INTENT, handler };

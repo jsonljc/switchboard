@@ -33,6 +33,7 @@ import {
 import { buildGate, deploymentResolver, ORG } from "./recommendation-handoff-harness.js";
 import { buildRileyPauseExecutionWorkflow } from "../services/workflows/riley-pause-execution-workflow.js";
 import { RILEY_PAUSE_INTENT } from "../services/workflows/riley-pause-submit-request.js";
+import { buildMarkRecommendationActed } from "../bootstrap/riley-pause-executor.js";
 
 export function pauseAllowPolicy(): Policy {
   return {
@@ -112,6 +113,38 @@ export function buildPauseLifecycleWorld(opts?: {
   const metaCalls: Array<{ campaignId: string; status: string }> = [];
   const sabotage = { failNext: false };
 
+  // Slice 4f: an in-memory recommendation row honoring markActedByExecution's
+  // conditional contract, driven through the REAL bootstrap closure so the
+  // loop also pins the sentinel + arg mapping. Tests may mutate `status` to
+  // simulate an operator preempt.
+  const recommendationRow = {
+    id: "rec_1",
+    organizationId: ORG,
+    intent: "recommendation.pause",
+    status: "pending" as string,
+    resolvedAt: null as Date | null,
+    resolvedBy: null as string | null,
+    executedWorkUnitId: null as string | null,
+  };
+  const markRecommendationActed = buildMarkRecommendationActed({
+    markActedByExecution: async (args) => {
+      if (
+        args.id !== recommendationRow.id ||
+        args.organizationId !== recommendationRow.organizationId
+      ) {
+        return { transitioned: false, reason: "not_found" };
+      }
+      if (recommendationRow.status !== "pending") {
+        return { transitioned: false, reason: "not_pending" };
+      }
+      recommendationRow.status = "acted";
+      recommendationRow.resolvedAt = args.executedAt;
+      recommendationRow.resolvedBy = args.resolvedBy;
+      recommendationRow.executedWorkUnitId = args.executableWorkUnitId;
+      return { transitioned: true };
+    },
+  });
+
   const pauseHandler: WorkflowHandler = buildRileyPauseExecutionWorkflow({
     getDeploymentCredentials: async (organizationId, _deploymentId) =>
       organizationId === ORG
@@ -127,6 +160,7 @@ export function buildPauseLifecycleWorld(opts?: {
         metaCalls.push({ campaignId, status });
       },
     }),
+    markRecommendationActed,
   });
 
   const intentRegistry = new IntentRegistry();
@@ -184,6 +218,7 @@ export function buildPauseLifecycleWorld(opts?: {
       ingress,
       traceStore,
       metaCalls,
+      recommendationRow,
       breakMetaOnce: () => {
         sabotage.failNext = true;
       },

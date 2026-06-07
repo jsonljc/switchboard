@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildRileyPauseExecutorHandler } from "../riley-pause-executor.js";
+import {
+  buildMarkRecommendationActed,
+  buildRileyPauseExecutorHandler,
+} from "../riley-pause-executor.js";
 import type { WorkUnit, WorkflowRuntimeServices } from "@switchboard/core/platform";
 
 const services = {} as WorkflowRuntimeServices;
@@ -79,6 +82,35 @@ describe("buildRileyPauseExecutorHandler (bootstrap wiring)", () => {
     expect(result.error?.code).toBe("NO_META_CONNECTION");
     expect(prisma.deploymentConnection.findFirst).toHaveBeenCalledWith({
       where: { deploymentId: "dep_riley", type: "meta-ads" },
+    });
+  });
+});
+
+describe("buildMarkRecommendationActed (slice 4f closure)", () => {
+  it("maps recommendationId to the row id and supplies the machine sentinel", async () => {
+    const markActedByExecution = vi.fn(
+      async (_args: {
+        id: string;
+        organizationId: string;
+        executableWorkUnitId: string;
+        resolvedBy: string;
+        executedAt: Date;
+      }) => ({ transitioned: true as const }),
+    );
+    const dep = buildMarkRecommendationActed({ markActedByExecution });
+    const executedAt = new Date("2026-06-07T03:30:00Z");
+    await dep({
+      organizationId: "org_1",
+      recommendationId: "rec_9",
+      executableWorkUnitId: "wu_9",
+      executedAt,
+    });
+    expect(markActedByExecution).toHaveBeenCalledWith({
+      id: "rec_9",
+      organizationId: "org_1",
+      executableWorkUnitId: "wu_9",
+      resolvedBy: "riley_self_execution",
+      executedAt,
     });
   });
 });

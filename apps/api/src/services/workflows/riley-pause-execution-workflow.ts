@@ -16,6 +16,16 @@ import {
  */
 export const RILEY_PAUSE_MAX_APPROVAL_AGE_HOURS = 48;
 
+/**
+ * resolvedBy sentinel for machine-executed pauses (slice 4f). A distinct
+ * machine identifier, never a human principal id: the approver approved, the
+ * platform acted. Bare "system" would be ambiguous with the real seeded
+ * system principal; workflow rows in the same table already use machine
+ * values ("policy_engine", "auto"). Human-approval provenance lives on the
+ * lifecycle (respondedBy), the WorkTrace, and the audit snapshot.
+ */
+export const RILEY_PAUSE_EXECUTION_RESOLVED_BY = "riley_self_execution";
+
 /** Org-isolation-aware credential resolution result. */
 export type RileyPauseCredsResult =
   | { kind: "ok"; credentials: { accessToken: string; accountId: string } }
@@ -48,6 +58,26 @@ export interface RileyPauseExecutionDeps {
       campaignId: string,
     ): Promise<{ status: string; effectiveStatus: string } | null>;
   };
+  /**
+   * Slice 4f: transition the source recommendation to "acted" after a REAL
+   * Meta pause write. Called from the truthful success leg ONLY (write
+   * accepted); skip/stale/failure legs never call it, and the already-paused
+   * pre-read skip is deliberately excluded (no spend change from THIS work
+   * unit; attributing a window would measure someone else's action). The
+   * implementation is conditional first-writer-wins; benign lost races return
+   * transitioned:false, infra errors throw and are caught at the call site.
+   * REQUIRED, not optional: an optional dep would let a future bootstrap
+   * forget the wiring and silently recreate the executed-pauses-invisible-
+   * to-attribution hole this slice exists to close.
+   */
+  markRecommendationActed: (args: {
+    organizationId: string;
+    recommendationId: string;
+    executableWorkUnitId: string;
+    executedAt: Date;
+  }) => Promise<
+    { transitioned: true } | { transitioned: false; reason: "not_found" | "not_pending" }
+  >;
   /** Injectable clock for the stale-approval cap. */
   now?: () => Date;
 }
@@ -194,6 +224,34 @@ export function buildRileyPauseExecutionWorkflow(deps: RileyPauseExecutionDeps):
         };
       }
 
+      // Slice 4f: the pause REALLY happened (request accepted). Record that
+      // truth on the source recommendation so outcome attribution can see it;
+      // resolvedAt = execution time (the attribution windows anchor on it).
+      // Bookkeeping never fails the work unit: the Meta write is the execution
+      // truth the operator was promised, so a transition failure is recorded
+      // in outputs (the WorkTrace is canonical) and error-logged, never
+      // converted into a false "failed" claim about a pause that succeeded.
+      const executedAt = now();
+      let recommendationTransition: "acted" | "not_found" | "not_pending" | "error";
+      try {
+        const transition = await deps.markRecommendationActed({
+          organizationId: workUnit.organizationId,
+          recommendationId: input.recommendationId,
+          executableWorkUnitId: workUnit.id,
+          executedAt,
+        });
+        recommendationTransition = transition.transitioned ? "acted" : transition.reason;
+      } catch (err) {
+        // LOUD: "Meta paused but attribution linkage failed" must be
+        // discoverable/alertable, never just trace-archaeology. The benign
+        // not_pending/not_found legs above are expected product behavior
+        // (first writer won) and are deliberately not error-logged.
+        recommendationTransition = "error";
+        console.error(
+          `[riley-pause] failed to mark recommendation acted org=${workUnit.organizationId} rec=${input.recommendationId} workUnit=${workUnit.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+
       // Non-null is safe: isPhaseCActionClassEligible("pause") above requires the
       // seam entry to exist (its first leg is `seam !== undefined`).
       const seam = PHASE_C_EXECUTION_SEAM.pause!;
@@ -209,6 +267,8 @@ export function buildRileyPauseExecutionWorkflow(deps: RileyPauseExecutionDeps):
           metaWriteAccepted: true,
           requestedAt,
           ageHours,
+          recommendationTransition,
+          executedAt: executedAt.toISOString(),
           rollbackPlan: seam.rollbackPlan,
           successMetric: seam.successMetric,
           guardrailMetrics: seam.guardrailMetrics,
