@@ -34,6 +34,8 @@ If Postgres is not running yet, the DB-dependent steps are skipped and the comma
 
 The dashboard reads `apps/dashboard/.env.local`; keys marked `SYNC-FROM-ROOT` in `apps/dashboard/.env.local.example` must match the values in the root `.env` (database URL, encryption key, NextAuth secret) or auth and encryption will silently fail.
 
+Prefer the one-shot `pnpm local:setup` above; the manual equivalent, if you want each step under your control:
+
 ```bash
 git clone https://github.com/jsonljc/switchboard.git
 cd switchboard
