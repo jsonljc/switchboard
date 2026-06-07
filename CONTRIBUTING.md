@@ -104,6 +104,18 @@ pnpm test -- --coverage                      # with coverage
 
 All business actions enter through `PlatformIngress` and require the `Idempotency-Key` header. Endpoint documentation lives in Swagger UI at `/docs` on a running API (port 3000).
 
+## Dependency layers
+
+```
+Layer 1: schemas                                              -> no internal deps
+Layer 2: sdk, cartridge-sdk, creative-pipeline, ad-optimizer  -> schemas only
+Layer 3: core                                                 -> schemas + sdk + cartridge-sdk
+Layer 4: db                                                   -> schemas + core
+Layer 5: apps/*                                               -> may import anything
+```
+
+Circular dependencies are forbidden; the architecture check in CI enforces file-size and layering rules.
+
 ## Conventions
 
 - Conventional Commits, enforced by commitlint (subject must start lowercase)
