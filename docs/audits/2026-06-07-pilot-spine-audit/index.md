@@ -134,6 +134,12 @@ _(none from this pass)_
 
 - [F-07](findings/F-07-followup-marketing-template-blocked.md) — `FOLLOWUP_ALLOW_MARKETING_TEMPLATE` empty default skips marketing-category re-engagement sends (intended posture; flag to flip post Meta approval).
 - [F-08](findings/F-08-autonomy-columns-not-enforcement-axis.md) — `AgentDeployment` autonomy columns inert in practice: `governanceSettings` JSON gates never opened by any product writer; `spendApprovalThreshold` is read but unreachable (JSON preconditions return early); `trustLevel` column's only reader (`SkillRuntimePolicyResolver`) is dead code, never instantiated. Verdict: ILLUSION/decay.
+- [F-10](findings/F-10-arch-check-blind-to-prisma-seed-size.md) — `scripts/arch-check.ts` size gate walks `<pkg>/src` only, so `packages/db/prisma/seed-marketplace.ts` (1068 lines) and `seed.ts` (653 lines) exceed the 600-line error threshold unmeasured. Tooling blind spot, no runtime impact. Verdict: GAP/decay.
+
+### Decay-pass clean results (Steps 2-3, no finding)
+
+- **Mutating-bypass scan: CLEAN.** `check-routes` default mode = 0 kept findings (102 suppressed, all allowlisted with written reasons); `--mode=error` exit 0 (0 `::error::`, 0 missing `@route-class` headers, 0 store-mutation violations; 8 non-blocking control-plane org-guard advisories tracked under #654). Every route added since 2026-05-17 (incl. all `apps/chat/src/routes/*`) either reaches `PlatformIngress.submit` or is allowlisted. No unallowlisted mutating bypass. Evidence: `evidence/decay-pass.md`, `evidence/check-routes.txt`.
+- **Orphans: CLEAN.** `packages/cartridge-sdk` (memory: "pending removal") is still load-bearing via the API/core test harness (`test-server.ts` `TestCartridge`) and declared deps — not a clean orphan; removal is tracked debt. The last-3-weeks Mercury `approvals/**` + cockpit `*-page.tsx` deletions left no dangling imports.
 
 ---
 

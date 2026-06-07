@@ -1,0 +1,84 @@
+
+> switchboard@ arch:check /Users/jasonli/switchboard/.claude/worktrees/pilot-spine-audit
+> npx tsx scripts/arch-check.ts
+
+
+╔══════════════════════════════════════════════════╗
+║        ARCHITECTURE HEALTH CHECK REPORT         ║
+╚══════════════════════════════════════════════════╝
+
+⚠  FILES OVER 400 LINES (god module candidates):
+   🟡 apps/api/src/bootstrap/inngest.ts: 1281 lines (eslint-disable — legacy debt)
+   🟡 apps/api/src/app.ts: 970 lines (eslint-disable — legacy debt)
+   🟡 packages/core/src/orchestrator/propose-pipeline.ts: 823 lines (eslint-disable — legacy debt)
+   🟡 apps/api/src/bootstrap/skill-mode.ts: 821 lines (eslint-disable — legacy debt)
+   🟡 apps/api/src/routes/marketplace.ts: 788 lines (eslint-disable — legacy debt)
+   🟡 packages/ad-optimizer/src/audit-runner.ts: 732 lines (eslint-disable — legacy debt)
+   🟡 packages/core/src/skill-runtime/skill-executor.ts: 685 lines (eslint-disable — legacy debt)
+   🟡 packages/core/src/platform/platform-ingress.ts: 676 lines (eslint-disable — legacy debt)
+   🟡 packages/db/src/stores/prisma-work-trace-store.ts: 657 lines (eslint-disable — legacy debt)
+   🟡 apps/api/src/routes/readiness.ts: 656 lines (eslint-disable — legacy debt)
+   🟡 packages/core/src/platform/platform-lifecycle.ts: 655 lines (eslint-disable — legacy debt)
+   🟡 apps/dashboard/src/components/cockpit/sprite/alex-variants.ts: 640 lines (eslint-disable — legacy debt)
+   🟡 packages/core/src/engine/policy-engine.ts: 633 lines (eslint-disable — legacy debt)
+   🟡 apps/api/src/__tests__/test-stores.ts: 611 lines (eslint-disable — legacy debt)
+   🟡 apps/api/src/bootstrap/contained-workflows.ts: 593 lines
+   🟡 apps/api/src/routes/organizations.ts: 581 lines
+   🟡 apps/api/src/__tests__/test-server.ts: 578 lines
+   🟡 packages/core/src/orchestrator/execution-manager.ts: 575 lines
+   🟡 apps/dashboard/src/app/(auth)/(mercury)/activity/fixtures.data.ts: 570 lines
+   🟡 apps/api/src/__tests__/recommendation-handoff-harness.ts: 566 lines
+   🟡 apps/api/src/routes/whatsapp-management.ts: 553 lines
+   🟡 packages/ad-optimizer/src/recommendation-sink.ts: 534 lines
+   🟡 packages/core/src/memory/compounding-service.ts: 521 lines
+   🟡 packages/ad-optimizer/src/inngest-functions.ts: 505 lines
+   🟡 packages/ad-optimizer/src/meta-ads-client.ts: 499 lines
+   🟡 packages/core/src/sessions/session-manager.ts: 490 lines
+   🟡 apps/dashboard/src/lib/api-client/governance.ts: 488 lines
+   🟡 packages/core/src/audit/ledger.ts: 487 lines
+   🟡 apps/dashboard/src/components/cockpit/sprite/riley-variants.ts: 485 lines
+   🟡 packages/core/src/storage/in-memory.ts: 474 lines
+   🟡 packages/core/src/skill-runtime/tools/calendar-book.ts: 468 lines
+   🟡 packages/core/src/skill-runtime/hooks/claim-classifier.ts: 467 lines
+   🟡 packages/db/src/recommendation-store.ts: 463 lines
+   🟡 apps/dashboard/src/app/(auth)/(mercury)/contacts/fixtures.ts: 460 lines
+   🟡 apps/chat/src/formatters/diagnostic-formatter.ts: 444 lines
+   🟡 packages/ad-optimizer/src/recommendation-engine.ts: 443 lines
+   🟡 apps/chat/src/adapters/whatsapp.ts: 440 lines
+   🟡 apps/chat/src/main.ts: 440 lines
+   🟡 packages/db/src/stores/prisma-creative-job-store.ts: 435 lines
+   🟡 packages/db/src/stores/prisma-contact-store.ts: 426 lines
+   🟡 apps/dashboard/src/app/(auth)/(mercury)/reports/fixtures.ts: 425 lines
+   🟡 packages/core/src/skill-runtime/types.ts: 422 lines
+   🟡 apps/api/src/routes/agents.ts: 421 lines
+   🟡 packages/db/src/storage/prisma-lifecycle-store.ts: 414 lines
+   🟡 packages/db/src/stores/prisma-revenue-store.ts: 411 lines
+   🟡 packages/db/src/stores/prisma-opportunity-store.ts: 403 lines
+   🟡 packages/core/src/recommendations/outcome-attribution.ts: 402 lines
+   🟡 packages/creative-pipeline/src/ugc/ugc-job-runner.ts: 402 lines
+
+✅ All packages have adequate test coverage
+
+⚠  `as any` USAGE BY PACKAGE:
+   🟡 packages/db: 4 occurrences
+   🟡 apps/api: 2 occurrences
+   🟡 apps/chat: 1 occurrences
+
+📊 PACKAGE FILE COUNTS:
+   🔴 packages/core: 514 source files, 407 test files
+   🔴 apps/dashboard: 287 source files, 131 test files
+   🔴 apps/api: 231 source files, 229 test files
+   🔴 packages/db: 113 source files, 116 test files
+   🔴 packages/schemas: 97 source files, 75 test files
+   🔴 apps/chat: 63 source files, 43 test files
+   🔴 packages/ad-optimizer: 52 source files, 65 test files
+   🟡 packages/creative-pipeline: 43 source files, 47 test files
+      packages/cartridge-sdk: 11 source files, 5 test files
+      packages/sdk: 9 source files, 3 test files
+
+✅ No imports of decommissioned @switchboard/agents package
+
+📋 Architecture health: 55 issue(s) found — review above
+
+✅ No error-level issues — CI check passed
+
