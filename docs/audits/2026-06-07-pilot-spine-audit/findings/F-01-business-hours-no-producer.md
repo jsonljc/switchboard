@@ -21,3 +21,7 @@ Expected: an onboarding/settings surface writes `businessHours` so the per-org `
 ## Suggested fix scope
 
 Add a business-hours writer to the onboarding/settings flow (write `OrganizationConfig.businessHours` via an authed route) so the LocalCalendarProvider engages for self-serve orgs; ship the producer in the same PR that exposes the UI, and add a test asserting a fresh org resolves Local (not Noop) once hours are saved.
+
+## Cross-reference
+
+The `GOOGLE_CALENDAR_CREDENTIALS` + `GOOGLE_CALENDAR_ID` env pair (see inventory) provides an alternative rescue path: if both are set, `calendar-provider-factory.ts:76` takes the Google Calendar branch before reaching the Noop fallback, using `DEFAULT_BUSINESS_HOURS` from `google-calendar-factory.ts:9` when `OrganizationConfig.businessHours` is null. Both are empty at prod default, so this path is DORMANT and F-01 still blocks the pilot unless one of the two writers is activated.

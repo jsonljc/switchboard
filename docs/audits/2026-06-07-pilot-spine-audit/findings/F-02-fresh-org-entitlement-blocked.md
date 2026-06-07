@@ -1,9 +1,9 @@
-# F-02: Fresh org is `entitled: false` — every mutating action is 403'd, and no producer ever entitles it
+# F-02: Fresh org is `entitled: false` — every mutating action is 402'd, and no producer ever entitles it
 
 - **Severity:** blocks-pilot
 - **Journey/step:** inventory
 - **Verdict:** DORMANT
-- **Location:** `packages/core/src/billing/entitlement.ts:14`; enforced at `packages/core/src/platform/platform-ingress.ts:196-205` and `apps/api/src/middleware/billing-guard.ts:71`; wired at `apps/api/src/app.ts:676,878` (verified against main on 2026-06-07)
+- **Location:** `packages/core/src/billing/entitlement.ts:14`; enforced at `packages/core/src/platform/platform-ingress.ts:196-205` and `apps/api/src/middleware/billing-guard.ts:71` (HTTP 402 at `:74`); `apps/api/src/utils/ingress-error-to-reply.ts:22` (ingress path also 402); wired at `apps/api/src/app.ts:676,878` (verified against main on 2026-06-07)
 - **Evidence:**
   - `entitlement.ts`: `evaluateEntitlement` returns `entitled:false reason:"blocked"` unless `entitlementOverride` true OR `subscriptionStatus ∈ {active, trialing}`.
   - Schema defaults (`schema.prisma:444,449`): `subscriptionStatus @default("none")`, `entitlementOverride @default(false)`.
@@ -17,7 +17,7 @@ Read `evaluateEntitlement`, the ingress enforcement block, and the billing-guard
 
 ## What happened vs expected
 
-Expected: a freshly signed-up pilot org can take mutating actions (book, send, approve) out of the box, or a trial/override is granted at signup. Observed: a fresh org has `subscriptionStatus="none"`, `entitlementOverride=false` ⇒ `entitled:false`. Every `PlatformIngress.submit()` returns `entitlement_required`, and every mutating HTTP route outside the public allowlist 403s. With Stripe disabled there is no producer that flips the org to entitled — the org is permanently blocked.
+Expected: a freshly signed-up pilot org can take mutating actions (book, send, approve) out of the box, or a trial/override is granted at signup. Observed: a fresh org has `subscriptionStatus="none"`, `entitlementOverride=false` ⇒ `entitled:false`. Every `PlatformIngress.submit()` returns `entitlement_required` (HTTP 402 via `ingress-error-to-reply.ts:22`), and every mutating HTTP route outside the public allowlist returns 402 via `billing-guard.ts:74`. With Stripe disabled there is no producer that flips the org to entitled — the org is permanently blocked.
 
 ## Suggested fix scope
 
