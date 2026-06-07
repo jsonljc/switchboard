@@ -1,5 +1,6 @@
 {
   "name": "@switchboard/creative-pipeline",
+  "description": "Creative content pipeline with async jobs via Inngest",
   "version": "0.1.0",
   "private": true,
   "type": "module",

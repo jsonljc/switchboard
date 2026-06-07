@@ -1,5 +1,6 @@
 {
   "name": "@switchboard/core",
+  "description": "Platform ingress, governance, skill runtime, and orchestration",
   "version": "0.1.0",
   "private": true,
   "type": "module",

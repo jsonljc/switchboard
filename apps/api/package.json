@@ -1,5 +1,6 @@
 {
   "name": "@switchboard/api",
+  "description": "Fastify REST API: platform ingress and governance surface",
   "version": "0.1.0",
   "private": true,
   "type": "module",
