@@ -48,7 +48,6 @@ Status describes code on `main`, not deployment. We do not claim a capability is
 - A single mutating chokepoint: `PlatformIngress.submit()` enforces idempotency, entitlement, and governance in one place (`packages/core/src/platform/platform-ingress.ts`).
 - A hash-chained canonical record: every action becomes a `WorkTrace`, content-hashed and anchored to the audit ledger (`packages/core/src/platform/work-trace-integrity.ts`).
 - Receipts as first-class rows: bookings mint a calendar receipt inside the same database transaction as the booking write (`packages/core/src/skill-runtime/tools/calendar-book.ts`), with a tiered evidence model (`packages/core/src/receipts/`).
-- Deposit links: Stripe Connect checkout for booking deposits, with payment status retrieved from Stripe as the authority.
 - Approval binding: what executes is byte-equivalent to what was approved (`packages/core/src/approval/`).
 - Meta click-to-WhatsApp first-touch capture from signed webhooks, persisted at lead intake.
 - Alex's WhatsApp-to-booking path wired end to end, in alpha. Launch blockers are tracked in `docs/audits/`.
@@ -56,6 +55,7 @@ Status describes code on `main`, not deployment. We do not claim a capability is
 
 **Gated off by design** (built, dark until flipped):
 
+- Deposit links: the Stripe Connect checkout adapter and payment-status retrieval are wired and tested; issuance through the skill runtime is not yet registered.
 - Riley's pause execution on Meta is capability-gated per organization; no production org is enabled.
 - Every ad object Mira creates is `PAUSED` by construction; the Meta client refuses to set `ACTIVE`.
 - Compliance gates (consent, claim scanning, messaging windows) run in observe mode during the enforcement bake.
@@ -144,4 +144,4 @@ Requires Node 20+, pnpm 9, and PostgreSQL 17/18 with pgvector. Full setup, devel
 
 Copyright (c) 2026. All rights reserved.
 
-The source is visible for evaluation and security review. No license is granted to use, copy, modify, or distribute this software, in whole or in part, without prior written permission.
+The source is visible for evaluation and security review. No license is granted to use, copy, modify, or distribute this software, in whole or in part, without prior written permission. Contributions are welcome through the process in [CONTRIBUTING.md](CONTRIBUTING.md); by submitting one you agree it may be incorporated into the project under these terms.
