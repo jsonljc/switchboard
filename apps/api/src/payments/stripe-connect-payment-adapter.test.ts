@@ -150,6 +150,86 @@ describe("StripeConnectPaymentAdapter.retrievePayment", () => {
   });
 });
 
+describe("StripeConnectPaymentAdapter.retrievePayment bookingId from metadata", () => {
+  it("returns bookingId from PaymentIntent metadata when present", async () => {
+    const retrievePI = vi.fn(async () => ({
+      id: "pi_meta_1",
+      amount: 6000,
+      currency: "sgd",
+      status: "succeeded",
+      metadata: { bookingId: "bk-from-meta", organizationId: "org-1" },
+    }));
+    const client = {
+      checkout: { sessions: { create: vi.fn() } },
+      paymentIntents: { retrieve: retrievePI },
+      webhooks: { constructEvent: vi.fn() },
+    } as unknown as StripeConnectClient;
+    const adapter = new StripeConnectPaymentAdapter({
+      client,
+      connectedAccountId,
+      successUrl: "https://app/success",
+      cancelUrl: "https://app/cancel",
+    });
+
+    const result = await adapter.retrievePayment("pi_meta_1");
+
+    expect(result).not.toBeNull();
+    expect(result?.bookingId).toBe("bk-from-meta");
+  });
+
+  it("returns bookingId=null when metadata has no bookingId", async () => {
+    const retrievePI = vi.fn(async () => ({
+      id: "pi_meta_2",
+      amount: 6000,
+      currency: "sgd",
+      status: "succeeded",
+      metadata: {},
+    }));
+    const client = {
+      checkout: { sessions: { create: vi.fn() } },
+      paymentIntents: { retrieve: retrievePI },
+      webhooks: { constructEvent: vi.fn() },
+    } as unknown as StripeConnectClient;
+    const adapter = new StripeConnectPaymentAdapter({
+      client,
+      connectedAccountId,
+      successUrl: "https://app/success",
+      cancelUrl: "https://app/cancel",
+    });
+
+    const result = await adapter.retrievePayment("pi_meta_2");
+
+    expect(result).not.toBeNull();
+    expect(result?.bookingId).toBeNull();
+  });
+
+  it("returns bookingId=null when metadata is absent", async () => {
+    const retrievePI = vi.fn(async () => ({
+      id: "pi_meta_3",
+      amount: 6000,
+      currency: "sgd",
+      status: "succeeded",
+      // no metadata key at all
+    }));
+    const client = {
+      checkout: { sessions: { create: vi.fn() } },
+      paymentIntents: { retrieve: retrievePI },
+      webhooks: { constructEvent: vi.fn() },
+    } as unknown as StripeConnectClient;
+    const adapter = new StripeConnectPaymentAdapter({
+      client,
+      connectedAccountId,
+      successUrl: "https://app/success",
+      cancelUrl: "https://app/cancel",
+    });
+
+    const result = await adapter.retrievePayment("pi_meta_3");
+
+    expect(result).not.toBeNull();
+    expect(result?.bookingId).toBeNull();
+  });
+});
+
 describe("StripeConnectPaymentAdapter.retrievePayment not-found", () => {
   it("returns null when the PaymentIntent does not exist", async () => {
     const retrievePI = vi.fn(async () => {
