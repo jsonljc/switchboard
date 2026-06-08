@@ -1,4 +1,4 @@
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 import type { GuardrailStateStore } from "@switchboard/core";
 import { InMemoryGuardrailStateStore } from "@switchboard/core";
 import { RedisGuardrailStateStore } from "./redis.js";

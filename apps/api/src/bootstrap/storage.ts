@@ -20,7 +20,7 @@ import type {
   GuardrailStateStore,
 } from "@switchboard/core";
 import { createGuardrailStateStore } from "../guardrail-state/index.js";
-import type Redis from "ioredis";
+import type { Redis } from "ioredis";
 
 export interface StorageBootstrapResult {
   storage: StorageContext;

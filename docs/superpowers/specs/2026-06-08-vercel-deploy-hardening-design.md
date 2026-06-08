@@ -12,29 +12,30 @@ src/app.ts(523,7): error TS2352: Conversion of type 'Cartridge' to type 'Governa
 
 ## Investigation summary (what is actually wrong)
 
-A four-agent audit established the following with file-level evidence:
+A four-agent audit plus the PR's own Vercel check established the following with file-level evidence:
 
-1. **The current repo is deploy-clean.** On `main` (`02f11ae1`), `apps/api/src/app.ts:43` is `import type Redis from "ioredis"` (used only in type position at line 59), and the `GovernanceCartridge` cast at `app.ts:522-525` is structurally sound. `pnpm --filter @switchboard/api typecheck` exits 0 after a normal build. None of the three errors reproduce.
+1. **`apps/api` IS a Vercel project (`switchboard-api`), not only a Render service.** The audit inferred Render from `render.yaml`, but the PR's commit status shows a Vercel project `switchboard-api` building `apps/api` with `tsc`. That is the host emitting the three errors.
 
-2. **The errors cannot come from any committed version of `app.ts`.** `git log -S 'import Redis from "ioredis"' -- apps/api/src/app.ts` is empty — `app.ts` has used the `import type` form since the line was introduced (`18b6d710`). The value-import hits in old commits (`8c1e4838` et al.) live in `apps/api/src/middleware/idempotency.ts` and `guardrail-state/*.ts`, **not** `app.ts`. The `GovernanceCartridge` cast did not exist in old `app.ts` either. So an "old commit" of `app.ts` could not emit this exact error trio.
+2. **The current source genuinely fails on Vercel's `tsc`, even though local `tsc` passes.** Local `pnpm --filter @switchboard/api typecheck` exits 0 on `main`, but the `switchboard-api` Vercel build of the same source (this branch) failed with the identical TS6133 / TS2709 / TS2352 trio. The divergence is the toolchain/resolution environment, not an old commit: Vercel's resolver treats the **default** import of ioredis's `Redis` as a namespace (→ TS2709 / TS6133), and checks the `Cartridge`→`GovernanceCartridge` cast more strictly than local (the `enrichContext` parameter types — `CartridgeContext` vs `Record<string, unknown>` — are method-bivariant-compatible locally but not under Vercel's evaluation → TS2352).
 
-3. **Deployment topology:** Vercel builds **only the dashboard** (`apps/dashboard`, Next.js). `apps/api` and `apps/chat` deploy to **Render** (`render.yaml`, `Dockerfile.api`, `docs/runbooks/production-urls.md`). The dashboard does **not** depend on `@switchboard/api`, so a Vercel dashboard build never compiles `app.ts`. The failing `tsc`-on-`app.ts` build therefore runs on the **api host (Render)** or a local/CI tree — not on Vercel.
+3. **`git log -S` confirms `app.ts` never had a _value_ `Redis` import** — so this is not an "old commit of app.ts" regression; it is a latent resolution-fragility in the current default-import form that only Vercel's `tsc` surfaces.
 
-4. **Most consistent cause:** the api host built a **stale build cache or a dirty/old snapshot** (the classic "main is broken" false alarm: a tree where lower layers were not rebuilt, or a one-off edit that flipped `import type Redis` → `import Redis`). There is **no committed misconfiguration** driving it — no `vercel.json`, no `.vercel/`, no deploy hook, no CI deploy step.
-
-**Conclusion:** the live failure is an **operational** host-side issue (clear cache + rebuild latest commit), not a code defect. This branch therefore (a) confirms the repo is clean, (b) ships safe, proactive hardening so an unpinned build environment can't reintroduce divergence, and (c) documents the operational fix as a runbook.
+**Conclusion:** the fix is a real (small, safe) code change — make the ioredis imports and the governance-cartridge cast robust to Vercel's stricter resolution — plus the build-environment hardening and runbook below. The PR's live Vercel check is the verification gate.
 
 ## In scope (changes this branch ships)
 
-1. **Pin the build Node version.** Add a repo-root `.nvmrc` (`22`) and a permissive `engines.node` floor (`>=20.9.0`, Next 16's requirement) to root `package.json`. Vercel and Render both read these to select the build runtime, removing silent default-drift. The floor is intentionally open-ended (no upper bound) so local contributors on Node 24 are not warned; `.nvmrc` is what actually pins the hosted build to a Vercel-supported 22.x (Vercel does not offer a 24.x build runtime).
+1. **Make ioredis imports robust (the actual build fix).** Convert every `import [type] Redis from "ioredis"` (default import) to the **named** form `import [type] { Redis } from "ioredis"` across `apps/api` and `apps/chat`. ioredis 5.x exports `Redis` as both `default` and a named export (`export { default as Redis }`); the named form is unambiguously the class type/value and sidesteps the default-as-namespace resolution that fails on Vercel. Zero behavior change (named class === default class).
 
-2. **Remove dead duplicate `headers()` in `apps/dashboard/next.config.mjs`.** The file declares `async headers()` twice in one object literal; the second (CSP `securityHeaders`) silently shadows the first. Deleting the dead first block is a **zero-behavior-change** cleanup of the deploy-critical config (the `X-DNS-Prefetch-Control` header in the dead block was never being served).
+2. **Route the governance-cartridge cast through `unknown`.** `app.ts:523`: `... as unknown as GovernanceCartridge | null` — TS's own suggested fix for the TS2352 structural-overlap rejection. This is a deliberate downcast at a storage boundary (the store returns the generic `Cartridge | null`); going through `unknown` makes it resolution-independent.
 
-3. **Add `docs/runbooks/deploy-troubleshooting.md`** — the deployment topology, the operational fix steps for both hosts (Render for api/chat, Vercel for dashboard), the build-time env-var checklist for the dashboard, and the local deploy-parity command.
+3. **Pin the build Node version.** Add a repo-root `.nvmrc` (`22`) and a permissive `engines.node` floor (`>=20.9.0`, Next 16's requirement) to root `package.json`. Vercel and Render both read these to select the build runtime, removing silent default-drift. The floor is intentionally open-ended (no upper bound) so local contributors on Node 24 are not warned; `.nvmrc` is what actually pins the hosted build to a Vercel-supported 22.x (Vercel does not offer a 24.x build runtime).
+
+4. **Remove dead duplicate `headers()` in `apps/dashboard/next.config.mjs`.** The file declares `async headers()` twice in one object literal; the second (CSP `securityHeaders`) silently shadows the first. Deleting the dead first block is a **zero-behavior-change** cleanup of the deploy-critical config (the `X-DNS-Prefetch-Control` header in the dead block was never being served).
+
+5. **Add `docs/runbooks/deploy-troubleshooting.md`** — the deployment topology, the operational fix steps for both hosts (Render for api/chat, Vercel for dashboard), the build-time env-var checklist for the dashboard, and the local deploy-parity command.
 
 ## Explicitly out of scope (and why)
 
-- **No change to `apps/api/src/app.ts`.** It is correct. Forcing `as unknown as` on the cast would reduce type safety to fix an error that does not exist on `main`.
 - **No `vercel.json` / no Prisma `postinstall`.** Prisma-generate-before-`next build` is a _theoretical_ risk, but the dashboard currently builds successfully on Vercel via the turbo `^build` chain. Adding `vercel.json` could override working Vercel-UI build settings and break a deploy that works today. Documented as a known risk in the runbook instead.
 - **No TypeScript caret removal, no `crypto`→`node:crypto` rename.** Frozen-lockfile installs already pin TS `6.0.3`; the `crypto` imports resolve fine. Both are cosmetic and outside the deploy-blocking scope.
 

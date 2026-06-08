@@ -4,16 +4,16 @@ Companion to [`production-urls.md`](./production-urls.md). Use when a production
 
 ## Deployment topology (which host builds what)
 
-| App              | Host       | Build command                           | Triggered by                                                |
-| ---------------- | ---------- | --------------------------------------- | ----------------------------------------------------------- |
-| `apps/dashboard` | **Vercel** | `next build` (via turbo)                | Git push to `main` (auto-deploy)                            |
-| `apps/api`       | **Render** | `pnpm build` (Docker, `Dockerfile.api`) | `render.yaml` → `branch: main`, `autoDeployTrigger: commit` |
-| `apps/chat`      | **Render** | `pnpm build` (Docker)                   | `render.yaml` → `branch: main`                              |
-| Postgres, Redis  | Render     | —                                       | —                                                           |
+| App              | Host(s)                                     | Build command                                                   | Triggered by                                                  |
+| ---------------- | ------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
+| `apps/dashboard` | **Vercel**                                  | `next build` (via turbo)                                        | Git push to `main` (auto-deploy)                              |
+| `apps/api`       | **Vercel** (`switchboard-api`) + **Render** | `tsc` (Vercel) / `pnpm build` Docker (Render, `Dockerfile.api`) | Vercel: git push / PR; Render: `render.yaml` → `branch: main` |
+| `apps/chat`      | **Render**                                  | `pnpm build` (Docker)                                           | `render.yaml` → `branch: main`                                |
+| Postgres, Redis  | Render                                      | —                                                               | —                                                             |
 
-Key consequence: **Vercel never compiles `apps/api`.** The dashboard does not depend on `@switchboard/api`, and turbo's `build` only walks a package's own dependency graph. A `tsc` error in `apps/api/src/app.ts` during a deploy is therefore an **api build on Render**, not a Vercel build — regardless of how the failure was labelled.
+`apps/api` has a **Vercel project named `switchboard-api`** (visible as the `Vercel` commit status on PRs) in addition to the Render service. The Vercel project builds `apps/api` with `tsc` and is a separate verification gate from Render — a build can be green on one host and red on the other if their toolchains resolve types differently (see the symptom below).
 
-There is **no `vercel.json` and no `.vercel/` in the repo** by design: Vercel and Render build settings live in each host's web UI.
+There is **no `vercel.json` and no `.vercel/` in the repo**: Vercel and Render build settings live in each host's web UI.
 
 ## Symptom: build fails on `apps/api/src/app.ts` (Redis / GovernanceCartridge errors)
 
@@ -23,13 +23,12 @@ src/app.ts(59,12): TS2709: Cannot use namespace 'Redis' as a type.
 src/app.ts(523,7): TS2352: Conversion of type 'Cartridge' to 'GovernanceCartridge' ...
 ```
 
-**This is not a code defect on `main`.** Current `app.ts:43` is `import type Redis from "ioredis"` and the `GovernanceCartridge` cast type-checks. No committed version of `app.ts` ever produced these errors (verified via `git log -S`). The cause is a **stale build cache or an old/dirty snapshot** on the building host.
+**Root cause: a toolchain-resolution divergence, not an old commit.** Local `tsc` and Render are lenient about two constructs that the **`switchboard-api` Vercel** `tsc` rejects:
 
-**Fix (Render, the host that builds `apps/api`):**
+- **Default import of `Redis`** (`import type Redis from "ioredis"`): Vercel's resolver treats the default export as a namespace → TS2709 ("cannot use namespace as a type") + TS6133. **Fix:** use the named export — `import [type] { Redis } from "ioredis"` (ioredis exports `Redis` both as `default` and named; the named form is unambiguously the class). All ioredis imports in `apps/api`/`apps/chat` were converted in the PR that added this runbook.
+- **`Cartridge`→`GovernanceCartridge` cast** (`app.ts`): the `enrichContext` parameter types are method-bivariant-compatible locally but rejected as insufficiently-overlapping on Vercel → TS2352. **Fix:** cast through `unknown` (`as unknown as GovernanceCartridge | null`).
 
-1. Confirm the repo is clean locally: from a fresh `main`, `pnpm reset && pnpm build && pnpm typecheck` should be green. (Note: `pnpm reset` rebuilds the schemas→core→db chain but **not** `ad-optimizer`/`creative-pipeline`/apps — a full `pnpm build` is what proves a deploy-equivalent tree. "Has no exported member" errors after `reset` alone are the documented stale-`dist/` false alarm.)
-2. Render dashboard → `switchboard-api` service → **Manual Deploy → "Clear build cache & deploy"**, on the latest `main` commit.
-3. Verify the deploy's commit SHA matches `git rev-parse origin/main`.
+If a _new_ default-style ioredis import or a fragile structural cast lands and only Vercel goes red while local/CI/Render stay green, apply the same two patterns. To reproduce Vercel locally as closely as possible, run a clean `pnpm build` (not `pnpm reset` alone — `reset` skips `ad-optimizer`/`creative-pipeline`/apps and yields false "has no exported member" alarms).
 
 ## Symptom: Vercel (dashboard) serves an old commit / keeps failing after "Redeploy"
 

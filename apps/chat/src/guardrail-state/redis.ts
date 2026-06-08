@@ -1,4 +1,4 @@
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 import type { GuardrailStateStore, RateLimitEntry } from "@switchboard/core";
 
 export class RedisGuardrailStateStore implements GuardrailStateStore {

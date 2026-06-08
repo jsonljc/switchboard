@@ -40,7 +40,7 @@ import { registerRoutes } from "./bootstrap/routes.js";
 import { registerInngest } from "./bootstrap/inngest.js";
 import { registerSwagger } from "./bootstrap/swagger.js";
 import { wireMetricsProvider } from "./bootstrap/wire-metrics.js";
-import type Redis from "ioredis";
+import type { Redis } from "ioredis";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -520,7 +520,7 @@ export async function buildServer() {
       return { spec, overlays };
     },
     loadCartridge: async (cartridgeId) =>
-      storage.cartridges.get(cartridgeId) as
+      storage.cartridges.get(cartridgeId) as unknown as
         | import("@switchboard/core/platform").GovernanceCartridge
         | null,
     getGovernanceProfile: async (orgId) => {
