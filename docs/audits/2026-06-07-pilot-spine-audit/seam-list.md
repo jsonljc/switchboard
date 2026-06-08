@@ -239,15 +239,19 @@ conversation.messages` (raw ConversationState JSONB).
   (`!response.ok` → markFailed; `outputs.sent===true/false` → markSent/markSkipped;
   else `no_terminal_outcome`).
 - Payload: `SubmitWorkResponse.result.outputs`.
-- Verdict: **SUSPECTED (latent).** The `{sent, skipReason}` contract matches
-  exactly — that part is OK. The latent: the cron reads `response.result.outputs`
-  guarded only by `!response.ok`. If the submit ever PARKS (`approvalRequired:
-true` → `ok:true`, NO `result`), `response.result.outputs` throws / the row is
-  marked `no_terminal_outcome`. Today `approvalPolicy:"none"` so it should not
-  park, but unlike S-08 there is no `system_auto_approved` short-circuit — the
-  gate still runs the policy lookup, so an org-level governance override that
-  injects require_approval could flip this. Confirm live that no posture/override
-  can force a `schedule`-trigger send to park.
+- Verdict: **CONFIRMED (by code trace, 2026-06-08) — mechanism refined → F-18.**
+  The `{sent, skipReason}` happy-path contract matches exactly. The defect: the
+  cron reads `response.result.outputs` guarded only by `!response.ok`. The
+  original "approvalRequired → no `result` → throws" hypothesis is **WRONG**: the
+  `approvalRequired` variant DOES carry `result` (`platform-ingress.ts:90-97`), so
+  it does not throw. BUT both a PARK (`result.outputs={}`, `:294`) AND a
+  governance DENY (`{ok:true, result:buildFailedResult(...)}`, `outputs={}`,
+  `:282-286,483-494`) yield `outputs.sent === undefined`, which falls through to
+  `markFailed(reminderId, "no_terminal_outcome")` — a misleading `failed` row, not
+  a deny/park classification. The DENY path is **reachable today**: under F-16 a
+  fresh org's 0-Policy default-deny floor denies every send, so every reminder
+  becomes `no_terminal_outcome` failed (with `alert:true`). See F-18 +
+  `evidence/j7-cron-outcome-handling.txt`.
 
 ### S-15 — scheduled-follow-up-dispatch → conversation.followup.send (ingress)
 
@@ -265,12 +269,19 @@ true` → `ok:true`, NO `result`), `response.result.outputs` throws / the row is
   `outputs:{ sent, skipReason }`.
 - Consumer: `scheduled-follow-up-dispatch.ts:75-119`.
 - Payload: `SubmitWorkResponse.result.outputs`.
-- Verdict: **SUSPECTED (latent).** Same structure as S-14: `{sent,skipReason}`
-  contract matches; the unhandled `approvalRequired` variant is the latent.
-  Additionally relies on `classifyCadenceSkip(reason)` and
-  `ACTIVATION_*` constants — confirm the workflow's `skipReason` strings are in
-  the set `classifyCadenceSkip` recognizes (an unrecognized reason silently falls
-  to the generic skip branch).
+- Verdict: **CONFIRMED (by code trace, 2026-06-08) — same defect as S-14 → F-18;
+  the `classifyCadenceSkip` axis is REFUTED.** Same `no_terminal_outcome`
+  mislabel of a deny/park as S-14 (`scheduled-follow-up-dispatch.ts:117-119`),
+  PLUS the follow-up cron passes a non-null `nextRetryAt` until attempts≥3, so a
+  denied follow-up is **retried up to 3 times** before terminal — re-submitting an
+  action the gate denies every time. The `classifyCadenceSkip` concern is
+  **REFUTED**: every skipReason the workflow can emit (`unsupported_channel`,
+  `consent_revoked`, `consent_pending`, `no_optin`, `no_template`,
+  `template_not_approved`, `marketing_blocked`) is handled — only
+  `template_not_approved`/`no_template` are `"activation"` (re-evaluable), and
+  every other reason (incl. `"unknown"`) maps to `"durable"` →
+  `markSkipped` (terminal). Fail-closed by design; no crash, no infinite retry.
+  See F-18 + `evidence/j7-cron-outcome-handling.txt`.
 
 ---
 
@@ -341,7 +352,8 @@ externalReference/bookingId`; contact/opportunity resolved server-side from the
 | Verdict            | Count  | Seam IDs                                                                     |
 | ------------------ | ------ | ---------------------------------------------------------------------------- |
 | OK                 | 13     | S-01, S-02, S-03, S-04, S-05, S-06, S-07, S-08, S-09, S-10, S-13, S-15, S-17 |
-| SUSPECTED          | 4      | S-11, S-14, S-16, S-18                                                       |
+| CONFIRMED-defect   | 2      | S-14, S-16 (→ F-18; `no_terminal_outcome` mislabels deny/park)               |
+| SUSPECTED          | 2      | S-11, S-18                                                                   |
 | UNVERIFIED-COMPLEX | 1      | S-12                                                                         |
 | **Total**          | **18** |                                                                              |
 
@@ -357,10 +369,12 @@ their current safety but flagged in-line for the live walkthrough.
   bubbles in HandoffDetailSheet.
 - **S-12** (UNVERIFIED-COMPLEX) — identify the writer that populates lead/agent
   turns into `ConversationState.messages` and its field name; settles S-11.
-- **S-14** — reminder cron: `approvalRequired` variant unhandled (latent;
-  no `system_auto_approved` short-circuit, so an org override could park).
-- **S-16** — follow-up cron: same unhandled `approvalRequired` variant; plus
-  confirm `skipReason` strings are recognized by `classifyCadenceSkip`.
+- **S-14 / S-16 — RESOLVED (CONFIRMED → F-18).** Both crons mislabel a governance
+  DENY and a require_approval PARK as `no_terminal_outcome` "failed" (the
+  approvalRequired variant carries `result`, so it does not throw — the original
+  "crash" hypothesis was wrong; the silent mislabel is the real defect). The DENY
+  path is reachable today under F-16 default-deny. `classifyCadenceSkip` coverage
+  REFUTED as a concern (all skipReasons handled; fail-closed). No longer SUSPECTED.
 - **S-18** — verified-payment revenue events lack `sourceCampaignId`/`sourceAdId`
   → possible NULL ad attribution on the Results paid-visits surface; plus
   `currency.length(3)` rejection risk.

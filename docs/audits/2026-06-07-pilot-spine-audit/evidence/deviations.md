@@ -208,3 +208,31 @@ feed the Inbox reads — `GET /api/dashboard/decisions → 200 {"decisions":[],"
 `/inbox` redirects to `/onboarding`. The respond/dispatch and reject legs are read-verified
 (dispatch-or-recovery present, no phantom-success). Cross-references **F-16** (and F-06 for the
 dark Slack notification leg).
+
+---
+
+## D-05 — Journey 7: the outbound-cron live SEND leg could not be triggered locally (no Inngest dev server)
+
+**Context:** J7-S2/S3 reserved a deviation slot (D-05) for seeding a confirmed booking 23-25h out
+for the audit org and triggering the `appointment-reminder-dispatch` Inngest function to observe,
+live, the ingress submission → gate deny (expected per F-16) → how the cron classifies the deny
+(proving S-14 live).
+
+**What happened — NO manual DB write was performed; the live SEND leg was NOT run.** The trigger
+mechanism is unavailable in this environment: no Inngest dev server is running (`ps` for `inngest`
+= 0 processes; no listener on `:8288`). The API registers the Inngest _serve_ handler at
+`/api/inngest` (`inngest.ts:1200`), but that is the registration/serve endpoint, not a
+function-invoke endpoint — without the Inngest dev server (or Inngest Cloud) signing and dispatching
+a function-invoke, there is no way to fire the cron locally. Standing up an Inngest dev server +
+re-registering the API functions is a large, environment-changing setup for a read-only audit and
+was out of scope per the task's explicit cost bound ("If Inngest can't be easily triggered locally,
+DO NOT sink large effort: verdict the live leg DORMANT-locally").
+
+**Verdict for the live leg:** DORMANT-locally. S-14 and S-16 are instead **CONFIRMED by a definitive
+code trace** of the `SubmitWorkResponse` contract (`platform-ingress.ts:87-97`, deny `:282-286`,
+park `:289-374`, `buildFailedResult` `:483-494`) against both dispatchers' response handling — the
+trace is unambiguous (exactly one fall-through for `outputs.sent === undefined`, hit by both deny and
+park). See `evidence/j7-cron-outcome-handling.txt` and **F-18**.
+
+**Scope:** no rows written, no booking seeded, no server started/restarted. Read-only +
+code-trace only.

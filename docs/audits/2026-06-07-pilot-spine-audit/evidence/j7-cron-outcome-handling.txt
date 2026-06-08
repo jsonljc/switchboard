@@ -1,0 +1,83 @@
+J7-S2 — Outbound cron response handling: S-14 / S-16 confirmed by code trace
+Verified against main, worktree audit/pilot-spine, 2026-06-08.
+
+=========================================================================
+1. SubmitWorkResponse — THREE variants (platform-ingress.ts:87-97)
+=========================================================================
+  | { ok: true;  result: ExecutionResult; workUnit }                                   // success
+  | { ok: false; error: IngressError }                                                 // error
+  | { ok: true;  result: ExecutionResult; workUnit; approvalRequired: true; ... }      // PARK
+
+KEY: the approvalRequired (PARK) variant carries `result`. So `response.result.outputs`
+     does NOT throw on a park. The seam-list "throws / crash" mechanism for S-14/S-16 is WRONG.
+
+=========================================================================
+2. The reachable-today path: DENY (platform-ingress.ts:282-286)
+=========================================================================
+  if (decision.outcome === "deny") {
+    const result = this.buildFailedResult(workUnit, decision.reasonCode, "Denied by governance");
+    await this.persistTrace(...);
+    return { ok: true, result, workUnit };          // <-- ok:TRUE, no `error`
+  }
+  buildFailedResult (:483-494): { outcome:"failed", outputs:{}, error:{code,message}, ... }
+
+  => for a deny: response.ok === true; response.result.outputs.sent === undefined.
+
+PARK (platform-ingress.ts:289-374):
+  result.outputs = {} (:294); returns { ok:true, result, workUnit, approvalRequired:true }.
+  => for a park: response.ok === true; response.result.outputs.sent === undefined.
+
+=========================================================================
+3. CONSUMER fall-through — both crons mark `no_terminal_outcome` = failed
+=========================================================================
+appointment-reminder-dispatch.ts:96-114
+  if (!response.ok) { markFailed(reminderId, response.error.type); failed++; return; }   // NOT taken (ok:true)
+  const outputs = (response.result.outputs ?? {}) as {sent?,skipReason?};                // {} -> sent undefined
+  if (outputs.sent === true)  { markSent;  return; }                                     // no
+  if (outputs.sent === false) { markSkipped; return; }                                   // no
+  markFailed(reminderId, "no_terminal_outcome"); failed++;                               // <-- HIT
+  ("failed" in TERMINAL set :42 -> terminal, no retry)
+
+scheduled-follow-up-dispatch.ts:75-121
+  same structure; fall-through :117-119
+  markFailed(followUp.id, "no_terminal_outcome", computeNextRetry(followUp.attempts, now)); failed++;
+  computeNextRetry (:127-131): non-null until attempts+1 >= MAX_SEND_ATTEMPTS(3)
+  => a denied follow-up is RETRIED up to 3 times before terminal (re-submits a deny that never succeeds).
+
+onFailure handlers are alert:true on riskCategory:"high" => denied/parked orgs generate operator
+failure alerts. Under F-16 (fresh org = 0 Policy => default-deny floor), EVERY reminder/follow-up
+for a not-yet-policy-provisioned org becomes a `failed` row. => F-18.
+
+=========================================================================
+4. FOLLOWUP_ALLOW_MARKETING_TEMPLATE empty default (cross-ref F-07)
+=========================================================================
+contained-workflows.ts:299  allowMarketingTemplate: process.env["FOLLOWUP_ALLOW_MARKETING_TEMPLATE"] === "true"
+  empty => false. (reminder workflow :316 hardcodes false.)
+Behavior (ONLY if gate ALLOWS; under F-16 default-deny the workflow never runs):
+  marketing-category template -> proactive-eligibility.ts:83-84 -> {eligible:false, reason:"marketing_blocked"}
+  -> conversation-followup-send-workflow.ts:71-76 -> {outcome:"completed", outputs:{sent:false, skipReason:"marketing_blocked"}}
+  -> cron: classifyCadenceSkip("marketing_blocked")="durable" -> markSkipped (terminal). Utility templates still send.
+  No throw. Matches F-07 (DORMANT/decay). No new finding.
+
+=========================================================================
+5. classifyCadenceSkip coverage (S-16 sub-check) — REFUTED concern
+=========================================================================
+Emitted skipReasons:
+  workflow: unsupported_channel (conversation-followup-send-workflow.ts:47,93)
+  eligibility (proactive-eligibility.ts): consent_revoked:56, consent_pending(via reasonCode),
+              no_optin:65, no_template:70/78, template_not_approved:81, marketing_blocked:84
+classifyCadenceSkip (scheduled-follow-up.ts:74,81-83):
+  ACTIVATION_SKIP_REASONS = {"template_not_approved","no_template"} -> "activation" (re-evaluable)
+  everything else (incl. "unknown") -> "durable" -> markSkipped (terminal)
+=> fail-closed by design. Unrecognized reason terminates the cadence; no crash, no infinite retry.
+   No mismatch bug. S-16 skipReason concern REFUTED.
+
+=========================================================================
+6. Live exercise — NOT RUN (DORMANT-locally)
+=========================================================================
+- No Inngest dev server running: ps for "inngest" = 0; no listener on :8288.
+- API serves the Inngest handler at /api/inngest (inngest.ts:1200 "Inngest serve handler
+  registered"), but that is the serve endpoint, not an invoke endpoint — without the Inngest
+  dev server (or cloud) there is no signed function-invoke path to trigger the cron locally.
+- Per the cost bound in the task, the live leg is verdicted DORMANT-locally and S-14/S-16 are
+  confirmed by the definitive code trace above. See deviations D-05.
