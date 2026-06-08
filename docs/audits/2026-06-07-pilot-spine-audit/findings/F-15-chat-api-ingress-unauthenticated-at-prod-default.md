@@ -52,3 +52,26 @@ The fix is purely provisioning + documentation:
 ## Cross-reference
 
 Same secret-provisioning gap family as F-03. Unlike F-13/F-14 (Telegram-only), this gap hits ALL channels including WhatsApp — it is the one J3-S3 blocker that directly threatens the WhatsApp pilot. Once F-15 is resolved (key provisioned), WhatsApp inbound should flow end-to-end without hitting F-13 or F-14 (which are Telegram-only by code read).
+
+## Resolution (2026-06-08)
+
+Fixed on `fix/f-15-chat-ingress-auth`. While implementing the recommended fix, the literal
+"provision a single `SWITCHBOARD_API_KEY` + matching `API_KEYS`" path was found to be
+multi-tenant-incorrect: the API derives the org from the auth key (`requireOrgForMutation`
+sets `request.orgId = organizationIdFromAuth`, and `resolveAuthoritativeDeployment` resolves
+the deployment via `resolveByOrgAndSlug(request.organizationId, ...)`), and a static API key
+is single-org by construction (`auth.ts:82-98` refuses to boot on an unscoped key). One
+org-scoped key on the shared, multi-tenant chat service would route every tenant's inbound
+to one org. The audit did not surface this because it exercised only the single audit org.
+
+Shipped instead: the chat-to-API ingress hop authenticates as a trusted internal service via
+`INTERNAL_API_SECRET` (already provisioned on both Render services) on a new
+`POST /api/internal/ingress/submit` route that honors the chat-resolved `body.organizationId`
+and still flows through `PlatformIngress.submit` (entitlement + GovernanceGate + idempotency
+unchanged; not a bypass). The chat adapter is re-tiered to that route, and a chat boot guard
+fails fast when `DATABASE_URL` is set but `INTERNAL_API_SECRET` is empty. The fix also carries
+`contactId`/`conversationThreadId` (Spec-1A lineage) through the hop, which the old route
+dropped. F-15 alone yields working, authenticated inbound that still default-denies until
+F-16/F-02 land (expected). Design + plan:
+`docs/superpowers/specs/2026-06-08-f-15-chat-ingress-auth-design.md`,
+`docs/superpowers/plans/2026-06-08-f-15-chat-ingress-auth.md`.

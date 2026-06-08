@@ -65,6 +65,8 @@ services:
           property: connectionString
       - key: CREDENTIALS_ENCRYPTION_KEY
         sync: false
+      # Shared chat<->api service secret. MUST be the SAME value on both services.
+      # Authenticates the chat-to-API ingress hop (F-15) + provision-notify + chat-approvals.
       - key: INTERNAL_API_SECRET
         sync: false
       - key: ANTHROPIC_API_KEY
@@ -185,6 +187,9 @@ services:
           property: connectionString
       - key: CREDENTIALS_ENCRYPTION_KEY
         sync: false
+      # Shared chat<->api service secret. MUST be the SAME value on both services.
+      # Authenticates the chat-to-API ingress hop (F-15) + provision-notify + chat-approvals.
+      # The chat server refuses to boot in managed mode (DATABASE_URL set) without it.
       - key: INTERNAL_API_SECRET
         sync: false
       - key: SWITCHBOARD_API_URL
