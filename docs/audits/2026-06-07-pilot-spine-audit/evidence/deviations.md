@@ -236,3 +236,36 @@ park). See `evidence/j7-cron-outcome-handling.txt` and **F-18**.
 
 **Scope:** no rows written, no booking seeded, no server started/restarted. Read-only +
 code-trace only.
+
+---
+
+## D-06 — Journey 5: complete onboarding so the authed Home/Inbox surfaces render (instead of redirecting to /onboarding)
+
+**Context:** J5-S1 required reaching the authed `/` (Home) and `/inbox` surfaces. The audit org
+has `onboardingComplete=false` (observed in J3/J4), so both routes redirect to `/onboarding`
+(the website-scan "Let Alex learn your business" flow), making the target surfaces unreachable.
+
+**Why not drive the real onboarding flow:** the `/onboarding` website-scan producer requires
+external website scraping + an LLM call (`packages/core/src/website-scanner/scanner.ts`), which
+is not reliably exercisable in this local audit environment and is not the J5 subject under test
+(J5 tests the Home/Inbox/Results/Contacts RENDER, not the scan). So `onboardingComplete` was set
+directly.
+
+**Deviation applied (exact SQL):**
+
+```sql
+UPDATE "OrganizationConfig" SET "onboardingComplete"=true WHERE id='org_4f796695-7022-4718-838f-71c50b879ad2';
+-- UPDATE 1
+```
+
+Before: `onboardingComplete=f`. After: `onboardingComplete=t`. (No restart needed; the gate is a
+per-request DB read.)
+
+**Consequence for evidence:** after D-06, logged-in `/` and `/inbox` no longer redirect; both
+render their real empty-state (no bookings/decisions exist). Artifacts `evidence/j5-home.png`,
+`evidence/j5-inbox.png`. The render verdicts (J5-S1 PASS empty-state; J5-S3 Contacts fixture-leak
+→ F-20) are honest live observations of the post-onboarding empty org.
+
+**Scope:** single-column UPDATE on the audit org's `OrganizationConfig`. No other rows touched.
+No escalation/booking/approval rows were seeded for J5 or J6 (J6 used read-only psql + code-trace
+only — see `evidence/j6-escalation-wiring.txt`).

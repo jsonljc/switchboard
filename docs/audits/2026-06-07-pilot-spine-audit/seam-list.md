@@ -192,16 +192,24 @@ conversation.messages` (raw ConversationState JSONB).
 - Consumer: `apps/dashboard/src/hooks/use-escalation-detail.ts:16,63` —
   `ConversationTurn` reads `text` (NOT `content`), role "owner" = operator.
 - Payload: `{ escalation, conversationHistory: ConversationTurn[] }`.
-- Verdict: **SUSPECTED.** Field-name divergence is real and is the exact
-  audit-target class. `ConversationState.messages` operator turns ARE written
-  with `text` (`prisma-conversation-state-store.ts:155-156,231-232`), matching
-  the consumer. BUT the gateway's user/assistant turns are persisted to a
-  DIFFERENT table (`Conversation` via `prisma-conversation-store.ts`) using
-  `content`, and I could not locate the writer that populates the lead/agent
-  turns INTO `ConversationState.messages`. If those lead turns are stored with
-  `content` (or never stored), the HandoffDetailSheet will render blank lead
-  message bodies. Needs live confirmation: open a real escalation and check
-  whether lead turns show text. See also S-12.
+- Verdict: **CONFIRMED (2026-06-08, refined: WRONG-TABLE, not field-rename) → F-19.**
+  The original field-name smell understated it. Settled by tracing the pilot
+  managed-channel path: `managed-webhook.ts:73 → ChannelGateway.handleIncoming →
+conversationStore.addMessage` (`channel-gateway.ts:120,211`) → **`PrismaGatewayConversationStore.addMessage`**
+  writes lead/agent turns to the **`ConversationMessage`** table with field
+  **`content`** (`gateway-conversation-store.ts:85-92`), NOT to
+  `ConversationState.messages`. The gateway only touches `ConversationState` via
+  `setConversationStatus` (status-only, `gateway-bridge.ts:200-219`). The only
+  `ConversationState.messages` writer on the pilot path is the OPERATOR reply
+  (`releaseEscalationToAi`, `prisma-conversation-state-store.ts:231-245`, role
+  `owner`). The other writer that DOES use `text` — `PrismaConversationStore.save`
+  (`apps/chat/src/conversation/prisma-store.ts:27-79`, `ConversationMessage` type
+  `state.ts:42 = {role,text,timestamp}`) — is the legacy chat-lifecycle store and
+  has NO callers on the managed path. So the escalation detail route reads a table
+  the pilot path never populates with lead/agent turns ⇒ empty/operator-only
+  conversation in the HandoffDetailSheet. Live corroboration: the only
+  `ConversationState` row in the DB is an `org_dev` seed (`seed-marketplace.ts:946`,
+  text-shaped). See F-19 + `evidence/j6-escalation-wiring.txt`. No longer SUSPECTED.
 
 ### S-12 — Who writes lead/agent turns into ConversationState.messages
 
@@ -209,10 +217,12 @@ conversation.messages` (raw ConversationState JSONB).
   appends `owner` turns; no create/initial-messages path and no user/assistant
   append found in this store.
 - Consumer: S-11 above.
-- Verdict: **UNVERIFIED-COMPLEX.** Settling the lead-turn field name requires
-  tracing the full ConversationState population path across the gateway
-  pre-input upsert and any sync writer — beyond a single-seam boundary. Resolve
-  during the live walkthrough (inspect a real ConversationState.messages row).
+- Verdict: **RESOLVED (2026-06-08) → F-19.** Settled: on the pilot managed-channel
+  path NO writer populates lead/agent turns into `ConversationState.messages` at
+  all — they go to the `ConversationMessage` table (`gateway-conversation-store.ts:85-92`,
+  field `content`). The gateway's only `ConversationState` write is status-only
+  (`gateway-bridge.ts:200-219`). The escalation detail route therefore reads a
+  table that holds (at most) operator turns. Folded into F-19 / S-11.
 
 ---
 
@@ -349,13 +359,12 @@ externalReference/bookingId`; contact/opportunity resolved server-side from the
 | J7 crons       | S-13, S-14, S-15, S-16 | 4     |
 | J3/J5 payments | S-17, S-18             | 2     |
 
-| Verdict            | Count  | Seam IDs                                                                     |
-| ------------------ | ------ | ---------------------------------------------------------------------------- |
-| OK                 | 13     | S-01, S-02, S-03, S-04, S-05, S-06, S-07, S-08, S-09, S-10, S-13, S-15, S-17 |
-| CONFIRMED-defect   | 2      | S-14, S-16 (→ F-18; `no_terminal_outcome` mislabels deny/park)               |
-| SUSPECTED          | 2      | S-11, S-18                                                                   |
-| UNVERIFIED-COMPLEX | 1      | S-12                                                                         |
-| **Total**          | **18** |                                                                              |
+| Verdict          | Count  | Seam IDs                                                                                                                               |
+| ---------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| OK               | 13     | S-01, S-02, S-03, S-04, S-05, S-06, S-07, S-08, S-09, S-10, S-13, S-15, S-17                                                           |
+| CONFIRMED-defect | 4      | S-11 (→ F-19; wrong-table escalation history), S-12 (folded into F-19), S-14, S-16 (→ F-18; `no_terminal_outcome` mislabels deny/park) |
+| SUSPECTED        | 1      | S-18                                                                                                                                   |
+| **Total**        | **18** |                                                                                                                                        |
 
 Note: S-08 and S-17 are verdict OK today (the `system_auto_approved`
 short-circuit makes the unhandled `approvalRequired` branch unreachable) but
@@ -364,11 +373,14 @@ their current safety but flagged in-line for the live walkthrough.
 
 ### SUSPECTED list (feeds the live walkthrough)
 
-- **S-11** — escalation `conversationHistory` turns: consumer reads `text`;
-  lead/agent turns may be stored with `content` (or not at all) → blank lead
-  bubbles in HandoffDetailSheet.
-- **S-12** (UNVERIFIED-COMPLEX) — identify the writer that populates lead/agent
-  turns into `ConversationState.messages` and its field name; settles S-11.
+- **S-11 — RESOLVED (CONFIRMED → F-19).** Wrong-table read: the escalation detail
+  route reads `ConversationState.messages`, but the pilot managed-channel path
+  writes lead/agent turns to the `ConversationMessage` table (`content`). The
+  gateway never populates `ConversationState.messages` with lead/agent turns
+  (status-only + operator turns). HandoffDetailSheet renders an empty conversation
+  for a real pilot escalation. No longer SUSPECTED.
+- **S-12 — RESOLVED (folded into F-19).** No writer populates lead/agent turns into
+  `ConversationState.messages` on the managed path; they live in `ConversationMessage`.
 - **S-14 / S-16 — RESOLVED (CONFIRMED → F-18).** Both crons mislabel a governance
   DENY and a require_approval PARK as `no_terminal_outcome` "failed" (the
   approvalRequired variant carries `result`, so it does not throw — the original
