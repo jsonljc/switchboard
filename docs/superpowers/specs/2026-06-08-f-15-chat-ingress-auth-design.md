@@ -67,13 +67,20 @@ audit org via Telegram). This is a "verify against the codebase" correction to t
 
 ## 3. The key insight: this is a service-to-service hop, not a tenant call
 
-The chat→API ingress hop is a **first-party, private-network, service-to-service call**
-(`render.yaml:190-191`: chat reaches the API at `http://switchboard-api:3000` on Render's
-private network). The chat service has already resolved the authoritative org _server-side_
+The chat→API ingress hop is a **first-party, service-to-service call**: the chat service
+reaches the API over Render's private network (`render.yaml:190-191`,
+`http://switchboard-api:3000`) and has already resolved the authoritative org _server-side_
 from the managed-channel token, not from untrusted lead input. The correct trust model is
 the one the codebase **already uses** for chat↔API internal calls: a shared
 `INTERNAL_API_SECRET` that authenticates the **caller process** and trusts the
 server-resolved context it carries.
+
+Reachability caveat: the API is a `web` service and is **also publicly reachable** (it serves
+the Vercel dashboard via `CORS_ORIGIN` and receives Meta/Stripe webhooks; only
+`switchboard-redis` is private-only at `render.yaml:228`). So this route's security does **not**
+rely on network isolation. It rests on `INTERNAL_API_SECRET` (the sole barrier for this route,
+exactly like the existing `chat-approvals` route) plus per-org governance on every submit. The
+secret must therefore be a high-entropy credential (min 32 random chars), rotated accordingly.
 
 This pattern is already in production for:
 
@@ -196,13 +203,22 @@ WhatsApp/Telegram inbound
 - **Trust model:** identical to the existing `INTERNAL_API_SECRET` routes, the secret
   authenticates the caller _process_, and the org it carries was resolved server-side from
   the channel token, not from untrusted client input.
-- **No governance bypass:** the route reaches `PlatformIngress.submit`; entitlement (F-02),
-  GovernanceGate default-deny (F-16), approval parking, and WorkTrace persistence all still
-  run. A leaked secret could submit intents, but every submit is governed, and fresh orgs
-  default-deny (F-16) and unentitled orgs 402 (F-02), bounding blast radius.
+- **The secret is the sole barrier (the API is public).** Because the API is internet-facing
+  (it serves the Vercel dashboard and external webhooks), this route gets no network
+  isolation. `INTERNAL_API_SECRET` is the only gate in front of it, same as the existing
+  `chat-approvals` route. It honors an arbitrary `body.organizationId` and accepts a `system`
+  actor, so a leaked secret is a cross-tenant submission primitive from anywhere; treat the
+  secret as a real credential (high-entropy, rotated). An API-side boot guard hard-fails in
+  production when `DATABASE_URL` is set but the secret is missing (defense in depth, mirroring
+  the chat boot guard).
+- **No governance bypass bounds the blast radius:** the route reaches `PlatformIngress.submit`,
+  so entitlement (F-02), GovernanceGate default-deny (F-16), approval parking, and WorkTrace
+  persistence all still run on every submit. Even with the secret, fresh orgs default-deny
+  (F-16) and unentitled orgs 402 (F-02), so a leaked secret cannot take un-approved actions
+  for a real customer.
 - **Blast-radius of reuse:** reusing `INTERNAL_API_SECRET` widens what a leaked secret can
   do (it already gates provision-notify + chat-approvals). Accepted: chat and api are
-  co-deployed first-party services on one private-network trust boundary; one secret per
+  co-deployed first-party services on one internal-secret trust boundary; one secret per
   boundary is coherent and reduces secret sprawl. A dedicated ingress secret (finer-grained
   rotation) is the considered alternative in §8.
 - **Timing-safe compare** with the byte-length guard (`internal-chat-approvals.ts:44-51`) is

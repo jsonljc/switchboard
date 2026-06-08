@@ -13,6 +13,7 @@ describe("runStartupChecks", () => {
     delete process.env["WHATSAPP_PHONE_NUMBER_ID"];
     delete process.env["SLACK_BOT_TOKEN"];
     delete process.env["CREDENTIALS_ENCRYPTION_KEY"];
+    delete process.env["INTERNAL_API_SECRET"];
     process.env.NODE_ENV = "test";
   });
 
@@ -69,5 +70,29 @@ describe("runStartupChecks", () => {
     const result = runStartupChecks();
     expect(result.ok).toBe(false);
     expect(result.errors.some((e) => e.includes("CREDENTIALS_ENCRYPTION_KEY"))).toBe(true);
+  });
+
+  // F-15: managed-channel mode (DATABASE_URL set) requires INTERNAL_API_SECRET for the
+  // chat-to-API ingress hop. Hard error in all environments.
+  it("errors when DATABASE_URL is set but INTERNAL_API_SECRET is empty (managed mode)", () => {
+    process.env["TELEGRAM_BOT_TOKEN"] = "fake-token";
+    process.env["DATABASE_URL"] = "postgresql://localhost/test";
+    const result = runStartupChecks();
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes("INTERNAL_API_SECRET"))).toBe(true);
+  });
+
+  it("passes when DATABASE_URL and INTERNAL_API_SECRET are both set", () => {
+    process.env["TELEGRAM_BOT_TOKEN"] = "fake-token";
+    process.env["DATABASE_URL"] = "postgresql://localhost/test";
+    process.env["INTERNAL_API_SECRET"] = "s3cr3t";
+    const result = runStartupChecks();
+    expect(result.errors.some((e) => e.includes("INTERNAL_API_SECRET"))).toBe(false);
+  });
+
+  it("does not require INTERNAL_API_SECRET when there is no database (non-managed dev mode)", () => {
+    process.env["TELEGRAM_BOT_TOKEN"] = "fake-token";
+    const result = runStartupChecks();
+    expect(result.errors.some((e) => e.includes("INTERNAL_API_SECRET"))).toBe(false);
   });
 });
