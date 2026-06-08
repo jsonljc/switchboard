@@ -254,9 +254,12 @@ describe("PrismaDeploymentResolver", () => {
     // SEAM PIN (audit J3-S6, F-13): for telegram the resolver looks the token up as a
     // DeploymentConnection PRIMARY KEY (`{ id: token, type }`), NOT as a `Connection` id
     // and NOT as a hashed token. The managed-channel runtime registry
-    // (apps/chat/src/managed/runtime-registry.ts:80) registers the gateway entry with
-    // `ManagedChannel.connectionId` (a `Connection` id) as this token — so a live inbound
-    // throws "No deployment connection found for channel=telegram" (captured live in the
+    // (apps/chat/src/managed/runtime-registry.ts:80) registers the gateway entry with a field
+    // NAMED `deploymentConnectionId` that actually HOLDS `ManagedChannel.connectionId` (a
+    // `Connection` id, not a DeploymentConnection PK) — that naming trap is the heart of F-13.
+    // So a live telegram inbound supplies a `Connection` id where the resolver expects a
+    // DeploymentConnection PK and throws "No deployment connection found for channel=telegram"
+    // (the WhatsApp branch escapes this by hashing the token; captured live in the
     // pilot-spine audit, evidence/j3-inbound-routing-broken.txt). This test pins the
     // resolver's side of the contract so the producer (registry) can be reconciled against it.
     it("looks up telegram by DeploymentConnection PK { id: token, type } (F-13 seam contract)", async () => {
