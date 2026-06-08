@@ -250,5 +250,29 @@ describe("PrismaDeploymentResolver", () => {
         "No deployment connection found",
       );
     });
+
+    // SEAM PIN (audit J3-S6, F-13): for telegram the resolver looks the token up as a
+    // DeploymentConnection PRIMARY KEY (`{ id: token, type }`), NOT as a `Connection` id
+    // and NOT as a hashed token. The managed-channel runtime registry
+    // (apps/chat/src/managed/runtime-registry.ts:80) registers the gateway entry with
+    // `ManagedChannel.connectionId` (a `Connection` id) as this token — so a live inbound
+    // throws "No deployment connection found for channel=telegram" (captured live in the
+    // pilot-spine audit, evidence/j3-inbound-routing-broken.txt). This test pins the
+    // resolver's side of the contract so the producer (registry) can be reconciled against it.
+    it("looks up telegram by DeploymentConnection PK { id: token, type } (F-13 seam contract)", async () => {
+      const row = makeDeploymentRow();
+      const prisma = makeMockPrisma(row);
+      const resolver = new PrismaDeploymentResolver(prisma);
+
+      // The token a CORRECTLY-wired managed channel must supply is the DeploymentConnection id.
+      await resolver.resolveByChannelToken("telegram", "deployment-connection-id");
+
+      expect(prisma.deploymentConnection.findFirst).toHaveBeenCalledWith({
+        where: { id: "deployment-connection-id", type: "telegram" },
+      });
+      // Critically NOT a tokenHash lookup for telegram (that path is for other channels).
+      const callArg = prisma.deploymentConnection.findFirst.mock.calls[0][0];
+      expect(callArg.where).not.toHaveProperty("tokenHash");
+    });
   });
 });

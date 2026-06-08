@@ -1,0 +1,42 @@
+=== J3-S3 inbound routing BROKEN (F-13) — exercised live 2026-06-08 ===
+Injected Telegram update to registered path /webhook/managed/conn_3e991b0e (synthetic chat_id 999000111, D-03).
+Webhook returned 200; gateway threw at deployment resolution. Log excerpt:
+
+[12:56:22.171] ERROR (61192): Gateway webhook processing error
+    err: {
+      "type": "Error",
+      "message": "No deployment connection found for channel=telegram",
+      "stack":
+          Error: No deployment connection found for channel=telegram
+              at PrismaDeploymentResolver.resolveByChannelToken (file:///Users/jasonli/switchboard/.claude/worktrees/pilot-spine-audit/packages/core/dist/platform/prisma-deployment-resolver.js:44:19)
+              at async ChannelGateway.handleIncoming (file:///Users/jasonli/switchboard/.claude/worktrees/pilot-spine-audit/packages/core/dist/channel-gateway/channel-gateway.js:107:24)
+              at async Object.<anonymous> (file:///Users/jasonli/switchboard/.claude/worktrees/pilot-spine-audit/apps/chat/dist/routes/managed-webhook.js:102:13)
+    }
+[12:56:22.172] INFO (61192): request completed
+    reqId: "req-l"
+    res: {
+
+Probe of the two candidate webhook paths:
+  GET /webhook/managed/cmq4q319c0004ko7npdi0wh3v (DeploymentConnection id) -> 404 (NOT registered)
+  GET /webhook/managed/conn_3e991b0e (Connection id, product-exposed)     -> 200 (registered, but token unresolvable)
+
+=== J3-S3 SECOND injection (post-D-03 routing bridge) — F-14 conversation persistence BROKEN ===
+Deployment now resolves (D-03), but thread create FK-fails:
+
+[DeploymentResolver] resolved deployment=cmq4q31990002ko7nhdklz8zi skillSlug=alex org=org_4f796695-7022-4718-838f-71c50b879ad2
+Invalid `prisma.conversationThread.create()` invocation:
+Foreign key constraint violated on the constraint: `ConversationThread_contactId_fkey`
+      "message": "\nInvalid `prisma.conversationThread.create()` invocation:\n\n\nForeign key constraint violated on the constraint: `ConversationThread_contactId_fkey`",
+          Invalid `prisma.conversationThread.create()` invocation:
+          Foreign key constraint violated on the constraint: `ConversationThread_contactId_fkey`
+              at async PrismaGatewayConversationStore.getOrCreateBySession (file:///Users/jasonli/switchboard/.claude/worktrees/pilot-spine-audit/apps/chat/dist/gateway/gateway-conversation-store.js:32:22)
+      "code": "P2003",
+
+=== J3-S3 THIRD injection (post-F-13+F-14 bridge) — F-15 ingress auth BROKEN ===
+Deployment resolved, contact+thread created, skill dispatch 401'd (no Authorization header):
+
+[DeploymentResolver] resolved deployment=cmq4q31990002ko7nhdklz8zi skillSlug=alex org=org_4f796695-7022-4718-838f-71c50b879ad2
+[HttpPlatformIngress] API error 401: {"error":"Missing Authorization header","statusCode":401}
+      "message": "Telegram API error 400: {\"ok\":false,\"error_code\":400,\"description\":\"Bad Request: chat not found\"}",
+          TelegramApiError: Telegram API error 400: {"ok":false,"error_code":400,"description":"Bad Request: chat not found"}
+              at async dispatchResponse (file:///Users/jasonli/switchboard/.claude/worktrees/pilot-spine-audit/packages/core/dist/channel-gateway/channel-gateway.js:94:9)

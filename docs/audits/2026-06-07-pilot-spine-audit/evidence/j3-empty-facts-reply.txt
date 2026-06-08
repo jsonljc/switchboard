@@ -1,0 +1,60 @@
+=== J3-S1 — Business-facts producer + empty-facts fallback ===
+Date: 2026-06-08 | org_4f796695-7022-4718-838f-71c50b879ad2
+
+QUESTION INJECTED (synthetic Telegram inbound, D-03): "Hi, what are your opening hours?"
+
+EMPTY-FACTS STATE (confirmed before any facts entered):
+ organizationId | facts_null 
+----------------+------------
+(0 rows)
+
+(No BusinessConfig row => BusinessFacts missing => Alex composes with BUSINESS_FACTS="".)
+
+EMPTY-FACTS FALLBACK CONFIRMED FROM SOURCE:
+  packages/core/src/skill-runtime/builders/alex.ts:98-105
+    let BUSINESS_FACTS = "";
+    if (stores.businessFactsStore) {
+      facts = await stores.businessFactsStore.get(orgId);
+      if (facts) { BUSINESS_FACTS = renderBusinessFacts(facts); }
+    }
+  => when no facts, BUSINESS_FACTS is the empty string and the prompt token
+     {{BUSINESS_FACTS}} renders blank SILENTLY (no code-level escalation).
+
+PROMPT-LEVEL GUARD (mitigates the fabrication hazard) — skills/alex/SKILL.md:389-399:
+  "If the customer asks about hours, pricing, services, policies ... Answer ONLY
+   from the Business Facts section above. If the answer is not in the Business
+   Facts, do NOT guess or improvise. Instead, say: 'I'm not certain about that
+   detail. Let me get a team member to confirm for you.' Then escalate to Bucket C."
+  Line 151: "If the fact is NOT in Business Facts, escalate (Bucket C)."
+  Line 396: "Never say 'probably', 'I think', or 'usually' about business facts."
+  => The empty-facts case is NOT a fabrication hazard: the prompt instructs Alex to
+     escalate rather than invent hours. The real cost is a DEGRADED-BUT-SAFE pilot:
+     a fresh org with no BusinessConfig row makes Alex escalate EVERY hours/pricing/
+     service question (because there is also no product producer that reaches a
+     fresh org's BusinessConfig before first contact). Folded into J3-S1 as DORMANT,
+     not filed as a separate fabrication finding (the guard is real and load-bearing).
+
+LIVE REPLY COULD NOT BE OBTAINED:
+  The skill (Alex's LLM) never ran. The managed-channel inbound spine is BROKEN at
+  three sequential prod-default seams: F-13 (routing), F-14 (contact FK), F-15
+  (ingress auth). F-13/F-14 were bridged (D-03/D-03c); F-15's bridge (mint an API
+  key) was denied by the environment safety classifier and not forced. With the
+  skill unreachable, the reply the synthetic lead received was the FRAMEWORK
+  FALLBACK, not a real Alex turn:
+
+  "I'm having trouble right now. Let me connect you with the team."
+  (channel-gateway.ts:127 / dispatchResponse fallback, after the ingress 401)
+
+VERDICT (J3-S1): DORMANT (safe-degraded), no separate finding filed.
+  - Empty-facts FABRICATION hazard: REFUTED by the SKILL.md prompt guard (escalate,
+    don't invent). The plan anticipated filing this as F-13/embarrasses-pilot; on
+    inspection the guard is real, so it is NOT filed as a fabrication finding.
+  - Could not be exercised LIVE: the conversation never reaches the LLM (managed-
+    channel inbound BROKEN at F-13 routing, F-14 contact FK, F-15 ingress auth;
+    F-15 bridge denied by safety classifier). Live reply observed = framework
+    fallback "I'm having trouble right now. Let me connect you with the team."
+  - Producer note: the business-facts producer (settings/business-facts +
+    PUT /api/dashboard/marketplace/deployments/[id]/business-facts -> BusinessConfig)
+    exists, but a FRESH org's BusinessConfig is empty and nothing populates it before
+    first contact, so Alex escalates every business-fact question until an operator
+    fills it in. Compounds F-01 (no businessHours producer).

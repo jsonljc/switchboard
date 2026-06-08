@@ -1,0 +1,45 @@
+=== J3-S3 — Booking conversation + spine persistence — NOT COMPLETED (blocked) 2026-06-08 ===
+
+The live booking conversation could NOT be driven to a confirmed slot. The managed-channel
+inbound spine is BROKEN at three independent prod-default seams, each exercised live:
+  F-13 (routing)    — bridged via D-03  (DeploymentConnection PK rename)
+  F-14 (contact FK) — bridged via D-03c (Contact insert)
+  F-15 (ingress auth) — bridge ATTEMPTED, DENIED by safety classifier (mint API key), NOT forced
+
+With F-15 unbridged, the skill (Alex LLM + calendar-book tool + governance) never runs, so no
+Booking / Receipt / WorkTrace / LifecycleRevenueEvent is produced through the live path.
+
+DB confirms the spine produced nothing for the org:
+                    tbl                     | count 
+--------------------------------------------+-------
+ Booking                                    |     0
+ Receipt                                    |     0
+ WorkTrace                                  |     0
+ LifecycleRevenueEvent                      |     0
+ ConversationThread(created by F-14 bridge) |     1
+(5 rows)
+
+
+PARTIAL LIVE PROGRESS (proves the spine wiring up to the API auth gate):
+  - Inbound webhook accepted (200), payload parsed by TelegramAdapter.
+  - Deployment RESOLVED to alex (post D-03): "resolved deployment=...0002 skillSlug=alex org=..."
+  - Contact + ConversationThread CREATED (post D-03c): thread keyed on visitor-999000111.
+  - Inbound message dispatched to HttpPlatformIngress -> POST /api/ingress/submit -> 401 (F-15).
+
+INTERNAL SPINE READINESS (verdicted, not exercised):
+  - businessHours injected (D-03b) so a booking WOULD resolve LocalCalendarProvider (F-01 unblocked
+    for this org). Factory uncached for this org (no booking attempted since boot), so the next
+    attempt would use Local, not Noop.
+  - calendar-book tool (packages/core/src/skill-runtime/tools/calendar-book.ts) mints Booking +
+    OutboxEvent("booked") + Receipt + opportunity stage-advance in ONE durable tx (:357-422), with
+    workTraceId threaded from ctx.workUnitId (:281). Receipt persisted to Receipt table (:406).
+  - This is the Spec-1A prove-leg (memory: receipted-bookings architecture MERGED). Verdicted
+    DORMANT-behind-F-15: wiring present + unblocked, but unreachable live without an authed
+    chat->API path.
+
+VERDICT (J3-S3):
+  - Inbound routing leg: BROKEN (F-13 + F-14 + F-15, all exercised live).
+  - Internal booking/receipt/WorkTrace leg: DORMANT-behind-F-15 (unblocked at the data layer via
+    D-03b, but unreachable because the conversation can't reach the API).
+  Handoff: a session with SWITCHBOARD_API_KEY provisioned (or a non-credential authed path) can
+  complete the live booking on this org (businessHours + business facts already in place).
