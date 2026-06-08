@@ -14,6 +14,71 @@ PASS / FAIL / STUB / NO-OP / MISSING.
 
 ---
 
+## Executive summary (for a non-technical reader)
+
+**What we did.** We ran the seven journeys a real pilot customer takes — sign up, connect a
+chat channel, teach the agent the business, take a booking, approve/reject an action, hand off
+to a human, and the automated reminder/follow-up crons — against a real, running copy of the
+product configured the way production ships by default. Where a journey could not run live, we
+read the actual code path. Every finding was then re-checked adversarially (we tried to prove
+ourselves wrong); several were upgraded or downgraded as a result.
+
+**The good news — the safety-critical parts hold.**
+
+- Signup works: a fresh business account is created cleanly.
+- Connecting a chat channel works and self-heals (it comes online on its own within seconds).
+- The governance gate **fails closed**: a brand-new pilot account cannot take any un-approved
+  action. There is no path where the agent acts on a customer's behalf without the right
+  approval. We found **no hidden ways to bypass** that gate.
+
+**Must fix before real pilot customers (8 issues).** These are mostly missing production
+_configuration_ and _provisioning_, not deep code rewrites:
+
+- **F-15 (config)** — the chat server has no API key set in the deploy config, so every
+  incoming message is rejected. Nothing reaches the agent. Highest-leverage single fix.
+- **F-16 (provisioning)** — a new account is created with no approval rules, so the approval
+  Inbox is permanently empty _and_ the agent can't take governed actions. The plumbing is
+  correct; nobody provisions the per-account rules (they only exist for the internal dev org).
+- **F-02 (config/provisioning)** — a new account is not "entitled," so every action is billing-
+  blocked (402). With Stripe off and no trial/override, nothing un-blocks it.
+- **F-01 (provisioning)** — no part of the product ever writes a business's opening hours, so
+  the calendar starts in "bookings disabled" mode.
+- **F-05 (config)** — if one launch env var is left unset, the signup page returns 403 to
+  everyone (the code default disagrees with the documented default).
+- **F-09 (config)** — login is broken on any non-Vercel production host because a trust setting
+  is unset. Auto-rescued on Vercel; a landmine anywhere else.
+- **F-19 (code)** — when a human takes over a conversation, the handoff screen shows an **empty
+  conversation** — the operator can't see what the customer said. Affects the real WhatsApp path.
+- **F-20 (code)** — the dashboard shows **fabricated demo leads and fake pipeline dollars** to
+  real customers, because the "go live" env flags never actually reach the browser. The
+  documented "flip the flag to go live" step does nothing.
+
+**Telegram-only, not the WhatsApp pilot.** **F-13** and **F-14** make the Telegram stand-in
+genuinely broken (routing + a database error on every message), but the real WhatsApp path
+avoids both by code read. These do not block the WhatsApp pilot; they would block a Telegram
+launch.
+
+**Known residual we could not close.** WhatsApp end-to-end could not be exercised — there is no
+local WhatsApp sandbox — so its soundness is _inferred from code_, not proven live. **The single
+highest-value pre-pilot test is one WhatsApp sandbox round-trip**: send a real message, confirm
+it reaches the agent, a contact + conversation are created, and a reply goes out.
+
+**What to fix first (ordered).**
+
+1. F-15 — provision the chat API key (deploy config). Nothing works inbound until this is set.
+2. F-02 + F-16 — provision new accounts (entitlement + per-org approval rules). Config/seed.
+3. F-01 — write business hours during onboarding (code/provisioning).
+4. F-20 — fix the client-side env flag so live surfaces stop showing fake data (code).
+5. F-19 — point the handoff screen at the table that actually holds the conversation (code).
+6. F-05, F-09 — set the two launch env vars correctly for the production host (config).
+
+**Deviations.** To get past these blockers and reach the internal spine, **6 documented DB/env
+deviations** were applied (D-01..D-06). Each is itself a finding — every deviation exists _only_
+because a producer/config gap (F-01/F-02/F-09/F-13/F-14/F-15/F-16) made the honest path
+impossible. None fabricated a success; blocked steps are recorded as DORMANT/BROKEN, not faked.
+
+---
+
 ## Verdict map
 
 One row per journey step. `verdict` ∈ PASS / FAIL / STUB / NO-OP / MISSING / (blank = not yet run).
@@ -185,3 +250,46 @@ Record any deviation from the plan/spec made during execution, with rationale.
   server-side ingress-harness seed was out of scope (full ingress rebuild). The respond/dispatch
   and reject legs are read-verified (dispatch-or-recovery, no phantom-success). Cross-references
   F-16 / F-06. Full detail: `evidence/deviations.md`.
+- **D-03 / D-03b / D-03c (J3):** to reach the internal booking spine past the BROKEN inbound seams,
+  three single-row writes on the audit org were applied — `DeploymentConnection` PK rename (the row
+  correct wiring would produce; bridges F-13), one `Contact` insert (the row the WhatsApp branch
+  would create; bridges F-14), and a schema-valid `businessHours` JSON (the producer F-01 is missing).
+  Each pairs with a DORMANT/BROKEN finding (F-13/F-14/F-01). The D-03d step (mint an ingress API key
+  to bridge F-15) was DENIED by the safety classifier and NOT forced — so the skill never ran and no
+  Booking/Receipt/WorkTrace was fabricated. Full detail: `evidence/deviations.md`.
+- **D-05 (J7):** the outbound-cron live SEND leg was NOT run (no Inngest dev server locally; no rows
+  written). The live leg is verdicted DORMANT-locally; S-14/S-16 are confirmed by a definitive code
+  trace instead (F-18). Full detail: `evidence/deviations.md`.
+- **D-06 (J5):** to render the authed Home/Inbox surfaces (otherwise onboarding-gated), a single
+  `onboardingComplete=true` column write was applied (the real website-scan onboarding producer is
+  not reliably exercisable locally and is not the J5 subject). Surfaces then rendered honest empty
+  state; the F-20 fixture-leak observation is live. Full detail: `evidence/deviations.md`.
+
+> **Deviation tally:** 6 documented deviations (D-01..D-06), each paired with a finding. All DB
+> writes were single-column/single-row on the audit org and each substituted for a missing
+> producer or unprovisioned config (F-01/F-02/F-09/F-13/F-14/F-16). Two sanctioned escape hatches
+> requiring credential extraction (D-03d API-key mint, D-04 per-user key decrypt) were DENIED by the
+> environment safety classifier and were not worked around — the dependent steps stand as
+> DORMANT/BROKEN, not faked.
+
+---
+
+## Success criteria (self-check against the spec)
+
+Checked against the spec's six success criteria. Each is satisfiable from this `index.md` alone.
+
+| #   | Spec criterion                                                                                                                       | Status            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Every step of all seven journeys carries a PROVEN/BROKEN/DORMANT verdict with an artifact.                                           | **MET**           | All J1-S1 .. J7-S4 rows in the verdict map carry a verdict + artifact. Where a step could not run live (WhatsApp inbound J2-S4/J3-S3, the live cron SEND J7-S3, the parked-approval legs J4), the verdict is an explicit DORMANT-by-config / DORMANT-locally / DORMANT-behind-F-15 with the blocking finding named — not a blank.                                                                                                                                                      |
+| 2   | Flag inventory covers every spine env var + stored control with LIVE/DORMANT/ILLUSION.                                               | **MET**           | Flag-inventory table covers all pre-identified rows plus discovered ones; the five Mercury `*_LIVE` flags are recorded DORMANT (broken-client-side, F-20), not LIVE. Out-of-scope Mira/Riley flags listed separately so nothing is silently omitted.                                                                                                                                                                                                                                   |
+| 3   | Every cross-package seam crossed by the walkthroughs has a committed safeParse/contract pin test, seeded from the Phase-0 seam list. | **PARTIALLY MET** | The seam actually _crossed live and found broken_ (F-13 telegram resolver contract) has a committed pin in `deployment-resolver.test.ts` (16/16 green). The remaining Phase-0 seams (S-07/S-08/S-11/S-14/S-16/S-17/S-18) were **not crossable live** — the spine was blocked upstream at F-15/F-16 — so they are verdicted by code trace in `seam-list.md` rather than pinned with a new safeParse test. Reason recorded: you cannot pin a producer→consumer seam that never executes. |
+| 4   | Findings ranked by pilot impact and individually verified at file:line against current main.                                         | **MET**           | 20 findings, each with file:line evidence; ranked into blocks-pilot / blocks-Telegram / embarrasses-pilot / cosmetic-low / decay. Severities reconciled to the finding files (the corrected source); F-19 and F-20 reflect their adversarial upgrades to blocks-pilot.                                                                                                                                                                                                                 |
+| 5   | Deterministic decay tools run and recorded.                                                                                          | **MET**           | `check-routes` (mutating-bypass scan: CLEAN), `arch-check` (surfaced F-10), orphan scan (CLEAN) recorded in `evidence/decay-pass.md` + `evidence/check-routes.txt` + the "Decay-pass clean results" section.                                                                                                                                                                                                                                                                           |
+| 6   | Any manual DB intervention documented as a deviation with a paired DORMANT finding.                                                  | **MET**           | 6 deviations (D-01..D-06) in `evidence/deviations.md`, each cross-referencing its DORMANT/BROKEN finding. No write occurred without a paired finding.                                                                                                                                                                                                                                                                                                                                  |
+
+**Overall:** 5 of 6 fully met; #3 partially met. The partial is not a gap in rigor but a
+consequence of the live environment — WhatsApp has no local sandbox and the inbound spine is
+blocked at config gaps (F-15/F-16), so the downstream seams could not be executed to pin. The
+single highest-value follow-up that would close #3 is a **WhatsApp sandbox round-trip** (named in
+the executive summary and the J3 residual-risk note), which would exercise S-1A (webhook→contact→
+thread) and the booking-spine seams live.
