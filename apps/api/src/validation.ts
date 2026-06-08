@@ -209,3 +209,40 @@ export const EmergencyHaltBodySchema = z.object({
 export const ResumeBodySchema = z.object({
   organizationId: z.string().min(1).max(500).optional(),
 });
+
+// ── Internal chat-to-API ingress (F-15) ──────────────────────────────
+// The chat service forwards the canonical submit request it built (it resolved
+// organizationId server-side from the channel token). The enums mirror ActorType /
+// Trigger / SurfaceName in packages/core/src/platform/ so the chat path
+// (type:"user", trigger:"chat") and CTWA path (type:"system", trigger:"internal")
+// both validate and reach submit with faithful types.
+export const InternalIngressSubmitBodySchema = z.object({
+  organizationId: z.string().min(1).max(200),
+  actor: z.object({
+    id: z.string().min(1).max(200),
+    type: z.enum(["user", "agent", "system", "service"]),
+  }),
+  intent: z.string().min(1).max(200),
+  parameters: boundedParameters.optional(),
+  trigger: z.enum(["chat", "api", "schedule", "internal"]).optional(),
+  surface: z
+    .object({
+      surface: z.enum(["api", "mcp", "chat", "dashboard"]),
+      sessionId: z.string().max(500).optional(),
+      requestId: z.string().max(500).optional(),
+      correlationId: z.string().max(500).optional(),
+    })
+    .optional(),
+  targetHint: z
+    .object({
+      skillSlug: z.string().max(200).optional(),
+      deploymentId: z.string().max(200).optional(),
+      channel: z.string().max(50).optional(),
+      token: z.string().max(500).optional(),
+    })
+    .optional(),
+  traceId: z.string().max(200).optional(),
+  idempotencyKey: z.string().max(500).optional(),
+  contactId: z.string().max(200).optional(),
+  conversationThreadId: z.string().max(200).optional(),
+});

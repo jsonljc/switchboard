@@ -10,6 +10,7 @@ import { actionLifecycleRoutes } from "../routes/action-lifecycle.js";
 import { executeRoutes } from "../routes/execute.js";
 import { approvalsRoutes } from "../routes/approvals.js";
 import { internalChatApprovalsRoutes } from "../routes/internal-chat-approvals.js";
+import { internalIngressRoutes } from "../routes/internal-ingress.js";
 import { recommendationsRoutes } from "../routes/recommendations.js";
 import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
 import { decisionsRoutes } from "../routes/decisions.js";
@@ -117,6 +118,10 @@ export async function registerRoutes(
   // Internal chat-approval bridge: INTERNAL_API_SECRET-authenticated respond
   // surface for the chat process (excluded from API-key auth by exact path).
   await app.register(internalChatApprovalsRoutes, { prefix: "/api/internal/chat-approvals" });
+  // Internal chat-to-API ingress: INTERNAL_API_SECRET-authenticated submit surface for the
+  // multi-tenant chat process; honors the chat-resolved org and flows through
+  // PlatformIngress (excluded from API-key auth by exact path). See F-15.
+  await app.register(internalIngressRoutes, { prefix: "/api/internal/ingress" });
   await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
   await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
   // decisionsRoutes registers two paths under /api/dashboard:
