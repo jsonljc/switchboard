@@ -1,0 +1,42 @@
+{
+  "step": "J2-S1 — connect Telegram via the product (PRE-entitlement)",
+  "method": "Playwright login (audit-pilot@example.com) → fetch POST /api/dashboard/organizations/provision in the authenticated browser context (the exact route useProvision() calls)",
+  "request": {
+    "url": "/api/dashboard/organizations/provision",
+    "method": "POST",
+    "body": { "channels": [{ "channel": "telegram", "botToken": "<redacted bot token>" }] }
+  },
+  "loginFinalUrl": "http://localhost:3002/onboarding",
+  "dashboardProxyResponse": {
+    "status": 500,
+    "statusText": "Internal Server Error",
+    "body": { "error": "Active subscription required", "statusCode": 500 }
+  },
+  "upstreamApiResponse_fromApiLog": {
+    "url": "/api/organizations/org_4f796695-7022-4718-838f-71c50b879ad2/provision",
+    "statusCode": 402,
+    "note": "billing-guard.ts:74 returned 402 'Active subscription required' after reading OrganizationConfig.subscriptionStatus + entitlementOverride (the F-02 entitlement resolver). The dashboard proxy (provision/route.ts:13-18 → proxy-error) re-codes any non-Unauthorized upstream error to 500, LOSING the 402 status (minor secondary concern, see F-11)."
+  },
+  "verdict": "F-02 REPRODUCED LIVE on the channel-connect path. POST /provision is a mutating, non-allowlisted route (billing-guard.ts:9,19-28) → 402 for the unentitled fresh org. Channel connect is blocked out of the box. Deviation D-02 applied next to proceed.",
+  "postD02_retry": {
+    "deviation": "D-02 applied: UPDATE \"OrganizationConfig\" SET \"entitlementOverride\"=true WHERE id='org_4f796695-7022-4718-838f-71c50b879ad2'; (resolver is uncached, fresh DB read per request — billing-entitlement-resolver.ts has no cache)",
+    "status": 200,
+    "statusText": "OK",
+    "body": {
+      "channels": [
+        {
+          "id": "9ae3a6cd-bad2-4e64-8b02-ad15d99bcffe",
+          "channel": "telegram",
+          "botUsername": null,
+          "webhookPath": "/webhook/managed/conn_3e991b0e",
+          "webhookRegistered": false,
+          "status": "active",
+          "statusDetail": null,
+          "lastHealthCheck": null,
+          "createdAt": "2026-06-08T04:40:27.160Z"
+        }
+      ]
+    },
+    "verdict": "PROVEN post-D-02. Channel resolved status='active' (NOT config_error). F-03 is confirmed DORMANT-by-config only: with INTERNAL_API_SECRET set + chat :3001 reachable (notify-chat-provisioned-channel succeeded), the F-03 chatConfig/chatNotify gate passes. connId=conn_3e991b0e, webhookPath=/webhook/managed/conn_3e991b0e, ManagedChannel.id=9ae3a6cd-bad2-4e64-8b02-ad15d99bcffe."
+  }
+}

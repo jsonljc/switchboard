@@ -1,0 +1,48 @@
+J2-S2 — ManagedChannel + AgentDeployment DB verification
+Captured: 2026-06-08, branch audit/pilot-spine, org_4f796695-7022-4718-838f-71c50b879ad2
+(Telegram connected via the product through the dashboard proxy; D-02 applied to clear F-02.)
+
+=== ManagedChannel (org-scoped) ===
+                  id                  | channel  |    status    | statusDetail | webhookRegistered | botUsername | lastHealthCheck |       updatedAt
+--------------------------------------+----------+--------------+--------------+-------------------+-------------+-----------------+------------------------
+ 9ae3a6cd-bad2-4e64-8b02-ad15d99bcffe | telegram | provisioning |              | f                 |             |                 | 2026-06-08 04:40:27.16
+
+=== Connection (org-scoped) ===
+      id       | serviceId | authType  | lastHealthCheck
+---------------+-----------+-----------+-----------------
+ conn_3e991b0e | telegram  | bot_token |
+
+=== AgentDeployment (org-scoped) ===  -- Alex deployment EXISTS now
+            id             | skillSlug | status |              organizationId
+---------------------------+-----------+--------+------------------------------------------
+ cmq4q31990002ko7nhdklz8zi | alex      | active | org_4f796695-7022-4718-838f-71c50b879ad2
+
+--------------------------------------------------------------------------------
+FINDINGS
+
+1. SEAM (F-11): API-returned status='active' is NEVER persisted to the ManagedChannel row.
+   - The POST /provision HTTP response returned status:"active" (see j2-connect-response.json).
+   - But the persisted ManagedChannel.status = "provisioning" (the schema default), and
+     updatedAt has not advanced since row creation (04:40:27.16). The provision route
+     (apps/api/src/routes/organizations.ts:298-306, 514-524) creates the row WITH NO status
+     field (defaults to "provisioning") and computes the resolved "active" ONLY for the HTTP
+     response body — it never writes the resolved status back to the row.
+   - The chat-side /internal/provision-notify handler (apps/chat/src/main.ts:396) calls
+     registry.provision() which registers the IN-MEMORY gateway entry but ALSO does not write
+     status (runtime-registry.ts:55-84 — no prisma.managedChannel.update for the success path).
+   - Consequence A (cosmetic-now): the dashboard channel list (channel-management.tsx:34-43
+     statusBadge) reads the persisted status and would render "provisioning"/yellow, never the
+     green "active" the connect call reported. Operator sees a stuck "provisioning" badge for a
+     working channel.
+   - Consequence B (BROKEN-on-restart, latent): RuntimeRegistry.loadAll (runtime-registry.ts:34)
+     and loadGatewayConnections (:88) reload ONLY rows where status="active" / DeploymentConnection
+     status="active" on chat boot. The ManagedChannel row is "provisioning", so on a chat restart
+     the gateway entry would NOT be reloaded from THIS table. (DeploymentConnection.status WAS set
+     "active" by organizations.ts:330, so loadGatewayConnections WOULD re-register by conn id — the
+     two loaders disagree on which table is authoritative; the ManagedChannel-keyed reload is dead
+     for freshly-provisioned channels.)
+
+2. Alex AgentDeployment EXISTS (skillSlug=alex, status=active). Created by
+   ensureAlexListingForOrg, invoked inside the provision transaction
+   (organizations.ts:312). This resolves the J1-S2 "lazy/absent" note: channel connect is a
+   reliable producer of the Alex deployment (in addition to the GET /config lazy path).

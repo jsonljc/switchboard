@@ -1,0 +1,43 @@
+J2-S3 — Inbound routing wired (gateway registry entry present)
+Captured: 2026-06-08, branch audit/pilot-spine, org_4f796695-7022-4718-838f-71c50b879ad2
+
+connId:      conn_3e991b0e
+webhookPath: /webhook/managed/conn_3e991b0e
+ManagedChannel.id: 9ae3a6cd-bad2-4e64-8b02-ad15d99bcffe
+
+NOTE: the Telegram bot has NO live webhook set (Telegram cannot reach localhost), so live
+delivery is out of scope here (Journey 3). This step proves the chat runtime registered an
+in-memory gateway entry for the connected channel and that the webhook dispatch route is live.
+
+=== chat /health (registry size) ===
+{"status":"ok","checks":{"db":"ok"},"uptime":49470,"managedChannels":1}
+  -> was managedChannels:0 at boot (evidence/boot-health.txt). The connect added 1 entry.
+
+=== chat log (provision-notify received) ===
+[12:40:27.211] INFO (61192): Provisioned managed runtime
+    managedChannelId: "9ae3a6cd-bad2-4e64-8b02-ad15d99bcffe"
+    channel: "telegram"
+  POST /internal/provision-notify  (main.ts:356-403) -> registry.provision() ->
+  gatewayEntries.set("/webhook/managed/conn_3e991b0e", {adapter: TelegramAdapter, ...})
+  (runtime-registry.ts:77). The TelegramAdapter loaded:
+  "[TelegramAdapter] No webhook secret configured — webhook verification is disabled (dev only)."
+
+=== webhook route reachability ===
+GET /webhook/managed/conn_3e991b0e        -> http_code=200   (real connId: entry FOUND)
+GET /webhook/managed/conn_does_not_exist  -> http_code=404   (control: entry NOT found)
+
+  Route handler: apps/chat/src/routes/managed-webhook.ts
+    :51-66 GET — registry.getGatewayByWebhookPath(path); 404 if null (:57), else 200 "OK" (:66).
+    :69-198 POST — same lookup; verifies signature then dispatches to gateway.
+  The 200 for the real connId vs 404 for a bogus one proves the dispatcher resolved a live
+  gateway entry for this channel (not a catch-all). Inbound routing is WIRED.
+
+VERDICT: PROVEN. A gateway entry exists for the connected channel and the webhook dispatch
+route resolves it. Live message injection deferred to Journey 3.
+
+CAVEAT (carried to F-11): the gateway entry is in-memory only and the ManagedChannel row is
+still status="provisioning" (see j2-channel-status.txt). RuntimeRegistry.loadAll reloads only
+status="active" ManagedChannel rows on chat boot — so this entry is NOT durable across a chat
+restart via the ManagedChannel table (DeploymentConnection.status="active" provides a partial,
+conn-keyed reload path via loadGatewayConnections). Routing is live NOW; restart-durability via
+the ManagedChannel loader is BROKEN for freshly-provisioned channels.
