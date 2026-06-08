@@ -1,9 +1,9 @@
 // @route-class: lifecycle
-import { timingSafeEqual } from "node:crypto";
-import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { respondToChannelApproval } from "@switchboard/core";
 import type { OperatorChannelBindingStore } from "@switchboard/core";
 import { InternalChatApprovalRespondBodySchema } from "../validation.js";
+import { verifyInternalSecret } from "../lib/internal-secret-auth.js";
 
 // Internal chat-approval bridge (spec
 // docs/superpowers/specs/2026-06-05-chat-approval-bridge-design.md).
@@ -32,24 +32,6 @@ const INTERNAL_RATE_LIMIT_WINDOW_MS = 60_000;
 export interface InternalChatApprovalsOptions {
   /** Test seam; production builds PrismaOperatorChannelBindingStore from app.prisma. */
   bindingStore?: OperatorChannelBindingStore;
-}
-
-type SecretCheck = "ok" | "unconfigured" | "unauthorized";
-
-function validateInternalSecret(request: FastifyRequest): SecretCheck {
-  const secret = process.env["INTERNAL_API_SECRET"];
-  if (!secret) return "unconfigured";
-  const header = request.headers.authorization;
-  if (!header) return "unauthorized";
-  // Compare BYTE lengths (not UTF-16 code units): a multi-byte header with a
-  // matching code-unit count would otherwise make timingSafeEqual throw a
-  // RangeError and surface as a 500 instead of a 401 (review finding; the
-  // guard stays length-first so the timing-safe compare sees equal sizes).
-  const headerBuf = Buffer.from(header);
-  const expectedBuf = Buffer.from(`Bearer ${secret}`);
-  if (headerBuf.length !== expectedBuf.length) return "unauthorized";
-  if (!timingSafeEqual(headerBuf, expectedBuf)) return "unauthorized";
-  return "ok";
 }
 
 export const internalChatApprovalsRoutes: FastifyPluginAsync<InternalChatApprovalsOptions> = async (
@@ -86,7 +68,7 @@ export const internalChatApprovalsRoutes: FastifyPluginAsync<InternalChatApprova
       },
     },
     async (request, reply) => {
-      const secretCheck = validateInternalSecret(request);
+      const secretCheck = verifyInternalSecret(request);
       if (secretCheck === "unconfigured") {
         request.log.error(
           "INTERNAL_API_SECRET is not configured; rejecting chat approval bridge request",
