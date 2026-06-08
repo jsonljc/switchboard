@@ -2,7 +2,7 @@
 // Webhook Deduplication — Redis-backed with in-memory fallback
 // ---------------------------------------------------------------------------
 
-import type Redis from "ioredis";
+import type { Redis } from "ioredis";
 
 const DEDUP_TTL_SECONDS = 86400; // 24 hours
 const IN_MEMORY_MAX_SIZE = 10_000;

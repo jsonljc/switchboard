@@ -1,5 +1,5 @@
 import type { ConversionBus, ConversionEvent } from "@switchboard/core";
-import type Redis from "ioredis";
+import type { Redis } from "ioredis";
 import type { PrismaDbClient } from "@switchboard/db";
 import type { ConversionPipelineMetrics } from "../metrics.js";
 

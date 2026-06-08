@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 
 const WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
