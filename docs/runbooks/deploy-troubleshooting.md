@@ -11,9 +11,15 @@ Companion to [`production-urls.md`](./production-urls.md). Use when a production
 | `apps/chat`      | **Render**                                  | `pnpm build` (Docker)                                           | `render.yaml` → `branch: main`                                |
 | Postgres, Redis  | Render                                      | —                                                               | —                                                             |
 
-`apps/api` has a **Vercel project named `switchboard-api`** (visible as the `Vercel` commit status on PRs) in addition to the Render service. The Vercel project builds `apps/api` with `tsc` and is a separate verification gate from Render — a build can be green on one host and red on the other if their toolchains resolve types differently (see the symptom below).
-
 There is **no `vercel.json` and no `.vercel/` in the repo**: Vercel and Render build settings live in each host's web UI.
+
+### ⚠️ `switchboard-api` is a misconfigured Vercel project — it should not exist
+
+There is a Vercel project named **`switchboard-api`** (visible as the `Vercel` commit status on PRs) that builds `apps/api`. **`apps/api` cannot run on Vercel.** It is a long-running Fastify server (`node dist/server.js` → `buildServer().listen()`), with no serverless handler, no `api/` functions directory, and no `@vercel/node` adapter. Vercel runs serverless/edge functions, not persistent servers, so even a green build would deploy nothing servable. `apps/api` is hosted on **Render** (`render.yaml`).
+
+This project's build fails on every commit (≈76s, fails before/at the workspace build — `@switchboard/*` deps aren't built in its isolated build context), producing a permanent red `Vercel` status that has nothing to do with code health (CI's docker build of `apps/api` is green).
+
+**Resolution (operator action — Vercel-UI only):** delete the `switchboard-api` Vercel project (Vercel → `switchboard-api` → Settings → Advanced → Delete Project). The API deploys via Render; there is no reason for a Vercel project to track it. If it must stay for some reason, set its **Ignored Build Step** (Settings → Git) command to `exit 0` so Vercel skips (rather than fails) every build.
 
 ## Symptom: build fails on `apps/api/src/app.ts` (Redis / GovernanceCartridge errors)
 
