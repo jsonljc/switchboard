@@ -245,4 +245,8 @@ export const InternalIngressSubmitBodySchema = z.object({
   idempotencyKey: z.string().max(500).optional(),
   contactId: z.string().max(200).optional(),
   conversationThreadId: z.string().max(200).optional(),
+  // Lineage: the CTWA producer threads parentWorkUnitId (ctwa-ingress-request.ts); forward
+  // it so a chained submit's parent link survives the hop. `priority`/`suggestedMode` are
+  // intentionally omitted (no producer sets them over this hop) and would be stripped.
+  parentWorkUnitId: z.string().max(200).optional(),
 });

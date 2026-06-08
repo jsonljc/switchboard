@@ -195,6 +195,25 @@ export async function buildServer() {
     );
   }
 
+  // Internal service secret check (F-15) — INTERNAL_API_SECRET authenticates the
+  // chat-to-API ingress hop and the chat-approval bridge. Without it, every managed-channel
+  // inbound 503s silently. Hard-fail in production, warn otherwise (mirrors the chat boot
+  // guard in apps/chat/src/startup-checks.ts).
+  if (process.env["DATABASE_URL"] && !process.env["INTERNAL_API_SECRET"]) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "INTERNAL_API_SECRET is required in production when DATABASE_URL is set. " +
+          "It authenticates the chat-to-API ingress hop and the chat-approval bridge. " +
+          "Set it to a strong random secret (min 32 chars), the same value on the chat service.",
+      );
+    }
+    app.log.warn(
+      "INTERNAL_API_SECRET is not set but DATABASE_URL is configured. " +
+        "The chat-to-API ingress hop and chat-approval bridge will reject every request (503). " +
+        "Set INTERNAL_API_SECRET to a strong random secret (min 32 chars), same value as chat.",
+    );
+  }
+
   // --- Bootstrap storage layer ---
   const { storage, ledger, policyCache, governanceProfileStore, prismaClient, redis } =
     await bootstrapStorage(app.log);

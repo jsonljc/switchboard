@@ -106,6 +106,7 @@ describe("POST /api/internal/ingress/submit (F-15)", () => {
         contactId: "contact_1",
         conversationThreadId: "thread_1",
         idempotencyKey: "org_a:whatsapp:wamid.1",
+        parentWorkUnitId: "wu_parent",
       },
     });
     expect(submit).toHaveBeenCalledWith(
@@ -113,6 +114,7 @@ describe("POST /api/internal/ingress/submit (F-15)", () => {
         contactId: "contact_1",
         conversationThreadId: "thread_1",
         idempotencyKey: "org_a:whatsapp:wamid.1",
+        parentWorkUnitId: "wu_parent",
       }),
     );
     await app.close();

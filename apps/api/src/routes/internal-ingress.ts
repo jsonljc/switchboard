@@ -70,6 +70,7 @@ export const internalIngressRoutes: FastifyPluginAsync = async (app) => {
           ...(body.idempotencyKey ? { idempotencyKey: body.idempotencyKey } : {}),
           ...(body.contactId ? { contactId: body.contactId } : {}),
           ...(body.conversationThreadId ? { conversationThreadId: body.conversationThreadId } : {}),
+          ...(body.parentWorkUnitId ? { parentWorkUnitId: body.parentWorkUnitId } : {}),
         });
         request.log.info(
           { organizationId: body.organizationId, intent: body.intent, ok: response.ok },
