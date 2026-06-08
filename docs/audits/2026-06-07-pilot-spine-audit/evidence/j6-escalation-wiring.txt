@@ -1,0 +1,109 @@
+J6 — Escalation / handoff: creation status, reply-wiring code-verification, S-11 resolution
+=============================================================================================
+Date: 2026-06-08  Branch: audit/pilot-spine  Org: org_4f796695-7022-4718-838f-71c50b879ad2
+
+J6-S1 — TRIGGER A HANDOFF
+-------------------------
+Escalation CREATION is agent-initiated: a managed-channel inbound message reaches the
+ChannelGateway, the escalation gate scans inbound text for triggers
+(channel-gateway.ts:275,290), and a match creates a Handoff row via handoffStore.
+That inbound path is BLOCKED by the already-filed dependencies:
+  - F-13 (Telegram managed-channel token is a Connection id, resolver expects a
+    DeploymentConnection id -> "No deployment connection found")
+  - F-14 (Telegram resolves no Contact -> ConversationThread.contactId FK P2003)
+  - F-15 (chat->API ingress has no SWITCHBOARD_API_KEY -> 401 on every managed message)
+So no escalation can be created through the live product path for the audit org.
+
+Live DB confirmation (read-only psql):
+  Handoff  WHERE organizationId=<audit org>  -> 0 rows
+  Handoff  (all orgs)                         -> 1 row  (a seed/demo row on org_dev)
+  EscalationRecord WHERE orgId=<audit org>    -> 0 rows
+  EscalationRecord (all orgs)                 -> 0 rows
+Note: the escalation Inbox surface reads the **Handoff** model (escalations.ts:43,92 ->
+app.prisma.handoff), NOT EscalationRecord. EscalationRecord is a separate
+summary/notification model with 0 rows everywhere.
+
+Escalation data model + feed EXIST:
+  - Handoff model (table backing app.prisma.handoff) — the escalation record.
+  - GET /api/escalations (list) + GET /api/escalations/:id (detail with conversation
+    history) + POST /:id/reply + POST /:id/resolve (escalations.ts).
+  - Dashboard: useEscalationDetail + useEscalationReply hooks; HandoffDetailSheet.
+  - Live: GET /api/dashboard/escalations?status=pending -> 200 {"escalations":[]} for
+    the audit org (authed session cookie).
+
+NO escalation row was seeded (no manual DB write for J6). Seeding a Handoff to exercise
+the reply ROUND-TRIP would also require a live channel adapter bound to the audit org's
+managed channel (agentNotifier.sendProactive), which is the same blocked surface; the
+reply wiring is therefore CODE-VERIFIED below instead.
+
+VERDICT J6-S1: DORMANT-behind-inbound-blockers (F-13/F-14/F-15). Data model + feed present.
+
+
+J6-S2 — HUMAN REPLY + THREAD RECOVERY (code-verify the wiring)
+-------------------------------------------------------------
+Reply path (apps/api/src/routes/escalations.ts, POST /:id/reply, :140-277):
+  1. requireOrganizationScope -> 404 if handoff missing or org-mismatch (:171-177).
+  2. handoff.update status="released", acknowledgedAt=now (:183-189) — STORE write.
+  3. if !handoff.sessionId -> 502 "channel delivery failed" (no thread to release) (:209-216).
+  4. conversationStateStore.releaseEscalationToAi({orgId, handoffId, threadId,
+     operator, reply:{text:message}}) (:224-230) — appends the OPERATOR turn to
+     ConversationState.messages + transitions status + writes WorkTrace
+     (prisma-conversation-state-store.ts:231-245, role:"owner", text:input.reply.text).
+  5. agentNotifier.sendProactive(storeResult.destinationPrincipalId,
+     storeResult.channel, message) (:246-250) — CHANNEL SEND.
+  6. finalizeOperatorTrace(...) records deliveryAttempted/deliveryResult (:259-265).
+  7. deliveryResult!=="delivered" -> 502 "Reply saved but channel delivery failed"
+     (:267-273). delivered -> 200 {escalation, replySent:true}.
+WIRING VERDICT: route -> store (releaseEscalationToAi) -> channel send (sendProactive)
+is wired end-to-end with a recovery-or-502 fork (no phantom success). PASS (code).
+
+NB: this route does NOT use apps/chat/src/escalation/routing.ts (routeEscalation ->
+adapter.sendTextReply to notifyThreadId ?? sourceThreadId). routeEscalation is the
+OUTBOUND escalation-NOTIFICATION path (notify owner that a lead escalated), a thin
+2-line wrapper, and is separate from the operator-reply-back path above. Both are wired;
+the operator-reply-back round-trip is the one memory #15 ("approve must end in
+dispatch-or-recovery") tracks, and it is intact here.
+
+Dashboard reply hook (use-escalation-reply.ts): POST /api/dashboard/escalations/:id/reply
+proxy -> the API route above; invalidates the escalation detail + list queries on success.
+
+
+S-11 — CONFIRMED (escalation detail conversation history reads the WRONG TABLE)
+------------------------------------------------------------------------------
+Consumer (escalations.ts:104-116, detail GET):
+  conversationHistory = (await prisma.conversationState.findFirst(
+      { where:{ threadId: handoff.sessionId, organizationId: orgId } })).messages   // ConversationState table
+Dashboard consumer (use-escalation-detail.ts:16-20): ConversationTurn reads `text`
+  (role "user"=lead, "owner"=operator).
+
+Producer of LEAD/AGENT turns on the PILOT (managed-channel) path:
+  managed-webhook.ts:73 -> ChannelGateway.handleIncoming
+  -> conversationStore.addMessage(conversationId, "user"/"assistant", text)
+     (channel-gateway.ts:120,211)
+  -> PrismaGatewayConversationStore.addMessage writes to the **ConversationMessage**
+     table with field **content** (gateway-conversation-store.ts:85-92), keyed by
+     contactId+orgId — NOT to ConversationState.messages.
+  The gateway only ever touches ConversationState via setConversationStatus
+  (gateway-bridge.ts:200-219), which writes STATUS ONLY (no messages array).
+  ConversationState.messages on the gateway path is therefore populated only with
+  OPERATOR ("owner") turns (releaseEscalationToAi, prisma-conversation-state-store.ts
+  :231-245) — never lead/agent turns.
+
+The OTHER writer, PrismaConversationStore.save (apps/chat/src/conversation/prisma-store.ts
+:27-79), DOES write ConversationState.messages with `text`-shaped turns
+(ConversationMessage type, state.ts:42 = {role:"user"|"assistant", text, timestamp}),
+but it is the legacy/direct chat lifecycle store and has NO callers on the managed-channel
+inbound path (grep: no import of conversation/threads from the managed path).
+
+Live corroboration: the only ConversationState row in the DB belongs to org_dev
+(seed-marketplace.ts:946, text-shaped) — there is no gateway-produced ConversationState
+row carrying lead turns anywhere.
+
+=> For a real managed-channel (WhatsApp/Telegram pilot) escalation, the
+HandoffDetailSheet's conversation history will be EMPTY (or operator-turns-only): the
+lead's and Alex's messages live in ConversationMessage.content, but the route reads
+ConversationState.messages. This is NOT merely a text-vs-content field rename within one
+table (the original S-11 smell) — it is a WRONG-TABLE read: the producer the pilot path
+uses never writes to the table the consumer reads. See F-19.
+
+S-11 VERDICT: CONFIRMED (refined: wrong-table, not field-rename). Filed as F-19.

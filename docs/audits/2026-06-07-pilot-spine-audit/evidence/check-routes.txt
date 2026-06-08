@@ -1,0 +1,22 @@
+# check-routes — default (ingress) mode
+$ npx tsx .agent/tools/check-routes.ts
+102 findings suppressed by allowlist.
+EXIT: 0
+# => 0 KEPT (unsuppressed) findings. Every mutating route that does not reach
+#    PlatformIngress.submit is covered by an allowlist entry with a written reason
+#    (.agent/tools/route-allowlist.yaml). No unallowlisted mutating bypass.
+
+# check-routes — error mode (repo-wide route-class / store-mutation enforcement)
+$ npx tsx .agent/tools/check-routes.ts --mode=error
+EXIT: 0
+# 0 ::error:: lines. 0 missing @route-class headers. 0 store-mutation violations.
+# 8 NON-BLOCKING ::warning:: control-plane org-guard advisories (Route Governance
+#   §12, tracked #654 — warn-only by design, excluded from exitCode):
+#     setup.ts, playbook.ts, onboard.ts, marketplace.ts, marketplace-persona.ts,
+#     marketplace-operational-state.ts, connections.ts, competence.ts
+# CI route gate PASSES.
+
+# NOTE on the "apps/chat: 1 occurrences" line: that line lives in arch-check.txt
+# (the `as any` USAGE BY PACKAGE section), NOT in check-routes output. The single
+# apps/chat `as any` is apps/chat/src/dlq/failed-message-store.ts:36
+# (rawPayload: input.rawPayload as any) — a DLQ persistence cast, not a route bypass.

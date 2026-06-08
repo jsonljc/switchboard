@@ -1,0 +1,14 @@
+=== J3-S1 producer (settings business-facts) — PROVEN LIVE 2026-06-08 ===
+Exercised the REAL producer chain through the logged-in audit user (browser session
+-> Next proxy PUT /api/dashboard/marketplace/deployments/cmq4q31990002ko7nhdklz8zi/business-facts
+-> getApiClient (DashboardUser.apiKeyEncrypted) -> API -> PrismaBusinessFactsStore.upsert -> BusinessConfig).
+PUT -> 200 {success:true}; GET round-trip -> 200 with full facts.
+NOTE: the dashboard->API hop IS authenticated (DashboardUser encrypted key), in
+contrast to the chat->API hop which is NOT (F-15, SWITCHBOARD_API_KEY empty).
+
+DB persistence (BusinessConfig):
+              organizationId              |          name           | services |    svc1     |     svc2      | faqs 
+------------------------------------------+-------------------------+----------+-------------+---------------+------
+ org_4f796695-7022-4718-838f-71c50b879ad2 | Glow Aesthetics (Audit) |        2 | Hydrafacial | Botox consult |    1
+(1 row)
+

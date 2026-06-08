@@ -1,0 +1,25 @@
+=== Connection vs DeploymentConnection seam (F-13) — DB state 2026-06-08 ===
+--- ManagedChannel ---
+                  id                  | channel  | connectionId  | status |          webhookPath           
+--------------------------------------+----------+---------------+--------+--------------------------------
+ 9ae3a6cd-bad2-4e64-8b02-ad15d99bcffe | telegram | conn_3e991b0e | active | /webhook/managed/conn_3e991b0e
+(1 row)
+
+--- Connection (org-level; ManagedChannel.connectionId points here) ---
+      id       | serviceId |  status   
+---------------+-----------+-----------
+ conn_3e991b0e | telegram  | connected
+(1 row)
+
+--- DeploymentConnection (what resolveByChannelToken expects to find by token=id) ---
+            id             |   type   |       deploymentId        |  slot   | status 
+---------------------------+----------+---------------------------+---------+--------
+ cmq4q319c0004ko7npdi0wh3v | telegram | cmq4q31990002ko7nhdklz8zi | default | active
+(1 row)
+
+--- AgentDeployment ---
+            id             | skillSlug | status 
+---------------------------+-----------+--------
+ cmq4q31990002ko7nhdklz8zi | alex      | active
+(1 row)
+

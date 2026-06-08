@@ -1,0 +1,68 @@
+# Stack Bring-Up — Boot Health Evidence (Audit Task 3, Step 4)
+Captured: 2026-06-07T14:59:25Z
+Branch: audit/pilot-spine
+Posture: production-default (auth ON, no dev bypass, launch mode = public)
+
+## Launch commands (detached, real entrypoints)
+API:       (cd apps/api && nohup node --env-file=../../.env dist/server.js > /tmp/audit-api.log 2>&1 & disown)
+Chat:      (cd apps/chat && nohup node --env-file=../../.env dist/main.js > /tmp/audit-chat.log 2>&1 & disown)
+Dashboard: (cd apps/dashboard && nohup pnpm start > /tmp/audit-dashboard.log 2>&1 & disown)  # next start -p 3002
+
+Note: plan template used dist/index.js; real API entry is dist/server.js, real chat entry is dist/main.js.
+
+## Port check before launch
+lsof -i :3000 -i :3001 -i :3002  ->  (no output) — all three free, no conflicts.
+
+## Listeners after launch
+node    61187 jasonli   25u  IPv4 0xcfbb908f558d42cd      0t0  TCP *:hbci (LISTEN)
+node    61192 jasonli   25u  IPv4 0xd2aebd06c4861b9d      0t0  TCP *:redwood-broker (LISTEN)
+node    61211 jasonli   12u  IPv6 0x1283bd30db347002      0t0  TCP *:exlm-agent (LISTEN)
+
+## Health checks
+API  GET /health           -> HTTP 200
+  body: {"status":"ok","checks":{"db":"ok"},"uptime":125}
+CHAT GET /health           -> HTTP 200
+  body: {"status":"ok","checks":{"db":"ok"},"uptime":122,"managedChannels":0}
+CHAT GET /api/health/deep  -> HTTP 200  (deep readiness)
+DASH GET /login            -> HTTP 200
+DASH GET (login static js) -> HTTP 200  (static-asset serving under next start)
+
+## F-05 production-default signup probe (proves launch mode = public, not waitlist)
+POST /api/auth/register {}  ->  HTTP 400
+  body: {"error":"Email is required"}   (400 field-validation, NOT 403 waitlist-gate)
+
+## Log tails
+----- /tmp/audit-api.log (tail 5) -----
+prisma:query SELECT "public"."OutboxEvent"."id", "public"."OutboxEvent"."eventId", "public"."OutboxEvent"."type", "public"."OutboxEvent"."payload", "public"."OutboxEvent"."status", "public"."OutboxEvent"."attempts", "public"."OutboxEvent"."lastAttemptAt", "public"."OutboxEvent"."createdAt" FROM "public"."OutboxEvent" WHERE "public"."OutboxEvent"."status" = $1 ORDER BY "public"."OutboxEvent"."createdAt" ASC LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."OutboxEvent"."id", "public"."OutboxEvent"."eventId", "public"."OutboxEvent"."type", "public"."OutboxEvent"."payload", "public"."OutboxEvent"."status", "public"."OutboxEvent"."attempts", "public"."OutboxEvent"."lastAttemptAt", "public"."OutboxEvent"."createdAt" FROM "public"."OutboxEvent" WHERE "public"."OutboxEvent"."status" = $1 ORDER BY "public"."OutboxEvent"."createdAt" ASC LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."OutboxEvent"."id", "public"."OutboxEvent"."eventId", "public"."OutboxEvent"."type", "public"."OutboxEvent"."payload", "public"."OutboxEvent"."status", "public"."OutboxEvent"."attempts", "public"."OutboxEvent"."lastAttemptAt", "public"."OutboxEvent"."createdAt" FROM "public"."OutboxEvent" WHERE "public"."OutboxEvent"."status" = $1 ORDER BY "public"."OutboxEvent"."createdAt" ASC LIMIT $2 OFFSET $3
+prisma:query SELECT 1
+prisma:query SELECT 1
+----- /tmp/audit-chat.log (tail 5) -----
+    }
+    responseTime: 11.637832999229431
+prisma:query SELECT 1
+prisma:query SELECT 1
+prisma:query SELECT 1
+----- /tmp/audit-dashboard.log (tail 12) -----
+✓ Ready in 59ms
+⚠ Invalid next.config.mjs options detected: 
+⚠     Unrecognized key(s) in object: 'poweredBy', 'optimizePackageImports'
+⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/jasonli/switchboard/pnpm-workspace.yaml as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * /Users/jasonli/switchboard/.claude/worktrees/pilot-spine-audit/pnpm-workspace.yaml
+
+⚠ "next start" does not work with "output: standalone" configuration. Use "node .next/standalone/server.js" instead.
+
+## Concern: dashboard output mode
+next.config.mjs sets output: 'standalone'. 'next start' warns it 'does not work with
+output: standalone' and suggests node .next/standalone/server.js. Despite the warning,
+next start IS serving the real production build: /login renders real HTML (title
+'Switchboard'), static chunks return 200, and dynamic API routes work (register probe
+above). The standalone server.js exists but at a deep nested path and was not
+post-processed with copied static/public dirs, so next start is the safer faithful
+runtime for this audit run. Recorded as a posture concern, not a blocker.

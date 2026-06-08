@@ -1,0 +1,16 @@
+{
+  "_http_status": 201,
+  "_request": {
+    "url": "POST http://localhost:3002/api/auth/register",
+    "email": "audit-pilot@example.com",
+    "name": "Audit Pilot",
+    "_note": "name is accepted by the request but ignored by the route; provision-dashboard-user.ts stores name:null"
+  },
+  "_response_body": {
+    "id": "db7b1725-ec28-48ad-ad9a-c0b6d4183ca7",
+    "email": "audit-pilot@example.com",
+    "organizationId": "org_4f796695-7022-4718-838f-71c50b879ad2",
+    "verificationEmailSent": false
+  },
+  "_note": "verificationEmailSent:false == auto-verify (RESEND_API_KEY unset); DB shows emailVerified set at registration time. See j1-db-rows.txt."
+}

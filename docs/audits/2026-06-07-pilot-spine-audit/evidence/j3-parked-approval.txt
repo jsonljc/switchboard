@@ -1,0 +1,29 @@
+=== J3-S5 — Park a real require_approval action for Journey 4 — HANDOFF (blocked) 2026-06-08 ===
+
+STATUS: NOT COMPLETED. No real parked-approval WorkTrace could be created.
+
+WHY: Parking a real (approvable, non-seeded) approval requires triggering a
+require_approval(mandatory) intent through PlatformIngress for this org. Both available
+trigger paths are blocked:
+  - Via conversation (Alex): blocked by F-15 (chat->API ingress 401; the skill never runs).
+  - Via direct POST /api/ingress/submit: requires a Bearer API key; minting one was DENIED
+    by the safety classifier (D-03d). No plaintext API key is available for this org.
+
+CANDIDATE require_approval ACTIONS (confirmed seeded for Alex, ready to park once reachable):
+  - claim-safety gate: seeded org-scoped require_approval(mandatory)
+    (apps/api/src/bootstrap/contained-workflows.ts:379, db seed). Survives the autonomous-
+    deployment spend lever (:425-427, "mandatory" not lowered by trustLevel).
+  - Alex->Mira draft-only handoff: require_approval(mandatory) policy
+    (contained-workflows.ts:410-412, db seed recommendation-handoff-*).
+  These are the right targets: triggered live they would create a WorkTrace with
+  approvalOutcome reflecting parked state + a real bindingHash (NOT a seeded/fabricated one).
+
+CURRENT PARKED-APPROVAL STATE FOR ORG (none):
+ERROR:  column "createdAt" does not exist
+LINE 1: ... "governanceOutcome" ILIKE '%approval%') ORDER BY "createdAt...
+                                                             ^
+
+HANDOFF TO J4: once F-15 is fixed (SWITCHBOARD_API_KEY provisioned) OR an org-scoped API key
+is made available, drive Alex to trigger the claim-safety gate (a medical-claim/over-threshold
+intent) so a real parked WorkTrace with a live bindingHash is created; pass that id to J4-S1.
+Do NOT use a seeded approval (fabricated bindingHash cannot be approved through the live flow).

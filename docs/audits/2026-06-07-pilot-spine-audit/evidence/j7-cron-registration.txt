@@ -1,0 +1,86 @@
+J7-S1 — Unattended outbound cron registration, schedules, kill-switch, targeting
+Verified against main, worktree audit/pilot-spine, 2026-06-08. Source identical between
+worktree HEAD and main checkout (diff confirmed for appointment-reminder-dispatch.ts).
+
+=========================================================================
+1. UNCONDITIONAL REGISTRATION (no env-flag wrapper)
+=========================================================================
+apps/api/src/bootstrap/inngest.ts:1180-1181
+      createScheduledFollowUpDispatchCron(scheduledFollowUpDispatchDeps),
+      createAppointmentReminderDispatchCron(appointmentReminderDispatchDeps),
+
+  -> Both appear directly in the functions:[...] array. NO `process.env[X]==="true" ? [...] : []`
+     wrapper.
+
+CONTRAST — every Mira/Riley cron IS env-gated:
+  inngest.ts:437   ...(process.env["RILEY_PAUSE_SELF_EXECUTION_ENABLED"] === "true" ? ... : [])
+  inngest.ts:951   readEnabledFlag: () => process.env["RILEY_OUTCOME_ATTRIBUTION_ENABLED"] === "true"
+  inngest.ts:989   readEnabledFlag: () => process.env["CREATIVE_ATTRIBUTION_ENABLED"] === "true"
+  inngest.ts:1036  readEnabledFlag: () => process.env["MIRA_SELF_BRIEF_ENABLED"] === "true"
+  inngest.ts:339   readFlag: () => process.env["MIRA_HANDOFF_BRIEF_ENRICHMENT_ENABLED"] === "true"
+
+=========================================================================
+2. SCHEDULES + riskCategory
+=========================================================================
+appointment-reminder-dispatch.ts:123-133
+  id: "appointment-reminder-dispatch"
+  triggers: [{ cron: "0 * * * *" }]            # hourly
+  riskCategory: "high", alert: true
+
+scheduled-follow-up-dispatch.ts:136-145
+  id: "scheduled-follow-up-dispatch"
+  triggers: [{ cron: "*/15 * * * *" }]         # every 15 minutes
+  riskCategory: "high", alert: true
+
+=========================================================================
+3. KILL-SWITCH ANALYSIS — NO operator-reachable stop (F-17)
+=========================================================================
+(a) No env flag gates registration (above).
+(b) No messaging-level pause field: grep messagingPaused|proactivePaused|outboundPaused|
+    sendingEnabled|REMINDER_*|FOLLOWUP_DISPATCH* over packages/ + apps/api/src = 0 hits.
+(c) Org-wide agent HALT does NOT reach these crons:
+    - haltAll (prisma-deployment-lifecycle-store.ts:40-42) flips AgentDeployment.status active->paused.
+    - cron submit path resolves deployment via:
+        contained-workflows.ts:514-523  submitScheduledReminder/FollowUp
+          -> resolveDeploymentForIntent(resolver, org, "conversation.reminder.send"|"conversation.followup.send")
+        resolve-deployment.ts:9   skillSlug = intent.split(".")[0]  => "conversation"
+        resolve-deployment.ts:20-30  try resolver.resolveByOrgAndSlug(org,"conversation"); catch -> api-direct
+        prisma-deployment-resolver.ts:73-80  active-only findFirst; throws "No active deployment found" if none
+    - There is NO "conversation" deployment seed (grep over packages/db/src/seed = 0).
+    - => resolveByOrgAndSlug always throws -> catch -> deploymentId:"api-direct".
+    - => the crons run with the api-direct deployment context, INDEPENDENT of any
+         AgentDeployment status. Pausing/halting/suspending all agents has ZERO effect.
+
+  ONLY stop levers (none is a real operator kill-switch):
+    1. Entitlement revocation (platform-ingress.ts:196-208): blunt, billing-coupled, kills ALL paid actions.
+    2. Insert a deny Policy row: DB write only, no UI/API.
+    3. Redeploy with the function removed/flag-gated.
+
+=========================================================================
+4. TARGETING / SAFETY
+=========================================================================
+(a) Tenant scoping:
+    findUpcomingConfirmed (prisma-booking-store.ts:225-229): CROSS-ORG by design
+      where {status:"confirmed", startsAt:{gte:windowStart, lt:windowEnd}}  (no organizationId filter)
+      organizationId carried per-row into the submit; each submit is org-scoped at the gate.
+    findDue (prisma-scheduled-follow-up-store.ts:49-57): CROSS-ORG by design
+      where {status:"pending", dueAt:{lte:now}, OR[nextRetryAt null|<=now], attempts:{lt:MAX}}.
+    => correct: cron iterates all orgs, each submit is org-scoped; no cross-tenant leak.
+
+(b) take-before-JS-filter STARVATION pattern — NOT present:
+    Reminder: take:SCAN_LIMIT(1000) is applied AFTER where(status+window), orderBy startsAt asc.
+              The cap bounds the already-filtered eligible set, not a pre-filter row cap. OK.
+    Follow-up: take:100 (inngest.ts:745 findDue(new Date(),100)) applied AFTER the full
+               pending+due+retry-ready+attempts<MAX where, orderBy dueAt asc. OK
+               (fairness note: if >100 due across all orgs in one tick, oldest-100 win; acceptable).
+
+(c) Time-window correctness:
+    Reminder: WINDOW_LOWER_MS=23h, WINDOW_UPPER_MS=25h (dispatch.ts:10-11); fires 23-25h
+              before startsAt; hourly cron => each confirmed booking caught once in that window.
+              Dedup: buildReminderDedupeKey(b.id, b.startsAt) + TERMINAL-set short-circuit +
+              P2002 race guard. Correct.
+    Follow-up: cadence via dueAt/nextRetryAt; 15-min cron; buildNextCadenceTouch on send;
+               day-bucketed dedupe key (P2002 guard) prevents duplicate next-touch. Correct.
+
+(d) Both use the seeded {id:"system", type:"system"} principal (reminder-send-request.ts:26,
+    followup-send-request.ts:20) — satisfies the cron-principal gotcha (S-13/S-15 OK).

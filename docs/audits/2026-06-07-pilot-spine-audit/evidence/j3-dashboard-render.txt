@@ -1,0 +1,20 @@
+=== J3-S4 — Dashboard render of the booking/receipt — NOT REACHABLE 2026-06-08 ===
+Two compounding reasons the booking could not be rendered live:
+  1. No booking exists. The booking spine could not be exercised (chat->API ingress
+     blocked by F-15; bridge denied by safety classifier). DB confirms 0 Booking,
+     0 Receipt rows for the org:
+ bookings | receipts 
+----------+----------
+        0 |        0
+(1 row)
+
+  2. The fresh org's authed surfaces are ONBOARDING-GATED: logged in as the audit
+     user, GET / and GET /inbox both redirect to /onboarding ("Let Alex learn your
+     business" website-scan). Home/Inbox booking render is unreachable until
+     onboarding completes. Screenshot: j3-dashboard-booking.png (the /inbox->/onboarding
+     redirect target).
+
+VERDICT: DORMANT-behind-F-15 + onboarding gate. The render path is verdicted from the
+  Spec-1A shipped read model (memory: receipted-bookings prove-leg merged), not live,
+  because no real booking could be produced. Handoff to a session with an authenticated
+  chat->API path (F-15 fix) to complete S4 with a real booking on a post-onboarding org.
