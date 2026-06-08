@@ -2,26 +2,28 @@ import type { CanonicalSubmitRequest, SubmitWorkResponse } from "@switchboard/co
 
 export class HttpPlatformIngressAdapter {
   private readonly baseUrl: string;
-  private readonly apiKey: string | undefined;
+  private readonly internalSecret: string | undefined;
 
-  constructor(baseUrl: string, apiKey?: string) {
+  constructor(baseUrl: string, internalSecret?: string) {
     this.baseUrl = baseUrl;
-    this.apiKey = apiKey;
+    this.internalSecret = internalSecret;
   }
 
-  // Accepts CanonicalSubmitRequest (not SubmitWorkRequest) because the
-  // `deployment: DeploymentContext` field is resolved server-side after the
-  // HTTP hop — callers on this side cannot supply it.
+  // Posts the canonical request to the API's internal ingress hop
+  // (POST /api/internal/ingress/submit), authenticated by INTERNAL_API_SECRET: the chat
+  // service is a trusted internal caller, and organizationId is the chat-resolved org
+  // carried in the body and honored server-side. The `deployment: DeploymentContext` field
+  // is resolved server-side after the HTTP hop, so callers here cannot supply it (F-15).
   async submit(request: CanonicalSubmitRequest): Promise<SubmitWorkResponse> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
-    if (this.apiKey) {
-      headers["Authorization"] = `Bearer ${this.apiKey}`;
+    if (this.internalSecret) {
+      headers["Authorization"] = `Bearer ${this.internalSecret}`;
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/ingress/submit`, {
+      const response = await fetch(`${this.baseUrl}/api/internal/ingress/submit`, {
         method: "POST",
         headers,
         body: JSON.stringify(request),
