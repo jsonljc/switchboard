@@ -1,0 +1,39 @@
+### Captured 2026-06-08T05:39:11Z — live psql, read-only ###
+
+-- ApprovalLifecycle for org --
+ id | status | actionEnvelopeId | expiresAt 
+----+--------+------------------+-----------
+(0 rows)
+
+-- Policy for org --
+ id | name | effect | approvalRequirement 
+----+------+--------+---------------------
+(0 rows)
+
+-- Policy count by org (all) --
+ organizationId | count 
+----------------+-------
+ org_dev        |    10
+(1 row)
+
+-- AgentDeployment for org --
+            id             | skillSlug | status | governanceSettings 
+---------------------------+-----------+--------+--------------------
+ cmq4q31990002ko7nhdklz8zi | alex      | active | {}
+(1 row)
+
+-- WorkTrace recent for org --
+ERROR:  column "status" does not exist
+LINE 1: SELECT id,status,intent FROM "WorkTrace" WHERE "organization...
+                  ^
+
+-- WorkTrace recent for org (correct cols) --
+ workUnitId | intent | governanceOutcome | outcome | approvalOutcome 
+------------+--------+-------------------+---------+-----------------
+(0 rows)
+
+
+-- LIVE decisions feed over authed session cookie (Playwright in-page fetch) --
+GET /api/dashboard/decisions -> 200
+{"decisions":[],"counts":{"total":0,"approval":0,"handoff":0}}
+POST-login URL: /onboarding ; /inbox redirects to /onboarding (screenshot j4-inbox-parked.png)

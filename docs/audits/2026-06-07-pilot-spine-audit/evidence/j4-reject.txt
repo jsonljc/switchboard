@@ -1,0 +1,28 @@
+=== J4-S2 — Reject path ===
+Date: 2026-06-08   Org: org_4f796695-7022-4718-838f-71c50b879ad2
+Verdict: DORMANT (same root cause as J4-S1: nothing parks, so nothing is rejectable).
+
+The reject leg is wired and read-verified:
+  use-workflow-approval-action.ts:72 reject(note) -> POST /api/dashboard/approvals
+  -> POST /api/approvals/:id/respond (action:"reject", NO bindingHash required:
+     approvals.ts:86-92 only requires bindingHash for approve)
+  -> respondToParkedLifecycle (respond-to-parked-lifecycle.ts:127-145):
+       lifecycleService.rejectLifecycle({...}) -> returns approvalState.status="rejected",
+       executionResult: null  (NO dispatch, NO side effect executed). Audit ledger records
+       action.rejected. rejectLifecycle tolerates a missing trace so a degraded card stays
+       rejectable. By code read the reject path suppresses the side effect correctly.
+
+Could NOT be exercised live: there is no parked ApprovalLifecycle for this org to reject
+(j4-db-state.txt: 0 rows), and no operator/session-auth action can create one
+(see j4-approve-dispatch.txt). The reject contract is therefore read-verified, NOT
+live-proven.
+
+LIVE PROOF THAT THE INBOX HAS NOTHING TO ACT ON (session-cookie path, the real one):
+  Logged in as audit-pilot@example.com via the dashboard UI (Playwright).
+  POST-login URL: http://localhost:3002/onboarding (fresh org is onboarding-gated).
+  In-page fetch of the EXACT feed the Inbox reads:
+    GET /api/dashboard/decisions  ->  HTTP 200
+    body: {"decisions":[],"counts":{"total":0,"approval":0,"handoff":0}}
+  Navigating to /inbox redirects to /onboarding (screenshot j4-inbox-parked.png:
+  "Let Alex learn your business" onboarding screen, not the Inbox).
+  => Even the Inbox surface is unreachable for a fresh org, and its feed is empty.

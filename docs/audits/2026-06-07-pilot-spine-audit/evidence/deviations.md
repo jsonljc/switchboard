@@ -173,3 +173,38 @@ Verification: `GET /api/auth/csrf` now returns 200 (was 500 UntrustedHost).
 (`@auth/core/lib/utils/env.js:40-44` treats them identically), so journeys J2+ still run at
 honest production posture for a Vercel-deployed pilot. F-09 stands as recorded: non-Vercel
 production runtimes break without an explicit `trustHost`/`AUTH_TRUST_HOST`.
+
+---
+
+## D-04 — Journey 4: no parked approval could be created; seed path NOT taken
+
+**Context:** J4-S1/S2 required parking a real `require_approval` action, then approving and
+rejecting it via the Inbox to prove dispatch-or-recovery and side-effect suppression.
+
+**What happened — NO manual DB write was performed; no approval was seeded.** Investigation
+established (live, read-only psql + code read) that a fresh pilot org has nothing that can
+park: 0 `Policy` rows, 0 `ApprovalLifecycle`, 0 `WorkTrace`; the `require_approval` policies
+are seeded for `org_dev` only (per-org provisioning is a TODO, `creative-governance.ts:21`);
+every dashboard-reachable operator intent is `system_auto_approved` (never parks); the gated
+workflow intents are internal-trigger-only or need a creative/ad deployment the org lacks. This
+IS the J4 finding (F-16, DORMANT), so fabricating a parked approval would have hidden it.
+
+**Escape hatches the plan sanctioned, and why neither was used:**
+
+- **Drive `POST /api/actions/propose` with the audit user's own per-user API key** (the same
+  DB-mapped credential the dashboard uses; not the F-15 chat env key). Obtaining the plaintext
+  required decrypting `DashboardUser.apiKeyEncrypted` (AES-256-GCM) — **DENIED by the
+  environment safety classifier** as credential extraction (same wall as J3 D-03d). Not forced.
+- **Seed a real parked lifecycle via `platformIngress.submit()` server-side** with the seeded
+  `{id:"system",type:"system"}` principal: would have required (a) seeding a per-org
+  `require_approval` policy AND a creative deployment AND a `CreativeJob` row, then (b)
+  reconstructing the full ingress wiring (deployment resolver, governance-gate deps, mode
+  registry, all stores) in a harness. That is a large product-shaped rebuild for a read-only
+  audit and would not be a faithful "live stack" exercise. Not done.
+
+**Live evidence captured instead** (honest production path, no deviation from auth posture):
+logged in as `audit-pilot@example.com` via the dashboard UI (Playwright) and fetched the exact
+feed the Inbox reads — `GET /api/dashboard/decisions → 200 {"decisions":[],"counts":{...0...}}`;
+`/inbox` redirects to `/onboarding`. The respond/dispatch and reject legs are read-verified
+(dispatch-or-recovery present, no phantom-success). Cross-references **F-16** (and F-06 for the
+dark Slack notification leg).

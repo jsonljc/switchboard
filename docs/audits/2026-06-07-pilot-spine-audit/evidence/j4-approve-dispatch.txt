@@ -1,0 +1,102 @@
+=== J4-S1 — Park a real approval, approve it, prove dispatch-or-recovery ===
+Date: 2026-06-08   Org: org_4f796695-7022-4718-838f-71c50b879ad2 (fresh pilot, signup-created)
+Verdict: DORMANT (no dashboard-reachable parking path exists for a fresh pilot org).
+
+------------------------------------------------------------------------------
+WHAT THE INBOX READS (so we query the SAME thing)
+------------------------------------------------------------------------------
+Inbox feed: GET /api/dashboard/decisions -> client.listDecisions()
+  (apps/dashboard/src/hooks/use-decision-feed.ts:13-18 -> apps/dashboard/src/app/api/dashboard/decisions/route.ts:16-25)
+API feed:  apps/api/src/routes/decisions.ts:20-55 listParkedApprovals()
+  -> app.lifecycleService.listOperatorActionableLifecycles(orgId)
+  -> adaptParkedApproval(...) which surfaces the REAL bindingHash from the current
+     ApprovalRevision (parked-approval-adapter.ts). The approve action sends that exact
+     bindingHash back: use-workflow-approval-action.ts:45-54 -> POST /api/dashboard/approvals
+     -> client.respondToApproval -> POST /api/approvals/:id/respond (approvals.ts:166).
+  Approve dispatch leg: respondToParkedLifecycle (respond-to-parked-lifecycle.ts:147-205):
+     approveLifecycle freezes payload -> writeApprovedPayloadToTrace -> runDispatch
+     -> platformLifecycle.executeApproved(workUnitId). Dispatch failure (throw OR
+     success:false) transitions the lifecycle to "recovery_required" (operator Retry card),
+     so approved work never vanishes. The respond path is correctly written (read-verified).
+
+------------------------------------------------------------------------------
+LIVE DB STATE FOR THIS ORG (read-only psql)
+------------------------------------------------------------------------------
+ApprovalLifecycle rows for org:                  0  (nothing parked, ever)
+  SELECT id,status,"actionEnvelopeId","expiresAt" FROM "ApprovalLifecycle"
+   WHERE "organizationId"='org_4f796695-...'  ->  (0 rows)
+
+Policy rows for org:                             0
+  SELECT id,name,effect,"approvalRequirement" FROM "Policy"
+   WHERE "organizationId"='org_4f796695-...'  ->  (0 rows)
+Policy rows by org (ALL orgs):
+  organizationId | count
+  org_dev        |    10           <-- the ONLY org with any policy
+
+AgentDeployment rows for org:
+  id=cmq4q31990002ko7nhdklz8zi  skillSlug=alex  status=active  governanceSettings={}
+  (one conversation deployment; NO creative / NO ad-optimizer deployment)
+
+------------------------------------------------------------------------------
+WHY NOTHING CAN PARK FOR A FRESH PILOT ORG  (three independent reasons)
+------------------------------------------------------------------------------
+(1) NO require_approval POLICY EXISTS FOR THIS ORG.
+    The require_approval(mandatory) policies for creative.job.publish, the Riley->agent
+    handoff, and the Riley campaign-pause are seeded ONLY for org_dev. The producer is a
+    KNOWN TODO, stated verbatim in the seed source:
+      packages/db/src/seed/creative-governance.ts:21
+      "...the seed runs it for `org_dev`; wiring it into the per-org pilot-enablement
+       path [is TODO]."
+    The builders are org-parameterized (buildCreativePublishApprovalPolicyInput(orgId),
+    :94) but NOTHING calls them for a newly-provisioned org. signup
+    (register/route.ts -> provisionDashboardUser -> seedOrgDayOneAgents) seeds only
+    OrgAgentEnablement, never a Policy. => the policy engine has no require_approval rule
+    to match, so the governance gate never returns require_approval for this org.
+    (NOTE: this CORRECTS the J3-S5 handoff note, which said these were "confirmed seeded
+     for Alex". They are not seeded for this org; DB shows 0 Policy rows.)
+
+(2) EVERY DASHBOARD-REACHABLE OPERATOR INTENT IS system_auto_approved (NEVER PARKS).
+    apps/api/src/bootstrap/operator-intents.ts:110-123 registerOperatorIntent() registers
+    ALL operator-direct intents (transition-opportunity, act-on-recommendation,
+    consent grant/revoke/clear, record-revenue, record-verified-payment, confirm/dismiss-
+    disqualification) with approvalPolicy:"none" + system_auto_approved. The gate
+    short-circuits to outcome:"execute" BEFORE any policy/identity step
+    (governance-gate.ts:100-108). They dispatch immediately; they cannot park.
+
+(3) THE GATED WORKFLOW INTENTS ARE NOT SESSION-REACHABLE / NEED MISSING DEPLOYMENTS.
+    contained-workflows.ts:347-481: creative.job.publish is api-trigger and the seeded
+    require_approval lives on org_dev only; the handoff + riley-pause are internal-trigger
+    only (allowedTriggers:["internal"], not reachable from the dashboard at all). All of
+    them require a creative / ad-optimizer deployment this org does not have.
+    The Mira "Keep/Pass" decision route (the one session-auth creative operator action)
+    is explicitly DRAFT-ONLY / NO-PUBLISH and writes only CreativeJob.reviewDecision —
+    it never submits through ingress (mira-decision.ts:1-13, :59-65).
+
+------------------------------------------------------------------------------
+ESCAPE HATCHES CONSIDERED AND WHY NOT USED
+------------------------------------------------------------------------------
+A) Drive POST /api/actions/propose with the audit user's own per-user API key (the SAME
+   credential the dashboard uses; F-15 only blocks the CHAT app's separate
+   SWITCHBOARD_API_KEY env, not this DB-mapped per-user key — auth.ts:189-222 DB fallback).
+   To obtain the plaintext key requires decrypting DashboardUser.apiKeyEncrypted
+   (AES-256-GCM, crypto.ts) -> DENIED by the environment safety classifier
+   (credential extraction). Same wall as J3 D-03d. Not forced.
+B) Reconstruct PlatformIngress server-side in a tsx harness and submit with the seeded
+   {id:"system",type:"system"} principal: requires re-wiring the deployment resolver,
+   governance-gate deps, mode registry and all stores (app.ts:532-731). Out of scope and
+   error-prone for a read-only audit; would not be a faithful "live stack" exercise.
+
+------------------------------------------------------------------------------
+CONCLUSION
+------------------------------------------------------------------------------
+The approve->dispatch RESPOND path (POST /api/approvals/:id/respond ->
+respondToParkedLifecycle) is correctly written and ends in dispatch-or-recovery
+(read-verified; no phantom-success in the code path). But it is UNREACHABLE for a fresh
+pilot org because the PRODUCER leg never fires: no per-org require_approval policy is
+provisioned, and no operator/session-auth action submits a gated intent. The approval
+Inbox has nothing to act on for a fresh pilot org.
+
+Verdict: DORMANT (config/producer prevents parking at prod defaults). New finding: F-16.
+Seam S-07 (approve->dispatch) and S-08/S-17 (phantom-success class): NOT EXERCISED LIVE
+(no live park reachable). S-07 respond/dispatch contract REFUTED-as-broken by code read
+(recovery_required transition present); recorded as not-live-exercised, not PROVEN.
