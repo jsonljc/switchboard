@@ -50,6 +50,16 @@ export function runStartupChecks(): CheckResult {
     errors.push("CREDENTIALS_ENCRYPTION_KEY is required in production when DATABASE_URL is set");
   }
 
+  // F-15: managed-channel mode (DATABASE_URL set) routes every inbound through the
+  // chat-to-API ingress hop, which authenticates with INTERNAL_API_SECRET. Without it,
+  // every inbound 401s silently. Fail fast and loud in all environments.
+  if (process.env["DATABASE_URL"] && !process.env["INTERNAL_API_SECRET"]) {
+    errors.push(
+      "INTERNAL_API_SECRET is required when DATABASE_URL is set (managed-channel mode): " +
+        "it authenticates the chat-to-API ingress hop. Set the same value on the api service.",
+    );
+  }
+
   return {
     ok: errors.length === 0,
     errors,

@@ -69,10 +69,14 @@ async function main() {
   // Parse application/x-www-form-urlencoded (Slack interactive payloads)
   registerSlackFormEncodedParser(app);
 
-  // Platform ingress adapter — all chat traffic routes through the API server
+  // Platform ingress adapter — all chat traffic routes through the API server. The hop
+  // authenticates as a trusted internal service with INTERNAL_API_SECRET (F-15): the chat
+  // service resolves each inbound's org server-side and carries it in the request body, and
+  // the API honors it on the internal-secret-authed ingress route. The boot guard above
+  // refuses to start in managed mode (DATABASE_URL set) without this secret.
   const apiUrl = process.env["SWITCHBOARD_API_URL"] ?? "http://localhost:3000";
-  const apiKey = process.env["SWITCHBOARD_API_KEY"];
-  const platformIngressAdapter = new HttpPlatformIngressAdapter(apiUrl, apiKey);
+  const internalSecret = process.env["INTERNAL_API_SECRET"];
+  const platformIngressAdapter = new HttpPlatformIngressAdapter(apiUrl, internalSecret);
 
   // Single-tenant setup: ChannelGateway with static deployment.
   // This path serves the /webhook/telegram endpoint for dev and non-DB deployments.

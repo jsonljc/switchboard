@@ -134,7 +134,10 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       request.url.startsWith("/api/meta/deletion/status") ||
       // Chat approval bridge: self-authenticates with INTERNAL_API_SECRET
       // (timing-safe) inside the route; exact path, never a prefix.
-      request.url === "/api/internal/chat-approvals/respond"
+      request.url === "/api/internal/chat-approvals/respond" ||
+      // Chat-to-API ingress: self-authenticates with INTERNAL_API_SECRET (timing-safe)
+      // inside the route and honors the chat-resolved org; exact path, never a prefix (F-15).
+      request.url === "/api/internal/ingress/submit"
     ) {
       return;
     }
