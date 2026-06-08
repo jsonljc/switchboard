@@ -1,19 +1,31 @@
-# F-15: managed-channel chat→API ingress hop sends no Authorization header at prod defaults — every message 401s and falls back to "I'm having trouble"
+# F-15: `SWITCHBOARD_API_KEY` not provisioned in deploy config — chat-to-API ingress hop sends no Authorization header, so `/api/ingress/submit` 401s on every managed-channel message
 
-- **Severity:** blocks-pilot
+- **Severity:** blocks-pilot (by-config, all-channel, launch-checklist) — same config-gap family as F-03; adapter code is correct when the key is set
 - **Journey/step:** J3-S3 (booking conversation — skill dispatch)
-- **Verdict:** BROKEN (exercised live; `/api/ingress/submit` returned 401 "Missing Authorization header")
-- **Location:**
-  - Producer (no header): `apps/chat/src/main.ts:74` — `const apiKey = process.env["SWITCHBOARD_API_KEY"]`; `:75` constructs `HttpPlatformIngressAdapter(apiUrl, apiKey)`.
-  - `apps/chat/src/gateway/http-platform-ingress-adapter.ts:19-21` — sets `Authorization: Bearer …` ONLY `if (this.apiKey)`. When unset, the POST to `/api/ingress/submit` carries no auth header.
-  - Consumer (401): `apps/api/src/routes/ingress.ts:12` (`/ingress/submit`, `preHandler: requireOrgForMutation`) → `apps/api/src/middleware/auth.ts:143-144` rejects with `401 "Missing Authorization header"` (the path is NOT in the auth-skip allowlist at `auth.ts:122-141`).
-  - Valid-key source the chat key would need to match: `auth.ts:208-211` — `dashboardUser.apiKeyHash` (SHA-256 of the key), or static `API_KEYS`/`API_KEY_METADATA`.
-  - Prod default: `.env.example` has `SWITCHBOARD_API_KEY=` (empty). The audit worktree `.env` likewise has no `SWITCHBOARD_API_KEY` (only `INTERNAL_API_SECRET`, which is a DIFFERENT secret used by the chat-approval bridge, not this ingress hop).
+- **Verdict:** BROKEN at prod defaults (exercised live; `/api/ingress/submit` returned 401 "Missing Authorization header") — **this is a deployment-config / launch gap, NOT a code bug in the adapter**
+- **Scope:** all-channel — hits WhatsApp and Telegram equally; the missing env var is channel-agnostic
+- **Location (config gap, not code bug):**
+  - Adapter code (correct): `apps/chat/src/gateway/http-platform-ingress-adapter.ts:19-21` — sets `Authorization: Bearer <key>` only `if (this.apiKey)`. When the key is set, the code works correctly.
+  - Key source: `apps/chat/src/main.ts:74-75` — reads `process.env["SWITCHBOARD_API_KEY"]`; passes it to `HttpPlatformIngressAdapter(apiUrl, apiKey)`.
+  - Gap 1 — default empty: `.env.example:146` has `SWITCHBOARD_API_KEY=` (blank); no default value is shipped.
+  - Gap 2 — not in deploy config: `render.yaml` `switchboard-chat` service (lines 149-213) defines no `SWITCHBOARD_API_KEY` entry — the key is simply absent from the deploy manifest, so a fresh Render deploy silently omits it.
+  - Gap 3 — no matching API_KEYS on api side: `render.yaml` `switchboard-api` service likewise defines no `API_KEYS` or `API_KEY_METADATA` entry. The API auth gate at `apps/api/src/middleware/auth.ts:208-211` validates the key against `dashboardUser.apiKeyHash` (SHA-256 of the key) or static `API_KEYS`/`API_KEY_METADATA`; neither is provisioned for the chat service in the deploy config.
+  - Consumer (401): `apps/api/src/routes/ingress.ts:12` (`/ingress/submit`, `preHandler: requireOrgForMutation`) -> `apps/api/src/middleware/auth.ts:143-144` rejects with `401 "Missing Authorization header"` (the path is NOT in the auth-skip allowlist at `auth.ts:122-141`).
     (verified against `audit/pilot-spine` worktree, 2026-06-08)
+
+## This is a config gap, not a code bug
+
+The adapter at `http-platform-ingress-adapter.ts:19-21` is correctly written: it sends the `Authorization` header when the key is present. The defect is that:
+
+1. The key is blank in `.env.example` with no guidance that it is REQUIRED in managed-channel mode.
+2. The `render.yaml` `switchboard-chat` service omits the `SWITCHBOARD_API_KEY` entry entirely — a fresh deploy has no key set.
+3. The `render.yaml` `switchboard-api` service has no corresponding `API_KEYS` / `API_KEY_METADATA` entry — even if the chat service sets a key, the API has nowhere to validate it (short of creating a `DashboardUser` with `apiKeyHash` out-of-band).
+
+The fix is provisioning — not rewriting the adapter. This is in the same family as F-03 (`INTERNAL_API_SECRET` unset), where the chat-to-API trust wiring depends on operator-set secrets that are empty by default with no provisioning producer.
 
 ## What was exercised
 
-After bridging F-13 (D-03) and F-14 (D-03c), I injected a Telegram inbound for the audit org. The deployment resolved, the Contact + ConversationThread were created, the inbound was persisted, and the gateway called `platformIngress.submit` → the HTTP adapter POSTed to `http://localhost:3000/api/ingress/submit` with no Authorization header. API log:
+After bridging F-13 (D-03) and F-14 (D-03c), I injected a Telegram inbound for the audit org. The deployment resolved, the Contact + ConversationThread were created, the inbound was persisted, and the gateway called `platformIngress.submit` -> the HTTP adapter POSTed to `http://localhost:3000/api/ingress/submit` with no Authorization header. API log:
 
 ```
 [HttpPlatformIngress] API error 401: {"error":"Missing Authorization header","statusCode":401}
@@ -21,16 +33,22 @@ After bridging F-13 (D-03) and F-14 (D-03c), I injected a Telegram inbound for t
 
 The submit returned `{ ok: false, error: { type: "validation_failed" } }`, so the gateway sent the framework fallback "I'm having trouble right now. Let me connect you with the team." (`channel-gateway.ts:127`/`:136`). The Telegram send then 400'd ("chat not found") because the recipient is synthetic (expected per the audit's synthetic-inbound posture). Artifact: `evidence/j3-inbound-routing-broken.txt` (third injection block).
 
+Note: this finding was reached on the Telegram path only because F-13/F-14 block Telegram earlier (and were bridged for testing). The 401 gap is channel-agnostic — the same `SWITCHBOARD_API_KEY` omission would cause the same 401 on an otherwise-working WhatsApp inbound.
+
 ## What happened vs expected
 
-Expected: the chat server authenticates to the API with an org-scoped key so the skill runs and Alex replies. Observed: at prod defaults the chat server has no API key, so EVERY managed-channel message fails the API auth gate and the customer always receives the generic "having trouble" fallback — the skill (Alex's LLM, booking tools, governance) never runs. The pilot conversation loop is dead even past F-13/F-14.
+Expected: the chat server authenticates to the API with an org-scoped key so the skill runs and Alex replies. Observed: at prod defaults the chat server has no API key, so EVERY managed-channel message fails the API auth gate and the customer always receives the generic "having trouble" fallback — the skill (Alex's LLM, booking tools, governance) never runs regardless of channel.
 
-This is the third of three independent prod-default blockers on the managed-channel inbound spine (F-13 routing, F-14 contact FK, F-15 ingress auth). It shares a root cause family with F-03 (`INTERNAL_API_SECRET` unset breaks channel `active` resolution): the chat↔API trust wiring depends on operator-set secrets that are empty by default and have no provisioning producer.
+## Required fix (launch-checklist items)
 
-## Suggested fix scope
+The fix is purely provisioning + documentation:
 
-Provision and inject `SWITCHBOARD_API_KEY` (an org-scoped key whose hash is stored on a service `DashboardUser.apiKeyHash`, or a static `API_KEYS`+`API_KEY_METADATA` entry) as part of deploy config, and document it in `.env.example`/the launch runbook as a REQUIRED secret (not blank). Consider failing chat boot loudly when `DATABASE_URL` is set (managed-channel mode) but `SWITCHBOARD_API_KEY` is empty, mirroring the API's own "API_KEYS required in production" startup guard (`auth.ts:64-68`). Add an integration test that runs a managed inbound end-to-end against an authed API and asserts a non-fallback reply.
+1. **`render.yaml` `switchboard-chat`**: add `SWITCHBOARD_API_KEY` with `sync: false` so the operator is prompted to enter a value at deploy time.
+2. **`render.yaml` `switchboard-api`**: add `API_KEYS` and `API_KEY_METADATA` with `sync: false` (or document the `DashboardUser.apiKeyHash` provisioning path) so the API can validate the key the chat service sends.
+3. **`.env.example`**: mark `SWITCHBOARD_API_KEY` as REQUIRED when `DATABASE_URL` is set (managed-channel mode), with a note describing how to generate and register the matching key on the API side.
+4. **Boot guard (recommended)**: fail chat boot loudly when `DATABASE_URL` is set but `SWITCHBOARD_API_KEY` is empty, mirroring the API's own "API_KEYS required in production" startup guard (`auth.ts:64-68`). This is a code-side improvement, but not the root cause of the gap.
+5. **Integration test (recommended)**: run a managed inbound end-to-end against an authed API and assert a non-fallback reply.
 
 ## Cross-reference
 
-Same secret-provisioning gap family as F-03. Sits downstream of F-13 + F-14 on the Telegram pilot spine; all three must be fixed for a self-serve Telegram pilot to function.
+Same secret-provisioning gap family as F-03. Unlike F-13/F-14 (Telegram-only), this gap hits ALL channels including WhatsApp — it is the one J3-S3 blocker that directly threatens the WhatsApp pilot. Once F-15 is resolved (key provisioned), WhatsApp inbound should flow end-to-end without hitting F-13 or F-14 (which are Telegram-only by code read).
