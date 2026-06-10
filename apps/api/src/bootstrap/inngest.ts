@@ -13,6 +13,7 @@ import {
   PrismaDeploymentStore,
   PrismaListingStore,
   PrismaDeploymentConnectionStore,
+  PrismaConnectionStore,
   PrismaAgentTaskStore,
   PrismaCreatorIdentityStore,
   PrismaProductIdentityStore,
@@ -84,6 +85,7 @@ import { resolveHandoffBrief } from "../services/workflows/handoff-brief-enrichm
 import type { RecommendationHandoffSubmitInput } from "../services/workflows/recommendation-handoff-request.js";
 import type { RileyPauseSubmitInput } from "../services/workflows/riley-pause-submit-request.js";
 import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
+import { buildRileyCredentialResolver } from "./riley-credential-resolver.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
@@ -373,6 +375,28 @@ export async function registerInngest(
     log: app.log,
   });
 
+  // Riley credential resolver (Tier-0 PR 0.1): the primary source is the
+  // deployment-scoped DeploymentConnection (`connectionStore`); the pilot
+  // fallback is the org-level Connection(serviceId="meta-ads") an operator
+  // enters in the Settings UI. A needs_reauth/revoked connection is skipped so
+  // a dead token is never used (and never poisons the weekly fleet audit).
+  const orgConnectionStore = new PrismaConnectionStore(app.prisma!);
+  const getDeploymentCredentials = buildRileyCredentialResolver({
+    deploymentConnectionStore: connectionStore,
+    connectionStore: orgConnectionStore,
+    resolveOrgId: async (deploymentId) => {
+      const deployment = await deploymentStore.findById(deploymentId);
+      return deployment?.organizationId ?? null;
+    },
+    decrypt: (blob) => {
+      const creds = decryptCredentials(blob);
+      return {
+        accessToken: creds.accessToken as string,
+        accountId: creds.accountId as string,
+      };
+    },
+  });
+
   const adOptimizerDeps: CronDependencies = {
     listActiveDeployments: async () => {
       const listing = await listingStore.findBySlug("ad-optimizer");
@@ -390,16 +414,7 @@ export async function registerInngest(
           ] ?? false) === true,
       }));
     },
-    getDeploymentCredentials: async (deploymentId) => {
-      const connections = await connectionStore.listByDeployment(deploymentId);
-      const conn = connections.find((c) => c.type === "meta-ads");
-      if (!conn) return null;
-      const creds = decryptCredentials(conn.credentials);
-      return {
-        accessToken: creds.accessToken as string,
-        accountId: creds.accountId as string,
-      };
-    },
+    getDeploymentCredentials,
     createAdsClient: (creds) => new MetaAdsClient(creds),
     createCrmProvider: (_deploymentId) => {
       // Real Prisma-backed provider. The Inngest function passes the resolved
