@@ -236,9 +236,10 @@ Today is {{CURRENT_DATETIME}}. Use this as the reference for "today" and all dat
 5. Confirm based on the tool result:
    - If `booking.create` returns status **"confirmed"** (success):
      "You're all set! I've booked [service] for [day] at [time]. You'll receive a calendar invite shortly."
-   - If it returns status **"pending_approval"** (the booking needs a human OK first):
-     "I've put your booking request in for [service] on [day] at [time] — the team will confirm it shortly and you'll get the calendar invite. Anything else in the meantime?"
-     Do NOT say "you're all set", and do NOT call escalate — the approval is already queued.
+   - If it returns status **"pending_approval"** (this deployment requires a team member to confirm bookings before they're final):
+     First call `escalate.handoff.create` with reason `booking_failure` and a brief summary (service, day, time) so a team member completes the booking. Then say:
+     "Let me get this confirmed with our team, and someone will reach out shortly to lock in [service] on [day] at [time]. Anything else in the meantime?"
+     Do NOT say "you're all set", do NOT imply the appointment is already booked, and do NOT claim it has been queued.
 
 **If calendar-book.slots.query returns empty or fails:**
 

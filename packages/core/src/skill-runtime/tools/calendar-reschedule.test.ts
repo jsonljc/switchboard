@@ -1,6 +1,7 @@
 import { it, expect, vi } from "vitest";
 import { BookingSlotConflictError } from "@switchboard/schemas";
 import { buildRescheduleOperations } from "./calendar-reschedule.js";
+import { getToolGovernanceDecision } from "../governance.js";
 
 const ctx = { orgId: "org-1", contactId: "c-1" } as never;
 const upcoming = [
@@ -29,6 +30,20 @@ function deps(over: Record<string, unknown> = {}) {
     ...over,
   };
 }
+
+it("booking.reschedule scopes its guided auto-approve override (still gates at supervised)", () => {
+  const ops = buildRescheduleOperations(ctx, deps() as never);
+  expect(getToolGovernanceDecision(ops["booking.reschedule"]!, "guided")).toBe("auto-approve");
+  expect(getToolGovernanceDecision(ops["booking.reschedule"]!, "supervised")).toBe(
+    "require-approval",
+  );
+});
+
+it("booking.cancel scopes its guided auto-approve override (still gates at supervised)", () => {
+  const ops = buildRescheduleOperations(ctx, deps() as never);
+  expect(getToolGovernanceDecision(ops["booking.cancel"]!, "guided")).toBe("auto-approve");
+  expect(getToolGovernanceDecision(ops["booking.cancel"]!, "supervised")).toBe("require-approval");
+});
 
 it("reschedule resolves the soonest booking from ctx.contactId and ignores a model contactId", async () => {
   const d = deps();
