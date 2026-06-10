@@ -1,0 +1,92 @@
+# D1 — Decision Engine & Statistical Soundness (Riley capability audit, 2026-06-10)
+
+> Audited against the worktree at `docs/provisioning-runbook` HEAD (9f213538). All claims re-verified against current code; key negative findings demonstrated by executing the compiled `decideForCampaign` directly. Baseline: `docs/audits/2026-06-02-riley-improvement-audit/domains/D1-decision-engine.md` (8 days stale; much of its backlog has shipped).
+
+## 1. Thesis
+
+The decision engine has been transformed since the baseline, and mostly for real. The three baseline-critical defects — no sample-size gate (G4), the discarded per-source economics (G2), and the cost-per-lead-only target (theme A) — are genuinely fixed in wired, behavior-bearing code: action-family evidence floors demote thin recs to watches inside the engine, the booked-CAC ladder resolves a calibrated per-campaign target that feeds **both** the daily breach detector and the engine, and per-source trueROAS now drives one heavily-gated advisory reallocation rec. The abstention machinery (Gate 0/1/2, tier withholding, dual learning lockouts) is layered and largely honest-null.
+
+But the abstention floor is **not** complete where it matters most. Two empirically-demonstrated silence holes remain: a zero-conversion burn campaign and a not-yet-durable breach both produce literally empty output. The diagnostician still carries two structurally unreachable rules (including the literal junk-leads detector), the engine's `switch_optimization_event` and `harden_capi_attribution` branches are dead for lack of producers, the parse boundary is NaN-blind, and the arbitrator — built to prevent multi-edit attribution damage — is consumed by nothing at emission except the pause primary. The baseline's meta-finding (_computed, then discarded_) has shrunk dramatically but survives in trends/forecasting/budget-distribution and one level deeper: rules that are wired but whose inputs never arrive.
+
+**Verdict: sound-with-gaps.** Nothing here moves money wrongly today (advisory posture + governance parking for the dark pause path), but the engine's false-negative blind spots directly undercut the north-star claim that Riley catches leaking spend on booked-revenue truth.
+
+## 2. Current state (verified)
+
+| Capability                                          | State                                                                                                                                                                                                                                                                                                                                              | Evidence                                                                                          |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Evidence floors (abstention Gate 2)                 | **REAL, wired.** Below-floor destructive/scale/structural recs demoted to `insufficient_evidence` watches in-engine; named per-family floors                                                                                                                                                                                                       | `recommendation-engine.ts:340-344`, `evidence-floor.ts:14-20`                                     |
+| Zero-day breach noise guard                         | **REAL.** Zero-conversion days count as breaches only with >= 20 window clicks                                                                                                                                                                                                                                                                     | `meta-campaign-insights-provider.ts:136-158`                                                      |
+| Booked-CAC economic ladder (#798/#835)              | **REAL, driving decisions.** Account resolve-once (calibrate-first invariant) + per-campaign Tier-1 (>=10 bookings) with account Tier-2 fallback; `effectiveTarget` feeds breach detector (`audit-runner.ts:548`) and engine (`:566`); tier gates action families (`applyTier`, cpc withholds all but `fix_signal_health`); `targetSource` stamped | `economic-target.ts:168-230`, `campaign-decision.ts:195-201`                                      |
+| Measurement trust (Gate 1, denominator step-change) | **REAL.** `measurementTrusted=false` demotes cost-driven + learning-resetting recs to `measurement_untrusted` watches; account watch surfaced                                                                                                                                                                                                      | `audit-report-builders.ts:56-84`, `campaign-decision.ts:179-194`                                  |
+| Source reallocation (#851/#854)                     | **REAL, fires into recommendations[].** 7 ordered gates: 2x ratio, winner trueROAS >= 1, per-source spend-attribution coverage >= 0.7 on BOTH sides, measurement trust, 10-lead/3-booking per-source floors, account scale floor                                                                                                                   | `source-reallocation.ts:136-188`, `audit-runner.ts:615-616`                                       |
+| Learning lockouts                                   | **REAL, dual-layer.** Reset-class (V2) hold for `resetsLearning==="yes"` while material ad set learning + V1 state-based backstop                                                                                                                                                                                                                  | `campaign-decision.ts:213-226`, `learning-phase-guard.ts`                                         |
+| Opportunity arbitrator (#876)                       | Computes a deterministic score over mutating candidates; **advisory metadata only** — emission ignores it except the pause-primary index                                                                                                                                                                                                           | `opportunity-arbitrator.ts:19-21`, `audit-runner.ts:629-645`                                      |
+| Phase-C pause seam                                  | Dark, structurally gated: primary-only, class eligibility, raised 100-click/10-conversion execution floor, double-flag capability passing                                                                                                                                                                                                          | `riley-pause-dispatch.ts:39-72`, `riley-pause-execution-floor.ts`, `inngest-functions.ts:271-273` |
+| Trends / breach forecasting                         | **DEAD in prod.** `getTrendData` never wired; `projectBreach` has no caller (`projectedBreachWeeks` hardcoded null)                                                                                                                                                                                                                                | `inngest-functions.ts:217-277`, `trend-engine.ts:36`                                              |
+| Budget distribution                                 | Computed, **report-only** — no rec derived                                                                                                                                                                                                                                                                                                         | `audit-v2-sections.ts:144-161`                                                                    |
+| Learning-limited recs (expand/consolidate)          | Gated off; no production caller sets `surfaceAdSetLearning`                                                                                                                                                                                                                                                                                        | `audit-v2-sections.ts:92`, `inngest-functions.ts:189-207`                                         |
+| Gate-0 coverage validator                           | Built + tested, **unwired in prod** (acknowledged follow-up); arbitrator defaults absent coverage to 1.0                                                                                                                                                                                                                                           | `inngest-functions.ts:77-80`, `opportunity-arbitrator.ts:122`                                     |
+| Eval                                                | `evals/riley-recommendation` exists: 40 deterministic fixtures across smoke/learning/measurement-trust/sufficiency/hybrid/arbitration/source-reallocation. **No fixture covers conversions=0 with spend>0**                                                                                                                                        | `evals/riley-recommendation/fixtures/`                                                            |
+
+## 3. Findings
+
+### D1-1 (P1, net-new) — Zero-conversion burn = total silence
+
+`safeDivide` encodes infinite CPA as 0 (`campaign-decision.ts:20-31`); every CPA-multiple gate in the engine is then false, so no rec exists for the abstention floor to demote. **Demonstrated:** `decideForCampaign` with $1,200 spend / 400 clicks / 0 conversions / 14-of-14 breach days returns `{insights:[],watches:[],recommendations:[]}`. The breach detector did its job (zero-days count past the 20-click floor) and the engine discarded it via the `isAboveAddCreativeCpa` AND (`recommendation-engine.ts:198-202`). The CPA delta even reads "down" (improving) against a converting prior week. The scale rule's explicit `cpa > 0` guard (`:220`) shows cpa=0 was understood as "no data" — but no burn rule was added. No eval fixture pins this. **Fix (S):** zero-conversion-burn rule (spend floor + 0 conversions + >= 20 clicks → pause/review rec through the normal gates, or at minimum a watch) + eval fixture.
+
+### D1-2 (P2, known-open) — Non-durable breach is still silence
+
+CPA 2.5x target with 5/14 breach days → empty result (demonstrated). Baseline G8's "breach not durable → silence" case survives all shipped abstention work. **Fix (S):** `breach_building` watch when the multiple is breached but durability < 7 days.
+
+### D1-3 (P2, known-open) — Unreachable diagnoses; dead engine branches
+
+`lead_quality_degradation` (needs a `costPerBooked` delta) and `ctwa_drive_by_clickers` (needs `chatsStarted`/`replyRate`) can never fire: the only live `diagnose()` caller passes deltas from `comparePeriods` over the fixed 7-key `MetricSet` (`campaign-decision.ts:128-129`, `period-comparator.ts:47-58`). Therefore `switch_optimization_event` (`recommendation-engine.ts:286-302`) is unreachable. `capiAttributionStale` has zero producers repo-wide → engine-side `harden_capi_attribution` dead. Four other diagnoses still drive nothing except suppressing the scale rule. The per-campaign economics rows already compute `costPerBooked` (`source-comparator.ts:89-103`) — the join to a delta is one wire away, exactly the baseline meta-finding pattern.
+
+### D1-4 (P2, net-new) — NaN-blind parse boundary
+
+`meta-ads-client.ts:462-493` parses all insight numerics with unguarded `parseFloat`/`parseInt`. NaN spend → cpa=NaN → all gates silently false (**demonstrated:** NaN spend + 14/14 breach days yields no pause). One NaN insight also poisons `accountSpend` in `arbitrate()` → all scores NaN → sort comparator returns NaN → primary selection undefined — and the Phase-C pause path keys off that primary. The breach detector's action-type denominator IS `Number.isFinite`-guarded (`:149`) and #939 guarded the corroborated arm; the main parse is the remaining unguarded numeric boundary (the repo's documented NaN-blind-gates class).
+
+### D1-5 (P2, known-open) — Arbitration not consumed; contradictory recs co-queue
+
+`audience_saturation` emits both `refresh_creative` (0.7) and `restructure` (0.65) — two learning-resetting mutations on one campaign in one run (**demonstrated**). The arbitrator penalizes the overlap but is "ADDITIVE RANKING METADATA ONLY"; the sink emits everything, and account-vs-campaign scope conflicts (shift away from a source while scaling a campaign in it) are deliberately unpenalized (`opportunity-arbitrator.ts:49-52`). The single-opportunity discipline exists on the report, not at the approval surface.
+
+### D1-6 (P2, known-open) — Trend/forecast/budget intelligence still discarded
+
+`getTrendData` unwired in the prod cron; `projectBreach` never called (`projectedBreachWeeks` hardcoded null); `budgetDistribution` report-only; learning-limited recs gated behind a flag nothing sets; `executeDailyCheck` fetches the account summary and discards it. Largest surviving slice of computed-then-discarded.
+
+### D1-7 (P2, net-new) — Tier-1 calibration ratio unguarded
+
+`resolveEconomicTargetForCampaign` floors bookings (>= 10) but not conversions; `bookingsPerConversion` mixes CRM bookings with Meta conversions from one 7-day window. 10 bookings / 2 Meta conversions → effectiveTarget = 5x the configured cost-per-booked, judged as Tier-1 truth — failing open (permissive) exactly where Meta undercounts. No clamp/smoothing. **Fix (S):** conversions floor + ratio clamp + fallback-to-account, pinned by fixture.
+
+### D1-8 (refinement, known-open) — Confidence still hardcoded; significance not sample-aware
+
+Per-rule constants (0.9/0.8/0.7/...) with only the flat Tier-2 -0.15 penalty as evidence linkage; `period-comparator.ts:21` is a fixed 15% relative threshold regardless of n. Routing thresholds still partition action types, not evidence strength (baseline G6).
+
+### D1-9 (P2, known-open) — Gate-0 coverage validator unwired in prod
+
+No `createCoverageValidator` in `apps/api/src/bootstrap/inngest.ts`; coverage abstention never fires; `truthConfidenceFor` defaults absent coverage to 1.0. Acknowledged in-code as a follow-up; becomes material at pilot with partially-tracked orgs.
+
+### D1-10 (refinement) — Copy/edge nits
+
+Two-window conflation in operator copy ("{7d multiplier}x target for {14d periods} days", `recommendation-engine.ts:94-110`; baseline G9/G10). `magnitudeFor`'s "can never become primary" comment is false for a sole mutating candidate (score <= 0 still becomes primary; the execution floor still protects the pause path). `detectDenominatorStepChange` requires clicks flat +/- 20% and prior conversions > 0 — a shift coinciding with click growth escapes; trust totals use aggregate conversions even when the breach denominator is pinned to `conversionActionType`.
+
+### D1-11 (verify-shipped) — What shipped is real
+
+Confirmed by tracing producer→consumer: evidence floors (G4/#812), booked-CAC ladder driving breach + engine targets (#798/#835), Gate-1 measurement-trust demotion, source reallocation firing into `recommendations[]` (#851/#854), dual learning lockouts, arbitration pause-primary → execution-floor → flag-gated submit-and-park seam (#927/#931/#933). Caveat: evidence `days: 7` is a hardcoded placeholder (`campaign-decision.ts:158-163`) so the tenure axis of every floor is decorative (acknowledged Phase-B debt) — a 2-day-old high-volume campaign passes.
+
+## 4. What is sound (with evidence)
+
+- **The abstention architecture, where a rec exists.** Five distinct demotion layers each produce a typed watch with a checkBackDate, in a deliberate order (Gate-2 evidence → Gate-1 measurement trust → tier → V2 reset-class lockout → V1 learning backstop), all in one pure function (`campaign-decision.ts:166-227`). Thin data on a _generated_ rec is never silence.
+- **Honest-null economics.** `safeDiv` returns null (not 0) for zero denominators in source/campaign economics; trueROAS normalizes cents exactly once and returns null for unknown value (`source-comparator.ts:31, 61-64`); the sink renders "true ROAS not yet attributed" rather than a fabricated 0 (`recommendation-sink.ts:235-243`).
+- **The reallocation gate stack.** Relative 2x ratio + absolute winner-profitability floor (prevents "shift toward the less-losing loser", `source-reallocation.ts:37, 148`) + per-candidate (not account-wide) spend-attribution coverage flooring (`spend-attributor.ts:40`, gated at `:154-161`) is a genuinely defensible decision gate, and each gate is pinned by an eval fixture per the module doc.
+- **The Phase-C pause seam's layered floors.** Class eligibility consumed verbatim from one contract (`isPhaseCActionClassEligible`), primary-only structural gating, a raised execution floor distinct from the advisory floor with an explicit producer-population-trap note on the days axis (`riley-pause-execution-floor.ts:8-11`), and park-truth (not gate-eligibility) feeding `riley_self` ownership.
+- **Deterministic, model-free evaluability.** `decideForCampaign` is pure with provider calls hoisted out (the eval seam), and the eval suite pins learning, measurement-trust, sufficiency, hybrid-tier, arbitration, and reallocation behavior — the baseline's theme D (unmeasurable) is structurally answered, though the fixture set has the D1-1 hole.
+
+## 5. Recommended sequence (this domain)
+
+1. **D1-1 + D1-2 (S):** burn rule + breach_building watch + eval fixtures — closes the abstention contract for real.
+2. **D1-4 (S):** `Number.isFinite` guards at the Meta parse boundary — cheap, protects arbitration before the pause flag ever flips.
+3. **D1-7 (S):** Tier-1 calibration clamp — protects the economic ladder's flagship tier.
+4. **D1-3 (M):** wire `costPerBooked` deltas (data already computed) or delete the unreachable rules.
+5. **D1-5 (M):** consume arbitration at emission before Spec-1B widens execution.
+6. **D1-6 / D1-9 (M):** trend feed + coverage validator wiring — the last computed-then-discarded slices.

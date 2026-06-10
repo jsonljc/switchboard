@@ -1,0 +1,73 @@
+# D7 — Learning Loop & Measurement (riley-capability-audit, 2026-06-10)
+
+> Audited against worktree HEAD (post-#949). Baseline: docs/audits/2026-06-02-riley-improvement-audit/ (D4 + D7). All baseline claims re-verified against current code; eval harness executed locally.
+
+## Thesis
+
+Since the 2026-06-02 baseline, Riley grew a **real PROOF substrate** — a deterministic CI-blocking eval over the actual decision pipeline, and a carefully-floored outcome ledger (corroboration, business-context stability, executed-pause linkage) whose honesty engineering is genuinely excellent. What it did **not** grow is an IMPROVE leg: **not one byte of the outcome ledger, the trust deltas, or the operator's approve/reject verdicts flows back into any decision Riley makes.** The loop is open in exactly the way the baseline described, now with far better-instrumented openness. Meanwhile the attribution cron remains dark behind a default-off flag, covers only `pause`/`refresh_creative` (not the reallocation move the north star is named after), and the base attribution row has a NaN hole one layer below the #939 finite-guard fix.
+
+**Can we PROVE Riley improves?** No. We can prove Riley _doesn't regress_ (eval) and, post-flag-flip, we can _display_ honest per-action outcomes. **Does Riley improve from outcomes today?** No — structurally impossible: there is no consumer.
+
+## Current state
+
+| Component                                      | State                                                        | Evidence                                                                                                                                                                                                                                            |
+| ---------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Eval harness (evals/riley-recommendation)      | **SHIPPED, verified green**                                  | Ran `pnpm eval:riley`: 12 per-campaign + 10 source-reallocation + 6 arbitration cases match, exit 0. Real pipeline via `decideRawForCase` (decide.ts:119-176)                                                                                       |
+| Eval CI gating                                 | **Blocking** on main pushes + riley-path PRs                 | ci.yml:536-601; vitest matrix + CLI runner both run                                                                                                                                                                                                 |
+| Eval determinism                               | Model-free, DB-free, no API key                              | README.md:6-12; confirmed by imports (only @switchboard/ad-optimizer + schemas)                                                                                                                                                                     |
+| Refusal/abstention coverage                    | Real                                                         | 7/10 source-reallocation cases abstain; 2/6 arbitration expect null primary; `insufficient_evidence`/`measurement_untrusted`/`in_learning_phase` pinned by drift guard                                                                              |
+| Eval CI path filter                            | **GAP**                                                      | ci.yml:555-567 omits analyzers/source-reallocation.ts, source-comparator.ts, spend-attributor.ts, opportunity-arbitrator.ts, revenue-state.ts — all exercised by the harness                                                                        |
+| Eval breadth                                   | Thin — 28 real cases                                         | 25 of 37 per-campaign JSONL lines are comments; 1 measurement-untrusted case, 1 recovering case; no numeric grading (deferred, README.md:133-138); execution floor not in gate                                                                      |
+| Outcome ledger writes (#886/#939/#946/#948)    | **SHIPPED, correct**                                         | outcome-attribution.ts:47-205; outcome-corroboration.ts:123-196 (finite guard :153); operational-stability.ts:176-299 (fail-toward-unstable); markActedByExecution stash recommendation-store.ts:303-339 → read recommendation-outcome-store.ts:331 |
+| Reader wiring (producer population)            | Wired                                                        | operationalStateReader + orgBookedStatsReader injected at inngest.ts:944-949 — no inert flag-gated control                                                                                                                                          |
+| Attribution cron                               | **DARK** — `RILEY_OUTCOME_ATTRIBUTION_ENABLED=false` default | .env.example:331; inngest.ts:951; flip runbook docs/launch/cockpit-wiring-runbook.md:110-143                                                                                                                                                        |
+| Attributable kinds                             | 2 only (`pause`, `refresh_creative`)                         | outcome-attribution-config.ts:3; `shift_budget_to_source` unmeasured                                                                                                                                                                                |
+| Outcome read-back into judgment                | **NONE**                                                     | Sole reader: routes.ts:155 → outcome-activity-row.ts (cockpit copy). campaign-decision.ts has no history/feedback input. Zero outcome refs in ad-optimizer                                                                                          |
+| Operator approve/reject capture (baseline 5.2) | **Still discarded**                                          | applyAct = status flip + AuditEntry (recommendation-store.ts:260-285); no aggregation anywhere                                                                                                                                                      |
+| injectedPatternIds lift rollup                 | Still write-only, Alex-side only                             | work-trace-recorder.ts:111 persists; readers = hash exclusion (work-trace-hash.ts:22) + response metadata only                                                                                                                                      |
+| Test quality at v3 seams                       | Good                                                         | 9,187 lines ad-optimizer tests incl. 10 audit-runner seam suites (integration test uses REAL MetaCampaignInsightsProvider); 3,305 lines core/recommendations tests; db executed-transition + outcome-store tests                                    |
+
+## Findings detail
+
+### D7-1 (P1, known-open) — The loop is still open: outcome ledger is write-only into Riley's judgment
+
+Sole consumer chain: `routes.ts:155` → `listRenderableForOrg` → `translateOutcomeToActivityRow` (cockpit copy). `trustDelta` and `causalStrength` — the explicit trust-economics signals built in #886/#939 — terminate as an allowlisted copy suffix (outcome-activity-row.ts:31-32). `decideForCampaign` (campaign-decision.ts) carries no outcome/history slot; audit-runner injects no outcome store; the Riley→Mira handoff carries no outcome enrichment. This is the baseline's meta-finding ("computed then discarded") reproduced at the trust layer with higher-quality discarded data. **Spec-1B implication:** the act-leg's earned-trust ramp has its currency already minted (trustDelta per executed action) and no bank. Recommendation: per-org/per-kind trust rollup → advisory confidence modifier in decideForCampaign + evidence input to the pause execution floor.
+
+### D7-2 (P1, known-open) — Operator approve/reject still discarded (baseline 5.2)
+
+`applyAct` flips status and writes an audit row; dismissals don't even become attribution candidates (status filter `acted`, recommendation-outcome-store.ts:261). No groupBy/aggregation of operator verdicts exists in any package. The data is already persisted (PendingActionRecord.status + AuditEntry) — closing this is a read-model + advisory modifier, no new writes.
+
+### D7-3 (P2, net-new) — NaN-blind base attribution row
+
+meta-insights-adapter.ts guards `accountSpendCents` finiteness (:84) but not `spendCents` (:76) / `ctr` (:77). A NaN post-window spend → `deltaPct = NaN` → every comparison gate false → **no** `below_noise_floor` flag → `cockpitRenderable === true` (NaN ≠ null, outcome-attribution.ts:117) → `causalStrength = "directional"` → `Math.sign(NaN)` makes `isFavorable` false → **fabricated `trustDelta = "down"`** (:169). Prisma JSON then either throws (aborting the org's whole sequential run — candidates after the poisoned one starve until the data heals) or stores `deltaPct: null` (display drops the row fail-closed, but the ledger keeps the false trust verdict forever — rows are insert-once). The corroboration arm survives (its own finite guard rejects with `non_finite_input`), which makes the asymmetry obvious: #939's lesson was applied to the upgrade path but not the base row. Fix is small: finite-guard the adapter outputs (non-finite → null → honest `meta_data_missing`) + defense-in-depth `Number.isFinite(deltaPct)` before the noise floor.
+
+### D7-4 (P2, net-new) — Eval CI path filter omits exercised sources
+
+The harness exercises `compareSources`/`decideSourceReallocation`/`computeAuditEconomicsSections`/`arbitrate`/`assembleRevenueState` (source-reallocation-eval.ts:4-11, arbitration-eval.ts:1-5) but ci.yml:555-567 filters only the campaign-decision dependency set. A PR touching only `analyzers/opportunity-arbitrator.ts` merges without the eval running; the job's unconditional main-branch run then fails post-merge — the repo's documented "path-filter lands debt on main" failure mode. Fix: widen filter to `packages/ad-optimizer/src/**`.
+
+### D7-5 (P2, known-open) — Dark loop, 2 kinds, reallocation unmeasured
+
+Flag default-off (.env.example:331); only `pause`/`refresh_creative` attributable (outcome-attribution-config.ts:3). `shift_budget_to_source` — the advisory reallocation that IS the north-star act — produces zero outcome rows, so the moat's receipt ("we moved spend and bookings-per-dollar held") cannot be shown even after the flip. The flip itself has no code blocker: readers wired, floors honest, runbook written. Every dark day costs operator-trust history that the windows+lag design can't fully backfill in spirit (rows attribute late, but the cockpit narrative starts at flip).
+
+### D7-6 (P2, net-new) — Eval is thin and the self-execution floor is ungated
+
+Real case count is 28, not the ~67 the JSONL line counts suggest (25 comment lines). One fixture each for measurement-untrusted and recovering. Drift guard enforces per-dimension floors, not combinations. Most important: `riley-pause-execution-floor.ts` — the decision that will let Riley move money without a human in Spec-1B — exists only in unit tests, not in the deterministic eval gate that the team treats as the engine-change prerequisite.
+
+### D7-9 (refinement, known-open) — No per-pattern lift rollup
+
+`injectedPatternIds` persisted on every WorkTrace and on Riley emissions (always `[]` — correct, the engine is deterministic), read only by hash-exclusion and response metadata. Alex's pattern surfacing calibrates on sourceCount/confidence, never realized lift. Platform-level gap, low Riley-specific urgency.
+
+## What is sound (with evidence)
+
+1. **The eval harness is the real thing, not theater.** It resolves fixtures through the live exports (`decideForCampaign`, `resolveEconomicTargetForCampaign`, `deriveLearningPhaseActive` — the same rule the audit-runner uses, decide.ts:166), is deterministic and dependency-free, runs blocking in CI, and ran green here. Its guards are adversarial: the denominator-guard exercises the REAL provider against the aggregate-vs-action_type divergence (asserts 14 breaches where the wrong denominator gives 0); the drift guard derives required coverage from the schema enums so a new tier automatically demands a fixture; set-membership `expectedActions` assertions close the lossy single-label hole (a dropped `pause` fails even when `add_creative` still leads). The README honestly defers two §11 scenarios as engine gaps instead of faking fixtures.
+2. **The outcome ledger's honesty engineering is exemplary.** Corroboration is upgrade-only with ordered reject reasons, sparse-booking floors, a spend-continuity band against the pause-degeneracy, and a pre-comparison `Number.isFinite` guard (outcome-corroboration.ts:153-165). Stability derivation fails toward "unstable" on garbage bounds, certifies "stable" only from a fresh all-five-dimensions governing row, and admits late confirmations as disruption-only geometry (operational-stability.ts). Read-side enum narrowing fails closed. Idempotency is two-layer (pre-check + P2002 typed error, duck-typed across the layer boundary).
+3. **#946's executed-pause linkage is a complete producer→consumer seam:** `markActedByExecution` stashes `executedWorkUnitId` under the status-predicate serialization point against operator races (recommendation-store.ts:303-339) and `projectBaseCandidate` reads it tolerantly — machine executions will be attributed the moment both flags and the cron are live.
+4. **No inert flag-gated control here:** both optional readers (operational state, booked stats) are injected in the prod bootstrap (inngest.ts:944-949), so flipping `RILEY_OUTCOME_ATTRIBUTION_ENABLED` activates the full 4c/4d/4e derivation, not a degraded `unknown`-everything shadow.
+
+## Priority order for this domain
+
+1. **D7-3** (S) — close the NaN hole before any flip makes ledger rows permanent.
+2. **D7-5a** (S) — flip the attribution flag per the runbook; start accruing history.
+3. **D7-4** (S) — widen the CI filter.
+4. **D7-2 → D7-1** (M each) — operator-verdict rollup first (no external deps), then the trust-ledger rollup consumed by the execution floor: together these are the minimum viable "Riley learns and can prove it," and they are the stated prerequisite for an honest Spec-1B.
+5. **D7-6 / D7-5b** (M) — execution-floor eval leg + `shift_budget_to_source` attribution kind.
