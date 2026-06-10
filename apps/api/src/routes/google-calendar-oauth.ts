@@ -8,6 +8,7 @@ import {
   encryptCredentials,
   decryptCredentials,
 } from "@switchboard/db";
+import { assertOrgAccess } from "../utils/org-access.js";
 
 interface GoogleCalendarOAuthConfig {
   clientId: string;
@@ -244,6 +245,16 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
+        // Tenant isolation (F2): gate the deployment against the authenticated org
+        // BEFORE reading or decrypting its stored OAuth credentials.
+        const deployment = await new PrismaDeploymentStore(app.prisma).findById(deploymentId);
+        if (!deployment) {
+          return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+        }
+        if (!assertOrgAccess(request, deployment.organizationId, reply)) {
+          return;
+        }
+
         const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
         const connection = await connectionStore.findByDeploymentAndType(
           deploymentId,

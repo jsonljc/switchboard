@@ -9,9 +9,11 @@ import {
 import type { FacebookOAuthConfig } from "@switchboard/ad-optimizer";
 import {
   PrismaDeploymentConnectionStore,
+  PrismaDeploymentStore,
   encryptCredentials,
   decryptCredentials,
 } from "@switchboard/db";
+import { assertOrgAccess } from "../utils/org-access.js";
 
 function getOAuthConfig(): FacebookOAuthConfig {
   const appId = process.env["FACEBOOK_APP_ID"];
@@ -167,6 +169,16 @@ export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
+        // Tenant isolation (F2): gate the deployment against the authenticated org
+        // BEFORE reading or decrypting its stored OAuth credentials.
+        const deployment = await new PrismaDeploymentStore(app.prisma).findById(deploymentId);
+        if (!deployment) {
+          return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+        }
+        if (!assertOrgAccess(request, deployment.organizationId, reply)) {
+          return;
+        }
+
         const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
         const connection = await connectionStore.findByDeploymentAndType(deploymentId, "meta-ads");
 
