@@ -59,6 +59,17 @@ describe("ToolResult helpers", () => {
     expect(result.error?.retryable).toBe(false);
   });
 
+  it("pendingApproval() instructs the model not to report the parked action as completed", () => {
+    // The in-skill governance hook cannot (yet) park a require-approval tool
+    // call into a real lifecycle, so the result is re-injected to the model.
+    // It must carry an explicit remediation so the model never tells the
+    // customer a non-executed action succeeded (audit F2 footgun).
+    const rem = pendingApproval("Requires human approval").error?.modelRemediation ?? "";
+    expect(rem).not.toBe("");
+    expect(rem.toLowerCase()).toContain("not been completed");
+    expect(rem.toLowerCase()).toContain("do not");
+  });
+
   it("pendingApproval() forwards typed payload when provided", () => {
     const result = pendingApproval("Regulatory review required", {
       kind: "regulatory",

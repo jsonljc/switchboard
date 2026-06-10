@@ -113,6 +113,51 @@ describe("ChannelGateway", () => {
     );
   });
 
+  it("never leaks the raw 'Awaiting approval' summary to the lead when a turn parks for approval", async () => {
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+    const addMessageSpy = vi.fn().mockResolvedValue(undefined);
+    const config = createMockConfig({
+      conversationStore: {
+        getOrCreateBySession: vi.fn().mockResolvedValue({ conversationId: "conv-1", messages: [] }),
+        addMessage: addMessageSpy,
+      },
+      platformIngress: {
+        // The outer governance gate parked the whole turn for human approval.
+        submit: vi.fn().mockResolvedValue({
+          ok: true,
+          result: {
+            outcome: "pending_approval",
+            outputs: {},
+            summary: "Awaiting approval",
+            traceId: "trace-1",
+          },
+          workUnit: { id: "wu-1", traceId: "trace-1" },
+        }),
+      },
+    });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_ok",
+      sessionId: "sess-1",
+      text: "can you book me in?",
+    };
+
+    await gateway.handleIncoming(message, { send: sendSpy });
+
+    // The internal framework summary must NEVER reach the customer...
+    expect(sendSpy).not.toHaveBeenCalledWith("Awaiting approval");
+    // ...a single neutral holding line is sent instead...
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    // ...and only a metadata marker (not the raw summary) is persisted.
+    expect(addMessageSpy).not.toHaveBeenCalledWith("conv-1", "assistant", "Awaiting approval");
+    expect(addMessageSpy).toHaveBeenCalledWith(
+      "conv-1",
+      "assistant",
+      "[suppressed:pending_approval]",
+    );
+  });
+
   it("processes message and delivers reply via replySink", async () => {
     const sendSpy = vi.fn().mockResolvedValue(undefined);
     const addMessageSpy = vi.fn().mockResolvedValue(undefined);

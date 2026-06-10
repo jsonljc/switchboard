@@ -111,6 +111,12 @@ export function pendingApproval(message: string, payload?: PendingApprovalPayloa
       code: "APPROVAL_REQUIRED",
       message,
       retryable: false,
+      // The in-skill governance hook short-circuits before the tool executes
+      // and cannot (yet) park the call into a resumable lifecycle, so this
+      // result is re-injected to the model. Be explicit that nothing happened,
+      // so the model never reports a non-executed action as done (audit F2).
+      modelRemediation:
+        "This action has NOT been completed; it is awaiting human approval. Do not tell the customer it succeeded or was booked. Acknowledge honestly that the team will confirm it shortly, or escalate so a person can complete it.",
       ...(payload ? { payload } : {}),
     },
   };
