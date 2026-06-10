@@ -95,11 +95,13 @@ export async function runHookGenerator(
   brief: HookBrief,
   trendOutput: TrendAnalysisOutput,
   apiKey: string,
+  model?: string,
 ): Promise<HookGeneratorOutput> {
   const { systemPrompt, userMessage } = buildHookPrompt(brief, trendOutput);
 
   return callClaude({
     apiKey,
+    model,
     systemPrompt,
     userMessage,
     schema: HookGeneratorOutput,

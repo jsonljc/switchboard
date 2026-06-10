@@ -69,6 +69,8 @@ interface ProductionDeps {
   providerClients: ProviderClients;
   assetStore: AssetStoreLike;
   apiKey: string;
+  /** Claude model id override for frame-QA vision calls; threaded from the UGC runner. */
+  model?: string;
   /**
    * Durable storage for final assets (slice-3 spec 3.3f). The exact polished
    * layering: interface owned here, S3 impl injected from bootstrap. Absent =
@@ -266,7 +268,7 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
   // from the api key the phase already holds; undefined (unconfigured) keeps
   // the honest stub. The factory lives in its own module so tests pin that
   // the evaluator actually receives deps in this path.
-  const qaDeps = buildFrameQaDeps(deps.apiKey);
+  const qaDeps = buildFrameQaDeps(deps.apiKey, deps.model);
 
   // Process specs sequentially — add p-limit parallelism when concurrent provider calls are needed.
   // The tracker accrues per ATTEMPT inside processSpec (qa-fail retries spend

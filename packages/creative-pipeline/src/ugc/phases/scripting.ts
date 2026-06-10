@@ -31,6 +31,8 @@ export interface ScriptingInput {
   creatorPool: CreatorIdentity[];
   creativeWeights: CreativeWeights;
   apiKey: string;
+  /** Claude model id override; threaded from the UGC runner's LLMConfig. */
+  model?: string;
 }
 
 interface CreativeSpecOutput {
@@ -96,7 +98,7 @@ function estimateDuration(sections: Array<{ durationRange: [number, number] }>):
 // ── Phase execution ──
 
 export async function executeScriptingPhase(input: ScriptingInput): Promise<ScriptingOutput> {
-  const { planningOutput, brief, creatorPool, creativeWeights, apiKey } = input;
+  const { planningOutput, brief, creatorPool, creativeWeights, apiKey, model } = input;
   const { castingAssignments, structures, identityPlans } = planningOutput;
 
   if (!castingAssignments || castingAssignments.length === 0) {
@@ -138,6 +140,7 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
       scriptConstraints: creativeWeights.scriptConstraints,
       hookDirectives: creativeWeights.hookDirectives,
       apiKey,
+      model,
     });
 
     // Generate direction (pure function)

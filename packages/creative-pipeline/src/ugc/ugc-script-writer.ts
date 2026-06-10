@@ -33,6 +33,8 @@ export interface UgcScriptInput {
   scriptConstraints: string[];
   hookDirectives: string[];
   apiKey: string;
+  /** Claude model id override; threaded from the UGC runner's LLMConfig. */
+  model?: string;
 }
 
 // ── Output schema (simple for SP4 — just the script text) ──
@@ -47,7 +49,7 @@ export type UgcScriptOutput = z.infer<typeof UgcScriptOutputSchema>;
 
 // ── Prompt builder ──
 
-export function buildUgcScriptPrompt(input: Omit<UgcScriptInput, "apiKey">): {
+export function buildUgcScriptPrompt(input: Omit<UgcScriptInput, "apiKey" | "model">): {
   systemPrompt: string;
   userMessage: string;
 } {
@@ -114,6 +116,7 @@ export async function runUgcScriptWriter(input: UgcScriptInput): Promise<UgcScri
 
   return callClaude({
     apiKey: input.apiKey,
+    model: input.model,
     systemPrompt,
     userMessage,
     schema: UgcScriptOutputSchema,

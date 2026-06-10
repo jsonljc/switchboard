@@ -16,7 +16,7 @@ const QA_MAX_TOKENS = 1024;
  * and every asset routes to human review. The extractor reads the SSRF
  * allowlist from env (CREATIVE_PIPELINE_ALLOWED_HOSTS).
  */
-export function buildFrameQaDeps(apiKey: string): RealismScorerDeps | undefined {
+export function buildFrameQaDeps(apiKey: string, model?: string): RealismScorerDeps | undefined {
   if (!apiKey) return undefined;
   const frameExtractor = new FfmpegFrameExtractor();
   return {
@@ -24,6 +24,7 @@ export function buildFrameQaDeps(apiKey: string): RealismScorerDeps | undefined 
     vision: (opts) =>
       callClaudeWithImages({
         apiKey,
+        model,
         systemPrompt: QA_SYSTEM_PROMPT,
         userMessage: opts.userMessage,
         images: opts.images,

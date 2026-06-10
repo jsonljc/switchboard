@@ -106,11 +106,13 @@ export async function runScriptWriter(
   trendOutput: TrendAnalysisOutput,
   hookOutput: HookGeneratorOutput,
   apiKey: string,
+  model?: string,
 ): Promise<ScriptWriterOutput> {
   const { systemPrompt, userMessage } = buildScriptPrompt(brief, trendOutput, hookOutput);
 
   return callClaude({
     apiKey,
+    model,
     systemPrompt,
     userMessage,
     schema: ScriptWriterOutput,

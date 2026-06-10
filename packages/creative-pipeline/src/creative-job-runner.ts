@@ -13,6 +13,8 @@ const APPROVAL_TIMEOUT = "24h";
 
 interface LLMConfig {
   apiKey: string;
+  /** Optional Claude model override; threaded to every stage. Absent = call-claude DEFAULT_MODEL. */
+  model?: string;
 }
 
 interface ImageConfig {
@@ -117,6 +119,7 @@ export async function executeCreativePipeline(
         },
         previousOutputs: stageOutputs,
         apiKey: llmConfig.apiKey,
+        model: llmConfig.model,
         openaiApiKey: imageConfig?.openaiApiKey,
         generateReferenceImages: job.generateReferenceImages,
         imageGenerator,

@@ -104,12 +104,14 @@ export async function runStoryboardBuilder(
   brief: StoryboardBrief,
   scriptsOutput: ScriptWriterOutput,
   apiKey: string,
+  model?: string,
   imageGenerator?: ImageGenerator,
 ): Promise<StoryboardOutput> {
   const { systemPrompt, userMessage } = buildStoryboardPrompt(brief, scriptsOutput);
 
   const output = await callClaude({
     apiKey,
+    model,
     systemPrompt,
     userMessage,
     schema: StoryboardOutput,

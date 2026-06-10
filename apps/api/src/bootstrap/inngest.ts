@@ -221,6 +221,12 @@ export async function registerInngest(
     );
   }
 
+  // Optional creative-pipeline model override (Mira polished + UGC). Empty or
+  // unset becomes undefined, so the package's centralized default
+  // (call-claude.ts DEFAULT_MODEL) applies. Packages must not read env per the
+  // dependency-layer rule, so the apps layer reads it and threads it via LLMConfig.
+  const creativeModel = process.env["CREATIVE_PIPELINE_MODEL"]?.trim() || undefined;
+
   const openaiApiKey = process.env["OPENAI_API_KEY"] ?? "";
   if (!openaiApiKey) {
     app.log.warn(
@@ -1087,7 +1093,7 @@ export async function registerInngest(
       ),
       createCreativeJobRunner(
         jobStore,
-        { apiKey },
+        { apiKey, model: creativeModel },
         openaiApiKey ? { openaiApiKey } : undefined,
         assetStorage,
         makeOnFailureHandler(
@@ -1116,7 +1122,7 @@ export async function registerInngest(
               };
             },
           },
-          llmConfig: { apiKey },
+          llmConfig: { apiKey, model: creativeModel },
           klingClient,
           heygenClient,
           assetStore,

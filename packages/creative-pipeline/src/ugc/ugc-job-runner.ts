@@ -61,7 +61,7 @@ interface UgcPipelineDeps {
   jobStore: UgcJobStore;
   creatorStore: CreatorStore;
   deploymentStore: DeploymentStore;
-  llmConfig?: { apiKey: string };
+  llmConfig?: { apiKey: string; model?: string };
   klingClient?: unknown;
   /** Real HeyGen client (slice-3 spec 3.5); absent = adapter throws, kling fallback. */
   heygenClient?: unknown;
@@ -81,6 +81,8 @@ interface UgcPipelineContext {
   providerCapabilities: unknown[];
   creativeWeights: unknown;
   apiKey: string;
+  // JSON-safe (a plain string), so it survives Inngest step memoization on replay.
+  model?: string;
 }
 
 // ── Phase execution (no-op stubs for SP2) ──
@@ -168,6 +170,7 @@ async function executePhase(
           hookDirectives: [],
         },
         apiKey: ctx.context.apiKey,
+        model: ctx.context.model,
       });
       return result as unknown as Record<string, unknown>;
     }
@@ -201,6 +204,7 @@ async function executePhase(
           },
           assetStore: deps?.assetStore as ProductionInput["deps"]["assetStore"],
           apiKey: ctx.context.apiKey,
+          model: ctx.context.model,
           assetStorage: deps?.assetStorage,
         },
       };
@@ -237,6 +241,7 @@ async function preloadContext(
     providerCapabilities: [], // SP5 adds real provider registry
     creativeWeights: translateFrictions([] as FunnelFriction[]),
     apiKey: deps.llmConfig?.apiKey ?? "",
+    model: deps.llmConfig?.model,
   };
 }
 
