@@ -243,7 +243,25 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
+      // F2: this route reads + decrypts a deployment's Google refresh token.
+      // Verify the deployment belongs to the caller's org BEFORE any credential
+      // read, or any authenticated tenant could read another tenant's calendars
+      // by supplying a foreign deploymentId. Fail closed when there is no org.
+      const orgId = request.organizationIdFromAuth;
+      if (!orgId) {
+        return reply.code(401).send({ error: "Authentication required", statusCode: 401 });
+      }
+
       try {
+        const deploymentStore = new PrismaDeploymentStore(app.prisma);
+        const deployment = await deploymentStore.findById(deploymentId);
+        if (!deployment) {
+          return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+        }
+        if (deployment.organizationId !== orgId) {
+          return reply.code(403).send({ error: "Forbidden", statusCode: 403 });
+        }
+
         const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
         const connection = await connectionStore.findByDeploymentAndType(
           deploymentId,
