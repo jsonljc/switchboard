@@ -2,10 +2,20 @@
 // ---------------------------------------------------------------------------
 // Workflow Routes — CRUD operations for workflows, actions, and checkpoints
 // ---------------------------------------------------------------------------
+//
+// Tenant isolation (audit finding F1). Every route fails closed via
+// `requireOrg` / `requireOrgForMutation` (403 when the request carries no org
+// binding) and gates the targeted resource against the AUTHENTICATED org via
+// `assertOrgAccess` — never an optional client-supplied `?organizationId=`. The
+// list routes derive their scope from `request.orgId` (auth), so a caller can
+// only ever enumerate its own org's workflows/actions. Mirrors the entity-by-id
+// tenant guard in `approvals.ts` and `action-lifecycle.ts`.
 
 import type { FastifyInstance } from "fastify";
 import { resolveCheckpoint } from "@switchboard/core";
 import { WorkflowStatusSchema } from "@switchboard/schemas";
+import { requireOrg, requireOrgForMutation } from "../decorators/org.js";
+import { assertOrgAccess } from "../utils/org-access.js";
 
 export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
   const workflowDeps = fastify.workflowDeps;
@@ -17,63 +27,61 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
   const { workflowEngine, store } = workflowDeps;
 
   // GET /:id — get a single workflow
-  fastify.get<{ Params: { id: string }; Querystring: { organizationId?: string } }>(
+  fastify.get<{ Params: { id: string } }>(
     "/:id",
+    { preHandler: requireOrg },
     async (request, reply) => {
       const workflow = await workflowEngine.getWorkflow(request.params.id);
       if (!workflow) {
         return reply.status(404).send({ error: "Workflow not found", statusCode: 404 });
       }
-      // Verify org scoping if provided
-      if (
-        request.query.organizationId &&
-        workflow.organizationId !== request.query.organizationId
-      ) {
-        return reply.status(404).send({ error: "Workflow not found", statusCode: 404 });
-      }
+      // Tenant isolation: the workflow must belong to the authenticated org.
+      if (!assertOrgAccess(request, workflow.organizationId, reply)) return;
       return reply.send(workflow);
     },
   );
 
-  // GET / — list workflows with optional filters
-  fastify.get<{
-    Querystring: { organizationId?: string; status?: string; limit?: string };
-  }>("/", async (request, reply) => {
-    const { organizationId, status, limit } = request.query;
-    if (!organizationId) {
-      return reply.status(400).send({ error: "organizationId required", statusCode: 400 });
-    }
+  // GET / — list workflows for the authenticated org
+  fastify.get<{ Querystring: { status?: string; limit?: string } }>(
+    "/",
+    { preHandler: requireOrg },
+    async (request, reply) => {
+      const { status, limit } = request.query;
 
-    // Validate status if provided
-    let validatedStatus: string | undefined;
-    if (status) {
-      const parsed = WorkflowStatusSchema.safeParse(status);
-      if (!parsed.success) {
-        return reply.status(400).send({ error: `Invalid status: ${status}`, statusCode: 400 });
+      // Validate status if provided
+      let validatedStatus: string | undefined;
+      if (status) {
+        const parsed = WorkflowStatusSchema.safeParse(status);
+        if (!parsed.success) {
+          return reply.status(400).send({ error: `Invalid status: ${status}`, statusCode: 400 });
+        }
+        validatedStatus = parsed.data;
       }
-      validatedStatus = parsed.data;
-    }
 
-    const workflows = await store.workflows.list({
-      organizationId,
-      status: validatedStatus as undefined,
-      limit: limit ? parseInt(limit, 10) : undefined,
-    });
-    return reply.send(workflows);
-  });
+      // Org scope comes from the authenticated request, never a query param.
+      const workflows = await store.workflows.list({
+        organizationId: request.orgId,
+        status: validatedStatus as undefined,
+        limit: limit ? parseInt(limit, 10) : undefined,
+      });
+      return reply.send(workflows);
+    },
+  );
 
   // POST /:id/cancel — cancel a workflow
-  fastify.post<{ Params: { id: string }; Querystring: { organizationId?: string } }>(
+  fastify.post<{ Params: { id: string } }>(
     "/:id/cancel",
+    { preHandler: requireOrgForMutation },
     async (request, reply) => {
       try {
-        // Verify the workflow belongs to the caller's org
-        if (request.query.organizationId) {
-          const workflow = await workflowEngine.getWorkflow(request.params.id);
-          if (!workflow || workflow.organizationId !== request.query.organizationId) {
-            return reply.status(404).send({ error: "Workflow not found", statusCode: 404 });
-          }
+        // Tenant isolation: the workflow must belong to the authenticated org
+        // before we cancel it.
+        const workflow = await workflowEngine.getWorkflow(request.params.id);
+        if (!workflow) {
+          return reply.status(404).send({ error: "Workflow not found", statusCode: 404 });
         }
+        if (!assertOrgAccess(request, workflow.organizationId, reply)) return;
+
         await workflowEngine.cancelWorkflow(request.params.id);
         return reply.send({ success: true });
       } catch (err) {
@@ -83,32 +91,31 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
     },
   );
 
-  // GET /actions/pending — list pending actions for an org
-  fastify.get<{
-    Querystring: { organizationId: string; limit?: string };
-  }>("/actions/pending", async (request, reply) => {
-    const { organizationId, limit } = request.query;
-    if (!organizationId) {
-      return reply.status(400).send({ error: "organizationId required", statusCode: 400 });
-    }
-    const actions = await store.actions.listByStatus(
-      organizationId,
-      "proposed",
-      limit ? parseInt(limit, 10) : undefined,
-    );
-    return reply.send(actions);
-  });
+  // GET /actions/pending — list pending actions for the authenticated org
+  fastify.get<{ Querystring: { limit?: string } }>(
+    "/actions/pending",
+    { preHandler: requireOrg },
+    async (request, reply) => {
+      const { limit } = request.query;
+      // Org scope comes from the authenticated request, never a query param.
+      const actions = await store.actions.listByStatus(
+        request.orgId,
+        "proposed",
+        limit ? parseInt(limit, 10) : undefined,
+      );
+      return reply.send(actions);
+    },
+  );
 
   // POST /checkpoints/:id/resolve — resolve an approval checkpoint
   fastify.post<{
     Params: { id: string };
-    Querystring: { organizationId?: string };
     Body: {
       decidedBy: string;
       action: "approve" | "reject" | "modify";
       fieldEdits?: Record<string, unknown>;
     };
-  }>("/checkpoints/:id/resolve", async (request, reply) => {
+  }>("/checkpoints/:id/resolve", { preHandler: requireOrgForMutation }, async (request, reply) => {
     try {
       const { decidedBy, action, fieldEdits } = request.body;
 
@@ -123,13 +130,9 @@ export async function workflowRoutes(fastify: FastifyInstance): Promise<void> {
       if (!workflow) {
         return reply.status(404).send({ error: "Checkpoint not found", statusCode: 404 });
       }
-      // Verify org scoping if provided
-      if (
-        request.query.organizationId &&
-        workflow.organizationId !== request.query.organizationId
-      ) {
-        return reply.status(404).send({ error: "Checkpoint not found", statusCode: 404 });
-      }
+      // Tenant isolation: the checkpoint's workflow must belong to the
+      // authenticated org before we read, resolve, or resume it.
+      if (!assertOrgAccess(request, workflow.organizationId, reply)) return;
 
       await resolveCheckpoint(store.checkpoints, workflow.organizationId, request.params.id, {
         decidedBy,
