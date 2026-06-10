@@ -383,7 +383,7 @@ export async function registerInngest(
   const orgConnectionStore = new PrismaConnectionStore(app.prisma!);
   const getDeploymentCredentials = buildRileyCredentialResolver({
     deploymentConnectionStore: connectionStore,
-    connectionStore: orgConnectionStore,
+    orgConnectionStore,
     resolveOrgId: async (deploymentId) => {
       const deployment = await deploymentStore.findById(deploymentId);
       return deployment?.organizationId ?? null;

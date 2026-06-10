@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { isUsableConnectionStatus } from "@switchboard/schemas";
 import { encryptCredentials, decryptCredentials } from "../crypto/credentials.js";
 
 export interface ConnectionRecord {
@@ -92,10 +93,11 @@ export class PrismaConnectionStore {
    * Org-scoped finder for Riley's credential resolver fallback (Tier-0 PR 0.1).
    * Returns the RAW encrypted credentials blob (no decrypt) so the resolver can
    * run it through the same decrypt as the deployment-scoped path, yielding one
-   * credential shape (integration-review seam #2). Skips a needs_reauth/revoked
-   * row so a dead token is never handed back (it would otherwise poison the
-   * weekly fleet audit). Returns null when the row is absent, dead, or stores
-   * non-string (legacy unencrypted) credentials.
+   * credential shape (integration-review seam #2). Skips a dead-token row
+   * (expired/revoked/needs_reauth, via the shared isUsableConnectionStatus
+   * predicate) so a dead token is never handed back (it would otherwise poison
+   * the weekly fleet audit). Returns null when the row is absent, dead, or
+   * stores non-string (legacy unencrypted) credentials.
    */
   async findByServiceId(
     serviceId: string,
@@ -106,7 +108,7 @@ export class PrismaConnectionStore {
       select: { credentials: true, status: true },
     });
     if (!row) return null;
-    if (row.status === "needs_reauth" || row.status === "revoked") return null;
+    if (!isUsableConnectionStatus(row.status)) return null;
     if (typeof row.credentials !== "string") return null;
     return { credentials: row.credentials };
   }

@@ -1,3 +1,5 @@
+import { isUsableConnectionStatus } from "@switchboard/schemas";
+
 /**
  * The subset of a DeploymentConnection the resolver reads. Kept local so the
  * resolver does not depend on a Prisma row type; the real store returns a
@@ -16,7 +18,7 @@ export interface RileyCredentialResolverDeps {
   };
   /** Org-level Connection store (pilot fallback). Returns the raw encrypted
    * blob; decryption is the resolver's job so both sources share one shape. */
-  connectionStore: {
+  orgConnectionStore: {
     findByServiceId(serviceId: string, orgId: string): Promise<{ credentials: string } | null>;
   };
   /** Maps a deployment to its owning organization (for the org fallback). */
@@ -25,10 +27,6 @@ export interface RileyCredentialResolverDeps {
   decrypt: (blob: string) => { accessToken: string; accountId: string };
 }
 
-/** A connection is unusable once its token is dead; never resolve those. */
-const isUsableStatus = (status: string | undefined): boolean =>
-  status !== "needs_reauth" && status !== "revoked";
-
 /**
  * Resolve Riley's Meta credentials. Primary source: the deployment-scoped
  * DeploymentConnection. Fallback (pilot decision #2, deprecate post-pilot):
@@ -36,7 +34,8 @@ const isUsableStatus = (status: string | undefined): boolean =>
  * Riley through the existing Settings UI before the OAuth self-serve path is
  * hardened.
  *
- * A needs_reauth/revoked connection is skipped from either source: Riley must
+ * A dead-token connection (expired/revoked/needs_reauth, via the shared
+ * isUsableConnectionStatus predicate) is skipped from either source: Riley must
  * never resolve to a dead token, which also stops a dead token from poisoning
  * the weekly fleet audit (D2-3). The org-store fallback applies the same skip
  * inside PrismaConnectionStore.findByServiceId.
@@ -46,12 +45,12 @@ export function buildRileyCredentialResolver(deps: RileyCredentialResolverDeps) 
     deploymentId: string,
   ): Promise<{ accessToken: string; accountId: string } | null> => {
     const dcs = await deps.deploymentConnectionStore.listByDeployment(deploymentId);
-    const dc = dcs.find((c) => c.type === "meta-ads" && isUsableStatus(c.status));
+    const dc = dcs.find((c) => c.type === "meta-ads" && isUsableConnectionStatus(c.status));
     if (dc) return deps.decrypt(dc.credentials);
 
     const orgId = await deps.resolveOrgId(deploymentId);
     if (!orgId) return null;
-    const orgConn = await deps.connectionStore.findByServiceId("meta-ads", orgId);
+    const orgConn = await deps.orgConnectionStore.findByServiceId("meta-ads", orgId);
     if (!orgConn) return null;
     return deps.decrypt(orgConn.credentials);
     // NOTE(deprecation): remove the org-Connection fallback once Riley migrates

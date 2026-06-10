@@ -277,6 +277,15 @@ describe("PrismaConnectionStore", () => {
       expect(await store.findByServiceId("meta-ads", "org_1")).toBeNull();
     });
 
+    it("returns null for an expired connection", async () => {
+      prisma.connection.findFirst.mockResolvedValue({
+        credentials: "ENCRYPTED_BLOB",
+        status: "expired",
+      });
+
+      expect(await store.findByServiceId("meta-ads", "org_1")).toBeNull();
+    });
+
     it("returns null when no connection exists for the org", async () => {
       prisma.connection.findFirst.mockResolvedValue(null);
 

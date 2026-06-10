@@ -19,7 +19,7 @@ describe("riley credential resolver", () => {
     const orgConn = { findByServiceId: vi.fn() };
     const resolver = buildRileyCredentialResolver({
       deploymentConnectionStore: deploymentConn,
-      connectionStore: orgConn,
+      orgConnectionStore: orgConn,
       resolveOrgId: vi.fn().mockResolvedValue("org_1"),
       decrypt: () => ({ accessToken: "DC", accountId: "act_1" }),
     });
@@ -32,7 +32,7 @@ describe("riley credential resolver", () => {
     const orgConn = { findByServiceId: vi.fn().mockResolvedValue({ credentials: "enc-org" }) };
     const resolver = buildRileyCredentialResolver({
       deploymentConnectionStore: deploymentConn,
-      connectionStore: orgConn,
+      orgConnectionStore: orgConn,
       resolveOrgId: vi.fn().mockResolvedValue("org_1"),
       decrypt: () => ({ accessToken: "ORG", accountId: "act_org" }),
     });
@@ -49,7 +49,20 @@ describe("riley credential resolver", () => {
     const orgConn = { findByServiceId: vi.fn().mockResolvedValue(null) };
     const resolver = buildRileyCredentialResolver({
       deploymentConnectionStore: deploymentConn,
-      connectionStore: orgConn,
+      orgConnectionStore: orgConn,
+      resolveOrgId: vi.fn().mockResolvedValue("org_1"),
+      decrypt: () => ({ accessToken: "DEAD", accountId: "x" }),
+    });
+    expect(await resolver("dep_1")).toBeNull();
+  });
+
+  // Same dead-token guard for an expired token (a canonical ConnectionStatus value).
+  it("skips an expired DeploymentConnection and does NOT return a dead token", async () => {
+    const resolver = buildRileyCredentialResolver({
+      deploymentConnectionStore: {
+        listByDeployment: vi.fn().mockResolvedValue([meta({ status: "expired" })]),
+      },
+      orgConnectionStore: { findByServiceId: vi.fn().mockResolvedValue(null) },
       resolveOrgId: vi.fn().mockResolvedValue("org_1"),
       decrypt: () => ({ accessToken: "DEAD", accountId: "x" }),
     });
@@ -59,7 +72,7 @@ describe("riley credential resolver", () => {
   it("returns null when neither store has a usable meta-ads connection", async () => {
     const resolver = buildRileyCredentialResolver({
       deploymentConnectionStore: { listByDeployment: vi.fn().mockResolvedValue([]) },
-      connectionStore: { findByServiceId: vi.fn().mockResolvedValue(null) },
+      orgConnectionStore: { findByServiceId: vi.fn().mockResolvedValue(null) },
       resolveOrgId: vi.fn().mockResolvedValue("org_1"),
       decrypt: () => ({ accessToken: "x", accountId: "x" }),
     });
@@ -70,7 +83,7 @@ describe("riley credential resolver", () => {
     const orgConn = { findByServiceId: vi.fn() };
     const resolver = buildRileyCredentialResolver({
       deploymentConnectionStore: { listByDeployment: vi.fn().mockResolvedValue([]) },
-      connectionStore: orgConn,
+      orgConnectionStore: orgConn,
       resolveOrgId: vi.fn().mockResolvedValue(null),
       decrypt: () => ({ accessToken: "x", accountId: "x" }),
     });
@@ -85,13 +98,15 @@ describe("riley credential resolver", () => {
     const decrypt = () => ({ accessToken: "T", accountId: "act" });
     const viaDeployment = buildRileyCredentialResolver({
       deploymentConnectionStore: { listByDeployment: vi.fn().mockResolvedValue([meta()]) },
-      connectionStore: { findByServiceId: vi.fn().mockResolvedValue(null) },
+      orgConnectionStore: { findByServiceId: vi.fn().mockResolvedValue(null) },
       resolveOrgId: vi.fn().mockResolvedValue("org_1"),
       decrypt,
     });
     const viaOrg = buildRileyCredentialResolver({
       deploymentConnectionStore: { listByDeployment: vi.fn().mockResolvedValue([]) },
-      connectionStore: { findByServiceId: vi.fn().mockResolvedValue({ credentials: "enc-org" }) },
+      orgConnectionStore: {
+        findByServiceId: vi.fn().mockResolvedValue({ credentials: "enc-org" }),
+      },
       resolveOrgId: vi.fn().mockResolvedValue("org_1"),
       decrypt,
     });
