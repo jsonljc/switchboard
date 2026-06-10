@@ -152,6 +152,10 @@ export { PrismaScheduledReminderStore } from "./stores/prisma-scheduled-reminder
 export { seedOrgDayOneAgents } from "./seed/seed-org-day-one-agents.js";
 export { seedMiraPilotOrgs } from "./seed/seed-mira-pilot-orgs.js";
 export {
+  provisionOrgAgentDeployments,
+  type ProvisionOrgAgentsResult,
+} from "./seed/provision-org-agents.js";
+export {
   CREATIVE_GOVERNANCE_SETTINGS,
   CREATIVE_SPEND_APPROVAL_THRESHOLD,
   CREATIVE_ALLOW_POLICY_RULE,
