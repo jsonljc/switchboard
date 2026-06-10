@@ -34,6 +34,8 @@ export interface StageInput {
   };
   previousOutputs: Record<string, unknown>;
   apiKey: string;
+  /** Claude model id override, threaded from LLMConfig. Absent = call-claude DEFAULT_MODEL. */
+  model?: string;
   /** OpenAI key for Whisper captions (pro tier). Absent = captions skipped, like image gen. */
   openaiApiKey?: string;
   generateReferenceImages?: boolean;
@@ -75,6 +77,7 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
           tasteContext: input.brief.tasteContext,
         },
         input.apiKey,
+        input.model,
       );
 
     case "hooks": {
@@ -91,6 +94,7 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
         },
         trendsOutput,
         input.apiKey,
+        input.model,
       );
     }
 
@@ -111,6 +115,7 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
         trends,
         hooks,
         input.apiKey,
+        input.model,
       );
     }
 
@@ -127,6 +132,7 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
         },
         scripts,
         input.apiKey,
+        input.model,
         input.generateReferenceImages ? input.imageGenerator : undefined,
       );
     }

@@ -212,10 +212,11 @@ describe("executeProductionPhase", () => {
       providerRegistry: [],
       retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
       budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
-      deps: deps as never,
+      deps: { ...deps, model: "claude-opus-4-8" } as never,
     };
     const result = await executeProductionPhase(input);
-    expect(buildFrameQaDeps).toHaveBeenCalledWith("test-key");
+    // The phase apiKey AND the threaded model override both reach the QA evaluator.
+    expect(buildFrameQaDeps).toHaveBeenCalledWith("test-key", "claude-opus-4-8");
     expect(qa.vision).toHaveBeenCalledTimes(1);
     // evaluated + pass auto-approves through deriveApprovalState
     expect(result.assets[0]!.approvalState).toBe("approved");

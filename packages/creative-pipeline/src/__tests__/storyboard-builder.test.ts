@@ -171,6 +171,7 @@ describe("runStoryboardBuilder", () => {
       },
       mockScripts,
       "test-api-key",
+      undefined,
       mockImageGenerator,
     );
 
@@ -205,6 +206,7 @@ describe("runStoryboardBuilder", () => {
       },
       mockScripts,
       "test-api-key",
+      undefined,
       mockImageGenerator,
     );
 

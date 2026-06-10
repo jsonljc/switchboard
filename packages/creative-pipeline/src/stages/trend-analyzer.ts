@@ -73,11 +73,13 @@ Guidelines:
 export async function runTrendAnalyzer(
   brief: TrendBrief,
   apiKey: string,
+  model?: string,
 ): Promise<TrendAnalysisOutput> {
   const { systemPrompt, userMessage } = buildTrendPrompt(brief);
 
   return callClaude({
     apiKey,
+    model,
     systemPrompt,
     userMessage,
     schema: TrendAnalysisOutput,

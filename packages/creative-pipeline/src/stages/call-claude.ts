@@ -2,8 +2,62 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { z } from "zod";
 
-const DEFAULT_MODEL = "claude-sonnet-4-5-20250514";
+/**
+ * Anthropic model ids this pipeline is known to run against. This is the single
+ * deliberately-maintained source of truth: DEFAULT_MODEL MUST be a member, and
+ * call-claude.test.ts pins both so changing one without the other fails CI.
+ *
+ * The list exists because the original default "claude-sonnet-4-5-20250514"
+ * (it mixes Sonnet 4.5's name with Sonnet 4's date suffix) is not a real
+ * model id and 404'd every live call, yet shipped unnoticed because every test
+ * mocks the SDK (2026-06-10 Mira capability audit, D1-F1). Update this list (and
+ * the test) deliberately when migrating models; verify ids against the real
+ * Anthropic catalog, never from memory.
+ */
+export const KNOWN_GOOD_MODELS = [
+  "claude-sonnet-4-6",
+  "claude-opus-4-8",
+  "claude-haiku-4-5",
+] as const;
+
+export type KnownGoodModel = (typeof KNOWN_GOOD_MODELS)[number];
+
+/**
+ * Default model for the creative pipeline. Cost-sensitive content generation →
+ * current-generation Sonnet (the faithful successor to the Sonnet-4.5 tier the
+ * original code intended). Centralized here: callers that pass no `model` fall
+ * back to this, and apps/api threads an optional override in via LLMConfig.
+ */
+export const DEFAULT_MODEL: KnownGoodModel = "claude-sonnet-4-6";
+
 const DEFAULT_MAX_TOKENS = 4096;
+
+// Anthropic ids are lowercase, dash-delimited (e.g. "claude-sonnet-4-6",
+// "claude-opus-4-8-20260106"). Dots ("claude-sonnet-4.6"), spaces, uppercase,
+// and non-claude providers are rejected; these are the common typo / wrong-key
+// shapes that otherwise surface only as an opaque 404 mid-job.
+const MODEL_ID_SHAPE = /^claude-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * Reject obviously malformed model ids at the call seam, so a bad id (a typo, an
+ * empty env value, a non-Anthropic key) fails loudly here instead of as a
+ * confusing HTTP 404 from the Messages API after a creative job has started.
+ *
+ * Note: this is a SHAPE guard, not an allowlist. Explicit overrides may use any
+ * well-formed claude id so newer models don't require a code change. The default
+ * is pinned to KNOWN_GOOD_MODELS separately (see the co-located test).
+ */
+export function assertValidModelId(model: string): void {
+  if (typeof model !== "string" || model.trim() === "") {
+    throw new Error("creative-pipeline: model id must be a non-empty string");
+  }
+  if (!MODEL_ID_SHAPE.test(model)) {
+    throw new Error(
+      `creative-pipeline: "${model}" is not a valid Anthropic model id ` +
+        `(expected a lowercase dash-delimited id like "${DEFAULT_MODEL}")`,
+    );
+  }
+}
 
 export interface CallClaudeOptions<T extends z.ZodType> {
   apiKey: string;
@@ -71,10 +125,13 @@ function parseClaudeResponse<T extends z.ZodType>(
 export async function callClaude<T extends z.ZodType>(
   options: CallClaudeOptions<T>,
 ): Promise<z.infer<T>> {
+  const model = options.model ?? DEFAULT_MODEL;
+  assertValidModelId(model);
+
   const client = new Anthropic({ apiKey: options.apiKey });
 
   const response = await client.messages.create({
-    model: options.model ?? DEFAULT_MODEL,
+    model,
     max_tokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: options.systemPrompt,
     messages: [{ role: "user", content: options.userMessage }],
@@ -96,10 +153,13 @@ export interface CallClaudeWithImagesOptions<T extends z.ZodType> extends CallCl
 export async function callClaudeWithImages<T extends z.ZodType>(
   options: CallClaudeWithImagesOptions<T>,
 ): Promise<z.infer<T>> {
+  const model = options.model ?? DEFAULT_MODEL;
+  assertValidModelId(model);
+
   const client = new Anthropic({ apiKey: options.apiKey });
 
   const response = await client.messages.create({
-    model: options.model ?? DEFAULT_MODEL,
+    model,
     max_tokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: options.systemPrompt,
     messages: [
