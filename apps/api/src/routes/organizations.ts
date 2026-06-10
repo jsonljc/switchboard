@@ -6,6 +6,7 @@ import {
   decryptCredentials,
   seedOrgDayOneAgents,
   seedAlexSkillPack,
+  provisionOrgAgentDeployments,
 } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
@@ -90,6 +91,21 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
         await seedAlexSkillPack(app.prisma, orgId);
       } catch (err) {
         console.warn(`[organizations] seedAlexSkillPack failed for ${orgId} (continuing):`, err);
+      }
+
+      // F3: provision Riley's deployment (day-one) so the cross-agent revenue loop
+      // exists for a real org, not just org_dev. Idempotent + atomic. Mira
+      // (day-thirty) is provisioned separately via scripts/provision-mira-for-org.ts.
+      // Guarded like seedAlexSkillPack: a provisioning hiccup must not fail config
+      // load; the orchestrator is idempotent, so the retry is the next config load.
+      try {
+        await provisionOrgAgentDeployments(app.prisma, orgId, { mira: false });
+      } catch (err) {
+        console.warn(
+          `[organizations] day-one Riley provisioning failed for ${orgId}; ` +
+            `will retry on next config load:`,
+          err,
+        );
       }
 
       return reply.send({ config });

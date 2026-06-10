@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
+
+// The GET /config route now calls provisionOrgAgentDeployments (day-one Riley, F3).
+// These tests focus on config/channel behavior, so mock the orchestrator to a no-op
+// spy; its own seam is covered by api-organizations-provisioning.test.ts. vi.mock is
+// hoisted above imports, so the spy is created via vi.hoisted.
+const { provisionSpy } = vi.hoisted(() => ({ provisionSpy: vi.fn() }));
+vi.mock("@switchboard/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@switchboard/db")>();
+  return { ...actual, provisionOrgAgentDeployments: provisionSpy };
+});
+
 import { ALEX_SKILL_PACK_SCOPES } from "@switchboard/db";
 import { organizationsRoutes } from "../routes/organizations.js";
 
