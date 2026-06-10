@@ -282,4 +282,9 @@ describe("seedMiraCreativeDeployment", () => {
     await seedMiraCreativeDeployment(withCreator, "org_dev");
     expect(withCreator._creatorCreates).toHaveLength(0);
   });
+
+  it("returns the provisioned deployment id", async () => {
+    const result = await seedMiraCreativeDeployment(prisma, "org_dev");
+    expect(result).toEqual({ deploymentId: "deploy_1" });
+  });
 });

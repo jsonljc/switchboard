@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaDbClient } from "../prisma-db.js";
 import {
   CREATIVE_GOVERNANCE_SETTINGS,
   CREATIVE_SPEND_APPROVAL_THRESHOLD,
@@ -37,9 +37,9 @@ export const CREATIVE_LISTING_SLUG = "performance-creative-director";
  * clear error if the listing is missing so the seed fails loudly.
  */
 export async function seedMiraCreativeDeployment(
-  prisma: PrismaClient,
+  prisma: PrismaDbClient,
   orgId: string,
-): Promise<void> {
+): Promise<{ deploymentId: string }> {
   const listing = await prisma.agentListing.findUnique({
     where: { slug: CREATIVE_LISTING_SLUG },
     select: { id: true },
@@ -132,6 +132,8 @@ export async function seedMiraCreativeDeployment(
   });
 
   await seedDefaultCreator(prisma, deployment.id);
+
+  return { deploymentId: deployment.id };
 }
 
 /**
@@ -152,7 +154,7 @@ export async function seedMiraCreativeDeployment(
  */
 const HOUSE_CREATOR_NAME = "House Creator";
 
-async function seedDefaultCreator(prisma: PrismaClient, deploymentId: string): Promise<void> {
+async function seedDefaultCreator(prisma: PrismaDbClient, deploymentId: string): Promise<void> {
   const existing = await prisma.creatorIdentity.findFirst({
     where: { deploymentId, name: HOUSE_CREATOR_NAME },
     select: { id: true },

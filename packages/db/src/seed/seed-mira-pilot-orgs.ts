@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaDbClient } from "../prisma-db.js";
 
 /**
  * Enables Mira (opt-in) for an explicit list of pilot orgs. Idempotent.
@@ -6,7 +6,7 @@ import type { PrismaClient } from "@prisma/client";
  * this is the deliberate, per-org pilot path. There is NO global day-one flip.
  */
 export async function seedMiraPilotOrgs(
-  prisma: PrismaClient,
+  prisma: PrismaDbClient,
   pilotOrgIds: string[],
 ): Promise<void> {
   await Promise.all(
