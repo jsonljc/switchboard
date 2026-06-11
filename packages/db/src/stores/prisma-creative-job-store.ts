@@ -52,6 +52,19 @@ export interface TasteCandidate {
   tasteCapturedAt: Date | null;
 }
 
+/** Narrow row the revenue-proven promotion consumes (F4): identity + descriptor inputs + measured perf. */
+export interface RevenueProvenCandidate {
+  id: string;
+  organizationId: string;
+  deploymentId: string;
+  mode: string;
+  stageOutputs: unknown;
+  ugcPhaseOutputs: unknown;
+  pastPerformance: unknown;
+  metaCampaignId: string | null;
+  metaVideoId: string | null;
+}
+
 export class PrismaCreativeJobStore {
   constructor(private prisma: PrismaDbClient) {}
 
@@ -229,6 +242,53 @@ export class PrismaCreativeJobStore {
       where: { organizationId, metaCampaignId: { not: null } },
       orderBy: { createdAt: "asc" },
     }) as unknown as CreativeJob[];
+  }
+
+  /**
+   * F4 revenue-proven promotion candidates: published jobs not yet promoted. The
+   * `revenueProvenPromotedAt: null` predicate makes the FETCH cap bound PENDING
+   * work, never history (promoted jobs drop out). Measured-state and the economic
+   * floors are applied in JS by the sweep (pastPerformance is JSON). Cross-org
+   * read (system cron); every WRITE stays org-scoped. Scale note: at pilot volume
+   * the published-job set per org is far under the cap; revisit (a measured-only
+   * index / per-org dispatch) only if a single org accumulates more
+   * measured-but-non-qualifying published jobs than the cap.
+   */
+  async listRevenueProvenCandidates(limit: number): Promise<RevenueProvenCandidate[]> {
+    return this.prisma.creativeJob.findMany({
+      where: { metaCampaignId: { not: null }, revenueProvenPromotedAt: null },
+      select: {
+        id: true,
+        organizationId: true,
+        deploymentId: true,
+        mode: true,
+        stageOutputs: true,
+        ugcPhaseOutputs: true,
+        pastPerformance: true,
+        metaCampaignId: true,
+        metaVideoId: true,
+      },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+    }) as unknown as RevenueProvenCandidate[];
+  }
+
+  /**
+   * F4 promotion idempotency watermark: set once a job's measured performance
+   * first crosses the floors, so the daily sweep never re-counts it. Org-scoped
+   * updateMany (doctrine #12); count===0 ⇒ missing/cross-org ⇒ StaleVersionError
+   * (the sweep treats it as a benign vanished-job skip).
+   */
+  async setRevenueProvenPromotedAt(
+    organizationId: string,
+    id: string,
+    promotedAt: Date,
+  ): Promise<void> {
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: { revenueProvenPromotedAt: promotedAt },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
   }
 
   /**
