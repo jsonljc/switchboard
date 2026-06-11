@@ -599,12 +599,14 @@ export async function buildServer() {
     const connectWebhookSecret = process.env["STRIPE_CONNECT_WEBHOOK_SECRET"];
     const stripeSecretKey = process.env["STRIPE_SECRET_KEY"];
     if (connectWebhookSecret && stripeSecretKey) {
-      const { default: Stripe } = await import("stripe");
+      // Reuse the platform Stripe singleton (getStripe is keyed on STRIPE_SECRET_KEY,
+      // guaranteed present by the guard above). constructEvent uses only the signing
+      // secret for its HMAC, so the client is just the carrier for the verify method;
+      // reusing the singleton avoids a second client and a duplicate apiVersion pin.
+      const { getStripe } = await import("./services/stripe-service.js");
       const { verifyConnectWebhookSignature } =
         await import("./payments/stripe-connect-payment-adapter.js");
-      const platformClient = new Stripe(stripeSecretKey, {
-        apiVersion: "2026-04-22.dahlia",
-      }) as unknown as StripeConnectClient;
+      const platformClient = getStripe() as unknown as StripeConnectClient;
       app.decorate("paymentWebhookVerifier", (rawBodyStr: string | Buffer, signature: string) =>
         verifyConnectWebhookSignature(platformClient, rawBodyStr, signature, connectWebhookSecret),
       );
