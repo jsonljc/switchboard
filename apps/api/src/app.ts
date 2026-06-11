@@ -41,6 +41,7 @@ import { registerInngest } from "./bootstrap/inngest.js";
 import { registerSwagger } from "./bootstrap/swagger.js";
 import { wireMetricsProvider } from "./bootstrap/wire-metrics.js";
 import { assertSafeSelfApprovalEnv } from "./bootstrap/self-approval-env.js";
+import type { StripeConnectClient } from "./payments/stripe-connect-payment-adapter.js";
 import type { Redis } from "ioredis";
 
 declare module "fastify" {
@@ -587,6 +588,31 @@ export async function buildServer() {
   if (prismaClient) {
     const { createPaymentPortFactory } = await import("./bootstrap/payment-port-factory.js");
     app.decorate("paymentPortFactory", createPaymentPortFactory({ prismaClient, logger: app.log }));
+  }
+
+  // Native Stripe Connect webhook verifier (platform-level endpoint, one signing
+  // secret). constructEvent verifies the Stripe-Signature over the raw body and
+  // returns the typed event (event.account carries the connected account). Gated on
+  // both the platform key and the Connect endpoint secret; absent either, the
+  // /api/webhooks/payments/webhook route 503s (fail-closed, no live verification).
+  {
+    const connectWebhookSecret = process.env["STRIPE_CONNECT_WEBHOOK_SECRET"];
+    const stripeSecretKey = process.env["STRIPE_SECRET_KEY"];
+    if (connectWebhookSecret && stripeSecretKey) {
+      const { default: Stripe } = await import("stripe");
+      const { verifyConnectWebhookSignature } =
+        await import("./payments/stripe-connect-payment-adapter.js");
+      const platformClient = new Stripe(stripeSecretKey, {
+        apiVersion: "2026-04-22.dahlia",
+      }) as unknown as StripeConnectClient;
+      app.decorate("paymentWebhookVerifier", (rawBodyStr: string | Buffer, signature: string) =>
+        verifyConnectWebhookSignature(platformClient, rawBodyStr, signature, connectWebhookSecret),
+      );
+    } else {
+      app.log.info(
+        "Stripe Connect webhook verifier not configured (need STRIPE_SECRET_KEY + STRIPE_CONNECT_WEBHOOK_SECRET); payments webhook will 503",
+      );
+    }
   }
 
   // Report cache store + report projection stores for /api/dashboard/reports
