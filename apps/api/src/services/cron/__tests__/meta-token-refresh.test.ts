@@ -45,6 +45,7 @@ function makeDeps(overrides: Partial<MetaTokenRefreshDeps> = {}): MetaTokenRefre
       appSecret: "secret_123",
       redirectUri: "https://example.com/callback",
     }),
+    notifyOperator: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -229,7 +230,14 @@ describe("executeMetaTokenRefresh", () => {
     const result = await executeMetaTokenRefresh(makeStep(), deps);
 
     expect(result.refreshed).toBe(1);
-    expect(deps.updateCredentials).toHaveBeenCalledOnce();
+    // Writes the refreshed expiry into BOTH the credential blob and metadata, so the readiness
+    // surface (which reads metadata.expiresAt) does not report a stale pre-refresh expiry (F2).
+    expect(deps.updateCredentials).toHaveBeenCalledWith(
+      "org_1",
+      "conn_1",
+      expect.any(String),
+      expect.objectContaining({ expiresAt: expect.any(String) }),
+    );
   });
 
   it("alerts the operator when an active connection is missing its expiry instead of silently skipping", async () => {
