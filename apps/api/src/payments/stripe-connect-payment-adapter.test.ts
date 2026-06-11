@@ -59,13 +59,52 @@ describe("StripeConnectPaymentAdapter.createDepositLink", () => {
     expect(link.amountCents).toBe(5000);
     expect(link.currency).toBe("sgd");
 
-    // Destination charge: the session is created ON the connected account.
+    // Direct charge: the session is created ON the connected account (the clinic).
     const [params, options] = createSession.mock.calls[0] as [
       Record<string, unknown>,
       Record<string, unknown>,
     ];
     expect(options.stripeAccount).toBe(connectedAccountId);
     expect(params.mode).toBe("payment");
+  });
+
+  it("creates a DIRECT charge (clinic = merchant of record), not a destination charge", async () => {
+    const { client, createSession } = makeFakeClient();
+    const adapter = new StripeConnectPaymentAdapter({
+      client,
+      connectedAccountId,
+      successUrl: "https://app/success",
+      cancelUrl: "https://app/cancel",
+    });
+
+    await adapter.createDepositLink({
+      organizationId: "org_1",
+      bookingId: "bk_1",
+      amountCents: 5000,
+      currency: "sgd",
+    });
+
+    const [params, options] = createSession.mock.calls[0] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    // Direct-charge marker: the call is scoped to the connected account via the
+    // Stripe-Account header, so the Charge + PaymentIntent live ON the clinic's
+    // account, exactly what retrievePayment (1A-4d) re-fetches on that same account.
+    expect(options.stripeAccount).toBe(connectedAccountId);
+
+    const paymentIntentData = params.payment_intent_data as Record<string, unknown>;
+    // NO destination-charge markers. transfer_data routes funds from a PLATFORM
+    // charge to a connected account and is mutually exclusive with the Stripe-Account
+    // header at the live API; on_behalf_of is a destination-charge construct that the
+    // canonical direct-charge body omits.
+    expect(paymentIntentData.transfer_data).toBeUndefined();
+    expect(paymentIntentData.on_behalf_of).toBeUndefined();
+    // No platform application fee is taken today (DepositLinkInput carries no fee
+    // field); application_fee_amount stays a documented future hook, not set here.
+    expect(paymentIntentData.application_fee_amount).toBeUndefined();
+    // Metadata still carries the booking linkage the webhook re-reads server-side.
+    expect(paymentIntentData.metadata).toEqual({ bookingId: "bk_1", organizationId: "org_1" });
   });
 });
 
