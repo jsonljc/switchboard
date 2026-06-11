@@ -8,7 +8,7 @@ import {
 
 // ── Shared size guards ──────────────────────────────────────────────
 
-const boundedParameters = z
+export const boundedParameters = z
   .record(z.string().max(200), z.unknown())
   .refine((obj) => JSON.stringify(obj).length <= 100_000, {
     message: "parameters must be ≤ 100 KB when serialized",

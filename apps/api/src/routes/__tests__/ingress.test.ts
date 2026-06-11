@@ -98,4 +98,17 @@ describe("POST /api/ingress/submit hardening (F3 + F11)", () => {
     expect(submit).toHaveBeenCalledTimes(1);
     await app.close();
   });
+
+  it("F11: an over-long parameter key (beyond boundedParameters) is 400, never submits", async () => {
+    const { app, submit } = await buildApp();
+    const res = await inject(app, {
+      actor: { id: "u1", type: "user" },
+      intent: "operator.transition_opportunity_stage",
+      parameters: { ["k".repeat(201)]: 1 },
+      trigger: "api",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(submit).not.toHaveBeenCalled();
+    await app.close();
+  });
 });

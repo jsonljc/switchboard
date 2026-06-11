@@ -2,6 +2,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { verifyInternalSecret } from "../lib/internal-secret-auth.js";
 import { InternalIngressSubmitBodySchema } from "../validation.js";
+import { isServiceOnlyIngressIntent } from "./service-only-intents.js";
 
 // Internal chat-to-API ingress hop
 // (spec docs/superpowers/specs/2026-06-08-f-15-chat-ingress-auth-design.md).
@@ -56,6 +57,19 @@ export const internalIngressRoutes: FastifyPluginAsync = async (app) => {
           .send({ error: "Invalid request body", details: parsed.error.issues, statusCode: 400 });
       }
       const body = parsed.data;
+
+      // F3: service-only intents (e.g. payment.record_verified) must not be
+      // submittable on ANY HTTP edge — only trusted in-process submitters (the
+      // HMAC-verified payments webhook) may. The handler also re-verifies against
+      // the PSP, but keep the two ingress doors symmetric so no service-only
+      // intent is exposed on one but blocked on the other.
+      if (isServiceOnlyIngressIntent(body.intent)) {
+        return reply.code(403).send({
+          error: "intent_not_accepted_on_this_route",
+          intent: body.intent,
+          statusCode: 403,
+        });
+      }
 
       try {
         const response = await app.platformIngress.submit({
