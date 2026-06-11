@@ -14,7 +14,7 @@ interface OptimizedPrompt {
   cameraMotion?: string;
 }
 
-interface KlingLike {
+export interface KlingLike {
   generateVideo(req: {
     prompt: string;
     negativePrompt?: string;
@@ -138,6 +138,21 @@ export async function runVideoProducer(
         });
       }
     }
+  }
+
+  // A render with no playable clip is a stage FAILURE, not a success. Returning
+  // empty clips here let the job complete "successfully" with nothing to review
+  // and never tripped the runner's retries/onFailure dead-letter. Throwing
+  // propagates through step.run -> Inngest retries (3) -> the wired
+  // creative.polished onFailure handler. Zero (not a coverage ratio) is the
+  // guard: with no clips there is nothing already rendered to re-buy on retry,
+  // so partial-success checkpointing stays a separate slice.
+  if (clips.length === 0) {
+    const reasons = errors.map((e) => e.message).join("; ");
+    throw new Error(
+      `Video production produced zero playable clips for job ${input.jobId} ` +
+        `(${errors.length} scene generation failure(s))${reasons ? `: ${reasons}` : ""}`,
+    );
   }
 
   // Basic tier: return clips only
