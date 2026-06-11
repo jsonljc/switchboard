@@ -158,6 +158,51 @@ describe("runVideoProducer", () => {
     expect(result.errors?.[0]?.tool).toBe("kling");
   });
 
+  it("throws when every scene fails to generate (zero clips, basic tier)", async () => {
+    const deps = makeMockDeps();
+    deps.klingClient.generateVideo = vi
+      .fn()
+      .mockRejectedValue(new Error("Kling API: 401 Unauthorized"));
+
+    await expect(
+      runVideoProducer(
+        {
+          jobId: "job_1",
+          storyboard,
+          scripts,
+          tier: "basic",
+          platforms: ["meta"],
+          productDescription: "A widget",
+        },
+        deps,
+      ),
+    ).rejects.toThrow(/zero playable clips/);
+  });
+
+  it("throws when every scene fails to generate (zero clips, pro tier) without attempting voiceover or assembly", async () => {
+    const deps = makeMockDeps();
+    deps.klingClient.generateVideo = vi
+      .fn()
+      .mockRejectedValue(new Error("Kling API: 401 Unauthorized"));
+
+    await expect(
+      runVideoProducer(
+        {
+          jobId: "job_1",
+          storyboard,
+          scripts,
+          tier: "pro",
+          platforms: ["meta"],
+          productDescription: "A widget",
+        },
+        deps,
+      ),
+    ).rejects.toThrow(/zero playable clips/);
+    // The throw fires right after the generation loop, before any pro-tier work.
+    expect(deps.elevenLabsClient!.synthesize).not.toHaveBeenCalled();
+    expect(deps.videoAssembler!.assemble).not.toHaveBeenCalled();
+  });
+
   it("falls back to basic output when assembly fails in pro tier", async () => {
     const deps = makeMockDeps();
     deps.videoAssembler!.assemble = vi.fn().mockRejectedValue(new Error("FFmpeg crash"));

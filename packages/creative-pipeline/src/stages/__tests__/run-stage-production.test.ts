@@ -18,8 +18,11 @@ vi.mock("../video-producer.js", () => ({
   createPromptOptimizer: vi.fn().mockReturnValue(vi.fn()),
 }));
 
+// run-stage no longer constructs KlingClient (it uses the injected client). This
+// mock exists only so a test can assert the constructor is NEVER called: a
+// regression to a self-built empty-key client would trip it.
 vi.mock("../kling-client.js", () => ({
-  KlingClient: vi.fn().mockImplementation(() => ({})),
+  KlingClient: vi.fn(),
 }));
 
 vi.mock("../elevenlabs-client.js", () => ({
@@ -74,6 +77,7 @@ const baseProductionInput: StageInput = {
   },
   apiKey: "test-key",
   productionTier: "basic",
+  klingClient: { generateVideo: vi.fn() },
 };
 
 describe("runStage — production", () => {
@@ -95,5 +99,34 @@ describe("runStage — production", () => {
       expect.objectContaining({ jobId: "job-1" }),
       expect.objectContaining({ assetStorage }),
     );
+  });
+
+  it("throws when no klingClient is injected (KLING_API_KEY unset at bootstrap)", async () => {
+    const { klingClient: _omit, ...withoutClient } = baseProductionInput;
+    await expect(runStage("production", withoutClient)).rejects.toThrow(/not configured/);
+  });
+
+  it("forwards the injected klingClient to runVideoProducer (no self-built client)", async () => {
+    const { runVideoProducer } = await import("../video-producer.js");
+    const mockProducer = runVideoProducer as ReturnType<typeof vi.fn>;
+    mockProducer.mockClear();
+
+    const klingClient = { generateVideo: vi.fn() };
+    await runStage("production", { ...baseProductionInput, klingClient });
+
+    expect(mockProducer).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: "job-1" }),
+      expect.objectContaining({ klingClient }),
+    );
+  });
+
+  it("does not construct its own KlingClient (uses only the injected one)", async () => {
+    const { KlingClient } = await import("../kling-client.js");
+    (KlingClient as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+    const klingClient = { generateVideo: vi.fn() };
+    await runStage("production", { ...baseProductionInput, klingClient });
+
+    expect(KlingClient).not.toHaveBeenCalled();
   });
 });
