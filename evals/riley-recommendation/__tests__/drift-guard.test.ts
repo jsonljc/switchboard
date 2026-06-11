@@ -68,6 +68,7 @@ describe("riley fixture-coverage drift guard", () => {
     expect(watchPatterns.has("insufficient_evidence")).toBe(true); // Gate 2 thin-data floor
     expect(watchPatterns.has("measurement_untrusted")).toBe(true); // Gate 1 denominator-trust hold
     expect(watchPatterns.has("in_learning_phase")).toBe(true); // V2 reset-class learning lockout
+    expect(watchPatterns.has("burn")).toBe(true); // D1-1 sub-durable zero-conversion visibility
 
     // The stable abstention floor: a low/healthy-signal account falls through to a
     // non-destructive insight rather than over-optimizing.

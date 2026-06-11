@@ -129,6 +129,12 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
   const diagnoses = diagnose(deltas);
 
   if (
+    // D1-1: never call a zero-conversion burn "performing well". cpa = safeDivide(spend, 0)
+    // collapses to 0, which otherwise reads as at/under target (and at targetROAS 0, roas 0
+    // clears the ROAS arm too), fabricating a positive "maintained 0.0x ROAS" insight on an
+    // active loss. `conversions > 0` also excludes a NaN conversions (NaN > 0 is false →
+    // suppressed, the safe direction); the burn rule then surfaces instead.
+    input.currentInsight.conversions > 0 &&
     learningGuard.isPerformingWell(
       { cpa: current.cpa, roas: current.roas },
       { targetCPA: input.effectiveTarget, targetROAS: input.targetROAS },

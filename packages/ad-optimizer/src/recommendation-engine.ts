@@ -9,7 +9,7 @@ import type {
 } from "@switchboard/schemas";
 import type { SignalHealthReport, Breach } from "./signal-health-checker.js";
 import { resetsLearningFor, learningPhaseImpactText } from "./action-reset-classification.js";
-import { meetsEvidenceFloor } from "./evidence-floor.js";
+import { meetsEvidenceFloor, ZERO_CONVERSION_DAY_CLICK_FLOOR } from "./evidence-floor.js";
 
 // ── Re-export types ──
 
@@ -21,6 +21,16 @@ const MAX_BUDGET_INCREASE_PERCENT = 20;
 const ADD_CREATIVE_CPA_MULTIPLIER = 2;
 const PAUSE_CPA_MULTIPLIER = 3;
 const KILL_DAYS_THRESHOLD = 7;
+
+// Zero-conversion burn spend floor (D1-1). Named config, tuned via the eval, never
+// silently. At or above this spend a zero-conversion window is a burn; below it, a quiet
+// no-data day. The matching click floor is the SHARED `ZERO_CONVERSION_DAY_CLICK_FLOOR`
+// (evidence-floor), so the burn and the breach detector's durability accrual stay aligned
+// by construction. A campaign with conversions===0 has cpa=0, which fails every
+// `cpa > k*target` gate below, so the burn is gated on these floors instead of the
+// conversion-based evidence floor (which a zero-conversion burn can never meet: the
+// destructive floor requires conversions>=5).
+const ZERO_CONV_SPEND_FLOOR = 50;
 
 // ── Input type ──
 
@@ -177,6 +187,75 @@ function insufficientEvidenceWatch(
   };
 }
 
+/**
+ * Zero-conversion burn (D1-1). A campaign spending real money with ZERO attributed
+ * conversions is the worst case Riley faces: `safeDivide(spend, 0)` collapses cpa to 0,
+ * so every `cpa > k*target` gate reads false and the engine would otherwise go silent
+ * (or, at targetROAS 0, mislabel it "performing well"). conversions===0 is the SIGNAL,
+ * not missing evidence, so this rule self-gates on its OWN floors — sustained spend and
+ * enough click traffic to make a zero conclusive (the breach detector's 20-click zero-day
+ * floor) — and is appended AFTER the conversion-based evidence-floor map so that floor
+ * (destructive: conversions>=5) can never demote it.
+ *
+ * Returns a `pause` recommendation when the breach is durable (routed as a rec so the
+ * campaign-decision gates — measurement-trust, learning, tier — still demote it on an
+ * untrusted denominator or an in-learning campaign), a `burn` watch when the burn is real
+ * but not yet durable (visible, never silent), or null below the floors (a genuine
+ * quiet/low-traffic window). No synthesized cpa in the copy — mirror the provider's
+ * "never carry Infinity into rationale" discipline.
+ *
+ * Denominator note: `conversions` here is the aggregate `currentInsight.conversions`, the
+ * same field `insightToMetrics` derives cpa from. When an org configures a
+ * `conversionActionType`, the breach detector's DURABILITY uses that action-type count
+ * while this rule (like cpa) reads the aggregate; aligning the whole engine on the
+ * action-type denominator is a separate, pre-existing concern, not introduced here.
+ */
+function zeroConversionBurnOutput(
+  input: RecommendationInput,
+  base: Pick<RecommendationInput, "campaignId" | "campaignName">,
+): RecommendationOutput | WatchOutput | null {
+  const { conversions, clicks } = input.evidence;
+  const spend = input.currentSpend;
+  // NaN-blind floors pass garbage as false (#939); guard every external numeric before
+  // comparing. A non-finite spend/clicks (a malformed payload) is not a confirmed burn —
+  // abstain. `NaN === 0` is already false, so a NaN conversions (a parse failure handled
+  // separately in PR 2.3) never trips the rule either.
+  const isBurn =
+    conversions === 0 &&
+    Number.isFinite(spend) &&
+    spend >= ZERO_CONV_SPEND_FLOOR &&
+    Number.isFinite(clicks) &&
+    clicks >= ZERO_CONVERSION_DAY_CLICK_FLOOR;
+  if (!isBurn) return null;
+
+  const isDurable =
+    input.targetBreach.granularity === "daily" &&
+    input.targetBreach.periodsAboveTarget >= KILL_DAYS_THRESHOLD;
+  if (isDurable) {
+    return makeRec(
+      base,
+      "pause",
+      0.85,
+      "immediate",
+      "Campaign is spending with zero attributed conversions — pause to stop the loss",
+      [
+        "Pause campaign in Ads Manager immediately",
+        "No attributed conversions across the breach window despite active spend — verify attribution/CAPI, then keep it paused if the spend is genuinely unproductive",
+      ],
+    );
+  }
+
+  return {
+    type: "watch",
+    campaignId: base.campaignId,
+    campaignName: base.campaignName,
+    pattern: "burn",
+    message:
+      "Campaign is spending with zero attributed conversions and the breach is still building — watching before any pause.",
+    checkBackDate: "",
+  };
+}
+
 // ── Main export ──
 
 export function generateRecommendations(
@@ -186,6 +265,12 @@ export function generateRecommendations(
   const cpa = getCPA(deltas);
   const results: RecommendationOutput[] = [];
   const base = { campaignId, campaignName };
+
+  // Zero-conversion burn (D1-1): computed FIRST so a cpa=0 reading from the gates below
+  // can never short-circuit it. Appended AFTER the evidence-floor map at the return so
+  // the conversion-based floor (which a zero-conversion burn can never meet) cannot demote
+  // it; the burn self-gates on its own spend/click floors instead.
+  const burn = zeroConversionBurnOutput(input, base);
 
   const isAboveAddCreativeCpa = cpa > ADD_CREATIVE_CPA_MULTIPLIER * targetCPA;
   const isAbovePauseCpa = cpa > PAUSE_CPA_MULTIPLIER * targetCPA;
@@ -337,11 +422,14 @@ export function generateRecommendations(
   // action family lacks the clicks/conversions/days to act is demoted to an
   // abstention watch. Measurement-family fixes (0/0/0 floor) and most diagnostics
   // pass; destructive (pause/add_creative) and scale recs get gated on thin data.
-  return results.map((rec) =>
+  const floored: (RecommendationOutput | WatchOutput)[] = results.map((rec) =>
     meetsEvidenceFloor(rec.action, input.evidence)
       ? rec
       : insufficientEvidenceWatch(base, rec.action, input.evidence),
   );
+  // The burn (if any) is prepended so a durable burn is the primary recommendation, and
+  // it bypasses the conversion-based floor above (see zeroConversionBurnOutput).
+  return burn ? [burn, ...floored] : floored;
 }
 
 // ── Signal Health Recommendations ──
