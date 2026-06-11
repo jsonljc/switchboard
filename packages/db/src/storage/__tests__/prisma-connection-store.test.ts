@@ -231,4 +231,74 @@ describe("PrismaConnectionStore", () => {
       expect(result).toBe("not_found");
     });
   });
+
+  describe("findByServiceId (riley credential resolver fallback)", () => {
+    it("returns the raw encrypted credentials blob without decrypting", async () => {
+      vi.mocked(decryptCredentials).mockClear();
+      prisma.connection.findFirst.mockResolvedValue({
+        credentials: "ENCRYPTED_BLOB",
+        status: "connected",
+      });
+
+      const result = await store.findByServiceId("meta-ads", "org_1");
+
+      expect(result).toEqual({ credentials: "ENCRYPTED_BLOB" });
+      expect(decryptCredentials).not.toHaveBeenCalled();
+    });
+
+    it("scopes the query to (serviceId, organizationId)", async () => {
+      prisma.connection.findFirst.mockResolvedValue({
+        credentials: "ENCRYPTED_BLOB",
+        status: "connected",
+      });
+
+      await store.findByServiceId("meta-ads", "org_1");
+
+      expect(prisma.connection.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { serviceId: "meta-ads", organizationId: "org_1" } }),
+      );
+    });
+
+    it("returns null for a needs_reauth connection (never a dead token)", async () => {
+      prisma.connection.findFirst.mockResolvedValue({
+        credentials: "ENCRYPTED_BLOB",
+        status: "needs_reauth",
+      });
+
+      expect(await store.findByServiceId("meta-ads", "org_1")).toBeNull();
+    });
+
+    it("returns null for a revoked connection", async () => {
+      prisma.connection.findFirst.mockResolvedValue({
+        credentials: "ENCRYPTED_BLOB",
+        status: "revoked",
+      });
+
+      expect(await store.findByServiceId("meta-ads", "org_1")).toBeNull();
+    });
+
+    it("returns null for an expired connection", async () => {
+      prisma.connection.findFirst.mockResolvedValue({
+        credentials: "ENCRYPTED_BLOB",
+        status: "expired",
+      });
+
+      expect(await store.findByServiceId("meta-ads", "org_1")).toBeNull();
+    });
+
+    it("returns null when no connection exists for the org", async () => {
+      prisma.connection.findFirst.mockResolvedValue(null);
+
+      expect(await store.findByServiceId("meta-ads", "org_1")).toBeNull();
+    });
+
+    it("returns null when stored credentials are not an encrypted string (legacy)", async () => {
+      prisma.connection.findFirst.mockResolvedValue({
+        credentials: { accessToken: "legacy" },
+        status: "connected",
+      });
+
+      expect(await store.findByServiceId("meta-ads", "org_1")).toBeNull();
+    });
+  });
 });
