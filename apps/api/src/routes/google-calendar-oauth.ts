@@ -8,7 +8,7 @@ import {
   encryptCredentials,
   decryptCredentials,
 } from "@switchboard/db";
-import { assertOrgAccess } from "../utils/org-access.js";
+import { assertOrgAccess, resolveCallerOrgId } from "../utils/org-access.js";
 
 interface GoogleCalendarOAuthConfig {
   clientId: string;
@@ -256,9 +256,8 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
         }
 
         // Defense-in-depth: scope the credential read to the authenticated caller's org so it stays
-        // tenant-safe at the store layer even if the route check above is ever dropped. Falls back
-        // to the deployment's own org in dev mode (auth disabled, request has no org binding).
-        const callerOrgId = request.organizationIdFromAuth ?? deployment.organizationId;
+        // tenant-safe at the store layer even if the route check above is ever dropped.
+        const callerOrgId = resolveCallerOrgId(request, deployment.organizationId);
         const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
         const connection = await connectionStore.findByDeploymentAndTypeForOrg(
           callerOrgId,

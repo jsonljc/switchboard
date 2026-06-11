@@ -33,6 +33,22 @@ describe("resolveMetaOAuthConfig", () => {
     });
   });
 
+  it("does not mix prefixes: a partial META_* set resolves the full FACEBOOK_* set", () => {
+    // META_APP_ID alone must NOT combine with FACEBOOK_APP_SECRET (potentially a different Meta
+    // app). When the META_* triple is incomplete, fall back to the whole FACEBOOK_* group.
+    const config = resolveMetaOAuthConfig({
+      META_APP_ID: "meta_app", // only the id is set under META_*
+      FACEBOOK_APP_ID: "fb_app",
+      FACEBOOK_APP_SECRET: "fb_secret",
+      FACEBOOK_REDIRECT_URI: "https://example.com/fb/callback",
+    });
+    expect(config).toEqual({
+      appId: "fb_app",
+      appSecret: "fb_secret",
+      redirectUri: "https://example.com/fb/callback",
+    });
+  });
+
   it("throws when a required credential is missing under both prefixes", () => {
     expect(() => resolveMetaOAuthConfig({ META_APP_ID: "only_id" })).toThrow(
       /Missing Meta OAuth config/,

@@ -13,7 +13,7 @@ import {
   encryptCredentials,
   decryptCredentials,
 } from "@switchboard/db";
-import { assertOrgAccess } from "../utils/org-access.js";
+import { assertOrgAccess, resolveCallerOrgId } from "../utils/org-access.js";
 
 /**
  * Resolve the Meta OAuth app credentials. The canonical names are META_* (the exact vars the
@@ -24,17 +24,28 @@ import { assertOrgAccess } from "../utils/org-access.js";
 export function resolveMetaOAuthConfig(
   env: Record<string, string | undefined>,
 ): FacebookOAuthConfig {
-  const appId = env["META_APP_ID"] ?? env["FACEBOOK_APP_ID"];
-  const appSecret = env["META_APP_SECRET"] ?? env["FACEBOOK_APP_SECRET"];
-  const redirectUri = env["META_OAUTH_REDIRECT_URI"] ?? env["FACEBOOK_REDIRECT_URI"];
+  // Resolve the credential as a GROUP per prefix, never field-by-field, so we cannot pair an app id
+  // from one prefix with a secret from the other (potentially a different Meta app). META_* is
+  // canonical (the prefix the refresh cron reads); FACEBOOK_* is a deprecated full-set alias.
+  const meta = {
+    appId: env["META_APP_ID"],
+    appSecret: env["META_APP_SECRET"],
+    redirectUri: env["META_OAUTH_REDIRECT_URI"],
+  };
+  const facebook = {
+    appId: env["FACEBOOK_APP_ID"],
+    appSecret: env["FACEBOOK_APP_SECRET"],
+    redirectUri: env["FACEBOOK_REDIRECT_URI"],
+  };
+  const config = meta.appId && meta.appSecret && meta.redirectUri ? meta : facebook;
 
-  if (!appId || !appSecret || !redirectUri) {
+  if (!config.appId || !config.appSecret || !config.redirectUri) {
     throw new Error(
       "Missing Meta OAuth config. Set META_APP_ID, META_APP_SECRET, META_OAUTH_REDIRECT_URI.",
     );
   }
 
-  return { appId, appSecret, redirectUri };
+  return { appId: config.appId, appSecret: config.appSecret, redirectUri: config.redirectUri };
 }
 
 function getOAuthConfig(): FacebookOAuthConfig {
@@ -192,9 +203,8 @@ export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
         }
 
         // Defense-in-depth: scope the credential read to the authenticated caller's org so it stays
-        // tenant-safe at the store layer even if the route check above is ever dropped. Falls back
-        // to the deployment's own org in dev mode (auth disabled, request has no org binding).
-        const callerOrgId = request.organizationIdFromAuth ?? deployment.organizationId;
+        // tenant-safe at the store layer even if the route check above is ever dropped.
+        const callerOrgId = resolveCallerOrgId(request, deployment.organizationId);
         const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
         const connection = await connectionStore.findByDeploymentAndTypeForOrg(
           callerOrgId,
