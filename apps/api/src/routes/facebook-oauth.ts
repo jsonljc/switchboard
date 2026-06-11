@@ -187,7 +187,11 @@ export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
         }
 
         const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
-        const connection = await connectionStore.findByDeploymentAndType(deploymentId, "meta-ads");
+        const connection = await connectionStore.findByDeploymentAndTypeForOrg(
+          orgId,
+          deploymentId,
+          "meta-ads",
+        );
 
         if (!connection) {
           return reply.code(404).send({

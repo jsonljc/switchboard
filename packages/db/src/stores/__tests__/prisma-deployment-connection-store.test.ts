@@ -68,4 +68,24 @@ describe("PrismaDeploymentConnectionStore tenant isolation", () => {
       expect(args.where).toEqual({ id: "conn_1", deployment: { organizationId: "org_X" } });
     });
   });
+
+  describe("findByDeploymentAndTypeForOrg", () => {
+    it("scopes the read WHERE by relation-filter deployment.organizationId", async () => {
+      prisma.deploymentConnection.findFirst.mockResolvedValue({ id: "conn_1", type: "meta-ads" });
+      const result = await store.findByDeploymentAndTypeForOrg("org_1", "dep_1", "meta-ads");
+      const args = prisma.deploymentConnection.findFirst.mock.calls[0]![0];
+      expect(args.where).toEqual({
+        deploymentId: "dep_1",
+        type: "meta-ads",
+        deployment: { organizationId: "org_1" },
+      });
+      expect(result).toEqual({ id: "conn_1", type: "meta-ads" });
+    });
+
+    it("returns null when the deployment is not in the caller's org (no cross-tenant read)", async () => {
+      prisma.deploymentConnection.findFirst.mockResolvedValue(null);
+      const result = await store.findByDeploymentAndTypeForOrg("org_other", "dep_1", "meta-ads");
+      expect(result).toBeNull();
+    });
+  });
 });

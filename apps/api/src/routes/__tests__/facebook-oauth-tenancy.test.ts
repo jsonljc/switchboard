@@ -11,6 +11,26 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { describe, it, expect, vi } from "vitest";
 import { facebookOAuthRoutes } from "../facebook-oauth.js";
 
+// For the owner happy-path: stub the upstream Graph call + credential decrypt so
+// the post-gate path (decrypt -> listAdAccounts -> 200) runs without a network
+// call or a real ciphertext. The 401/403/404 tests never reach these.
+vi.mock("@switchboard/ad-optimizer", async (orig) => {
+  const actual = await orig<typeof import("@switchboard/ad-optimizer")>();
+  return {
+    ...actual,
+    listAdAccounts: vi
+      .fn()
+      .mockResolvedValue([{ accountId: "123", name: "Acct", status: 1, currency: "USD" }]),
+  };
+});
+vi.mock("@switchboard/db", async (orig) => {
+  const actual = await orig<typeof import("@switchboard/db")>();
+  return {
+    ...actual,
+    decryptCredentials: vi.fn().mockReturnValue({ accessToken: "tok", accountId: "act_123" }),
+  };
+});
+
 function buildMockPrisma(deploymentOrgId: string | null, hasConnection: boolean) {
   return {
     agentDeployment: {
@@ -90,5 +110,17 @@ describe("facebook-oauth listing route — cross-tenant authorization (F2)", () 
     });
     expect(res.statusCode).toBe(401);
     expect(prisma.agentDeployment.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("returns 200 with ad accounts for a deployment the caller owns", async () => {
+    const prisma = buildMockPrisma("org_a", true); // owned + has a meta-ads connection
+    const app = await buildApp({ prisma, organizationId: "org_a" });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/connections/facebook/dep_a/accounts",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { accounts: unknown[] };
+    expect(body.accounts).toHaveLength(1);
   });
 });

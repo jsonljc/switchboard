@@ -263,7 +263,8 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
         }
 
         const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
-        const connection = await connectionStore.findByDeploymentAndType(
+        const connection = await connectionStore.findByDeploymentAndTypeForOrg(
+          orgId,
           deploymentId,
           "google_calendar",
         );
