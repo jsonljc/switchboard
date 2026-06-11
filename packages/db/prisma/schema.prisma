@@ -1412,6 +1412,10 @@ model CreativeJob {
   // Slice-2 taste-sweep idempotency watermark: the OBSERVED reviewDecidedAt
   // last captured (never wall-clock), so re-decisions stay strictly newer.
   tasteCapturedAt DateTime?
+  // F4 revenue-proven promotion idempotency watermark: set once when a measured
+  // creative first crosses the promotion floors, so the daily sweep never
+  // re-counts the same creative into its bucket (sourceCount fidelity).
+  revenueProvenPromotedAt DateTime?
 
   // Meta publish (P2 parked draft package). Nullable — set by creative.job.publish.
   // durableAssetUrl is the PR A contract (durable assembled-creative URL); publish

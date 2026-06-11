@@ -138,6 +138,7 @@ import {
 } from "../services/cron/mira-self-brief.js";
 import { isAgentHomeAccessible } from "../lib/agent-home-access.js";
 import { createCreativeTasteSweep } from "../services/cron/creative-taste-sweep.js";
+import { createRevenueProvenPromotion } from "../services/cron/revenue-proven-promotion.js";
 import { buildCreativeTasteProvider } from "../services/creative-taste-context.js";
 import { buildCreativeAssetStorage } from "../lib/creative-asset-storage.js";
 
@@ -1128,6 +1129,16 @@ export async function registerInngest(
     memoryStore: deploymentMemoryStoreForTaste,
     logger: app.log,
   });
+  // F4 Riley->Mira channel: promote measured creative winners into revenue_proven
+  // memory on the creative deployment Mira reads. Reuses the same job + deployment
+  // memory stores; no external I/O, so (like the taste sweep) no kill-switch.
+  const revenueProvenPromotion = createRevenueProvenPromotion({
+    failure: asyncFailure,
+    jobStore,
+    memoryStore: deploymentMemoryStoreForTaste,
+    now: () => new Date(),
+    logger: app.log,
+  });
   const creativeTasteProvider = buildCreativeTasteProvider(deploymentMemoryStoreForTaste);
 
   await app.register(inngestFastify, {
@@ -1252,6 +1263,7 @@ export async function registerInngest(
       creativeAttributionDispatch,
       creativeAttributionWorker,
       creativeTasteSweep,
+      revenueProvenPromotion,
       miraSelfBriefDispatch,
       miraSelfBriefWorker,
     ],
