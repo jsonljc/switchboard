@@ -98,7 +98,7 @@ export const paymentsWebhookRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // Server-side booking lookup to resolve contact/opportunity. The booking row is
-    // the authoritative join — never read contactId/opportunityId from the webhook
+    // the authoritative join. Never read contactId/opportunityId from the webhook
     // body (forgeable) or the charge metadata (not stored there). Scoping by
     // organizationId is the cross-tenant guard: a mismatched account/org finds no row.
     const booking = app.prisma

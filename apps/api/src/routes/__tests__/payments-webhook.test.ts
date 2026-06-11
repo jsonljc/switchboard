@@ -15,7 +15,7 @@ import { RecordVerifiedPaymentParametersSchema } from "../operator-intents-schem
 // (constructEvent over the Stripe-Signature header with the platform Connect signing secret),
 // re-fetches the PaymentIntent by id (never trusts the body amount), and submits through
 // ingress as a service actor. These tests pin the REAL event shape + the REAL verification
-// scheme — the `stripe` client below is used ONLY for crypto (constructEvent +
+// scheme. The `stripe` client below is used ONLY for crypto (constructEvent +
 // generateTestHeaderString make no network call), so a dummy api key is fine.
 
 const SECRET = "whsec_test_connect_secret";
