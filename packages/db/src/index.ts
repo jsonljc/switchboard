@@ -103,6 +103,10 @@ export type {
 export { PrismaCreatorIdentityStore } from "./stores/prisma-creator-identity-store.js";
 export { PrismaAssetRecordStore } from "./stores/prisma-asset-record-store.js";
 export { PrismaExecutionTraceStore } from "./stores/prisma-execution-trace-store.js";
+export {
+  PrismaBookingOutcomeLedgerStore,
+  type BookingOutcomeLedgerRow,
+} from "./stores/prisma-booking-outcome-ledger-store.js";
 export { PrismaKnowledgeEntryStore } from "./stores/prisma-knowledge-entry-store.js";
 export { PrismaWorkTraceStore } from "./stores/prisma-work-trace-store.js";
 export { PrismaBookingStore } from "./stores/prisma-booking-store.js";
