@@ -27,6 +27,8 @@ export { normalizeWorkUnit } from "./work-unit.js";
 
 // Intent Registration
 export type { IntentRegistration, ExecutorBinding } from "./intent-registration.js";
+// F4 registry guard: a spend-bearing intent must never be auto-approved.
+export { SpendBearingAutoApproveError } from "./intent-registration.js";
 
 // Governance
 export type { GovernanceDecision, ExecutionConstraints } from "./governance-types.js";

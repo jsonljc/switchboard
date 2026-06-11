@@ -1,4 +1,5 @@
 import type { IntentRegistration } from "./intent-registration.js";
+import { assertNotSpendBearingAutoApprove } from "./intent-registration.js";
 import type { ExecutionModeName, Trigger } from "./types.js";
 
 export class IntentRegistry {
@@ -8,6 +9,9 @@ export class IntentRegistry {
     if (this.registrations.has(registration.intent)) {
       throw new Error(`Intent already registered: ${registration.intent}`);
     }
+    // F4 registry guard: a spend-bearing intent must never be auto-approved
+    // (auto-approval skips the spend-approval threshold + hard spend-limit floor).
+    assertNotSpendBearingAutoApprove(registration);
     this.registrations.set(registration.intent, registration);
   }
 
