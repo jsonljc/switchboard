@@ -33,6 +33,7 @@ import {
   PrismaReconciliationStore,
   PrismaBusinessFactsStore,
   PrismaOperationalStateStore,
+  PrismaFailedMessageRetentionStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -88,6 +89,11 @@ import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
 import { buildRileyCredentialResolver } from "./riley-credential-resolver.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
+import {
+  createDlqRetentionPurgeCron,
+  resolveRetentionWindows,
+} from "../services/cron/dlq-retention-purge.js";
+import type { DlqRetentionPurgeDeps } from "../services/cron/dlq-retention-purge.js";
 import {
   createCreativePublishFunction,
   type CreativePublishFunctionDeps,
@@ -609,6 +615,25 @@ export async function registerInngest(
       appSecret: process.env["META_APP_SECRET"] ?? "",
       redirectUri: process.env["META_OAUTH_REDIRECT_URI"] ?? "",
     }),
+  };
+
+  // Dead-letter-queue retention purge (PDPA F6). Deletes aged FailedMessage rows
+  // (terminal-status past the soft window OR any-status past the hard cap) so the
+  // DLQ — which stores the entire inbound webhook (patient text + phone) — does
+  // not retain PII forever. Cross-tenant by design; a thin orchestrator over the
+  // batched db-store purge. Windows env-configurable (defaults 30 / 90 days).
+  // Completes the F5/F6 retention+deletion pair (F5 = per-contact erasure).
+  const failedMessageRetentionStore = new PrismaFailedMessageRetentionStore(app.prisma);
+  const { soft: dlqSoftDays, hard: dlqHardDays } = resolveRetentionWindows(
+    process.env["DLQ_RETENTION_DAYS"],
+    process.env["DLQ_HARD_RETENTION_DAYS"],
+  );
+  const dlqRetentionPurgeDeps: DlqRetentionPurgeDeps = {
+    failure: asyncFailure,
+    purge: (input) => failedMessageRetentionStore.purgeExpired(input),
+    softRetentionDays: dlqSoftDays,
+    hardRetentionDays: dlqHardDays,
+    logger: { info: (msg) => app.log.info(msg), warn: (msg) => app.log.warn(msg) },
   };
 
   // Reconciliation cron dependencies
@@ -1194,6 +1219,7 @@ export async function registerInngest(
       ),
       dailyPatternDecayCron,
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
+      createDlqRetentionPurgeCron(dlqRetentionPurgeDeps),
       createCreativePublishFunction(creativePublishFunctionDeps),
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),
