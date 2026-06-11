@@ -4,20 +4,14 @@ import { z } from "zod";
 import { requireIdempotencyKey } from "../utils/idempotency-key.js";
 import { buildDevAuthFallback } from "../utils/auth-fallback.js";
 import { requireOrgForMutation } from "../decorators/org.js";
-import { RECORD_VERIFIED_PAYMENT_INTENT } from "../bootstrap/operator-intents/record-verified-payment.js";
-
-/** Intents that must never be accepted on the public operator edge — they are
- *  service-only and reachable only through trusted in-process submitters (e.g.
- *  the HMAC-verified payments webhook). A tenant API key must not be able to
- *  forge a verified payment here (F3,
- *  docs/audits/2026-06-10-security-audit/11-tickets.md). Defence in depth: the
- *  handler also requires a service/system actor AND re-verifies against the PSP. */
-const SERVICE_ONLY_INGRESS_INTENTS = new Set<string>([RECORD_VERIFIED_PAYMENT_INTENT]);
+import { boundedParameters } from "../validation.js";
+import { isServiceOnlyIngressIntent } from "./service-only-intents.js";
 
 // F11: validate the body. Models CanonicalSubmitRequest (canonical-request.ts) so
-// every legitimate shape — including the CTWA system-actor / trigger:"internal" /
-// targetHint / parentWorkUnitId path — is accepted, while a malformed/over-shaped
-// body is rejected (.strict() at the top level).
+// every legitimate operator submit is accepted, while a malformed/over-shaped
+// body is rejected (.strict() at the top level; parameters bounded like the
+// sibling routes). NOTE: chat/CTWA does NOT use this public route — it uses the
+// INTERNAL_API_SECRET /internal/ingress/submit edge.
 const IngressSubmitBodySchema = z
   .object({
     organizationId: z.string().optional(),
@@ -25,7 +19,7 @@ const IngressSubmitBodySchema = z
       .object({ id: z.string().min(1), type: z.enum(["user", "agent", "system", "service"]) })
       .optional(),
     intent: z.string().min(1),
-    parameters: z.record(z.unknown()).optional(),
+    parameters: boundedParameters.optional(),
     trigger: z.enum(["chat", "api", "schedule", "internal"]).optional(),
     surface: z
       .object({
@@ -73,7 +67,7 @@ export const ingressRoutes: FastifyPluginAsync = async (app) => {
     const body = parsed.data;
 
     // F3: service-only intents are not accepted on the public operator edge.
-    if (SERVICE_ONLY_INGRESS_INTENTS.has(body.intent)) {
+    if (isServiceOnlyIngressIntent(body.intent)) {
       return reply.code(403).send({
         error: "intent_not_accepted_on_this_route",
         intent: body.intent,
