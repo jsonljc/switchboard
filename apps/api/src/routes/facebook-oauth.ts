@@ -14,39 +14,7 @@ import {
   decryptCredentials,
 } from "@switchboard/db";
 import { assertOrgAccess, resolveCallerOrgId } from "../utils/org-access.js";
-
-/**
- * Resolve the Meta OAuth app credentials. The canonical names are META_* (the exact vars the
- * token-refresh cron already reads, bootstrap/inngest.ts), so authorize/callback and the refresh
- * cron read one credential prefix (D10-4). FACEBOOK_* are accepted as deprecated aliases so
- * existing deployments keep working for one release.
- */
-export function resolveMetaOAuthConfig(
-  env: Record<string, string | undefined>,
-): FacebookOAuthConfig {
-  // Resolve the credential as a GROUP per prefix, never field-by-field, so we cannot pair an app id
-  // from one prefix with a secret from the other (potentially a different Meta app). META_* is
-  // canonical (the prefix the refresh cron reads); FACEBOOK_* is a deprecated full-set alias.
-  const meta = {
-    appId: env["META_APP_ID"],
-    appSecret: env["META_APP_SECRET"],
-    redirectUri: env["META_OAUTH_REDIRECT_URI"],
-  };
-  const facebook = {
-    appId: env["FACEBOOK_APP_ID"],
-    appSecret: env["FACEBOOK_APP_SECRET"],
-    redirectUri: env["FACEBOOK_REDIRECT_URI"],
-  };
-  const config = meta.appId && meta.appSecret && meta.redirectUri ? meta : facebook;
-
-  if (!config.appId || !config.appSecret || !config.redirectUri) {
-    throw new Error(
-      "Missing Meta OAuth config. Set META_APP_ID, META_APP_SECRET, META_OAUTH_REDIRECT_URI.",
-    );
-  }
-
-  return { appId: config.appId, appSecret: config.appSecret, redirectUri: config.redirectUri };
-}
+import { resolveMetaOAuthConfig } from "../utils/meta-oauth-config.js";
 
 function getOAuthConfig(): FacebookOAuthConfig {
   return resolveMetaOAuthConfig(process.env);
