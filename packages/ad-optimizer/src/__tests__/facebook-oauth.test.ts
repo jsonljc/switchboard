@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   buildAuthorizationUrl,
+  buildSignedState,
+  verifySignedState,
   exchangeCodeForToken,
   exchangeForLongLivedToken,
   listAdAccounts,
@@ -200,6 +202,79 @@ describe("facebook-oauth", () => {
       await expect(refreshTokenIfNeeded(config, "revoked-token", nearExpiry)).rejects.toThrow(
         "Facebook OAuth error (400): Token has been revoked",
       );
+    });
+  });
+
+  describe("buildSignedState / verifySignedState", () => {
+    const SECRET = "test-state-secret-at-least-32-characters-long";
+
+    it("round-trips the deploymentId through a signed state", () => {
+      const state = buildSignedState("dep_123", SECRET);
+      expect(typeof state).toBe("string");
+      expect(state).toContain("."); // <payload>.<sig>
+      expect(verifySignedState(state, SECRET)).toEqual({ deploymentId: "dep_123" });
+    });
+
+    it("does not leak the deploymentId in cleartext (payload is base64url-encoded)", () => {
+      const state = buildSignedState("dep_secret_id", SECRET);
+      expect(state).not.toContain("dep_secret_id");
+    });
+
+    it("rejects a state signed with a different secret", () => {
+      const state = buildSignedState("dep_123", SECRET);
+      expect(verifySignedState(state, "a-totally-different-secret-value-32+chars")).toBeNull();
+    });
+
+    it("rejects a tampered payload (signature no longer matches)", () => {
+      const state = buildSignedState("dep_123", SECRET);
+      const [payload, sig] = state.split(".") as [string, string];
+      // Flip a character in the payload portion.
+      const flipped = (payload[0] === "A" ? "B" : "A") + payload.slice(1);
+      expect(verifySignedState(`${flipped}.${sig}`, SECRET)).toBeNull();
+    });
+
+    it("rejects a tampered signature", () => {
+      const state = buildSignedState("dep_123", SECRET);
+      const [payload, sig] = state.split(".") as [string, string];
+      const flippedSig = sig.slice(0, -1) + (sig.endsWith("A") ? "B" : "A");
+      expect(verifySignedState(`${payload}.${flippedSig}`, SECRET)).toBeNull();
+    });
+
+    it("rejects a malformed state (wrong number of segments)", () => {
+      expect(verifySignedState("not-a-valid-state", SECRET)).toBeNull();
+      expect(verifySignedState("a.b.c", SECRET)).toBeNull();
+      expect(verifySignedState("", SECRET)).toBeNull();
+    });
+
+    it("rejects a length-mismatched signature without throwing (timing-safe guard)", () => {
+      const state = buildSignedState("dep_123", SECRET);
+      const [payload] = state.split(".") as [string, string];
+      // A short signature would make crypto.timingSafeEqual throw if not length-guarded.
+      expect(() => verifySignedState(`${payload}.deadbeef`, SECRET)).not.toThrow();
+      expect(verifySignedState(`${payload}.deadbeef`, SECRET)).toBeNull();
+    });
+
+    it("rejects an expired state (older than the max age)", () => {
+      const elevenMinutesAgo = Date.now() - 11 * 60 * 1000;
+      const state = buildSignedState("dep_123", SECRET, elevenMinutesAgo);
+      expect(verifySignedState(state, SECRET)).toBeNull();
+    });
+
+    it("accepts a state within a custom max age", () => {
+      const twoMinutesAgo = Date.now() - 2 * 60 * 1000;
+      const state = buildSignedState("dep_123", SECRET, twoMinutesAgo);
+      expect(verifySignedState(state, SECRET, 5 * 60 * 1000)).toEqual({ deploymentId: "dep_123" });
+    });
+
+    it("rejects a state whose issued-at is in the future (clock-rollback / tamper)", () => {
+      const future = Date.now() + 60 * 60 * 1000;
+      const state = buildSignedState("dep_123", SECRET, future);
+      expect(verifySignedState(state, SECRET)).toBeNull();
+    });
+
+    it("preserves deploymentIds that themselves contain a colon", () => {
+      const state = buildSignedState("dep:weird:id", SECRET);
+      expect(verifySignedState(state, SECRET)).toEqual({ deploymentId: "dep:weird:id" });
     });
   });
 });

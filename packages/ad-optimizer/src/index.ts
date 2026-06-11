@@ -48,6 +48,9 @@ export { parseLeadWebhook, fetchLeadDetail, extractFieldValue } from "./meta-lea
 export type { LeadData } from "./meta-leads-ingester.js";
 export {
   buildAuthorizationUrl,
+  buildSignedState,
+  verifySignedState,
+  STATE_MAX_AGE_MS,
   exchangeCodeForToken,
   exchangeForLongLivedToken,
   listAdAccounts,
