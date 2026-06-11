@@ -227,6 +227,9 @@ export const CreativeJobSchema = z.object({
   currentStage: CreativeJobStage,
   stageOutputs: z.record(z.unknown()),
   stoppedAt: z.string().nullable(),
+  // Terminal failure marker for a retry-exhausted polished render (dead-letter
+  // consumer write). Mirrors ugcFailure; null = not failed.
+  stageFailure: z.record(z.unknown()).nullable().optional(),
   mode: CreativeJobMode.default("polished"),
   ugcPhase: z.string().nullable().optional(),
   ugcPhaseOutputs: z.record(z.unknown()).nullable().optional(),

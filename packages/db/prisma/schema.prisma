@@ -1384,6 +1384,9 @@ model CreativeJob {
   stageOutputs   Json    @default("{}")
   stoppedAt      String?
   productionTier String?
+  // Terminal failure marker for a retry-exhausted polished render (dead-letter
+  // consumer write). Mirrors ugcFailure; null = not failed.
+  stageFailure   Json?
 
   // PCD identity registry (SP1)
   productIdentityId        String?
