@@ -1159,6 +1159,7 @@ export async function registerInngest(
           asyncFailure,
         ) as (arg: unknown) => Promise<void>,
         creativeTasteProvider,
+        klingClient,
       ),
       createUgcJobRunner(
         {

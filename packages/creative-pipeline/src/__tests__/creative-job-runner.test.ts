@@ -214,6 +214,55 @@ describe("executeCreativePipeline", () => {
     await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
     expect(jobStore.setDurableAsset).not.toHaveBeenCalled();
   });
+
+  it("threads the injected klingClient into the production stage input", async () => {
+    const { runStage } = await import("../stages/run-stage.js");
+    const mockRunStage = runStage as ReturnType<typeof vi.fn>;
+    mockRunStage.mockClear();
+    mockRunStage.mockResolvedValue({ placeholder: true });
+
+    const klingClient = { generateVideo: vi.fn() };
+    await executeCreativePipeline(
+      jobData,
+      step as never,
+      jobStore as never,
+      llmConfig,
+      undefined,
+      undefined,
+      undefined,
+      klingClient,
+    );
+
+    const productionCall = mockRunStage.mock.calls.find((c) => c[0] === "production");
+    expect((productionCall?.[1] as { klingClient?: unknown }).klingClient).toBe(klingClient);
+  });
+
+  it("forwards an injected klingClient through the created runner handler into production", async () => {
+    createFunctionSpy.mockClear();
+    const { runStage } = await import("../stages/run-stage.js");
+    const mockRunStage = runStage as ReturnType<typeof vi.fn>;
+    mockRunStage.mockClear();
+    mockRunStage.mockResolvedValue({ placeholder: true });
+
+    const klingClient = { generateVideo: vi.fn() };
+    createCreativeJobRunner(
+      jobStore as never,
+      llmConfig,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      klingClient,
+    );
+    const handler = createFunctionSpy.mock.calls[0]?.[1] as (arg: {
+      event: { data: typeof jobData };
+      step: typeof step;
+    }) => Promise<void>;
+    await handler({ event: { data: jobData }, step });
+
+    const productionCall = mockRunStage.mock.calls.find((c) => c[0] === "production");
+    expect((productionCall?.[1] as { klingClient?: unknown }).klingClient).toBe(klingClient);
+  });
 });
 
 // ---------------------------------------------------------------------------

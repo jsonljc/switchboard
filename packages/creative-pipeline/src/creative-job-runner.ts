@@ -5,7 +5,7 @@ import { CreativePerformanceHistorySchema } from "@switchboard/schemas";
 import type { CreativeJob, VideoProducerOutput } from "@switchboard/schemas";
 import { DalleImageGenerator } from "./stages/image-generator.js";
 import type { ImageGenerator } from "./stages/image-generator.js";
-import type { AssetStorageClient } from "./stages/video-producer.js";
+import type { AssetStorageClient, KlingLike } from "./stages/video-producer.js";
 import type { CreativeMemoryProvider } from "./creative-memory.js";
 
 // 24-hour timeout for buyer approval between stages
@@ -61,6 +61,7 @@ export async function executeCreativePipeline(
   imageConfig?: ImageConfig,
   assetStorage?: AssetStorageClient,
   creativeMemoryProvider?: CreativeMemoryProvider,
+  klingClient?: KlingLike,
 ): Promise<void> {
   const job = await step.run("load-job", () => jobStore.findById(eventData.jobId));
 
@@ -144,6 +145,7 @@ export async function executeCreativePipeline(
         imageGenerator,
         ...(productionTier ? { productionTier } : {}),
         assetStorage,
+        klingClient,
       }),
     );
 
@@ -197,6 +199,7 @@ export function createCreativeJobRunner(
   assetStorage?: AssetStorageClient,
   onFailure?: (arg: unknown) => Promise<void>,
   creativeMemoryProvider?: CreativeMemoryProvider,
+  klingClient?: KlingLike,
 ) {
   return inngestClient.createFunction(
     {
@@ -215,6 +218,7 @@ export function createCreativeJobRunner(
         imageConfig,
         assetStorage,
         creativeMemoryProvider,
+        klingClient,
       );
     },
   );

@@ -10,9 +10,6 @@ import type { ScriptWriterOutput, StoryboardOutput } from "@switchboard/schemas"
 vi.mock("../stages/whisper-client.js", () => ({
   WhisperClient: vi.fn().mockImplementation(() => ({ transcribe: vi.fn() })),
 }));
-vi.mock("../stages/kling-client.js", () => ({
-  KlingClient: vi.fn().mockImplementation(() => ({ generateVideo: vi.fn() })),
-}));
 vi.mock("../stages/elevenlabs-client.js", () => ({
   ElevenLabsClient: vi.fn().mockImplementation(() => ({ synthesize: vi.fn() })),
 }));
@@ -70,6 +67,7 @@ const baseInput = {
   previousOutputs: { storyboard, scripts } as Record<string, unknown>,
   apiKey: "anthropic-key",
   productionTier: "pro",
+  klingClient: { generateVideo: vi.fn() },
 };
 
 describe("run-stage production whisper key", () => {
