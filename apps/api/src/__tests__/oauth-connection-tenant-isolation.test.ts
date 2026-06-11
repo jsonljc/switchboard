@@ -125,6 +125,7 @@ async function buildScopedApp(): Promise<ScopedTestApp> {
 }
 
 const HEADERS_A = { authorization: `Bearer ${KEY_A}` };
+const HEADERS_B = { authorization: `Bearer ${KEY_B}` };
 const HEADERS_UNSCOPED = { authorization: `Bearer ${UNSCOPED_KEY}` };
 
 const FB_URL = (dep: string) => `/api/connections/facebook/${dep}/accounts`;
@@ -173,6 +174,22 @@ describe("OAuth connection cross-tenant isolation (F2)", () => {
       expect(res.statusCode).toBe(403);
       expect(ctx.connectionFindFirst).not.toHaveBeenCalled();
     });
+
+    it("scopes the connection read to the caller's org at the store layer (defense-in-depth)", async () => {
+      // Org B reads its OWN deployment, so the gate passes and the route reaches the store read.
+      // That read must carry the caller's org in the WHERE, so it stays tenant-safe even if the
+      // route-level gate were ever removed (findByDeploymentAndTypeForOrg, not the org-blind read).
+      await ctx.app.inject({ method: "GET", url: FB_URL(DEPLOYMENT_B), headers: HEADERS_B });
+      expect(ctx.connectionFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            deploymentId: DEPLOYMENT_B,
+            type: "meta-ads",
+            deployment: { organizationId: ORG_B },
+          }),
+        }),
+      );
+    });
   });
 
   describe("GET /api/connections/google-calendar/:deploymentId/calendars", () => {
@@ -204,6 +221,19 @@ describe("OAuth connection cross-tenant isolation (F2)", () => {
       });
       expect(res.statusCode).toBe(403);
       expect(ctx.connectionFindFirst).not.toHaveBeenCalled();
+    });
+
+    it("scopes the connection read to the caller's org at the store layer (defense-in-depth)", async () => {
+      await ctx.app.inject({ method: "GET", url: GCAL_URL(DEPLOYMENT_B), headers: HEADERS_B });
+      expect(ctx.connectionFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            deploymentId: DEPLOYMENT_B,
+            type: "google_calendar",
+            deployment: { organizationId: ORG_B },
+          }),
+        }),
+      );
     });
   });
 
