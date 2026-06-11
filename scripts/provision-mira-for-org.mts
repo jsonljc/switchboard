@@ -6,12 +6,13 @@
 //
 // Usage: npx tsx scripts/provision-mira-for-org.mts <orgId>
 //
-// .mts (not .ts): the repo root is CommonJS (no "type":"module"), but @switchboard/db
-// publishes ESM-only exports. The .mts extension makes tsx load this script as ESM so
-// the import resolves. @switchboard/db + @prisma/client are root devDependencies so a
-// root-level script can resolve them.
-import { PrismaClient } from "@prisma/client";
-import { provisionOrgAgentDeployments } from "@switchboard/db";
+// .mts (not .ts): @switchboard/db is ESM-only — its package "exports" defines only an
+// `import` condition. The repo root is CommonJS, so tsx loads a root `.ts` script as CJS
+// and require-resolution of @switchboard/db fails with ERR_PACKAGE_PATH_NOT_EXPORTED (the
+// existing `.ts` operator scripts hit this too). `.mts` forces ESM, which uses the
+// `import` condition and resolves. @switchboard/db is a root devDependency so a root-level
+// script can resolve it, and it re-exports PrismaClient (so no @prisma/client dep needed).
+import { PrismaClient, provisionOrgAgentDeployments } from "@switchboard/db";
 
 async function main(): Promise<void> {
   const [orgId] = process.argv.slice(2);

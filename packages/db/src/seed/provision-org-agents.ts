@@ -10,14 +10,14 @@ export interface ProvisionOrgAgentsResult {
 }
 
 /**
- * Idempotently ensures the ad-optimizer marketplace listing exists. No-clobber:
- * create-if-missing, never overwrite a richer production listing (`update: {}`).
- * Riley's deployment seeder resolves this listing by slug and throws if it is
- * absent, and production provisions listings lazily per org (seedMarketplace is
+ * Idempotently ensures the ad-optimizer marketplace listing exists and returns its id.
+ * No-clobber: create-if-missing, never overwrite a richer production listing
+ * (`update: {}`). The deployment seeder resolves this listing by slug and throws if it
+ * is absent, and production provisions listings lazily per org (seedMarketplace is
  * dev-only), so this guarantees the prerequisite. Mirrors ensureAlexListingForOrg.
  */
-async function ensureAdOptimizerListing(db: PrismaDbClient): Promise<void> {
-  await db.agentListing.upsert({
+async function ensureAdOptimizerListing(db: PrismaDbClient): Promise<string> {
+  const listing = await db.agentListing.upsert({
     where: { slug: "ad-optimizer" },
     update: {},
     create: {
@@ -31,11 +31,12 @@ async function ensureAdOptimizerListing(db: PrismaDbClient): Promise<void> {
       metadata: {},
     },
   });
+  return listing.id;
 }
 
 /** As ensureAdOptimizerListing, for the creative listing Mira's deployment resolves. */
-async function ensureCreativeListing(db: PrismaDbClient): Promise<void> {
-  await db.agentListing.upsert({
+async function ensureCreativeListing(db: PrismaDbClient): Promise<string> {
+  const listing = await db.agentListing.upsert({
     where: { slug: "performance-creative-director" },
     update: {},
     create: {
@@ -48,6 +49,28 @@ async function ensureCreativeListing(db: PrismaDbClient): Promise<void> {
       metadata: {},
     },
   });
+  return listing.id;
+}
+
+/**
+ * Looks up an already-provisioned deployment for the org under the given listing.
+ * The provision step is "create-once": if the deployment exists we must NOT re-run the
+ * seeder, because its `update: config` would overwrite operator-set fields. For Riley
+ * that means clobbering `inputConfig` (ad-account / pixel set via the marketplace PATCH,
+ * which merges) and `governanceSettings`; this matters because provisioning is invoked
+ * from the hot `GET /config` route on every load. The listing ensure (above) is
+ * no-clobber and cheap, so it always runs; only the deployment re-seed is guarded.
+ */
+async function findExistingDeployment(
+  db: PrismaDbClient,
+  orgId: string,
+  listingId: string,
+): Promise<{ deploymentId: string } | null> {
+  const existing = await db.agentDeployment.findUnique({
+    where: { organizationId_listingId: { organizationId: orgId, listingId } },
+    select: { id: true },
+  });
+  return existing ? { deploymentId: existing.id } : null;
 }
 
 /**
@@ -58,8 +81,9 @@ async function ensureCreativeListing(db: PrismaDbClient): Promise<void> {
  * Riley->Mira handoff resolves against, plus Mira enablement.
  *
  * One interactive transaction wraps every write so deployment, governance, and
- * enablement land atomically. Idempotent upserts keyed deterministically, so the
- * whole call is safe to re-run.
+ * enablement land atomically. Provision-once: an existing deployment is never re-seeded
+ * (the seeders' `update: config` would clobber operator-customized state); the listings
+ * are ensured no-clobber on every call. Safe to re-run.
  *
  * Takes the root PrismaClient (it needs `$transaction`) and passes the tx client to
  * every reused seeder (each widened to accept Prisma.TransactionClient).
@@ -70,11 +94,18 @@ export async function provisionOrgAgentDeployments(
   opts: { mira: boolean },
 ): Promise<ProvisionOrgAgentsResult> {
   return prisma.$transaction(async (tx): Promise<ProvisionOrgAgentsResult> => {
-    await ensureAdOptimizerListing(tx);
-    const riley = await seedRileyAdOptimizerDeployment(tx, orgId);
+    const rileyListingId = await ensureAdOptimizerListing(tx);
+    const riley =
+      (await findExistingDeployment(tx, orgId, rileyListingId)) ??
+      (await seedRileyAdOptimizerDeployment(tx, orgId));
     if (!opts.mira) return { riley };
 
-    await ensureCreativeListing(tx);
+    const miraListingId = await ensureCreativeListing(tx);
+    const existingMira = await findExistingDeployment(tx, orgId, miraListingId);
+    if (existingMira) return { riley, mira: existingMira };
+
+    // First-time Mira provisioning: deployment + handoff/creative governance (inside the
+    // seeder) + enablement, together.
     const mira = await seedMiraCreativeDeployment(tx, orgId);
     await seedMiraPilotOrgs(tx, [orgId]);
     return { riley, mira };

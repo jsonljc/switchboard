@@ -33,7 +33,8 @@ interface EnablementUpsertArgs {
  * rollback (that is a Prisma/Postgres guarantee). agentDeployment.upsert returns a
  * distinct id per agent so Riley and Mira are distinguishable.
  */
-function buildMockPrisma() {
+function buildMockPrisma(opts: { existingDeployments?: Record<string, { id: string }> } = {}) {
+  const { existingDeployments = {} } = opts;
   const listingUpserts: ListingUpsertArgs[] = [];
   const deploymentUpserts: DeploymentUpsertArgs[] = [];
   const policyUpserts: PolicyUpsertArgs[] = [];
@@ -53,6 +54,13 @@ function buildMockPrisma() {
       })),
     },
     agentDeployment: {
+      // The provision-once guard reads this (keyed by listingId). Default null = fresh
+      // org, so the seeder then runs; pass `existingDeployments` to simulate a re-run.
+      findUnique: vi.fn(
+        async (args: {
+          where: { organizationId_listingId: { organizationId: string; listingId: string } };
+        }) => existingDeployments[args.where.organizationId_listingId.listingId] ?? null,
+      ),
       upsert: vi.fn(async (args: DeploymentUpsertArgs) => {
         deploymentUpserts.push(args);
         const skillSlug = args.create.skillSlug as string;
@@ -141,6 +149,19 @@ describe("provisionOrgAgentDeployments", () => {
         prisma._writeOrder.indexOf("deployment:ad-optimizer"),
       );
     });
+
+    it("provision-once: skips re-seeding an already-provisioned Riley deployment (no clobber)", async () => {
+      const p = buildMockPrisma({
+        existingDeployments: { "listing_ad-optimizer": { id: "existing_riley" } },
+      });
+      const result = await provisionOrgAgentDeployments(p, "org_acme", { mira: false });
+      // No deployment upsert ⇒ the seeder's `update: config` never runs, so operator-set
+      // inputConfig (ad-account / pixel via the marketplace PATCH) + governanceSettings survive.
+      expect(p._deploymentUpserts).toHaveLength(0);
+      expect(result).toEqual({ riley: { deploymentId: "existing_riley" } });
+      // The listing is still ensured (no-clobber, cheap).
+      expect(p._listingUpserts.find((l) => l.where.slug === "ad-optimizer")).toBeDefined();
+    });
   });
 
   describe("{ mira: true } — day-thirty Mira + handoff governance", () => {
@@ -154,8 +175,19 @@ describe("provisionOrgAgentDeployments", () => {
 
     it("seeds the handoff approval policy the resolver consumes (producer→consumer)", async () => {
       await provisionOrgAgentDeployments(prisma, "org_acme", { mira: true });
-      const ids = prisma._policyUpserts.map((p) => p.where.id);
-      expect(ids).toContain(recommendationHandoffApprovalPolicyId("org_acme"));
+      const approval = prisma._policyUpserts.find(
+        (p) => p.where.id === recommendationHandoffApprovalPolicyId("org_acme"),
+      );
+      expect(approval).toBeDefined();
+      // The GovernanceGate resolves by effect + the anchored actionType rule, not the id;
+      // assert those so the seam fails if the producer drifts from what the gate matches.
+      expect(approval!.create).toMatchObject({
+        effect: "require_approval",
+        approvalRequirement: "mandatory",
+      });
+      expect(JSON.stringify(approval!.create.rule)).toContain(
+        "adoptimizer\\\\.recommendation\\\\.handoff",
+      );
     });
 
     it("enables Mira for exactly the provided org (strict scope, no global write)", async () => {
@@ -172,6 +204,20 @@ describe("provisionOrgAgentDeployments", () => {
       );
       expect(listing).toBeDefined();
       expect(listing!.update).toEqual({});
+    });
+
+    it("provision-once: skips re-seeding an already-provisioned Mira deployment (no clobber, no re-enable)", async () => {
+      const p = buildMockPrisma({
+        existingDeployments: {
+          "listing_performance-creative-director": { id: "existing_mira" },
+        },
+      });
+      const result = await provisionOrgAgentDeployments(p, "org_acme", { mira: true });
+      // Mira already provisioned ⇒ no creative deployment upsert, no policy re-seed, no
+      // enablement re-write (which would override an operator who disabled Mira).
+      expect(p._deploymentUpserts.find((d) => d.create.skillSlug === "creative")).toBeUndefined();
+      expect(p._enablementUpserts).toHaveLength(0);
+      expect(result.mira).toEqual({ deploymentId: "existing_mira" });
     });
   });
 
