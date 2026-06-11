@@ -43,8 +43,68 @@ export interface IntentRegistration {
   approvalPolicy: ApprovalPolicy;
   /** See {@link ApprovalMode}. Defaults to `"policy"` when omitted. */
   approvalMode?: ApprovalMode;
+  /**
+   * Marks an intent that commits OUTBOUND spend — an amount the spend-approval
+   * threshold and the hard spend-limit floor are meant to gate (e.g. an
+   * ad-campaign budget change; the values `extractSpendAmount` reads:
+   * spendAmount/amount/budgetChange/newBudget). Defaults to `false` when omitted.
+   *
+   * This is money-movement, NOT compute cost: `budgetClass: "expensive"` (an
+   * expensive creative-pipeline run) is NOT spend-bearing, and recording inbound
+   * revenue / verified payments is NOT spend-bearing. A spend-bearing intent MUST
+   * NOT be registered `approvalMode: "system_auto_approved"` — both
+   * {@link IntentRegistry.register} and the governance gate refuse it, because
+   * auto-approval skips the spend gate. Distinct from
+   * `RecommendationInput.financialEffect` (an advisory risk-contract flag on the
+   * recommendation layer): this is a `core` registration property that gates the
+   * auto-approval fast path and means OUTBOUND spend specifically — which is why
+   * it is not derived from the action's spend amount (inbound money-recording
+   * intents such as `revenue.record` carry an amount yet must stay auto-approved).
+   * See `docs/audits/2026-06-10-security-audit/04-auth-and-governance.md` (F4) —
+   * the long-standing Riley R1 registry-guard recommendation.
+   */
+  spendBearing?: boolean;
   idempotent: boolean;
   allowedTriggers: Trigger[];
   timeoutMs: number;
   retryable: boolean;
+}
+
+/**
+ * Thrown when a spend-bearing intent is registered or evaluated with
+ * `approvalMode: "system_auto_approved"`. Auto-approval returns `execute` at the
+ * top of `GovernanceGate.evaluate()`, BEFORE the spend-approval threshold and the
+ * hard spend-limit floor — so a spend-bearing intent on that path could move money
+ * with no cap and no human sign-off. This is a programming/configuration invariant
+ * (not user input), so it fails loudly. See the F4 registry-guard finding:
+ * `docs/audits/2026-06-10-security-audit/04-auth-and-governance.md` and
+ * `11-tickets.md`.
+ */
+export class SpendBearingAutoApproveError extends Error {
+  /** The offending intent name. */
+  readonly intent: string;
+
+  constructor(intent: string) {
+    super(
+      `Intent "${intent}" is spendBearing and cannot use approvalMode ` +
+        `"system_auto_approved": auto-approval bypasses the spend-approval ` +
+        `threshold and the hard spend-limit floor. Register it with approvalMode ` +
+        `"policy" (the default) so the spend gate runs.`,
+    );
+    this.name = "SpendBearingAutoApproveError";
+    this.intent = intent;
+  }
+}
+
+/**
+ * The F4 safety invariant: a spend-bearing intent must never be auto-approved.
+ * Called by `IntentRegistry.register()` (throws at startup) and asserted again in
+ * `GovernanceGate` immediately before the auto-approve short-circuit (defence in
+ * depth, for a registration that bypassed the registry). Inert for every
+ * non-spend-bearing intent and for spend-bearing intents under `"policy"` mode.
+ */
+export function assertNotSpendBearingAutoApprove(registration: IntentRegistration): void {
+  if (registration.spendBearing === true && registration.approvalMode === "system_auto_approved") {
+    throw new SpendBearingAutoApproveError(registration.intent);
+  }
 }

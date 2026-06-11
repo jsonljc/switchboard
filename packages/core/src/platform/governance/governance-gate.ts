@@ -13,6 +13,7 @@ import type { PolicyEngineContext, PolicyEngineConfig } from "../../engine/polic
 import type { ResolvedIdentity } from "../../identity/spec.js";
 import type { WorkUnit } from "../work-unit.js";
 import type { IntentRegistration } from "../intent-registration.js";
+import { assertNotSpendBearingAutoApprove } from "../intent-registration.js";
 import type { GovernanceDecision, ExecutionConstraints } from "../governance-types.js";
 import { toActionProposal, toEvaluationContext } from "./work-unit-adapter.js";
 import { toGovernanceDecision } from "./decision-adapter.js";
@@ -98,6 +99,12 @@ export class GovernanceGate {
     // Skips the human approval-policy lookup only. Auth, idempotency,
     // WorkTrace, audit, and execution dispatch all run unchanged downstream.
     if (registration.approvalMode === "system_auto_approved") {
+      // F4 defence in depth: a spend-bearing intent must never reach the
+      // auto-approve short-circuit. IntentRegistry.register() already refuses to
+      // register one; this catches a registration that bypassed the registry.
+      // A programming invariant (not user input) ⇒ throw loudly rather than
+      // silently downgrade to require_approval.
+      assertNotSpendBearingAutoApprove(registration);
       return {
         outcome: "execute",
         riskScore: 0,

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { IntentRegistry } from "../intent-registry.js";
 import type { IntentRegistration } from "../intent-registration.js";
+import { SpendBearingAutoApproveError } from "../intent-registration.js";
 
 const campaignPause: IntentRegistration = {
   intent: "campaign.pause",
@@ -98,5 +99,71 @@ describe("IntentRegistry", () => {
     registry.register(campaignPause);
     registry.register(adOptimizer);
     expect(registry.size).toBe(2);
+  });
+});
+
+// F4 registry guard (security audit 2026-06-10): a spend-bearing intent — one
+// that commits OUTBOUND spend the spend gate must cap — must never be registered
+// `approvalMode: "system_auto_approved"`, because auto-approval returns `execute`
+// before the spend-approval threshold and the hard spend floor run.
+const budgetRegistration = (overrides?: Partial<IntentRegistration>): IntentRegistration => ({
+  intent: "digital-ads.campaign.adjust_budget",
+  defaultMode: "cartridge",
+  allowedModes: ["cartridge"],
+  executor: { mode: "cartridge", actionId: "digital-ads.campaign.adjust_budget" },
+  parameterSchema: {},
+  mutationClass: "write",
+  budgetClass: "standard",
+  approvalPolicy: "threshold",
+  spendBearing: true,
+  idempotent: false,
+  allowedTriggers: ["api"],
+  timeoutMs: 30_000,
+  retryable: false,
+  ...overrides,
+});
+
+describe("IntentRegistry — F4 spend-bearing auto-approve guard", () => {
+  let registry: IntentRegistry;
+
+  beforeEach(() => {
+    registry = new IntentRegistry();
+  });
+
+  it("throws when a spend-bearing intent is registered system_auto_approved", () => {
+    expect(() =>
+      registry.register(budgetRegistration({ approvalMode: "system_auto_approved" })),
+    ).toThrow(SpendBearingAutoApproveError);
+  });
+
+  it("names the offending intent and the rule in the error message", () => {
+    expect(() =>
+      registry.register(budgetRegistration({ approvalMode: "system_auto_approved" })),
+    ).toThrow(/digital-ads\.campaign\.adjust_budget/);
+    expect(() =>
+      registry.register(budgetRegistration({ approvalMode: "system_auto_approved" })),
+    ).toThrow(/system_auto_approved/);
+  });
+
+  it("allows a spend-bearing intent under policy mode (approvalMode omitted)", () => {
+    expect(() => registry.register(budgetRegistration())).not.toThrow();
+    expect(registry.lookup("digital-ads.campaign.adjust_budget")?.spendBearing).toBe(true);
+  });
+
+  it("allows a spend-bearing intent under explicit policy mode", () => {
+    expect(() => registry.register(budgetRegistration({ approvalMode: "policy" }))).not.toThrow();
+  });
+
+  it("allows a non-spend-bearing intent under system_auto_approved (operator-direct pattern)", () => {
+    expect(() =>
+      registry.register(
+        budgetRegistration({
+          intent: "operator.transition_opportunity_stage",
+          spendBearing: false,
+          approvalPolicy: "none",
+          approvalMode: "system_auto_approved",
+        }),
+      ),
+    ).not.toThrow();
   });
 });
