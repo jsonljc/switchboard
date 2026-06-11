@@ -119,6 +119,8 @@ const authPlugin: FastifyPluginAsync = async (app) => {
   });
 
   app.addHook("preHandler", async (request, reply) => {
+    // OAuth callbacks always carry a query string (?code=&state=), so match the path only.
+    const pathname = request.url.split("?")[0];
     // Skip auth for health check, metrics, and docs (Swagger UI)
     if (
       request.url === "/health" ||
@@ -137,7 +139,13 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       request.url === "/api/internal/chat-approvals/respond" ||
       // Chat-to-API ingress: self-authenticates with INTERNAL_API_SECRET (timing-safe)
       // inside the route and honors the chat-resolved org; exact path, never a prefix (F-15).
-      request.url === "/api/internal/ingress/submit"
+      request.url === "/api/internal/ingress/submit" ||
+      // OAuth provider callbacks: the browser redirect from Facebook/Google carries no Bearer.
+      // Security rests on the HMAC-signed `state` (minted only by the Bearer-authed authorize leg
+      // after assertOrgAccess) verified inside the route. Exact path, never a prefix; the authorize
+      // legs stay Bearer-authed and are NOT exempted (D10-3).
+      pathname === "/api/connections/facebook/callback" ||
+      pathname === "/api/connections/google-calendar/callback"
     ) {
       return;
     }

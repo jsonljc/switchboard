@@ -1,7 +1,7 @@
 // @route-class: ingress-receiver
 import type { FastifyPluginAsync } from "fastify";
-import { createHmac } from "node:crypto";
 import { google } from "googleapis";
+import { buildSignedState, verifySignedState } from "@switchboard/ad-optimizer";
 import {
   PrismaDeploymentConnectionStore,
   PrismaDeploymentStore,
@@ -9,6 +9,7 @@ import {
   decryptCredentials,
 } from "@switchboard/db";
 import { assertOrgAccess, resolveCallerOrgId } from "../utils/org-access.js";
+import { resolveOAuthStateSecret } from "../utils/oauth-state-secret.js";
 
 interface GoogleCalendarOAuthConfig {
   clientId: string;
@@ -39,38 +40,17 @@ const CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
 ];
 
-function getStateSecret(): string {
-  return process.env["SESSION_TOKEN_SECRET"] || process.env["NEXTAUTH_SECRET"] || "dev-fallback";
-}
-
-function signState(deploymentId: string): string {
-  const timestamp = Date.now().toString(36);
-  const payload = `${deploymentId}:${timestamp}`;
-  const sig = createHmac("sha256", getStateSecret()).update(payload).digest("hex").slice(0, 16);
-  return `${payload}:${sig}`;
-}
-
-function verifyState(state: string): { valid: boolean; deploymentId: string } {
-  const parts = state.split(":");
-  if (parts.length !== 3) return { valid: false, deploymentId: "" };
-  const [deploymentId, timestamp, sig] = parts as [string, string, string];
-  const expectedSig = createHmac("sha256", getStateSecret())
-    .update(`${deploymentId}:${timestamp}`)
-    .digest("hex")
-    .slice(0, 16);
-  if (sig !== expectedSig) return { valid: false, deploymentId: "" };
-  const age = Date.now() - parseInt(timestamp, 36);
-  if (age > 10 * 60 * 1000) return { valid: false, deploymentId: "" };
-  return { valid: true, deploymentId };
-}
-
 export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
-  // GET /api/connections/google-calendar/authorize — redirect to Google OAuth consent screen
+  // GET /api/connections/google-calendar/authorize — mint a signed Google OAuth authorize URL.
+  // Bearer-authed (the dashboard server-proxies it): verify the caller's org owns the deployment
+  // BEFORE signing a state for it (Q2). Returns { authorizeUrl } for the dashboard to redirect to.
   app.get<{ Querystring: { deploymentId?: string } }>(
     "/google-calendar/authorize",
     {
       schema: {
-        description: "Redirect to Google OAuth consent screen for calendar access.",
+        description:
+          "Mint a signed Google Calendar OAuth authorize URL for a deployment the caller's org owns. " +
+          "Returns { authorizeUrl }.",
         tags: ["Connections", "Google Calendar OAuth"],
       },
     },
@@ -82,18 +62,30 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
           .send({ error: "deploymentId query parameter is required", statusCode: 400 });
       }
 
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+      }
+
+      const deployment = await new PrismaDeploymentStore(app.prisma).findById(deploymentId);
+      if (!deployment) {
+        return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+      }
+      if (!assertOrgAccess(request, deployment.organizationId, reply)) {
+        return;
+      }
+
       try {
         const config = getOAuthConfig();
         const oauth2Client = createOAuth2Client(config);
 
-        const url = oauth2Client.generateAuthUrl({
+        const authorizeUrl = oauth2Client.generateAuthUrl({
           access_type: "offline",
           scope: CALENDAR_SCOPES,
-          state: signState(deploymentId),
+          state: buildSignedState(deploymentId, resolveOAuthStateSecret(process.env)),
           prompt: "consent",
         });
 
-        return reply.redirect(url);
+        return reply.send({ authorizeUrl });
       } catch (err) {
         app.log.error(err, "Failed to build Google Calendar authorization URL");
         return reply.code(500).send({ error: "OAuth configuration error", statusCode: 500 });
@@ -133,11 +125,13 @@ export const googleCalendarOAuthRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ error: "Missing code or state parameter", statusCode: 400 });
       }
 
-      const stateResult = verifyState(state);
-      if (!stateResult.valid) {
+      // Auth-exempt leg: trust ONLY the signed state. verifySignedState rejects a forged / tampered
+      // / expired / replayed state; the deploymentId it returns drives a trusted DB lookup below.
+      const verified = verifySignedState(state, resolveOAuthStateSecret(process.env));
+      if (!verified) {
         return reply.code(400).send({ error: "Invalid or expired OAuth state", statusCode: 400 });
       }
-      const deploymentId = stateResult.deploymentId;
+      const deploymentId = verified.deploymentId;
 
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
