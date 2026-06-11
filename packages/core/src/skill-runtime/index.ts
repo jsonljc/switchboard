@@ -64,7 +64,8 @@ export {
 } from "./builders/index.js";
 export { CircuitBreaker } from "./circuit-breaker.js";
 export { BlastRadiusLimiter } from "./blast-radius-limiter.js";
-export { OutcomeLinker } from "./outcome-linker.js";
+export { OutcomeLinker, deriveLinkedOutcome } from "./outcome-linker.js";
+export type { LinkedOutcome } from "./outcome-linker.js";
 export { ok, fail, denied, pendingApproval } from "./tool-result.js";
 export type { ToolResult } from "./tool-result.js";
 export {
