@@ -426,4 +426,34 @@ describe("Payments webhook contract-pin: submitted params satisfy handler schema
     expect(submit).not.toHaveBeenCalled();
     await app.close();
   });
+
+  it("skips (200, no submit) when the re-fetched charge is not paid", async () => {
+    const retrievePayment = vi.fn(async (id: string) => ({
+      externalReference: id,
+      bookingId: "bk-pending",
+      amountCents: 5000,
+      currency: "sgd",
+      provider: "stripe",
+      status: "pending" as const,
+    }));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c1", opportunityId: "opp1" }));
+    const { submit } = makeSubmitSpy();
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-1",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const payload = bodyWithCharge("evt_pending", "ch_pending", "acct_org1", 5000);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/webhooks/payments/webhook",
+      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ received: true, skipped: true, reason: "charge_not_paid" });
+    expect(submit).not.toHaveBeenCalled();
+    await app.close();
+  });
 });

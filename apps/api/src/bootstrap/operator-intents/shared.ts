@@ -49,4 +49,8 @@ export const OPERATOR_INTENT_ERROR_CODES = {
   CONSENT_INVALID_JURISDICTION: "CONSENT_INVALID_JURISDICTION",
   CONSENT_REVOKED_CANNOT_REGRANT: "CONSENT_REVOKED_CANNOT_REGRANT",
   CONSENT_OPERATION_FAILED: "CONSENT_OPERATION_FAILED",
+  // F3: payment.record_verified is a service-only intent whose `verified` verdict
+  // is anchored to a server-side PSP fetch-back — never the caller's `provider`.
+  PAYMENT_FORBIDDEN_ACTOR: "PAYMENT_FORBIDDEN_ACTOR",
+  PAYMENT_NOT_VERIFIED: "PAYMENT_NOT_VERIFIED",
 } as const;

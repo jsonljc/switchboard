@@ -78,6 +78,16 @@ export const paymentsWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(200).send({ received: true, skipped: true, reason: "charge_not_found" });
     }
 
+    // Only a settled charge becomes a verified payment. A not-yet-paid charge
+    // (e.g. a payment_intent.created/processing event) is acknowledged but not
+    // recorded — a later "paid" event re-fetches and records it. This keeps the
+    // record_verified handler's paid-only invariant from turning a normal event
+    // into a 500/retry storm.
+    if (charge.status !== "paid") {
+      app.log.info({ chargeId, status: charge.status }, "Charge not paid yet; skipping");
+      return reply.code(200).send({ received: true, skipped: true, reason: "charge_not_paid" });
+    }
+
     // A charge with no PSP-metadata booking linkage cannot be attributed to a
     // contact or opportunity. 200-skip so redeliveries don't error-storm (never 500).
     if (!charge.bookingId) {
