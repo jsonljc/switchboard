@@ -38,6 +38,18 @@ export class PrismaDeploymentConnectionStore {
     });
   }
 
+  /**
+   * Org-scoped variant of findByDeploymentAndType: only returns the connection when the
+   * deployment belongs to `organizationId`. Defense-in-depth so a credential read is tenant-safe
+   * at the store layer even if a caller forgets the route-level org check, mirroring the
+   * organizationId scoping already on updateStatus/updateCredentials/delete.
+   */
+  async findByDeploymentAndTypeForOrg(organizationId: string, deploymentId: string, type: string) {
+    return this.prisma.deploymentConnection.findFirst({
+      where: { deploymentId, type, deployment: { organizationId } },
+    });
+  }
+
   async updateStatus(organizationId: string, id: string, status: string): Promise<void> {
     const result = await this.prisma.deploymentConnection.updateMany({
       where: { id, deployment: { organizationId } },

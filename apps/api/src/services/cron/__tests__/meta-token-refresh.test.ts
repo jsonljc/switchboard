@@ -45,6 +45,7 @@ function makeDeps(overrides: Partial<MetaTokenRefreshDeps> = {}): MetaTokenRefre
       appSecret: "secret_123",
       redirectUri: "https://example.com/callback",
     }),
+    notifyOperator: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -105,7 +106,9 @@ describe("executeMetaTokenRefresh", () => {
     expect(deps.refreshTokenIfNeeded).not.toHaveBeenCalled();
   });
 
-  it("refreshes tokens expiring within threshold", async () => {
+  it("refreshes a legacy connection whose creds still carry `tokenExpiresAt` (back-compat fallback)", async () => {
+    // `expiresAt` is the field the OAuth callback writes today; `tokenExpiresAt` is the legacy key
+    // the reader falls back to so any pre-existing connection is still lifecycle-managed.
     const soonDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 days out
     const creds = encryptTestCreds({
       accessToken: "old_token",
@@ -191,6 +194,76 @@ describe("executeMetaTokenRefresh", () => {
     expect(result.checked).toBe(1);
     expect(result.refreshed).toBe(0);
     expect(result.failed).toBe(0);
+  });
+
+  it("refreshes a connection whose creds carry `expiresAt` (the field the OAuth callback writes)", async () => {
+    // The facebook-oauth callback persists `expiresAt` (facebook-oauth.ts:117,125), not
+    // `tokenExpiresAt`. If the cron reads a different field it silently never refreshes and the
+    // 60-day Meta token dies with no alert (D10-2). Drive this from the real producer's shape.
+    const soonDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000); // 3 days out
+    const creds = encryptTestCreds({
+      accessToken: "old_token",
+      accountId: "act_123",
+      accountName: "Clinic Ads",
+      currency: "USD",
+      expiresAt: soonDate.toISOString(),
+    });
+
+    const deps = makeDeps({
+      listMetaConnections: vi.fn().mockResolvedValue([
+        {
+          id: "conn_1",
+          organizationId: "org_1",
+          deploymentId: "dep_1",
+          type: "meta-ads",
+          status: "active",
+          credentials: creds,
+          metadata: null,
+        },
+      ]),
+      refreshTokenIfNeeded: vi.fn().mockResolvedValue({
+        accessToken: "new_token",
+        expiresIn: 5184000,
+      }),
+    });
+
+    const result = await executeMetaTokenRefresh(makeStep(), deps);
+
+    expect(result.refreshed).toBe(1);
+    // Writes the refreshed expiry into BOTH the credential blob and metadata, so the readiness
+    // surface (which reads metadata.expiresAt) does not report a stale pre-refresh expiry (F2).
+    expect(deps.updateCredentials).toHaveBeenCalledWith(
+      "org_1",
+      "conn_1",
+      expect.any(String),
+      expect.objectContaining({ expiresAt: expect.any(String) }),
+    );
+  });
+
+  it("alerts the operator when an active connection is missing its expiry instead of silently skipping", async () => {
+    const creds = encryptTestCreds({ accessToken: "tok", accountId: "act_123" }); // no expiry field
+    const notifyOperator = vi.fn().mockResolvedValue(undefined);
+    const deps = makeDeps({
+      listMetaConnections: vi.fn().mockResolvedValue([
+        {
+          id: "conn_1",
+          organizationId: "org_1",
+          deploymentId: "dep_1",
+          type: "meta-ads",
+          status: "active",
+          credentials: creds,
+          metadata: null,
+        },
+      ]),
+      notifyOperator,
+    });
+
+    await executeMetaTokenRefresh(makeStep(), deps);
+
+    expect(notifyOperator).toHaveBeenCalledWith(
+      expect.stringContaining("conn_1"),
+      expect.objectContaining({ connectionId: "conn_1", deploymentId: "dep_1" }),
+    );
   });
 });
 

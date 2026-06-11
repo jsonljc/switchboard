@@ -68,4 +68,18 @@ describe("PrismaDeploymentConnectionStore tenant isolation", () => {
       expect(args.where).toEqual({ id: "conn_1", deployment: { organizationId: "org_X" } });
     });
   });
+
+  describe("findByDeploymentAndTypeForOrg", () => {
+    it("scopes the credential read by relation-filter deployment.organizationId", async () => {
+      prisma.deploymentConnection.findFirst.mockResolvedValue({ id: "conn_1", credentials: "enc" });
+      const result = await store.findByDeploymentAndTypeForOrg("org_1", "dep_1", "meta-ads");
+      const args = prisma.deploymentConnection.findFirst.mock.calls[0]![0];
+      expect(args.where).toEqual({
+        deploymentId: "dep_1",
+        type: "meta-ads",
+        deployment: { organizationId: "org_1" },
+      });
+      expect(result).toEqual({ id: "conn_1", credentials: "enc" });
+    });
+  });
 });

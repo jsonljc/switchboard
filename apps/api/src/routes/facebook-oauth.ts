@@ -13,20 +13,43 @@ import {
   encryptCredentials,
   decryptCredentials,
 } from "@switchboard/db";
-import { assertOrgAccess } from "../utils/org-access.js";
+import { assertOrgAccess, resolveCallerOrgId } from "../utils/org-access.js";
 
-function getOAuthConfig(): FacebookOAuthConfig {
-  const appId = process.env["FACEBOOK_APP_ID"];
-  const appSecret = process.env["FACEBOOK_APP_SECRET"];
-  const redirectUri = process.env["FACEBOOK_REDIRECT_URI"];
+/**
+ * Resolve the Meta OAuth app credentials. The canonical names are META_* (the exact vars the
+ * token-refresh cron already reads, bootstrap/inngest.ts), so authorize/callback and the refresh
+ * cron read one credential prefix (D10-4). FACEBOOK_* are accepted as deprecated aliases so
+ * existing deployments keep working for one release.
+ */
+export function resolveMetaOAuthConfig(
+  env: Record<string, string | undefined>,
+): FacebookOAuthConfig {
+  // Resolve the credential as a GROUP per prefix, never field-by-field, so we cannot pair an app id
+  // from one prefix with a secret from the other (potentially a different Meta app). META_* is
+  // canonical (the prefix the refresh cron reads); FACEBOOK_* is a deprecated full-set alias.
+  const meta = {
+    appId: env["META_APP_ID"],
+    appSecret: env["META_APP_SECRET"],
+    redirectUri: env["META_OAUTH_REDIRECT_URI"],
+  };
+  const facebook = {
+    appId: env["FACEBOOK_APP_ID"],
+    appSecret: env["FACEBOOK_APP_SECRET"],
+    redirectUri: env["FACEBOOK_REDIRECT_URI"],
+  };
+  const config = meta.appId && meta.appSecret && meta.redirectUri ? meta : facebook;
 
-  if (!appId || !appSecret || !redirectUri) {
+  if (!config.appId || !config.appSecret || !config.redirectUri) {
     throw new Error(
-      "Missing Facebook OAuth config. Set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, FACEBOOK_REDIRECT_URI.",
+      "Missing Meta OAuth config. Set META_APP_ID, META_APP_SECRET, META_OAUTH_REDIRECT_URI.",
     );
   }
 
-  return { appId, appSecret, redirectUri };
+  return { appId: config.appId, appSecret: config.appSecret, redirectUri: config.redirectUri };
+}
+
+function getOAuthConfig(): FacebookOAuthConfig {
+  return resolveMetaOAuthConfig(process.env);
 }
 
 export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
@@ -179,8 +202,15 @@ export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
           return;
         }
 
+        // Defense-in-depth: scope the credential read to the authenticated caller's org so it stays
+        // tenant-safe at the store layer even if the route check above is ever dropped.
+        const callerOrgId = resolveCallerOrgId(request, deployment.organizationId);
         const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
-        const connection = await connectionStore.findByDeploymentAndType(deploymentId, "meta-ads");
+        const connection = await connectionStore.findByDeploymentAndTypeForOrg(
+          callerOrgId,
+          deploymentId,
+          "meta-ads",
+        );
 
         if (!connection) {
           return reply.code(404).send({

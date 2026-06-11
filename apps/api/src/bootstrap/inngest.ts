@@ -600,8 +600,8 @@ export async function registerInngest(
         }),
       );
     },
-    updateCredentials: async (organizationId, id, credentials) => {
-      await connectionStore.updateCredentials(organizationId, id, credentials);
+    updateCredentials: async (organizationId, id, credentials, metadata) => {
+      await connectionStore.updateCredentials(organizationId, id, credentials, metadata);
     },
     updateStatus: async (organizationId, id, status) => {
       await connectionStore.updateStatus(organizationId, id, status);
@@ -615,6 +615,19 @@ export async function registerInngest(
       appSecret: process.env["META_APP_SECRET"] ?? "",
       redirectUri: process.env["META_OAUTH_REDIRECT_URI"] ?? "",
     }),
+    notifyOperator: async (message, context) => {
+      const asString = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+      await asyncFailure.operatorAlerter?.alert({
+        errorType: "async_job_retry_exhausted",
+        severity: "warning",
+        errorMessage: message,
+        deploymentId: asString(context["deploymentId"]),
+        organizationId: asString(context["organizationId"]),
+        retryable: true,
+        occurredAt: new Date().toISOString(),
+        source: "inngest_function",
+      });
+    },
   };
 
   // Dead-letter-queue retention purge (PDPA F6). Deletes aged FailedMessage rows

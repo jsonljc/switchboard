@@ -51,6 +51,18 @@ export function assertOrgAccess(
 }
 
 /**
+ * The organization id to scope a tenant-owned resource READ by, given the request's auth state.
+ * In production (auth enabled) this is the authenticated caller's org, which assertOrgAccess has
+ * already confirmed matches the resource; scoping the store read by it keeps the read tenant-safe
+ * even if the route-level check is later dropped. In dev mode (auth disabled) there is no caller
+ * identity, so we scope to the resource's own org so an org-scoped read never spuriously misses.
+ */
+export function resolveCallerOrgId(request: FastifyRequest, resourceOrgId: string): string {
+  if (request.server.authDisabled === true) return resourceOrgId;
+  return request.organizationIdFromAuth ?? resourceOrgId;
+}
+
+/**
  * Resolves the organization for a mutation route, enforcing the auth-trust-binding rules:
  *
  *   - In dev mode (app.authDisabled === true), `bodyOrgId` is acceptable (used in tests
