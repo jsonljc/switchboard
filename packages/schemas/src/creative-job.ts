@@ -239,6 +239,9 @@ export const CreativeJobSchema = z.object({
   // last captured (never wall-clock now), so a re-decision during a sweep
   // stays strictly newer and is re-observed next run.
   tasteCapturedAt: z.coerce.date().nullable().optional(),
+  // F4 revenue-proven promotion idempotency watermark: set once a measured creative
+  // first crosses the promotion floors, so the daily sweep counts it exactly once.
+  revenueProvenPromotedAt: z.coerce.date().nullable().optional(),
   // Meta publish (P2 parked draft package). All nullable/optional — populated only
   // by the creative.job.publish handler (and durableAssetUrl by PR A).
   metaVideoId: z.string().nullable().optional(),
