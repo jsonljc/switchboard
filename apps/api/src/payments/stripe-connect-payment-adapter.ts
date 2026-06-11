@@ -60,16 +60,24 @@ export class StripeConnectPaymentAdapter implements PaymentPort {
   }
 
   async createDepositLink(input: DepositLinkInput): Promise<DepositLink> {
-    // ONE STRIPE-SEMANTICS FLAG (go-live gate item, non-blocking for unit tests):
-    // This body sets BOTH payment_intent_data.transfer_data.destination (destination
-    // charge — created on the PLATFORM account with funds transferred to the connected
-    // account) AND the stripeAccount RequestOptions (direct charge — created ON the
-    // connected account). These are contradictory at the live Stripe API. Tests inject
-    // a fake client, so all unit assertions pass as written. Before flipping to a real
-    // connected account, reconcile to ONE Connect charge model:
-    //   - Direct charge: keep stripeAccount + on_behalf_of, drop transfer_data
-    //   - Destination charge: keep transfer_data + application_fee_amount, drop stripeAccount
-    // Resolve at the go-live gate per spec §12 / the approved plan's flag.
+    // DIRECT Connect charge (reconciled at the go-live gate). The Checkout Session is
+    // created ON the connected account via the stripeAccount RequestOption (the
+    // Stripe-Account header below), so the Charge + PaymentIntent live on the CLINIC's
+    // account and the clinic is the merchant of record. retrievePayment re-fetches the
+    // PaymentIntent on that SAME connected account, so a direct charge is the only model
+    // the already-merged settlement path can read back.
+    //
+    // Deliberately NO transfer_data: that is a destination-charge construct (it routes
+    // funds from a PLATFORM charge to a connected account), mutually exclusive with the
+    // Stripe-Account header at the live API; a destination-charge PaymentIntent would
+    // live on the platform, where retrievePayment's connected-account re-fetch would 404
+    // and no paid visit would ever settle. Deliberately NO on_behalf_of either: the
+    // canonical direct-charge body omits it (the connected account is already the
+    // merchant of record by construction).
+    //
+    // Platform fee: none today. To take one, set payment_intent_data.application_fee_amount
+    // (it transfers to the platform from the direct charge); DepositLinkInput carries no
+    // fee field yet, so that is a deliberate future hook, not set here.
     const session = await this.client.checkout.sessions.create(
       {
         mode: "payment",
@@ -86,7 +94,6 @@ export class StripeConnectPaymentAdapter implements PaymentPort {
           },
         ],
         payment_intent_data: {
-          transfer_data: { destination: this.connectedAccountId },
           metadata: { bookingId: input.bookingId, organizationId: input.organizationId },
         },
         metadata: { bookingId: input.bookingId, organizationId: input.organizationId },
