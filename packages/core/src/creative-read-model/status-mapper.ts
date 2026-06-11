@@ -50,6 +50,9 @@ export function mapCreativeJobToMiraStatus(job: CreativeJob): MiraCreativeStatus
     return "failed";
   }
   if (job.mode !== "ugc" && productionErrorsWithoutVideo(job.stageOutputs)) return "failed";
+  // Terminal failure marker written by the dead-letter consumer when a polished
+  // render exhausts its retries; beats the awaiting_review fall-through below.
+  if (job.mode !== "ugc" && job.stageFailure != null) return "failed";
   if (job.stoppedAt != null) return "stopped";
 
   // Rules 4–8: branch by mode for completion / progress detection
