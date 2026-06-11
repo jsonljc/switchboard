@@ -99,6 +99,7 @@ import {
   createCreativePublishFunction,
   type CreativePublishFunctionDeps,
 } from "../services/creative-publish-function.js";
+import { createCreativeFailureRecorder } from "../services/creative-failure-recorder.js";
 import { assertPublishable } from "../services/creative-publish-preconditions.js";
 import {
   buildRunReconciliation,
@@ -1199,9 +1200,12 @@ export async function registerInngest(
         makeOnFailureHandler(
           {
             functionId: "ugc-job-runner",
+            // Emit creative.ugc.failed so the failure recorder marks an out-of-band
+            // ugc step failure terminal (D5-F4). In-band phase failures persist failUgc
+            // themselves and never reach onFailure, so the two paths never both fire.
+            eventDomain: "creative.ugc",
             riskCategory: "medium",
             alert: false,
-            emitEvent: false,
           },
           asyncFailure,
         ) as (arg: unknown) => Promise<void>,
@@ -1246,6 +1250,7 @@ export async function registerInngest(
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
       createDlqRetentionPurgeCron(dlqRetentionPurgeDeps),
       createCreativePublishFunction(creativePublishFunctionDeps),
+      createCreativeFailureRecorder({ jobStore, failure: asyncFailure }),
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
