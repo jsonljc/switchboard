@@ -19,6 +19,9 @@ export async function GET(request: NextRequest) {
     if (err instanceof Error && err.message === "Unauthorized") {
       return NextResponse.redirect(new URL("/login", request.url));
     }
+    // 403 (foreign deployment) / 404 / server misconfig collapse to one operator-facing redirect;
+    // log the cause so it stays diagnosable.
+    console.error("Facebook OAuth authorize proxy failed", err);
     return NextResponse.redirect(new URL("/settings?error=connect_failed", request.url));
   }
 }
