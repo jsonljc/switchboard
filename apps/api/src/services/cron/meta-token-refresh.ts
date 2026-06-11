@@ -50,12 +50,25 @@ export async function executeMetaTokenRefresh(
     await step.run(`refresh-${conn.id}`, async () => {
       const creds = decryptCredentials(conn.credentials);
       const accessToken = creds.accessToken as string | undefined;
-      const expiresAtRaw = creds.tokenExpiresAt as string | undefined;
+      // The OAuth callback persists the expiry as `expiresAt` (facebook-oauth.ts:117,125). Read
+      // that field, falling back to the legacy `tokenExpiresAt` only for any pre-existing row, so
+      // the cron actually sees the expiry instead of silently skipping every connection (D10-2).
+      const expiresAtRaw = (creds.expiresAt ?? creds.tokenExpiresAt) as string | undefined;
 
       if (!accessToken || !expiresAtRaw) {
+        // An active meta-ads connection with no usable token or expiry cannot be lifecycle-managed
+        // and will die unrefreshed; surface it to the operator instead of returning silently.
         console.warn(
-          `[meta-token-refresh] Connection ${conn.id} missing accessToken or tokenExpiresAt`,
+          `[meta-token-refresh] Connection ${conn.id} is active but missing its accessToken or expiry`,
         );
+        if (deps.notifyOperator) {
+          await deps
+            .notifyOperator(
+              `Meta connection ${conn.id} is active but missing its access token or expiry`,
+              { connectionId: conn.id, deploymentId: conn.deploymentId },
+            )
+            .catch(() => {}); // never let an alert failure break the cron
+        }
         return;
       }
 
@@ -75,7 +88,7 @@ export async function executeMetaTokenRefresh(
           const updatedCreds = {
             ...creds,
             accessToken: result.accessToken,
-            tokenExpiresAt: newExpiresAt.toISOString(),
+            expiresAt: newExpiresAt.toISOString(),
           };
           const encrypted = encryptCredentials(updatedCreds);
           await deps.updateCredentials(conn.organizationId, conn.id, encrypted);
