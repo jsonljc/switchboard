@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
+import { getApiClient } from "@/lib/get-api-client";
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,14 +9,19 @@ export async function GET(request: NextRequest) {
     if (!deploymentId) {
       return NextResponse.json({ error: "deploymentId is required" }, { status: 400 });
     }
-    const apiUrl = process.env.SWITCHBOARD_API_URL;
-    if (!apiUrl) {
-      return NextResponse.json({ error: "API URL not configured" }, { status: 500 });
+    // Server-proxy with the operator's API key so the API authorize leg can verify the org owns
+    // this deployment and sign the OAuth state; then redirect the browser to the signed consent URL.
+    // (A plain browser redirect to the API would carry no Bearer, leaving the leg unable to gate.)
+    const client = await getApiClient();
+    const { authorizeUrl } = await client.getFacebookAuthorizeUrl(deploymentId);
+    return NextResponse.redirect(authorizeUrl);
+  } catch (err) {
+    if (err instanceof Error && err.message === "Unauthorized") {
+      return NextResponse.redirect(new URL("/login", request.url));
     }
-    return NextResponse.redirect(
-      `${apiUrl}/api/connections/facebook/authorize?deploymentId=${deploymentId}`,
-    );
-  } catch {
-    return NextResponse.redirect(new URL("/login", request.url));
+    // 403 (foreign deployment) / 404 / server misconfig collapse to one operator-facing redirect;
+    // log the cause so it stays diagnosable.
+    console.error("Facebook OAuth authorize proxy failed", err);
+    return NextResponse.redirect(new URL("/settings?error=connect_failed", request.url));
   }
 }

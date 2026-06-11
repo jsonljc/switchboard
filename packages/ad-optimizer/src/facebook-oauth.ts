@@ -1,5 +1,7 @@
 // packages/ad-optimizer/src/facebook-oauth.ts
 
+import { createHmac, timingSafeEqual } from "node:crypto";
+
 export const GRAPH_API_BASE = "https://graph.facebook.com/v21.0";
 export const OAUTH_DIALOG = "https://www.facebook.com/v21.0/dialog/oauth";
 export const SCOPES =
@@ -22,6 +24,64 @@ export interface AdAccount {
   name: string;
   currency: string;
   status: number;
+}
+
+/** Default OAuth `state` lifetime. Bounds the replay window between authorize and callback. */
+export const STATE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Build an HMAC-signed OAuth `state` that binds the deploymentId and an issued-at timestamp.
+ *
+ * Format: `<base64url(deploymentId:issuedAt_b36)>.<base64url(hmac-sha256(secret, payload_b64))>`.
+ * The signature is computed over the already-encoded payload segment, so verification recomputes it
+ * over the received segment verbatim (no canonicalization ambiguity). The secret is the API-tier
+ * OAuth-state secret (see `apps/api/src/utils/oauth-state-secret.ts`); signing stays server-side so
+ * the callback can trust the deploymentId without a Bearer.
+ */
+export function buildSignedState(
+  deploymentId: string,
+  secret: string,
+  issuedAtMs: number = Date.now(),
+): string {
+  const payloadB64 = Buffer.from(`${deploymentId}:${issuedAtMs.toString(36)}`, "utf8").toString(
+    "base64url",
+  );
+  const sig = createHmac("sha256", secret).update(payloadB64).digest("base64url");
+  return `${payloadB64}.${sig}`;
+}
+
+/**
+ * Verify an HMAC-signed OAuth `state`. Returns the bound `deploymentId`, or `null` if the state is
+ * malformed, the signature does not match (constant-time compare), or the issued-at is outside
+ * `[now - maxAgeMs, now]`. Never throws on attacker-controlled input.
+ */
+export function verifySignedState(
+  state: string,
+  secret: string,
+  maxAgeMs: number = STATE_MAX_AGE_MS,
+): { deploymentId: string } | null {
+  const parts = state.split(".");
+  if (parts.length !== 2) return null;
+  const [payloadB64, sig] = parts as [string, string];
+  if (!payloadB64 || !sig) return null;
+
+  const expected = createHmac("sha256", secret).update(payloadB64).digest("base64url");
+  const sigBuf = Buffer.from(sig);
+  const expectedBuf = Buffer.from(expected);
+  // Length-guard before timingSafeEqual, which throws on unequal-length buffers.
+  if (sigBuf.length !== expectedBuf.length) return null;
+  if (!timingSafeEqual(sigBuf, expectedBuf)) return null;
+
+  const payload = Buffer.from(payloadB64, "base64url").toString("utf8");
+  const sep = payload.lastIndexOf(":");
+  if (sep < 1) return null;
+  const deploymentId = payload.slice(0, sep);
+  const issuedAt = parseInt(payload.slice(sep + 1), 36);
+  if (!Number.isFinite(issuedAt)) return null;
+  const age = Date.now() - issuedAt;
+  if (age < 0 || age > maxAgeMs) return null;
+
+  return { deploymentId };
 }
 
 /**

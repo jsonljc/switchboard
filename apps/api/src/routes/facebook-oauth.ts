@@ -2,6 +2,8 @@
 import type { FastifyPluginAsync } from "fastify";
 import {
   buildAuthorizationUrl,
+  buildSignedState,
+  verifySignedState,
   exchangeCodeForToken,
   exchangeForLongLivedToken,
   listAdAccounts,
@@ -15,18 +17,24 @@ import {
 } from "@switchboard/db";
 import { assertOrgAccess, resolveCallerOrgId } from "../utils/org-access.js";
 import { resolveMetaOAuthConfig } from "../utils/meta-oauth-config.js";
+import { resolveOAuthStateSecret } from "../utils/oauth-state-secret.js";
 
 function getOAuthConfig(): FacebookOAuthConfig {
   return resolveMetaOAuthConfig(process.env);
 }
 
 export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
-  // GET /api/connections/facebook/authorize — redirect to Facebook OAuth dialog
+  // GET /api/connections/facebook/authorize — mint a signed Facebook OAuth authorize URL.
+  // Bearer-authed: the dashboard server-proxies this with the operator's key so we can verify the
+  // caller's org owns the deployment BEFORE signing a state for it (Q2 / connection-fixation). The
+  // browser is then redirected (by the dashboard) to the returned URL; the callback is the exempt leg.
   app.get<{ Querystring: { deploymentId?: string } }>(
     "/facebook/authorize",
     {
       schema: {
-        description: "Redirect to Facebook OAuth dialog for ad account connection.",
+        description:
+          "Mint a signed Facebook OAuth authorize URL for a deployment the caller's org owns. " +
+          "Returns { authorizeUrl }.",
         tags: ["Connections", "Facebook OAuth"],
       },
     },
@@ -38,10 +46,25 @@ export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
           .send({ error: "deploymentId query parameter is required", statusCode: 400 });
       }
 
+      if (!app.prisma) {
+        return reply.code(503).send({ error: "Database not available", statusCode: 503 });
+      }
+
+      // Gate the deployment against the authenticated org BEFORE minting a state. assertOrgAccess
+      // sends the 403 (foreign / unscoped) or relies on the auth wall for 401 (no Bearer).
+      const deployment = await new PrismaDeploymentStore(app.prisma).findById(deploymentId);
+      if (!deployment) {
+        return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+      }
+      if (!assertOrgAccess(request, deployment.organizationId, reply)) {
+        return;
+      }
+
       try {
         const config = getOAuthConfig();
-        const url = buildAuthorizationUrl(config, deploymentId);
-        return reply.redirect(url);
+        const state = buildSignedState(deploymentId, resolveOAuthStateSecret(process.env));
+        const authorizeUrl = buildAuthorizationUrl(config, state);
+        return reply.send({ authorizeUrl });
       } catch (err) {
         app.log.error(err, "Failed to build Facebook authorization URL");
         return reply.code(500).send({ error: "OAuth configuration error", statusCode: 500 });
@@ -66,10 +89,10 @@ export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      const { code, state: deploymentId, error, error_description } = request.query;
+      const { code, state, error, error_description } = request.query;
 
       if (error) {
-        app.log.warn({ error, error_description, deploymentId }, "Facebook OAuth error callback");
+        app.log.warn({ error, error_description }, "Facebook OAuth error callback");
         return reply.code(400).send({
           error: "Facebook OAuth denied",
           detail: error_description ?? error,
@@ -77,15 +100,30 @@ export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      if (!code || !deploymentId) {
+      if (!code || !state) {
         return reply.code(400).send({ error: "Missing code or state parameter", statusCode: 400 });
       }
+
+      // Auth-exempt leg: no Bearer (Facebook controls this redirect). Trust ONLY the signed state —
+      // verify the HMAC + expiry, then derive the deploymentId; the deployment's own org is the
+      // binding (Q1). A forged / tampered / expired / replayed state is rejected with 400.
+      const verified = verifySignedState(state, resolveOAuthStateSecret(process.env));
+      if (!verified) {
+        return reply.code(400).send({ error: "Invalid or expired OAuth state", statusCode: 400 });
+      }
+      const { deploymentId } = verified;
 
       if (!app.prisma) {
         return reply.code(503).send({ error: "Database not available", statusCode: 503 });
       }
 
       try {
+        // Confirm the deployment still exists; it is the org-binding anchor for the connection.
+        const deployment = await new PrismaDeploymentStore(app.prisma).findById(deploymentId);
+        if (!deployment) {
+          return reply.code(404).send({ error: "Deployment not found", statusCode: 404 });
+        }
+
         const config = getOAuthConfig();
 
         // Exchange code for short-lived token
