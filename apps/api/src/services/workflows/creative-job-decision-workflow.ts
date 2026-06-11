@@ -32,7 +32,8 @@ export function buildCreativeJobDecisionWorkflow(
       // failed job would emit an event no wait hears and report a misleading
       // success).
       const ugcDone = job.mode === "ugc" && (job.ugcPhase === "complete" || job.ugcFailure != null);
-      const polishedDone = job.mode !== "ugc" && job.currentStage === "complete";
+      const polishedDone =
+        job.mode !== "ugc" && (job.currentStage === "complete" || job.stageFailure != null);
       if (ugcDone || polishedDone || job.stoppedAt) {
         return {
           outcome: "failed",
