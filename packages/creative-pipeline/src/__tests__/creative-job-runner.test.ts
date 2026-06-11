@@ -94,9 +94,9 @@ describe("executeCreativePipeline", () => {
   it("runs all 5 stages when buyer approves each", async () => {
     await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
 
-    // 1 load-job + 5 stage runs + 5 save calls = 11 step.run calls
+    // 1 load-job + 1 load-production-tier + 5 stage runs + 5 save calls = 12 step.run calls
     // + 4 waitForEvent calls (no wait after production)
-    expect(step.run).toHaveBeenCalledTimes(11);
+    expect(step.run).toHaveBeenCalledTimes(12);
     expect(step.waitForEvent).toHaveBeenCalledTimes(4);
   });
 
@@ -394,7 +394,100 @@ describe("slice-2 feed-back threading (taste provider + measured history)", () =
   it("absent provider changes nothing (no extra step.run)", async () => {
     const step = mkStep();
     await executeCreativePipeline(jobData, step as never, mkStore(null) as never, llmConfig);
-    // 1 load-job + 5 stage runs + 5 saves = 11 (unchanged from the M1 contract)
-    expect(step.run).toHaveBeenCalledTimes(11);
+    // 1 load-job + 1 load-production-tier + 5 stage runs + 5 saves = 12
+    expect(step.run).toHaveBeenCalledTimes(12);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D1-F2 regression: the operator's production-tier choice is written AFTER the
+// load-job snapshot is memoized, so the production stage must re-read it from
+// authoritative state instead of the snapshot. The default createMockStep is
+// pass-through (no replay memoization), which is precisely why this defect went
+// untested; this block memoizes step outputs the way Inngest replays them.
+// ---------------------------------------------------------------------------
+describe("productionTier propagation: replay-safe re-read [D1-F2]", () => {
+  const llmConfig = { apiKey: "test-key" };
+  const jobData = {
+    jobId: "job_1",
+    taskId: "task_1",
+    organizationId: "org_1",
+    deploymentId: "dep_1",
+  };
+
+  // Inngest memoizes each step's first-run output and replays it verbatim. A
+  // stale-snapshot read passes under a pass-through mock but fails here, because
+  // a correct fix must observe state written after load-job was memoized, and
+  // must do so under a fresh, distinctly-named step (reusing "load-job" returns
+  // the cached null and fails this test too).
+  function createReplayStep() {
+    const memo = new Map<string, unknown>();
+    return {
+      run: vi.fn(async (name: string, fn: () => unknown) => {
+        if (memo.has(name)) return memo.get(name);
+        const result = await fn();
+        memo.set(name, result);
+        return result;
+      }),
+      waitForEvent: vi.fn(
+        async () => ({ data: { action: "continue" } }) as { data: { action: string } } | null,
+      ),
+    };
+  }
+
+  it("renders the tier persisted after the load-job snapshot, not stale basic", async () => {
+    const { runStage } = await import("../stages/run-stage.js");
+    const mockRunStage = runStage as ReturnType<typeof vi.fn>;
+    mockRunStage.mockClear();
+    mockRunStage.mockResolvedValue({ placeholder: true });
+
+    // Invariant: load-job is memoized with productionTier null; before production
+    // begins the persisted row reads "pro"; production must use the fresh value.
+    // The storyboard-gate decision persists the tier once currentStage advances
+    // to "storyboard", i.e. when the scripts output is saved, which is the
+    // updateStage(stage: "storyboard") call below.
+    let dbTier: "basic" | "pro" | null = null;
+    const findById = vi.fn(async () => ({
+      id: "job_1",
+      taskId: "task_1",
+      organizationId: "org_1",
+      deploymentId: "dep_1",
+      productDescription: "AI scheduling tool",
+      targetAudience: "Small business owners",
+      platforms: ["meta"],
+      brandVoice: null,
+      productImages: [],
+      references: [],
+      pastPerformance: null,
+      generateReferenceImages: false,
+      currentStage: "trends",
+      stageOutputs: {},
+      productionTier: dbTier, // read at call time → the load-job snapshot stays null
+      stoppedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+    const jobStore = {
+      findById,
+      updateStage: vi.fn(
+        async (_org: string, _id: string, stage: string, outputs: Record<string, unknown>) => {
+          if (stage === "storyboard") dbTier = "pro";
+          return { id: "job_1", currentStage: stage, stageOutputs: outputs };
+        },
+      ),
+      stop: vi.fn(),
+      setDurableAsset: vi.fn(),
+    };
+
+    await executeCreativePipeline(
+      jobData,
+      createReplayStep() as never,
+      jobStore as never,
+      llmConfig,
+    );
+
+    const productionCall = mockRunStage.mock.calls.find((call) => call[0] === "production");
+    expect(productionCall).toBeDefined();
+    expect((productionCall?.[1] as { productionTier?: string }).productionTier).toBe("pro");
   });
 });

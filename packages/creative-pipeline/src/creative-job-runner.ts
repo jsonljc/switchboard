@@ -103,6 +103,25 @@ export async function executeCreativePipeline(
   let stageOutputs: Record<string, unknown> = (job.stageOutputs ?? {}) as Record<string, unknown>;
 
   for (const stage of STAGE_ORDER) {
+    // production is the only consumer of productionTier and the only stage gated
+    // on the operator's tier choice. That choice is written by the storyboard-gate
+    // decision (creative-job-decision-workflow) AFTER the load-job snapshot above
+    // is captured, and Inngest memoizes load-job across replays, so reading
+    // job.productionTier here always yields basic: the pro assembly path never
+    // runs, durableAssetUrl is never set, and polished publish always fails its
+    // CREATIVE_ASSET_NOT_DURABLE precondition. Re-read the persisted tier in a
+    // fresh, distinctly-named step the first time we reach production (after the
+    // storyboard-gate wait has resolved); the string result is JSON-memoized for
+    // later replays. This heals new and not-yet-rendered runs, not a run whose
+    // stage-production step already memoized a basic output.
+    const productionTier =
+      stage === "production"
+        ? await step.run("load-production-tier", async () => {
+            const current = await jobStore.findById(eventData.jobId);
+            return current?.productionTier ?? "basic";
+          })
+        : undefined;
+
     // Run the stage
     const output = await step.run(`stage-${stage}`, () =>
       runStage(stage, {
@@ -123,7 +142,7 @@ export async function executeCreativePipeline(
         openaiApiKey: imageConfig?.openaiApiKey,
         generateReferenceImages: job.generateReferenceImages,
         imageGenerator,
-        productionTier: job.productionTier ?? "basic",
+        ...(productionTier ? { productionTier } : {}),
         assetStorage,
       }),
     );
