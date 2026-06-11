@@ -89,6 +89,7 @@ import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
 import { buildRileyCredentialResolver } from "./riley-credential-resolver.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
+import { resolveMetaOAuthConfig } from "../utils/meta-oauth-config.js";
 import {
   createDlqRetentionPurgeCron,
   resolveRetentionWindows,
@@ -610,11 +611,10 @@ export async function registerInngest(
       const { refreshTokenIfNeeded } = await import("@switchboard/ad-optimizer");
       return refreshTokenIfNeeded(config, currentToken, expiresAt);
     },
-    getOAuthConfig: () => ({
-      appId: process.env["META_APP_ID"] ?? "",
-      appSecret: process.env["META_APP_SECRET"] ?? "",
-      redirectUri: process.env["META_OAUTH_REDIRECT_URI"] ?? "",
-    }),
+    // Resolve through the shared resolver so the cron honors the same META_* canonical / FACEBOOK_*
+    // deprecated-alias precedence the OAuth route uses (D10-4); throwing on missing config is fine
+    // here, the per-connection refresh catch turns it into a needs_reauth + operator alert.
+    getOAuthConfig: () => resolveMetaOAuthConfig(process.env),
     notifyOperator: async (message, context) => {
       const asString = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
       await asyncFailure.operatorAlerter?.alert({

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveMetaOAuthConfig } from "../facebook-oauth.js";
+import { resolveMetaOAuthConfig } from "../meta-oauth-config.js";
 
 describe("resolveMetaOAuthConfig", () => {
   it("prefers the canonical META_* vars over the deprecated FACEBOOK_* aliases", () => {
@@ -21,6 +21,8 @@ describe("resolveMetaOAuthConfig", () => {
   });
 
   it("falls back to the FACEBOOK_* aliases when META_* are unset (back-compat)", () => {
+    // This is the leg the cron now also honors: a FACEBOOK_*-only deployment must resolve a usable
+    // config instead of throwing and falsely marking every connection needs_reauth.
     const config = resolveMetaOAuthConfig({
       FACEBOOK_APP_ID: "fb_app",
       FACEBOOK_APP_SECRET: "fb_secret",
