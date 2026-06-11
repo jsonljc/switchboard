@@ -43,6 +43,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: ^19
         version: 19.8.1
+      '@switchboard/db':
+        specifier: workspace:*
+        version: link:packages/db
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:packages/schemas

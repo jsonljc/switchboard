@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaDbClient } from "../prisma-db.js";
 import {
   buildRileyPauseAllowPolicyInput,
   buildRileyPauseApprovalPolicyInput,
@@ -32,9 +32,9 @@ export const AD_OPTIMIZER_LISTING_SLUG = "ad-optimizer";
  * error if the listing is missing so the seed fails loudly.
  */
 export async function seedRileyAdOptimizerDeployment(
-  prisma: PrismaClient,
+  prisma: PrismaDbClient,
   orgId: string,
-): Promise<void> {
+): Promise<{ deploymentId: string }> {
   const listing = await prisma.agentListing.findUnique({
     where: { slug: AD_OPTIMIZER_LISTING_SLUG },
     select: { id: true },
@@ -63,7 +63,7 @@ export async function seedRileyAdOptimizerDeployment(
     connectionIds: [] as string[],
   };
 
-  await prisma.agentDeployment.upsert({
+  const deployment = await prisma.agentDeployment.upsert({
     where: {
       organizationId_listingId: { organizationId: orgId, listingId: listing.id },
     },
@@ -92,4 +92,6 @@ export async function seedRileyAdOptimizerDeployment(
     create: { id: pauseApprovalId, ...pauseApprovalData },
     update: pauseApprovalData,
   });
+
+  return { deploymentId: deployment.id };
 }
