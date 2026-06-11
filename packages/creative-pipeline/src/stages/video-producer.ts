@@ -148,7 +148,7 @@ export async function runVideoProducer(
   // guard: with no clips there is nothing already rendered to re-buy on retry,
   // so partial-success checkpointing stays a separate slice.
   if (clips.length === 0) {
-    const reasons = errors.map((e) => e.message).join("; ");
+    const reasons = [...new Set(errors.map((e) => e.message))].join("; ");
     throw new Error(
       `Video production produced zero playable clips for job ${input.jobId} ` +
         `(${errors.length} scene generation failure(s))${reasons ? `: ${reasons}` : ""}`,
