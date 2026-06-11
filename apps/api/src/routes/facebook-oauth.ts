@@ -15,18 +15,30 @@ import {
 } from "@switchboard/db";
 import { assertOrgAccess } from "../utils/org-access.js";
 
-function getOAuthConfig(): FacebookOAuthConfig {
-  const appId = process.env["FACEBOOK_APP_ID"];
-  const appSecret = process.env["FACEBOOK_APP_SECRET"];
-  const redirectUri = process.env["FACEBOOK_REDIRECT_URI"];
+/**
+ * Resolve the Meta OAuth app credentials. The canonical names are META_* (the exact vars the
+ * token-refresh cron already reads, bootstrap/inngest.ts), so authorize/callback and the refresh
+ * cron read one credential prefix (D10-4). FACEBOOK_* are accepted as deprecated aliases so
+ * existing deployments keep working for one release.
+ */
+export function resolveMetaOAuthConfig(
+  env: Record<string, string | undefined>,
+): FacebookOAuthConfig {
+  const appId = env["META_APP_ID"] ?? env["FACEBOOK_APP_ID"];
+  const appSecret = env["META_APP_SECRET"] ?? env["FACEBOOK_APP_SECRET"];
+  const redirectUri = env["META_OAUTH_REDIRECT_URI"] ?? env["FACEBOOK_REDIRECT_URI"];
 
   if (!appId || !appSecret || !redirectUri) {
     throw new Error(
-      "Missing Facebook OAuth config. Set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, FACEBOOK_REDIRECT_URI.",
+      "Missing Meta OAuth config. Set META_APP_ID, META_APP_SECRET, META_OAUTH_REDIRECT_URI.",
     );
   }
 
   return { appId, appSecret, redirectUri };
+}
+
+function getOAuthConfig(): FacebookOAuthConfig {
+  return resolveMetaOAuthConfig(process.env);
 }
 
 export const facebookOAuthRoutes: FastifyPluginAsync = async (app) => {
