@@ -827,6 +827,12 @@ export async function buildServer() {
       receiptWriter: {
         write: (input, tx) => prismaReceipts.mint(input, tx as never).then(() => {}),
       },
+      // F3: anchor `verified` to a server-side PSP fetch-back via the per-org
+      // payment port. Without it, payment.record_verified is not registered.
+      paymentVerifier: app.paymentPortFactory
+        ? (orgId: string, externalReference: string) =>
+            app.paymentPortFactory!(orgId).then((port) => port.retrievePayment(externalReference))
+        : undefined,
       logger: app.log,
     });
   }
