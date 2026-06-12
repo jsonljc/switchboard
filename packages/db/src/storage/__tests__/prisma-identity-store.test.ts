@@ -206,10 +206,11 @@ describe("PrismaIdentityStore", () => {
   });
 
   describe("listDelegationRules", () => {
-    it("returns mapped delegation rules", async () => {
+    it("issues an unfiltered query and maps rows when no organization is given", async () => {
       prisma.delegationRule.findMany.mockResolvedValue([TEST_DELEGATION_ROW]);
 
       const result = await store.listDelegationRules();
+
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
         id: "rule_1",
@@ -218,7 +219,28 @@ describe("PrismaIdentityStore", () => {
         scope: "ad.create",
         expiresAt: NOW,
       });
-      expect(prisma.delegationRule.findMany).toHaveBeenCalled();
+      // No org means no org filter on the query (parity with the in-memory store return-all).
+      const callArg = prisma.delegationRule.findMany.mock.calls[0]?.[0];
+      expect(callArg?.where).toBeUndefined();
+    });
+
+    it("scopes the query to the grantor's organization when an org is given", async () => {
+      prisma.delegationRule.findMany.mockResolvedValue([TEST_DELEGATION_ROW]);
+
+      const result = await store.listDelegationRules("orgA");
+
+      // Tenant isolation (audit F8): only the relevant clinic's delegation rules are loaded.
+      // Under mocked Prisma we assert the org-scoped query shape; the DB applies the filter.
+      expect(prisma.delegationRule.findMany).toHaveBeenCalledWith({
+        where: { grantor: { organizationId: "orgA" } },
+      });
+      expect(result[0]).toEqual({
+        id: "rule_1",
+        grantor: "principal_1",
+        grantee: "principal_2",
+        scope: "ad.create",
+        expiresAt: NOW,
+      });
     });
   });
 
