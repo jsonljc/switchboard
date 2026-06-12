@@ -31,7 +31,7 @@ export interface DepositLinkWiringDeps {
    */
   paymentPortFactory: PaymentPortFactory;
   /**
-   * PrismaBookingStore.findById -- org-UNAWARE (takes only bookingId). Org
+   * PrismaBookingStore.findById is org-UNAWARE (takes only bookingId). Org
    * isolation is enforced in the adapter below, never delegated to the tool.
    */
   findBookingById: (bookingId: string) => Promise<BookingRow | null>;

@@ -59,7 +59,7 @@ interface SkillModeBootstrapDeps {
    * are persisted but not traced.
    */
   /**
-   * Optional per-org PaymentPort factory -- the SAME instance app.ts decorates as
+   * Optional per-org PaymentPort factory: the SAME instance app.ts decorates as
    * `app.paymentPortFactory`, so the Noop in-process issued map round-trips with
    * the payments webhook's retrievePayment. When provided, Alex gets a
    * `deposit-link` tool to issue a deposit for a confirmed booking. Omitted in

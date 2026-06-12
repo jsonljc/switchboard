@@ -594,7 +594,7 @@ export async function buildServer() {
     app.decorate("orgAgentEnablementStore", orgAgentEnablementStore);
   }
 
-  // Per-org PaymentPort factory -- constructed above and shared with Alex's deposit-link
+  // Per-org PaymentPort factory, constructed above and shared with Alex's deposit-link
   // tool so the Noop issued map round-trips with the webhook's retrievePayment.
   // The /api/webhooks/payments/webhook route 503s when this is missing.
   if (paymentPortFactory) {
