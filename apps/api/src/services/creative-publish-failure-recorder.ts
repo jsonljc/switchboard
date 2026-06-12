@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { makeOnFailureHandler, type AsyncFailureContext } from "@switchboard/core";
+import type { WorkTraceStore, ExecutionError } from "@switchboard/core/platform";
 import { inngestClient } from "@switchboard/creative-pipeline";
 import { CREATIVE_META_PUBLISH_STATUS, type CreativeJob } from "@switchboard/schemas";
 import type { PrismaCreativeJobStore } from "@switchboard/db";
@@ -15,7 +16,7 @@ export interface StepTools {
  * { jobId, organizationId }). Only jobId is essential; the rest is descriptive.
  */
 const FailureEventSchema = z.object({
-  trigger: z.object({ jobId: z.string() }).optional(),
+  trigger: z.object({ jobId: z.string(), workUnitId: z.string().optional() }).optional(),
   code: z.string().optional(),
   message: z.string().optional(),
   occurredAt: z.string().optional(),
@@ -24,6 +25,7 @@ const FailureEventSchema = z.object({
 
 export interface CreativePublishFailureRecorderDeps {
   jobStore: Pick<PrismaCreativeJobStore, "findById" | "updatePublishFields">;
+  traceStore: Pick<WorkTraceStore, "getByWorkUnitId" | "update"> | null;
   failure: AsyncFailureContext;
 }
 
@@ -51,6 +53,121 @@ function isPublishResolved(job: CreativeJob): boolean {
   );
 }
 
+// Must match the intent the publish dispatcher is registered under
+// (bootstrap/contained-workflows.ts). Used to reject a workUnitId that resolves to
+// a non-publish trace of the same job (submit/continue share parameters.jobId).
+const CREATIVE_PUBLISH_INTENT = "creative.job.publish";
+const PUBLISH_FAILED_SUMMARY =
+  "Meta publish failed after retries; the paused draft package was not created.";
+const DEAD_LETTER_FALLBACK_CODE = "CREATIVE_PUBLISH_DEAD_LETTER";
+const DEAD_LETTER_FALLBACK_MESSAGE = "Creative publish dead-lettered after retry exhaustion.";
+
+/**
+ * Both shapes of the store's lock rejection share this discriminator: the
+ * `{ ok: false, code: "WORK_TRACE_LOCKED" }` production result and the
+ * WorkTraceLockedError thrown when NODE_ENV is not production. Matching on the
+ * code (not instanceof) avoids cross-package class-identity pitfalls.
+ */
+function isWorkTraceLockedError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "WORK_TRACE_LOCKED"
+  );
+}
+
+/**
+ * Reconcile the canonical WorkTrace for a dead-lettered publish (D5-F1).
+ * `executeAfterApproval` seals the trace at outcome "queued" when the dispatcher
+ * hands off to async; left there forever it is a substrate lie (a terminally-
+ * failed publish whose canonical record reads as still-in-flight). Flip the
+ * THIS-ATTEMPT trace queued -> failed (a successful re-publish parks under a
+ * different workUnitId/trace, so this never mislabels a success).
+ *
+ * `workUnitId` comes from a replayable, possibly stale or malformed dead-letter
+ * event, so it is never trusted as a blind mutation pointer: the resolved trace
+ * must be THIS org's PUBLISH trace for THIS job (org + parameters.jobId + intent)
+ * before any write. Idempotent + no-clobber via the trace's own queued-gate; the
+ * lock state machine also refuses a terminal clobber.
+ */
+export async function reconcilePublishTraceFailed(
+  traceStore: Pick<WorkTraceStore, "getByWorkUnitId" | "update">,
+  args: {
+    workUnitId: string;
+    organizationId: string;
+    jobId: string;
+    error: ExecutionError;
+    completedAt?: string;
+  },
+): Promise<void> {
+  const existing = await traceStore.getByWorkUnitId(args.workUnitId);
+  if (!existing) {
+    console.warn(
+      `[creative-publish-failure-recorder] no WorkTrace ${args.workUnitId}; cannot reconcile publish outcome`,
+    );
+    return;
+  }
+  const trace = existing.trace;
+
+  // Identity guards: a poisoned, stale, or malformed pointer must never become a
+  // cross-work-unit mutation primitive. Any mismatch -> no-op, logged loudly.
+  if (trace.organizationId !== args.organizationId) {
+    console.error(
+      `[creative-publish-failure-recorder] WorkTrace ${args.workUnitId} org ${trace.organizationId} != job org ${args.organizationId}; refusing cross-tenant reconcile`,
+    );
+    return;
+  }
+  if (trace.intent !== CREATIVE_PUBLISH_INTENT) {
+    console.error(
+      `[creative-publish-failure-recorder] WorkTrace ${args.workUnitId} intent ${trace.intent} != ${CREATIVE_PUBLISH_INTENT}; refusing wrong-action reconcile`,
+    );
+    return;
+  }
+  if (trace.parameters?.jobId !== args.jobId) {
+    console.error(
+      `[creative-publish-failure-recorder] WorkTrace ${args.workUnitId} jobId ${String(
+        trace.parameters?.jobId,
+      )} != ${args.jobId}; refusing wrong-job reconcile`,
+    );
+    return;
+  }
+
+  // Idempotency + no-clobber: only a still-"queued" trace is reconciled.
+  if (trace.outcome !== "queued") return;
+
+  try {
+    const result = await traceStore.update(
+      args.workUnitId,
+      {
+        outcome: "failed",
+        error: args.error,
+        executionSummary: PUBLISH_FAILED_SUMMARY,
+        ...(args.completedAt ? { completedAt: args.completedAt } : {}),
+      },
+      { caller: "creative-publish-failure-recorder", organizationId: args.organizationId },
+    );
+    if (!result.ok) {
+      // Production lock-rejection shape: a concurrent reconcile sealed the trace
+      // terminal between our queued read and this write. Benign (already
+      // resolved); log and move on.
+      console.warn(
+        `[creative-publish-failure-recorder] WorkTrace ${args.workUnitId} locked before reconcile (${result.reason}); left unchanged`,
+      );
+    }
+  } catch (err) {
+    // Non-production lock-rejection shape: the store THROWS WorkTraceLockedError
+    // rather than returning { ok: false }. Same benign concurrent-seal conflict,
+    // so swallow it. Any OTHER error is genuinely unexpected: rethrow so Inngest
+    // retries (loud and self-healing), and the store has already recorded a
+    // work_trace_locked_violation for the lock case.
+    if (!isWorkTraceLockedError(err)) throw err;
+    console.warn(
+      `[creative-publish-failure-recorder] WorkTrace ${args.workUnitId} locked before reconcile (threw in non-production); left unchanged`,
+    );
+  }
+}
+
 /**
  * Consume a `creative.publish.failed` dead-letter and mark the job so a
  * retry-exhausted Meta publish is observable to the operator (D9-F3): the read
@@ -63,10 +180,11 @@ function isPublishResolved(job: CreativeJob): boolean {
 export async function executeCreativePublishFailureRecorder(
   eventData: unknown,
   step: StepTools,
-  deps: Pick<CreativePublishFailureRecorderDeps, "jobStore">,
+  deps: Pick<CreativePublishFailureRecorderDeps, "jobStore" | "traceStore">,
 ): Promise<void> {
   const parsed = FailureEventSchema.safeParse(eventData);
-  const jobId = parsed.success ? parsed.data.trigger?.jobId : undefined;
+  const data = parsed.success ? parsed.data : undefined;
+  const jobId = data?.trigger?.jobId;
   if (!jobId) {
     // No entity id on the dead-letter (already audited by makeOnFailureHandler);
     // nothing actionable.
@@ -75,11 +193,42 @@ export async function executeCreativePublishFailureRecorder(
 
   const job = await step.run("load-job", () => deps.jobStore.findById(jobId));
   if (!job) return; // vanished
-  if (isPublishResolved(job)) return; // already parked or already marked failed
 
-  await step.run("mark-publish-failed", () =>
-    deps.jobStore.updatePublishFields(job.organizationId, jobId, {
-      metaPublishStatus: CREATIVE_META_PUBLISH_STATUS.publishFailed,
+  // Job-field honesty (operator surface, #996/#1002). Idempotent at the JOB level:
+  // skip if the job already resolved (parked success, or a prior dead-letter mark).
+  if (!isPublishResolved(job)) {
+    await step.run("mark-publish-failed", () =>
+      deps.jobStore.updatePublishFields(job.organizationId, jobId, {
+        metaPublishStatus: CREATIVE_META_PUBLISH_STATUS.publishFailed,
+      }),
+    );
+  }
+
+  // Canonical-trace honesty (D5-F1). Runs INDEPENDENT of the job-state guard above:
+  // a job already marked publish_failed must never suppress this and preserve the
+  // "queued forever" trace lie. Idempotency/no-clobber is the trace's own queued-
+  // gate (inside reconcilePublishTraceFailed), not the job guard. Org comes from the
+  // loaded row, never the event. Skipped (logged) when the store is unwired or the
+  // dead-letter predates the workUnitId passthrough.
+  const { traceStore } = deps;
+  const workUnitId = data?.trigger?.workUnitId;
+  if (!traceStore) return;
+  if (!workUnitId) {
+    console.warn(
+      `[creative-publish-failure-recorder] dead-letter for job ${jobId} carried no workUnitId; canonical WorkTrace not reconciled`,
+    );
+    return;
+  }
+  await step.run("reconcile-publish-trace", () =>
+    reconcilePublishTraceFailed(traceStore, {
+      workUnitId,
+      organizationId: job.organizationId,
+      jobId: job.id,
+      error: {
+        code: data?.code ?? DEAD_LETTER_FALLBACK_CODE,
+        message: data?.message ?? DEAD_LETTER_FALLBACK_MESSAGE,
+      },
+      completedAt: data?.occurredAt,
     }),
   );
 }

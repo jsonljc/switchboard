@@ -12,7 +12,7 @@ function makeStore(row: Record<string, unknown> | null) {
   return { findById: vi.fn(async () => (row ? { ...row } : null)) };
 }
 function workUnit(organizationId = ORG) {
-  return { organizationId, parameters: { jobId: JOB } } as never;
+  return { id: "wu_1", organizationId, parameters: { jobId: JOB } } as never;
 }
 const PENDING = {
   id: JOB,
@@ -32,7 +32,7 @@ describe("buildCreativePublishWorkflow (dispatcher)", () => {
     );
     expect(inngestSend).toHaveBeenCalledWith({
       name: "creative-pipeline/publish.requested",
-      data: { jobId: JOB, organizationId: ORG },
+      data: { jobId: JOB, organizationId: ORG, workUnitId: "wu_1" },
     });
     expect(res.outcome).toBe("queued");
     expect(res.outputs).toMatchObject({ jobId: JOB });

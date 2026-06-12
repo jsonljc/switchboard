@@ -1252,7 +1252,11 @@ export async function registerInngest(
       createDlqRetentionPurgeCron(dlqRetentionPurgeDeps),
       createCreativePublishFunction(creativePublishFunctionDeps),
       createCreativeFailureRecorder({ jobStore, failure: asyncFailure }),
-      createCreativePublishFailureRecorder({ jobStore, failure: asyncFailure }),
+      createCreativePublishFailureRecorder({
+        jobStore,
+        traceStore: app.workTraceStore,
+        failure: asyncFailure,
+      }),
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
