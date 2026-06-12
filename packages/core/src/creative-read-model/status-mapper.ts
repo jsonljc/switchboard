@@ -1,4 +1,9 @@
-import { RealismScoreSchema, type CreativeJob } from "@switchboard/schemas";
+import {
+  RealismScoreSchema,
+  CREATIVE_META_PUBLISH_STATUS,
+  type CreativeJob,
+  type CreativeMetaPublishStatus,
+} from "@switchboard/schemas";
 import type {
   MiraCreativeStatus,
   MiraReviewAction,
@@ -67,6 +72,23 @@ export function mapCreativeJobToMiraStatus(job: CreativeJob): MiraCreativeStatus
   if (job.currentStage === "complete") return "draft_ready";
   if (hasKeys(job.stageOutputs)) return "awaiting_review";
   return "in_progress";
+}
+
+/**
+ * Map the persisted free-form `metaPublishStatus` to the typed publish lifecycle
+ * the read model exposes (D9-F3). Only the two known values surface; null, an
+ * unattempted publish, or a future/unknown string reads as "no publish state"
+ * so a stray value never renders as a publish badge. Orthogonal to
+ * MiraCreativeStatus: this is the publish axis, not the render axis.
+ */
+export function derivePublishStatus(job: CreativeJob): CreativeMetaPublishStatus | undefined {
+  if (job.metaPublishStatus === CREATIVE_META_PUBLISH_STATUS.parkedPaused) {
+    return CREATIVE_META_PUBLISH_STATUS.parkedPaused;
+  }
+  if (job.metaPublishStatus === CREATIVE_META_PUBLISH_STATUS.publishFailed) {
+    return CREATIVE_META_PUBLISH_STATUS.publishFailed;
+  }
+  return undefined;
 }
 
 export function deriveReviewAction(status: MiraCreativeStatus): MiraReviewAction {

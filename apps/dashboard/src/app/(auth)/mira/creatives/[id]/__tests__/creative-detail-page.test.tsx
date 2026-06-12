@@ -156,6 +156,34 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
     expect(publishTexts).toHaveLength(0);
   });
 
+  it("surfaces a publish-failed notice when the approved publish dead-lettered (D9-F3)", () => {
+    mockCreative.mockReturnValue({
+      data: summary({
+        status: "draft_ready",
+        draft: { videoUrl: "https://x/p.mp4" },
+        publishStatus: "publish_failed",
+      }),
+      isLoading: false,
+      isError: false,
+    });
+    render(<MiraCreativeDetailPage id="j" />);
+    expect(screen.getByText(/Publishing to Meta failed/i)).toBeInTheDocument();
+    expect(screen.getByText(/no paused draft was created in Ads Manager/i)).toBeInTheDocument();
+  });
+
+  it("shows no publish-failed notice for a parked (successful) or not-yet-published job", () => {
+    for (const publishStatus of ["parked_paused", undefined] as const) {
+      mockCreative.mockReturnValue({
+        data: summary({ draft: { videoUrl: "https://x/p.mp4" }, publishStatus }),
+        isLoading: false,
+        isError: false,
+      });
+      const { unmount } = render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.queryByText(/Publishing to Meta failed/i)).toBeNull();
+      unmount();
+    }
+  });
+
   it("continue requires confirm before mutating", () => {
     mockCreative.mockReturnValue({
       data: summary({

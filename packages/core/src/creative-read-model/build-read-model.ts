@@ -5,6 +5,7 @@ import {
   deriveTitle,
   deriveDraft,
   deriveQa,
+  derivePublishStatus,
 } from "./status-mapper.js";
 import { derivePerformance } from "./performance-projection.js";
 import type { MiraCreativeJobSummary, MiraCreativeReadModel } from "./types.js";
@@ -31,6 +32,7 @@ export function buildMiraCreativeReadModel(
     const draft = deriveDraft(job);
     const performance = derivePerformance(job);
     const qa = deriveQa(job);
+    const publishStatus = derivePublishStatus(job);
     return {
       id: job.id,
       title: deriveTitle(job),
@@ -47,6 +49,7 @@ export function buildMiraCreativeReadModel(
       ...(job.mode === "ugc" && typeof job.ugcPhase === "string" && job.ugcPhase
         ? { ugcPhase: job.ugcPhase }
         : {}),
+      ...(publishStatus ? { publishStatus } : {}),
     };
   });
 

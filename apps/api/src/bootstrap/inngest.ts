@@ -100,6 +100,7 @@ import {
   type CreativePublishFunctionDeps,
 } from "../services/creative-publish-function.js";
 import { createCreativeFailureRecorder } from "../services/creative-failure-recorder.js";
+import { createCreativePublishFailureRecorder } from "../services/creative-publish-failure-recorder.js";
 import { assertPublishable } from "../services/creative-publish-preconditions.js";
 import {
   buildRunReconciliation,
@@ -1251,6 +1252,7 @@ export async function registerInngest(
       createDlqRetentionPurgeCron(dlqRetentionPurgeDeps),
       createCreativePublishFunction(creativePublishFunctionDeps),
       createCreativeFailureRecorder({ jobStore, failure: asyncFailure }),
+      createCreativePublishFailureRecorder({ jobStore, failure: asyncFailure }),
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
