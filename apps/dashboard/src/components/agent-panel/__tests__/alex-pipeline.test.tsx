@@ -60,6 +60,13 @@ describe("AlexPipeline", () => {
     expect(screen.getByText("No active consultations")).toBeInTheDocument();
   });
 
+  it("singularizes the count noun at 1 (no '1 people')", () => {
+    data = vm([{ id: "c1", stage: "warm", name: "Maya R.", ctx: "warm lead" }]);
+    render(<AlexPipeline />);
+    expect(screen.getByText("1 person in pipeline")).toBeInTheDocument();
+    expect(screen.queryByText("1 people in pipeline")).not.toBeInTheDocument();
+  });
+
   it("renders the total count and tiles by stage", () => {
     data = vm([
       { id: "c1", stage: "hot", name: "Maya R.", ctx: "asked about Botox" },

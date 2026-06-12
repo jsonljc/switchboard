@@ -478,7 +478,7 @@ describe("AgentPanel state matrix", () => {
     renderAlexPanel();
     expect(screen.getByTestId("alex-pipeline")).toBeInTheDocument();
     expect(screen.getByTestId("alex-wins")).toBeInTheDocument();
-    expect(screen.getByText("1 people in pipeline")).toBeInTheDocument();
+    expect(screen.getByText("1 person in pipeline")).toBeInTheDocument();
     expect(screen.getByText(/Booked botox · \$450/)).toBeInTheDocument();
   });
 

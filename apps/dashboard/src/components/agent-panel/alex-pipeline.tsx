@@ -49,23 +49,28 @@ export function AlexPipeline() {
         </div>
       }
     >
-      {(vm) => (
-        <div className={styles.logSection} data-testid="alex-pipeline">
-          <div className={styles.logSectionH}>
-            <span className={styles.logSectionTitle}>
-              {`${vm.totalCount} ${vm.countNoun} in pipeline`}
-            </span>
+      {(vm) => {
+        // AlexPipeline is Alex-scoped, so countNoun is always the plural
+        // "people"; singularize at a count of 1 to avoid "1 people".
+        const noun = vm.totalCount === 1 ? "person" : vm.countNoun;
+        return (
+          <div className={styles.logSection} data-testid="alex-pipeline">
+            <div className={styles.logSectionH}>
+              <span className={styles.logSectionTitle}>
+                {`${vm.totalCount} ${noun} in pipeline`}
+              </span>
+            </div>
+            <div className={styles.apLog} role="list" aria-label="Pipeline">
+              {vm.tiles.slice(0, MAX_TILES).map((t) => (
+                <div key={t.id} className={styles.apLogRow} role="listitem">
+                  <span className={styles.apLogText}>{`${t.name} · ${t.ctx}`}</span>
+                  <span className={styles.apLogTime}>{STAGE_LABEL[t.stage]}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className={styles.apLog} role="list" aria-label="Pipeline">
-            {vm.tiles.slice(0, MAX_TILES).map((t) => (
-              <div key={t.id} className={styles.apLogRow} role="listitem">
-                <span className={styles.apLogText}>{`${t.name} · ${t.ctx}`}</span>
-                <span className={styles.apLogTime}>{STAGE_LABEL[t.stage]}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        );
+      }}
     </QueryStates>
   );
 }
