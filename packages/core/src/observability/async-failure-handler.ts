@@ -76,7 +76,7 @@ export interface OnFailureParams {
 // arg.event.data.event; the run id is arg.event.data.run_id; arg.error is the thrown Error.
 interface InngestOnFailureArg {
   error: unknown;
-  event?: { data?: { run_id?: string; event?: { name?: string } } };
+  event?: { data?: { run_id?: string; event?: { name?: string; data?: Record<string, unknown> } } };
 }
 
 /** Build a standard onFailure handler (spec §2). Never throws — failure handling
@@ -119,10 +119,17 @@ export function makeOnFailureHandler(params: OnFailureParams, ctx: AsyncFailureC
 
     // (b) dead-letter destination — domain event (spec §2b; optional for Class E).
     if (emitEvent && params.eventDomain) {
+      // Propagate the original trigger payload (e.g. { jobId, organizationId }) so a
+      // dead-letter consumer can act on the specific entity that failed; the envelope
+      // itself carries no entity id.
+      const trigger = arg.event?.data?.event?.data;
       try {
         await ctx.inngest.send({
           name: `${params.eventDomain}.failed`,
-          data: envelope as unknown as Record<string, unknown>,
+          data: {
+            ...(envelope as unknown as Record<string, unknown>),
+            ...(trigger ? { trigger } : {}),
+          },
         });
       } catch (err) {
         console.error(`[async-failure] .failed emit failed for ${params.functionId}`, err);

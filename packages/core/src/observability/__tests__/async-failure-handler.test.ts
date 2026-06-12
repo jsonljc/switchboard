@@ -169,6 +169,50 @@ describe("makeOnFailureHandler", () => {
     expect((recorded[0] as { entityId: string }).entityId).toBe("run_1");
   });
 
+  it("includes the original trigger payload on the emitted .failed event", async () => {
+    const { ctx, sent } = makeCtx();
+    const onFailure = makeOnFailureHandler(
+      {
+        functionId: "creative-job-runner",
+        eventDomain: "creative.polished",
+        riskCategory: "medium",
+        alert: false,
+      },
+      ctx,
+    );
+    await onFailure({
+      error: new Error("boom"),
+      event: {
+        name: "inngest/function.failed",
+        data: {
+          run_id: "run_1",
+          event: {
+            name: "creative-pipeline/polished.submitted",
+            data: { jobId: "job_1", organizationId: "org_1" },
+          },
+        },
+      },
+    } as never);
+    expect(sent).toHaveLength(1);
+    expect((sent[0] as { name: string }).name).toBe("creative.polished.failed");
+    expect((sent[0] as { data: Record<string, unknown> }).data.trigger).toEqual({
+      jobId: "job_1",
+      organizationId: "org_1",
+    });
+    // envelope fields still ride alongside the trigger
+    expect((sent[0] as { data: Record<string, unknown> }).data.code).toBe("ASYNC_JOB_FAILED");
+  });
+
+  it("emits with no trigger key when the original payload is absent", async () => {
+    const { ctx, sent } = makeCtx();
+    const onFailure = makeOnFailureHandler(
+      { functionId: "x", eventDomain: "x", riskCategory: "low", alert: false },
+      ctx,
+    );
+    await onFailure(failureArg as never); // failureArg's inner event carries no data
+    expect((sent[0] as { data: Record<string, unknown> }).data).not.toHaveProperty("trigger");
+  });
+
   it("never throws out of onFailure even if audit recording fails", async () => {
     const ctx = {
       auditLedger: {

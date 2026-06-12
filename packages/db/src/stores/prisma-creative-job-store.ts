@@ -138,6 +138,9 @@ export class PrismaCreativeJobStore {
       data: {
         currentStage: stage,
         stageOutputs: stageOutputs as object,
+        // Forward progress clears any prior terminal marker: a replayed run that
+        // advances is no longer failed (self-heal; see failPolished).
+        stageFailure: Prisma.JsonNull,
       },
     });
     if (result.count === 0) throw new StaleVersionError(id, -1, -1);
@@ -163,6 +166,27 @@ export class PrismaCreativeJobStore {
     const result = await this.prisma.creativeJob.updateMany({
       where: { id, organizationId },
       data: { productionTier: tier },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
+  }
+
+  /**
+   * Persist a terminal failure marker on a polished job (dead-letter consumer
+   * write). Mirrors failUgc for the polished lifecycle: a retry-exhausted render
+   * reads as failed instead of a zombie awaiting_review. Org-scoped updateMany
+   * (doctrine #12); count===0 ⇒ missing/cross-org ⇒ StaleVersionError.
+   */
+  async failPolished(
+    organizationId: string,
+    id: string,
+    failure: Record<string, unknown>,
+  ): Promise<CreativeJob> {
+    await this.assertMode(id, "polished");
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: { stageFailure: failure as object },
     });
     if (result.count === 0) throw new StaleVersionError(id, -1, -1);
     const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });

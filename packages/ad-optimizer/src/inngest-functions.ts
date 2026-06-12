@@ -1,5 +1,5 @@
 // packages/ad-optimizer/src/inngest-functions.ts
-import { Inngest } from "inngest";
+import { Inngest, type InngestFunction } from "inngest";
 
 const inngestClient = new Inngest({ id: "switchboard" });
 import { AuditRunner } from "./audit-runner.js";
@@ -300,7 +300,7 @@ export async function executeDailyCheck(step: StepTools, deps: CronDependencies)
 export function createWeeklyAuditCron(
   deps: CronDependencies,
   onFailure?: (arg: unknown) => Promise<void>,
-) {
+): InngestFunction.Any {
   return inngestClient.createFunction(
     {
       id: "ad-optimizer-weekly-audit",
@@ -318,7 +318,7 @@ export function createWeeklyAuditCron(
 export function createDailyCheckCron(
   deps: CronDependencies,
   onFailure?: (arg: unknown) => Promise<void>,
-) {
+): InngestFunction.Any {
   return inngestClient.createFunction(
     {
       id: "ad-optimizer-daily-check",
@@ -381,7 +381,7 @@ export async function executeDailySignalHealthCheck(
 export function createDailySignalHealthCron(
   deps: SignalHealthCronDependencies,
   onFailure?: (arg: unknown) => Promise<void>,
-) {
+): InngestFunction.Any {
   return inngestClient.createFunction(
     {
       id: "ad-optimizer-daily-signal-health",
@@ -485,7 +485,7 @@ export async function executeRileyOutcomeAttributionDispatch(
 export function createRileyOutcomeAttributionDispatch(
   deps: RileyOutcomeAttributionDispatchDeps,
   onFailure?: (arg: unknown) => Promise<void>,
-) {
+): InngestFunction.Any {
   return inngestClient.createFunction(
     {
       id: "riley-outcome-attribution-dispatch",
