@@ -38,6 +38,14 @@ export type AdsClientLike = Pick<
 export interface CreativePublishEventData {
   jobId: string;
   organizationId: string;
+  /**
+   * Originating WorkTrace work-unit id. Rides the dead-letter `trigger`
+   * passthrough so the publish-failure recorder can reconcile the canonical
+   * WorkTrace outcome (queued -> failed) for a retry-exhausted publish (D5-F1).
+   * Optional: the publish chain never reads it, and events enqueued before this
+   * field existed lack it.
+   */
+  workUnitId?: string;
 }
 
 export interface CreativePublishFunctionDeps {

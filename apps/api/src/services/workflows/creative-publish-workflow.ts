@@ -50,10 +50,12 @@ export function buildCreativePublishWorkflow(deps: CreativePublishDeps): Workflo
       }
 
       // Hand off the rate-limited Meta chain to the dead-lettered Inngest function.
+      // Carry workUnit.id so it rides the dead-letter `trigger` passthrough and the
+      // publish-failure recorder can reconcile THIS trace queued -> failed (D5-F1).
       const { inngestClient } = await import("@switchboard/creative-pipeline");
       await inngestClient.send({
         name: "creative-pipeline/publish.requested",
-        data: { jobId, organizationId: orgId },
+        data: { jobId, organizationId: orgId, workUnitId: workUnit.id },
       });
 
       return { outcome: "queued", summary: QUEUED_SUMMARY, outputs: { jobId } };
