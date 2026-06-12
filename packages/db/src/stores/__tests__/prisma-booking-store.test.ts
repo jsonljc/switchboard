@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { StaleVersionError } from "@switchboard/core";
 import { BookingSlotConflictError, isBookingSlotConflictError } from "@switchboard/schemas";
-import { PrismaBookingStore } from "../prisma-booking-store.js";
+import { PrismaBookingStore, BOOKING_LOCK_NS } from "../prisma-booking-store.js";
 
 function makePrisma() {
   return {
@@ -83,6 +83,10 @@ describe("PrismaBookingStore", () => {
     const result = await store.create(input);
     expect((result as typeof expected).status).toBe("pending_confirmation");
     expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  it("exports a stable advisory-lock namespace (shared with the local calendar path)", () => {
+    expect(BOOKING_LOCK_NS).toBe(920_001);
   });
 
   it("confirms a booking by id with tenant scope (Pattern B)", async () => {

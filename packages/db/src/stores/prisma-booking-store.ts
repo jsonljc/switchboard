@@ -20,7 +20,9 @@ interface CreateBookingInput {
 
 // Advisory-lock namespace for per-org booking serialization. Distinct from the
 // audit-chain ledger lock (900_001). Two-int pg_advisory_xact_lock form.
-const BOOKING_LOCK_NS = 920_001;
+// Exported so the local calendar booking path (apps/api calendar-provider-factory)
+// can lock on the same namespace and cannot silently drift from this store (F12).
+export const BOOKING_LOCK_NS = 920_001;
 
 export class PrismaBookingStore {
   constructor(private prisma: PrismaClient) {}
