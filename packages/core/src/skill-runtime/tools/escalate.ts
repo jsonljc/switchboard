@@ -58,7 +58,7 @@ export function createEscalateToolFactory(deps: EscalateToolBaseDeps): EscalateT
         execute: async (params: unknown): Promise<ToolResult> => {
           const input = params as EscalateInput;
 
-          const existing = await deps.handoffStore.getBySessionId(ctx.sessionId);
+          const existing = await deps.handoffStore.getBySessionId(ctx.orgId, ctx.sessionId);
           if (existing && (existing.status === "pending" || existing.status === "assigned")) {
             return ok({ handoffId: existing.id, status: "already_pending" });
           }

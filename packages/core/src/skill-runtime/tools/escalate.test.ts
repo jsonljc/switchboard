@@ -78,6 +78,7 @@ describe("escalate tool factory", () => {
         reason: "missing_knowledge",
       }),
     );
+    expect(baseDeps.handoffStore.getBySessionId).toHaveBeenCalledWith("org_1", "sess_1");
     expect(baseDeps.handoffStore.save).toHaveBeenCalled();
     expect(baseDeps.notifier.notify).toHaveBeenCalled();
     expect(result).toEqual(
@@ -109,6 +110,7 @@ describe("escalate tool factory", () => {
         organizationId: "org_2",
       }),
     );
+    expect(baseDeps.handoffStore.getBySessionId).toHaveBeenCalledWith("org_2", "sess_2");
   });
 
   it("returns existing handoff if one is pending for same session (duplicate guard)", async () => {
