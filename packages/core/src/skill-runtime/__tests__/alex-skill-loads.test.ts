@@ -29,4 +29,9 @@ describe("alex skill context requirements", () => {
     expect(req("CLAIM_BOUNDARIES")?.required).toBe(false);
     expect(req("BUSINESS_FACTS")?.required).toBe(true);
   });
+
+  it("declares deposit-link in its tool list (registered in skill-mode for confirmed-booking deposits)", () => {
+    const skill = loadSkill("alex", join(REPO_ROOT, "skills"));
+    expect(skill.tools).toContain("deposit-link");
+  });
 });
