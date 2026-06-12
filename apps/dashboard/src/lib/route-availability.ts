@@ -4,11 +4,16 @@
 //
 // Two policies live here, intentionally distinct:
 //
-// 1. isMercuryToolLive(id) — env-var-driven, runtime. Each Mercury Tools
-//    surface (list + detail) ships as a unit and turns on when its
-//    NEXT_PUBLIC_*_LIVE flag is "true". Read per-call so vitest can mutate
-//    process.env between tests; in production Next.js inlines NEXT_PUBLIC_*
-//    at build time so this is effectively a constant.
+// 1. isMercuryToolLive(id) — env-var-driven. Each Mercury Tools surface
+//    (list + detail) ships as a unit and turns on when its NEXT_PUBLIC_*_LIVE
+//    flag is "true". MUST be a static switch — one literal NEXT_PUBLIC_*_LIVE
+//    read per id (see below). Next.js only inlines NEXT_PUBLIC_* into the
+//    client bundle via static literal member access, so a computed/bracket env
+//    read is permanently undefined in the browser (F9 / the F-20 bug). Do NOT
+//    refactor back to a keyed-map + bracket lookup — the no-restricted-syntax
+//    eslint rule and scripts/check-no-dynamic-public-env.ts guard against it.
+//    Read per-call so vitest can mutate process.env between tests; in
+//    production the reads are build-time constants.
 //
 // 2. isAgentHomeLinkLive(kind) — compile-time map keyed by AgentHomeLink
 //    discriminator. Adding a new kind to the AgentHomeLink union forces a
@@ -25,16 +30,22 @@ import type { AgentHomeLink } from "./agent-home/types";
 
 export type ToolsNavId = "contacts" | "automations" | "activity" | "reports" | "approvals";
 
-const TOOLS_LIVE_ENV = {
-  contacts: "NEXT_PUBLIC_CONTACTS_LIVE",
-  automations: "NEXT_PUBLIC_AUTOMATIONS_LIVE",
-  activity: "NEXT_PUBLIC_ACTIVITY_LIVE",
-  reports: "NEXT_PUBLIC_REPORTS_LIVE",
-  approvals: "NEXT_PUBLIC_APPROVALS_LIVE",
-} as const satisfies Record<ToolsNavId, string>;
-
 export function isMercuryToolLive(id: ToolsNavId): boolean {
-  return process.env[TOOLS_LIVE_ENV[id]] === "true";
+  // One static literal read per id so Next.js inlines each into the client
+  // bundle. Exhaustive over ToolsNavId: adding a member without a branch lets
+  // `id` reach the function end as a non-never type, raising TS2366.
+  switch (id) {
+    case "contacts":
+      return process.env.NEXT_PUBLIC_CONTACTS_LIVE === "true";
+    case "automations":
+      return process.env.NEXT_PUBLIC_AUTOMATIONS_LIVE === "true";
+    case "activity":
+      return process.env.NEXT_PUBLIC_ACTIVITY_LIVE === "true";
+    case "reports":
+      return process.env.NEXT_PUBLIC_REPORTS_LIVE === "true";
+    case "approvals":
+      return process.env.NEXT_PUBLIC_APPROVALS_LIVE === "true";
+  }
 }
 
 export function isAgentHomeLinkLive(kind: AgentHomeLink["kind"]): boolean {
