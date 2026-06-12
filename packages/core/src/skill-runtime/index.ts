@@ -35,11 +35,13 @@ export {
   createCalendarBookToolFactory,
   createWebScannerTool,
   createEscalateToolFactory,
+  createDepositLinkToolFactory,
   createDelegateToolFactory,
   createScheduleFollowUpToolFactory,
 } from "./tools/index.js";
 export type {
   EscalateToolFactory,
+  DepositLinkToolFactory,
   DelegateToolFactory,
   DelegateToolDeps,
   CalendarBookToolFactory,
