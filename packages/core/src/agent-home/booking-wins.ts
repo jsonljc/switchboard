@@ -70,6 +70,11 @@ export function projectBookingWins(
         occurredAtIso: effective.toISOString(),
       };
     }),
+    // Best-effort: derived from the post-join rows the caller passes. The ledger
+    // drops traces whose booking is absent in-org, so a caller that fetches
+    // VISIBLE_LIMIT+1 traces may yield fewer rows and under-report hasMore. No
+    // consumer reads this yet (no "see all" wins page — F10 surfaces inline); a
+    // future wins page should compute hasMore from the trace fetch count.
     hasMore: rows.length > VISIBLE_LIMIT,
     freshness: { generatedAt: now.toISOString(), dataSource: "live" },
   };
