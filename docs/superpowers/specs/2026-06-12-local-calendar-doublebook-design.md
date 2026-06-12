@@ -195,3 +195,25 @@ all three booking-lock sites: `buildLocalStore.createInTransaction`, `PrismaBook
 and `PrismaBookingStore.reschedule`. Both the local path and `PrismaBookingStore.create` now have
 gated real-Postgres concurrency proofs (one success, N-1 `SLOT_CONFLICT`, one row). This stays
 within the F12 booking-lock mechanism and does not fold in the unrelated F13/F14/F15 findings.
+
+## Code review outcome
+
+A high-effort `/code-review` pass drove two changes:
+
+- The `::int4` cast was a bandaid replicated at three call sites with nothing stopping a fourth
+  from omitting it and hitting `42883` again, and the always-on (mocked) unit suite never
+  asserted the cast (only the gated real-Postgres test did, and that never runs in CI). Both are
+  fixed by extracting a single `acquireBookingLock(tx, organizationId)` helper in `packages/db`
+  that owns the cast; all three sites lock through it, and the mocked unit tests now assert the
+  `::int4` cast so a regression is caught in CI. `BOOKING_LOCK_NS` is no longer exported; the
+  helper is the only lock API.
+
+Two real findings were left as follow-ups because they are outside F12's create-path race and
+are pre-existing (not introduced here); they are flagged in the PR and the security-audit note:
+
+- `buildLocalStore.reschedule` does a bare `booking.update` with no advisory lock and no overlap
+  check, so the local reschedule path can still land two bookings on one slot.
+- `buildLocalStore.reschedule` and `buildLocalStore.cancel` update by booking id with no
+  `organizationId` filter, a cross-org write (IDOR) risk that the new create-path
+  `ORGANIZATION_MISMATCH` guard does not cover. This is a tenant-isolation finding that warrants
+  its own security review rather than a drive-by fix.
