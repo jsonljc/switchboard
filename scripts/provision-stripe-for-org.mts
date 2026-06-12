@@ -62,6 +62,9 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("[provision-stripe-for-org] failed:", err);
+  // Log only the message, not the raw error object: this script handles a live secret and an
+  // encrypted-credentials payload; avoid serializing error internals (which some drivers
+  // populate with query input) to stderr / log sinks.
+  console.error("[provision-stripe-for-org] failed:", err instanceof Error ? err.message : err);
   process.exit(1);
 });
