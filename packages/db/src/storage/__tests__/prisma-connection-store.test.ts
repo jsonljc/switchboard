@@ -232,6 +232,147 @@ describe("PrismaConnectionStore", () => {
     });
   });
 
+  describe("provisionStripeConnection", () => {
+    it("creates a new stripe Connection with externalAccountId := connectedAccountId and encrypted creds", async () => {
+      prisma.connection.findFirst.mockResolvedValue(null);
+      prisma.connection.upsert.mockResolvedValue({ id: "conn_new" });
+
+      const result = await store.provisionStripeConnection({
+        organizationId: "org_1",
+        connectedAccountId: "acct_test123",
+        secretKey: "sk_test_abc",
+      });
+
+      expect(result).toEqual({ id: "conn_new", created: true });
+      const args = prisma.connection.upsert.mock.calls[0]![0];
+      expect(args.where).toEqual({
+        serviceId_organizationId: { serviceId: "stripe", organizationId: "org_1" },
+      });
+      expect(args.create).toMatchObject({
+        serviceId: "stripe",
+        serviceName: "stripe",
+        organizationId: "org_1",
+        authType: "api_key",
+        status: "connected",
+        externalAccountId: "acct_test123",
+        scopes: [],
+      });
+      expect(args.create.id).toMatch(/^conn_/);
+      expect(JSON.parse(args.create.credentials)).toEqual({
+        connectedAccountId: "acct_test123",
+        secretKey: "sk_test_abc",
+      });
+      // #999 invariant: the account the adapter transacts on === the account the webhook
+      // resolves the org by.
+      expect(JSON.parse(args.create.credentials).connectedAccountId).toBe(
+        args.create.externalAccountId,
+      );
+    });
+
+    it("accepts a restricted key (rk_) as the per-org secret", async () => {
+      prisma.connection.findFirst.mockResolvedValue(null);
+      prisma.connection.upsert.mockResolvedValue({ id: "conn_rk" });
+
+      const result = await store.provisionStripeConnection({
+        organizationId: "org_1",
+        connectedAccountId: "acct_rk",
+        secretKey: "rk_test_restricted",
+      });
+
+      expect(result.created).toBe(true);
+      const args = prisma.connection.upsert.mock.calls[0]![0];
+      expect(JSON.parse(args.create.credentials).secretKey).toBe("rk_test_restricted");
+    });
+
+    it("merges into existing creds on re-provision, preserving other keys and updating externalAccountId", async () => {
+      prisma.connection.findFirst.mockResolvedValue({
+        id: "conn_existing",
+        credentials: JSON.stringify({
+          connectedAccountId: "acct_old",
+          secretKey: "sk_test_old",
+          webhookSecret: "whsec_keepme",
+        }),
+      });
+      prisma.connection.upsert.mockResolvedValue({ id: "conn_existing" });
+
+      const result = await store.provisionStripeConnection({
+        organizationId: "org_1",
+        connectedAccountId: "acct_new",
+        secretKey: "sk_test_new",
+      });
+
+      expect(result).toEqual({ id: "conn_existing", created: false });
+      const args = prisma.connection.upsert.mock.calls[0]![0];
+      expect(JSON.parse(args.update.credentials)).toEqual({
+        connectedAccountId: "acct_new",
+        secretKey: "sk_test_new",
+        webhookSecret: "whsec_keepme",
+      });
+      expect(args.update.externalAccountId).toBe("acct_new");
+      expect(args.update.status).toBe("connected");
+    });
+
+    it("is org-scoped on the credential pre-read", async () => {
+      prisma.connection.findFirst.mockResolvedValue(null);
+      prisma.connection.upsert.mockResolvedValue({ id: "conn_new" });
+
+      await store.provisionStripeConnection({
+        organizationId: "org_42",
+        connectedAccountId: "acct_x",
+        secretKey: "sk_test_x",
+      });
+
+      expect(prisma.connection.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { serviceId: "stripe", organizationId: "org_42" } }),
+      );
+    });
+
+    it("fail-closed: throws and writes nothing when secretKey is empty", async () => {
+      await expect(
+        store.provisionStripeConnection({
+          organizationId: "org_1",
+          connectedAccountId: "acct_x",
+          secretKey: "",
+        }),
+      ).rejects.toThrow(/secretKey must be a Stripe secret/);
+      expect(prisma.connection.findFirst).not.toHaveBeenCalled();
+      expect(prisma.connection.upsert).not.toHaveBeenCalled();
+    });
+
+    it("fail-closed: throws when secretKey has no sk_/rk_ prefix", async () => {
+      await expect(
+        store.provisionStripeConnection({
+          organizationId: "org_1",
+          connectedAccountId: "acct_x",
+          secretKey: "totally-not-a-key",
+        }),
+      ).rejects.toThrow(/sk_\.\.\.\) or restricted \(rk_/);
+      expect(prisma.connection.upsert).not.toHaveBeenCalled();
+    });
+
+    it("fail-closed: throws when connectedAccountId is not an acct_ id", async () => {
+      await expect(
+        store.provisionStripeConnection({
+          organizationId: "org_1",
+          connectedAccountId: "not-an-acct",
+          secretKey: "sk_test_x",
+        }),
+      ).rejects.toThrow(/acct_/);
+      expect(prisma.connection.upsert).not.toHaveBeenCalled();
+    });
+
+    it("fail-closed: throws when organizationId is empty", async () => {
+      await expect(
+        store.provisionStripeConnection({
+          organizationId: "",
+          connectedAccountId: "acct_x",
+          secretKey: "sk_test_x",
+        }),
+      ).rejects.toThrow(/organizationId is required/);
+      expect(prisma.connection.upsert).not.toHaveBeenCalled();
+    });
+  });
+
   describe("findByServiceId (riley credential resolver fallback)", () => {
     it("returns the raw encrypted credentials blob without decrypting", async () => {
       vi.mocked(decryptCredentials).mockClear();
