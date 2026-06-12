@@ -69,6 +69,7 @@ import { dashboardAutomationsRoutes } from "../routes/dashboard-automations.js";
 import { dashboardActivityRoutes } from "../routes/dashboard-activity.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
 import { pipelineRoute } from "../routes/agent-home/pipeline.js";
+import { bookingWinsRoute } from "../routes/agent-home/booking-wins.js";
 import { creativesRoute } from "../routes/agent-home/creatives.js";
 import { miraBriefRoute } from "../routes/agent-home/mira-brief.js";
 import { miraDecisionRoute } from "../routes/agent-home/mira-decision.js";
@@ -132,6 +133,9 @@ export async function registerRoutes(
   await app.register(winsRoute, { prefix: "/api/dashboard" });
   // pipelineRoute: GET /api/dashboard/agents/:agentId/pipeline — agent-home pipeline feed
   await app.register(pipelineRoute, { prefix: "/api/dashboard" });
+  // bookingWinsRoute: GET /api/dashboard/agents/:agentId/booking-wins — Alex's
+  // converted bookings (F5 ledger) surfaced as cockpit wins (trace + revenue).
+  await app.register(bookingWinsRoute, { prefix: "/api/dashboard" });
   // creativesRoute: GET /api/dashboard/agents/:agentId/creatives — Mira creative review feed
   await app.register(creativesRoute, { prefix: "/api/dashboard" });
   // miraBriefRoute: POST /api/dashboard/agents/mira/brief — createCreativeDraftRequest (draft-only)
