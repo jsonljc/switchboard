@@ -7,6 +7,7 @@ import type {
 import { createId } from "@paralleldrive/cuid2";
 import { computeExecutionCostUSD } from "../../telemetry/llm-costs.js";
 import { getMetrics } from "../../telemetry/metrics.js";
+import { deriveLinkedOutcome } from "../outcome-linker.js";
 
 interface ExecutionTraceStore {
   create(trace: SkillExecutionTrace): Promise<void>;
@@ -65,8 +66,13 @@ export class TracePersistenceHook
       cacheReadTokens: cacheRead,
       cacheCreationTokens: cacheCreation,
     });
+    const traceId = createId();
+    // Link the canonical WorkTrace to the business outcome the turn produced
+    // (booking conversion, stage advance, opt-out). Persisted inline in the single
+    // trace create — atomic and idempotent, no post-create updateMany.
+    const linkedOutcome = deriveLinkedOutcome(result.toolCalls, traceId);
     const trace: SkillExecutionTrace = {
-      id: createId(),
+      id: traceId,
       deploymentId: ctx.deploymentId,
       organizationId: ctx.orgId,
       skillSlug: ctx.skillSlug,
@@ -89,6 +95,13 @@ export class TracePersistenceHook
       status: result.trace.status,
       error: result.trace.error,
       responseSummary: result.response.slice(0, 500),
+      ...(linkedOutcome
+        ? {
+            linkedOutcomeId: linkedOutcome.id,
+            linkedOutcomeType: linkedOutcome.type,
+            linkedOutcomeResult: linkedOutcome.result,
+          }
+        : {}),
       writeCount: result.trace.writeCount,
       createdAt: new Date(),
     };

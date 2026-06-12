@@ -162,6 +162,9 @@ export interface SkillExecutionTraceData {
   model?: string;
 }
 
+/** The kinds of business outcome a skill turn can be linked to on its WorkTrace. */
+export type LinkedOutcomeType = "opportunity" | "task" | "campaign" | "booking";
+
 export interface SkillExecutionTrace {
   id: string;
   deploymentId: string;
@@ -187,7 +190,7 @@ export interface SkillExecutionTrace {
   error?: string;
   responseSummary: string;
   linkedOutcomeId?: string;
-  linkedOutcomeType?: "opportunity" | "task" | "campaign";
+  linkedOutcomeType?: LinkedOutcomeType;
   linkedOutcomeResult?: string;
   writeCount: number;
   createdAt: Date;
