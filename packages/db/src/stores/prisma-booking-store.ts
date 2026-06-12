@@ -19,7 +19,9 @@ interface CreateBookingInput {
 }
 
 // Advisory-lock namespace for per-org booking serialization. Distinct from the
-// audit-chain ledger lock (900_001). Two-int pg_advisory_xact_lock form.
+// audit-chain ledger lock (900_001). Two-key pg_advisory_xact_lock(int4, int4) form:
+// callers MUST cast this to ::int4, because Prisma sends JS numbers as bigint and
+// pg_advisory_xact_lock(bigint, integer) does not exist (Postgres error 42883).
 // Exported so the local calendar booking path (apps/api calendar-provider-factory)
 // can lock on the same namespace and cannot silently drift from this store (F12).
 export const BOOKING_LOCK_NS = 920_001;
@@ -33,7 +35,7 @@ export class PrismaBookingStore {
     // until commit; half-open interval test mirrors the Local provider guard but on the
     // LIVE write path.
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}, hashtext(${input.organizationId}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}::int4, hashtext(${input.organizationId}))`;
       // Single-resource-per-org capacity assumption: overlap is org-wide (not per
       // calendarId/room/practitioner), mirroring the original Local-provider guard.
       const overlap = await tx.booking.findFirst({
@@ -126,7 +128,7 @@ export class PrismaBookingStore {
     // land on a slot another LIVE booking already holds. Advisory lock held until
     // commit; overlap is half-open and excludes the booking being moved.
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}, hashtext(${orgId}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}::int4, hashtext(${orgId}))`;
       // Single-resource-per-org capacity assumption: overlap is org-wide (not per
       // calendarId/room/practitioner), mirroring the original Local-provider guard.
       // Exclude the booking being moved so a no-op/shrink reschedule doesn't self-conflict.

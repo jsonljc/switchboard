@@ -185,7 +185,7 @@ export function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
         // the overlap check and double-book the same physical slot (F12). Mirrors
         // PrismaBookingStore.create and shares BOOKING_LOCK_NS, so the local path and
         // the durable store lock on the same key. Held until the transaction commits.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}, hashtext(${orgId}))`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}::int4, hashtext(${orgId}))`;
         const conflicts = await tx.booking.findMany({
           where: {
             organizationId: orgId,
