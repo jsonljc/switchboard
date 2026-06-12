@@ -508,6 +508,18 @@ export async function buildServer() {
   const { createChildWorkSubmitter } = await import("./bootstrap/delegation-submitter.js");
   const childWorkSubmitter = createChildWorkSubmitter(() => submitChildWorkRef);
 
+  // Per-org PaymentPort factory (PR 1A-4d). Constructed BEFORE bootstrapSkillMode so the
+  // SAME instance backs both Alex's deposit-link tool and the payments webhook: the Noop
+  // adapter's in-process issued map only round-trips when one instance is shared. Stripe-first,
+  // Noop fail-closed; never a global env secret.
+  let paymentPortFactory:
+    | import("./bootstrap/payment-port-factory.js").PaymentPortFactory
+    | undefined;
+  if (prismaClient) {
+    const { createPaymentPortFactory } = await import("./bootstrap/payment-port-factory.js");
+    paymentPortFactory = createPaymentPortFactory({ prismaClient, logger: app.log });
+  }
+
   try {
     if (!prismaClient) {
       throw new Error("SkillMode requires DATABASE_URL — prismaClient is null");
@@ -520,6 +532,7 @@ export async function buildServer() {
       logger: app.log,
       contextBuilder,
       childWorkSubmitter,
+      paymentPortFactory,
     });
     simulationExecutor = skillModeResult.simulationExecutor;
     simulationSkill = skillModeResult.alexSkill;
@@ -581,13 +594,11 @@ export async function buildServer() {
     app.decorate("orgAgentEnablementStore", orgAgentEnablementStore);
   }
 
-  // Per-org PaymentPort factory — selects the Stripe Connect adapter when the org
-  // has a connected 'stripe' Connection with full Connect creds; falls back to the
-  // Noop adapter (DEGRADED) otherwise. Fail-closed: never uses a global env secret.
+  // Per-org PaymentPort factory -- constructed above and shared with Alex's deposit-link
+  // tool so the Noop issued map round-trips with the webhook's retrievePayment.
   // The /api/webhooks/payments/webhook route 503s when this is missing.
-  if (prismaClient) {
-    const { createPaymentPortFactory } = await import("./bootstrap/payment-port-factory.js");
-    app.decorate("paymentPortFactory", createPaymentPortFactory({ prismaClient, logger: app.log }));
+  if (paymentPortFactory) {
+    app.decorate("paymentPortFactory", paymentPortFactory);
   }
 
   // Native Stripe Connect webhook verifier (platform-level endpoint, one signing
