@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createHmac } from "node:crypto";
+import { Writable } from "node:stream";
 import Fastify, { type FastifyInstance } from "fastify";
 import formbody from "@fastify/formbody";
 import { metaDeletionRoutes } from "../routes/meta-deletion.js";
@@ -86,6 +87,33 @@ async function buildApp(prisma: MockPrisma): Promise<FastifyInstance> {
   app.decorate("prisma", prisma as unknown as never);
   await app.register(metaDeletionRoutes, { prefix: "/api/meta/deletion", appSecret: APP_SECRET });
   return app;
+}
+
+// Like buildApp, but with a real pino logger writing ndjson into `lines` so we
+// can assert what the error paths log (the default buildApp uses logger:false).
+async function buildCapturingApp(
+  prisma: MockPrisma,
+): Promise<{ app: FastifyInstance; lines: string[] }> {
+  const lines: string[] = [];
+  const stream = new Writable({
+    write(chunk: Buffer, _encoding, callback): void {
+      lines.push(chunk.toString("utf8"));
+      callback();
+    },
+  });
+  const app = Fastify({ logger: { level: "error", stream } });
+  await app.register(formbody);
+  app.decorate("prisma", prisma as unknown as never);
+  await app.register(metaDeletionRoutes, { prefix: "/api/meta/deletion", appSecret: APP_SECRET });
+  return { app, lines };
+}
+
+function parseLogLines(lines: string[]): Array<Record<string, unknown>> {
+  return lines
+    .join("")
+    .split("\n")
+    .filter((l) => l.length > 0)
+    .map((l) => JSON.parse(l) as Record<string, unknown>);
 }
 
 describe("POST /api/meta/deletion", () => {
@@ -218,6 +246,62 @@ describe("POST /api/meta/deletion", () => {
       data: expect.objectContaining({ status: "failed", failureReason: "db boom" }),
     });
     await app.close();
+  });
+});
+
+describe("POST /api/meta/deletion — error-path logging (F10/PDPA)", () => {
+  it("never writes the full phone to the cascade-failure log line", async () => {
+    const phone = "6591234567";
+    const prisma = makePrisma();
+    prisma.contact.findMany.mockResolvedValue([{ id: "c-1", organizationId: "org-1" }]);
+    prisma.contact.findFirst.mockResolvedValue({ id: "c-1", phone: null });
+    // The cascade runs inside $transaction; reject it AND quote the phone in the
+    // message to prove the err is sanitized, not just userId.
+    prisma.$transaction.mockRejectedValueOnce(new Error(`delete failed for ${phone}`));
+
+    const { app, lines } = await buildCapturingApp(prisma);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: `signed_request=${encodeURIComponent(makeSignedRequest({ user_id: phone }))}`,
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    const entry = parseLogLines(lines).find(
+      (e) => typeof e.msg === "string" && (e.msg as string).includes("cascade delete failed"),
+    );
+    expect(entry).toBeDefined();
+    expect(entry!.userIdMasked).toBe("…4567");
+    expect(JSON.stringify(entry)).not.toContain(phone);
+    expect(JSON.stringify(entry)).not.toContain(`+${phone}`);
+  });
+
+  it("never writes the full phone to the persist-failure log line", async () => {
+    const phone = "6591234567";
+    const prisma = makePrisma();
+    prisma.contact.findMany.mockResolvedValue([]); // no cascade
+    prisma.dataDeletionRequest.create.mockRejectedValueOnce(
+      new Error(`insert failed for ${phone}`),
+    );
+
+    const { app, lines } = await buildCapturingApp(prisma);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: `signed_request=${encodeURIComponent(makeSignedRequest({ user_id: phone }))}`,
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    const entry = parseLogLines(lines).find(
+      (e) => typeof e.msg === "string" && (e.msg as string).includes("failed to persist"),
+    );
+    expect(entry).toBeDefined();
+    expect(entry!.userIdMasked).toBe("…4567");
+    expect(JSON.stringify(entry)).not.toContain(phone);
   });
 });
 
