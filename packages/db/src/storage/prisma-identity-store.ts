@@ -127,8 +127,13 @@ export class PrismaIdentityStore implements IdentityStore {
     });
   }
 
-  async listDelegationRules(_organizationId?: string): Promise<DelegationRule[]> {
-    const rows = await this.prisma.delegationRule.findMany();
+  async listDelegationRules(organizationId?: string): Promise<DelegationRule[]> {
+    // Tenant isolation (audit F8): scope to the grantor's org when one is given so a
+    // delegation granted in another clinic cannot authorise an approver here. No org
+    // returns all rules (mirrors the in-memory reference store's contract).
+    const rows = await this.prisma.delegationRule.findMany(
+      organizationId ? { where: { grantor: { organizationId } } } : undefined,
+    );
     return rows.map(
       (row: {
         id: string;
