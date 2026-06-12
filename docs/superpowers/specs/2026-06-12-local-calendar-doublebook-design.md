@@ -172,3 +172,26 @@ Tradeoff (not a blocker): the per-org advisory lock serializes all local booking
 not just the same slot. This matches `PrismaBookingStore`'s existing semantics and is fine for
 clinic booking volume; a finer per-resource lock is future work if a single org ever needs high
 concurrent throughput across independent practitioners or rooms.
+
+## Execution discovery: the booking advisory lock never worked against real Postgres
+
+While running the real-Postgres concurrency proof, every booking failed with Postgres error
+`42883`: `function pg_advisory_xact_lock(bigint, integer) does not exist`. Prisma sends a JS
+number parameter as `bigint`, and `hashtext()` returns `integer`, so the two-key call resolved
+to `pg_advisory_xact_lock(bigint, integer)`, which is not a real signature (the two-key form is
+`(int4, int4)`). The fix is a one-token `::int4` cast on the namespace argument.
+
+Crucially, this was not unique to the new local path: `PrismaBookingStore.create` and
+`PrismaBookingStore.reschedule` use the identical pattern and throw the same error against real
+Postgres (verified empirically). Their unit tests mock `$executeRaw`, and the booking write path
+is otherwise Noop-proven, so the lock had never actually executed against a live database. The
+prior audit's "double-booking is prevented on the main path" rested on a static read; in fact
+the durable booking lock has never functioned.
+
+Because F12's whole point is making the booking advisory lock serialize, and because this fix
+exports a shared `BOOKING_LOCK_NS` so the local path and the durable store lock on the same key
+(only meaningful if both actually acquire the lock), the `::int4` cast is applied uniformly to
+all three booking-lock sites: `buildLocalStore.createInTransaction`, `PrismaBookingStore.create`,
+and `PrismaBookingStore.reschedule`. Both the local path and `PrismaBookingStore.create` now have
+gated real-Postgres concurrency proofs (one success, N-1 `SLOT_CONFLICT`, one row). This stays
+within the F12 booking-lock mechanism and does not fold in the unrelated F13/F14/F15 findings.
