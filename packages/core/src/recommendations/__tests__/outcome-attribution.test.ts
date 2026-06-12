@@ -211,6 +211,47 @@ describe("attributeOneRecommendation — metricSummary always populated", () => 
   });
 });
 
+describe("attributeOneRecommendation — non-finite delta is honest absence (D7-3/D3-3)", () => {
+  // Defense-in-depth for the meta-insights-adapter boundary: even if a provider
+  // regresses its finite-guard and a NaN spendCents/ctr reaches the derivation,
+  // a non-finite deltaPct must read as the ABSENCE of a usable movement, not a
+  // movement of NaN. The bug (feedback_nan_blind_comparison_gates, #939):
+  // NaN !== null reads true, so cockpitRenderable, causalStrength and trustDelta
+  // all fire on a fictional number and render a confident, fictional cockpit row.
+  // The NaN must enter via postWindow with a finite-positive preWindow: the
+  // `preWindow.spendCents > 0` / `preWindow.ctr > 0` guard already turns a NaN
+  // pre-window into a null (absent) delta.
+  it("does not render, certify, or stamp a trust delta when post spend is non-finite (pause)", () => {
+    const row = attributeOneRecommendation({
+      candidate: REC,
+      preWindow: w(10000, 0.02),
+      postWindow: w(NaN, 0.02),
+      overlaps: [],
+    });
+    expect(row.cockpitRenderable).toBe(false);
+    expect(row.trustDelta).toBe("none");
+    expect(row.causalStrength).toBe("inconclusive");
+    expect(row.copyTemplate).toBeNull();
+    // The persisted metric summary must carry honest absence, never a NaN.
+    expect(row.metricSummary.deltas.deltaPct).toBeNull();
+    expect(row.metricSummary.deltas.deltaAmountCents).toBeNull();
+  });
+
+  it("does not render or certify when a refresh post ctr is non-finite", () => {
+    const refreshRec: AttributableRecommendation = { ...REC, actionKind: "refresh_creative" };
+    const row = attributeOneRecommendation({
+      candidate: refreshRec,
+      preWindow: w(50000, 0.02, 14),
+      postWindow: w(50000, NaN, 14),
+      overlaps: [],
+    });
+    expect(row.cockpitRenderable).toBe(false);
+    expect(row.trustDelta).toBe("none");
+    expect(row.causalStrength).toBe("inconclusive");
+    expect(row.metricSummary.deltas.deltaPct).toBeNull();
+  });
+});
+
 describe("attributeOneRecommendation — slice-3 enrichments (honesty floors)", () => {
   it("emits directional + trustDelta up for a clean favorable pause delta", () => {
     const row = attributeOneRecommendation({

@@ -77,6 +77,16 @@ export function createMetaInsightsProviderForOrg(
       const ctr = rows.reduce((sum, r) => sum + r.inlineLinkClickCtr, 0) / rows.length;
       const dailyRowCount = rows.length;
 
+      // spendCents and ctr are the window's REQUIRED primary signals (unlike the
+      // OPTIONAL accountSpendCents below, which is merely omitted when non-finite).
+      // A non-finite value here — a NaN that survived the client mapper, or a
+      // poisoned reduce sum — makes the whole window unjudgeable, so report
+      // ABSENCE (null): the same documented fallback as a missing connection,
+      // which the orchestrator treats as meta_data_missing / cockpitRenderable=false.
+      // A NaN spendCents would instead fabricate a confident, fictional cockpit
+      // row downstream (feedback_nan_blind_comparison_gates, #939).
+      if (!Number.isFinite(spendCents) || !Number.isFinite(ctr)) return null;
+
       return {
         spendCents,
         ctr,

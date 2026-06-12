@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@switchboard/db";
-import type { InsightsWindowQuery } from "@switchboard/core";
+import { attributeOneRecommendation } from "@switchboard/core";
+import type {
+  InsightsWindowQuery,
+  AttributableRecommendation,
+  WindowMetrics,
+} from "@switchboard/core";
 
 // ---------------------------------------------------------------------------
 // Regression guard: PR #812 fixed the Meta Insights daily-series call
@@ -212,5 +217,73 @@ describe("createMetaInsightsProviderForOrg — account-level spend enrichment (r
     const metrics = await provider.getWindowMetrics(makeQuery());
 
     expect(metrics).toBeNull();
+  });
+});
+
+describe("createMetaInsightsProviderForOrg — poisoned requested-campaign window is honest absence (D7-3/D3-3)", () => {
+  beforeEach(() => {
+    getCampaignInsightsSpy.mockReset();
+  });
+
+  it("returns null when the requested campaign's spend is non-finite (unjudgeable, not fictional)", async () => {
+    // The requested campaign (camp-42) is the window's primary signal. A NaN
+    // spendCents would flow into attributeOneRecommendation and fabricate a
+    // confident cockpit row. spendCents/ctr are REQUIRED fields, so a poisoned
+    // one makes the WHOLE window unjudgeable -> null (the documented
+    // meta_data_missing fallback), unlike the OPTIONAL accountSpendCents which
+    // is merely omitted at :84.
+    getCampaignInsightsSpy.mockResolvedValue([
+      { campaignId: "camp-42", spend: NaN, inlineLinkClickCtr: 0.02 },
+    ]);
+    const provider = createMetaInsightsProviderForOrg("org-1", makeFakePrisma());
+
+    const metrics = await provider.getWindowMetrics(makeQuery());
+
+    expect(metrics).toBeNull();
+  });
+
+  it("returns null when the requested campaign's ctr is non-finite even if spend is finite", async () => {
+    getCampaignInsightsSpy.mockResolvedValue([
+      { campaignId: "camp-42", spend: 10.5, inlineLinkClickCtr: NaN },
+    ]);
+    const provider = createMetaInsightsProviderForOrg("org-1", makeFakePrisma());
+
+    const metrics = await provider.getWindowMetrics(makeQuery());
+
+    expect(metrics).toBeNull();
+  });
+
+  it("seam: the adapter's absence flows into attributeOneRecommendation as meta_data_missing, never a fictional row", async () => {
+    // Producer -> consumer seam pin (feedback_per_slice_review_misses_cross_slice_seams):
+    // drive the REAL adapter output into the REAL core derivation, no mock
+    // between them. Without the adapter guard, `poisoned` is a NaN-bearing
+    // window, not null, and this assertion fails.
+    getCampaignInsightsSpy.mockResolvedValue([
+      { campaignId: "camp-42", spend: NaN, inlineLinkClickCtr: NaN },
+    ]);
+    const provider = createMetaInsightsProviderForOrg("org-1", makeFakePrisma());
+    const poisoned = await provider.getWindowMetrics(makeQuery());
+    expect(poisoned).toBeNull(); // producer contract: an unjudgeable window is absent
+
+    const candidate: AttributableRecommendation = {
+      id: "rec-1",
+      organizationId: "org-1",
+      campaignId: "camp-42",
+      actionKind: "pause",
+      resolvedAt: new Date("2026-05-01T12:00:00Z"),
+      executableWorkUnitId: null,
+    };
+    const postWindow: WindowMetrics = { spendCents: 800, ctr: 0.02, dailyRowCount: 7 };
+
+    const row = attributeOneRecommendation({
+      candidate,
+      preWindow: poisoned,
+      postWindow,
+      overlaps: [],
+    });
+
+    expect(row.visibilityFlags).toContain("meta_data_missing");
+    expect(row.cockpitRenderable).toBe(false);
+    expect(row.trustDelta).toBe("none");
   });
 });
