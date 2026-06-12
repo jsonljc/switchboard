@@ -1,0 +1,10 @@
+# D1-2 non-durable breach visibility. The daily durable gate only ACTS at
+# periodsAboveTarget >= 7, so a breach of 1..6 of 14 days fires no rec and (pre-fix) no
+# watch: it is invisible until day 7. cpa 350 = 3.5x target on real volume (600 clicks /
+# 6 conv, clearing the destructive floor), 4 of 14 daily breach days. PRE-FIX: primary
+# "none" (the breach is silent while it builds). POST-FIX: an informational breach_building
+# watch surfaces it. The durable twin (suff-durable-volume-act, identical body at 9 breach
+# days) still ACTS (add_creative + pause), proving this is purely additive visibility below
+# the threshold, not a new pause path. expectedWatchPatterns pins the new surface so the
+# drift guard fails loudly if this fixture is ever deleted.
+{"id":"breach-building-sub-durable-visible","current":{"impressions":20000,"inlineLinkClicks":600,"spend":2100,"conversions":6,"revenue":0,"frequency":1.6},"previous":{"impressions":20000,"inlineLinkClicks":600,"spend":2100,"conversions":6,"revenue":0,"frequency":1.6},"targetBreach":{"periodsAboveTarget":4,"granularity":"daily"},"learningState":"success","economicTier":"booked_cac","effectiveTarget":100,"targetROAS":3,"expectedOutcome":"watch","expectedWatchPatterns":["breach_building"],"notes":"D1-2: a 4/14-day daily breach at cpa 3.5x is below the 7-day pause threshold; the engine must SHOW it building (breach_building watch) rather than stay silent until day 7. Identical body to suff-durable-volume-act except periodsAboveTarget 4 vs 9 (which still ACTS add_creative+pause): additive visibility, not a new pause path. measurementTrusted omitted (true)."}
