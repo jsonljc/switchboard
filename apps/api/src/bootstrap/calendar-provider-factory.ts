@@ -1,4 +1,4 @@
-import type { PrismaClient, Prisma } from "@switchboard/db";
+import { type PrismaClient, type Prisma, BOOKING_LOCK_NS } from "@switchboard/db";
 import type { CalendarProvider, BusinessHoursConfig } from "@switchboard/schemas";
 import { NoopCalendarProvider } from "./noop-calendar-provider.js";
 
@@ -143,7 +143,9 @@ async function resolveForOrg(
   return new NoopCalendarProvider();
 }
 
-function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
+// Exported for the F12 focused unit + integration tests. This is not a public construction
+// path; the calendar provider factory above is the only production caller.
+export function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
   return {
     findOverlapping: async (startsAt: Date, endsAt: Date) => {
       return prismaClient.booking.findMany({
@@ -172,10 +174,21 @@ function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
       sourceChannel?: string | null;
       workTraceId?: string | null;
     }) => {
+      // This store is bound to one org at construction. Refuse a payload whose org
+      // disagrees so the advisory lock, overlap check, and insert can never key off
+      // different orgs (F12).
+      if (input.organizationId !== orgId) {
+        throw new Error("ORGANIZATION_MISMATCH");
+      }
       return prismaClient.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Serialize check-then-insert per org so two concurrent leads cannot both pass
+        // the overlap check and double-book the same physical slot (F12). Mirrors
+        // PrismaBookingStore.create and shares BOOKING_LOCK_NS, so the local path and
+        // the durable store lock on the same key. Held until the transaction commits.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}, hashtext(${orgId}))`;
         const conflicts = await tx.booking.findMany({
           where: {
-            organizationId: input.organizationId,
+            organizationId: orgId,
             startsAt: { lt: input.endsAt },
             endsAt: { gt: input.startsAt },
             status: { notIn: ["cancelled", "failed"] },
@@ -188,7 +201,7 @@ function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
         }
         return tx.booking.create({
           data: {
-            organizationId: input.organizationId,
+            organizationId: orgId,
             contactId: input.contactId,
             opportunityId: input.opportunityId ?? null,
             service: input.service,
