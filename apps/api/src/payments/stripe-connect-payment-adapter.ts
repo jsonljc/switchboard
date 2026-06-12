@@ -194,10 +194,13 @@ function isStripeResourceMissing(err: unknown): boolean {
 }
 
 /**
- * Verify a Connect webhook payload's signature using the PER-ORG Connect
- * webhook secret (separate from the billing STRIPE_WEBHOOK_SECRET). This is
- * the seam the payments-webhook route's `verifyPaymentWebhookSignature` calls;
- * it is intentionally a standalone function, NOT a PaymentPort method. Stripe's
+ * Verify a Connect webhook payload's signature with the PLATFORM Connect endpoint
+ * signing secret (STRIPE_CONNECT_WEBHOOK_SECRET; distinct from the billing
+ * STRIPE_WEBHOOK_SECRET). A platform-level Connect endpoint receives events from
+ * every connected account, each carrying the connected account at the top-level
+ * event.account; one platform secret verifies them all. The payments-webhook route
+ * invokes this via the `app.paymentWebhookVerifier` decorator wired in app.ts; it is
+ * intentionally a standalone function, NOT a PaymentPort method. Stripe's
  * StripeSignatureVerificationError propagates on a tampered body/signature.
  */
 export function verifyConnectWebhookSignature(

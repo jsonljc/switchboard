@@ -1,102 +1,170 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import rawBody from "fastify-raw-body";
-import { createHmac } from "node:crypto";
+import Stripe from "stripe";
 import { paymentsWebhookRoutes } from "../payments-webhook.js";
+import {
+  verifyConnectWebhookSignature,
+  type StripeConnectClient,
+} from "../../payments/stripe-connect-payment-adapter.js";
 import { RecordVerifiedPaymentParametersSchema } from "../operator-intents-schemas-payment.js";
 
-// PSP payments webhook ingress-receiver. Mirrors ad-optimizer-signature.test.ts:
-// the route must verify an HMAC over the RAW body (STRIPE_WEBHOOK_SECRET) and
-// fail closed (401) on any missing/forged signature or missing secret, BEFORE
-// trusting any body field.
+// Stripe Connect deposit settlement webhook (1A-4d). A platform-level Connect endpoint
+// receives `payment_intent.succeeded` events from connected clinic accounts, each carrying
+// the connected account at the TOP-LEVEL `event.account`. The route verifies natively
+// (constructEvent over the Stripe-Signature header with the platform Connect signing secret),
+// re-fetches the PaymentIntent by id (never trusts the body amount), and submits through
+// ingress as a service actor. These tests pin the REAL event shape + the REAL verification
+// scheme. The `stripe` client below is used ONLY for crypto (constructEvent +
+// generateTestHeaderString make no network call), so a dummy api key is fine.
 
-const SECRET = "test-webhook-secret";
-// Valid JSON whose connected-account id resolves to NO Connection, so a verified
-// request short-circuits at 200 without needing a real port/ingress.
-const PAYLOAD = JSON.stringify({
-  id: "evt_sig_1",
-  type: "charge.succeeded",
-  data: { object: { id: "ch_sig_1", amount: 9999, account: "acct_unknown" } },
-});
+const SECRET = "whsec_test_connect_secret";
+const stripe = new Stripe("sk_test_dummy", { apiVersion: "2026-04-22.dahlia" });
 
-function sign(body: string, secret: string): string {
-  return "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
+const realVerifier = (secret: string) => (raw: string | Buffer, sig: string) =>
+  verifyConnectWebhookSignature(stripe as unknown as StripeConnectClient, raw, sig, secret);
+
+const sign = (body: string, secret: string): string =>
+  stripe.webhooks.generateTestHeaderString({ payload: body, secret });
+
+// REAL payment_intent.succeeded Connect event: top-level `account`, data.object = PaymentIntent.
+function piSucceeded(o: {
+  eventId: string;
+  account?: string;
+  paymentIntentId: string;
+  amount?: number;
+}): string {
+  return JSON.stringify({
+    id: o.eventId,
+    object: "event",
+    type: "payment_intent.succeeded",
+    ...(o.account ? { account: o.account } : {}),
+    data: {
+      object: {
+        id: o.paymentIntentId,
+        object: "payment_intent",
+        status: "succeeded",
+        amount: o.amount ?? 9999,
+        currency: "sgd",
+        metadata: { bookingId: "bk-meta", organizationId: "org-meta" },
+      },
+    },
+  });
 }
 
-async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
-  await app.register(rawBody, { field: "rawBody", global: false });
-  app.decorate("prisma", { connection: { findFirst: async () => null } } as never);
-  await app.register(paymentsWebhookRoutes, { prefix: "/api/webhooks" });
-  await app.ready();
-  return app;
+// A non-target event type (checkout.session.completed): data.object is a session, NOT a
+// PaymentIntent, so the route must ignore it rather than re-fetch a cs_ id as a PaymentIntent.
+function otherTypeEvent(eventId: string, account: string): string {
+  return JSON.stringify({
+    id: eventId,
+    object: "event",
+    type: "checkout.session.completed",
+    account,
+    data: { object: { id: "cs_123", object: "checkout.session" } },
+  });
 }
 
-async function postWebhook(app: FastifyInstance, signature: string | undefined) {
+async function post(app: FastifyInstance, body: string, signature?: string) {
   return app.inject({
     method: "POST",
     url: "/api/webhooks/payments/webhook",
     headers: {
       "content-type": "application/json",
-      ...(signature ? { "x-payment-signature": signature } : {}),
+      ...(signature ? { "stripe-signature": signature } : {}),
     },
-    payload: PAYLOAD,
+    payload: body,
   });
 }
 
-describe("Payments webhook signature verification", () => {
-  let saved: string | undefined;
-  beforeEach(() => {
-    saved = process.env["STRIPE_WEBHOOK_SECRET"];
-    process.env["STRIPE_WEBHOOK_SECRET"] = SECRET;
-  });
-  afterEach(() => {
-    if (saved === undefined) delete process.env["STRIPE_WEBHOOK_SECRET"];
-    else process.env["STRIPE_WEBHOOK_SECRET"] = saved;
-  });
+// --- Signature + event-type gate (no port/ingress needed; org resolves to none) ---
 
-  it("accepts a request carrying a valid x-payment-signature (org unresolved -> 200 skip)", async () => {
+async function buildApp(opts?: { decorateVerifier?: boolean }): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false });
+  await app.register(rawBody, { field: "rawBody", global: false });
+  app.decorate("prisma", { connection: { findFirst: async () => null } } as never);
+  if (opts?.decorateVerifier !== false) {
+    app.decorate("paymentWebhookVerifier", realVerifier(SECRET) as never);
+  }
+  await app.register(paymentsWebhookRoutes, { prefix: "/api/webhooks" });
+  await app.ready();
+  return app;
+}
+
+describe("Payments webhook native Stripe Connect verification", () => {
+  it("accepts a valid Stripe-Signature for payment_intent.succeeded (org unresolved -> 200 skip)", async () => {
     const app = await buildApp();
-    const res = await postWebhook(app, sign(PAYLOAD, SECRET));
+    const body = piSucceeded({
+      eventId: "evt_ok",
+      account: "acct_unknown",
+      paymentIntentId: "pi_ok",
+    });
+    const res = await post(app, body, sign(body, SECRET));
     expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ received: true, skipped: true, reason: "no_org" });
     await app.close();
   });
 
-  it("rejects a request with no signature header", async () => {
+  it("rejects a request with no Stripe-Signature header -> 401", async () => {
     const app = await buildApp();
-    const res = await postWebhook(app, undefined);
+    const body = piSucceeded({ eventId: "evt_nosig", account: "acct_x", paymentIntentId: "pi_x" });
+    const res = await post(app, body, undefined);
     expect(res.statusCode).toBe(401);
     await app.close();
   });
 
-  it("rejects a forged signature", async () => {
+  it("rejects a tampered body (valid sig over a different body) -> 401", async () => {
     const app = await buildApp();
-    const res = await postWebhook(app, sign(PAYLOAD, "wrong-secret"));
+    const signed = piSucceeded({ eventId: "evt_a", account: "acct_x", paymentIntentId: "pi_a" });
+    const tampered = piSucceeded({ eventId: "evt_b", account: "acct_x", paymentIntentId: "pi_b" });
+    const res = await post(app, tampered, sign(signed, SECRET));
     expect(res.statusCode).toBe(401);
     await app.close();
   });
 
-  it("fails closed when STRIPE_WEBHOOK_SECRET is not configured", async () => {
-    delete process.env["STRIPE_WEBHOOK_SECRET"];
+  it("rejects a signature from the wrong secret -> 401", async () => {
     const app = await buildApp();
-    const res = await postWebhook(app, sign(PAYLOAD, SECRET));
+    const body = piSucceeded({ eventId: "evt_w", account: "acct_x", paymentIntentId: "pi_w" });
+    const res = await post(app, body, sign(body, "whsec_wrong"));
     expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("fails closed with 503 when the verifier is not configured", async () => {
+    const app = await buildApp({ decorateVerifier: false });
+    const body = piSucceeded({ eventId: "evt_503", account: "acct_x", paymentIntentId: "pi_503" });
+    const res = await post(app, body, sign(body, SECRET));
+    expect(res.statusCode).toBe(503);
+    await app.close();
+  });
+
+  it("ignores a non-target event type -> 200 skip, no routing", async () => {
+    const app = await buildApp();
+    const body = otherTypeEvent("evt_other", "acct_x");
+    const res = await post(app, body, sign(body, SECRET));
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      received: true,
+      skipped: true,
+      reason: "ignored_event_type",
+    });
+    await app.close();
+  });
+
+  it("skips when the connected account is missing on the event -> 200 {no_account}", async () => {
+    const app = await buildApp();
+    const body = piSucceeded({ eventId: "evt_noacct", paymentIntentId: "pi_noacct" }); // no account
+    const res = await post(app, body, sign(body, SECRET));
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ received: true, skipped: true, reason: "no_account" });
     await app.close();
   });
 });
 
-// --- helpers shared by the resolve/refetch/replay blocks ---
-function bodyWithCharge(eventId: string, chargeId: string, account: string, bodyAmount: number) {
-  return JSON.stringify({
-    id: eventId,
-    type: "charge.succeeded",
-    data: { object: { id: chargeId, amount: bodyAmount, account } },
-  });
-}
+// --- Org resolution + charge re-fetch + replay + contract-pin ---
 
 function makeSubmitSpy() {
   // Mimics PlatformIngress idempotency: same key returns the prior result and does
-  // NOT re-run downstream effects (platform-ingress.ts:100-160).
+  // NOT re-run downstream effects (platform-ingress.ts).
   const seen = new Map<string, { id: string; traceId: string }>();
   const calls: Array<Record<string, unknown>> = [];
   const submit = vi.fn(async (req: Record<string, unknown>) => {
@@ -131,40 +199,26 @@ async function buildResolvingApp(opts: {
     },
   } as never);
   app.decorate("platformIngress", { submit: opts.submit } as never);
-  app.decorate(
-    "paymentPortFactory",
-    async () =>
-      ({
-        retrievePayment: opts.retrievePayment,
-      }) as never,
-  );
+  app.decorate("paymentPortFactory", (async () => ({
+    retrievePayment: opts.retrievePayment,
+  })) as never);
+  app.decorate("paymentWebhookVerifier", realVerifier(SECRET) as never);
   await app.register(paymentsWebhookRoutes, { prefix: "/api/webhooks" });
   await app.ready();
   return app;
 }
 
 describe("Payments webhook org resolution + charge re-fetch", () => {
-  let saved: string | undefined;
-  beforeEach(() => {
-    saved = process.env["STRIPE_WEBHOOK_SECRET"];
-    process.env["STRIPE_WEBHOOK_SECRET"] = SECRET;
-  });
-  afterEach(() => {
-    if (saved === undefined) delete process.env["STRIPE_WEBHOOK_SECRET"];
-    else process.env["STRIPE_WEBHOOK_SECRET"] = saved;
-  });
-
   it("refuses to submit when the org cannot be resolved (no Connection)", async () => {
     const retrievePayment = vi.fn();
     const { submit, calls } = makeSubmitSpy();
     const app = await buildResolvingApp({ connectionOrgId: null, retrievePayment, submit });
-    const payload = bodyWithCharge("evt_noorg", "ch_noorg", "acct_unknown", 9999);
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/webhooks/payments/webhook",
-      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
-      payload,
+    const body = piSucceeded({
+      eventId: "evt_noorg",
+      account: "acct_unknown",
+      paymentIntentId: "pi_noorg",
     });
+    const res = await post(app, body, sign(body, SECRET));
     expect(res.statusCode).toBe(200);
     expect(submit).not.toHaveBeenCalled();
     expect(retrievePayment).not.toHaveBeenCalled();
@@ -172,7 +226,7 @@ describe("Payments webhook org resolution + charge re-fetch", () => {
     await app.close();
   });
 
-  it("re-fetches the charge by id and submits the RE-FETCHED amount, never the body amount", async () => {
+  it("re-fetches the PaymentIntent by id and submits the RE-FETCHED amount, never the body amount", async () => {
     const retrievePayment = vi.fn(async (id: string) => ({
       externalReference: id,
       bookingId: "bk-1",
@@ -189,19 +243,21 @@ describe("Payments webhook org resolution + charge re-fetch", () => {
       submit,
       bookingFindFirst,
     });
-    const payload = bodyWithCharge("evt_amt", "ch_amt", "acct_org1", 9999);
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/webhooks/payments/webhook",
-      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
-      payload,
+    const body = piSucceeded({
+      eventId: "evt_amt",
+      account: "acct_org1",
+      paymentIntentId: "pi_amt",
+      amount: 9999,
     });
+    const res = await post(app, body, sign(body, SECRET));
     expect(res.statusCode).toBe(200);
-    expect(retrievePayment).toHaveBeenCalledWith("ch_amt");
+    expect(retrievePayment).toHaveBeenCalledWith("pi_amt"); // the PaymentIntent id from data.object.id
     expect(submit).toHaveBeenCalledTimes(1);
     const req = calls[0]!;
     expect(req["intent"]).toBe("payment.record_verified");
     expect(req["organizationId"]).toBe("org-1");
+    expect((req["actor"] as { id: string; type: string }).type).toBe("service");
+    expect(req["idempotencyKey"]).toBe("psp-evt_amt"); // keyed on the Stripe event id
     const params = req["parameters"] as { amountCents: number; provider: string };
     expect(params.amountCents).toBe(5000); // RE-FETCHED, not body's 9999
     expect(params.provider).toBe("stripe");
@@ -209,20 +265,8 @@ describe("Payments webhook org resolution + charge re-fetch", () => {
   });
 });
 
-// Task 3: pins the idempotency contract — same provider message id must produce the same
-// idempotencyKey ("psp-<id>") on both calls so PlatformIngress deduplicates to one record.
 describe("Payments webhook replay (idempotency at ingress)", () => {
-  let saved: string | undefined;
-  beforeEach(() => {
-    saved = process.env["STRIPE_WEBHOOK_SECRET"];
-    process.env["STRIPE_WEBHOOK_SECRET"] = SECRET;
-  });
-  afterEach(() => {
-    if (saved === undefined) delete process.env["STRIPE_WEBHOOK_SECRET"];
-    else process.env["STRIPE_WEBHOOK_SECRET"] = saved;
-  });
-
-  it("replaying the same provider message id dedups to one ingress record", async () => {
+  it("replaying the same Stripe event id dedups to one ingress record", async () => {
     const retrievePayment = vi.fn(async (id: string) => ({
       externalReference: id,
       bookingId: "bk-replay",
@@ -239,26 +283,17 @@ describe("Payments webhook replay (idempotency at ingress)", () => {
       submit,
       bookingFindFirst,
     });
-    const payload = bodyWithCharge("evt_replay", "ch_replay", "acct_org1", 5000);
-    const headers = {
-      "content-type": "application/json",
-      "x-payment-signature": sign(payload, SECRET),
-    };
-    const first = await app.inject({
-      method: "POST",
-      url: "/api/webhooks/payments/webhook",
-      headers,
-      payload,
+    const body = piSucceeded({
+      eventId: "evt_replay",
+      account: "acct_org1",
+      paymentIntentId: "pi_replay",
     });
-    const second = await app.inject({
-      method: "POST",
-      url: "/api/webhooks/payments/webhook",
-      headers,
-      payload,
-    });
+    const signature = sign(body, SECRET);
+    const first = await post(app, body, signature);
+    const second = await post(app, body, signature);
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
-    // Both submits carried the SAME message-id-derived key...
+    // Both submits carried the SAME event-id-derived key...
     expect(calls).toHaveLength(2);
     expect(calls[0]!["idempotencyKey"]).toBe("psp-evt_replay");
     expect(calls[1]!["idempotencyKey"]).toBe("psp-evt_replay");
@@ -270,21 +305,7 @@ describe("Payments webhook replay (idempotency at ingress)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Contract-pin: submitted parameters must satisfy RecordVerifiedPaymentParametersSchema
-// RED before fix (missing contactId/opportunityId/bookingId) → GREEN after.
-// ---------------------------------------------------------------------------
 describe("Payments webhook contract-pin: submitted params satisfy handler schema", () => {
-  let saved: string | undefined;
-  beforeEach(() => {
-    saved = process.env["STRIPE_WEBHOOK_SECRET"];
-    process.env["STRIPE_WEBHOOK_SECRET"] = SECRET;
-  });
-  afterEach(() => {
-    if (saved === undefined) delete process.env["STRIPE_WEBHOOK_SECRET"];
-    else process.env["STRIPE_WEBHOOK_SECRET"] = saved;
-  });
-
   it("happy path: submitted parameters satisfy RecordVerifiedPaymentParametersSchema", async () => {
     const retrievePayment = vi.fn(async (id: string) => ({
       externalReference: id,
@@ -302,17 +323,16 @@ describe("Payments webhook contract-pin: submitted params satisfy handler schema
       submit,
       bookingFindFirst,
     });
-    const payload = bodyWithCharge("evt_contract", "ch_contract", "acct_contract", 9999);
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/webhooks/payments/webhook",
-      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
-      payload,
+    const body = piSucceeded({
+      eventId: "evt_contract",
+      account: "acct_contract",
+      paymentIntentId: "pi_contract",
+      amount: 9999,
     });
+    const res = await post(app, body, sign(body, SECRET));
     expect(res.statusCode).toBe(200);
     expect(submit).toHaveBeenCalledTimes(1);
     const params = (calls[0] as Record<string, unknown>)["parameters"];
-    // The core assertion: the schema the handler validates against must pass.
     expect(RecordVerifiedPaymentParametersSchema.safeParse(params).success).toBe(true);
     expect(params).toMatchObject({
       contactId: "c1",
@@ -341,13 +361,12 @@ describe("Payments webhook contract-pin: submitted params satisfy handler schema
       submit,
       bookingFindFirst,
     });
-    const payload = bodyWithCharge("evt_nobk", "ch_nobk", "acct_org1", 5000);
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/webhooks/payments/webhook",
-      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
-      payload,
+    const body = piSucceeded({
+      eventId: "evt_nobk",
+      account: "acct_org1",
+      paymentIntentId: "pi_nobk",
     });
+    const res = await post(app, body, sign(body, SECRET));
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
       received: true,
@@ -375,13 +394,12 @@ describe("Payments webhook contract-pin: submitted params satisfy handler schema
       submit,
       bookingFindFirst,
     });
-    const payload = bodyWithCharge("evt_norow", "ch_norow", "acct_org1", 5000);
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/webhooks/payments/webhook",
-      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
-      payload,
+    const body = piSucceeded({
+      eventId: "evt_norow",
+      account: "acct_org1",
+      paymentIntentId: "pi_norow",
     });
+    const res = await post(app, body, sign(body, SECRET));
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
       received: true,
@@ -401,7 +419,6 @@ describe("Payments webhook contract-pin: submitted params satisfy handler schema
       provider: "stripe",
       status: "paid" as const,
     }));
-    // Booking exists but contactId is null (guard against orphaned bookings)
     const bookingFindFirst = vi.fn(async () => ({ contactId: null, opportunityId: "opp1" }));
     const { submit } = makeSubmitSpy();
     const app = await buildResolvingApp({
@@ -410,13 +427,12 @@ describe("Payments webhook contract-pin: submitted params satisfy handler schema
       submit,
       bookingFindFirst,
     });
-    const payload = bodyWithCharge("evt_noc", "ch_noc", "acct_org1", 5000);
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/webhooks/payments/webhook",
-      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
-      payload,
+    const body = piSucceeded({
+      eventId: "evt_noc",
+      account: "acct_org1",
+      paymentIntentId: "pi_noc",
     });
+    const res = await post(app, body, sign(body, SECRET));
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
       received: true,
@@ -444,13 +460,12 @@ describe("Payments webhook contract-pin: submitted params satisfy handler schema
       submit,
       bookingFindFirst,
     });
-    const payload = bodyWithCharge("evt_pending", "ch_pending", "acct_org1", 5000);
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/webhooks/payments/webhook",
-      headers: { "content-type": "application/json", "x-payment-signature": sign(payload, SECRET) },
-      payload,
+    const body = piSucceeded({
+      eventId: "evt_pending",
+      account: "acct_org1",
+      paymentIntentId: "pi_pending",
     });
+    const res = await post(app, body, sign(body, SECRET));
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ received: true, skipped: true, reason: "charge_not_paid" });
     expect(submit).not.toHaveBeenCalled();
