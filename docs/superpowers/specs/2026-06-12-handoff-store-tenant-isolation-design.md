@@ -29,9 +29,9 @@ This is the standing tenant-isolation hardening theme also seen in `creative-job
   - `getBySessionId` (a handoff-unique method name): exactly one production caller, `packages/core/src/skill-runtime/tools/escalate.ts:61`, where `ctx.orgId` is already in scope (used at lines 68-69). Typed via `Pick<HandoffStore, "save" | "getBySessionId">`.
   - `getById`: zero production callers (only the db test references it).
   - `updateStatus`: zero production callers (the `.updateStatus(` hits elsewhere are scheduler/task/connection stores, not Handoff).
-- The audit guessed "API handoff routes and the respond/escalation lifecycle are the likely other callers." Verified false: the escalation routes (`escalations.ts`, `escalation-resolve.ts`) use `conversationStateStore`/`workTraceStore`, not `HandoffStore`; the api `decisions.ts` route and `dashboard-contact-detail.ts` use only the already-scoped `listPending`.
+- The audit guessed "API handoff routes and the respond/escalation lifecycle are the likely other callers." Partially corrected: no route calls the three `HandoffStore` methods (the api `decisions.ts` route and `dashboard-contact-detail.ts` use only the already-scoped `listPending`; `escalation-resolve.ts` does not touch handoffs). But `escalations.ts` reaches the `Handoff` table **directly** via `app.prisma.handoff.{findUnique,update,findMany}`, bypassing the store entirely. That direct surface is a separate access path from F8 (which is store-method-bounded). It is currently org-safe at the route level (each by-id read does `findUnique({where:{id}})` then `if (!handoff || handoff.organizationId !== orgId) return 404` before any PII is assembled; the two status mutations at `:183` release and `:312` resolve are `update({where:{id}})` gated by that same in-request guard). See the out-of-scope note below.
 
-Net: tightening the interface forces a change at exactly one production call site (`escalate.ts`) plus the two store implementations and their tests. Small, contained, security-class.
+Net: tightening the interface forces a change at exactly one production call site (`escalate.ts`) plus the two store implementations and their tests. Small, contained, security-class. The `escalations.ts` direct-prisma surface is real but separate and already guarded; it is documented as out of scope, not silently ignored.
 
 ## Design
 
@@ -97,6 +97,8 @@ Because signature tightening can pass typecheck yet red app suites that pass old
 In scope: org-scope the three Handoff store methods, thread `organizationId` through the one production caller (`escalate.ts`), update both store implementations and all affected tests, add per-method tenant-denial + behavioral-isolation + save-immutability tests, remove the `#643` self-flag.
 
 Out of scope (do not touch): F11 (activityStatus time-decay), `listPending` (already scoped), `save()` behavior (audited safe; only a regression test added), any other store, any migration, the other tenant-isolation PRs (#635, #965, #971).
+
+Adjacent surface, documented out of scope (surfaced by the F8 code review): `apps/api/src/routes/escalations.ts` accesses the `Handoff` table directly via `app.prisma.handoff` rather than through `HandoffStore`, so the store-method F8 fix does not reach it. It is currently org-safe (guarded reads return 404 cross-tenant; the two status mutations are gated by the same in-request org guard), so this is a defense-in-depth gap, not a live hole. Hardening it is a route refactor, not a store change: Prisma `update` cannot take a non-unique `{ id, organizationId }` where, so the by-id mutations would become `updateMany({ where: { id, organizationId } })` + a `count === 0` guard + a refetch for the response body (the route currently uses the `update` return row). That is a separate, properly-scoped change and is deliberately not folded into this focused store PR.
 
 ## Follow-up note (non-blocking)
 
