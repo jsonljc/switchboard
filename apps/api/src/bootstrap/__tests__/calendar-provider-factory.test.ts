@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createCalendarProviderFactory } from "../calendar-provider-factory.js";
+import { createCalendarProviderFactory, buildLocalStore } from "../calendar-provider-factory.js";
 import { isNoopCalendarProvider, NoopCalendarProvider } from "../noop-calendar-provider.js";
 
 function makePrisma(rowByOrg: Record<string, { businessHours: unknown } | null>) {
@@ -211,5 +211,98 @@ describe("createCalendarProviderFactory: Local provider email wiring (#9a regres
     const provider = (await factory("org-local")) as unknown as { onSendFailure?: unknown };
 
     expect(provider.onSendFailure).toBeTypeOf("function");
+  });
+});
+
+describe("buildLocalStore.createInTransaction: advisory lock (F12)", () => {
+  function makeTxPrisma() {
+    const tx = {
+      $executeRaw: vi.fn().mockResolvedValue(0),
+      booking: {
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockResolvedValue({ id: "bk_new" }),
+      },
+    };
+    const prisma = { $transaction: vi.fn((fn: (t: typeof tx) => unknown) => fn(tx)) };
+    return { prisma, tx };
+  }
+
+  const STORE_ORG = "org-from-store";
+
+  const baseInput = {
+    organizationId: STORE_ORG,
+    contactId: "ct-1",
+    service: "consultation",
+    startsAt: new Date("2026-06-20T02:00:00Z"),
+    endsAt: new Date("2026-06-20T03:00:00Z"),
+    timezone: "Asia/Singapore",
+    status: "confirmed",
+    calendarEventId: "local-evt-1",
+    createdByType: "agent",
+  };
+
+  it("takes pg_advisory_xact_lock(BOOKING_LOCK_NS, hashtext(orgId)) before the overlap check and insert", async () => {
+    const { prisma, tx } = makeTxPrisma();
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await store.createInTransaction(baseInput);
+
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    const [strings, ...values] = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const lockSql = (strings as string[]).join("?");
+    expect(lockSql).toContain("pg_advisory_xact_lock");
+    // The ::int4 cast is the load-bearing fix: Prisma sends the namespace as bigint and
+    // pg_advisory_xact_lock(bigint, integer) does not exist. Guard it in the always-on suite.
+    expect(lockSql).toContain("::int4");
+    expect(values).toContain(920_001);
+    expect(values).toContain(STORE_ORG);
+
+    const lockOrder = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
+    const findOrder = (tx.booking.findMany as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    const createOrder = (tx.booking.create as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(findOrder);
+    expect(findOrder).toBeLessThan(createOrder);
+  });
+
+  it("keys the lock, overlap check, and insert all off the store's bound org", async () => {
+    const { prisma, tx } = makeTxPrisma();
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await store.createInTransaction(baseInput);
+
+    const lockValues = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.calls[0]!.slice(1);
+    expect(lockValues).toContain(STORE_ORG);
+    const overlapWhere = (tx.booking.findMany as ReturnType<typeof vi.fn>).mock.calls[0]![0].where;
+    expect(overlapWhere.organizationId).toBe(STORE_ORG);
+    const createData = (tx.booking.create as ReturnType<typeof vi.fn>).mock.calls[0]![0].data;
+    expect(createData.organizationId).toBe(STORE_ORG);
+  });
+
+  it("rejects ORGANIZATION_MISMATCH without locking or inserting when the payload org differs", async () => {
+    const { prisma, tx } = makeTxPrisma();
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await expect(
+      store.createInTransaction({ ...baseInput, organizationId: "org-from-input" }),
+    ).rejects.toThrow("ORGANIZATION_MISMATCH");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.$executeRaw).not.toHaveBeenCalled();
+    expect(tx.booking.create).not.toHaveBeenCalled();
+  });
+
+  it("throws SLOT_CONFLICT without inserting when an overlap exists, lock still taken first", async () => {
+    const { prisma, tx } = makeTxPrisma();
+    (tx.booking.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "existing" }]);
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await expect(store.createInTransaction(baseInput)).rejects.toThrow("SLOT_CONFLICT");
+    expect(tx.booking.create).not.toHaveBeenCalled();
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    const lockOrder = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
+    const findOrder = (tx.booking.findMany as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(findOrder);
   });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { StaleVersionError } from "@switchboard/core";
 import { BookingSlotConflictError, isBookingSlotConflictError } from "@switchboard/schemas";
-import { PrismaBookingStore } from "../prisma-booking-store.js";
+import { PrismaBookingStore, acquireBookingLock } from "../prisma-booking-store.js";
 
 function makePrisma() {
   return {
@@ -83,6 +83,18 @@ describe("PrismaBookingStore", () => {
     const result = await store.create(input);
     expect((result as typeof expected).status).toBe("pending_confirmation");
     expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  it("acquireBookingLock issues pg_advisory_xact_lock with the int4-cast namespace", async () => {
+    const executeRaw = vi.fn().mockResolvedValue(0);
+    await acquireBookingLock({ $executeRaw: executeRaw } as never, "org-1");
+    const [strings, ...values] = executeRaw.mock.calls[0]!;
+    const sql = (strings as string[]).join("?");
+    expect(sql).toContain("pg_advisory_xact_lock");
+    // The ::int4 cast is mandatory: Prisma sends the namespace as bigint and
+    // pg_advisory_xact_lock(bigint, integer) does not exist (Postgres 42883).
+    expect(sql).toContain("::int4");
+    expect(values).toEqual([920_001, "org-1"]);
   });
 
   it("confirms a booking by id with tenant scope (Pattern B)", async () => {
