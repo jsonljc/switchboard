@@ -144,3 +144,31 @@ insert, double-book) against the unlocked code, green (one conflict) after the l
 Two simultaneous local-calendar bookings for the same slot result in exactly one success and
 one `SLOT_CONFLICT`, demonstrated by the gated concurrency test against a live Postgres, with
 the mocked unit proof guarding the lock-before-check ordering in CI.
+
+## Review amendments (2026-06-12)
+
+Adopted from a plan review before execution:
+
+1. **Single org source of truth.** `buildLocalStore` is constructed per org (closed-over
+   `orgId`), but the existing `createInTransaction` keyed its overlap check and insert off the
+   caller-supplied `input.organizationId`. To stop the lock, overlap check, and insert from ever
+   keying off different orgs, `createInTransaction` now rejects a mismatched payload with
+   `ORGANIZATION_MISMATCH` and uses the closed-over `orgId` for the lock, the overlap query, and
+   the insert.
+2. **Deterministic green, reliable red.** The committed concurrency test fires N (8) concurrent
+   same-slot bookings and asserts exactly one success. The throwaway red demonstration removes
+   the lock and inserts a `pg_sleep` between the overlap check and the insert so the race window
+   is hit reliably, not probabilistically.
+3. **Explicit integration opt-in.** Because the concurrency test writes and deletes real rows,
+   it is gated on `DATABASE_URL` **and** `RUN_DB_INTEGRATION=1`, not `DATABASE_URL` alone, to
+   prevent accidental runs against the wrong database.
+4. **No foreign keys.** Verified against the live schema: `Booking` has no foreign keys
+   (outgoing or incoming), so the test uses free-string org/contact ids and needs no seeding.
+5. **Org-source unit coverage.** A unit test builds the store with one org and submits a
+   different payload org, asserting `ORGANIZATION_MISMATCH` and that no lock, overlap, or insert
+   runs.
+
+Tradeoff (not a blocker): the per-org advisory lock serializes all local bookings for an org,
+not just the same slot. This matches `PrismaBookingStore`'s existing semantics and is fine for
+clinic booking volume; a finer per-resource lock is future work if a single org ever needs high
+concurrent throughput across independent practitioners or rooms.
