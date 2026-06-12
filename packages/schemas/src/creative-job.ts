@@ -259,6 +259,22 @@ export const CreativeJobSchema = z.object({
 });
 export type CreativeJob = z.infer<typeof CreativeJobSchema>;
 
+/**
+ * Lifecycle values for the free-form `metaPublishStatus` column above. The
+ * publish handler sets `parked_paused` at the terminal create-ad checkpoint; a
+ * dead-lettered publish is marked `publish_failed` by the publish-failure
+ * recorder so a retry-exhausted Meta draft is observable to the operator
+ * instead of reading as "never published". Absent (null) = not published, or in
+ * flight. Single-sourced here (Layer 1) so the api producer and the core read
+ * model agree on the literals without a cross-layer import.
+ */
+export const CREATIVE_META_PUBLISH_STATUS = {
+  parkedPaused: "parked_paused",
+  publishFailed: "publish_failed",
+} as const;
+export type CreativeMetaPublishStatus =
+  (typeof CREATIVE_META_PUBLISH_STATUS)[keyof typeof CREATIVE_META_PUBLISH_STATUS];
+
 // ── Measured past performance (slice-2 attribution sweep) ──
 
 /**

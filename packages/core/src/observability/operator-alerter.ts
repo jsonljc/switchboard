@@ -26,8 +26,14 @@ export interface OperatorAlerter {
 }
 
 export class NoopOperatorAlerter implements OperatorAlerter {
-  async alert(_payload: InfrastructureFailureAlert): Promise<void> {
-    // intentional no-op
+  async alert(payload: InfrastructureFailureAlert): Promise<void> {
+    // No webhook configured (OPERATOR_ALERT_WEBHOOK_URL unset). The alert cannot
+    // be delivered, but log it at error level so a misconfigured prod is at
+    // least visible in host logs instead of being fully silent (D9-F1). Wiring
+    // the webhook so alerts become actionable is a separate ops leg.
+    console.error(
+      `[OperatorAlerter] no webhook configured; operator alert dropped: ${payload.errorType} (${payload.severity}): ${payload.errorMessage}`,
+    );
   }
 }
 

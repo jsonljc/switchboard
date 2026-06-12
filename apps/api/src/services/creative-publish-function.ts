@@ -2,12 +2,12 @@ import { makeOnFailureHandler, type AsyncFailureContext } from "@switchboard/cor
 import { NonRetriableError } from "inngest";
 import { inngestClient } from "@switchboard/creative-pipeline";
 import type { MetaAdsClient } from "@switchboard/ad-optimizer";
-import type { CreativeJob } from "@switchboard/schemas";
+import { CREATIVE_META_PUBLISH_STATUS, type CreativeJob } from "@switchboard/schemas";
 import type { PrismaCreativeJobStore } from "@switchboard/db";
 import type { PublishContext, PublishPrecheck } from "./creative-publish-preconditions.js";
 
 /** Persisted lifecycle marker once the full paused draft package exists. */
-export const PARKED_PAUSED = "parked_paused";
+export const PARKED_PAUSED = CREATIVE_META_PUBLISH_STATUS.parkedPaused;
 
 // Placeholder ad content the operator finalizes in Ads Manager (the locked "parked
 // draft" framing). The campaign is PAUSED so the budget never spends. A currency-aware
@@ -49,15 +49,24 @@ export interface CreativePublishFunctionDeps {
 }
 
 /**
- * Failure-contract Class B (a paused draft carries no live spend): record the audit
- * entry + emit the dead-letter event, no operator alert. Exported so a test locks the
- * doctrine-#7 contract (event domain, risk, alert).
+ * Failure-contract: record the audit entry, emit the `creative.publish.failed`
+ * dead-letter (consumed by the publish-failure recorder, which marks
+ * metaPublishStatus so the operator sees the failure), AND alert. This is a
+ * human-approved action with a named owner, so a retry-exhausted publish alerts
+ * at warning severity (a paused draft carries no live spend, so not critical).
+ * Exported so a test locks the doctrine-#7 contract (event domain, risk, alert).
+ *
+ * NOTE: the alert is actionable only once OPERATOR_ALERT_WEBHOOK_URL is wired in
+ * the deploy topology (render.yaml / provisioning runbook), a separate ops leg
+ * (D9-F1). Until then NoopOperatorAlerter logs the dropped alert at error level,
+ * so the failure is at least visible in host logs.
  */
 export const CREATIVE_PUBLISH_FAILURE_PARAMS = {
   functionId: "creative-publish",
   eventDomain: "creative.publish",
   riskCategory: "medium",
-  alert: false,
+  alert: true,
+  severity: "warning",
 } as const;
 
 function draftName(job: Pick<CreativeJob, "id" | "productDescription">): string {

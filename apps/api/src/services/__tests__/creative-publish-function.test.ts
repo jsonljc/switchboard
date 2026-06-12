@@ -132,12 +132,17 @@ describe("executeCreativePublish", () => {
     expect(store._row().metaAdSetId).toBeNull();
   });
 
-  it("dead-letter contract: Class B audit + creative.publish.failed, no alert", async () => {
+  it("dead-letter contract: audit + creative.publish.failed event + operator warning alert", async () => {
+    // A human-approved publish whose Meta chain dead-letters has a named owner;
+    // it alerts at warning severity (the paused draft carries no live spend, so
+    // not critical). The dead-letter event still fires for the publish-failure
+    // recorder to mark metaPublishStatus.
     expect(CREATIVE_PUBLISH_FAILURE_PARAMS).toMatchObject({
       functionId: "creative-publish",
       eventDomain: "creative.publish",
       riskCategory: "medium",
-      alert: false,
+      alert: true,
+      severity: "warning",
     });
     const auditLedger = { record: vi.fn().mockResolvedValue(undefined) };
     const inngest = { send: vi.fn().mockResolvedValue(undefined) };
@@ -154,6 +159,11 @@ describe("executeCreativePublish", () => {
     expect(inngest.send).toHaveBeenCalledWith(
       expect.objectContaining({ name: "creative.publish.failed" }),
     );
-    expect(operatorAlerter.alert).not.toHaveBeenCalled();
+    expect(operatorAlerter.alert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: "warning",
+        errorType: "async_job_retry_exhausted",
+      }),
+    );
   });
 });
