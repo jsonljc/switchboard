@@ -312,6 +312,33 @@ describe("PrismaConnectionStore", () => {
       expect(args.update.status).toBe("connected");
     });
 
+    it("preserves keys from a legacy unencrypted (object) existing credentials row", async () => {
+      // A legacy/manual row whose credentials column is a JSON object, not an encrypted
+      // string. The read must carry its keys through (like mergeCredentialsById), not drop them.
+      prisma.connection.findFirst.mockResolvedValue({
+        id: "conn_legacy",
+        credentials: {
+          connectedAccountId: "acct_old",
+          secretKey: "sk_test_old",
+          webhookSecret: "whsec_legacy",
+        },
+      });
+      prisma.connection.upsert.mockResolvedValue({ id: "conn_legacy" });
+
+      await store.provisionStripeConnection({
+        organizationId: "org_1",
+        connectedAccountId: "acct_new",
+        secretKey: "sk_test_new",
+      });
+
+      const args = prisma.connection.upsert.mock.calls[0]![0];
+      expect(JSON.parse(args.update.credentials)).toEqual({
+        connectedAccountId: "acct_new",
+        secretKey: "sk_test_new",
+        webhookSecret: "whsec_legacy",
+      });
+    });
+
     it("is org-scoped on the credential pre-read", async () => {
       prisma.connection.findFirst.mockResolvedValue(null);
       prisma.connection.upsert.mockResolvedValue({ id: "conn_new" });

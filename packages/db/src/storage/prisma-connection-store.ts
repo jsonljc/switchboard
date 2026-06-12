@@ -229,37 +229,39 @@ export class PrismaConnectionStore {
       );
     }
 
-    // Org-scoped pre-read for the credential merge; decrypt only our org's row.
+    // Org-scoped pre-read for the credential merge; decrypt only our org's row. Mirror
+    // mergeCredentialsById's read: decrypt an encrypted string, or carry a legacy unencrypted
+    // object through (do NOT discard its keys — that would silently drop a preserved field).
     const existing = await this.prisma.connection.findFirst({
       where: { serviceId: "stripe", organizationId },
       select: { id: true, credentials: true },
     });
-    const existingCreds =
-      existing && typeof existing.credentials === "string"
+    const existingCreds = existing
+      ? typeof existing.credentials === "string"
         ? decryptCredentials(existing.credentials)
-        : {};
+        : (existing.credentials as Record<string, unknown>)
+      : {};
     const encrypted = encryptCredentials({ ...existingCreds, connectedAccountId, secretKey });
+
+    // Fields written on BOTH branches, defined once so create and update cannot drift.
+    const writeFields = {
+      serviceName: "stripe",
+      authType: "api_key",
+      credentials: encrypted,
+      status: "connected",
+      externalAccountId: connectedAccountId,
+    };
 
     const row = await this.prisma.connection.upsert({
       where: { serviceId_organizationId: { serviceId: "stripe", organizationId } },
       create: {
         id: `conn_${randomUUID()}`,
         serviceId: "stripe",
-        serviceName: "stripe",
         organizationId,
-        authType: "api_key",
-        credentials: encrypted,
         scopes: [],
-        status: "connected",
-        externalAccountId: connectedAccountId,
+        ...writeFields,
       },
-      update: {
-        serviceName: "stripe",
-        authType: "api_key",
-        credentials: encrypted,
-        status: "connected",
-        externalAccountId: connectedAccountId,
-      },
+      update: writeFields,
       select: { id: true },
     });
 
