@@ -58,6 +58,14 @@ interface SkillModeBootstrapDeps {
    * emit WorkTrace entries on stage transitions. When absent, stage transitions
    * are persisted but not traced.
    */
+  /**
+   * Optional per-org PaymentPort factory -- the SAME instance app.ts decorates as
+   * `app.paymentPortFactory`, so the Noop in-process issued map round-trips with
+   * the payments webhook's retrievePayment. When provided, Alex gets a
+   * `deposit-link` tool to issue a deposit for a confirmed booking. Omitted in
+   * tests => no deposit tool (fail-closed), mirroring childWorkSubmitter/delegate.
+   */
+  paymentPortFactory?: import("./payment-port-factory.js").PaymentPortFactory;
 }
 
 export async function bootstrapSkillMode(
@@ -364,6 +372,19 @@ export async function bootstrapSkillMode(
     followUpStore: new PrismaScheduledFollowUpStore(prismaClient),
   });
 
+  // deposit-link (PR 1A-4d producer): issue a deposit for a confirmed booking.
+  // Registered only when a paymentPortFactory is injected (the SAME instance the
+  // payments webhook uses), mirroring delegate/childWorkSubmitter. read+idempotent
+  // => governance auto-approves in all modes; it rides the booking's prior approval.
+  const depositLinkFactory = deps.paymentPortFactory
+    ? await import("./deposit-link-wiring.js").then(({ buildDepositLinkToolFactory }) =>
+        buildDepositLinkToolFactory({
+          paymentPortFactory: deps.paymentPortFactory!,
+          findBookingById: (bookingId: string) => bookingStore.findById(bookingId),
+        }),
+      )
+    : undefined;
+
   // Per-request tool factories — the executor materializes a fresh tool per
   // execution with a trusted SkillRequestContext closed in. These are the
   // canonical execution path for trust-bound tools (AI-1).
@@ -375,6 +396,7 @@ export async function bootstrapSkillMode(
   ]);
   if (delegateFactory) toolFactories.set("delegate", delegateFactory);
   toolFactories.set("follow-up", scheduleFollowUpFactory);
+  if (depositLinkFactory) toolFactories.set("deposit-link", depositLinkFactory);
 
   // Schema-only tool map for Anthropic tool registration & GovernanceHook.
   // Trust-bound tools are materialized with a synthetic context here to
@@ -392,6 +414,7 @@ export async function bootstrapSkillMode(
   ]);
   if (delegateFactory) toolsMap.set("delegate", delegateFactory(SCHEMA_ONLY_CTX));
   toolsMap.set("follow-up", scheduleFollowUpFactory(SCHEMA_ONLY_CTX));
+  if (depositLinkFactory) toolsMap.set("deposit-link", depositLinkFactory(SCHEMA_ONLY_CTX));
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropicClient = new Anthropic({ apiKey: process.env["ANTHROPIC_API_KEY"] });
@@ -641,9 +664,11 @@ export async function bootstrapSkillMode(
   const simulationToolFactories = new Map(toolFactories);
   simulationToolFactories.delete("delegate");
   simulationToolFactories.delete("follow-up");
+  simulationToolFactories.delete("deposit-link");
   const simulationToolsMap = new Map(toolsMap);
   simulationToolsMap.delete("delegate");
   simulationToolsMap.delete("follow-up");
+  simulationToolsMap.delete("deposit-link");
   // Safety gate and claim classifier shared instances — same resolver/cache so simulation
   // shares posture warm-hits from the main executor. SimulationPolicyHook trails last to
   // block any write operations that survive governance filtering.
