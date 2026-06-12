@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
+import fastifyRawBody from "fastify-raw-body";
 import {
   registerManagedWebhookRoutes,
   type ManagedWebhookDeps,
@@ -46,6 +47,15 @@ async function buildApp(entry: GatewayEntry): Promise<FastifyInstance> {
   // The REAL production form decoder (extracted from main.ts): block_actions
   // arrive form-encoded; the parser unwraps `payload` and preserves rawBody.
   registerSlackFormEncodedParser(app);
+  // fastify-raw-body for the JSON path (mirrors main.ts); the route verifies the HMAC
+  // over the true raw bytes and fails closed without them (F9). The Slack form parser
+  // above continues to supply rawBody for the form-encoded interactive path.
+  await app.register(fastifyRawBody, {
+    field: "rawBody",
+    global: false,
+    encoding: "utf8",
+    runFirst: true,
+  });
   const deps: ManagedWebhookDeps = {
     registry: { getGatewayByWebhookPath: () => entry },
   };

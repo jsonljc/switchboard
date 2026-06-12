@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
+import rawBody from "fastify-raw-body";
 import {
   registerManagedWebhookRoutes,
   type ManagedWebhookDeps,
@@ -31,6 +32,15 @@ function makeEntry(adapter: Partial<GatewayEntry["adapter"]>): GatewayEntry {
 
 async function buildApp(entry: GatewayEntry | null): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+  // Mirror production: the managed route opts into raw-body capture, and the route
+  // fails closed when request.rawBody is absent. Register the plugin so this harness
+  // exercises the real wiring (otherwise the verify-passes case would 401 on missing raw).
+  await app.register(rawBody, {
+    field: "rawBody",
+    global: false,
+    encoding: "utf8",
+    runFirst: true,
+  });
   const deps: ManagedWebhookDeps = {
     registry: { getGatewayByWebhookPath: () => entry },
   };

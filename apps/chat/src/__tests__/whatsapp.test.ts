@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
+import rawBody from "fastify-raw-body";
 import { createHmac } from "node:crypto";
 import { WhatsAppAdapter } from "../adapters/whatsapp.js";
 import { registerManagedWebhookRoutes, type CtwaAdapterLike } from "../routes/managed-webhook.js";
@@ -513,6 +514,13 @@ describe("WhatsApp managed webhook — CTWA adapter wiring", () => {
     };
 
     app = Fastify({ logger: false });
+    // Mirror production wiring so the route sees the true raw bytes for HMAC (F9).
+    await app.register(rawBody, {
+      field: "rawBody",
+      global: false,
+      encoding: "utf8",
+      runFirst: true,
+    });
     registerManagedWebhookRoutes(app, {
       registry,
       ctwaAdapter: { ingest },
