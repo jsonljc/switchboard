@@ -161,3 +161,28 @@ export interface PipelineViewModel {
   setupLink: AgentHomeLink; // always { kind: "agent-setup", agentKey }
   freshness: DataFreshness;
 }
+
+// ─── B3' Booking Wins (F5 ledger → cockpit) ──────────────────
+// Alex's converted bookings with trace + revenue. Distinct from the
+// recommendation-shaped WinViewModel above: booking wins carry revenue (raw
+// cents; the UI formats) and trace provenance, sourced from the F5
+// booking-outcome ledger, not resolved recommendations. Mirrors
+// @switchboard/core's BookingWins* (dashboard supersets core).
+export interface BookingWinViewModel {
+  traceId: string;
+  bookingId: string;
+  contactId: string;
+  service: string;
+  bookingStatus: string;
+  valueCents: number | null;
+  revenuePending: boolean;
+  sourceCampaignId: string | null;
+  timeFolio: string;
+  occurredAtIso: string;
+}
+
+export interface BookingWinsViewModel {
+  wins: readonly BookingWinViewModel[];
+  hasMore: boolean;
+  freshness: { generatedAt: string; dataSource: "live" };
+}

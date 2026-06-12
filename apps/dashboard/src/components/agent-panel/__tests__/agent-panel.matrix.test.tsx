@@ -141,6 +141,24 @@ vi.mock("@/hooks/use-agent-activity-cockpit", () => ({
   }),
 }));
 
+// -- useAgentPipeline / useAgentWins (Alex-only F10 slots) --
+let pipelineData: unknown = undefined;
+let pipelineIsLoading = false;
+let winsData: unknown = undefined;
+let winsIsLoading = false;
+
+vi.mock("@/hooks/use-agent-pipeline", () => ({
+  useAgentPipeline: () => ({
+    data: pipelineData,
+    isLoading: pipelineIsLoading,
+    isError: false,
+    error: null,
+  }),
+}));
+vi.mock("@/hooks/use-agent-wins", () => ({
+  useAgentWins: () => ({ data: winsData, isLoading: winsIsLoading, isError: false, error: null }),
+}));
+
 // -- InboxAgentAvatar -- (avoids sprite/canvas setup)
 vi.mock("@/components/inbox/inbox-agent-avatar", () => ({
   InboxAgentAvatar: ({ agentKey }: { agentKey: string }) => (
@@ -325,6 +343,20 @@ beforeEach(() => {
   };
   activityIsLoading = false;
   activityIsError = false;
+
+  // Alex-only pipeline + wins slots — default to honest-empty (loaded, no rows).
+  pipelineData = {
+    agentKey: "alex",
+    pipelineKind: "leads",
+    totalCount: 0,
+    countNoun: "people",
+    tiles: [],
+    setupLink: { kind: "agent-setup", agentKey: "alex" },
+    freshness: { generatedAt: "x", window: "today", dataSource: "live" },
+  };
+  pipelineIsLoading = false;
+  winsData = { wins: [], hasMore: false, freshness: { generatedAt: "x", dataSource: "live" } };
+  winsIsLoading = false;
 });
 
 // Helper to render the assembled panel for alex (set-up agent)
@@ -351,6 +383,10 @@ describe("AgentPanel state matrix", () => {
     feedData = undefined;
     activityIsLoading = true;
     activityData = undefined;
+    pipelineIsLoading = true;
+    pipelineData = undefined;
+    winsIsLoading = true;
+    winsData = undefined;
 
     renderAlexPanel();
 
@@ -398,6 +434,52 @@ describe("AgentPanel state matrix", () => {
   it("renders the agent identity exactly once (header owns it; slot does not duplicate)", () => {
     renderAlexPanel();
     expect(document.querySelectorAll('[data-testid="agent-avatar"]')).toHaveLength(1);
+  });
+
+  // ── F10: Alex pipeline + wins slots ──────────────────────────────────────────
+  // Alex's panel surfaces the live pipeline and converted bookings (trace +
+  // revenue) from the F5 ledger. Both render alongside the existing four slots.
+  it("alex panel surfaces the pipeline and wins slots with real data", () => {
+    pipelineData = {
+      agentKey: "alex",
+      pipelineKind: "leads",
+      totalCount: 1,
+      countNoun: "people",
+      tiles: [
+        {
+          id: "c1",
+          stage: "hot",
+          name: "Maya R.",
+          ctx: "Botox",
+          link: { kind: "contact", id: "c1" },
+        },
+      ],
+      setupLink: { kind: "agent-setup", agentKey: "alex" },
+      freshness: { generatedAt: "x", window: "today", dataSource: "live" },
+    };
+    winsData = {
+      wins: [
+        {
+          traceId: "trace_xyz12345",
+          bookingId: "b1",
+          contactId: "c1",
+          service: "botox",
+          bookingStatus: "confirmed",
+          valueCents: 45000,
+          revenuePending: false,
+          sourceCampaignId: null,
+          timeFolio: "9:00 AM",
+          occurredAtIso: "2026-06-12T03:00:00Z",
+        },
+      ],
+      hasMore: false,
+      freshness: { generatedAt: "x", dataSource: "live" },
+    };
+    renderAlexPanel();
+    expect(screen.getByTestId("alex-pipeline")).toBeInTheDocument();
+    expect(screen.getByTestId("alex-wins")).toBeInTheDocument();
+    expect(screen.getByText("1 person in pipeline")).toBeInTheDocument();
+    expect(screen.getByText(/Booked botox · \$450/)).toBeInTheDocument();
   });
 
   // ── Row 3: Metrics window=all 400 → falls back to week ───────────────────────
@@ -548,5 +630,8 @@ describe("AgentPanel state matrix", () => {
     expect(screen.queryByText(/No update yet/i)).not.toBeInTheDocument();
     // Freshness foot must NOT appear for Mira (no data slots)
     expect(screen.queryByTestId("freshness-foot")).not.toBeInTheDocument();
+    // Alex-only slots must NOT appear for Mira
+    expect(screen.queryByTestId("alex-pipeline")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("alex-wins")).not.toBeInTheDocument();
   });
 });
