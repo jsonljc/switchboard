@@ -132,11 +132,6 @@ describe("Routes never mutate prisma.conversationState directly", () => {
       appendedReply: { role: "owner", text: "hi", timestamp: "now" },
     });
     const sendProactive = vi.fn().mockResolvedValue(undefined);
-    const handoffUpdate = vi.fn().mockResolvedValue({
-      ...handoff,
-      status: "released",
-      acknowledgedAt: new Date(),
-    });
 
     const app = await buildConversationTestApp({
       conversationStateStore: {
@@ -150,7 +145,12 @@ describe("Routes never mutate prisma.conversationState directly", () => {
         conversationState: { update: updateSpy },
         handoff: {
           findUnique: vi.fn().mockResolvedValue(handoff),
-          update: handoffUpdate,
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findFirst: vi.fn().mockResolvedValue({
+            ...handoff,
+            status: "released",
+            acknowledgedAt: new Date(),
+          }),
         },
       },
       organizationId: "org_1",

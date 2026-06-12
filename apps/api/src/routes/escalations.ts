@@ -177,16 +177,27 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       // Update handoff status to released. The handoff mutation is owned by
-      // the escalations route directly — only the conversationState-side work
+      // the escalations route directly; only the conversationState-side work
       // (message append + status transition + WorkTrace) is delegated to
-      // ConversationStateStore.
-      const updatedHandoff = await app.prisma.handoff.update({
-        where: { id },
+      // ConversationStateStore. The write is org-scoped at the query level via
+      // updateMany so it fails closed independently of the guard above;
+      // updateMany drops Prisma's P2025 not-found, hence the count===0 guard.
+      const releaseResult = await app.prisma.handoff.updateMany({
+        where: { id, organizationId: orgId },
         data: {
           status: "released",
           acknowledgedAt: new Date(),
         },
       });
+      if (releaseResult.count === 0) {
+        return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
+      }
+      const updatedHandoff = await app.prisma.handoff.findFirst({
+        where: { id, organizationId: orgId },
+      });
+      if (!updatedHandoff) {
+        return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
+      }
 
       const escalation = {
         id: updatedHandoff.id,
@@ -309,14 +320,25 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
       }
 
-      const updatedHandoff = await app.prisma.handoff.update({
-        where: { id },
+      // Org-scoped write (updateMany + count===0 guard) so the mutation fails
+      // closed independently of the guard above; updateMany drops P2025.
+      const resolveResult = await app.prisma.handoff.updateMany({
+        where: { id, organizationId: orgId },
         data: {
           status: "resolved",
           resolutionNote: resolutionNote ?? null,
           resolvedAt: new Date(),
         },
       });
+      if (resolveResult.count === 0) {
+        return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
+      }
+      const updatedHandoff = await app.prisma.handoff.findFirst({
+        where: { id, organizationId: orgId },
+      });
+      if (!updatedHandoff) {
+        return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
+      }
 
       return reply.send({
         escalation: {

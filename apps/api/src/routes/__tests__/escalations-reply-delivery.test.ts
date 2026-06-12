@@ -38,18 +38,18 @@ function makeReleaseResult(overrides: Record<string, unknown> = {}) {
 }
 
 function makePrisma(
-  overrides: Partial<{ handoffFindUnique: unknown; handoffUpdate: unknown }> = {},
+  overrides: Partial<{
+    handoffFindUnique: unknown;
+    handoffUpdateMany: unknown;
+    handoffFindFirst: unknown;
+  }> = {},
 ) {
+  const releasedRow = { ...handoff, status: "released", acknowledgedAt: new Date() };
   return {
     handoff: {
       findUnique: overrides.handoffFindUnique ?? vi.fn().mockResolvedValue(handoff),
-      update:
-        overrides.handoffUpdate ??
-        vi.fn().mockResolvedValue({
-          ...handoff,
-          status: "released",
-          acknowledgedAt: new Date(),
-        }),
+      updateMany: overrides.handoffUpdateMany ?? vi.fn().mockResolvedValue({ count: 1 }),
+      findFirst: overrides.handoffFindFirst ?? vi.fn().mockResolvedValue(releasedRow),
     },
   };
 }
@@ -209,14 +209,15 @@ describe("POST /api/escalations/:id/reply", () => {
   it("skips the store call when handoff has no sessionId (still releases handoff)", async () => {
     const releaseEscalationToAi = vi.fn();
     const handoffWithoutSession = { ...handoff, sessionId: null };
-    const handoffUpdate = vi.fn().mockResolvedValue({
-      ...handoffWithoutSession,
-      status: "released",
-      acknowledgedAt: new Date(),
-    });
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const prisma = makePrisma({
       handoffFindUnique: vi.fn().mockResolvedValue(handoffWithoutSession),
-      handoffUpdate,
+      handoffUpdateMany: updateMany,
+      handoffFindFirst: vi.fn().mockResolvedValue({
+        ...handoffWithoutSession,
+        status: "released",
+        acknowledgedAt: new Date(),
+      }),
     });
     const app = await buildConversationTestApp({
       conversationStateStore: {
@@ -239,7 +240,7 @@ describe("POST /api/escalations/:id/reply", () => {
     // skipped, so the route returns 502 (consistent with the prior "no
     // delivery happened" semantics).
     expect(releaseEscalationToAi).not.toHaveBeenCalled();
-    expect(handoffUpdate).toHaveBeenCalled();
+    expect(updateMany).toHaveBeenCalled();
     expect(res.statusCode).toBe(502);
   });
 });

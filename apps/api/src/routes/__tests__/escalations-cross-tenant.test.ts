@@ -147,3 +147,154 @@ describe("GET /api/escalations/:id — cross-tenant ConversationState scoping", 
     expect(body.conversationHistory).toHaveLength(2);
   });
 });
+
+describe("POST /api/escalations/:id/resolve cross-tenant scoping", () => {
+  it("returns 404 cross-tenant and never mutates", async () => {
+    const updateMany = vi.fn();
+    const app = await buildConversationTestApp({
+      prisma: {
+        handoff: {
+          findUnique: vi.fn().mockResolvedValue({ ...handoffOrgA, organizationId: "org_b" }),
+          updateMany,
+          findFirst: vi.fn(),
+        },
+      },
+      organizationId: "org_a",
+      principalId: "principal_a",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/resolve",
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("scopes the status mutation to the caller org (org in the updateMany where-clause)", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const resolvedRow = {
+      ...handoffOrgA,
+      status: "resolved",
+      resolutionNote: "done",
+      resolvedAt: new Date("2026-05-02T00:00:00Z"),
+    };
+    const app = await buildConversationTestApp({
+      prisma: {
+        handoff: {
+          findUnique: vi.fn().mockResolvedValue(handoffOrgA),
+          updateMany,
+          findFirst: vi.fn().mockResolvedValue(resolvedRow),
+        },
+      },
+      organizationId: "org_a",
+      principalId: "principal_a",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/resolve",
+      payload: { resolutionNote: "done" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    const args = updateMany.mock.calls[0]![0] as { where: Record<string, unknown> };
+    expect(args.where["id"]).toBe("esc-1");
+    expect(args.where["organizationId"]).toBe("org_a");
+  });
+
+  it("returns 404 when the org-scoped updateMany matches no row (fail-closed on count===0)", async () => {
+    const app = await buildConversationTestApp({
+      prisma: {
+        handoff: {
+          // The Handoff guard passes (same org), but the scoped write matches no
+          // row, so the count===0 guard must 404 rather than report a fake success.
+          findUnique: vi.fn().mockResolvedValue(handoffOrgA),
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          findFirst: vi.fn(),
+        },
+      },
+      organizationId: "org_a",
+      principalId: "principal_a",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/resolve",
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("POST /api/escalations/:id/reply cross-tenant scoping", () => {
+  it("returns 404 cross-tenant and never mutates or releases", async () => {
+    const updateMany = vi.fn();
+    const releaseEscalationToAi = vi.fn();
+    const app = await buildConversationTestApp({
+      conversationStateStore: {
+        setOverride: vi.fn(),
+        sendOperatorMessage: vi.fn(),
+        releaseEscalationToAi,
+      },
+      prisma: {
+        handoff: {
+          findUnique: vi.fn().mockResolvedValue({ ...handoffOrgA, organizationId: "org_b" }),
+          updateMany,
+          findFirst: vi.fn(),
+        },
+      },
+      organizationId: "org_a",
+      principalId: "principal_a",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/reply",
+      payload: { message: "hi" },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(releaseEscalationToAi).not.toHaveBeenCalled();
+  });
+
+  it("scopes the release mutation to the caller org and 404s (fail-closed) when it matches no row", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const releaseEscalationToAi = vi.fn();
+    const app = await buildConversationTestApp({
+      conversationStateStore: {
+        setOverride: vi.fn(),
+        sendOperatorMessage: vi.fn(),
+        releaseEscalationToAi,
+      },
+      prisma: {
+        handoff: {
+          findUnique: vi.fn().mockResolvedValue(handoffOrgA),
+          updateMany,
+          findFirst: vi.fn(),
+        },
+      },
+      organizationId: "org_a",
+      principalId: "principal_a",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/reply",
+      payload: { message: "hi" },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    const args = updateMany.mock.calls[0]![0] as { where: Record<string, unknown> };
+    expect(args.where["id"]).toBe("esc-1");
+    expect(args.where["organizationId"]).toBe("org_a");
+    // Mutation failed closed before any downstream release/delivery work.
+    expect(releaseEscalationToAi).not.toHaveBeenCalled();
+  });
+});
