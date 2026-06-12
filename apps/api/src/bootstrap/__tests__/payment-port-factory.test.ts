@@ -65,7 +65,10 @@ describe("createPaymentPortFactory: rejection eviction", () => {
 // ---------------------------------------------------------------------------
 
 function makePrismaWithConnection(
-  connectionByOrg: Record<string, { id: string; credentials: unknown } | null>,
+  connectionByOrg: Record<
+    string,
+    { id: string; credentials: unknown; externalAccountId: string | null } | null
+  >,
 ) {
   return {
     connection: {
@@ -86,14 +89,14 @@ function fakeStripeClient() {
 }
 
 describe("createPaymentPortFactory: Stripe Connect selection", () => {
-  it("returns a StripeConnectPaymentAdapter when a connected 'stripe' Connection with full creds exists", async () => {
+  it("returns a StripeConnectPaymentAdapter for full creds with NO per-org webhookSecret when externalAccountId matches", async () => {
     const prisma = makePrismaWithConnection({
-      "org-stripe": { id: "conn_1", credentials: "enc" },
+      "org-stripe": { id: "conn_1", credentials: "enc", externalAccountId: "acct_1" },
     });
     const decryptCredentials = vi.fn(() => ({
       connectedAccountId: "acct_1",
       secretKey: "sk_live_x",
-      webhookSecret: "whsec_x",
+      // deliberately NO webhookSecret — post-#984 the platform secret verifies webhooks.
     }));
     const stripeClientFactory = vi.fn(() => fakeStripeClient());
     const factory = createPaymentPortFactory({
@@ -134,16 +137,48 @@ describe("createPaymentPortFactory: Stripe Connect selection", () => {
 
   it("returns the Noop adapter when Connect creds are partial (fail-closed)", async () => {
     const prisma = makePrismaWithConnection({
-      "org-partial": { id: "conn_2", credentials: "enc" },
+      "org-partial": { id: "conn_2", credentials: "enc", externalAccountId: "acct" },
     });
     const factory = createPaymentPortFactory({
       prismaClient: prisma as never,
       logger: silentLogger,
-      // missing webhookSecret -> parser returns null -> Noop
-      decryptCredentials: vi.fn(() => ({ connectedAccountId: "acct", secretKey: "sk" })),
+      // missing secretKey -> parser returns null -> Noop
+      decryptCredentials: vi.fn(() => ({ connectedAccountId: "acct" })),
       stripeClientFactory: vi.fn() as never,
     });
 
     expect(isNoopPaymentAdapter(await factory("org-partial"))).toBe(true);
+  });
+
+  it("returns Noop when externalAccountId disagrees with credentials.connectedAccountId (fail-closed; settlement would not resolve)", async () => {
+    const prisma = makePrismaWithConnection({
+      "org-mismatch": { id: "conn_3", credentials: "enc", externalAccountId: "acct_1" },
+    });
+    const stripeClientFactory = vi.fn(() => fakeStripeClient());
+    const factory = createPaymentPortFactory({
+      prismaClient: prisma as never,
+      logger: silentLogger,
+      decryptCredentials: vi.fn(() => ({ connectedAccountId: "acct_2", secretKey: "sk_live_x" })),
+      stripeClientFactory: stripeClientFactory as never,
+    });
+
+    expect(isNoopPaymentAdapter(await factory("org-mismatch"))).toBe(true);
+    // Never build a live client when the account the adapter would act on is not the
+    // one the settlement webhook resolves the org by.
+    expect(stripeClientFactory).not.toHaveBeenCalled();
+  });
+
+  it("returns Noop when the Connection has no externalAccountId even with full creds (settlement cannot resolve)", async () => {
+    const prisma = makePrismaWithConnection({
+      "org-noext": { id: "conn_4", credentials: "enc", externalAccountId: null },
+    });
+    const factory = createPaymentPortFactory({
+      prismaClient: prisma as never,
+      logger: silentLogger,
+      decryptCredentials: vi.fn(() => ({ connectedAccountId: "acct_1", secretKey: "sk_live_x" })),
+      stripeClientFactory: vi.fn() as never,
+    });
+
+    expect(isNoopPaymentAdapter(await factory("org-noext"))).toBe(true);
   });
 });

@@ -27,8 +27,8 @@ export interface PaymentPortFactoryDeps {
     connection: {
       findFirst(args: {
         where: { organizationId: string; serviceId: string; status: string };
-        select: { id: boolean; credentials: boolean };
-      }): Promise<{ id: string; credentials: unknown } | null>;
+        select: { id: boolean; credentials: boolean; externalAccountId: boolean };
+      }): Promise<{ id: string; credentials: unknown; externalAccountId: string | null } | null>;
     };
   };
   // Optional injectable decryptCredentials for tests. Defaults to @switchboard/db's
@@ -80,12 +80,20 @@ async function resolveForOrg(deps: PaymentPortFactoryDeps, orgId: string): Promi
   if (deps.prismaClient) {
     const connection = await deps.prismaClient.connection.findFirst({
       where: { organizationId: orgId, serviceId: "stripe", status: "connected" },
-      select: { id: true, credentials: true },
+      select: { id: true, credentials: true, externalAccountId: true },
     });
 
     if (connection) {
       const creds = parseStripeConnectCredentials(decrypt(connection.credentials));
-      if (creds) {
+      // Live only when creds are complete AND the connected account the adapter would
+      // transact on is the SAME account the settlement webhook resolves the org by
+      // (Connection.externalAccountId, matched against the top-level event.account in
+      // payments-webhook.ts). If they disagree, a deposit link would be issued and
+      // re-fetched on one account while the webhook resolves the org by another, so a
+      // paid deposit could never settle. Fail closed loudly instead of silently
+      // degrading. A null externalAccountId fails this equality by construction, which
+      // is correct: an org the settlement webhook cannot resolve must not go live.
+      if (creds && creds.connectedAccountId === connection.externalAccountId) {
         deps.logger.info(
           `Payment[${orgId}]: using StripeConnectPaymentAdapter (connected account)`,
         );
@@ -100,9 +108,15 @@ async function resolveForOrg(deps: PaymentPortFactoryDeps, orgId: string): Promi
           cancelUrl: "https://switchboard.local/payment/cancel",
         });
       }
-      deps.logger.info(
-        `Payment[${orgId}]: 'stripe' Connection present but Connect creds incomplete — using Noop (fail-closed)`,
-      );
+      if (creds) {
+        deps.logger.error(
+          `Payment[${orgId}]: 'stripe' Connection externalAccountId does not match credentials.connectedAccountId — using Noop (fail-closed; settlement would not resolve)`,
+        );
+      } else {
+        deps.logger.info(
+          `Payment[${orgId}]: 'stripe' Connection present but Connect creds incomplete — using Noop (fail-closed)`,
+        );
+      }
     }
   }
 
