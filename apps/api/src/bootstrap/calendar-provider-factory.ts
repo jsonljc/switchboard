@@ -1,4 +1,4 @@
-import { type PrismaClient, type Prisma, BOOKING_LOCK_NS } from "@switchboard/db";
+import { type PrismaClient, type Prisma, acquireBookingLock } from "@switchboard/db";
 import type { CalendarProvider, BusinessHoursConfig } from "@switchboard/schemas";
 import { NoopCalendarProvider } from "./noop-calendar-provider.js";
 
@@ -182,10 +182,10 @@ export function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
       }
       return prismaClient.$transaction(async (tx: Prisma.TransactionClient) => {
         // Serialize check-then-insert per org so two concurrent leads cannot both pass
-        // the overlap check and double-book the same physical slot (F12). Mirrors
-        // PrismaBookingStore.create and shares BOOKING_LOCK_NS, so the local path and
-        // the durable store lock on the same key. Held until the transaction commits.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}::int4, hashtext(${orgId}))`;
+        // the overlap check and double-book the same physical slot (F12). The shared
+        // acquireBookingLock helper owns the ::int4 cast, so this path and the durable
+        // PrismaBookingStore lock on the same key. Held until the transaction commits.
+        await acquireBookingLock(tx, orgId);
         const conflicts = await tx.booking.findMany({
           where: {
             organizationId: orgId,

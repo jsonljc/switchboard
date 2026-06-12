@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createCalendarProviderFactory, buildLocalStore } from "../calendar-provider-factory.js";
 import { isNoopCalendarProvider, NoopCalendarProvider } from "../noop-calendar-provider.js";
-import { BOOKING_LOCK_NS } from "@switchboard/db";
 
 function makePrisma(rowByOrg: Record<string, { businessHours: unknown } | null>) {
   return {
@@ -250,8 +249,12 @@ describe("buildLocalStore.createInTransaction: advisory lock (F12)", () => {
 
     expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     const [strings, ...values] = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect((strings as string[]).join("?")).toContain("pg_advisory_xact_lock");
-    expect(values).toContain(BOOKING_LOCK_NS);
+    const lockSql = (strings as string[]).join("?");
+    expect(lockSql).toContain("pg_advisory_xact_lock");
+    // The ::int4 cast is the load-bearing fix: Prisma sends the namespace as bigint and
+    // pg_advisory_xact_lock(bigint, integer) does not exist. Guard it in the always-on suite.
+    expect(lockSql).toContain("::int4");
+    expect(values).toContain(920_001);
     expect(values).toContain(STORE_ORG);
 
     const lockOrder = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
