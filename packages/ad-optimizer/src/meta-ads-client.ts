@@ -9,6 +9,28 @@ import type {
 const API_BASE = "https://graph.facebook.com/v21.0";
 const RATE_LIMIT_MS = 60_000;
 
+/**
+ * Parse an external Meta numeric, coercing any non-finite result to a fallback
+ * (default 0). Meta returns numerics as strings; a non-numeric sentinel ("N/A",
+ * an empty string, a malformed payload) makes parseFloat/parseInt yield NaN,
+ * which must never reach a comparison gate: a `>`-gate reads NaN as false
+ * silently and voids a recommendation, and one NaN row poisons a whole `reduce`
+ * sum (feedback_nan_blind_comparison_gates, #939). 0 is the honest fallback for
+ * every field here (spend/conversions/revenue/impressions/clicks/rates): it is
+ * the safe no-false-action direction and isolates damage to the single bad row.
+ * The peer guard at meta-campaign-insights-provider.ts (action-type denominator)
+ * uses the same Number.isFinite discipline; this keeps both boundaries symmetric.
+ */
+function finiteFloat(value: unknown, fallback = 0): number {
+  const n = parseFloat(String(value ?? "0"));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function finiteInt(value: unknown, fallback = 0): number {
+  const n = parseInt(String(value ?? "0"), 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 interface MetaAdsClientConfig {
   accessToken: string;
   accountId: string;
@@ -262,9 +284,9 @@ export class MetaAdsClient {
       accountId: metadata.id as string,
       accountName: metadata.name as string,
       currency: metadata.currency as string,
-      totalSpend: parseFloat(insights.spend ?? "0"),
-      totalImpressions: parseInt(insights.impressions ?? "0", 10),
-      totalClicks: parseInt(insights.clicks ?? "0", 10),
+      totalSpend: finiteFloat(insights.spend),
+      totalImpressions: finiteInt(insights.impressions),
+      totalClicks: finiteInt(insights.clicks),
       activeCampaigns,
     };
   }
@@ -459,15 +481,15 @@ export class MetaAdsClient {
       campaignName: String(raw.campaign_name ?? ""),
       status: String(raw.status ?? ""),
       effectiveStatus: String(raw.effective_status ?? ""),
-      impressions: parseInt(String(raw.impressions ?? "0"), 10),
-      inlineLinkClicks: parseInt(String(raw.inline_link_clicks ?? "0"), 10),
-      spend: parseFloat(String(raw.spend ?? "0")),
-      conversions: parseFloat(String(raw.conversions ?? "0")),
-      revenue: parseFloat(String(raw.revenue ?? "0")),
-      frequency: parseFloat(String(raw.frequency ?? "0")),
-      cpm: parseFloat(String(raw.cpm ?? "0")),
-      inlineLinkClickCtr: parseFloat(String(raw.inline_link_click_ctr ?? "0")),
-      costPerInlineLinkClick: parseFloat(String(raw.cost_per_inline_link_click ?? "0")),
+      impressions: finiteInt(raw.impressions),
+      inlineLinkClicks: finiteInt(raw.inline_link_clicks),
+      spend: finiteFloat(raw.spend),
+      conversions: finiteFloat(raw.conversions),
+      revenue: finiteFloat(raw.revenue),
+      frequency: finiteFloat(raw.frequency),
+      cpm: finiteFloat(raw.cpm),
+      inlineLinkClickCtr: finiteFloat(raw.inline_link_click_ctr),
+      costPerInlineLinkClick: finiteFloat(raw.cost_per_inline_link_click),
       dateStart: String(raw.date_start ?? ""),
       dateStop: String(raw.date_stop ?? ""),
       // Meta returns `actions` as an array of { action_type, value }. Surface it
@@ -483,14 +505,14 @@ export class MetaAdsClient {
       adSetId: raw.adset_id ?? "",
       adSetName: raw.adset_name ?? "",
       campaignId: raw.campaign_id ?? "",
-      impressions: parseInt(raw.impressions ?? "0", 10),
-      inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
-      spend: parseFloat(raw.spend ?? "0"),
-      conversions: parseFloat(raw.conversions ?? "0"),
-      frequency: parseFloat(raw.frequency ?? "0"),
-      cpm: parseFloat(raw.cpm ?? "0"),
-      inlineLinkClickCtr: parseFloat(raw.inline_link_click_ctr ?? "0"),
-      costPerInlineLinkClick: parseFloat(raw.cost_per_inline_link_click ?? "0"),
+      impressions: finiteInt(raw.impressions),
+      inlineLinkClicks: finiteInt(raw.inline_link_clicks),
+      spend: finiteFloat(raw.spend),
+      conversions: finiteFloat(raw.conversions),
+      frequency: finiteFloat(raw.frequency),
+      cpm: finiteFloat(raw.cpm),
+      inlineLinkClickCtr: finiteFloat(raw.inline_link_click_ctr),
+      costPerInlineLinkClick: finiteFloat(raw.cost_per_inline_link_click),
       dateStart: raw.date_start ?? "",
       dateStop: raw.date_stop ?? "",
     };
