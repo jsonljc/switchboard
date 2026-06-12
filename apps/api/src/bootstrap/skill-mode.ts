@@ -54,11 +54,6 @@ interface SkillModeBootstrapDeps {
    */
   childWorkSubmitter?: import("@switchboard/core/skill-runtime").ChildWorkSubmitter;
   /**
-   * Optional WorkTraceStore. When provided, PrismaOpportunityStore uses it to
-   * emit WorkTrace entries on stage transitions. When absent, stage transitions
-   * are persisted but not traced.
-   */
-  /**
    * Optional per-org PaymentPort factory: the SAME instance app.ts decorates as
    * `app.paymentPortFactory`, so the Noop in-process issued map round-trips with
    * the payments webhook's retrievePayment. When provided, Alex gets a
@@ -376,14 +371,14 @@ export async function bootstrapSkillMode(
   // Registered only when a paymentPortFactory is injected (the SAME instance the
   // payments webhook uses), mirroring delegate/childWorkSubmitter. read+idempotent
   // => governance auto-approves in all modes; it rides the booking's prior approval.
-  const depositLinkFactory = deps.paymentPortFactory
-    ? await import("./deposit-link-wiring.js").then(({ buildDepositLinkToolFactory }) =>
-        buildDepositLinkToolFactory({
-          paymentPortFactory: deps.paymentPortFactory!,
-          findBookingById: (bookingId: string) => bookingStore.findById(bookingId),
-        }),
-      )
-    : undefined;
+  let depositLinkFactory: SkillToolFactory | undefined;
+  if (deps.paymentPortFactory) {
+    const { buildDepositLinkToolFactory } = await import("./deposit-link-wiring.js");
+    depositLinkFactory = buildDepositLinkToolFactory({
+      paymentPortFactory: deps.paymentPortFactory,
+      findBookingById: (bookingId: string) => bookingStore.findById(bookingId),
+    });
+  }
 
   // Per-request tool factories — the executor materializes a fresh tool per
   // execution with a trusted SkillRequestContext closed in. These are the
