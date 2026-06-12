@@ -49,16 +49,25 @@ describe("stripe provisioning -> payment factory seam", () => {
       secretKey: "sk_test_seam",
     });
     expect(captured).not.toBeNull();
+    // Producer-side invariant made explicit at the seam: externalAccountId === connectedAccountId.
+    expect(captured!.externalAccountId).toBe("acct_seam123");
 
     // CONSUMER: feed the captured row into the #999 factory with the DEFAULT (real) decrypt.
     const stripeClientFactory = vi.fn(() => fakeStripeClient());
     const factoryPrisma = {
       connection: {
-        findFirst: vi.fn(async () => ({
-          id: "conn_seam",
-          credentials: captured!.credentials,
-          externalAccountId: captured!.externalAccountId,
-        })),
+        // Honor the factory's WHERE so the seam also pins the writer's serviceId/status to what
+        // the factory queries for: a row written with status != "connected" or serviceId !=
+        // "stripe" would not be found and would fall through to Noop.
+        findFirst: vi.fn(async ({ where }: { where: { serviceId: string; status: string } }) =>
+          where.serviceId === "stripe" && where.status === "connected"
+            ? {
+                id: "conn_seam",
+                credentials: captured!.credentials,
+                externalAccountId: captured!.externalAccountId,
+              }
+            : null,
+        ),
       },
     };
     const factory = createPaymentPortFactory({
