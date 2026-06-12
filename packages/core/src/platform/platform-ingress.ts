@@ -157,7 +157,7 @@ export class PlatformIngress {
           traceId: existingTrace.traceId,
           error: existingTrace.error,
         };
-        return {
+        const replayResponse = {
           ok: true as const,
           result,
           workUnit: {
@@ -175,6 +175,24 @@ export class PlatformIngress {
             idempotencyKey: existingTrace.idempotencyKey,
           },
         };
+        // D5-3/D4-1: an ingress park (require_approval) persists a pending_approval
+        // WorkTrace; a replay MUST preserve the approvalRequired marker so an
+        // approval-aware consumer (e.g. the Riley pause submitter) classifies the
+        // replay as parked instead of misreading it as an ungated execution. Match on
+        // BOTH outcome AND ingressPath: pending_approval is not unique to ingress — the
+        // recommendation emission mirror also persists a KEYED pending_approval row
+        // (ingressPath "agent_recommendation_emission"), so outcome alone would mis-mark
+        // a non-park trace if a key ever collided. Only a platform_ingress park is
+        // re-marked. lifecycleId/bindingHash are intentionally NOT reconstructed:
+        // buildWorkTrace persists neither, and they were already minted on the first
+        // park (the submitter tolerates their absence).
+        if (
+          existingTrace.outcome === "pending_approval" &&
+          existingTrace.ingressPath === "platform_ingress"
+        ) {
+          return { ...replayResponse, approvalRequired: true as const };
+        }
+        return replayResponse;
       }
     }
 

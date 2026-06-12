@@ -9,6 +9,8 @@ import type { ExecutionResult } from "../execution-result.js";
 import type { GovernanceDecision, ExecutionConstraints } from "../governance-types.js";
 import type { ExecutionMode } from "../execution-context.js";
 import type { CanonicalSubmitRequest } from "../canonical-request.js";
+import type { WorkTrace } from "../work-trace.js";
+import type { WorkOutcome } from "../types.js";
 
 const testConstraints: ExecutionConstraints = {
   allowedModelTiers: ["default"],
@@ -130,6 +132,83 @@ function createConfig(
     },
     traceStore: overrides.traceStore,
   };
+}
+
+/**
+ * An in-memory WorkTraceStore with a real org-scoped idempotency lookup, so a
+ * park-then-replay round-trip exercises the actual cached-replay branch (not a
+ * hand-built trace fixture). Mirrors the production store's contract closely
+ * enough for the ingress: persist/claim index by (organizationId, idempotencyKey).
+ */
+function inMemoryTraceStore(): WorkTraceStore {
+  const byKey = new Map<string, WorkTrace>();
+  const byWorkUnit = new Map<string, WorkTrace>();
+  const keyOf = (orgId: string, key: string): string => `${orgId}::${key}`;
+  return {
+    persist: async (trace) => {
+      byWorkUnit.set(trace.workUnitId, trace);
+      if (trace.idempotencyKey) {
+        byKey.set(keyOf(trace.organizationId, trace.idempotencyKey), trace);
+      }
+    },
+    claim: async (trace) => {
+      const k = trace.idempotencyKey ? keyOf(trace.organizationId, trace.idempotencyKey) : null;
+      if (k && byKey.has(k)) return { claimed: false };
+      byWorkUnit.set(trace.workUnitId, trace);
+      if (k) byKey.set(k, trace);
+      return { claimed: true };
+    },
+    getByWorkUnitId: async (id) => {
+      const trace = byWorkUnit.get(id);
+      return trace ? { trace, integrity: { status: "ok" } } : null;
+    },
+    update: async (id, fields) => {
+      const existing = byWorkUnit.get(id);
+      if (!existing) {
+        return { ok: false, code: "WORK_TRACE_LOCKED", traceUnchanged: true, reason: "not found" };
+      }
+      const merged: WorkTrace = { ...existing, ...fields };
+      byWorkUnit.set(id, merged);
+      if (merged.idempotencyKey) {
+        byKey.set(keyOf(merged.organizationId, merged.idempotencyKey), merged);
+      }
+      return { ok: true, trace: merged };
+    },
+    getByIdempotencyKey: async (organizationId, key) => {
+      const trace = byKey.get(keyOf(organizationId, key));
+      return trace ? { trace, integrity: { status: "ok" } } : null;
+    },
+  };
+}
+
+/**
+ * A minimal resolved (non-pending_approval) trace the replay branch can rebuild a
+ * response from. Only the fields the replay reads are populated; the rest of the
+ * WorkTrace is irrelevant to the cached-replay path.
+ */
+function resolvedTraceFixture(
+  outcome: WorkOutcome,
+  ingressPath: WorkTrace["ingressPath"] = "platform_ingress",
+): WorkTrace {
+  return {
+    workUnitId: "wu-replay",
+    outcome,
+    executionSummary: "prior result",
+    executionOutputs: { ran: true },
+    mode: "skill",
+    durationMs: 5,
+    traceId: "trace-replay",
+    error: outcome === "failed" ? { code: "X", message: "m" } : undefined,
+    organizationId: "org-1",
+    requestedAt: "2026-06-01T00:00:00.000Z",
+    actor: { id: "user-1", type: "user" },
+    intent: "campaign.pause",
+    parameters: { campaignId: "camp-123" },
+    deploymentContext: { deploymentId: "dep-1", skillSlug: "test-skill" },
+    trigger: "chat",
+    idempotencyKey: "k-resolved",
+    ingressPath,
+  } as unknown as WorkTrace;
 }
 
 describe("PlatformIngress", () => {
@@ -371,5 +450,79 @@ describe("PlatformIngress", () => {
       expect(response.workUnit.deployment.deploymentId).toBe("dep-resolved");
       expect(response.workUnit.traceId.length).toBeGreaterThan(0);
     }
+  });
+
+  describe("idempotent replay reconstructs the approval marker (D5-3/D4-1)", () => {
+    it("a pending_approval replay returns approvalRequired:true, like the first park", async () => {
+      const traceStore = inMemoryTraceStore();
+      const config = createConfig({ decision: buildApprovalDecision(), traceStore });
+      const ingress = new PlatformIngress(config);
+      const keyed: CanonicalSubmitRequest = {
+        ...baseRequest,
+        idempotencyKey: "mutate:riley:rec_1:pause",
+      };
+
+      // First submit: the genuine park persists a pending_approval trace.
+      const first = await ingress.submit(keyed);
+      expect(first.ok).toBe(true);
+      expect("approvalRequired" in first && first.approvalRequired).toBe(true);
+
+      // Second submit (same key): the idempotent replay (e.g. a weekly-cron retry).
+      // It MUST carry the same approval marker the first park returned, so an
+      // approval-aware consumer classifies it as parked, not as a phantom execution.
+      const second = await ingress.submit(keyed);
+      expect(second.ok).toBe(true);
+      expect("approvalRequired" in second && second.approvalRequired).toBe(true);
+      if (second.ok) expect(second.result.outcome).toBe("pending_approval");
+    });
+
+    it.each(["completed", "failed", "queued"] as const)(
+      "a %s replay stays marker-free and shape-identical (marker scoped to pending_approval)",
+      async (outcome) => {
+        const trace = resolvedTraceFixture(outcome);
+        const traceStore: WorkTraceStore = {
+          persist: vi.fn().mockResolvedValue(undefined),
+          claim: vi.fn().mockResolvedValue({ claimed: true }),
+          getByWorkUnitId: vi.fn().mockResolvedValue(null),
+          update: vi.fn().mockResolvedValue({ ok: true, trace: {} as never }),
+          getByIdempotencyKey: vi.fn().mockResolvedValue({ trace, integrity: { status: "ok" } }),
+        };
+        const config = createConfig({ traceStore });
+        const ingress = new PlatformIngress(config);
+
+        const res = await ingress.submit({ ...baseRequest, idempotencyKey: "k-resolved" });
+
+        expect(res.ok).toBe(true);
+        // The marker is reconstructed ONLY for pending_approval; resolved outcomes
+        // replay unchanged (no approvalRequired key at all).
+        expect("approvalRequired" in res).toBe(false);
+        if (res.ok) {
+          expect(res.result.outcome).toBe(outcome);
+          expect(res.workUnit.idempotencyKey).toBe("k-resolved");
+        }
+      },
+    );
+
+    it("a non-ingress pending_approval replay (recommendation emission mirror row) is NOT marked", async () => {
+      // The emission mirror persists a KEYED pending_approval WorkTrace with ingressPath
+      // "agent_recommendation_emission". Only a platform_ingress park may be re-marked, so
+      // this replay must NOT carry approvalRequired even though the outcome matches.
+      const trace = resolvedTraceFixture("pending_approval", "agent_recommendation_emission");
+      const traceStore: WorkTraceStore = {
+        persist: vi.fn().mockResolvedValue(undefined),
+        claim: vi.fn().mockResolvedValue({ claimed: true }),
+        getByWorkUnitId: vi.fn().mockResolvedValue(null),
+        update: vi.fn().mockResolvedValue({ ok: true, trace: {} as never }),
+        getByIdempotencyKey: vi.fn().mockResolvedValue({ trace, integrity: { status: "ok" } }),
+      };
+      const config = createConfig({ traceStore });
+      const ingress = new PlatformIngress(config);
+
+      const res = await ingress.submit({ ...baseRequest, idempotencyKey: "k-resolved" });
+
+      expect(res.ok).toBe(true);
+      expect("approvalRequired" in res).toBe(false);
+      if (res.ok) expect(res.result.outcome).toBe("pending_approval");
+    });
   });
 });
