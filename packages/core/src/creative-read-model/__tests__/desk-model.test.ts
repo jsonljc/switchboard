@@ -141,5 +141,93 @@ describe("buildMiraDeskModel — review decisions (PR4)", () => {
     expect(desk.keptDrafts[0]?.thumbnailUrl).toBe("t1");
     // passed (x1) appears in neither bucket.
     expect(desk.inProduction).toEqual([]);
+    // no publish failures here → the attention bucket stays empty.
+    expect(desk.needsAttention).toEqual([]);
+  });
+});
+
+describe("buildMiraDeskModel — publish failures (D9-F3)", () => {
+  it("routes a kept draft whose publish failed into needsAttention with a publish_failed problem (not the calm kept shelf)", () => {
+    const jobs: MiraCreativeJobSummary[] = [
+      job({
+        id: "pf",
+        status: "draft_ready",
+        draft: { videoUrl: "v", thumbnailUrl: "t" },
+        reviewDecision: "kept",
+        publishStatus: "publish_failed",
+      }),
+    ];
+    const desk = buildMiraDeskModel({ jobs, counts: { ...counts, total: 1 } });
+    expect(desk.needsAttention.map((i) => i.id)).toEqual(["pf"]);
+    expect(desk.needsAttention[0]?.problem).toBe("publish_failed");
+    expect(desk.needsAttention[0]?.state).toBe("approved_draft");
+    // It must NOT also sit silently in the calm kept shelf.
+    expect(desk.keptDrafts).toEqual([]);
+  });
+
+  it("keeps a successfully parked publish in the kept shelf (a success is not a problem)", () => {
+    const jobs: MiraCreativeJobSummary[] = [
+      job({
+        id: "ok",
+        status: "draft_ready",
+        draft: { videoUrl: "v", thumbnailUrl: "t" },
+        reviewDecision: "kept",
+        publishStatus: "parked_paused",
+      }),
+    ];
+    const desk = buildMiraDeskModel({ jobs, counts: { ...counts, total: 1 } });
+    expect(desk.keptDrafts.map((i) => i.id)).toEqual(["ok"]);
+    expect(desk.keptDrafts[0]?.problem).toBeUndefined();
+    expect(desk.needsAttention).toEqual([]);
+  });
+
+  it("drops a publish failure the operator already dismissed (passed) from every bucket", () => {
+    const jobs: MiraCreativeJobSummary[] = [
+      job({
+        id: "pp",
+        status: "draft_ready",
+        draft: { videoUrl: "v" },
+        reviewDecision: "passed",
+        publishStatus: "publish_failed",
+      }),
+    ];
+    const desk = buildMiraDeskModel({ jobs, counts: { ...counts, total: 1 } });
+    expect(desk.needsAttention).toEqual([]);
+    expect(desk.keptDrafts).toEqual([]);
+  });
+
+  it("leaves needsAttention empty for ordinary kept/ready drafts and keeps isEmpty independent", () => {
+    const jobs: MiraCreativeJobSummary[] = [
+      job({ id: "k", status: "draft_ready", draft: { videoUrl: "v" }, reviewDecision: "kept" }),
+      job({ id: "r", status: "draft_ready", draft: { videoUrl: "w" } }),
+    ];
+    const desk = buildMiraDeskModel({ jobs, counts: { ...counts, total: 2 } });
+    expect(desk.needsAttention).toEqual([]);
+    expect(desk.keptDrafts.map((i) => i.id)).toEqual(["k"]);
+    expect(desk.isEmpty).toBe(false);
+  });
+
+  it("lets a render failure outrank a stray publish marker (defensive precedence)", () => {
+    // status:"failed" + publishStatus never co-occur in real data (publish runs
+    // only after a kept draft_ready); pin the precedence so a future refactor
+    // cannot mislabel a render failure as a publish failure.
+    const jobs: MiraCreativeJobSummary[] = [
+      job({ id: "x", status: "failed", publishStatus: "publish_failed" }),
+    ];
+    const desk = buildMiraDeskModel({ jobs, counts: { ...counts, total: 1 } });
+    expect(desk.inProduction.find((i) => i.id === "x")?.problem).toBe("quality_failed");
+    expect(desk.needsAttention).toEqual([]);
+  });
+
+  it("keeps the attention bucket to genuine publish failures (membership tracks the derived problem)", () => {
+    // A kept draft that is render-failed AND carries a publish marker is
+    // unreachable in real data, but pin the invariant: needsAttention ⇔ a
+    // publish_failed problem, so render failure (quality_failed) can never land
+    // there wearing a publish-failed badge.
+    const jobs: MiraCreativeJobSummary[] = [
+      job({ id: "rf", status: "failed", reviewDecision: "kept", publishStatus: "publish_failed" }),
+    ];
+    const desk = buildMiraDeskModel({ jobs, counts: { ...counts, total: 1 } });
+    expect(desk.needsAttention).toEqual([]);
   });
 });

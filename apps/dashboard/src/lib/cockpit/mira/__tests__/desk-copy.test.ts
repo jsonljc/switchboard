@@ -21,6 +21,10 @@ describe("desk copy guardrails", () => {
     expect(PROBLEM_COPY.quality_failed).toMatch(/quality/i);
   });
 
+  it("maps the publish_failed problem to a plain Meta message (D9-F3)", () => {
+    expect(PROBLEM_COPY.publish_failed).toMatch(/meta/i);
+  });
+
   it("contains NO Phase-2 banned words anywhere", () => {
     const all = [
       ...Object.values(STAGE_COPY),
