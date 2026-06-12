@@ -86,6 +86,25 @@ describe("managed webhook HMAC over true raw bytes (F9)", () => {
     await app.close();
   });
 
+  it("rejects a payload signed over the re-serialized body (raw bytes are authoritative)", async () => {
+    // Body is NON_CANONICAL_RAW, but the signature is computed over its canonical
+    // re-serialization (CANONICAL_RAW). A route that (incorrectly) HMAC'd
+    // JSON.stringify(request.body) would ACCEPT this (200); verifying over the true
+    // raw bytes REJECTS it (401). This pins "raw bytes are authoritative".
+    const app = await buildApp(makeWhatsAppEntry());
+    const res = await app.inject({
+      method: "POST",
+      url: "/webhook/managed/abc",
+      headers: {
+        "content-type": "application/json",
+        "x-hub-signature-256": sign(CANONICAL_RAW),
+      },
+      payload: NON_CANONICAL_RAW,
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
   it("verifies a canonical raw payload", async () => {
     const app = await buildApp(makeWhatsAppEntry());
     const res = await app.inject({
