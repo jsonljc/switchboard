@@ -100,6 +100,21 @@ export function attributeOneRecommendation(input: AttributeOneInput): RileyOutco
     }
   }
 
+  // D7-3/D3-3 defense-in-depth: a non-finite delta is the ABSENCE of a usable
+  // movement, not a movement of NaN. Coerce deltaPct (and the cents delta) to
+  // null at the source so every downstream `!== null`/`=== null` gate — the
+  // noise floor, renderability (:117), causalStrength, the trustDelta block,
+  // deriveCorroboration, and the persisted metricSummary — reads it as honest
+  // absence end-to-end. A NaN reaches here only if a provider regresses the
+  // finite-guard at the meta-insights-adapter boundary (the producer half of
+  // this fix); Number.isFinite is the canonical guard
+  // (feedback_nan_blind_comparison_gates, #939). Normalizing here rather than at
+  // each read site is load-bearing: deriveCorroboration's own `deltaPct === null`
+  // reject is itself NaN-blind (NaN === null is false, NaN >= 0 is false), so a
+  // per-site guard at :117 alone would leave corroboration and the summary poisoned.
+  if (deltaPct !== null && !Number.isFinite(deltaPct)) deltaPct = null;
+  if (deltaAmountCents !== null && !Number.isFinite(deltaAmountCents)) deltaAmountCents = null;
+
   // 5. Noise-floor check (only when no prior flag and deltas computable)
   const hadPriorFlag = flags.length > 0;
   if (!hadPriorFlag && deltaPct !== null) {
