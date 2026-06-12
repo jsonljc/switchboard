@@ -46,6 +46,14 @@ vi.mock("../work-log", () => ({
   ),
 }));
 
+// Alex-only slots (added in F10) — stubbed so the shell tests stay focused.
+vi.mock("../alex-pipeline", () => ({
+  AlexPipeline: () => <div data-testid="slot-alex-pipeline" />,
+}));
+vi.mock("../alex-wins", () => ({
+  AlexWins: () => <div data-testid="slot-alex-wins" />,
+}));
+
 // Mock InboxAgentAvatar — avoids sprite/canvas setup
 vi.mock("@/components/inbox/inbox-agent-avatar", () => ({
   InboxAgentAvatar: ({ agentKey }: { agentKey: string }) => (
