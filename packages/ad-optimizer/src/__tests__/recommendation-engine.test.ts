@@ -457,4 +457,89 @@ describe("generateRecommendations", () => {
       expect(destructiveRec).toBeUndefined();
     });
   });
+
+  describe("zero-conversion burn (D1-1)", () => {
+    const kindsOf = (out: (RecommendationOutput | WatchOutput)[]): string[] =>
+      out.map((o) => (o.type === "recommendation" ? o.action : o.pattern));
+
+    // A DURABLE zero-conversion burn meeting both floors (spend 2100 > 50, clicks 600 >=
+    // 20). cpa reads 0 because safeDivide(spend, 0) = 0, so every cpa-multiple gate is
+    // false and the engine would go silent without the dedicated burn rule.
+    const burnInput = (over: Partial<RecommendationInput> = {}): RecommendationInput => ({
+      campaignId: "camp-burn",
+      campaignName: "Zero Conversion Burn",
+      diagnoses: [],
+      deltas: [makeDelta("cpa", 0, 0, "stable", false)],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 2100,
+      targetBreach: { periodsAboveTarget: 14, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 600, conversions: 0, days: 7 },
+      ...over,
+    });
+
+    it("does NOT go silent on a durable burn (spend>floor, conversions=0, clicks>=20)", () => {
+      const out = generateRecommendations(burnInput());
+      // The accrued breach must surface SOMETHING actionable, never [].
+      expect(out.length).toBeGreaterThan(0);
+      const kinds = kindsOf(out);
+      // Either a pause-class rec OR a burn watch — never silence, never a manufactured
+      // "good"/scale signal from a cpa=0 reading.
+      expect(kinds.some((k) => k === "pause" || k === "review_budget" || k === "burn")).toBe(true);
+      expect(kinds).not.toContain("scale");
+    });
+
+    it("routes a durable zero-conversion burn to a pause", () => {
+      expect(kindsOf(generateRecommendations(burnInput()))).toContain("pause");
+    });
+
+    it("emits a burn watch (not a pause) when the burn is not yet durable", () => {
+      const out = generateRecommendations(
+        burnInput({
+          targetBreach: { periodsAboveTarget: 3, granularity: "daily", isApproximate: false },
+        }),
+      );
+      expect(kindsOf(out)).toContain("burn");
+      // Sub-durable: visible, but never an actual pause below the durability threshold.
+      expect(recs(out).some((r) => r.action === "pause")).toBe(false);
+    });
+
+    it("does NOT fire below the click floor (a quiet zero-day is noise)", () => {
+      const out = generateRecommendations(
+        burnInput({ evidence: { clicks: 8, conversions: 0, days: 7 } }), // < 20-click floor
+      );
+      expect(recs(out).some((r) => r.action === "pause")).toBe(false);
+      expect(kindsOf(out)).not.toContain("burn");
+    });
+
+    it("does NOT fire below the spend floor (trivial spend is a no-data day)", () => {
+      const out = generateRecommendations(
+        burnInput({ currentSpend: 40, evidence: { clicks: 600, conversions: 0, days: 7 } }),
+      );
+      expect(recs(out).some((r) => r.action === "pause")).toBe(false);
+      expect(kindsOf(out)).not.toContain("burn");
+    });
+
+    it("abstains on a non-finite spend (a NaN must not pass the floor as a burn)", () => {
+      const out = generateRecommendations(
+        burnInput({ currentSpend: NaN, evidence: { clicks: 600, conversions: 0, days: 7 } }),
+      );
+      expect(recs(out).some((r) => r.action === "pause")).toBe(false);
+      expect(kindsOf(out)).not.toContain("burn");
+    });
+
+    it("leaves the normal cpa-multiple path intact for a real (nonzero-conversion) breach", () => {
+      const out = generateRecommendations(
+        burnInput({
+          deltas: [makeDelta("cpa", 350, 350, "stable", false)], // cpa 350 = 3.5x target
+          evidence: { clicks: 600, conversions: 6, days: 7 }, // meets the destructive floor
+        }),
+      );
+      const kinds = kindsOf(out);
+      // The real durable breach still pauses through the existing gate, and the burn rule
+      // does NOT fire (conversions != 0), so no `burn` watch is manufactured.
+      expect(kinds).toContain("pause");
+      expect(kinds).not.toContain("burn");
+    });
+  });
 });

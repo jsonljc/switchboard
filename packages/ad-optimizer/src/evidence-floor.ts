@@ -19,6 +19,13 @@ export const EVIDENCE_FLOORS: Record<EvidenceFamily, Evidence> = {
   measurement: { clicks: 0, conversions: 0, days: 0 },
 };
 
+/** Minimum window clicks for a zero-conversion day/window to count as conclusive signal
+ * rather than low-traffic noise. SHARED, single source of truth: the breach detector's
+ * durability accrual (`meta-campaign-insights-provider.ts`) and the engine's
+ * zero-conversion-burn rule (`recommendation-engine.ts`) both read it, so the two floors
+ * can never silently diverge on a future tuning pass. Tune via the eval, never silently. */
+export const ZERO_CONVERSION_DAY_CLICK_FLOOR = 20;
+
 /** Derived from the consolidated ACTION_CONTRACT (Riley v3 slice 2). API unchanged. */
 export function evidenceFamilyFor(action: AdRecommendationAction): EvidenceFamily {
   return ACTION_CONTRACT[action].evidenceFamily;
