@@ -13,6 +13,7 @@ import { MiraReadyToReview } from "./mira-ready-to-review";
 import { MiraInProductionTray } from "./mira-in-production-tray";
 import { MiraBriefBox } from "./mira-brief-box";
 import { MiraKeptShelf } from "./mira-kept-shelf";
+import { MiraNeedsAttention } from "./mira-needs-attention";
 import { MiraDeskSkeleton } from "./mira-desk-skeleton";
 
 // Phase-2 Director's Desk. Module order (Decision 3): brief box · the one hero
@@ -69,6 +70,10 @@ export function MiraDeskPage() {
         >
           {(desk) => (
             <>
+              {/* Attention first: a publishing dead-letter (D9-F3) is the one
+                  thing the operator must not miss; the module self-hides when
+                  there is nothing wrong, leaving the happy-path desk unchanged. */}
+              <MiraNeedsAttention items={desk.needsAttention} />
               <MiraBriefBox />
               <MiraReadyToReview count={desk.readyToReviewCount} />
               <MiraInProductionTray items={desk.inProduction} />

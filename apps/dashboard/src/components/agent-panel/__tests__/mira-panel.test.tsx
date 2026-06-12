@@ -1,19 +1,27 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 const push = vi.fn();
 let enabled: boolean | undefined = false;
+let deskData: {
+  readyToReviewCount?: number;
+  needsAttention?: Array<{ id: string; title: string }>;
+} = { readyToReviewCount: 3 };
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/hooks/use-mira-enabled", () => ({
   useMiraEnabled: () => ({ enabled, isLoading: false }),
 }));
 vi.mock("@/hooks/use-mira-desk", () => ({
-  useMiraDesk: vi.fn().mockReturnValue({ data: { readyToReviewCount: 3 } }),
+  useMiraDesk: () => ({ data: deskData }),
 }));
 
 import { MiraPanel } from "@/components/agent-panel/mira-panel";
 
 describe("MiraPanel", () => {
+  beforeEach(() => {
+    deskData = { readyToReviewCount: 3 };
+  });
+
   it("not enabled → honest 'not set up', no dead anchors", () => {
     enabled = false;
     const { container } = render(<MiraPanel />);
@@ -45,5 +53,19 @@ describe("MiraPanel", () => {
     enabled = true;
     render(<MiraPanel />);
     expect(screen.getByText("3 drafts ready to review")).toBeInTheDocument();
+  });
+
+  it("flags a publish failure that needs attention, even when nothing is waiting (D9-F3)", () => {
+    enabled = true;
+    deskData = { readyToReviewCount: 0, needsAttention: [{ id: "pf", title: "Botox promo" }] };
+    render(<MiraPanel />);
+    expect(screen.getByText(/1 draft needs attention/i)).toBeInTheDocument();
+  });
+
+  it("stays quiet when nothing needs attention", () => {
+    enabled = true;
+    deskData = { readyToReviewCount: 2, needsAttention: [] };
+    render(<MiraPanel />);
+    expect(screen.queryByText(/needs attention/i)).toBeNull();
   });
 });

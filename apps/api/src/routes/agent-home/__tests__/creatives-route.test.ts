@@ -382,3 +382,67 @@ describe("review decisions through the real endpoints (inbox-zero)", () => {
     expect(JSON.stringify(desk)).not.toContain("ibz-passed");
   });
 });
+
+// Prove the publish axis flows raw row → reader → build-read-model →
+// buildMiraDeskModel → desk JSON (D9-F3): a kept draft whose free-form
+// metaPublishStatus dead-lettered must surface in the desk's needsAttention
+// bucket, NOT sit silently in the calm kept shelf. The per-unit tests cover the
+// model in isolation; this locks the reader↔model↔route seam end to end so a
+// future reader/mapper change can't quietly drop the publish marker.
+describe("publish failures through the real endpoints (D9-F3)", () => {
+  let ctx: TestContext;
+
+  function readyKept(id: string, over: Record<string, unknown>) {
+    return baseJob({
+      id,
+      createdAt: new Date("2026-05-26"),
+      currentStage: "complete",
+      stageOutputs: {
+        production: { assembledVideos: [{ videoUrl: `https://x/${id}.mp4`, thumbnailUrl: "t" }] },
+      },
+      reviewDecision: "kept",
+      ...over,
+    });
+  }
+  // A failed publish, a successful (parked) publish, and an unattempted one —
+  // all kept, all draft_ready. Only the failed one needs the operator.
+  const ROWS = [
+    readyKept("pub-failed", { metaPublishStatus: "publish_failed" }),
+    readyKept("pub-ok", { metaPublishStatus: "parked_paused" }),
+    readyKept("pub-none", {}),
+  ];
+
+  beforeAll(async () => {
+    ctx = await buildTestServer();
+    (ctx.app as unknown as { prisma: unknown }).prisma = {
+      creativeJob: {
+        findMany: async (args: { where?: { organizationId?: string } }) =>
+          args?.where?.organizationId === PILOT ? ROWS : [],
+      },
+      organizationConfig: { findFirst: async () => null },
+    };
+    await ctx.app.register(creativesRoute, { prefix: "/api/dashboard" });
+    await ctx.app.orgAgentEnablementStore!.enable(PILOT, "mira");
+  });
+  afterAll(async () => ctx.app.close());
+
+  it("desk: a dead-lettered publish surfaces in needsAttention, never the calm kept shelf", async () => {
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/dashboard/agents/mira/desk",
+      headers: { "x-org-id": PILOT },
+    });
+    expect(res.statusCode).toBe(200);
+    const { desk } = res.json() as {
+      desk: {
+        needsAttention: { id: string; problem?: string }[];
+        keptDrafts: { id: string }[];
+      };
+    };
+    // The failed publish is pulled out for attention, tagged with its reason…
+    expect(desk.needsAttention.map((d) => d.id)).toEqual(["pub-failed"]);
+    expect(desk.needsAttention[0]?.problem).toBe("publish_failed");
+    // …and the successful + unattempted kept drafts stay calm on the shelf.
+    expect(desk.keptDrafts.map((d) => d.id).sort()).toEqual(["pub-none", "pub-ok"]);
+  });
+});

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMiraEnabled } from "@/hooks/use-mira-enabled";
 import { useMiraDesk } from "@/hooks/use-mira-desk";
 import { PrintedPortraitAvatar } from "@/components/agent-avatar/printed-portrait-avatar";
+import { T } from "@/components/cockpit/tokens";
 import styles from "./agent-panel.module.css";
 
 /**
@@ -19,6 +20,9 @@ export function MiraPanel() {
 
   if (enabled) {
     const ready = deskQ.data?.readyToReviewCount;
+    // D9-F3 — roll up the desk's attention bucket so a dead-lettered publishing
+    // attempt is visible on the Home drill-in, not only inside Mira's workspace.
+    const attention = deskQ.data?.needsAttention?.length ?? 0;
     return (
       <div className={styles.notset}>
         <PrintedPortraitAvatar agentKey="mira" size={84} hero />
@@ -31,6 +35,13 @@ export function MiraPanel() {
             {ready === 0
               ? "No drafts waiting"
               : `${ready} draft${ready === 1 ? "" : "s"} ready to review`}
+          </span>
+        ) : null}
+        {attention > 0 ? (
+          <span className={styles.notsetMeta} style={{ color: T.red }}>
+            {`${attention} draft${attention === 1 ? "" : "s"} ${
+              attention === 1 ? "needs" : "need"
+            } attention`}
           </span>
         ) : null}
         <button type="button" className={styles.miraOpenCta} onClick={() => router.push("/mira")}>

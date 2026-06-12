@@ -26,11 +26,13 @@ export const UGC_PHASE_COPY: Record<string, string> = {
 export const AWAITING_GO_COPY = "Waiting for your go-ahead";
 
 // Problem copy only surfaces when something is wrong (default tray is plain status).
+// "Publishing" (gerund) clears the copy-hygiene guard; the bare CTA verb does not.
 export const PROBLEM_COPY: Record<MiraDeskProblemCode, string> = {
   needs_input: "Needs your input",
   reference_missing: "Reference image missing",
   unsafe: "Failed a safety check",
   quality_failed: "Draft failed a quality check",
+  publish_failed: "Publishing to Meta failed",
 };
 
 // Static Desk strings. No banned words; future affordances use neutral phrasing.
@@ -44,6 +46,11 @@ export const DESK_COPY = {
   keptTitle: "Kept drafts",
   keptSub: "Drafts you kept. Sending to Riley comes later.",
   keptEmpty: "Drafts you keep will live here. Sending them to Riley comes later.",
+  // D9-F3 — the attention module: kept drafts whose Meta publishing dead-lettered.
+  // Renders only when non-empty, at the top of the desk, so a busy operator
+  // learns that publishing failed without opening that one creative.
+  needsAttentionTitle: "Needs attention",
+  needsAttentionSub: "Open a draft to see what happened.",
 } as const;
 
 // ---------------------------------------------------------------------------

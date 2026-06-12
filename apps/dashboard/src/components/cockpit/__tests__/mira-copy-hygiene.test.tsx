@@ -32,6 +32,7 @@ const SOURCES: Array<{ path: string; allow?: string[] }> = [
   // Phase 2 Director's Desk surfaces:
   { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-desk-page.tsx") },
   { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-in-production-tray.tsx") },
+  { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-needs-attention.tsx") },
   { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-ready-to-review.tsx") },
   { path: resolve(DASHBOARD_ROOT, "src/lib/cockpit/mira/desk-copy.ts") },
   { path: resolve(DASHBOARD_ROOT, "src/components/cockpit/mira/mira-brief-box.tsx") },
