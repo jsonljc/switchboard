@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import rawBody from "fastify-raw-body";
 import { timingSafeEqual } from "node:crypto";
 import type { ReplySink } from "@switchboard/core";
 import { ChannelGateway, setMetrics } from "@switchboard/core";
@@ -68,6 +69,18 @@ async function main() {
 
   // Parse application/x-www-form-urlencoded (Slack interactive payloads)
   registerSlackFormEncodedParser(app);
+
+  // Capture the raw request body for routes that opt in via { config: { rawBody: true } }.
+  // The managed webhook verifies HMAC signatures over the EXACT bytes the platform signed;
+  // re-serializing request.body silently drops valid inbound messages (security audit F9).
+  // global:false so only opted-in routes pay the buffering cost. Mirrors apps/api/src/app.ts.
+  // Registered before the managed routes below so fastify-raw-body's onRoute hook sees them.
+  await app.register(rawBody, {
+    field: "rawBody",
+    global: false,
+    encoding: "utf8",
+    runFirst: true,
+  });
 
   // Platform ingress adapter — all chat traffic routes through the API server. The hop
   // authenticates as a trusted internal service with INTERNAL_API_SECRET (F-15): the chat

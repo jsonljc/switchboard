@@ -228,6 +228,9 @@ importers:
       fastify:
         specifier: 5.8.5
         version: 5.8.5
+      fastify-raw-body:
+        specifier: ^5.0.0
+        version: 5.0.0
       ioredis:
         specifier: ^5.10.1
         version: 5.10.1

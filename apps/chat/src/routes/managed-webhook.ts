@@ -66,7 +66,7 @@ export function registerManagedWebhookRoutes(app: FastifyInstance, deps: Managed
     return reply.code(200).send("OK");
   });
 
-  app.post("/webhook/managed/:webhookId", async (request, reply) => {
+  app.post("/webhook/managed/:webhookId", { config: { rawBody: true } }, async (request, reply) => {
     const { webhookId } = request.params as { webhookId: string };
     const webhookPath = `/webhook/managed/${webhookId}`;
 
@@ -91,9 +91,22 @@ export function registerManagedWebhookRoutes(app: FastifyInstance, deps: Managed
       );
       return reply.code(401).send({ error: "Signature verification unavailable" });
     }
-    const rawBody =
-      ((request as unknown as Record<string, unknown>).rawBody as string) ??
-      JSON.stringify(request.body);
+    // Verify the HMAC against the EXACT bytes the platform signed. fastify-raw-body
+    // (registered in main.ts; opted in via { config: { rawBody: true } } above) populates
+    // request.rawBody for the JSON path, and the Slack form parser sets it for interactive
+    // payloads. Re-serializing request.body (JSON.stringify) is not byte-identical to what
+    // Meta/Slack signed (key order, unicode escaping, whitespace), so it silently 401s valid
+    // inbound messages (security audit F9). If raw capture is unavailable, fail closed: a
+    // re-serialized HMAC can only ever produce a false rejection, never a valid match, so the
+    // old fallback added no security and only hid a wiring regression.
+    const rawBody = (request as unknown as { rawBody?: string }).rawBody;
+    if (typeof rawBody !== "string") {
+      app.log.error(
+        { webhookPath, channel: gatewayEntry.channel },
+        "Managed webhook raw body unavailable (raw-body capture not wired); rejecting",
+      );
+      return reply.code(401).send({ error: "Signature verification unavailable" });
+    }
     const headers = request.headers as Record<string, string | undefined>;
     if (!gatewayEntry.adapter.verifyRequest(rawBody, headers)) {
       return reply.code(401).send({ error: "Invalid signature" });
