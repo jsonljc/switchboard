@@ -15,6 +15,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { PrismaContactStore } from "@switchboard/db";
+import { maskPhone } from "@switchboard/core/audit";
 import { parseAndVerifySignedRequest } from "../lib/meta-signed-request.js";
 
 interface DeletionRequestBody {
@@ -24,6 +25,28 @@ interface DeletionRequestBody {
 interface MetaDeletionDeps {
   /** Override for tests; defaults to process.env.META_APP_SECRET. */
   appSecret?: string;
+}
+
+/**
+ * Build a log-safe descriptor of a deletion error. The matched phone values can
+ * appear in `userId` and — when a Prisma validation error renders the failing
+ * query — inside `err.message`. We strip every known phone value (replacing it
+ * with its last-4 mask) and drop the stack (its first line repeats the message),
+ * keeping name + code + sanitized message so the line stays debuggable without
+ * leaking PII (PDPA; audit F10).
+ */
+function describeDeletionError(
+  err: unknown,
+  phoneValues: readonly string[],
+): { name: string; code?: string; message: string } {
+  const name = err instanceof Error ? err.name : "UnknownError";
+  const rawCode = (err as { code?: unknown } | null | undefined)?.code;
+  const code = typeof rawCode === "string" ? rawCode : undefined;
+  let message = err instanceof Error ? err.message : String(err);
+  for (const value of phoneValues) {
+    if (value.length > 0) message = message.split(value).join(maskPhone(value));
+  }
+  return code === undefined ? { name, message } : { name, code, message };
 }
 
 export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (app, deps) => {
@@ -90,7 +113,10 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
           deletedIds.push(match.id);
         }
       } catch (err) {
-        request.log.error({ err, userId }, "Meta deletion: cascade delete failed");
+        request.log.error(
+          { err: describeDeletionError(err, candidateValues), userIdMasked: maskPhone(userId) },
+          "Meta deletion: cascade delete failed",
+        );
         failureReason = err instanceof Error ? err.message : "unknown_error";
       }
 
@@ -112,7 +138,11 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
         });
       } catch (err) {
         request.log.error(
-          { err, userId, confirmationCode },
+          {
+            err: describeDeletionError(err, candidateValues),
+            userIdMasked: maskPhone(userId),
+            confirmationCode,
+          },
           "Meta deletion: failed to persist request record",
         );
       }

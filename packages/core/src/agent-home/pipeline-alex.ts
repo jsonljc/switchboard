@@ -1,4 +1,5 @@
 import { formatRelativeAge } from "./relative-age.js";
+import { maskPhone, PHONE_MASK_FALLBACK } from "../audit/mask-phone.js";
 import type { PipelineViewModel, PipelineTileViewModel, PipelineStage } from "./pipeline-types.js";
 
 export interface AlexPipelineRow {
@@ -56,8 +57,8 @@ function classifyAlexStage(row: AlexPipelineRow, now: Date): PipelineStage {
 function alexTileName(row: AlexPipelineRow): string {
   if (row.name && row.name.trim().length > 0) return row.name;
   if (row.phone) {
-    const last4 = row.phone.replace(/\D/g, "").slice(-4);
-    if (last4.length === 4) return `…${last4}`;
+    const masked = maskPhone(row.phone);
+    if (masked !== PHONE_MASK_FALLBACK) return masked;
   }
   return "Unnamed lead";
 }
