@@ -256,6 +256,52 @@ function zeroConversionBurnOutput(
   };
 }
 
+/**
+ * Sub-durable breach visibility (D1-2). The daily durable gate only fires a
+ * recommendation at periodsAboveTarget >= KILL_DAYS_THRESHOLD (=7), so a daily breach of
+ * 1..6 days (below that threshold) satisfies no rec branch and no watch: it stays invisible
+ * until it crosses day 7, and the operator never sees it building. This rule surfaces that
+ * accumulating breach as an INFORMATIONAL `breach_building` watch (never a pause, never a
+ * recommendation). It is the conservative sibling of zeroConversionBurnOutput.
+ *
+ * Purely additive visibility. It fires strictly BELOW the durability threshold (the >=7
+ * case is owned by add_creative/pause) and only on daily granularity (weekly is owned by
+ * review_budget), so it changes no existing rec/watch/insight outcome. Like the burn it is
+ * returned AS a watch and appended OUTSIDE the rec-only evidence-floor map at the return,
+ * so that map (which only demotes recommendations) can never touch it. `checkBackDate` is
+ * left blank for the caller (campaign-decision.ts) to fill, like insufficientEvidenceWatch.
+ *
+ * NaN-blind floors pass garbage as false (#939): a non-finite cpa leaves the breach
+ * magnitude unknown, so guard it explicitly and abstain rather than surface a breach we
+ * cannot quantify. (NaN already fails the `>` below, so the guard is explicit intent; the
+ * safe fall-through is "no watch.")
+ */
+function breachBuildingOutput(
+  input: RecommendationInput,
+  base: Pick<RecommendationInput, "campaignId" | "campaignName">,
+): WatchOutput | null {
+  const { targetBreach, targetCPA } = input;
+  const cpa = getCPA(input.deltas);
+  const isAboveAddCreativeCpa =
+    Number.isFinite(cpa) && cpa > ADD_CREATIVE_CPA_MULTIPLIER * targetCPA;
+  const isBuilding =
+    isAboveAddCreativeCpa &&
+    targetBreach.granularity === "daily" &&
+    targetBreach.periodsAboveTarget >= 1 &&
+    targetBreach.periodsAboveTarget < KILL_DAYS_THRESHOLD;
+  if (!isBuilding) return null;
+
+  return {
+    type: "watch",
+    campaignId: base.campaignId,
+    campaignName: base.campaignName,
+    pattern: "breach_building",
+    message:
+      "Campaign CPA is above target and the breach is building (not yet a durable 7-day breach). Watching before any action.",
+    checkBackDate: "",
+  };
+}
+
 // ── Main export ──
 
 export function generateRecommendations(
@@ -271,6 +317,12 @@ export function generateRecommendations(
   // the conversion-based floor (which a zero-conversion burn can never meet) cannot demote
   // it; the burn self-gates on its own spend/click floors instead.
   const burn = zeroConversionBurnOutput(input, base);
+
+  // Sub-durable breach (D1-2): an accumulating 1..6-day daily breach above the add-creative
+  // multiple that no rec branch acts on yet. Surfaced as an informational watch, also
+  // appended outside the rec-only floor map so it is pure visibility, never a pause. null
+  // for the durable (>=7), weekly, sub-2x, or non-finite-cpa cases.
+  const breachBuilding = breachBuildingOutput(input, base);
 
   const isAboveAddCreativeCpa = cpa > ADD_CREATIVE_CPA_MULTIPLIER * targetCPA;
   const isAbovePauseCpa = cpa > PAUSE_CPA_MULTIPLIER * targetCPA;
@@ -427,9 +479,14 @@ export function generateRecommendations(
       ? rec
       : insufficientEvidenceWatch(base, rec.action, input.evidence),
   );
-  // The burn (if any) is prepended so a durable burn is the primary recommendation, and
-  // it bypasses the conversion-based floor above (see zeroConversionBurnOutput).
-  return burn ? [burn, ...floored] : floored;
+  // The burn (if any) is prepended so a durable burn is the primary recommendation, and it
+  // bypasses the conversion-based floor above (see zeroConversionBurnOutput). The
+  // breach_building watch (if any) is appended after the recs: it is informational
+  // visibility, never the primary action, and also bypasses the rec-only floor map. (burn
+  // and breach_building are mutually exclusive: a burn reads cpa=0, which fails the >2x
+  // gate, but both are handled so neither can ever be dropped.)
+  const withBurn = burn ? [burn, ...floored] : floored;
+  return breachBuilding ? [...withBurn, breachBuilding] : withBurn;
 }
 
 // ── Signal Health Recommendations ──
