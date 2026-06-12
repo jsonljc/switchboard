@@ -40,6 +40,7 @@ import { registerRoutes } from "./bootstrap/routes.js";
 import { registerInngest } from "./bootstrap/inngest.js";
 import { registerSwagger } from "./bootstrap/swagger.js";
 import { wireMetricsProvider } from "./bootstrap/wire-metrics.js";
+import { assertSafeSelfApprovalEnv } from "./bootstrap/self-approval-env.js";
 import type { Redis } from "ioredis";
 
 declare module "fastify" {
@@ -97,6 +98,12 @@ declare module "fastify" {
 }
 
 export async function buildServer() {
+  // Fail fast on prod-unsafe env before any I/O. Mirrors the dashboard's
+  // assertSafeDashboardAuthEnv(): a production boot with ALLOW_SELF_APPROVAL
+  // enabled but unacknowledged crashes here rather than silently disabling
+  // four-eyes approval (security audit 2026-06-10, F7).
+  assertSafeSelfApprovalEnv();
+
   // Initialize OpenTelemetry before Fastify starts (must be first)
   await initTelemetry();
 
