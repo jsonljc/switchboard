@@ -79,7 +79,6 @@ export function PaymentResultCard({ variant }: { variant: PaymentResultVariant }
           border: "1px solid #E7E0D6",
           borderRadius: "1rem",
           padding: "2.5rem 2rem",
-          boxShadow: "0 1px 2px rgba(26, 23, 20, 0.04)",
         }}
       >
         <div
