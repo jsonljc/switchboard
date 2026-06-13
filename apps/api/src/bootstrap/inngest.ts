@@ -548,6 +548,10 @@ export async function registerInngest(
       return { buffer, type };
     },
     failure: asyncFailure,
+    // Reconcile the canonical publish trace queued -> completed once the paused
+    // draft parks (honest-success sibling of the failure recorder's queued ->
+    // failed reconcile, wired with the same app.workTraceStore below).
+    traceStore: app.workTraceStore,
   };
 
   const dailyPatternDecayCron = inngestClient.createFunction(

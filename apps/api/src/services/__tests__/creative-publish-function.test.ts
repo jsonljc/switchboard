@@ -7,15 +7,58 @@ vi.mock("@switchboard/creative-pipeline", () => ({
   inngestClient: { createFunction: inngestCreateFunction },
 }));
 
-const { executeCreativePublish, CREATIVE_PUBLISH_FAILURE_PARAMS, PARKED_PAUSED } =
-  await import("../creative-publish-function.js");
+const {
+  executeCreativePublish,
+  reconcilePublishTraceCompleted,
+  CREATIVE_PUBLISH_FAILURE_PARAMS,
+  PARKED_PAUSED,
+  PAUSED_DRAFT_SUMMARY,
+} = await import("../creative-publish-function.js");
 const { makeOnFailureHandler } = await import("@switchboard/core");
 
 const ORG = "org_1";
 const JOB = "job_1";
+const WU = "wu_1";
 
 /** step.run mock: invokes the callback and returns its value (no Inngest memoization). */
 const step = { run: async (_id: string, fn: () => unknown) => fn() } as never;
+
+type TraceShape = {
+  outcome: string;
+  organizationId?: string;
+  intent?: string;
+  parameters?: Record<string, unknown>;
+};
+
+const QUEUED_PUBLISH_TRACE: TraceShape = {
+  outcome: "queued",
+  organizationId: ORG,
+  intent: "creative.job.publish",
+  parameters: { jobId: JOB },
+};
+
+/** WorkTraceStore subset the success reconcile uses; update returns the prod ok-shape. */
+function makeTraceStore(trace: TraceShape | null = QUEUED_PUBLISH_TRACE) {
+  return {
+    getByWorkUnitId: vi.fn(
+      async (): Promise<unknown> => (trace ? { trace, integrity: { status: "ok" } } : null),
+    ),
+    update: vi.fn(
+      async (): Promise<unknown> => ({
+        ok: true,
+        trace: { ...(trace ?? {}), outcome: "completed" },
+      }),
+    ),
+  };
+}
+
+/** The four meta ids makeAds() yields, in the dispatcher short-circuit's output shape. */
+const PARKED_OUTPUTS = {
+  metaAdId: "ad_1",
+  metaAdSetId: "set_1",
+  metaCreativeId: "cr_1",
+  metaCampaignId: "camp_1",
+} as const;
 
 function makeAds() {
   return {
@@ -56,13 +99,16 @@ function deps(
     ads?: ReturnType<typeof makeAds>;
     store?: ReturnType<typeof makeStore>;
     pre?: unknown;
+    traceStore?: ReturnType<typeof makeTraceStore> | null;
   } = {},
 ) {
   const ads = over.ads ?? makeAds();
   const store = over.store ?? makeStore(JOB_BASE);
+  const traceStore = over.traceStore === undefined ? null : over.traceStore;
   return {
     ads,
     store,
+    traceStore,
     d: {
       jobStore: store as never,
       assertPublishable: vi.fn().mockResolvedValue(
@@ -78,6 +124,7 @@ function deps(
       makeAdsClient: () => ads as never,
       fetchAsset: vi.fn().mockResolvedValue({ buffer: Buffer.from("x"), type: "video" as const }),
       failure: {} as never,
+      traceStore: traceStore as never,
     },
   };
 }
@@ -164,6 +211,154 @@ describe("executeCreativePublish", () => {
         severity: "warning",
         errorType: "async_job_retry_exhausted",
       }),
+    );
+  });
+
+  it("reconciles the canonical work trace queued -> completed once the draft parks", async () => {
+    const traceStore = makeTraceStore();
+    const { d } = deps({ traceStore });
+    await executeCreativePublish({ jobId: JOB, organizationId: ORG, workUnitId: WU }, step, d);
+    expect(traceStore.getByWorkUnitId).toHaveBeenCalledWith(WU);
+    expect(traceStore.update).toHaveBeenCalledWith(
+      WU,
+      expect.objectContaining({
+        outcome: "completed",
+        executionSummary: PAUSED_DRAFT_SUMMARY,
+        executionOutputs: PARKED_OUTPUTS,
+        completedAt: expect.any(String),
+      }),
+      { caller: "creative-publish", organizationId: ORG },
+    );
+  });
+
+  it("does not reconcile the trace when the event carries no workUnitId (back-compat)", async () => {
+    const traceStore = makeTraceStore();
+    const { d } = deps({ traceStore });
+    await executeCreativePublish({ jobId: JOB, organizationId: ORG }, step, d);
+    expect(traceStore.getByWorkUnitId).not.toHaveBeenCalled();
+    expect(traceStore.update).not.toHaveBeenCalled();
+  });
+
+  it("degrades to no trace reconcile when no trace store is wired", async () => {
+    const { d, store } = deps({ traceStore: null });
+    await executeCreativePublish({ jobId: JOB, organizationId: ORG, workUnitId: WU }, step, d);
+    // The publish itself still parks the draft.
+    expect(store._row().metaAdId).toBe("ad_1");
+    expect(store._row().metaPublishStatus).toBe(PARKED_PAUSED);
+  });
+});
+
+describe("reconcilePublishTraceCompleted", () => {
+  const ARGS = {
+    workUnitId: WU,
+    organizationId: ORG,
+    jobId: JOB,
+    outputs: PARKED_OUTPUTS,
+    completedAt: "2026-06-13T00:00:00.000Z",
+  };
+
+  it("reconciles a queued publish trace to completed, carrying outputs + summary + completedAt", async () => {
+    const traceStore = makeTraceStore();
+    await reconcilePublishTraceCompleted(traceStore as never, ARGS);
+    expect(traceStore.getByWorkUnitId).toHaveBeenCalledWith(WU);
+    expect(traceStore.update).toHaveBeenCalledWith(
+      WU,
+      {
+        outcome: "completed",
+        executionSummary: PAUSED_DRAFT_SUMMARY,
+        executionOutputs: PARKED_OUTPUTS,
+        completedAt: "2026-06-13T00:00:00.000Z",
+      },
+      { caller: "creative-publish", organizationId: ORG },
+    );
+  });
+
+  it("refuses a cross-tenant reconcile when the trace org != the job org", async () => {
+    const traceStore = makeTraceStore({ ...QUEUED_PUBLISH_TRACE, organizationId: "org_B" });
+    await reconcilePublishTraceCompleted(traceStore as never, ARGS);
+    expect(traceStore.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses a wrong-action reconcile when the trace intent != creative.job.publish", async () => {
+    const traceStore = makeTraceStore({ ...QUEUED_PUBLISH_TRACE, intent: "creative.job.submit" });
+    await reconcilePublishTraceCompleted(traceStore as never, ARGS);
+    expect(traceStore.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses a wrong-job reconcile when the trace parameters.jobId != the loaded job", async () => {
+    const traceStore = makeTraceStore({
+      ...QUEUED_PUBLISH_TRACE,
+      parameters: { jobId: "job_other" },
+    });
+    await reconcilePublishTraceCompleted(traceStore as never, ARGS);
+    expect(traceStore.update).not.toHaveBeenCalled();
+  });
+
+  it("no-ops when the trace already reached completed (idempotent re-delivery)", async () => {
+    const traceStore = makeTraceStore({ ...QUEUED_PUBLISH_TRACE, outcome: "completed" });
+    await reconcilePublishTraceCompleted(traceStore as never, ARGS);
+    expect(traceStore.update).not.toHaveBeenCalled();
+  });
+
+  it("no-ops when the trace already reached failed (a dead-letter won the race; no clobber)", async () => {
+    const traceStore = makeTraceStore({ ...QUEUED_PUBLISH_TRACE, outcome: "failed" });
+    await reconcilePublishTraceCompleted(traceStore as never, ARGS);
+    expect(traceStore.update).not.toHaveBeenCalled();
+  });
+
+  it("warns and no-ops when the WorkTrace is missing", async () => {
+    const traceStore = makeTraceStore(null);
+    await reconcilePublishTraceCompleted(traceStore as never, ARGS);
+    expect(traceStore.getByWorkUnitId).toHaveBeenCalledWith(WU);
+    expect(traceStore.update).not.toHaveBeenCalled();
+  });
+
+  it("tolerates a locked trace, production shape ({ ok: false }), without throwing", async () => {
+    const traceStore = makeTraceStore();
+    traceStore.update = vi.fn(async () => ({
+      ok: false,
+      code: "WORK_TRACE_LOCKED",
+      traceUnchanged: true,
+      reason: "locked",
+    }));
+    await expect(
+      reconcilePublishTraceCompleted(traceStore as never, ARGS),
+    ).resolves.toBeUndefined();
+  });
+
+  it("tolerates a locked trace, non-production shape (WorkTraceLockedError throw), without escaping", async () => {
+    const traceStore = makeTraceStore();
+    traceStore.update = vi.fn(async () => {
+      throw Object.assign(new Error("Trace locked"), { code: "WORK_TRACE_LOCKED" });
+    });
+    await expect(
+      reconcilePublishTraceCompleted(traceStore as never, ARGS),
+    ).resolves.toBeUndefined();
+  });
+
+  it("propagates an unexpected trace-store error so Inngest can retry", async () => {
+    const traceStore = makeTraceStore();
+    traceStore.update = vi.fn(async () => {
+      throw new Error("connection reset");
+    });
+    await expect(reconcilePublishTraceCompleted(traceStore as never, ARGS)).rejects.toThrow(
+      "connection reset",
+    );
+  });
+
+  it("omits completedAt from the update when not supplied", async () => {
+    const traceStore = makeTraceStore();
+    const { completedAt: _drop, ...argsNoTime } = ARGS;
+    await reconcilePublishTraceCompleted(traceStore as never, argsNoTime);
+    // Exact-match: an extra completedAt key would fail the deep-equal.
+    expect(traceStore.update).toHaveBeenCalledWith(
+      WU,
+      {
+        outcome: "completed",
+        executionSummary: PAUSED_DRAFT_SUMMARY,
+        executionOutputs: PARKED_OUTPUTS,
+      },
+      { caller: "creative-publish", organizationId: ORG },
     );
   });
 });
