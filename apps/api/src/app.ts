@@ -14,7 +14,7 @@ import rawBody from "fastify-raw-body";
 import formbody from "@fastify/formbody";
 import { setMetrics, evaluate, resolveIdentity } from "@switchboard/core";
 import type { StorageContext, PolicyCache, AgentNotifier } from "@switchboard/core";
-import { AuditLedger, NoopOperatorAlerter, WebhookOperatorAlerter } from "@switchboard/core";
+import { AuditLedger } from "@switchboard/core";
 import type { OperatorAlerter } from "@switchboard/core";
 import {
   IntentRegistry,
@@ -37,6 +37,7 @@ import { buildDevAuthFallback } from "./utils/auth-fallback.js";
 import { bootstrapStorage } from "./bootstrap/storage.js";
 import { ensureSystemIdentity } from "./bootstrap/system-identity.js";
 import { registerRoutes } from "./bootstrap/routes.js";
+import { selectOperatorAlerter } from "./bootstrap/select-operator-alerter.js";
 import { registerInngest } from "./bootstrap/inngest.js";
 import { registerSwagger } from "./bootstrap/swagger.js";
 import { wireMetricsProvider } from "./bootstrap/wire-metrics.js";
@@ -452,14 +453,10 @@ export async function buildServer() {
 
   // --- OperatorAlerter + WorkTraceStore (moved before SkillMode so workTraceStore
   //     can be threaded into PrismaOpportunityStore inside bootstrapSkillMode) ---
-  const operatorAlerter: OperatorAlerter = process.env.OPERATOR_ALERT_WEBHOOK_URL
-    ? new WebhookOperatorAlerter({
-        webhookUrl: process.env.OPERATOR_ALERT_WEBHOOK_URL,
-        headers: process.env.OPERATOR_ALERT_WEBHOOK_SECRET
-          ? { Authorization: `Bearer ${process.env.OPERATOR_ALERT_WEBHOOK_SECRET}` }
-          : undefined,
-      })
-    : new NoopOperatorAlerter();
+  // Single source of truth for the operator alerter; the same instance is
+  // threaded to the WorkTraceStore, PlatformIngress, and the Inngest async
+  // path (registerInngest) below, so every failure path shares one alerter (D9-F1).
+  const operatorAlerter: OperatorAlerter = selectOperatorAlerter(process.env);
 
   let workTraceStore: import("@switchboard/db").PrismaWorkTraceStore | undefined;
   let deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null = null;
