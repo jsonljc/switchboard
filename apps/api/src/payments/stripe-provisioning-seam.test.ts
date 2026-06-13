@@ -65,6 +65,7 @@ describe("stripe provisioning -> payment factory seam", () => {
                 id: "conn_seam",
                 credentials: captured!.credentials,
                 externalAccountId: captured!.externalAccountId,
+                status: "connected",
               }
             : null,
         ),
