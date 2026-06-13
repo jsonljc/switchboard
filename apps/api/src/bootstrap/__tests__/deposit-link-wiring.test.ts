@@ -146,6 +146,7 @@ describe("buildDepositLinkToolFactory", () => {
         trustLevel,
       });
       expect(result.proceed).toBe(true);
+      expect(result.decision).toBeUndefined();
     }
   });
 });

@@ -53,11 +53,12 @@ export function createDepositLinkToolFactory(deps: DepositLinkToolDeps): Deposit
         // already-confirmed booking. It must NOT trigger a new approval (spec
         // §8; design record 2026-06-13-deposit-issuance-governance-posture).
         // Rationale, affirmed at go-live:
-        //  - Inbound collection, not outbound spend. The codebase auto-approves
-        //    inbound recording that carries money (revenue.record) and
-        //    require_approves only OUTBOUND spend (spendBearing, F4 #978). A
-        //    deposit link asks the customer to pay the clinic; no money moves
-        //    until the customer actively pays.
+        //  - Inbound collection, not outbound spend. The platform's governance
+        //    doctrine (intent-registration.ts) auto-approves inbound recording
+        //    that carries money (e.g. the payment.record_verified intent,
+        //    system_auto_approved) and require_approves only OUTBOUND spend
+        //    (spendBearing, F4 #978). A deposit link asks the customer to pay
+        //    the clinic; no money moves until the customer actively pays.
         //  - It rides a higher governance class: the booking (calendar.book) is
         //    external_mutation; this read is strictly downstream of a confirmed
         //    booking.
