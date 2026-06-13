@@ -229,4 +229,27 @@ describe("makeOnFailureHandler", () => {
     );
     await expect(onFailure(failureArg as never)).resolves.toBeUndefined();
   });
+
+  it("never throws out of onFailure even if alert delivery throws (D9-F1)", async () => {
+    const ctx = {
+      auditLedger: { record: async () => ({}) as never } as unknown as AuditLedger,
+      operatorAlerter: {
+        alert: async () => {
+          throw new Error("webhook down");
+        },
+      } as OperatorAlerter,
+      inngest: { send: async () => {} },
+    };
+    const onFailure = makeOnFailureHandler(
+      {
+        functionId: "creative-job-runner",
+        eventDomain: "creative.polished",
+        riskCategory: "medium",
+        alert: true,
+        severity: "warning",
+      },
+      ctx,
+    );
+    await expect(onFailure(failureArg as never)).resolves.toBeUndefined();
+  });
 });
