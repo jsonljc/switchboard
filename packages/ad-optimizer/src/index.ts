@@ -147,6 +147,18 @@ export {
   PHASE_C_EXECUTION_SEAM,
 } from "./action-contract.js";
 export type { ActionContract, PhaseCExecutionContract } from "./action-contract.js";
+// Spec-1B act leg: the ENFORCED blast-radius contract (numeric caps + machine-
+// comparable guardrails + automated rollback) and its pure fail-closed cap check.
+// The apps/api reallocate executor (Spec-1B) consumes these; the declarative
+// PhaseCExecutionContract above stays the pause class's recorded-not-enforced seam.
+export { assertWithinBlastRadius } from "./blast-radius-contract.js";
+export type {
+  BlastRadiusContract,
+  BlastRadiusGuardrail,
+  BlastRadiusGuardrailMetric,
+  BlastRadiusRollback,
+  BlastRadiusVerdict,
+} from "./blast-radius-contract.js";
 // Phase-C wiring: raised execution floor for the self-submitted pause.
 export {
   RILEY_PAUSE_EXECUTION_EVIDENCE_FLOOR,
