@@ -1,4 +1,4 @@
-import { type PrismaClient, type Prisma, acquireBookingLock } from "@switchboard/db";
+import { type PrismaClient } from "@switchboard/db";
 import type { CalendarProvider, BusinessHoursConfig } from "@switchboard/schemas";
 import { NoopCalendarProvider } from "./noop-calendar-provider.js";
 
@@ -143,8 +143,10 @@ async function resolveForOrg(
   return new NoopCalendarProvider();
 }
 
-// Exported for the F12 focused unit + integration tests. This is not a public construction
-// path; the calendar provider factory above is the only production caller.
+// Exported for the calendar provider integration tests. This is not a public construction
+// path; the calendar provider factory above is the only production caller. The local provider
+// reads through this store (free-slot computation + getBooking); the durable PrismaBookingStore
+// owns every booking write (F12).
 export function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
   return {
     findOverlapping: async (startsAt: Date, endsAt: Date) => {
@@ -156,68 +158,6 @@ export function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
           status: { notIn: ["cancelled", "failed"] },
         },
         select: { startsAt: true, endsAt: true },
-      });
-    },
-    createInTransaction: async (input: {
-      organizationId: string;
-      contactId: string;
-      opportunityId?: string | null;
-      service: string;
-      startsAt: Date;
-      endsAt: Date;
-      timezone: string;
-      status: string;
-      calendarEventId: string;
-      attendeeName?: string | null;
-      attendeeEmail?: string | null;
-      createdByType: string;
-      sourceChannel?: string | null;
-      workTraceId?: string | null;
-    }) => {
-      // This store is bound to one org at construction. Refuse a payload whose org
-      // disagrees so the advisory lock, overlap check, and insert can never key off
-      // different orgs (F12).
-      if (input.organizationId !== orgId) {
-        throw new Error("ORGANIZATION_MISMATCH");
-      }
-      return prismaClient.$transaction(async (tx: Prisma.TransactionClient) => {
-        // Serialize check-then-insert per org so two concurrent leads cannot both pass
-        // the overlap check and double-book the same physical slot (F12). The shared
-        // acquireBookingLock helper owns the ::int4 cast, so this path and the durable
-        // PrismaBookingStore lock on the same key. Held until the transaction commits.
-        await acquireBookingLock(tx, orgId);
-        const conflicts = await tx.booking.findMany({
-          where: {
-            organizationId: orgId,
-            startsAt: { lt: input.endsAt },
-            endsAt: { gt: input.startsAt },
-            status: { notIn: ["cancelled", "failed"] },
-          },
-          select: { id: true },
-          take: 1,
-        });
-        if (conflicts.length > 0) {
-          throw new Error("SLOT_CONFLICT");
-        }
-        return tx.booking.create({
-          data: {
-            organizationId: orgId,
-            contactId: input.contactId,
-            opportunityId: input.opportunityId ?? null,
-            service: input.service,
-            startsAt: input.startsAt,
-            endsAt: input.endsAt,
-            timezone: input.timezone,
-            status: input.status,
-            calendarEventId: input.calendarEventId,
-            attendeeName: input.attendeeName ?? null,
-            attendeeEmail: input.attendeeEmail ?? null,
-            createdByType: input.createdByType,
-            sourceChannel: input.sourceChannel ?? null,
-            workTraceId: input.workTraceId ?? null,
-          },
-          select: { id: true },
-        });
       });
     },
     findById: async (bookingId: string) => {

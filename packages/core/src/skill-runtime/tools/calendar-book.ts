@@ -449,6 +449,26 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           getMetrics().bookingConfirmed.inc({ orgId });
           if (stageAdvanced) getMetrics().bookingStageAdvanced.inc({ orgId });
 
+          // Post-confirm notification (best-effort). The booking is already durably confirmed; a
+          // notification failure must never fail it. The local provider sends its RESEND-gated
+          // email here, after the durable commit, because its cancelBooking is a no-op and a
+          // pre-confirm email could not be compensated. Google notifies natively during
+          // createBooking and omits this hook.
+          if (provider.notifyBookingConfirmed) {
+            try {
+              await provider.notifyBookingConfirmed({
+                bookingId: booking.id,
+                attendeeEmail,
+                attendeeName,
+                service: input.service,
+                startsAt: input.slotStart,
+                endsAt: input.slotEnd,
+              });
+            } catch (notifyErr) {
+              console.warn("[calendar-book] booking-confirmation notification failed", notifyErr);
+            }
+          }
+
           return ok(
             {
               bookingId: booking.id,
