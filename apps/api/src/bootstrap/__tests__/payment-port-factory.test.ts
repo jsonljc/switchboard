@@ -285,4 +285,29 @@ describe("createPaymentPortFactory: redirect URL wiring", () => {
     expect(createParams[0]?.success_url).toBe("http://localhost:3002/payment/success");
     expect(createParams[0]?.cancel_url).toBe("http://localhost:3002/payment/cancel");
   });
+
+  it("treats a blank or whitespace base URL as unset (absolute URLs, never relative)", async () => {
+    for (const blank of ["", "   "]) {
+      const { createParams, client } = recordingStripeClient();
+      const factory = createPaymentPortFactory({
+        prismaClient: provisionedPrisma() as never,
+        logger: silentLogger,
+        decryptCredentials: vi.fn(liveCreds),
+        stripeClientFactory: () => client,
+        paymentRedirectBaseUrl: blank,
+      });
+
+      const port = await factory("org-stripe");
+      await port.createDepositLink({
+        bookingId: "bk_blank",
+        organizationId: "org-stripe",
+        amountCents: 5000,
+        currency: "SGD",
+      });
+
+      // Never a bare relative path — Stripe Checkout rejects non-absolute success/cancel URLs.
+      expect(createParams[0]?.success_url).toBe("http://localhost:3002/payment/success");
+      expect(createParams[0]?.cancel_url).toBe("http://localhost:3002/payment/cancel");
+    }
+  });
 });

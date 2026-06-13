@@ -103,7 +103,13 @@ async function resolveForOrg(deps: PaymentPortFactoryDeps, orgId: string): Promi
       // degrading. A null externalAccountId fails this equality by construction, which
       // is correct: an org the settlement webhook cannot resolve must not go live.
       if (creds && creds.connectedAccountId === connection.externalAccountId) {
-        const baseUrl = (deps.paymentRedirectBaseUrl ?? DEFAULT_PAYMENT_REDIRECT_BASE_URL).replace(
+        // Trim + empty-guard so a blank or whitespace base (e.g. a deployer who blanks the
+        // PAYMENT_PUBLIC_URL line in .env) cannot produce a relative redirect URL that Stripe
+        // Checkout rejects; fall back to the dev default, then strip any trailing slashes.
+        const configuredBaseUrl = (
+          deps.paymentRedirectBaseUrl ?? DEFAULT_PAYMENT_REDIRECT_BASE_URL
+        ).trim();
+        const baseUrl = (configuredBaseUrl || DEFAULT_PAYMENT_REDIRECT_BASE_URL).replace(
           /\/+$/,
           "",
         );

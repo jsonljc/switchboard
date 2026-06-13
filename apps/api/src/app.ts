@@ -520,10 +520,11 @@ export async function buildServer() {
       await import("./bootstrap/payment-port-factory.js");
     // Pilot-global patient-payment-page origin (Fork 2): a dedicated PAYMENT_PUBLIC_URL
     // (the documented per-origin hook), falling back to the existing DASHBOARD_URL (the
-    // pages ARE dashboard pages) then the localhost dev default.
+    // pages ARE dashboard pages) then the localhost dev default. `||` (not `??`) so a
+    // blank env value falls through to the next source instead of yielding an empty origin.
     const paymentRedirectBaseUrl =
-      process.env.PAYMENT_PUBLIC_URL ??
-      process.env.DASHBOARD_URL ??
+      process.env.PAYMENT_PUBLIC_URL ||
+      process.env.DASHBOARD_URL ||
       DEFAULT_PAYMENT_REDIRECT_BASE_URL;
     paymentPortFactory = createPaymentPortFactory({
       prismaClient,
