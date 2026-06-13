@@ -144,6 +144,17 @@ services:
         sync: false
       - key: SENTRY_DSN_SERVER
         sync: false
+      # Operator paging webhook for terminal infrastructure failures: governance /
+      # trace-persist / execution exceptions (PlatformIngress) and retry-exhausted
+      # async dead-letters (Inngest onFailure, e.g. a dead-lettered paid creative
+      # publish or a retry-exhausted render). UNSET => NoopOperatorAlerter: the alert
+      # is logged at error in host logs but NO human is paged. The secret, when set,
+      # is sent as a Bearer Authorization header (a Slack incoming-webhook ignores it
+      # and authenticates by URL secrecy). api only; the chat service builds no alerter.
+      - key: OPERATOR_ALERT_WEBHOOK_URL
+        sync: false
+      - key: OPERATOR_ALERT_WEBHOOK_SECRET
+        sync: false
       - key: LOG_LEVEL
         value: info
 

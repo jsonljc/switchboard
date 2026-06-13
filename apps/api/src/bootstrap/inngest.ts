@@ -89,6 +89,10 @@ import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
 import { buildRileyCredentialResolver } from "./riley-credential-resolver.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
+import {
+  CREATIVE_POLISHED_RUNNER_FAILURE_PARAMS,
+  CREATIVE_UGC_RUNNER_FAILURE_PARAMS,
+} from "../services/creative-runner-failure-params.js";
 import { resolveMetaOAuthConfig } from "../utils/meta-oauth-config.js";
 import {
   createDlqRetentionPurgeCron,
@@ -1166,15 +1170,9 @@ export async function registerInngest(
         { apiKey, model: creativeModel },
         openaiApiKey ? { openaiApiKey } : undefined,
         assetStorage,
-        makeOnFailureHandler(
-          {
-            functionId: "creative-job-runner",
-            eventDomain: "creative.polished",
-            riskCategory: "medium",
-            alert: false,
-          },
-          asyncFailure,
-        ) as (arg: unknown) => Promise<void>,
+        makeOnFailureHandler(CREATIVE_POLISHED_RUNNER_FAILURE_PARAMS, asyncFailure) as (
+          arg: unknown,
+        ) => Promise<void>,
         creativeTasteProvider,
         klingClient,
       ),
@@ -1202,18 +1200,9 @@ export async function registerInngest(
           // a durableAssetUrl and become publishable.
           assetStorage,
         },
-        makeOnFailureHandler(
-          {
-            functionId: "ugc-job-runner",
-            // Emit creative.ugc.failed so the failure recorder marks an out-of-band
-            // ugc step failure terminal (D5-F4). In-band phase failures persist failUgc
-            // themselves and never reach onFailure, so the two paths never both fire.
-            eventDomain: "creative.ugc",
-            riskCategory: "medium",
-            alert: false,
-          },
-          asyncFailure,
-        ) as (arg: unknown) => Promise<void>,
+        makeOnFailureHandler(CREATIVE_UGC_RUNNER_FAILURE_PARAMS, asyncFailure) as (
+          arg: unknown,
+        ) => Promise<void>,
       ),
       createWeeklyAuditCron(
         adOptimizerDeps,

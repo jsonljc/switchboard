@@ -41,6 +41,7 @@
 - [ ] `pnpm --filter @switchboard/db exec prisma migrate status` reports "up to date" (or equivalent in `api` startup logs).
 - [ ] Send one production-safe Inngest event; confirm handler runs inside deployed `api`.
 - [ ] Send Sentry test events from `api` and `chat` tagged `environment=production, test=true`; events arrive AND alert rules ignore them.
+- [ ] Set `OPERATOR_ALERT_WEBHOOK_URL` (+ optional `OPERATOR_ALERT_WEBHOOK_SECRET`) on `api`; confirm a forced terminal async failure pages the operator channel. Left unset, paging is OFF; alerts only land in `api` host logs (`[OperatorAlerter] no webhook configured`). Note: wiring the webhook activates every operator-alert class at once (governance / trace-persist / execution exceptions plus the `alert:true` async dead-letters such as paid-publish, render, and ugc), and alert dedup/throttle is a known follow-up, so expect a burst if many jobs fail in one window.
 
 ## Webhook registration
 
