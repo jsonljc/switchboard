@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { VerifiedPaymentSchema, DepositLinkSchema, DepositLinkInputSchema } from "./payment.js";
+import {
+  VerifiedPaymentSchema,
+  DepositLinkSchema,
+  DepositLinkInputSchema,
+  PAYMENT_SUCCESS_PATH,
+  PAYMENT_CANCEL_PATH,
+} from "./payment.js";
 
 describe("VerifiedPaymentSchema", () => {
   it("validates a provider='noop' degraded payment", () => {
@@ -65,5 +71,19 @@ describe("DepositLinkInputSchema", () => {
     });
     expect(ok.bookingId).toBe("bk_1");
     expect(() => DepositLinkInputSchema.parse({ bookingId: "bk_1" })).toThrow();
+  });
+});
+
+describe("payment redirect path contract", () => {
+  it("exposes the canonical success/cancel path suffixes", () => {
+    expect(PAYMENT_SUCCESS_PATH).toBe("/payment/success");
+    expect(PAYMENT_CANCEL_PATH).toBe("/payment/cancel");
+  });
+
+  it("are absolute single-slash path suffixes", () => {
+    for (const p of [PAYMENT_SUCCESS_PATH, PAYMENT_CANCEL_PATH]) {
+      expect(p.startsWith("/")).toBe(true);
+      expect(p.startsWith("//")).toBe(false);
+    }
   });
 });
