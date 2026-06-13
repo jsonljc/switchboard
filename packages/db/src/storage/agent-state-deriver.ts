@@ -36,6 +36,33 @@ const STATUS_FROM_EVENT: Record<string, DerivedAgentState["activityStatus"]> = {
   "action.error": "error",
 };
 
+/** Inactivity window after which a transient "in progress" status is treated as stale. */
+export const ACTIVITY_STATUS_STALE_MS = 10 * 60_000; // 10 minutes
+
+/** Statuses asserting the agent is actively doing something right now. */
+const TRANSIENT_STATUSES = new Set<DerivedAgentState["activityStatus"]>(["working", "analyzing"]);
+
+/**
+ * Decays a transient "working"/"analyzing" status to "idle" once the last action is
+ * older than ACTIVITY_STATUS_STALE_MS. Non-transient statuses (waiting_approval, error,
+ * idle) are returned unchanged: an outstanding approval or a recorded error is a real
+ * state, not a stale in-progress claim.
+ *
+ * The elapsed comparison is finite-guarded so a missing or invalid timestamp decays to
+ * idle rather than silently reading as fresh (a raw `elapsed > stale` is false for NaN).
+ */
+function decayTransientStatus(
+  status: DerivedAgentState["activityStatus"],
+  lastActionAt: Date | null,
+  now: Date,
+): DerivedAgentState["activityStatus"] {
+  if (!TRANSIENT_STATUSES.has(status)) return status;
+  if (!lastActionAt) return "idle";
+  const elapsed = now.getTime() - lastActionAt.getTime();
+  if (!Number.isFinite(elapsed) || elapsed > ACTIVITY_STATUS_STALE_MS) return "idle";
+  return status;
+}
+
 function eventToRole(eventType: string, summary: string): string {
   const combined = `${eventType} ${summary}`;
   for (const [role, pattern] of Object.entries(ROLE_EVENT_PATTERNS)) {
@@ -54,9 +81,12 @@ function deriveTaskDescription(eventType: string, summary: string): string {
   return eventType;
 }
 
-export function deriveAgentStates(entries: AuditEntryRow[]): Map<string, DerivedAgentState> {
+export function deriveAgentStates(
+  entries: AuditEntryRow[],
+  now: Date = new Date(),
+): Map<string, DerivedAgentState> {
   const states = new Map<string, DerivedAgentState>();
-  const todayStart = new Date();
+  const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
 
   // Initialize all roles with idle state
@@ -92,7 +122,8 @@ export function deriveAgentStates(entries: AuditEntryRow[]): Map<string, Derived
     state.lastActionAt = new Date(entry.timestamp);
     state.lastActionSummary = entry.summary;
     state.currentTask = deriveTaskDescription(entry.eventType, entry.summary);
-    state.activityStatus = STATUS_FROM_EVENT[entry.eventType] ?? "idle";
+    const rawStatus = STATUS_FROM_EVENT[entry.eventType] ?? "idle";
+    state.activityStatus = decayTransientStatus(rawStatus, state.lastActionAt, now);
 
     if (new Date(entry.timestamp) >= todayStart) {
       state.metrics.actionsToday++;
