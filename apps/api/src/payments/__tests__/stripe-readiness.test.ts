@@ -110,26 +110,40 @@ describe("describeReadiness", () => {
 });
 
 describe("resolveRedirectPrecondition", () => {
-  it("uses PAYMENT_PUBLIC_URL when set", () => {
+  it("uses PAYMENT_PUBLIC_URL when set, stripping trailing slashes", () => {
     const r = resolveRedirectPrecondition({ PAYMENT_PUBLIC_URL: "https://app.example.com/" });
-    expect(r).toMatchObject({
+    expect(r).toEqual({
       ok: true,
       source: "PAYMENT_PUBLIC_URL",
       effectiveBaseUrl: "https://app.example.com",
     });
   });
 
-  it("falls back to DASHBOARD_URL when PAYMENT_PUBLIC_URL is blank", () => {
+  it("uses DASHBOARD_URL when PAYMENT_PUBLIC_URL is empty (bare || fall-through)", () => {
+    const r = resolveRedirectPrecondition({
+      PAYMENT_PUBLIC_URL: "",
+      DASHBOARD_URL: "https://dash.example.com",
+    });
+    expect(r).toEqual({
+      ok: true,
+      source: "DASHBOARD_URL",
+      effectiveBaseUrl: "https://dash.example.com",
+    });
+  });
+
+  it("reports the localhost fallback when a whitespace PAYMENT_PUBLIC_URL shadows DASHBOARD_URL", () => {
+    // app.ts's bare || picks the truthy whitespace value; the factory then trims it to the
+    // localhost default. The diagnostic must NOT claim DASHBOARD_URL is used.
     const r = resolveRedirectPrecondition({
       PAYMENT_PUBLIC_URL: "   ",
       DASHBOARD_URL: "https://dash.example.com",
     });
-    expect(r).toMatchObject({ ok: true, source: "DASHBOARD_URL" });
+    expect(r).toEqual({ ok: false, source: "fallback", effectiveBaseUrl: null });
   });
 
   it("warns (not ok) when neither is set", () => {
     const r = resolveRedirectPrecondition({});
-    expect(r).toMatchObject({ ok: false, source: "fallback", effectiveBaseUrl: null });
+    expect(r).toEqual({ ok: false, source: "fallback", effectiveBaseUrl: null });
   });
 });
 

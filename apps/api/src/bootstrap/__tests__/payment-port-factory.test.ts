@@ -4,7 +4,10 @@ import { createPaymentPortFactory } from "../payment-port-factory.js";
 import { isNoopPaymentAdapter } from "../noop-payment-adapter.js";
 import { StripeConnectPaymentAdapter } from "../../payments/stripe-connect-payment-adapter.js";
 import type { StripeConnectClient } from "../../payments/stripe-connect-payment-adapter.js";
-import { classifyStripeReadiness } from "../../payments/stripe-readiness.js";
+import {
+  classifyStripeReadiness,
+  STRIPE_LIVE_CONNECTION_STATUS,
+} from "../../payments/stripe-readiness.js";
 import { parseStripeConnectCredentials } from "../../payments/stripe-connect-credentials.js";
 
 const silentLogger = { info: () => {}, error: () => {} };
@@ -82,7 +85,7 @@ function makePrismaWithConnection(
           if (!row) return null;
           // Default to the live status the writer sets, so existing connected fixtures keep
           // resolving to the live adapter once the factory delegates to the predicate.
-          return { status: "connected", ...row };
+          return { status: STRIPE_LIVE_CONNECTION_STATUS, ...row };
         },
       ),
     },
@@ -350,7 +353,7 @@ describe("createPaymentPortFactory: factory agrees with classifyStripeReadiness"
           id: "conn",
           credentials: "enc",
           externalAccountId: c.externalAccountId,
-          status: "connected",
+          status: STRIPE_LIVE_CONNECTION_STATUS,
         },
       });
       const factory = createPaymentPortFactory({
@@ -361,7 +364,7 @@ describe("createPaymentPortFactory: factory agrees with classifyStripeReadiness"
       });
       const port = await factory("org");
       const predicate = classifyStripeReadiness(
-        { status: "connected", externalAccountId: c.externalAccountId },
+        { status: STRIPE_LIVE_CONNECTION_STATUS, externalAccountId: c.externalAccountId },
         parseStripeConnectCredentials(c.creds),
       );
       expect(isNoopPaymentAdapter(port)).toBe(!predicate.live);

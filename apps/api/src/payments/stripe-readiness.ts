@@ -106,27 +106,28 @@ export interface RedirectPrecondition {
 }
 
 /**
- * Mirror app.ts (PAYMENT_PUBLIC_URL || DASHBOARD_URL || localhost dev default) plus the
- * factory's trim-empty-guard: a blank/whitespace value falls through to the next source. A
- * fallback to localhost means a live org would issue Checkout links pointing at localhost.
+ * Mirror app.ts exactly: PAYMENT_PUBLIC_URL || DASHBOARD_URL || localhost dev default. The ||
+ * is BARE (app.ts:525-528), so a whitespace-only value is truthy and shadows the next source;
+ * the factory's trim-empty-guard then falls back to the localhost default. So a whitespace
+ * PAYMENT_PUBLIC_URL resolves to localhost, NOT to DASHBOARD_URL, and this diagnostic reports
+ * the localhost fallback rather than a false OK on a source app.ts never consulted. A fallback
+ * to localhost means a live org would issue Checkout links pointing at localhost.
  */
 export function resolveRedirectPrecondition(env: {
   PAYMENT_PUBLIC_URL?: string;
   DASHBOARD_URL?: string;
 }): RedirectPrecondition {
-  const paymentPublic = env.PAYMENT_PUBLIC_URL?.trim();
-  if (paymentPublic) {
-    return {
-      ok: true,
-      source: "PAYMENT_PUBLIC_URL",
-      effectiveBaseUrl: paymentPublic.replace(/\/+$/, ""),
-    };
+  const paymentPublicChosen = Boolean(env.PAYMENT_PUBLIC_URL);
+  const chosen = env.PAYMENT_PUBLIC_URL || env.DASHBOARD_URL || "";
+  const effectiveBaseUrl = chosen.trim().replace(/\/+$/, "");
+  if (!effectiveBaseUrl) {
+    return { ok: false, source: "fallback", effectiveBaseUrl: null };
   }
-  const dashboard = env.DASHBOARD_URL?.trim();
-  if (dashboard) {
-    return { ok: true, source: "DASHBOARD_URL", effectiveBaseUrl: dashboard.replace(/\/+$/, "") };
-  }
-  return { ok: false, source: "fallback", effectiveBaseUrl: null };
+  return {
+    ok: true,
+    source: paymentPublicChosen ? "PAYMENT_PUBLIC_URL" : "DASHBOARD_URL",
+    effectiveBaseUrl,
+  };
 }
 
 export interface WebhookPrecondition {

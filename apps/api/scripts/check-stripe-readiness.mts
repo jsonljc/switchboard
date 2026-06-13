@@ -7,7 +7,7 @@
 // DASHBOARD_URL / STRIPE_* env the API runs with for the global preconditions to be meaningful):
 //
 //   npx tsx apps/api/scripts/check-stripe-readiness.mts <orgId>   # one org; exit 1 if not live
-//   npx tsx apps/api/scripts/check-stripe-readiness.mts           # every org with a stripe Connection
+//   npx tsx apps/api/scripts/check-stripe-readiness.mts           # every org with a stripe Connection (report only; always exit 0)
 //
 // .mts: @switchboard/db is ESM-only (see scripts/provision-stripe-for-org.mts).
 import { PrismaClient, decryptCredentials } from "@switchboard/db";
@@ -35,7 +35,9 @@ function printPreconditions(): void {
     );
   }
   if (webhook.ok) {
-    console.warn("  webhook verification: STRIPE_SECRET_KEY set, STRIPE_CONNECT_WEBHOOK_SECRET set [OK]");
+    console.warn(
+      "  webhook verification: STRIPE_SECRET_KEY set, STRIPE_CONNECT_WEBHOOK_SECRET set [OK]",
+    );
   } else {
     console.warn(
       `  webhook verification: STRIPE_SECRET_KEY ${webhook.stripeSecretKeySet ? "set" : "MISSING"}, ` +
@@ -45,7 +47,10 @@ function printPreconditions(): void {
   }
 }
 
-async function fetchOne(prisma: PrismaClient, orgId: string): Promise<RawStripeConnectionRow | null> {
+async function fetchOne(
+  prisma: PrismaClient,
+  orgId: string,
+): Promise<RawStripeConnectionRow | null> {
   // No status filter: the diagnostic must see a non-connected Connection to report it.
   return prisma.connection.findFirst({
     where: { serviceId: "stripe", organizationId: orgId },
