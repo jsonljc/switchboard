@@ -1,8 +1,7 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
 import type { PrismaCreativeJobStore } from "@switchboard/db";
-import { PARKED_PAUSED } from "../creative-publish-function.js";
+import { PARKED_PAUSED, PAUSED_DRAFT_SUMMARY } from "../creative-publish-function.js";
 
-const PAUSED_DRAFT_SUMMARY = "Created paused Meta draft package (review & activate in Ads Manager)";
 const QUEUED_SUMMARY =
   "Queued paused Meta draft package creation (finalize in Ads Manager once ready)";
 
