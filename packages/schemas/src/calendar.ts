@@ -92,9 +92,13 @@ export type CalendarHealthCheck = z.infer<typeof CalendarHealthCheckSchema>;
 export interface CalendarProvider {
   listAvailableSlots(query: SlotQuery): Promise<TimeSlot[]>;
   createBooking(input: CreateBookingInput): Promise<Booking>;
-  cancelBooking(bookingId: string, reason?: string): Promise<void>;
-  rescheduleBooking(bookingId: string, newSlot: TimeSlot): Promise<Booking>;
-  getBooking(bookingId: string): Promise<Booking | null>;
+  // `eventId` is the provider's own calendar handle: the value returned as
+  // `Booking.calendarEventId` from `createBooking` (a Google event id, or the local
+  // provider's `local-<uuid>`), NOT the durable Booking row id. Callers pass
+  // `booking.calendarEventId`; the durable row mutation is owned by the booking store.
+  cancelBooking(eventId: string, reason?: string): Promise<void>;
+  rescheduleBooking(eventId: string, newSlot: TimeSlot): Promise<Booking>;
+  getBooking(eventId: string): Promise<Booking | null>;
   healthCheck(): Promise<CalendarHealthCheck>;
 }
 
