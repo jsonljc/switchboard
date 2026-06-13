@@ -5,6 +5,7 @@ import {
   PILOT_DEPOSIT_CURRENCY,
 } from "../deposit-link-wiring.js";
 import { NoopPaymentAdapter } from "../noop-payment-adapter.js";
+import { GovernanceHook } from "@switchboard/core/skill-runtime";
 import type { PaymentPort, DepositLinkInput } from "@switchboard/schemas";
 
 // Structurally matches SkillRequestContext without importing the type.
@@ -122,5 +123,30 @@ describe("buildDepositLinkToolFactory", () => {
     expect(charge!.bookingId).toBe("bk_42");
     expect(charge!.provider).toBe("noop");
     expect(charge!.status).toBe("paid");
+  });
+
+  // Integration-boundary guard: the wired tool keeps the autonomous (auto-approve)
+  // governance posture at every trust level. Drives the REAL GovernanceHook over the
+  // tool as actually built by the wiring, so a wiring-level override or reclassification
+  // (drift away from the rides-booking-approval decision) turns this red. See the design
+  // record docs/superpowers/specs/2026-06-13-deposit-issuance-governance-posture-design.md.
+  it("the wired tool auto-approves through the real GovernanceHook at every trust level (no wiring-level override)", async () => {
+    const { port } = fakePort();
+    const tool = buildDepositLinkToolFactory({
+      paymentPortFactory: vi.fn(async () => port),
+      findBookingById: vi.fn(async () => confirmed),
+    })(CTX);
+    const hook = new GovernanceHook(new Map([["deposit-link", tool]]));
+    for (const trustLevel of ["supervised", "guided", "autonomous"] as const) {
+      const result = await hook.beforeToolCall({
+        toolId: "deposit-link",
+        operation: "deposit.issue",
+        params: { bookingId: "bk_1" },
+        effectCategory: "read",
+        trustLevel,
+      });
+      expect(result.proceed).toBe(true);
+      expect(result.decision).toBeUndefined();
+    }
   });
 });
