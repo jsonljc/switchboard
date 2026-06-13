@@ -30,9 +30,9 @@ const BOOKING_LOCK_NS = 920_001;
  *
  * The `::int4` cast is mandatory, and the reason this is a single shared helper: Prisma
  * sends JS numbers as bigint, and the two-key signature `pg_advisory_xact_lock(bigint,
- * integer)` does not exist (Postgres error 42883). Every booking write path
- * (PrismaBookingStore.create / reschedule and the local calendar provider's store) locks
- * through here so no call site can reintroduce that bug or drift from this namespace (F12).
+ * integer)` does not exist (Postgres error 42883). Every durable booking write path
+ * (PrismaBookingStore.create / reschedule) locks through here so no call site can reintroduce
+ * that bug or drift from this namespace (F12).
  */
 export async function acquireBookingLock(
   tx: Prisma.TransactionClient,
