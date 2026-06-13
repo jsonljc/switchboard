@@ -86,8 +86,9 @@ export type BusinessHoursConfig = z.infer<typeof BusinessHoursConfigSchema>;
  * Canonical default business hours seeded into OrganizationConfig at org provisioning so a fresh
  * org resolves LocalCalendarProvider (not Noop) and the booking loop works with no operator action
  * and no external calendar credentials. Asia/Singapore matches the SG/MY pilot wedge and the
- * BookingSchema timezone default; Mon-Fri 09:00-18:00. Operators can refine hours later. This is the
- * single source of truth, also consumed by the Google calendar factory's fallback default.
+ * BookingSchema timezone default; Mon-Fri 09:00-18:00. Operator-editable hours are follow-up work
+ * (there is no product write path for businessHours yet). This is the single source of truth, also
+ * consumed by the Google calendar factory's fallback default.
  */
 export const DEFAULT_BUSINESS_HOURS: BusinessHoursConfig = {
   timezone: "Asia/Singapore",

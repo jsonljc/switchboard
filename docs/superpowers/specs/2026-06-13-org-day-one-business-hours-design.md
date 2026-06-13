@@ -42,10 +42,20 @@ a single shared canonical constant.
    `packages/schemas/src/calendar.ts`, exported next to `BusinessHoursConfigSchema`. Schemas is
    Layer 1 (importable by both `apps/dashboard` and `apps/api`); the canonical instance belongs with
    its contract. Repoint `google-calendar-factory.ts` at the import (behavior identical).
-2. Set `businessHours: DEFAULT_BUSINESS_HOURS` in both org-config CREATE sites:
+2. Set `businessHours: DEFAULT_BUSINESS_HOURS` at the two CANONICAL fresh-org CREATE sites:
    - `apps/dashboard/src/lib/provision-dashboard-user.ts` (self-serve signup, the primary path).
    - `apps/api/src/routes/organizations.ts` GET `/config` lazy upsert `create` branch (the fallback
      for API-first orgs).
+
+   Other `organizationConfig.upsert` calls also have `create` branches (`agents.ts:322,383`,
+   `prisma-governance-profile-store.ts`), but they are NOT fresh-org creators: each is gated behind
+   `requireOrganizationScope` (an org-bound principal that exists only because one of the two
+   canonical paths already created the config row), so their `create` branch is a defensive fallback
+   that, in the real flow, never fires as a true first-create (the `update` branch runs). They also
+   omit `runtimeType`/`governanceProfile`/etc., i.e. they are a pre-existing broader inconsistency,
+   not the F-01 seam. Seeding only `businessHours` there would be a misleading half-measure, so they
+   are intentionally left as-is (see Out of scope).
+
 3. Pin the producer -> consumer seam: a test asserting
    `BusinessHoursConfigSchema.safeParse(DEFAULT_BUSINESS_HOURS).success` is true (the seeded value
    satisfies the contract the slot generator and `LocalCalendarProvider` consume), plus a
@@ -78,8 +88,12 @@ a single shared canonical constant.
 ## Out of scope (deliberate)
 
 - Operator-editable business hours via a settings route/UI (follow-up; would add `businessHours` to
-  the PUT `/config` allowlist WITH validation).
+  the PUT `/config` allowlist WITH validation). Today there is no operator write path for
+  `businessHours`, so the seeded default stands until that surface is built.
 - Backfilling existing orgs that currently have `businessHours = null`.
+- Seeding `businessHours` into the non-canonical `organizationConfig.upsert` `create` branches
+  (`agents.ts`, `prisma-governance-profile-store.ts`); they only run for an already-provisioned org,
+  so the omission is latent, not a live fresh-org gap.
 - F-02 (entitlement) and F-16 (per-org governance provisioning); F-16 is already substantially
   addressed on `origin/main` (signup now calls `provisionOrgAgentDeployments` + creates an owner
   `IdentitySpec`).
