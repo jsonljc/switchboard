@@ -12,6 +12,10 @@ import {
   type StripeConnectClient,
 } from "../payments/stripe-connect-payment-adapter.js";
 import { parseStripeConnectCredentials } from "../payments/stripe-connect-credentials.js";
+import {
+  classifyStripeReadiness,
+  STRIPE_LIVE_CONNECTION_STATUS,
+} from "../payments/stripe-readiness.js";
 
 export type PaymentPortFactory = (orgId: string) => Promise<PaymentPort>;
 
@@ -31,8 +35,13 @@ export interface PaymentPortFactoryDeps {
     connection: {
       findFirst(args: {
         where: { organizationId: string; serviceId: string; status: string };
-        select: { id: boolean; credentials: boolean; externalAccountId: boolean };
-      }): Promise<{ id: string; credentials: unknown; externalAccountId: string | null } | null>;
+        select: { id: boolean; credentials: boolean; externalAccountId: boolean; status: boolean };
+      }): Promise<{
+        id: string;
+        credentials: unknown;
+        externalAccountId: string | null;
+        status: string;
+      } | null>;
     };
   };
   // Optional injectable decryptCredentials for tests. Defaults to @switchboard/db's
@@ -88,24 +97,25 @@ async function resolveForOrg(deps: PaymentPortFactoryDeps, orgId: string): Promi
 
   if (deps.prismaClient) {
     const connection = await deps.prismaClient.connection.findFirst({
-      where: { organizationId: orgId, serviceId: "stripe", status: "connected" },
-      select: { id: true, credentials: true, externalAccountId: true },
+      where: { organizationId: orgId, serviceId: "stripe", status: STRIPE_LIVE_CONNECTION_STATUS },
+      select: { id: true, credentials: true, externalAccountId: true, status: true },
     });
 
     if (connection) {
       const creds = parseStripeConnectCredentials(decrypt(connection.credentials));
-      // Live only when creds are complete AND the connected account the adapter would
-      // transact on is the SAME account the settlement webhook resolves the org by
-      // (Connection.externalAccountId, matched against the top-level event.account in
-      // payments-webhook.ts). If they disagree, a deposit link would be issued and
-      // re-fetched on one account while the webhook resolves the org by another, so a
-      // paid deposit could never settle. Fail closed loudly instead of silently
-      // degrading. A null externalAccountId fails this equality by construction, which
-      // is correct: an org the settlement webhook cannot resolve must not go live.
-      if (creds && creds.connectedAccountId === connection.externalAccountId) {
-        // Trim + empty-guard so a blank or whitespace base (e.g. a deployer who blanks the
-        // PAYMENT_PUBLIC_URL line in .env) cannot produce a relative redirect URL that Stripe
-        // Checkout rejects; fall back to the dev default, then strip any trailing slashes.
+      // The readiness predicate is the single source of truth for live-vs-Noop; the readiness
+      // CLI calls the same function, so the diagnostic cannot drift from this decision. The
+      // query already constrains status to STRIPE_LIVE_CONNECTION_STATUS, so the predicate's
+      // status gate is a confirmed no-op here; it is the live gate for the CLI's broader query.
+      const readiness = classifyStripeReadiness(
+        { status: connection.status, externalAccountId: connection.externalAccountId },
+        creds,
+      );
+
+      if (readiness.live && creds) {
+        // Trim + empty-guard so a blank or whitespace base cannot produce a relative redirect
+        // URL that Stripe Checkout rejects; fall back to the dev default, then strip trailing
+        // slashes. (Unchanged #1015 redirect wiring.)
         const configuredBaseUrl = (
           deps.paymentRedirectBaseUrl ?? DEFAULT_PAYMENT_REDIRECT_BASE_URL
         ).trim();
@@ -119,28 +129,24 @@ async function resolveForOrg(deps: PaymentPortFactoryDeps, orgId: string): Promi
         return new StripeConnectPaymentAdapter({
           client: buildStripeClient(creds.secretKey),
           connectedAccountId: creds.connectedAccountId,
-          // Patient-facing redirect URLs, config-driven (PAYMENT_PUBLIC_URL, resolved in
-          // app.ts; localhost dev default). createDepositLink passes these as the Stripe
-          // Checkout success_url/cancel_url. retrievePayment and the settlement webhook
-          // never read them, so they are cosmetic to settlement. Path suffixes come from
-          // @switchboard/schemas (the single source the dashboard route is pinned to).
           successUrl: `${baseUrl}${PAYMENT_SUCCESS_PATH}`,
           cancelUrl: `${baseUrl}${PAYMENT_CANCEL_PATH}`,
         });
       }
-      if (creds) {
+
+      if (readiness.reason === "account_mismatch") {
         deps.logger.error(
-          `Payment[${orgId}]: 'stripe' Connection externalAccountId does not match credentials.connectedAccountId — using Noop (fail-closed; settlement would not resolve)`,
+          `Payment[${orgId}]: 'stripe' Connection externalAccountId does not match credentials.connectedAccountId - using Noop (fail-closed; settlement would not resolve)`,
         );
       } else {
         deps.logger.info(
-          `Payment[${orgId}]: 'stripe' Connection present but Connect creds incomplete — using Noop (fail-closed)`,
+          `Payment[${orgId}]: 'stripe' Connection present but not live-ready (${readiness.reason}) - using Noop (fail-closed)`,
         );
       }
     }
   }
 
-  // Fall through to Noop — every org that lacks a connected Stripe Connection gets a
+  // Fall through to Noop - every org that lacks a connected Stripe Connection gets a
   // DEGRADED (T3) noop payment posture that is never a production-countable paid visit.
   deps.logger.info(`Payment[${orgId}]: using NoopPaymentAdapter (Stripe Connect not configured)`);
   return new NoopPaymentAdapter();

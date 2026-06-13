@@ -29,6 +29,7 @@
     "arch:check": "npx tsx scripts/arch-check.ts",
     "preflight": "bash scripts/preflight.sh",
     "reference-audit": "node scripts/reference-audit.mjs",
+    "stripe:readiness": "tsx apps/api/scripts/check-stripe-readiness.mts",
     "worktree:init": "bash scripts/worktree-init.sh",
     "archive:superpowers": "bash scripts/archive-superpowers-docs.sh",
     "archive:superpowers:install": "bash scripts/launchd/install-archive-superpowers.sh",

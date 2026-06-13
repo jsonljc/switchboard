@@ -4,6 +4,11 @@ import { createPaymentPortFactory } from "../payment-port-factory.js";
 import { isNoopPaymentAdapter } from "../noop-payment-adapter.js";
 import { StripeConnectPaymentAdapter } from "../../payments/stripe-connect-payment-adapter.js";
 import type { StripeConnectClient } from "../../payments/stripe-connect-payment-adapter.js";
+import {
+  classifyStripeReadiness,
+  STRIPE_LIVE_CONNECTION_STATUS,
+} from "../../payments/stripe-readiness.js";
+import { parseStripeConnectCredentials } from "../../payments/stripe-connect-credentials.js";
 
 const silentLogger = { info: () => {}, error: () => {} };
 
@@ -69,14 +74,19 @@ describe("createPaymentPortFactory: rejection eviction", () => {
 function makePrismaWithConnection(
   connectionByOrg: Record<
     string,
-    { id: string; credentials: unknown; externalAccountId: string | null } | null
+    { id: string; credentials: unknown; externalAccountId: string | null; status?: string } | null
   >,
 ) {
   return {
     connection: {
       findFirst: vi.fn(
-        async ({ where }: { where: { organizationId: string; serviceId: string } }) =>
-          connectionByOrg[where.organizationId] ?? null,
+        async ({ where }: { where: { organizationId: string; serviceId: string } }) => {
+          const row = connectionByOrg[where.organizationId];
+          if (!row) return null;
+          // Default to the live status the writer sets, so existing connected fixtures keep
+          // resolving to the live adapter once the factory delegates to the predicate.
+          return { status: STRIPE_LIVE_CONNECTION_STATUS, ...row };
+        },
       ),
     },
   };
@@ -310,4 +320,54 @@ describe("createPaymentPortFactory: redirect URL wiring", () => {
       expect(createParams[0]?.cancel_url).toBe("http://localhost:3002/payment/cancel");
     }
   });
+});
+
+describe("createPaymentPortFactory: factory agrees with classifyStripeReadiness", () => {
+  const cases = [
+    {
+      name: "match -> live",
+      externalAccountId: "acct_1",
+      creds: { connectedAccountId: "acct_1", secretKey: "sk_x" },
+    },
+    {
+      name: "mismatch -> noop",
+      externalAccountId: "acct_1",
+      creds: { connectedAccountId: "acct_2", secretKey: "sk_x" },
+    },
+    {
+      name: "incomplete -> noop",
+      externalAccountId: "acct_1",
+      creds: { connectedAccountId: "acct_1" },
+    },
+    {
+      name: "null external -> noop",
+      externalAccountId: null,
+      creds: { connectedAccountId: "acct_1", secretKey: "sk_x" },
+    },
+  ];
+
+  for (const c of cases) {
+    it(`${c.name}: isNoop(factory) === !predicate.live`, async () => {
+      const prisma = makePrismaWithConnection({
+        org: {
+          id: "conn",
+          credentials: "enc",
+          externalAccountId: c.externalAccountId,
+          status: STRIPE_LIVE_CONNECTION_STATUS,
+        },
+      });
+      const factory = createPaymentPortFactory({
+        prismaClient: prisma as never,
+        logger: silentLogger,
+        decryptCredentials: vi.fn(() => c.creds),
+        stripeClientFactory: (() => fakeStripeClient()) as never,
+      });
+      const port = await factory("org");
+      const predicate = classifyStripeReadiness(
+        { status: STRIPE_LIVE_CONNECTION_STATUS, externalAccountId: c.externalAccountId },
+        parseStripeConnectCredentials(c.creds),
+      );
+      expect(isNoopPaymentAdapter(port)).toBe(!predicate.live);
+    });
+  }
 });
