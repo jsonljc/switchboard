@@ -14,10 +14,20 @@ type RiskScoreResult = ReturnType<typeof computeRiskScore>;
  * spend-limit deny check (below) and the spend-approval-threshold autonomy lever
  * in the governance gate, so they can never disagree about "the amount".
  */
-const SPEND_KEYS = ["spendAmount", "amount", "budgetChange", "newBudget"] as const;
+export const SPEND_KEYS = ["spendAmount", "amount", "budgetChange", "newBudget"] as const;
 
-export function extractSpendAmount(proposal: ActionProposal): number | null {
-  for (const key of SPEND_KEYS) {
+/**
+ * Reads the first finite spend amount under `keys` (default: all SPEND_KEYS).
+ * The `keys` parameter lets a caller read a SUBSET, e.g. the governance gate's
+ * auto-approve guard reads only the OUTBOUND keys (SPEND_KEYS minus the generic
+ * "amount") so inbound money-recording intents stay auto-approved. Number.isFinite
+ * guards so a NaN/Infinity never reads as an amount.
+ */
+export function extractSpendAmount(
+  proposal: ActionProposal,
+  keys: readonly string[] = SPEND_KEYS,
+): number | null {
+  for (const key of keys) {
     const value = proposal.parameters[key];
     if (typeof value === "number" && Number.isFinite(value)) return value;
   }

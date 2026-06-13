@@ -20,7 +20,7 @@ import { toGovernanceDecision } from "./decision-adapter.js";
 import { applySpendApprovalThreshold } from "./spend-approval-threshold.js";
 import { DEFAULT_CARTRIDGE_CONSTRAINTS } from "./default-constraints.js";
 import { createGuardrailState } from "../../engine/policy-engine.js";
-import { extractSpendAmount } from "../../engine/spend-limits.js";
+import { extractSpendAmount, SPEND_KEYS } from "../../engine/spend-limits.js";
 import { profileToPosture, DEFAULT_GOVERNANCE_PROFILE } from "../../governance/profile.js";
 
 /**
@@ -74,6 +74,65 @@ const DEFAULT_RISK_INPUT: RiskInput = {
   sensitivity: { entityVolatile: false, learningPhase: false, recentlyModified: false },
 };
 
+/**
+ * OUTBOUND-spend parameter keys: the engine's canonical SPEND_KEYS
+ * (engine/spend-limits.ts) MINUS the generic "amount" key. Derived from SPEND_KEYS
+ * rather than hand-copied, so a new outbound key added there is automatically
+ * covered here and the two lists cannot silently drift (a drift would re-open the
+ * very bypass this guard closes). "amount" is excluded because inbound
+ * money-recording intents legitimately carry it yet must stay auto-approved:
+ * operator.record_revenue is registered system_auto_approved + write and submits
+ * parameters.amount, and payment.record_verified records inbound value too.
+ * spendBearing is a static flag precisely so "outbound spend" is NOT inferred from a
+ * bare amount (intent-registration.ts); this runtime guard mirrors that by reading
+ * only the outbound-specific keys, never the generic "amount".
+ */
+const OUTBOUND_SPEND_KEYS = SPEND_KEYS.filter((key) => key !== "amount");
+
+/**
+ * Outbound money-move intent prefixes that must NEVER ride the system_auto_approved
+ * short-circuit, even when no outbound spend delta can be read from their parameters
+ * (the dollars may live in a field the extractor cannot see). The CONFIRMED entry is
+ * adoptimizer.campaign.reallocate, the Spec-1B reallocation intent
+ * (docs/superpowers/specs/2026-06-05-close-the-revenue-loop-design.md, C6 / 1B-1),
+ * which that spec registers require_approval; the other two are anticipated outbound
+ * siblings. This denylist is the structural backstop if any is ever mis-registered
+ * auto-approved. Keep tiny; add new OUTBOUND money-move intents here. See the F4
+ * registry guard and feedback_system_auto_approved_bypasses_spend_gates.
+ */
+const FINANCIAL_AUTO_APPROVE_DENYLIST = [
+  "adoptimizer.campaign.reallocate",
+  "adoptimizer.campaign.scale",
+  "adoptimizer.campaign.shift_budget_to_source",
+] as const;
+
+/** True when the proposal carries a finite, non-zero OUTBOUND budget delta under
+ *  OUTBOUND_SPEND_KEYS (NOT the generic "amount"). Reuses extractSpendAmount's
+ *  finiteness-guarded read so the guard and the spend gate agree on "the amount"
+ *  (a NaN never reads as a spend, feedback_nan_blind_comparison_gates). */
+function carriesOutboundSpend(proposal: ActionProposal): boolean {
+  const amount = extractSpendAmount(proposal, OUTBOUND_SPEND_KEYS);
+  return amount !== null && amount !== 0;
+}
+
+/**
+ * D9-2 runtime financial-intent test for the auto-approve guard. OR of two signals:
+ *  (1) a write/destructive intent carrying an OUTBOUND spend delta (carriesOutboundSpend);
+ *  (2) a denylisted outbound money-move intent prefix, even with no extractable delta.
+ * Complementary to assertNotSpendBearingAutoApprove, which catches a STATICALLY
+ * declared spendBearing:true registration; this catches an UNDECLARED outbound intent
+ * whose runtime parameters carry an outbound delta, or a known money-move family.
+ * Inbound money-recording (operator.record_revenue carries the generic "amount") is
+ * intentionally NOT financial here, so it keeps short-circuiting to execute.
+ */
+function isFinancialIntent(registration: IntentRegistration, proposal: ActionProposal): boolean {
+  if (FINANCIAL_AUTO_APPROVE_DENYLIST.some((prefix) => registration.intent.startsWith(prefix))) {
+    return true;
+  }
+  if (registration.mutationClass === "read") return false;
+  return carriesOutboundSpend(proposal);
+}
+
 export class GovernanceGate {
   private readonly deps: GovernanceGateDeps;
 
@@ -95,6 +154,11 @@ export class GovernanceGate {
       ? { ...DEFAULT_CARTRIDGE_CONSTRAINTS, trustLevel: workUnit.deployment.trustLevelOverride }
       : DEFAULT_CARTRIDGE_CONSTRAINTS;
 
+    // Build the action proposal once, before the short-circuit, so the D9-2
+    // financial guard below and the downstream policy evaluation / spend read
+    // share a single instance (toActionProposal is a pure projection of workUnit).
+    const proposal = toActionProposal(workUnit, registration);
+
     // Amendment 1 — system_auto_approved short-circuit.
     // Skips the human approval-policy lookup only. Auth, idempotency,
     // WorkTrace, audit, and execution dispatch all run unchanged downstream.
@@ -105,13 +169,27 @@ export class GovernanceGate {
       // A programming invariant (not user input) ⇒ throw loudly rather than
       // silently downgrade to require_approval.
       assertNotSpendBearingAutoApprove(registration);
-      return {
-        outcome: "execute",
-        riskScore: 0,
-        budgetProfile: "cheap",
-        constraints,
-        matchedPolicies: [],
-      };
+      // D9-2 structural guard: a financial intent must NEVER ride the
+      // short-circuit, which returns execute BEFORE the downstream spend gate
+      // (applySpendApprovalThreshold over extractSpendAmount). The F4 throw above
+      // covers a STATICALLY declared spendBearing:true registration; this covers
+      // an UNDECLARED one whose runtime parameters carry a spend amount, or a
+      // money-move family on the denylist. Fall through to the full policy path so
+      // the seeded require_approval policy parks it (else default-deny). This makes
+      // "financial intents are require_approval, never system_auto_approved" a
+      // structural invariant, not a convention (#931,
+      // feedback_system_auto_approved_bypasses_spend_gates).
+      if (!isFinancialIntent(registration, proposal)) {
+        return {
+          outcome: "execute",
+          riskScore: 0,
+          budgetProfile: "cheap",
+          constraints,
+          matchedPolicies: [],
+        };
+      }
+      // Financial intent: deliberately do not return; continue to the full policy
+      // evaluation below so it parks or denies.
     }
 
     // Derive cartridgeId from executor binding (first segment of action ID)
@@ -155,8 +233,8 @@ export class GovernanceGate {
     const profile = govProfile ?? DEFAULT_GOVERNANCE_PROFILE;
     const systemRiskPosture = profileToPosture(profile);
 
-    // Build proposal and evaluation context
-    const proposal = toActionProposal(workUnit, registration);
+    // Build evaluation context. The proposal was built once above, before the
+    // short-circuit, and is reused here.
     const evalContext = toEvaluationContext(workUnit, registration);
 
     // Assemble full PolicyEngineContext
