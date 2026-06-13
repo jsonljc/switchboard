@@ -49,6 +49,22 @@ interface JobEventData {
 }
 
 /**
+ * Terminal-lifecycle check for replay / duplicate-delivery safety (D5-F2).
+ * Mirrors the canonical terminal set in @switchboard/core's status-mapper
+ * (mapCreativeJobToMiraStatus: draft_ready / stopped / failed => canContinue
+ * false) but stays schemas-only; creative-pipeline is Layer 2 and must not
+ * import core. The status-mapper's derived "failed" rule
+ * (productionErrorsWithoutVideo) is subsumed by the "complete" check: production
+ * is the last stage, so a job that trips it already advanced currentStage to
+ * "complete". The stage loop always restarts at STAGE_ORDER[0], so a fresh
+ * duplicate invocation against a terminal job would otherwise re-run the trends
+ * stage (LLM spend) and overwrite currentStage.
+ */
+function isPolishedJobTerminal(job: CreativeJob): boolean {
+  return job.currentStage === "complete" || job.stoppedAt != null || job.stageFailure != null;
+}
+
+/**
  * Core pipeline logic extracted for testability.
  * Called by the Inngest function handler with real step tools,
  * or by tests with mocked step tools.
@@ -67,6 +83,22 @@ export async function executeCreativePipeline(
 
   if (!job) {
     throw new Error(`Creative job not found: ${eventData.jobId}`);
+  }
+
+  // D5-F2: a re-delivered or operator-replayed polished.submitted against a
+  // terminal (complete / stopped / failed) job must be a clean no-op: no
+  // lifecycle mutation, no paid stage re-run, no approval park, no throw. The
+  // stage loop below restarts at STAGE_ORDER[0] on every fresh invocation, so
+  // without this guard a duplicate event re-runs the trends stage (LLM spend)
+  // and overwrites currentStage "complete" => "hooks", parking at the trends
+  // gate (canContinue) one operator Continue away from a full paid re-run.
+  if (isPolishedJobTerminal(job)) {
+    console.warn(
+      `[creative-job-runner] skipping terminal job ${job.id} ` +
+        `(currentStage=${String(job.currentStage)}, stopped=${job.stoppedAt != null}, ` +
+        `failed=${job.stageFailure != null}); replayed/duplicate polished.submitted is a no-op`,
+    );
+    return;
   }
 
   // Create image generator if configured and job requests it
@@ -207,6 +239,12 @@ export function createCreativeJobRunner(
       name: "Creative Pipeline Job Runner",
       retries: 3,
       triggers: [{ event: "creative-pipeline/polished.submitted" }],
+      // D5-F2: dedupe a re-delivered/replayed polished.submitted (Inngest 24h
+      // window; per-function-scoped) so even a mid-flight job is safe from a
+      // concurrent duplicate run. Defense-in-depth behind the terminal entry
+      // guard; concurrency was unfit (a run parked on waitForEvent releases its
+      // slot, so a limit of 1 would not serialize across an approval wait).
+      idempotency: "event.data.jobId",
       ...(onFailure ? { onFailure } : {}),
     },
     async ({ event, step }: { event: { data: JobEventData }; step: StepTools }) => {
