@@ -326,6 +326,29 @@ describe("StripeConnectPaymentAdapter.createDepositLink idempotency", () => {
   });
 });
 
+describe("StripeConnectPaymentAdapter.retrievePayment redirect-URL independence", () => {
+  it("settles correctly even when the redirect URLs are empty (reads only the PaymentIntent)", async () => {
+    const { client } = makeClientReturningPI({
+      id: "pi_indep",
+      amount: 5000,
+      currency: "sgd",
+      status: "succeeded",
+    });
+    // Deliberately empty redirect URLs: settlement must be unaffected.
+    const adapter = new StripeConnectPaymentAdapter({
+      client,
+      connectedAccountId,
+      successUrl: "",
+      cancelUrl: "",
+    });
+
+    const result = await adapter.retrievePayment("pi_indep");
+
+    expect(result?.status).toBe("paid");
+    expect(result?.amountCents).toBe(5000);
+  });
+});
+
 describe("verifyConnectWebhookSignature", () => {
   it("returns the constructed event using the per-org Connect secret", () => {
     const fakeEvent = { id: "evt_1", type: "payment_intent.succeeded" };

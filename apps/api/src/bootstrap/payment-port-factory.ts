@@ -4,6 +4,7 @@
 // creds, else returns Noop (fail-closed — never a global env secret).
 import Stripe from "stripe";
 import type { PaymentPort } from "@switchboard/schemas";
+import { PAYMENT_SUCCESS_PATH, PAYMENT_CANCEL_PATH } from "@switchboard/schemas";
 import { decryptCredentials as defaultDecryptCredentials } from "@switchboard/db";
 import { NoopPaymentAdapter } from "./noop-payment-adapter.js";
 import {
@@ -13,6 +14,9 @@ import {
 import { parseStripeConnectCredentials } from "../payments/stripe-connect-credentials.js";
 
 export type PaymentPortFactory = (orgId: string) => Promise<PaymentPort>;
+
+/** Dev default for the patient-payment-page origin; production sets PAYMENT_PUBLIC_URL. */
+export const DEFAULT_PAYMENT_REDIRECT_BASE_URL = "http://localhost:3002";
 
 export interface PaymentPortFactoryDeps {
   // Matches the bootstrap logger shape used by calendar-provider-factory.ts.
@@ -37,6 +41,11 @@ export interface PaymentPortFactoryDeps {
   // Optional injectable Stripe client factory for tests. Defaults to a real new
   // Stripe(secretKey, { apiVersion }) constructor matching stripe-service.ts:13.
   stripeClientFactory?: (secretKey: string) => StripeConnectClient;
+  // Public origin (scheme + host) where the patient-facing /payment/success and
+  // /payment/cancel pages are served (the dashboard app). Resolved in app.ts from
+  // PAYMENT_PUBLIC_URL (Fork 2). Optional so existing call sites/tests keep compiling;
+  // defaults to the localhost dev origin. Cosmetic to settlement (webhook-only).
+  paymentRedirectBaseUrl?: string;
 }
 
 export function createPaymentPortFactory(deps: PaymentPortFactoryDeps): PaymentPortFactory {
@@ -94,18 +103,29 @@ async function resolveForOrg(deps: PaymentPortFactoryDeps, orgId: string): Promi
       // degrading. A null externalAccountId fails this equality by construction, which
       // is correct: an org the settlement webhook cannot resolve must not go live.
       if (creds && creds.connectedAccountId === connection.externalAccountId) {
+        // Trim + empty-guard so a blank or whitespace base (e.g. a deployer who blanks the
+        // PAYMENT_PUBLIC_URL line in .env) cannot produce a relative redirect URL that Stripe
+        // Checkout rejects; fall back to the dev default, then strip any trailing slashes.
+        const configuredBaseUrl = (
+          deps.paymentRedirectBaseUrl ?? DEFAULT_PAYMENT_REDIRECT_BASE_URL
+        ).trim();
+        const baseUrl = (configuredBaseUrl || DEFAULT_PAYMENT_REDIRECT_BASE_URL).replace(
+          /\/+$/,
+          "",
+        );
         deps.logger.info(
           `Payment[${orgId}]: using StripeConnectPaymentAdapter (connected account)`,
         );
         return new StripeConnectPaymentAdapter({
           client: buildStripeClient(creds.secretKey),
           connectedAccountId: creds.connectedAccountId,
-          // GO-LIVE: replace these placeholders with the org's real success/cancel redirect
-          // URLs before enabling a live Stripe Connection. Inert until then — deposit-link
-          // issuance is deferred; the live webhook path uses only retrievePayment, which
-          // never reads these.
-          successUrl: "https://switchboard.local/payment/success",
-          cancelUrl: "https://switchboard.local/payment/cancel",
+          // Patient-facing redirect URLs, config-driven (PAYMENT_PUBLIC_URL, resolved in
+          // app.ts; localhost dev default). createDepositLink passes these as the Stripe
+          // Checkout success_url/cancel_url. retrievePayment and the settlement webhook
+          // never read them, so they are cosmetic to settlement. Path suffixes come from
+          // @switchboard/schemas (the single source the dashboard route is pinned to).
+          successUrl: `${baseUrl}${PAYMENT_SUCCESS_PATH}`,
+          cancelUrl: `${baseUrl}${PAYMENT_CANCEL_PATH}`,
         });
       }
       if (creds) {

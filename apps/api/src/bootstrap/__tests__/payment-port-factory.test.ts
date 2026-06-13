@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
+import type Stripe from "stripe";
 import { createPaymentPortFactory } from "../payment-port-factory.js";
 import { isNoopPaymentAdapter } from "../noop-payment-adapter.js";
 import { StripeConnectPaymentAdapter } from "../../payments/stripe-connect-payment-adapter.js";
+import type { StripeConnectClient } from "../../payments/stripe-connect-payment-adapter.js";
 
 const silentLogger = { info: () => {}, error: () => {} };
 
@@ -180,5 +182,132 @@ describe("createPaymentPortFactory: Stripe Connect selection", () => {
     });
 
     expect(isNoopPaymentAdapter(await factory("org-noext"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Redirect URL wiring helpers
+// ---------------------------------------------------------------------------
+
+function recordingStripeClient(): {
+  createParams: Stripe.Checkout.SessionCreateParams[];
+  client: StripeConnectClient;
+} {
+  const createParams: Stripe.Checkout.SessionCreateParams[] = [];
+  const client = {
+    checkout: {
+      sessions: {
+        create: async (params: Stripe.Checkout.SessionCreateParams) => {
+          createParams.push(params);
+          return { url: "https://checkout.stripe.test/c/sess_1", payment_intent: "pi_1" };
+        },
+      },
+    },
+    paymentIntents: { retrieve: vi.fn() },
+    webhooks: { constructEvent: vi.fn() },
+  } as unknown as StripeConnectClient;
+  return { createParams, client };
+}
+
+function provisionedPrisma() {
+  return makePrismaWithConnection({
+    "org-stripe": { id: "conn_1", credentials: "enc", externalAccountId: "acct_1" },
+  });
+}
+
+const liveCreds = () => ({ connectedAccountId: "acct_1", secretKey: "sk_live_x" });
+
+describe("createPaymentPortFactory: redirect URL wiring", () => {
+  it("issues a deposit link whose success_url/cancel_url derive from the configured base URL", async () => {
+    const { createParams, client } = recordingStripeClient();
+    const factory = createPaymentPortFactory({
+      prismaClient: provisionedPrisma() as never,
+      logger: silentLogger,
+      decryptCredentials: vi.fn(liveCreds),
+      stripeClientFactory: () => client,
+      paymentRedirectBaseUrl: "https://app.example.com",
+    });
+
+    const port = await factory("org-stripe");
+    await port.createDepositLink({
+      bookingId: "bk_1",
+      organizationId: "org-stripe",
+      amountCents: 5000,
+      currency: "SGD",
+    });
+
+    expect(createParams).toHaveLength(1);
+    expect(createParams[0]?.success_url).toBe("https://app.example.com/payment/success");
+    expect(createParams[0]?.cancel_url).toBe("https://app.example.com/payment/cancel");
+    // The dead placeholder domain is gone for good.
+    expect(JSON.stringify(createParams[0])).not.toContain("switchboard.local");
+  });
+
+  it("normalizes a trailing slash on the base URL (no double slash)", async () => {
+    const { createParams, client } = recordingStripeClient();
+    const factory = createPaymentPortFactory({
+      prismaClient: provisionedPrisma() as never,
+      logger: silentLogger,
+      decryptCredentials: vi.fn(liveCreds),
+      stripeClientFactory: () => client,
+      paymentRedirectBaseUrl: "https://app.example.com/",
+    });
+
+    const port = await factory("org-stripe");
+    await port.createDepositLink({
+      bookingId: "bk_2",
+      organizationId: "org-stripe",
+      amountCents: 5000,
+      currency: "SGD",
+    });
+
+    expect(createParams[0]?.success_url).toBe("https://app.example.com/payment/success");
+    expect(createParams[0]?.cancel_url).toBe("https://app.example.com/payment/cancel");
+  });
+
+  it("falls back to the localhost dev default when no base URL is injected", async () => {
+    const { createParams, client } = recordingStripeClient();
+    const factory = createPaymentPortFactory({
+      prismaClient: provisionedPrisma() as never,
+      logger: silentLogger,
+      decryptCredentials: vi.fn(liveCreds),
+      stripeClientFactory: () => client,
+    });
+
+    const port = await factory("org-stripe");
+    await port.createDepositLink({
+      bookingId: "bk_3",
+      organizationId: "org-stripe",
+      amountCents: 5000,
+      currency: "SGD",
+    });
+
+    expect(createParams[0]?.success_url).toBe("http://localhost:3002/payment/success");
+    expect(createParams[0]?.cancel_url).toBe("http://localhost:3002/payment/cancel");
+  });
+
+  it("treats a blank or whitespace base URL as unset (absolute URLs, never relative)", async () => {
+    for (const blank of ["", "   "]) {
+      const { createParams, client } = recordingStripeClient();
+      const factory = createPaymentPortFactory({
+        prismaClient: provisionedPrisma() as never,
+        logger: silentLogger,
+        decryptCredentials: vi.fn(liveCreds),
+        stripeClientFactory: () => client,
+        paymentRedirectBaseUrl: blank,
+      });
+
+      const port = await factory("org-stripe");
+      await port.createDepositLink({
+        bookingId: "bk_blank",
+        organizationId: "org-stripe",
+        amountCents: 5000,
+        currency: "SGD",
+      });
+
+      // Never a bare relative path — Stripe Checkout rejects non-absolute success/cancel URLs.
+      expect(createParams[0]?.success_url).toBe("http://localhost:3002/payment/success");
+      expect(createParams[0]?.cancel_url).toBe("http://localhost:3002/payment/cancel");
+    }
   });
 });
