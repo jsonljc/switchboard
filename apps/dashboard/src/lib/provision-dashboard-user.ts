@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from "crypto";
 import type { PrismaClient } from "@prisma/client";
 import { seedOrgDayOneAgents } from "@switchboard/db";
+import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
 import { encryptApiKey } from "./crypto";
 
 interface ProvisionDashboardUserInput {
@@ -30,6 +31,9 @@ export async function provisionDashboardUser(
         governanceProfile: "guarded",
         onboardingComplete: false,
         provisioningStatus: "pending",
+        // F-01: seed valid default business hours so a fresh org resolves
+        // LocalCalendarProvider (not Noop) and the booking loop works out of the box.
+        businessHours: DEFAULT_BUSINESS_HOURS,
       },
     });
 

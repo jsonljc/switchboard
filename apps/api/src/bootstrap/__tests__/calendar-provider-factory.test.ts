@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
 import { createCalendarProviderFactory, buildLocalStore } from "../calendar-provider-factory.js";
 import { isNoopCalendarProvider, NoopCalendarProvider } from "../noop-calendar-provider.js";
 
@@ -69,6 +70,24 @@ describe("createCalendarProviderFactory: Noop fallback", () => {
     });
 
     expect(isNoopCalendarProvider(await factory("org-A"))).toBe(true);
+  });
+});
+
+describe("createCalendarProviderFactory: provisioning default resolves Local (F-01)", () => {
+  it("resolves a non-Noop provider for a fresh org seeded with DEFAULT_BUSINESS_HOURS", async () => {
+    // Pins the provisioning seam: the value seeded at org provisioning must be the kind of
+    // object the factory accepts to leave the Noop tier. No Google env, so the only way out
+    // of Noop is the seeded business hours. Driven from the REAL provisioning constant.
+    const prisma = makePrisma({ "org-fresh": { businessHours: DEFAULT_BUSINESS_HOURS } });
+    const factory = createCalendarProviderFactory({
+      prismaClient: prisma as never,
+      logger: silentLogger,
+      env: {},
+    });
+
+    const provider = await factory("org-fresh");
+
+    expect(isNoopCalendarProvider(provider)).toBe(false);
   });
 });
 

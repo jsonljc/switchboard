@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateAvailableSlots } from "./slot-generator.js";
-import type { BusinessHoursConfig } from "@switchboard/schemas";
+import { DEFAULT_BUSINESS_HOURS, type BusinessHoursConfig } from "@switchboard/schemas";
 
 const businessHours: BusinessHoursConfig = {
   timezone: "Asia/Singapore",
@@ -110,6 +110,34 @@ describe("generateAvailableSlots", () => {
       expect(new Date(slot.start).getTime()).not.toBeNaN();
       expect(new Date(slot.end).getTime()).not.toBeNaN();
     }
+  });
+
+  it("the provisioning default (DEFAULT_BUSINESS_HOURS) yields bookable weekday slots (F-01)", () => {
+    // End-to-end proof for F-01: the exact value seeded at org provisioning must produce real
+    // booking slots on a weekday, so a fresh org's booking loop actually works, not just that a
+    // LocalCalendarProvider is constructed. Driven from the REAL provisioning constant.
+    const weekday = generateAvailableSlots({
+      dateFrom: "2026-04-20T00:00:00+08:00", // a Monday in Asia/Singapore
+      dateTo: "2026-04-20T23:59:59+08:00",
+      durationMinutes: DEFAULT_BUSINESS_HOURS.defaultDurationMinutes,
+      bufferMinutes: DEFAULT_BUSINESS_HOURS.bufferMinutes,
+      businessHours: DEFAULT_BUSINESS_HOURS,
+      busyPeriods: [],
+      calendarId: "primary",
+    });
+    expect(weekday.length).toBeGreaterThan(0);
+    expect(weekday.every((s) => s.available)).toBe(true);
+
+    const weekend = generateAvailableSlots({
+      dateFrom: "2026-04-19T00:00:00+08:00", // a Sunday: no day config in the default
+      dateTo: "2026-04-19T23:59:59+08:00",
+      durationMinutes: DEFAULT_BUSINESS_HOURS.defaultDurationMinutes,
+      bufferMinutes: DEFAULT_BUSINESS_HOURS.bufferMinutes,
+      businessHours: DEFAULT_BUSINESS_HOURS,
+      busyPeriods: [],
+      calendarId: "primary",
+    });
+    expect(weekend).toHaveLength(0);
   });
 
   it("produces consecutive slot starts 45 minutes apart when bufferMinutes is 15 and durationMinutes is 30", () => {

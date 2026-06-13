@@ -8,6 +8,7 @@ import {
   seedAlexSkillPack,
   provisionOrgAgentDeployments,
 } from "@switchboard/db";
+import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
@@ -73,6 +74,7 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           onboardingComplete: false,
           managedChannels: [],
           provisioningStatus: "pending",
+          businessHours: DEFAULT_BUSINESS_HOURS, // F-01: resolve Local (not Noop) for fresh orgs
         },
         update: {},
       });
