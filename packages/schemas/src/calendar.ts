@@ -111,6 +111,15 @@ export const CalendarHealthCheckSchema = z.object({
 });
 export type CalendarHealthCheck = z.infer<typeof CalendarHealthCheckSchema>;
 
+export interface BookingConfirmedNotification {
+  bookingId: string;
+  attendeeEmail: string | null;
+  attendeeName: string | null;
+  service: string;
+  startsAt: string;
+  endsAt: string;
+}
+
 export interface CalendarProvider {
   listAvailableSlots(query: SlotQuery): Promise<TimeSlot[]>;
   createBooking(input: CreateBookingInput): Promise<Booking>;
@@ -123,6 +132,13 @@ export interface CalendarProvider {
   cancelBooking(eventId: string, reason?: string): Promise<void>;
   rescheduleBooking(eventId: string, newSlot: TimeSlot): Promise<Booking>;
   getBooking(bookingId: string): Promise<Booking | null>;
+  /**
+   * Optional post-confirmation notification hook. The booking tool calls this AFTER the durable
+   * confirm transaction commits, so a confirmation is only ever sent for a booking that truly
+   * persisted. Providers that notify the attendee natively during createBooking (e.g. Google
+   * Calendar invites) omit it. Best-effort: implementations must not throw.
+   */
+  notifyBookingConfirmed?(notification: BookingConfirmedNotification): Promise<void>;
   healthCheck(): Promise<CalendarHealthCheck>;
 }
 
