@@ -277,6 +277,15 @@ describe("PrismaBookingStore.create overlap guard", () => {
     );
     expect(tx.booking.create).toHaveBeenCalled();
     expect(row).toEqual({ id: "new-booking" });
+    // Order proof migrated from the removed buildLocalStore.createInTransaction unit test: the
+    // advisory lock is taken BEFORE the overlap check, which runs BEFORE the insert.
+    const lockOrder = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
+    const findOrder = (tx.booking.findFirst as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    const createOrder = (tx.booking.create as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(findOrder);
+    expect(findOrder).toBeLessThan(createOrder);
   });
 
   it("throws BookingSlotConflictError (not insert) when a live booking overlaps", async () => {
