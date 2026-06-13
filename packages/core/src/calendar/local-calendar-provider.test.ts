@@ -351,8 +351,6 @@ describeOrgScope("LocalCalendarProvider listAvailableSlots org scoping", () => {
       findOverlapping,
       createInTransaction: viOrgScope.fn(),
       findById: viOrgScope.fn(),
-      cancel: viOrgScope.fn(),
-      reschedule: viOrgScope.fn(),
     };
     const provider = new LocalCalendarProviderOrgScope({
       businessHours: __businessHoursForOrgScope,

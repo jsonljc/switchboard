@@ -40,8 +40,6 @@ export interface LocalBookingStore {
     workTraceId?: string | null;
   }): Promise<{ id: string }>;
   findById(bookingId: string): Promise<Booking | null>;
-  cancel(bookingId: string): Promise<void>;
-  reschedule(bookingId: string, newSlot: { start: string; end: string }): Promise<{ id: string }>;
 }
 
 interface LocalCalendarProviderConfig {
