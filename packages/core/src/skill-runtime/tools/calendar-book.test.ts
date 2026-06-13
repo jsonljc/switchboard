@@ -928,5 +928,19 @@ describe("createCalendarBookToolFactory", () => {
       expect(result.status).toBe("success");
       expect(result.data?.status).toBe("confirmed");
     });
+
+    it("confirms normally for a provider that omits the optional hook (Google/Noop path)", async () => {
+      // The Google adapter notifies attendees natively and does not implement
+      // notifyBookingConfirmed; the tool's guard must skip the call without failing.
+      delete (calendarProvider as { notifyBookingConfirmed?: unknown }).notifyBookingConfirmed;
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_123" });
+
+      const result = await tool.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("success");
+      expect(result.data?.status).toBe("confirmed");
+    });
   });
 });
