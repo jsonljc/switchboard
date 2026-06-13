@@ -90,6 +90,31 @@ describe("riley pause approve-to-dispatch loop (real respond + dispatch stack)",
     );
   });
 
+  it("D5-2a x #1007 seam: the last-mile gate reads the DURABLE approvalOutcome the replay leaves honest", async () => {
+    // The executor's last-mile gate (D5-2a) is ACTIVE in this exact dispatch path:
+    // it reads getApprovalState over the REAL trace store and only writes to Meta on
+    // an approved lifecycle. PlatformLifecycle stamps approvalOutcome="approved" on
+    // the durable trace BEFORE dispatch, and the idempotent-replay path (#1007)
+    // reconstructs the SubmitWorkResponse WITHOUT touching that field, so a replayed
+    // approved park reads "approved" here too and never falsely fails the gate.
+    const w = buildPauseLifecycleWorld();
+    const { lifecycleId, bindingHash } = await park(w);
+    const result = await respondToParkedLifecycle(w.deps, {
+      lifecycleId,
+      action: "approve",
+      respondedBy: "operator_jane",
+      bindingHash,
+    });
+    expect(result.executionResult?.success).toBe(true);
+    expect(w.harness.metaCalls).toEqual([{ campaignId: "camp_1", status: "PAUSED" }]);
+
+    // The gate's input is the durable WorkTrace.approvalOutcome - assert it is what a
+    // replay would re-read (the seam the cross-tier dependency pins).
+    const lifecycle = await w.lifecycleService.getLifecycleById(lifecycleId);
+    const trace = (await w.harness.traceStore.getByWorkUnitId(lifecycle!.actionEnvelopeId))!.trace;
+    expect(trace.approvalOutcome).toBe("approved");
+  });
+
   it("a REAL reject pauses nothing and fails the trace", async () => {
     const w = buildPauseLifecycleWorld();
     const { lifecycleId } = await park(w);

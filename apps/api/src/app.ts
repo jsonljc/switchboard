@@ -789,12 +789,21 @@ export async function buildServer() {
     | undefined;
   if (prismaClient) {
     const { bootstrapContainedWorkflows } = await import("./bootstrap/contained-workflows.js");
+    // workTraceStore is always constructed alongside prismaClient (above); the
+    // pause executor's last-mile approved-lifecycle check (D5-2a) reads it, so a
+    // missing store here is a wiring bug, not a degraded mode. Fail loud.
+    if (!workTraceStore) {
+      throw new Error(
+        "workTraceStore must be initialized when prismaClient is present (riley pause last-mile gate)",
+      );
+    }
     const result = await bootstrapContainedWorkflows({
       prismaClient,
       intentRegistry,
       modeRegistry,
       platformIngress,
       deploymentResolver,
+      workTraceStore,
       logger: app.log,
     });
     instantFormAdapter = result.instantFormAdapter;

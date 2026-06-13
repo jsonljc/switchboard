@@ -45,6 +45,11 @@ function harness(overrides?: {
   campaignStatus?: { status: string; effectiveStatus: string } | null;
   updateCampaignStatus?: ReturnType<typeof vi.fn>;
   markRecommendationActed?: ReturnType<typeof vi.fn>;
+  approval?: {
+    approvalOutcome?: "approved" | "rejected" | "patched" | "expired";
+    approvalRespondedBy?: string;
+  };
+  getApprovalState?: ReturnType<typeof vi.fn>;
 }) {
   const updateCampaignStatus =
     overrides?.updateCampaignStatus ?? vi.fn().mockResolvedValue(undefined);
@@ -65,6 +70,15 @@ function harness(overrides?: {
         executedAt: Date;
       }) => ({ transitioned: true as const }),
     );
+  const getApprovalState =
+    overrides?.getApprovalState ??
+    vi.fn(
+      async (_args: { organizationId: string; workUnitId: string }) =>
+        overrides?.approval ?? {
+          approvalOutcome: "approved" as const,
+          approvalRespondedBy: "user_owner",
+        },
+    );
   const deps = {
     getDeploymentCredentials: vi.fn(async (organizationId: string, _deploymentId: string) => {
       if (overrides?.creds === "org_mismatch") {
@@ -79,9 +93,16 @@ function harness(overrides?: {
     }),
     createAdsClient: vi.fn().mockReturnValue({ updateCampaignStatus, getCampaignStatus }),
     markRecommendationActed,
+    getApprovalState,
     now: () => NOW,
   };
-  return { deps, updateCampaignStatus, getCampaignStatus, markRecommendationActed };
+  return {
+    deps,
+    updateCampaignStatus,
+    getCampaignStatus,
+    markRecommendationActed,
+    getApprovalState,
+  };
 }
 
 describe("riley pause execution workflow", () => {
@@ -365,5 +386,75 @@ describe("slice 4f: recommendation transition on the truthful success leg ONLY",
     const handler = buildRileyPauseExecutionWorkflow(h.deps);
     await handler.execute(workUnit(), services);
     expect(h.markRecommendationActed).not.toHaveBeenCalled();
+  });
+});
+
+describe("D5-2a: last-mile approved-lifecycle check", () => {
+  it("writes the pause when the WorkTrace shows an approved lifecycle", async () => {
+    const h = harness({
+      approval: { approvalOutcome: "approved", approvalRespondedBy: "user_owner" },
+    });
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const result = await handler.execute(workUnit(), services);
+    expect(result.outcome).toBe("completed");
+    expect(h.updateCampaignStatus).toHaveBeenCalledWith("camp_1", "PAUSED");
+  });
+
+  it("accepts a patched-and-approved lifecycle (operator edited the action, then approved)", async () => {
+    const h = harness({
+      approval: { approvalOutcome: "patched", approvalRespondedBy: "user_owner" },
+    });
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const result = await handler.execute(workUnit(), services);
+    expect(result.outcome).toBe("completed");
+    expect(h.updateCampaignStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("REFUSES to write (fails closed, PAUSE_NOT_APPROVED) when the trace shows no approval", async () => {
+    const h = harness({ approval: { approvalOutcome: undefined, approvalRespondedBy: undefined } });
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const result = await handler.execute(workUnit(), services);
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe("PAUSE_NOT_APPROVED");
+    expect(h.updateCampaignStatus).not.toHaveBeenCalled(); // never touches Meta
+    expect(h.markRecommendationActed).not.toHaveBeenCalled();
+  });
+
+  it("REFUSES when the lifecycle was rejected", async () => {
+    const h = harness({
+      approval: { approvalOutcome: "rejected", approvalRespondedBy: "user_owner" },
+    });
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const result = await handler.execute(workUnit(), services);
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe("PAUSE_NOT_APPROVED");
+    expect(h.updateCampaignStatus).not.toHaveBeenCalled();
+  });
+
+  it("REFUSES when the lifecycle expired", async () => {
+    const h = harness({ approval: { approvalOutcome: "expired", approvalRespondedBy: undefined } });
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const result = await handler.execute(workUnit(), services);
+    expect(result.outcome).toBe("failed");
+    expect(result.error?.code).toBe("PAUSE_NOT_APPROVED");
+    expect(h.updateCampaignStatus).not.toHaveBeenCalled();
+  });
+
+  it("reads the approval for THIS work unit + org (scoped lookup, never cross-tenant)", async () => {
+    const h = harness();
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    await handler.execute(workUnit(), services);
+    expect(h.getApprovalState).toHaveBeenCalledWith({
+      organizationId: "org_1",
+      workUnitId: "wu_pause_1",
+    });
+  });
+
+  it("fails closed BEFORE resolving credentials (no decrypt on an unapproved unit)", async () => {
+    const h = harness({ approval: { approvalOutcome: undefined } });
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const result = await handler.execute(workUnit(), services);
+    expect(result.outcome).toBe("failed");
+    expect(h.deps.getDeploymentCredentials).not.toHaveBeenCalled();
   });
 });

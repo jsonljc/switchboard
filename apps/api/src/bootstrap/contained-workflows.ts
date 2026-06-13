@@ -2,6 +2,7 @@ import type {
   ExecutionModeRegistry,
   WorkflowHandler,
   DeploymentResolver,
+  WorkTraceStore,
 } from "@switchboard/core/platform";
 import { WorkflowMode } from "@switchboard/core/platform";
 import type { IntentRegistry } from "@switchboard/core/platform";
@@ -35,6 +36,9 @@ interface ContainedWorkflowBootstrapDeps {
   modeRegistry: ExecutionModeRegistry;
   platformIngress: PlatformIngress;
   deploymentResolver: DeploymentResolver | null;
+  /** WorkTrace reader backing the pause executor's required last-mile approved-
+   * lifecycle check (D5-2a); always wired so the executor reads an approved trace. */
+  workTraceStore: Pick<WorkTraceStore, "getByWorkUnitId">;
   logger: { info(msg: string): void; warn(msg: string): void; error(msg: string): void };
 }
 
@@ -142,6 +146,7 @@ export async function bootstrapContainedWorkflows(
     modeRegistry,
     platformIngress,
     deploymentResolver,
+    workTraceStore,
     logger,
   } = deps;
 
@@ -228,7 +233,7 @@ export async function bootstrapContainedWorkflows(
   // Phase-C pause executor: on approval, pauses the campaign on Meta with the
   // org's own meta-ads credentials. Wiring (incl. the org-isolation credential
   // resolver) lives in bootstrap/riley-pause-executor.ts.
-  const rileyPauseExecutor = await buildRileyPauseExecutorHandler(prismaClient);
+  const rileyPauseExecutor = await buildRileyPauseExecutorHandler(prismaClient, workTraceStore);
 
   // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
   // difference between callers is how the WhatsApp 24h-window timestamp is resolved

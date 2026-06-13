@@ -1,4 +1,4 @@
-import type { WorkflowHandler } from "@switchboard/core/platform";
+import type { WorkflowHandler, WorkTrace } from "@switchboard/core/platform";
 import { RileyPauseExecutionInput } from "@switchboard/schemas";
 import {
   PHASE_C_EXECUTION_SEAM,
@@ -78,9 +78,41 @@ export interface RileyPauseExecutionDeps {
   }) => Promise<
     { transitioned: true } | { transitioned: false; reason: "not_found" | "not_pending" }
   >;
+  /**
+   * Last-mile approved-lifecycle check (D5-2a). Reads the canonical WorkTrace for
+   * THIS work unit and reports its approval outcome. Defense in depth: the
+   * platform parks-then-approves before dispatch, but the entire human gate
+   * otherwise rests on one deletable Policy row (riley-pause-gate.test.ts pins
+   * "allow alone EXECUTES"). If the approval policy is mis-seeded, partially
+   * seeded, or an admin deletes it, this is the backstop that keeps Riley from
+   * writing an UNAPPROVED pause to Meta. It reads the DURABLE WorkTrace fields
+   * (work-trace.ts), which the idempotent-replay path leaves honest (#1007), so
+   * a replayed approved park still reads "approved" and executes.
+   *
+   * REQUIRED, never optional: an optional dep would let a future bootstrap
+   * forget the wiring and silently recreate the hole this exists to close
+   * (feedback_safety_gate_needs_producer_population). The closure org-scopes the
+   * read: a trace whose organizationId differs from the work unit's reads as no
+   * approval (never trust another tenant's trace).
+   */
+  getApprovalState: (args: { organizationId: string; workUnitId: string }) => Promise<{
+    // Canonical WorkTrace approval union (single source of truth). A new outcome
+    // added there is auto-tracked here and, since APPROVED_OUTCOMES enumerates the
+    // values that authorize the write, any new state fails closed until added.
+    approvalOutcome?: WorkTrace["approvalOutcome"];
+    approvalRespondedBy?: string;
+  }>;
   /** Injectable clock for the stale-approval cap. */
   now?: () => Date;
 }
+
+/**
+ * Approval outcomes that authorize the Meta write. "patched" is an
+ * operator-edited-then-approved lifecycle (still a human approval). "rejected"
+ * and "expired" do NOT authorize; an absent outcome means the unit reached the
+ * executor without ever being approved (the deleted/mis-seeded-policy case).
+ */
+const APPROVED_OUTCOMES: ReadonlySet<string> = new Set(["approved", "patched"]);
 
 /**
  * PHASE-C executor for `adoptimizer.campaign.pause`. Runs ONLY after the seeded
@@ -148,6 +180,30 @@ export function buildRileyPauseExecutionWorkflow(deps: RileyPauseExecutionDeps):
             reason: "stale_approval",
             requestedAt,
             ageHours,
+          },
+        };
+      }
+
+      // Last-mile approved-lifecycle check (D5-2a). Fail closed BEFORE resolving
+      // (and decrypting) credentials: a unit that reached the executor without an
+      // approved lifecycle must never touch the org's secrets or Meta. A genuine
+      // ungated execution is LOUD (outcome "failed" -> recovery_required + operator
+      // card); a legitimate (incl. replayed) approved park reads "approved"/"patched"
+      // here and proceeds silently.
+      const approval = await deps.getApprovalState({
+        organizationId: workUnit.organizationId,
+        workUnitId: workUnit.id,
+      });
+      if (!approval.approvalOutcome || !APPROVED_OUTCOMES.has(approval.approvalOutcome)) {
+        return {
+          outcome: "failed",
+          summary: "Refusing to pause: no approved lifecycle for this work unit",
+          error: {
+            code: "PAUSE_NOT_APPROVED",
+            message:
+              `Work unit ${workUnit.id} reached the pause executor without an approved lifecycle ` +
+              `(approvalOutcome=${approval.approvalOutcome ?? "none"}). The mandatory approval policy ` +
+              "may be missing or was deleted; refusing to write an unapproved pause to Meta.",
           },
         };
       }
