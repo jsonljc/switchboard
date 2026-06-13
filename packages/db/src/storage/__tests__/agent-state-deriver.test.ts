@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveAgentStates } from "../agent-state-deriver.js";
+import { deriveAgentStates, ACTIVITY_STATUS_STALE_MS } from "../agent-state-deriver.js";
 
 describe("deriveAgentStates", () => {
   it("initializes all roles as idle when no entries", () => {
@@ -105,5 +105,108 @@ describe("deriveAgentStates", () => {
     ]);
     const strategist = states.get("strategist")!;
     expect(strategist.metrics.actionsToday).toBe(1);
+  });
+});
+
+describe("activityStatus time-decay", () => {
+  const NOW = new Date("2026-06-13T12:00:00.000Z");
+  const ago = (ms: number) => new Date(NOW.getTime() - ms);
+
+  it("decays a stale working status to idle past the inactivity window", () => {
+    const states = deriveAgentStates(
+      [
+        {
+          eventType: "action.proposed",
+          timestamp: ago(ACTIVITY_STATUS_STALE_MS + 60_000),
+          summary: "Proposed campaign budget increase",
+        },
+      ],
+      NOW,
+    );
+    const strategist = states.get("strategist")!;
+    expect(strategist.activityStatus).toBe("idle");
+    expect(strategist.lastActionSummary).toBe("Proposed campaign budget increase");
+  });
+
+  it("keeps a recent working status active within the window", () => {
+    const states = deriveAgentStates(
+      [
+        {
+          eventType: "action.proposed",
+          timestamp: ago(60_000),
+          summary: "Proposed campaign budget increase",
+        },
+      ],
+      NOW,
+    );
+    expect(states.get("strategist")!.activityStatus).toBe("working");
+  });
+
+  it("keeps working exactly at the threshold and decays just past it", () => {
+    const atThreshold = deriveAgentStates(
+      [
+        {
+          eventType: "action.proposed",
+          timestamp: ago(ACTIVITY_STATUS_STALE_MS),
+          summary: "Proposed campaign budget increase",
+        },
+      ],
+      NOW,
+    );
+    expect(atThreshold.get("strategist")!.activityStatus).toBe("working");
+
+    const pastThreshold = deriveAgentStates(
+      [
+        {
+          eventType: "action.proposed",
+          timestamp: ago(ACTIVITY_STATUS_STALE_MS + 1),
+          summary: "Proposed campaign budget increase",
+        },
+      ],
+      NOW,
+    );
+    expect(pastThreshold.get("strategist")!.activityStatus).toBe("idle");
+  });
+
+  it("does not decay waiting_approval even when stale", () => {
+    const states = deriveAgentStates(
+      [
+        {
+          eventType: "action.pending_approval",
+          timestamp: ago(ACTIVITY_STATUS_STALE_MS * 10),
+          summary: "Campaign budget increase needs approval",
+        },
+      ],
+      NOW,
+    );
+    expect(states.get("strategist")!.activityStatus).toBe("waiting_approval");
+  });
+
+  it("does not decay error even when stale", () => {
+    const states = deriveAgentStates(
+      [
+        {
+          eventType: "action.error",
+          timestamp: ago(ACTIVITY_STATUS_STALE_MS * 10),
+          summary: "Campaign update failed",
+        },
+      ],
+      NOW,
+    );
+    expect(states.get("strategist")!.activityStatus).toBe("error");
+  });
+
+  it("decays to idle when the timestamp is invalid (NaN-guarded comparison)", () => {
+    const states = deriveAgentStates(
+      [
+        {
+          eventType: "action.proposed",
+          timestamp: new Date(NaN),
+          summary: "Proposed campaign budget increase",
+        },
+      ],
+      NOW,
+    );
+    expect(states.get("strategist")!.activityStatus).toBe("idle");
   });
 });
