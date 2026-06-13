@@ -38,6 +38,7 @@ export {
   createDepositLinkToolFactory,
   createDelegateToolFactory,
   createScheduleFollowUpToolFactory,
+  buildRescheduleOperations,
 } from "./tools/index.js";
 export type {
   EscalateToolFactory,
@@ -48,6 +49,7 @@ export type {
   CrmWriteToolFactory,
   CalendarProviderFactory,
   ScheduleFollowUpToolFactory,
+  CalendarRescheduleDeps,
 } from "./tools/index.js";
 export type {
   ChildWorkSubmitter,

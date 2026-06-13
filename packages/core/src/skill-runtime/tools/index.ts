@@ -12,3 +12,5 @@ export { createDelegateToolFactory } from "./delegate.js";
 export type { DelegateToolFactory, DelegateToolDeps } from "./delegate.js";
 export { createScheduleFollowUpToolFactory } from "./schedule-follow-up.js";
 export type { ScheduleFollowUpToolFactory } from "./schedule-follow-up.js";
+export { buildRescheduleOperations } from "./calendar-reschedule.js";
+export type { CalendarRescheduleDeps } from "./calendar-reschedule.js";

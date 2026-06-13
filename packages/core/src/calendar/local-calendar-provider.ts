@@ -40,8 +40,6 @@ export interface LocalBookingStore {
     workTraceId?: string | null;
   }): Promise<{ id: string }>;
   findById(bookingId: string): Promise<Booking | null>;
-  cancel(bookingId: string): Promise<void>;
-  reschedule(bookingId: string, newSlot: { start: string; end: string }): Promise<{ id: string }>;
 }
 
 interface LocalCalendarProviderConfig {
@@ -147,36 +145,41 @@ export class LocalCalendarProvider implements CalendarProvider {
     };
   }
 
-  async cancelBooking(bookingId: string, _reason?: string): Promise<void> {
-    await this.store.cancel(bookingId);
+  async cancelBooking(_calendarEventId: string, _reason?: string): Promise<void> {
+    // No-op. The durable booking store (PrismaBookingStore.cancel, org-scoped +
+    // count===0 guarded) is the single writer that cancels the row, and runs as the
+    // caller's FIRST step. A local (DB-backed) calendar has no external event to delete,
+    // so there is nothing to do here.
   }
 
-  async rescheduleBooking(bookingId: string, newSlot: TimeSlot): Promise<Booking> {
-    const existing = await this.store.findById(bookingId);
-    const result = await this.store.reschedule(bookingId, {
-      start: newSlot.start,
-      end: newSlot.end,
-    });
+  async rescheduleBooking(calendarEventId: string, newSlot: TimeSlot): Promise<Booking> {
+    // No-op move. For a local (DB-backed) calendar there is no external event to patch:
+    // the durable booking store (PrismaBookingStore.reschedule, advisory-locked +
+    // overlap-guarded + org-scoped, throwing the typed BookingSlotConflictError) owns the
+    // row mutation and runs as the caller's second step. Return a sparse Booking echoing
+    // the requested slot, mirroring GoogleCalendarAdapter.rescheduleBooking; the caller
+    // (calendar-reschedule tool) discards this return and treats the durable write as
+    // authoritative.
     return {
-      id: result.id,
-      contactId: existing?.contactId ?? "",
-      organizationId: existing?.organizationId ?? "",
-      service: existing?.service ?? "",
+      id: "",
+      contactId: "",
+      organizationId: "",
+      service: "",
       status: "confirmed",
-      calendarEventId: existing?.calendarEventId ?? null,
-      attendeeName: existing?.attendeeName ?? null,
-      attendeeEmail: existing?.attendeeEmail ?? null,
-      notes: existing?.notes ?? null,
-      createdByType: existing?.createdByType ?? "agent",
-      sourceChannel: existing?.sourceChannel ?? null,
-      workTraceId: existing?.workTraceId ?? null,
-      opportunityId: existing?.opportunityId ?? null,
+      calendarEventId,
+      attendeeName: null,
+      attendeeEmail: null,
+      notes: null,
+      createdByType: "agent",
+      sourceChannel: null,
+      workTraceId: null,
+      opportunityId: null,
       startsAt: newSlot.start,
       endsAt: newSlot.end,
       timezone: this.businessHours.timezone,
-      rescheduleCount: (existing?.rescheduleCount ?? 0) + 1,
-      rescheduledAt: new Date().toISOString(),
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      rescheduleCount: 0,
+      rescheduledAt: null,
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
   }

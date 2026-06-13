@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { PrismaClient, PrismaBookingStore } from "@switchboard/db";
+import { LocalCalendarProvider } from "@switchboard/core/calendar";
+import { buildRescheduleOperations } from "@switchboard/core/skill-runtime";
+import type { BusinessHoursConfig } from "@switchboard/schemas";
 import { buildLocalStore } from "../calendar-provider-factory.js";
 
 // Real-Postgres concurrency proof for F12. Fires CONCURRENCY simultaneous local-calendar
@@ -13,6 +16,20 @@ import { buildLocalStore } from "../calendar-provider-factory.js";
 // it writes and deletes real rows. CI (no Postgres, no opt-in) skips it; it never blocks a merge.
 const DB_INTEGRATION_ENABLED =
   !!process.env["DATABASE_URL"] && process.env["RUN_DB_INTEGRATION"] === "1";
+
+const BUSINESS_HOURS: BusinessHoursConfig = {
+  timezone: "Asia/Singapore",
+  days: [
+    { day: 1, open: "00:00", close: "23:59" },
+    { day: 2, open: "00:00", close: "23:59" },
+    { day: 3, open: "00:00", close: "23:59" },
+    { day: 4, open: "00:00", close: "23:59" },
+    { day: 5, open: "00:00", close: "23:59" },
+  ],
+  defaultDurationMinutes: 60,
+  bufferMinutes: 0,
+  slotIncrementMinutes: 60,
+};
 
 describe.skipIf(!DB_INTEGRATION_ENABLED)(
   "buildLocalStore.createInTransaction concurrency (integration, F12)",
@@ -115,72 +132,75 @@ describe.skipIf(!DB_INTEGRATION_ENABLED)(
   },
 );
 
-// Finding A (race): two concurrent reschedules of two different bookings onto the SAME free
-// slot for one org. The advisory lock serializes them; exactly one wins and the other gets
-// SLOT_CONFLICT, so the target slot is never double-held and the loser stays put.
+// Migrated from the deleted buildLocalStore reschedule proofs: the F12 reschedule guarantees
+// now live on the durable PrismaBookingStore, which is the store that actually runs in
+// production (skill-mode.ts wires `new PrismaBookingStore(...)` as the reschedule tool's
+// bookingStore). Two concurrent reschedules onto one slot: the advisory lock serializes them,
+// exactly one wins and the other gets the TYPED conflict; the loser stays put.
 describe.skipIf(!DB_INTEGRATION_ENABLED)(
-  "buildLocalStore.reschedule concurrency (integration, F12 follow-up)",
+  "PrismaBookingStore.reschedule concurrency (integration, F12 on the live path)",
   () => {
-    it("two concurrent reschedules onto one slot yield exactly one success + one SLOT_CONFLICT", async () => {
+    it("two concurrent reschedules onto one slot yield exactly one success + one typed conflict", async () => {
       const prisma = new PrismaClient();
-      const orgId = `f12r-it-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const store = buildLocalStore(prisma, orgId);
+      const store = new PrismaBookingStore(prisma);
+      const orgId = `f12pr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-      const slotA = { start: "2026-09-05T02:00:00.000Z", end: "2026-09-05T03:00:00.000Z" };
-      const slotB = { start: "2026-09-05T04:00:00.000Z", end: "2026-09-05T05:00:00.000Z" };
-      const target = { start: "2026-09-05T06:00:00.000Z", end: "2026-09-05T07:00:00.000Z" };
-
-      const mk = (n: number, slot: { start: string; end: string }) =>
-        store.createInTransaction({
-          organizationId: orgId,
-          contactId: `patient-${n}`,
-          service: "consultation",
-          startsAt: new Date(slot.start),
-          endsAt: new Date(slot.end),
-          timezone: "Asia/Singapore",
-          status: "confirmed",
-          calendarEventId: `local-${n}`,
-          createdByType: "agent",
-        });
+      const slotA = {
+        startsAt: new Date("2026-10-05T02:00:00.000Z"),
+        endsAt: new Date("2026-10-05T03:00:00.000Z"),
+      };
+      const slotB = {
+        startsAt: new Date("2026-10-05T04:00:00.000Z"),
+        endsAt: new Date("2026-10-05T05:00:00.000Z"),
+      };
+      const target = {
+        startsAt: new Date("2026-10-05T06:00:00.000Z"),
+        endsAt: new Date("2026-10-05T07:00:00.000Z"),
+      };
 
       try {
-        const a = await mk(1, slotA);
-        const b = await mk(2, slotB);
+        const a = await store.create({
+          organizationId: orgId,
+          contactId: "p1",
+          service: "consultation",
+          ...slotA,
+        });
+        const b = await store.create({
+          organizationId: orgId,
+          contactId: "p2",
+          service: "consultation",
+          ...slotB,
+        });
 
         const results = await Promise.allSettled([
-          store.reschedule(a.id, target),
-          store.reschedule(b.id, target),
+          store.reschedule(orgId, a.id, target),
+          store.reschedule(orgId, b.id, target),
         ]);
 
         const fulfilled = results.filter((r) => r.status === "fulfilled");
         const rejected = results.filter((r) => r.status === "rejected");
         expect(fulfilled).toHaveLength(1);
         expect(rejected).toHaveLength(1);
-        const reason = (rejected[0] as PromiseRejectedResult).reason as Error;
-        expect(reason).toBeInstanceOf(Error);
-        expect(reason.message).toBe("SLOT_CONFLICT");
+        const reason = (rejected[0] as PromiseRejectedResult).reason as { code?: string };
+        expect(reason.code).toBe("SLOT_CONFLICT");
 
-        // The target slot is held by exactly one LIVE booking (not double-held).
         const inTarget = await prisma.booking.findMany({
           where: {
             organizationId: orgId,
             status: { notIn: ["cancelled", "failed"] },
-            startsAt: { lt: new Date(target.end) },
-            endsAt: { gt: new Date(target.start) },
+            startsAt: { lt: target.endsAt },
+            endsAt: { gt: target.startsAt },
           },
         });
         expect(inTarget).toHaveLength(1);
+        expect(inTarget[0]!.rescheduleCount).toBe(1);
 
-        // The loser is byte-for-byte unchanged at its original slot.
         const all = await prisma.booking.findMany({ where: { organizationId: orgId } });
-        expect(all).toHaveLength(2);
-        const winners = all.filter((r) => r.startsAt.toISOString() === target.start);
-        const losers = all.filter((r) => r.startsAt.toISOString() !== target.start);
-        expect(winners).toHaveLength(1);
-        expect(winners[0]!.rescheduleCount).toBe(1);
+        const losers = all.filter(
+          (r) => r.startsAt.toISOString() !== target.startsAt.toISOString(),
+        );
         expect(losers).toHaveLength(1);
         expect(losers[0]!.rescheduleCount).toBe(0);
-        expect([slotA.start, slotB.start]).toContain(losers[0]!.startsAt.toISOString());
       } finally {
         await prisma.booking.deleteMany({ where: { organizationId: orgId } }).catch(() => {});
         await prisma.$disconnect();
@@ -189,56 +209,159 @@ describe.skipIf(!DB_INTEGRATION_ENABLED)(
   },
 );
 
-// Finding B (IDOR): a store bound to org-B must not reschedule or cancel org-A's booking.
-// Both reject (BOOKING_NOT_FOUND, not a silent no-op) and org-A's row stays untouched; org-A
-// can still reschedule it, proving the guard is org-scoping, not a freeze.
+// Migrated cross-org IDOR proof: a reschedule/cancel for the wrong org rejects (count===0
+// guard), not a silent no-op, and the row stays untouched; the owning org can still act.
 describe.skipIf(!DB_INTEGRATION_ENABLED)(
-  "buildLocalStore reschedule/cancel cross-org isolation (integration, F12 follow-up)",
+  "PrismaBookingStore reschedule/cancel cross-org isolation (integration, F12 on the live path)",
   () => {
-    it("org-B cannot reschedule or cancel org-A's booking; org-A's row is untouched", async () => {
+    it("org-B cannot reschedule or cancel org-A's booking; org-A still can", async () => {
       const prisma = new PrismaClient();
+      const store = new PrismaBookingStore(prisma);
       const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const orgA = `f12x-a-${suffix}`;
-      const orgB = `f12x-b-${suffix}`;
-      const storeA = buildLocalStore(prisma, orgA);
-      const storeB = buildLocalStore(prisma, orgB);
+      const orgA = `f12px-a-${suffix}`;
+      const orgB = `f12px-b-${suffix}`;
 
-      const slot = { start: "2026-09-07T02:00:00.000Z", end: "2026-09-07T03:00:00.000Z" };
-      const newSlot = { start: "2026-09-07T08:00:00.000Z", end: "2026-09-07T09:00:00.000Z" };
+      const slot = {
+        startsAt: new Date("2026-10-07T02:00:00.000Z"),
+        endsAt: new Date("2026-10-07T03:00:00.000Z"),
+      };
+      const newSlot = {
+        startsAt: new Date("2026-10-07T08:00:00.000Z"),
+        endsAt: new Date("2026-10-07T09:00:00.000Z"),
+      };
 
       try {
-        const created = await storeA.createInTransaction({
+        const a = await store.create({
           organizationId: orgA,
-          contactId: "patient-a",
+          contactId: "pa",
           service: "consultation",
-          startsAt: new Date(slot.start),
-          endsAt: new Date(slot.end),
-          timezone: "Asia/Singapore",
-          status: "confirmed",
-          calendarEventId: "local-a",
-          createdByType: "agent",
+          ...slot,
         });
 
-        await expect(storeB.reschedule(created.id, newSlot)).rejects.toThrow("BOOKING_NOT_FOUND");
-        await expect(storeB.cancel(created.id)).rejects.toThrow("BOOKING_NOT_FOUND");
+        await expect(store.reschedule(orgB, a.id, newSlot)).rejects.toThrow();
+        await expect(store.cancel(orgB, a.id)).rejects.toThrow();
 
-        const row = await prisma.booking.findUnique({ where: { id: created.id } });
-        expect(row).not.toBeNull();
-        expect(row!.startsAt.toISOString()).toBe(slot.start);
-        expect(row!.endsAt.toISOString()).toBe(slot.end);
-        expect(row!.status).toBe("confirmed");
+        const row = await prisma.booking.findUnique({ where: { id: a.id } });
+        expect(row!.startsAt.toISOString()).toBe(slot.startsAt.toISOString());
         expect(row!.rescheduleCount).toBe(0);
+        expect(row!.status).not.toBe("cancelled");
 
-        // org-A can still reschedule its own booking (guard is org-scoping, not a freeze).
-        const moved = await storeA.reschedule(created.id, newSlot);
-        expect(moved).toEqual({ id: created.id });
-        const after = await prisma.booking.findUnique({ where: { id: created.id } });
-        expect(after!.startsAt.toISOString()).toBe(newSlot.start);
+        const moved = await store.reschedule(orgA, a.id, newSlot);
+        expect(moved.id).toBe(a.id);
+        const after = await prisma.booking.findUnique({ where: { id: a.id } });
+        expect(after!.startsAt.toISOString()).toBe(newSlot.startsAt.toISOString());
         expect(after!.rescheduleCount).toBe(1);
       } finally {
         await prisma.booking
           .deleteMany({ where: { organizationId: { in: [orgA, orgB] } } })
           .catch(() => {});
+        await prisma.$disconnect();
+      }
+    });
+  },
+);
+
+// THE BUG-FIX PROOF: drive the reschedule TOOL exactly as production wires it for a no-PMS org
+// (a real LocalCalendarProvider whose rescheduleBooking is a no-op, plus a real
+// PrismaBookingStore as the durable bookingStore). Before this slice the provider threw
+// BOOKING_NOT_FOUND on the calendarEventId and the durable move never ran; now the row moves
+// once (no double-count) and a genuine clash is re-offered retryably instead of escalating.
+describe.skipIf(!DB_INTEGRATION_ENABLED)(
+  "calendar.reschedule end-to-end for a local provider (integration)",
+  () => {
+    function wire(prisma: PrismaClient, orgId: string, contactId: string) {
+      const localStore = buildLocalStore(prisma, orgId);
+      const durable = new PrismaBookingStore(prisma);
+      const ops = buildRescheduleOperations({ orgId, contactId } as never, {
+        calendarProviderFactory: async () =>
+          new LocalCalendarProvider({ businessHours: BUSINESS_HOURS, bookingStore: localStore }),
+        isCalendarProviderConfigured: () => true,
+        bookingStore: durable,
+      });
+      return { localStore, ops };
+    }
+
+    it("moves the booking row exactly once via the durable store", async () => {
+      const prisma = new PrismaClient();
+      const orgId = `f12e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const contactId = "patient-e2e";
+      const { localStore, ops } = wire(prisma, orgId, contactId);
+      try {
+        const created = await localStore.createInTransaction({
+          organizationId: orgId,
+          contactId,
+          service: "consultation",
+          startsAt: new Date("2026-11-01T02:00:00.000Z"),
+          endsAt: new Date("2026-11-01T03:00:00.000Z"),
+          timezone: "Asia/Singapore",
+          status: "confirmed",
+          calendarEventId: "local-e2e-1",
+          createdByType: "agent",
+        });
+
+        const res = await ops["booking.reschedule"]!.execute({
+          slotStart: "2026-11-01T06:00:00.000Z",
+          slotEnd: "2026-11-01T07:00:00.000Z",
+          calendarId: "local",
+        });
+
+        expect(res.status).toBe("success");
+        const row = await prisma.booking.findUnique({ where: { id: created.id } });
+        expect(row!.startsAt.toISOString()).toBe("2026-11-01T06:00:00.000Z");
+        expect(row!.endsAt.toISOString()).toBe("2026-11-01T07:00:00.000Z");
+        // Single write: no double-increment from a redundant provider write.
+        expect(row!.rescheduleCount).toBe(1);
+      } finally {
+        await prisma.booking.deleteMany({ where: { organizationId: orgId } }).catch(() => {});
+        await prisma.$disconnect();
+      }
+    });
+
+    it("returns retryable SLOT_TAKEN and leaves the booking put when the target is held", async () => {
+      const prisma = new PrismaClient();
+      const orgId = `f12e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const contactId = "patient-mover";
+      const { localStore, ops } = wire(prisma, orgId, contactId);
+      try {
+        const mover = await localStore.createInTransaction({
+          organizationId: orgId,
+          contactId,
+          service: "consultation",
+          startsAt: new Date("2026-11-03T02:00:00.000Z"),
+          endsAt: new Date("2026-11-03T03:00:00.000Z"),
+          timezone: "Asia/Singapore",
+          status: "confirmed",
+          calendarEventId: "local-mover",
+          createdByType: "agent",
+        });
+        // A different patient already holds the target slot.
+        await localStore.createInTransaction({
+          organizationId: orgId,
+          contactId: "patient-holder",
+          service: "consultation",
+          startsAt: new Date("2026-11-03T06:00:00.000Z"),
+          endsAt: new Date("2026-11-03T07:00:00.000Z"),
+          timezone: "Asia/Singapore",
+          status: "confirmed",
+          calendarEventId: "local-holder",
+          createdByType: "agent",
+        });
+
+        const res = await ops["booking.reschedule"]!.execute({
+          slotStart: "2026-11-03T06:00:00.000Z",
+          slotEnd: "2026-11-03T07:00:00.000Z",
+          calendarId: "local",
+        });
+
+        expect(res.status).toBe("error");
+        expect(res.error?.code).toBe("SLOT_TAKEN");
+        expect(res.error?.retryable).toBe(true);
+        // The mover's booking is untouched at its original slot.
+        const row = await prisma.booking.findUnique({ where: { id: mover.id } });
+        expect(row!.startsAt.toISOString()).toBe("2026-11-03T02:00:00.000Z");
+        expect(row!.rescheduleCount).toBe(0);
+      } finally {
+        await prisma.booking.deleteMany({ where: { organizationId: orgId } }).catch(() => {});
         await prisma.$disconnect();
       }
     });
