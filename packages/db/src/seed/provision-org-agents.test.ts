@@ -4,6 +4,7 @@ import { provisionOrgAgentDeployments } from "./provision-org-agents.js";
 // Direct source import (NOT the @switchboard/db barrel) to avoid a self-referential
 // cycle now that the orchestrator is also exported from index.ts.
 import { recommendationHandoffApprovalPolicyId } from "./recommendation-handoff-governance.js";
+import { rileyPauseAllowPolicyId, rileyPauseApprovalPolicyId } from "./riley-pause-governance.js";
 
 interface ListingUpsertArgs {
   where: { slug: string };
@@ -33,8 +34,10 @@ interface EnablementUpsertArgs {
  * rollback (that is a Prisma/Postgres guarantee). agentDeployment.upsert returns a
  * distinct id per agent so Riley and Mira are distinguishable.
  */
-function buildMockPrisma(opts: { existingDeployments?: Record<string, { id: string }> } = {}) {
-  const { existingDeployments = {} } = opts;
+function buildMockPrisma(
+  opts: { existingDeployments?: Record<string, { id: string }>; throwOnPolicyId?: string } = {},
+) {
+  const { existingDeployments = {}, throwOnPolicyId } = opts;
   const listingUpserts: ListingUpsertArgs[] = [];
   const deploymentUpserts: DeploymentUpsertArgs[] = [];
   const policyUpserts: PolicyUpsertArgs[] = [];
@@ -70,6 +73,11 @@ function buildMockPrisma(opts: { existingDeployments?: Record<string, { id: stri
     },
     policy: {
       upsert: vi.fn(async (args: PolicyUpsertArgs) => {
+        // Simulate a mid-seed infra failure on a specific policy upsert (after any
+        // prior upserts in the same transaction already ran).
+        if (throwOnPolicyId && args.where.id === throwOnPolicyId) {
+          throw new Error("db down mid-seed");
+        }
         policyUpserts.push(args);
         return { id: args.where.id };
       }),
@@ -228,6 +236,25 @@ describe("provisionOrgAgentDeployments", () => {
       expect(prisma._deploymentUpserts.length).toBeGreaterThan(0);
       expect(prisma._policyUpserts.length).toBeGreaterThan(0);
       expect(prisma._enablementUpserts.length).toBeGreaterThan(0);
+    });
+
+    it("seeds the Riley pause allow + mandatory-approval pair (the human-gate both-or-neither unit)", async () => {
+      await provisionOrgAgentDeployments(prisma, "org_acme", { mira: false });
+      const ids = prisma._policyUpserts.map((p) => p.where.id);
+      expect(ids).toContain(rileyPauseAllowPolicyId("org_acme"));
+      expect(ids).toContain(rileyPauseApprovalPolicyId("org_acme"));
+    });
+
+    it("a mid-seed failure on the pause approval upsert rejects OUT of the $transaction (real PG rolls BOTH pause rows back, never allow-alone)", async () => {
+      // The allow upsert runs first; the mandatory-approval upsert throws. A mock
+      // cannot prove a real Postgres rollback, but proving the throw is NOT swallowed
+      // - it escapes provisionOrgAgentDeployments - proves the surrounding
+      // $transaction rolls both rows back, so a partial seed can never leave the
+      // allow policy alone (which self-executes).
+      const p = buildMockPrisma({ throwOnPolicyId: rileyPauseApprovalPolicyId("org_acme") });
+      await expect(provisionOrgAgentDeployments(p, "org_acme", { mira: false })).rejects.toThrow(
+        "db down mid-seed",
+      );
     });
 
     it("is idempotent: two runs produce identical Riley deployment create payloads", async () => {
