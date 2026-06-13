@@ -286,6 +286,9 @@ export function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
         }
         // Org-scope the move. updateMany drops Prisma's P2025 not-found throw, so the
         // count===0 guard rejects a missing or cross-org id instead of silently no-op'ing (F12).
+        // Unlike the durable PrismaBookingStore.reschedule we intentionally do not set
+        // rescheduledAt: the local findById maps it to null regardless, and touching it is
+        // outside the two F12 findings. rescheduleCount still increments for parity.
         const result = await tx.booking.updateMany({
           where: { id: bookingId, organizationId: orgId },
           data: {
