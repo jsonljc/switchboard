@@ -149,6 +149,28 @@ describe("LocalCalendarProvider", () => {
     });
   });
 
+  describe("reschedule/cancel are no-ops (durable store owns the row)", () => {
+    it("rescheduleBooking does not write to the store and echoes the new slot + eventId", async () => {
+      const result = await provider.rescheduleBooking("local-evt-123", {
+        start: "2026-09-01T02:00:00.000Z",
+        end: "2026-09-01T03:00:00.000Z",
+        calendarId: "local",
+        available: true,
+      });
+      expect(store.reschedule).not.toHaveBeenCalled();
+      expect(store.findById).not.toHaveBeenCalled();
+      expect(result.calendarEventId).toBe("local-evt-123");
+      expect(result.startsAt).toBe("2026-09-01T02:00:00.000Z");
+      expect(result.endsAt).toBe("2026-09-01T03:00:00.000Z");
+      expect(result.status).toBe("confirmed");
+    });
+
+    it("cancelBooking does not write to the store and resolves void", async () => {
+      await expect(provider.cancelBooking("local-evt-123")).resolves.toBeUndefined();
+      expect(store.cancel).not.toHaveBeenCalled();
+    });
+  });
+
   describe("email confirmation", () => {
     it("calls emailSender when attendeeEmail is provided on createBooking", async () => {
       const emailSender = vi.fn().mockResolvedValue(undefined);
