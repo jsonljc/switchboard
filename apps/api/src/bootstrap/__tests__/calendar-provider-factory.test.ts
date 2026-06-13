@@ -391,3 +391,37 @@ describe("buildLocalStore.reschedule: advisory lock + org scope (F12 follow-up)"
     await expect(store.reschedule(BOOKING_ID, newSlot)).rejects.toThrow("BOOKING_NOT_FOUND");
   });
 });
+
+describe("buildLocalStore.cancel: org scope (F12 follow-up)", () => {
+  const STORE_ORG = "org-from-store";
+  const BOOKING_ID = "bk-1";
+
+  function makePrisma(count: number) {
+    return { booking: { updateMany: vi.fn().mockResolvedValue({ count }) } };
+  }
+
+  it("scopes the cancel update to the bound org (IDOR guard)", async () => {
+    const prisma = makePrisma(1);
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await store.cancel(BOOKING_ID);
+
+    const updateArgs = (prisma.booking.updateMany as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(updateArgs.where).toEqual({ id: BOOKING_ID, organizationId: STORE_ORG });
+    expect(updateArgs.data).toEqual({ status: "cancelled" });
+  });
+
+  it("throws BOOKING_NOT_FOUND when updateMany matches no row (missing or cross-org id)", async () => {
+    const prisma = makePrisma(0);
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await expect(store.cancel(BOOKING_ID)).rejects.toThrow("BOOKING_NOT_FOUND");
+  });
+
+  it("resolves void on success", async () => {
+    const prisma = makePrisma(1);
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await expect(store.cancel(BOOKING_ID)).resolves.toBeUndefined();
+  });
+});

@@ -247,10 +247,17 @@ export function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
       };
     },
     cancel: async (bookingId: string) => {
-      await prismaClient.booking.update({
-        where: { id: bookingId },
+      // Org-scope the cancel so a forged/guessed bookingId from another org cannot cancel
+      // that org's booking (F12). A cancel cannot create a slot conflict, so no lock/overlap.
+      // updateMany drops Prisma's P2025 not-found throw, so the count===0 guard rejects a
+      // missing or cross-org id instead of silently no-op'ing.
+      const result = await prismaClient.booking.updateMany({
+        where: { id: bookingId, organizationId: orgId },
         data: { status: "cancelled" },
       });
+      if (result.count === 0) {
+        throw new Error("BOOKING_NOT_FOUND");
+      }
     },
     reschedule: async (bookingId: string, newSlot: { start: string; end: string }) => {
       const startsAt = new Date(newSlot.start);
