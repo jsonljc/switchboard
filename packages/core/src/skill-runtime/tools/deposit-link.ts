@@ -49,9 +49,27 @@ export function createDepositLinkToolFactory(deps: DepositLinkToolDeps): Deposit
       "deposit.issue": {
         description:
           "Issue a deposit payment link for a confirmed booking. Idempotent; returns the same link on replay.",
-        // 'read': idempotent external read on an already-approved booking — must
-        // NOT trigger a new approval (spec §8). The EffectCategory union has no
-        // 'external_read'; 'read' + idempotent is the honest mapping.
+        // effectCategory "read": an idempotent, inbound external read on an
+        // already-confirmed booking. It must NOT trigger a new approval (spec
+        // §8; design record 2026-06-13-deposit-issuance-governance-posture).
+        // Rationale, affirmed at go-live:
+        //  - Inbound collection, not outbound spend. The codebase auto-approves
+        //    inbound recording that carries money (revenue.record) and
+        //    require_approves only OUTBOUND spend (spendBearing, F4 #978). A
+        //    deposit link asks the customer to pay the clinic; no money moves
+        //    until the customer actively pays.
+        //  - It rides a higher governance class: the booking (calendar.book) is
+        //    external_mutation; this read is strictly downstream of a confirmed
+        //    booking.
+        //  - A mid-loop per-issue approval is unrepresentable in skill-mode: a
+        //    hook pending_approval is re-injected and the loop continues with no
+        //    resume (skill-executor.ts), so require-approval here would block
+        //    issuance with no human-approve-then-issue path and break the loop,
+        //    not supervise it. The deliberate human control lives at per-org
+        //    Stripe provisioning (fail-closed) and at booking confirmation.
+        // The EffectCategory union has no 'external_read'; 'read' + idempotent is
+        // the honest mapping. The posture is pinned by the governance test in
+        // this file's sibling deposit-link.test.ts.
         effectCategory: "read" as const,
         idempotent: true,
         inputSchema: {

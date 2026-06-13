@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createDepositLinkToolFactory } from "./deposit-link.js";
+import { GovernanceHook } from "../hooks/governance-hook.js";
+import { getToolGovernanceDecision } from "../governance.js";
+import type { TrustLevel } from "../governance-types.js";
 import type { SkillRequestContext } from "../types.js";
 import type { PaymentPort, DepositLinkInput } from "@switchboard/schemas";
 
@@ -83,5 +86,55 @@ describe("deposit-link tool factory", () => {
     const a = await tool.operations["deposit.issue"]!.execute({ bookingId: "bk_1" });
     const b = await tool.operations["deposit.issue"]!.execute({ bookingId: "bk_1" });
     expect(a.data!.externalReference).toBe(b.data!.externalReference);
+  });
+});
+
+// Pins the go-live governance posture: live deposit-link issuance stays autonomous
+// (auto-approve at every trust level), riding the booking's prior approval. See the
+// design record docs/superpowers/specs/2026-06-13-deposit-issuance-governance-posture-design.md
+// and the rationale comment in deposit-link.ts. These drive the REAL decision path
+// (getToolGovernanceDecision + GovernanceHook.beforeToolCall), not a mock that assumes it.
+describe("deposit.issue governance posture (rides booking approval, no per-issue gate)", () => {
+  const TRUST_LEVELS: TrustLevel[] = ["supervised", "guided", "autonomous"];
+  const confirmed = () => makeDeps({ id: "bk_1", organizationId: "org_1", status: "confirmed" });
+
+  it("auto-approves at every trust level via the real policy table", () => {
+    const op = createDepositLinkToolFactory(confirmed())(TEST_CONTEXT).operations["deposit.issue"]!;
+    for (const trustLevel of TRUST_LEVELS) {
+      expect(getToolGovernanceDecision(op, trustLevel)).toBe("auto-approve");
+    }
+  });
+
+  it("the real GovernanceHook lets deposit.issue proceed (never pending_approval/denied)", async () => {
+    const tool = createDepositLinkToolFactory(confirmed())(TEST_CONTEXT);
+    const hook = new GovernanceHook(new Map([["deposit-link", tool]]));
+    for (const trustLevel of TRUST_LEVELS) {
+      const result = await hook.beforeToolCall({
+        toolId: "deposit-link",
+        operation: "deposit.issue",
+        params: { bookingId: "bk_1" },
+        effectCategory: "read",
+        trustLevel,
+      });
+      expect(result.proceed).toBe(true);
+      expect(result.decision).toBeUndefined();
+    }
+  });
+
+  it("is port-agnostic: the decision never resolves the payment port (live vs Noop is irrelevant)", async () => {
+    const paymentPortFactory = vi.fn(async () => {
+      throw new Error("port must not be resolved at governance-decision time");
+    });
+    const tool = createDepositLinkToolFactory({ ...confirmed(), paymentPortFactory })(TEST_CONTEXT);
+    const hook = new GovernanceHook(new Map([["deposit-link", tool]]));
+    const result = await hook.beforeToolCall({
+      toolId: "deposit-link",
+      operation: "deposit.issue",
+      params: { bookingId: "bk_1" },
+      effectCategory: "read",
+      trustLevel: "supervised",
+    });
+    expect(result.proceed).toBe(true);
+    expect(paymentPortFactory).not.toHaveBeenCalled();
   });
 });
