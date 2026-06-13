@@ -5,6 +5,7 @@ import type {
   TimeSlot,
   CreateBookingInput,
   Booking,
+  BookingConfirmedNotification,
   CalendarHealthCheck,
   BusinessHoursConfig,
 } from "@switchboard/schemas";
@@ -23,22 +24,6 @@ export type EmailSender = (email: BookingConfirmationEmail) => Promise<void>;
 
 export interface LocalBookingStore {
   findOverlapping(startsAt: Date, endsAt: Date): Promise<Array<{ startsAt: Date; endsAt: Date }>>;
-  createInTransaction(input: {
-    organizationId: string;
-    contactId: string;
-    opportunityId?: string | null;
-    service: string;
-    startsAt: Date;
-    endsAt: Date;
-    timezone: string;
-    status: string;
-    calendarEventId: string;
-    attendeeName?: string | null;
-    attendeeEmail?: string | null;
-    createdByType: string;
-    sourceChannel?: string | null;
-    workTraceId?: string | null;
-  }): Promise<{ id: string }>;
   findById(bookingId: string): Promise<Booking | null>;
 }
 
@@ -83,46 +68,15 @@ export class LocalCalendarProvider implements CalendarProvider {
   }
 
   async createBooking(input: CreateBookingInput): Promise<Booking> {
+    // The durable PrismaBookingStore.create (the booking tool's step 1, advisory-locked +
+    // overlap-guarded, F12) is the single writer for a local org. This provider only mints the
+    // calendar handle and returns, mirroring GoogleCalendarAdapter.createBooking which creates the
+    // EXTERNAL event and returns its id but writes no DB row. The confirmation email is sent by
+    // notifyBookingConfirmed AFTER the durable confirm commits (cancelBooking is a no-op here, so a
+    // pre-confirm email could not be compensated the way Google's native invite is).
     const calendarEventId = `local-${randomUUID()}`;
-    const result = await this.store.createInTransaction({
-      organizationId: input.organizationId,
-      contactId: input.contactId,
-      opportunityId: input.opportunityId ?? null,
-      service: input.service,
-      startsAt: new Date(input.slot.start),
-      endsAt: new Date(input.slot.end),
-      timezone: this.businessHours.timezone,
-      status: "confirmed",
-      calendarEventId,
-      attendeeName: input.attendeeName ?? null,
-      attendeeEmail: input.attendeeEmail ?? null,
-      createdByType: input.createdByType ?? "agent",
-      sourceChannel: input.sourceChannel ?? null,
-      workTraceId: input.workTraceId ?? null,
-    });
-
-    // Send confirmation email (best-effort, non-blocking)
-    if (this.emailSender && input.attendeeEmail) {
-      try {
-        await this.emailSender({
-          to: input.attendeeEmail,
-          attendeeName: input.attendeeName ?? null,
-          service: input.service,
-          startsAt: input.slot.start,
-          endsAt: input.slot.end,
-          bookingId: result.id,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.warn(`[LocalCalendarProvider] Email confirmation failed: ${msg}`);
-        if (this.onSendFailure) {
-          this.onSendFailure({ bookingId: result.id, error: msg });
-        }
-      }
-    }
-
     return {
-      id: result.id,
+      id: "",
       contactId: input.contactId,
       organizationId: input.organizationId,
       opportunityId: input.opportunityId ?? null,
@@ -143,6 +97,28 @@ export class LocalCalendarProvider implements CalendarProvider {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  async notifyBookingConfirmed(notification: BookingConfirmedNotification): Promise<void> {
+    // Best-effort, RESEND-gated. Called by the booking tool AFTER the durable confirm commits,
+    // keyed on the durable booking id (the canonical row reference shown to the customer).
+    if (!this.emailSender || !notification.attendeeEmail) return;
+    try {
+      await this.emailSender({
+        to: notification.attendeeEmail,
+        attendeeName: notification.attendeeName ?? null,
+        service: notification.service,
+        startsAt: notification.startsAt,
+        endsAt: notification.endsAt,
+        bookingId: notification.bookingId,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[LocalCalendarProvider] Email confirmation failed: ${msg}`);
+      if (this.onSendFailure) {
+        this.onSendFailure({ bookingId: notification.bookingId, error: msg });
+      }
+    }
   }
 
   async cancelBooking(_calendarEventId: string, _reason?: string): Promise<void> {
