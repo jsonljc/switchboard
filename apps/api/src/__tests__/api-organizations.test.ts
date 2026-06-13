@@ -13,6 +13,7 @@ vi.mock("@switchboard/db", async (importOriginal) => {
 });
 
 import { ALEX_SKILL_PACK_SCOPES } from "@switchboard/db";
+import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
 import { organizationsRoutes } from "../routes/organizations.js";
 
 describe("Organizations API — Config", () => {
@@ -129,6 +130,9 @@ describe("Organizations API — Config", () => {
             id: "org_test",
             onboardingComplete: false,
             provisioningStatus: "pending",
+            // F-01: a fresh org must be seeded with valid default business hours so the
+            // calendar provider factory resolves Local (not Noop) and bookings work.
+            businessHours: DEFAULT_BUSINESS_HOURS,
           }),
           update: {},
         }),

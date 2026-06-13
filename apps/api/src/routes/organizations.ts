@@ -8,6 +8,7 @@ import {
   seedAlexSkillPack,
   provisionOrgAgentDeployments,
 } from "@switchboard/db";
+import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
@@ -73,6 +74,9 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           onboardingComplete: false,
           managedChannels: [],
           provisioningStatus: "pending",
+          // F-01: seed valid default business hours so a fresh org resolves
+          // LocalCalendarProvider (not Noop) and the booking loop works out of the box.
+          businessHours: DEFAULT_BUSINESS_HOURS,
         },
         update: {},
       });
