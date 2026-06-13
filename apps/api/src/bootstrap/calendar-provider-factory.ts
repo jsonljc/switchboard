@@ -247,22 +247,61 @@ export function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
       };
     },
     cancel: async (bookingId: string) => {
-      await prismaClient.booking.update({
-        where: { id: bookingId },
+      // Org-scope the cancel so a forged/guessed bookingId from another org cannot cancel
+      // that org's booking (F12). A cancel cannot create a slot conflict, so no lock/overlap.
+      // updateMany drops Prisma's P2025 not-found throw, so the count===0 guard rejects a
+      // missing or cross-org id instead of silently no-op'ing.
+      const result = await prismaClient.booking.updateMany({
+        where: { id: bookingId, organizationId: orgId },
         data: { status: "cancelled" },
       });
+      if (result.count === 0) {
+        throw new Error("BOOKING_NOT_FOUND");
+      }
     },
     reschedule: async (bookingId: string, newSlot: { start: string; end: string }) => {
-      const updated = await prismaClient.booking.update({
-        where: { id: bookingId },
-        data: {
-          startsAt: new Date(newSlot.start),
-          endsAt: new Date(newSlot.end),
-          rescheduleCount: { increment: 1 },
-        },
-        select: { id: true },
+      const startsAt = new Date(newSlot.start);
+      const endsAt = new Date(newSlot.end);
+      return prismaClient.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Serialize check-then-move per org (mirrors createInTransaction and the durable
+        // PrismaBookingStore.reschedule) so a reschedule cannot land on a slot another LIVE
+        // booking already holds. The shared acquireBookingLock helper owns the ::int4 cast;
+        // held until the transaction commits.
+        await acquireBookingLock(tx, orgId);
+        // Org-scoped, half-open overlap excluding the booking being moved so a no-op or
+        // shrink reschedule does not self-conflict.
+        const conflicts = await tx.booking.findMany({
+          where: {
+            organizationId: orgId,
+            id: { not: bookingId },
+            startsAt: { lt: endsAt },
+            endsAt: { gt: startsAt },
+            status: { notIn: ["cancelled", "failed"] },
+          },
+          select: { id: true },
+          take: 1,
+        });
+        if (conflicts.length > 0) {
+          throw new Error("SLOT_CONFLICT");
+        }
+        // Org-scope the move. updateMany drops Prisma's P2025 not-found throw, so the
+        // count===0 guard rejects a missing or cross-org id instead of silently no-op'ing (F12).
+        // Unlike the durable PrismaBookingStore.reschedule we intentionally do not set
+        // rescheduledAt: the local findById maps it to null regardless, and touching it is
+        // outside the two F12 findings. rescheduleCount still increments for parity.
+        const result = await tx.booking.updateMany({
+          where: { id: bookingId, organizationId: orgId },
+          data: {
+            startsAt,
+            endsAt,
+            rescheduleCount: { increment: 1 },
+          },
+        });
+        if (result.count === 0) {
+          throw new Error("BOOKING_NOT_FOUND");
+        }
+        return { id: bookingId };
       });
-      return { id: updated.id };
     },
   };
 }

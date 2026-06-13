@@ -306,3 +306,122 @@ describe("buildLocalStore.createInTransaction: advisory lock (F12)", () => {
     expect(lockOrder).toBeLessThan(findOrder);
   });
 });
+
+describe("buildLocalStore.reschedule: advisory lock + org scope (F12 follow-up)", () => {
+  function makeTxPrisma() {
+    const tx = {
+      $executeRaw: vi.fn().mockResolvedValue(0),
+      booking: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const prisma = { $transaction: vi.fn((fn: (t: typeof tx) => unknown) => fn(tx)) };
+    return { prisma, tx };
+  }
+
+  const STORE_ORG = "org-from-store";
+  const BOOKING_ID = "bk-1";
+  const newSlot = { start: "2026-06-20T04:00:00Z", end: "2026-06-20T05:00:00Z" };
+
+  it("takes pg_advisory_xact_lock(::int4) before the overlap check and update", async () => {
+    const { prisma, tx } = makeTxPrisma();
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await store.reschedule(BOOKING_ID, newSlot);
+
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    const [strings, ...values] = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const lockSql = (strings as string[]).join("?");
+    expect(lockSql).toContain("pg_advisory_xact_lock");
+    expect(lockSql).toContain("::int4");
+    expect(values).toContain(920_001);
+    expect(values).toContain(STORE_ORG);
+
+    const lockOrder = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
+    const findOrder = (tx.booking.findMany as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    const updateOrder = (tx.booking.updateMany as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(findOrder);
+    expect(findOrder).toBeLessThan(updateOrder);
+  });
+
+  it("scopes the overlap check to the bound org and excludes the booking being moved", async () => {
+    const { prisma, tx } = makeTxPrisma();
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await store.reschedule(BOOKING_ID, newSlot);
+
+    const overlapWhere = (tx.booking.findMany as ReturnType<typeof vi.fn>).mock.calls[0]![0].where;
+    expect(overlapWhere.organizationId).toBe(STORE_ORG);
+    expect(overlapWhere.id).toEqual({ not: BOOKING_ID });
+  });
+
+  it("scopes the update to the bound org (IDOR guard), increments count, returns { id }", async () => {
+    const { prisma, tx } = makeTxPrisma();
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    const result = await store.reschedule(BOOKING_ID, newSlot);
+
+    const updateArgs = (tx.booking.updateMany as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(updateArgs.where).toEqual({ id: BOOKING_ID, organizationId: STORE_ORG });
+    expect(updateArgs.data.rescheduleCount).toEqual({ increment: 1 });
+    expect(result).toEqual({ id: BOOKING_ID });
+  });
+
+  it("throws SLOT_CONFLICT without updating when an overlap exists, lock still taken first", async () => {
+    const { prisma, tx } = makeTxPrisma();
+    (tx.booking.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "other" }]);
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await expect(store.reschedule(BOOKING_ID, newSlot)).rejects.toThrow("SLOT_CONFLICT");
+    expect(tx.booking.updateMany).not.toHaveBeenCalled();
+    const lockOrder = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
+    const findOrder = (tx.booking.findMany as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(findOrder);
+  });
+
+  it("throws BOOKING_NOT_FOUND when updateMany matches no row (missing or cross-org id)", async () => {
+    const { prisma, tx } = makeTxPrisma();
+    (tx.booking.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await expect(store.reschedule(BOOKING_ID, newSlot)).rejects.toThrow("BOOKING_NOT_FOUND");
+  });
+});
+
+describe("buildLocalStore.cancel: org scope (F12 follow-up)", () => {
+  const STORE_ORG = "org-from-store";
+  const BOOKING_ID = "bk-1";
+
+  function makePrisma(count: number) {
+    return { booking: { updateMany: vi.fn().mockResolvedValue({ count }) } };
+  }
+
+  it("scopes the cancel update to the bound org (IDOR guard)", async () => {
+    const prisma = makePrisma(1);
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await store.cancel(BOOKING_ID);
+
+    const updateArgs = (prisma.booking.updateMany as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(updateArgs.where).toEqual({ id: BOOKING_ID, organizationId: STORE_ORG });
+    expect(updateArgs.data).toEqual({ status: "cancelled" });
+  });
+
+  it("throws BOOKING_NOT_FOUND when updateMany matches no row (missing or cross-org id)", async () => {
+    const prisma = makePrisma(0);
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await expect(store.cancel(BOOKING_ID)).rejects.toThrow("BOOKING_NOT_FOUND");
+  });
+
+  it("resolves void on success", async () => {
+    const prisma = makePrisma(1);
+    const store = buildLocalStore(prisma as never, STORE_ORG);
+
+    await expect(store.cancel(BOOKING_ID)).resolves.toBeUndefined();
+  });
+});
