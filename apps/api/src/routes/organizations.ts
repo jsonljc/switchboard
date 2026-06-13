@@ -74,9 +74,7 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           onboardingComplete: false,
           managedChannels: [],
           provisioningStatus: "pending",
-          // F-01: seed valid default business hours so a fresh org resolves
-          // LocalCalendarProvider (not Noop) and the booking loop works out of the box.
-          businessHours: DEFAULT_BUSINESS_HOURS,
+          businessHours: DEFAULT_BUSINESS_HOURS, // F-01: resolve Local (not Noop) for fresh orgs
         },
         update: {},
       });
