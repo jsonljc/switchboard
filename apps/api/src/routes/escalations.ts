@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyPluginAsync } from "fastify";
-import { ConversationStateNotFoundError } from "@switchboard/core/platform";
+import { ConversationStateNotFoundError, ContactNotFoundError } from "@switchboard/core/platform";
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { resolveOperatorActor } from "./operator-actor.js";
 import { finalizeOperatorTrace } from "./work-trace-delivery-enrichment.js";
@@ -264,16 +264,46 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(503).send({ error: "Conversation store unavailable", statusCode: 503 });
       }
 
+      // Resolve the escalate-tool contact via the WorkTrace lineage (mirrors the
+      // GET transcript read): the escalate tool keys the handoff sessionId to a
+      // workUnit.traceId, and the gateway threads contactId onto every turn's
+      // trace. A resolved contactId routes the reply to ConversationMessage +
+      // Contact-keyed delivery; a miss (gateway pre-input-gate handoffs have no
+      // WorkTrace) falls back to the phone-threaded ConversationState (unchanged).
+      const traceForContact = await app.prisma.workTrace.findFirst({
+        where: {
+          traceId: handoff.sessionId,
+          organizationId: orgId,
+          contactId: { not: null },
+        },
+        orderBy: { requestedAt: "desc" },
+        select: { contactId: true },
+      });
+      const target = traceForContact?.contactId
+        ? { contactId: traceForContact.contactId }
+        : { threadId: handoff.sessionId };
+
       let storeResult;
       try {
         storeResult = await app.conversationStateStore.releaseEscalationToAi({
           organizationId: orgId,
           handoffId: handoff.id,
-          threadId: handoff.sessionId,
           operator: resolveOperatorActor(request),
           reply: { text: message },
+          target,
         });
       } catch (err) {
+        // A genuine contact data gap (escalate-tool path): the reply is saved as
+        // an audit intent but delivery is unresolved => 502, not 404.
+        if (err instanceof ContactNotFoundError) {
+          return reply.code(502).send({
+            escalation,
+            replySent: false,
+            error: "Reply saved but delivery is unresolved (contact not found).",
+            statusCode: 502,
+          });
+        }
+        // Missing phone-threaded ConversationState (gateway path): unchanged 404.
         if (err instanceof ConversationStateNotFoundError) {
           return reply
             .code(404)
