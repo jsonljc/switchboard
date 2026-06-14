@@ -403,6 +403,34 @@ export class MetaAdsClient {
     }
   }
 
+  /**
+   * Read one campaign's budget + status for the Spec-1B reallocation read-modify-re-read executor
+   * (close-the-revenue-loop spec section 7). THROWS on a Meta error (unlike getCampaignStatus, which
+   * degrades to null): a money move cannot proceed on an unknown budget, so the executor fails closed.
+   * dailyBudgetCents is Meta's NATIVE minor units (cents), parsed VERBATIM (no x100; contrast
+   * getAccountDailySpendCents, where insights `spend` is a dollars string). null when absent (the
+   * campaign budgets at the ad-set level -> the executor refuses UNSUPPORTED_BUDGET_TOPOLOGY),
+   * non-numeric (strict /^\d+$/, never coerces "5000abc"), or zero - honest-null, NEVER a coerced 0
+   * (a 0 would read as "free to move the whole budget"; feedback_nan_blind_comparison_gates).
+   */
+  async getCampaign(campaignId: string): Promise<{
+    campaignId: string;
+    name: string;
+    status: string;
+    dailyBudgetCents: number | null;
+  }> {
+    const response = await this.get(`/${campaignId}?fields=id,name,status,daily_budget`);
+    const rawStr = response.daily_budget == null ? "" : String(response.daily_budget);
+    const parsed = /^\d+$/.test(rawStr) ? Number(rawStr) : Number.NaN;
+    const dailyBudgetCents = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+    return {
+      campaignId: String(response.id ?? campaignId),
+      name: String(response.name ?? ""),
+      status: String(response.status ?? ""),
+      dailyBudgetCents,
+    };
+  }
+
   async getAdCampaignId(adId: string): Promise<string | null> {
     const cached = this.adCampaignCache.get(adId);
     if (cached !== undefined) return cached;
