@@ -35,12 +35,20 @@ export interface SendOperatorMessageResult {
   appendedMessage: { role: "owner"; text: string; timestamp: string };
 }
 
+// Discriminated target for releasing an escalation back to the AI. The two
+// producer paths key the transcript differently:
+//   - escalate-tool handoffs resolve a Contact (ConversationMessage transcript +
+//     Contact-keyed delivery);
+//   - gateway pre-input-gate handoffs key a phone-threaded ConversationState
+//     (the historical behavior, unchanged).
+export type ReleaseEscalationTarget = { contactId: string } | { threadId: string };
+
 export interface ReleaseEscalationInput {
   organizationId: string;
   handoffId: string;
-  threadId: string;
   operator: Actor;
   reply: { text: string };
+  target: ReleaseEscalationTarget;
 }
 
 export interface ReleaseEscalationResult {
@@ -63,6 +71,18 @@ export class ConversationStateNotFoundError extends Error {
   constructor(public readonly threadId: string) {
     super(`ConversationState not found for threadId="${threadId}"`);
     this.name = "ConversationStateNotFoundError";
+  }
+}
+
+// Thrown when the escalate-tool release target resolves a contactId that has no
+// Contact row (a genuine data gap, distinct from a missing ConversationState).
+// The reply route maps this to 502 ("reply saved, delivery unresolved"), not
+// 404, so it is never confused with handoff-not-found / wrong-org.
+export class ContactNotFoundError extends Error {
+  readonly kind = "contact_not_found" as const;
+  constructor(public readonly contactId: string) {
+    super(`Contact not found for contactId="${contactId}"`);
+    this.name = "ContactNotFoundError";
   }
 }
 

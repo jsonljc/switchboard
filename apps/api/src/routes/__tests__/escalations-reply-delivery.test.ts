@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ConversationStateNotFoundError } from "@switchboard/core/platform";
+import { ConversationStateNotFoundError, ContactNotFoundError } from "@switchboard/core/platform";
 import type { AgentNotifier } from "@switchboard/core";
 import { buildConversationTestApp } from "./build-conversation-test-app.js";
 
@@ -42,6 +42,7 @@ function makePrisma(
     handoffFindUnique: unknown;
     handoffUpdateMany: unknown;
     handoffFindFirst: unknown;
+    workTraceFindFirst: unknown;
   }> = {},
 ) {
   const releasedRow = { ...handoff, status: "released", acknowledgedAt: new Date() };
@@ -50,6 +51,12 @@ function makePrisma(
       findUnique: overrides.handoffFindUnique ?? vi.fn().mockResolvedValue(handoff),
       updateMany: overrides.handoffUpdateMany ?? vi.fn().mockResolvedValue({ count: 1 }),
       findFirst: overrides.handoffFindFirst ?? vi.fn().mockResolvedValue(releasedRow),
+    },
+    // The reply route resolves the escalate-tool contact via the WorkTrace
+    // lineage (traceId === handoff.sessionId). Default: no row => gateway path
+    // (falls back to threadId === sessionId, the historical behavior).
+    workTrace: {
+      findFirst: overrides.workTraceFindFirst ?? vi.fn().mockResolvedValue(null),
     },
   };
 }
@@ -71,11 +78,13 @@ function makeWorkTraceStore() {
 }
 
 describe("POST /api/escalations/:id/reply", () => {
-  it("delegates to releaseEscalationToAi, delivers via channel, then finalizes the WorkTrace", async () => {
+  it("escalate-tool path: resolves contactId via WorkTrace, delegates with target:{contactId}, delivers, finalizes", async () => {
     const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
     const sendProactive = vi.fn().mockResolvedValue(undefined);
     const workTraceStore = makeWorkTraceStore();
-    const prisma = makePrisma();
+    // The escalate-tool handoff has a WorkTrace lineage carrying the contactId.
+    const workTraceFindFirst = vi.fn().mockResolvedValue({ contactId: "c1" });
+    const prisma = makePrisma({ workTraceFindFirst });
     const app = await buildConversationTestApp({
       conversationStateStore: {
         setOverride: vi.fn(),
@@ -99,12 +108,22 @@ describe("POST /api/escalations/:id/reply", () => {
     const body = JSON.parse(res.body) as { replySent: boolean; escalation: { id: string } };
     expect(body.replySent).toBe(true);
     expect(body.escalation.id).toBe("esc-1");
+    // The contact lineage is resolved org-scoped, by the handoff sessionId(=traceId).
+    expect(workTraceFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          traceId: "sess-wa-123",
+          organizationId: "org_1",
+          contactId: { not: null },
+        }),
+      }),
+    );
     expect(releaseEscalationToAi).toHaveBeenCalledWith({
       organizationId: "org_1",
       handoffId: "esc-1",
-      threadId: "sess-wa-123",
       operator: { type: "user", id: "principal_1" },
       reply: { text: "We can fit you in at 3pm tomorrow." },
+      target: { contactId: "c1" },
     });
     expect(sendProactive).toHaveBeenCalledWith(
       "user-phone-123",
@@ -124,6 +143,67 @@ describe("POST /api/escalations/:id/reply", () => {
       }),
       expect.objectContaining({ caller: "escalations.reply" }),
     );
+  });
+
+  it("gateway path: WorkTrace miss falls back to target:{threadId: sessionId}", async () => {
+    const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
+    const sendProactive = vi.fn().mockResolvedValue(undefined);
+    // Default makePrisma workTraceFindFirst resolves null => gateway-gate handoff
+    // (no WorkTrace lineage); the route must fall back to the sessionId threadId.
+    const prisma = makePrisma();
+    const app = await buildConversationTestApp({
+      conversationStateStore: {
+        setOverride: vi.fn(),
+        sendOperatorMessage: vi.fn(),
+        releaseEscalationToAi,
+      },
+      workTraceStore: makeWorkTraceStore(),
+      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      prisma,
+      organizationId: "org_1",
+      principalId: "principal_1",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/reply",
+      payload: { message: "We can fit you in at 3pm tomorrow." },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(releaseEscalationToAi).toHaveBeenCalledWith({
+      organizationId: "org_1",
+      handoffId: "esc-1",
+      operator: { type: "user", id: "principal_1" },
+      reply: { text: "We can fit you in at 3pm tomorrow." },
+      target: { threadId: "sess-wa-123" },
+    });
+  });
+
+  it("returns 502 (not 404) when the store throws ContactNotFoundError", async () => {
+    const releaseEscalationToAi = vi.fn().mockRejectedValue(new ContactNotFoundError("c1"));
+    const workTraceFindFirst = vi.fn().mockResolvedValue({ contactId: "c1" });
+    const app = await buildConversationTestApp({
+      conversationStateStore: {
+        setOverride: vi.fn(),
+        sendOperatorMessage: vi.fn(),
+        releaseEscalationToAi,
+      },
+      workTraceStore: makeWorkTraceStore(),
+      agentNotifier: { sendProactive: vi.fn() } as unknown as AgentNotifier,
+      prisma: makePrisma({ workTraceFindFirst }),
+      organizationId: "org_1",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/reply",
+      payload: { message: "hi" },
+    });
+
+    expect(res.statusCode).toBe(502);
+    const body = JSON.parse(res.body) as { replySent: boolean };
+    expect(body.replySent).toBe(false);
   });
 
   it("returns 502 and records deliveryResult=failed when channel delivery throws", async () => {

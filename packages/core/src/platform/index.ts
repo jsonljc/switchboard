@@ -157,10 +157,12 @@ export type {
   SendOperatorMessageResult,
   ReleaseEscalationInput,
   ReleaseEscalationResult,
+  ReleaseEscalationTarget,
 } from "./conversation-state-store.js";
 export {
   ConversationStateNotFoundError,
   ConversationStateInvalidTransitionError,
+  ContactNotFoundError,
 } from "./conversation-state-store.js";
 
 // Deployment Lifecycle Store
