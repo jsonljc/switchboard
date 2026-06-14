@@ -45,3 +45,14 @@ describe("Meta SDK loads only in the authenticated app", () => {
     );
   });
 });
+
+describe("dashboard CSP", () => {
+  it("allows the Meta SDK host in the script-src directive", () => {
+    const config = readFileSync(path.resolve(process.cwd(), "next.config.mjs"), "utf8");
+    // Capture the script-src directive content (up to the next backtick or comma)
+    // so the assertion targets the directive, not an unrelated line.
+    const match = config.match(/script-src([^`,]*)/);
+    expect(match, "script-src directive not found").not.toBeNull();
+    expect(match![1]).toContain("https://connect.facebook.net");
+  });
+});
