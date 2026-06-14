@@ -64,7 +64,7 @@ export function buildResultsModel(data: ReportData): ResultsModel {
     worstCampaign,
     cost: data.cost,
     costNarrative: data.costNarrative,
-    heldRate: data.heldRate,
+    heldRate: data.heldRate ?? { attended: 0, matured: 0, rate: null },
     managedComparison: data.managedComparison,
   };
 }
