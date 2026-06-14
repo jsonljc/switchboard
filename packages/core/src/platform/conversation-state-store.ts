@@ -74,6 +74,18 @@ export class ConversationStateNotFoundError extends Error {
   }
 }
 
+// Thrown when the escalate-tool release target resolves a contactId that has no
+// Contact row (a genuine data gap, distinct from a missing ConversationState).
+// The reply route maps this to 502 ("reply saved, delivery unresolved"), not
+// 404, so it is never confused with handoff-not-found / wrong-org.
+export class ContactNotFoundError extends Error {
+  readonly kind = "contact_not_found" as const;
+  constructor(public readonly contactId: string) {
+    super(`Contact not found for contactId="${contactId}"`);
+    this.name = "ContactNotFoundError";
+  }
+}
+
 export class ConversationStateInvalidTransitionError extends Error {
   readonly kind = "conversation_state_invalid_transition" as const;
   constructor(message: string) {

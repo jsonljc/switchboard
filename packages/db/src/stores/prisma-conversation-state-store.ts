@@ -13,6 +13,7 @@ import type {
 import {
   ConversationStateNotFoundError,
   ConversationStateInvalidTransitionError,
+  ContactNotFoundError,
 } from "@switchboard/core/platform";
 import type { PrismaWorkTraceStore } from "./prisma-work-trace-store.js";
 
@@ -220,11 +221,24 @@ export class PrismaConversationStateStore implements ConversationStateStore {
   }
 
   async releaseEscalationToAi(input: ReleaseEscalationInput): Promise<ReleaseEscalationResult> {
+    if ("contactId" in input.target) {
+      return this.releaseEscalationToContact(input, input.target.contactId);
+    }
+    return this.releaseEscalationToThread(input, input.target.threadId);
+  }
+
+  // Gateway pre-input-gate path: a phone-keyed ConversationState exists. Behavior
+  // here is identical to the historical single-path implementation (lookup-or-
+  // throw, append to .messages, flip status->active, audit). MUST NOT regress.
+  private async releaseEscalationToThread(
+    input: ReleaseEscalationInput,
+    threadId: string,
+  ): Promise<ReleaseEscalationResult> {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.conversationState.findFirst({
-        where: { threadId: input.threadId, organizationId: input.organizationId },
+        where: { threadId, organizationId: input.organizationId },
       });
-      if (!existing) throw new ConversationStateNotFoundError(input.threadId);
+      if (!existing) throw new ConversationStateNotFoundError(threadId);
 
       const requestedAt = new Date();
       const ownerReply = {
@@ -293,6 +307,107 @@ export class PrismaConversationStateStore implements ConversationStateStore {
         threadId: existing.threadId,
         channel: existing.channel,
         destinationPrincipalId: existing.principalId,
+        workTraceId: workUnitId,
+        appendedReply: ownerReply,
+      };
+    });
+  }
+
+  // Escalate-tool path: no ConversationState row is keyed by the traceId, so the
+  // owner reply is written to ConversationMessage (the canonical transcript the
+  // escalation GET reads). The phone-keyed ConversationState status flip is
+  // best-effort (no-op when no row); delivery is sourced from the Contact.
+  private async releaseEscalationToContact(
+    input: ReleaseEscalationInput,
+    contactId: string,
+  ): Promise<ReleaseEscalationResult> {
+    return this.prisma.$transaction(async (tx) => {
+      const contact = await tx.contact.findFirst({
+        where: { id: contactId, organizationId: input.organizationId },
+      });
+      if (!contact) throw new ContactNotFoundError(contactId);
+
+      const requestedAt = new Date();
+      const channel = contact.primaryChannel;
+      // contact.phoneE164 is the already-normalized destination passed straight to
+      // the Graph API `to` field, and is also the gateway ConversationState threadId.
+      const destination = contact.phoneE164 ?? "";
+      const ownerReply = {
+        role: "owner" as const,
+        text: input.reply.text,
+        timestamp: requestedAt.toISOString(),
+      };
+
+      // Canonical transcript write. Columns mirror gateway-conversation-store:
+      // { contactId, orgId, direction, content, channel } + metadata.sender marker.
+      const message = await tx.conversationMessage.create({
+        data: {
+          contactId: contact.id,
+          orgId: input.organizationId,
+          direction: "outbound",
+          content: input.reply.text,
+          channel,
+          metadata: { sender: "owner" },
+        },
+      });
+
+      // Best-effort: flip the phone-keyed ConversationState back to active so a
+      // gateway re-engagement reads the right status. count:0 (no row on the
+      // escalate-tool path) is expected and must NOT throw — only the gateway
+      // re-engagement reads this status.
+      if (destination) {
+        await tx.conversationState.updateMany({
+          where: { threadId: destination, organizationId: input.organizationId },
+          data: { status: "active", lastActivityAt: requestedAt },
+        });
+      }
+
+      const workUnitId = randomUUID();
+      const trace: WorkTrace = {
+        workUnitId,
+        traceId: workUnitId,
+        intent: "escalation.reply.release_to_ai",
+        mode: "operator_mutation",
+        organizationId: input.organizationId,
+        actor: input.operator,
+        trigger: "api",
+        parameters: {
+          actionKind: "escalation.reply.release_to_ai",
+          orgId: input.organizationId,
+          conversationId: message.id,
+          escalationId: input.handoffId,
+          before: { status: "human_override" },
+          after: { status: "active" },
+          message: {
+            channel,
+            destination,
+            redactedPreview: redactedPreview(input.reply.text),
+            bodyHash: bodyHash(input.reply.text),
+            deliveryAttempted: false,
+          },
+        },
+        governanceOutcome: "execute",
+        riskScore: 0,
+        matchedPolicies: [],
+        outcome: "running",
+        durationMs: 0,
+        executionSummary: `operator ${input.operator.id} released escalation ${input.handoffId} to contact ${contact.id}`,
+        modeMetrics: { governanceMode: "operator_auto_allow" },
+        ingressPath: "store_recorded_operator_mutation",
+        hashInputVersion: 2,
+        requestedAt: requestedAt.toISOString(),
+        governanceCompletedAt: requestedAt.toISOString(),
+      };
+
+      await this.workTraceStore.recordOperatorMutation(trace, {
+        tx: tx as Prisma.TransactionClient,
+      });
+
+      return {
+        conversationId: message.id,
+        threadId: destination,
+        channel,
+        destinationPrincipalId: destination,
         workTraceId: workUnitId,
         appendedReply: ownerReply,
       };
