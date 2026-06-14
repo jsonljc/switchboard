@@ -541,9 +541,13 @@ export class PlatformLifecycle {
     const principal = await this.config.identityStore.getPrincipal(respondedBy);
     if (!principal) throw new Error(`Principal not found: ${respondedBy}`);
 
-    const delegations = await this.config.identityStore.listDelegationRules(
-      approval.organizationId ?? undefined,
-    );
+    // Fail closed (audit F8): only consult delegation rules when the approval is
+    // scoped to a concrete organization. A null/empty org must NOT load every
+    // tenant's rules (cross-tenant authorization hole); fall back to
+    // direct-approver-only authorization.
+    const delegations = approval.organizationId
+      ? await this.config.identityStore.listDelegationRules(approval.organizationId)
+      : [];
     const chainResult = canApproveWithChain(principal, approval.request.approvers, delegations);
     if (!chainResult.authorized) {
       throw new Error(`Principal ${respondedBy} is not authorized to respond to this approval`);

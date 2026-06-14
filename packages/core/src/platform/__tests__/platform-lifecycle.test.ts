@@ -8,6 +8,7 @@ import type {
   ActionEnvelope,
   ApprovalRecord,
   ApprovalRequest,
+  DelegationRule,
   Principal,
 } from "@switchboard/schemas";
 import type { WorkTrace } from "../work-trace.js";
@@ -203,7 +204,7 @@ function createMockStores() {
     saveOverlay: vi.fn(),
     getPrincipal: vi.fn(async (id: string) => makePrincipal(id)),
     savePrincipal: vi.fn(),
-    listDelegationRules: vi.fn(async () => []),
+    listDelegationRules: vi.fn(async (): Promise<DelegationRule[]> => []),
     saveDelegationRule: vi.fn(),
   } satisfies CoreIdentityStore;
 
@@ -331,6 +332,63 @@ describe("PlatformLifecycle", () => {
       modeRegistry: stores.modeRegistry,
       traceStore: stores.traceStore,
       ledger: stores.ledger,
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // F8 (security audit): delegation rules must be org-scoped, fail closed
+  // -----------------------------------------------------------------------
+  describe("authorizeResponder org-scoped delegation (audit F8)", () => {
+    // Authorizes "delegate-1" via the chain because its grantor "approver-1"
+    // is a direct approver on the request.
+    const delegationRule: DelegationRule = {
+      id: "del-cross",
+      grantor: "approver-1",
+      grantee: "delegate-1",
+      scope: "*",
+      expiresAt: null,
+    };
+
+    it("does not load delegation rules for a null-org approval and rejects a responder authorized only via cross-tenant delegation", async () => {
+      const { approvalId } = stores.seed({ approvers: ["approver-1"] });
+      // ApprovalRecord.organizationId is nullable; simulate a null-org approval.
+      const seeded = stores._approvals.get(approvalId)!;
+      stores._approvals.set(approvalId, { ...seeded, organizationId: null });
+
+      // The store would surface another tenant's rule on an UNSCOPED (no-org) read.
+      stores.identityStore.listDelegationRules.mockImplementation(
+        async (org?: string): Promise<DelegationRule[]> => (org ? [] : [delegationRule]),
+      );
+
+      await expect(
+        lifecycle.respondToApproval({
+          approvalId,
+          action: "approve",
+          respondedBy: "delegate-1",
+          bindingHash: BINDING_HASH,
+        }),
+      ).rejects.toThrow(/not authorized/i);
+
+      // Fail closed: a null-org approval must never query the cross-tenant rule set.
+      expect(stores.identityStore.listDelegationRules).not.toHaveBeenCalled();
+    });
+
+    it("scopes delegation lookup to the approval's org and still authorizes an in-org delegated responder", async () => {
+      const { approvalId } = stores.seed({ approvers: ["approver-1"] }); // seed defaults org to ORG_ID
+
+      stores.identityStore.listDelegationRules.mockImplementation(
+        async (org?: string): Promise<DelegationRule[]> => (org === ORG_ID ? [delegationRule] : []),
+      );
+
+      const result = await lifecycle.respondToApproval({
+        approvalId,
+        action: "approve",
+        respondedBy: "delegate-1",
+        bindingHash: BINDING_HASH,
+      });
+
+      expect(result.approvalState.status).toBe("approved");
+      expect(stores.identityStore.listDelegationRules).toHaveBeenCalledWith(ORG_ID);
     });
   });
 
