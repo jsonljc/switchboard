@@ -18,7 +18,10 @@ import {
   buildRileyReallocateAllowPolicyInput,
   buildRileyReallocateApprovalPolicyInput,
 } from "@switchboard/db";
-import { RILEY_REALLOCATE_INTENT } from "../services/workflows/riley-budget-submit-request.js";
+import {
+  RILEY_REALLOCATE_INTENT,
+  buildRileyBudgetSubmitRequest,
+} from "../services/workflows/riley-budget-submit-request.js";
 
 const ORG = "org-acme";
 
@@ -66,27 +69,36 @@ function approvalPolicy(): Policy {
   } as Policy;
 }
 
-function reallocateWorkUnit(opts?: {
-  trustLevelOverride?: "autonomous";
-  spendAmount?: number;
-}): WorkUnit {
+// The gate consumes the REAL producer output (no hand-duplicated parameters) so this test and the
+// submit-request builder can never drift on actionType / spendAmount / frozen cents.
+const REALLOCATE_INPUT = {
+  organizationId: ORG,
+  recommendationId: "rec_1",
+  adAccountId: "act_123",
+  campaignId: "camp_1",
+  fromCents: 5000,
+  toCents: 8000,
+  rationale: "scale the daily budget up",
+  evidence: { clicks: 100, conversions: 10, days: 7 },
+};
+
+function reallocateParameters(): Record<string, unknown> {
+  const req = buildRileyBudgetSubmitRequest(REALLOCATE_INPUT, {
+    deploymentId: "dep-riley",
+    skillSlug: "ad-optimizer",
+  });
+  if (!req) throw new Error("expected a non-null reallocate submit request");
+  return req.parameters as Record<string, unknown>;
+}
+
+function reallocateWorkUnit(opts?: { trustLevelOverride?: "autonomous" }): WorkUnit {
   return {
     id: "wu-reallocate-1",
     requestedAt: "2026-06-06T00:00:00.000Z",
     organizationId: ORG,
     actor: { id: "system", type: "system" },
     intent: RILEY_REALLOCATE_INTENT,
-    parameters: {
-      recommendationId: "rec_1",
-      actionType: "shift_budget_to_source",
-      adAccountId: "act_123",
-      campaignId: "camp_1",
-      fromCents: 5000,
-      toCents: 8000,
-      rationale: "shift budget toward the higher-paid source",
-      evidence: { clicks: 100, conversions: 10, days: 7 },
-      ...(opts?.spendAmount !== undefined ? { spendAmount: opts.spendAmount } : {}),
-    },
+    parameters: reallocateParameters(),
     deployment: {
       deploymentId: "dep-riley",
       skillSlug: "ad-optimizer",
@@ -146,13 +158,20 @@ describe("adoptimizer.campaign.reallocate governance gate (real engine)", () => 
   it("STILL parks at MANDATORY under an autonomous deployment carrying a spendAmount (the spend lever relaxes only standard)", async () => {
     const gate = buildGate([allowPolicy(), approvalPolicy()]);
     const decision = await gate.evaluate(
-      reallocateWorkUnit({ trustLevelOverride: "autonomous", spendAmount: 30 }),
+      reallocateWorkUnit({ trustLevelOverride: "autonomous" }),
       reallocateRegistration(),
     );
     expect(decision.outcome).toBe("require_approval");
     if (decision.outcome === "require_approval") {
       expect(decision.approvalLevel).toBe("mandatory");
     }
+  });
+
+  it("consumes the REAL producer's parameters: actionType 'scale' + dollar spendAmount reach the gate", () => {
+    const params = reallocateParameters();
+    // The re-keyed scale trigger and the structured spend-delta the gate sizes on (|8000-5000|/100).
+    expect(params.actionType).toBe("scale");
+    expect(params.spendAmount).toBe(30);
   });
 
   it("allow ALONE EXECUTES (documents the approval policy is load-bearing - never seed one without the other)", async () => {

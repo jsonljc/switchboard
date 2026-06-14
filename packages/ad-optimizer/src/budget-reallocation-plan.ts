@@ -38,3 +38,30 @@ export function computeBudgetDelta(
   const deltaCentsSigned = proposedCents - currentCents;
   return { deltaCentsSigned, deltaCentsMagnitude: Math.abs(deltaCentsSigned) };
 }
+
+/**
+ * The Spec-1B campaign-budget scale factor: a +20% daily-budget increase. Mirrors the recommendation
+ * engine's advertised "scale budget by up to 20%" (MAX_BUDGET_INCREASE_PERCENT) but is kept
+ * independent of that UI-copy constant on purpose: this is the money math, not the recommendation
+ * text. v1 only scales UP; decreases (review_budget) are deferred.
+ */
+export const REALLOCATE_SCALE_FACTOR = 1.2;
+
+/**
+ * Propose the scaled CAMPAIGN daily budget (cents) for a `scale` recommendation: round(current ×
+ * factor). Pure + deterministic. Returns null on a non-finite/non-positive current or factor, or
+ * when the rounded result is not a safe positive integer (a defensive overflow guard - the binding
+ * ceilings at write time are the executor's blast-radius cap and the client's MAX_SANE_DAILY_BUDGET
+ * sanity limit). Cents in, cents out; the dollars normalization happens once at the gate and at
+ * trueRoas, never here.
+ */
+export function proposeCampaignReallocationCents(
+  currentCents: number,
+  factor: number = REALLOCATE_SCALE_FACTOR,
+): number | null {
+  if (!Number.isFinite(currentCents) || currentCents <= 0) return null;
+  if (!Number.isFinite(factor) || factor <= 0) return null;
+  const proposed = Math.round(currentCents * factor);
+  if (!Number.isSafeInteger(proposed) || proposed <= 0) return null;
+  return proposed;
+}

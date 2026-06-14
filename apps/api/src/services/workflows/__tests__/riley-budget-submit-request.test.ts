@@ -12,7 +12,7 @@ const input: RileyBudgetSubmitInput = {
   campaignId: "camp_1",
   fromCents: 5000,
   toCents: 8000,
-  rationale: "Shift budget toward the higher-paid source",
+  rationale: "Campaign performing under target CPA, scale the daily budget up",
   evidence: { clicks: 100, conversions: 10, days: 7 },
 };
 const deployment = { deploymentId: "dep-riley", skillSlug: "ad-optimizer" };
@@ -31,18 +31,33 @@ describe("buildRileyBudgetSubmitRequest (Spec-1B reallocate governed submit)", (
     expect(req!.targetHint).toEqual({ deploymentId: "dep-riley", skillSlug: "ad-optimizer" });
   });
 
-  it("freezes adAccountId + campaignId + fromCents + toCents in the bound parameters", () => {
+  it("freezes the scale action + adAccountId + campaignId + fromCents + toCents and the dollar spendAmount", () => {
     const req = buildRileyBudgetSubmitRequest(input, deployment);
     expect(req!.parameters).toEqual({
       recommendationId: "rec_1",
-      actionType: "shift_budget_to_source",
+      actionType: "scale",
       adAccountId: "act_123",
       campaignId: "camp_1",
       fromCents: 5000,
       toCents: 8000,
-      rationale: "Shift budget toward the higher-paid source",
+      // structured spend-delta the governance spend gate sizes on: |8000 - 5000| cents = $30.00.
+      spendAmount: 30,
+      rationale: "Campaign performing under target CPA, scale the daily budget up",
       evidence: { clicks: 100, conversions: 10, days: 7 },
     });
+  });
+
+  it("carries the spend magnitude in DOLLARS (gate units), independent of move direction", () => {
+    const up = buildRileyBudgetSubmitRequest(
+      { ...input, fromCents: 5000, toCents: 8000 },
+      deployment,
+    );
+    const down = buildRileyBudgetSubmitRequest(
+      { ...input, fromCents: 8000, toCents: 5000 },
+      deployment,
+    );
+    expect(up!.parameters.spendAmount).toBe(30);
+    expect(down!.parameters.spendAmount).toBe(30);
   });
 
   it("abstains (null) on a zero-delta no-op", () => {
