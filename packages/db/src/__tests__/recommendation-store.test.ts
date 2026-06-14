@@ -309,9 +309,47 @@ describe("PrismaRecommendationStore", () => {
       .calls[0]![0];
     expect(updateCall.where).toMatchObject({ id: row.id, status: "pending" });
 
+    // Spec-1B 1B-2: an operator transition TO "acted" stamps executedAt (= resolvedAt) so the
+    // outcome scorer keeps scoring operator-acted recs once it gates on executedAt:{not:null}.
+    expect(updateCall.data.executedAt).toBeInstanceOf(Date);
+    expect(updateCall.data.executedAt).toBe(updateCall.data.resolvedAt);
+
     // Assert auditEntry.create was called with a valid sha256 entryHash
     const auditCall = (prisma.auditEntry.create as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(auditCall.data.entryHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("applyAct does NOT stamp executedAt for a non-acted transition (dismissed = no execution)", async () => {
+    const row = makeDbRow({
+      id: "aaaaaaaa-0000-0000-0000-000000000002",
+      surface: "queue",
+      undoableUntil: null,
+      status: "pending",
+    });
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      (callback: (tx: unknown) => Promise<unknown>) => callback(prisma),
+    );
+    (prisma.pendingActionRecord.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(row);
+    (prisma.pendingActionRecord.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...row,
+      status: "dismissed",
+      resolvedAt: new Date(),
+    });
+    (prisma.auditEntry.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ id: "audit-2" });
+
+    await store.applyAct({
+      id: row.id,
+      orgId: "org-1",
+      actor: { principalId: "user-1", type: "operator" },
+      fromStatus: "pending",
+      toStatus: "dismissed",
+      note: undefined,
+    });
+
+    const updateCall = (prisma.pendingActionRecord.update as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0];
+    expect(updateCall.data.resolvedAt).toBeInstanceOf(Date);
+    expect("executedAt" in updateCall.data).toBe(false);
   });
 
   it("scopes applyAct's update and existence read by organizationId (cross-tenant guard)", async () => {
