@@ -151,7 +151,7 @@ export type { ActionContract, PhaseCExecutionContract } from "./action-contract.
 // comparable guardrails + automated rollback) and its pure fail-closed cap check.
 // The apps/api reallocate executor (Spec-1B) consumes these; the declarative
 // PhaseCExecutionContract above stays the pause class's recorded-not-enforced seam.
-export { assertWithinBlastRadius } from "./blast-radius-contract.js";
+export { assertWithinBlastRadius, DEFAULT_BLAST_RADIUS_CONTRACT } from "./blast-radius-contract.js";
 export type {
   BlastRadiusContract,
   BlastRadiusGuardrail,

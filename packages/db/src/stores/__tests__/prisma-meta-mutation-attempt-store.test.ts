@@ -32,13 +32,30 @@ const ROW = {
 function mockPrisma(over?: {
   create?: (args: { data: Record<string, unknown> }) => Promise<unknown>;
   findUnique?: (args: { where: Record<string, unknown> }) => Promise<unknown>;
+  findFirst?: (args: { where: Record<string, unknown> }) => Promise<unknown>;
+  updateMany?: (args: {
+    where: Record<string, unknown>;
+    data: Record<string, unknown>;
+  }) => Promise<{
+    count: number;
+  }>;
 }) {
-  return {
+  const prisma = {
+    $executeRaw: vi.fn(async () => 1),
+    $transaction: vi.fn(),
     metaMutationAttempt: {
       create: vi.fn(over?.create ?? (async () => ROW)),
       findUnique: vi.fn(over?.findUnique ?? (async () => null)),
+      findFirst: vi.fn(over?.findFirst ?? (async () => null)),
+      updateMany: vi.fn(over?.updateMany ?? (async () => ({ count: 1 }))),
     },
   };
+  // The interactive $transaction passes the same client as the tx (mirrors the repo's other
+  // store tests); raw advisory-lock + findFirst + create all run on it.
+  prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) =>
+    cb(prisma),
+  );
+  return prisma;
 }
 
 describe("PrismaMetaMutationAttemptStore (Spec-1B at-most-once marker + lease)", () => {
@@ -98,5 +115,113 @@ describe("PrismaMetaMutationAttemptStore (Spec-1B at-most-once marker + lease)",
     });
     const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
     await expect(store.create(INPUT)).rejects.toMatchObject({ code: "P2002" });
+  });
+});
+
+const CLAIM = {
+  organizationId: "org-1",
+  adAccountId: "act_123",
+  campaignId: "camp_1",
+  executionWorkUnitId: "wu_1",
+  observedPriorCents: 5000,
+  requestedToCents: 6000,
+  workTraceId: "trace_1",
+  now: new Date("2026-06-07T03:30:00Z"),
+};
+
+describe("PrismaMetaMutationAttemptStore.claimLeaseAndMark (advisory-locked conditional claim)", () => {
+  it("with no active competing marker: advisory-locks the campaign, then creates a pending marker", async () => {
+    const prisma = mockPrisma();
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    const result = await store.claimLeaseAndMark(CLAIM);
+    expect(result).toEqual({ claimed: true, row: ROW });
+    // The advisory lock is taken (serializes concurrent claims on the same campaign) inside the tx.
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    // The competing-marker probe is scoped to the campaign + only ACTIVE (unresolved, unexpired) rows.
+    const probe = prisma.metaMutationAttempt.findFirst.mock.calls[0]![0] as {
+      where: Record<string, unknown>;
+    };
+    expect(probe.where).toMatchObject({
+      organizationId: "org-1",
+      adAccountId: "act_123",
+      campaignId: "camp_1",
+      status: { in: ["pending", "recovery_required"] },
+      heldUntil: { gt: CLAIM.now },
+    });
+    const created = prisma.metaMutationAttempt.create.mock.calls[0]![0] as {
+      data: Record<string, unknown>;
+    };
+    expect(created.data).toMatchObject({
+      organizationId: "org-1",
+      adAccountId: "act_123",
+      campaignId: "camp_1",
+      executionWorkUnitId: "wu_1",
+      status: "pending",
+      observedPriorCents: 5000,
+      requestedToCents: 6000,
+      workTraceId: "trace_1",
+    });
+    // heldUntil is now + the lease TTL (a future instant), so the row is an active lease.
+    expect((created.data.heldUntil as Date).getTime()).toBeGreaterThan(CLAIM.now.getTime());
+  });
+
+  it("contention: an active competing marker on the campaign -> claimed:false, NO create (LEASE_CONTENDED upstream)", async () => {
+    const prisma = mockPrisma({
+      findFirst: async () => ({ ...ROW, executionWorkUnitId: "wu_other" }),
+    });
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    const result = await store.claimLeaseAndMark(CLAIM);
+    expect(result).toEqual({ claimed: false });
+    expect(prisma.metaMutationAttempt.create).not.toHaveBeenCalled();
+    // The lock is still taken before the probe (the probe is only meaningful under the lock).
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PrismaMetaMutationAttemptStore status transitions", () => {
+  it("markApplied flips a pending marker to applied (org+pending scoped) and reports transitioned", async () => {
+    const prisma = mockPrisma();
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    const res = await store.markApplied({ executionWorkUnitId: "wu_1", organizationId: "org-1" });
+    expect(res).toEqual({ transitioned: true });
+    const call = prisma.metaMutationAttempt.updateMany.mock.calls[0]![0] as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    expect(call.where).toEqual({
+      executionWorkUnitId: "wu_1",
+      organizationId: "org-1",
+      status: "pending",
+    });
+    expect(call.data).toMatchObject({ status: "applied" });
+  });
+
+  it("markApplied on a non-pending marker is a benign no-op (count 0 -> transitioned:false, no throw)", async () => {
+    const prisma = mockPrisma({ updateMany: async () => ({ count: 0 }) });
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    expect(
+      await store.markApplied({ executionWorkUnitId: "wu_1", organizationId: "org-1" }),
+    ).toEqual({ transitioned: false });
+  });
+
+  it("markRecoveryRequired flips a pending marker to recovery_required (blocks auto-replay)", async () => {
+    const prisma = mockPrisma();
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    const res = await store.markRecoveryRequired({
+      executionWorkUnitId: "wu_1",
+      organizationId: "org-1",
+    });
+    expect(res).toEqual({ transitioned: true });
+    const call = prisma.metaMutationAttempt.updateMany.mock.calls[0]![0] as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    expect(call.where).toEqual({
+      executionWorkUnitId: "wu_1",
+      organizationId: "org-1",
+      status: "pending",
+    });
+    expect(call.data).toMatchObject({ status: "recovery_required" });
   });
 });

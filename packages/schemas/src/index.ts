@@ -164,6 +164,8 @@ export * from "./recommendations.js";
 // Riley -> agent recommendation handoff payload (Governed Handoff Contract Freeze §4.3)
 export * from "./recommendation-handoff.js";
 export * from "./riley-pause-execution.js";
+// Spec-1B act leg: the executed-reallocation success receipt (persisted to WorkTrace.executionOutputs)
+export * from "./execution-receipt.js";
 
 // Reports v1 view-model (operator deep-dive surface)
 export * from "./reports/v1.js";
