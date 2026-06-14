@@ -30,6 +30,10 @@ import {
   type RileyPauseSubmitInput,
 } from "../services/workflows/riley-pause-submit-request.js";
 import {
+  buildRileyBudgetSubmitRequest,
+  type RileyBudgetSubmitInput,
+} from "../services/workflows/riley-budget-submit-request.js";
+import {
   buildMiraBriefComposeSubmitRequest,
   buildMiraConceptDraftSubmitRequest,
   type MiraBriefComposeSubmitInput,
@@ -89,6 +93,13 @@ export interface ContainedWorkflowBootstrapResult {
    */
   submitRileyPause: (
     input: RileyPauseSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse | null>;
+  /** SPEC-1B: submit a governed reallocation request for a single campaign budget move,
+   * parking for mandatory human approval via the seeded policy. Returns null when the
+   * builder abstains (malformed / no-op delta). */
+  submitRileyBudget: (
+    input: RileyBudgetSubmitInput,
     deployment: { deploymentId: string; skillSlug: string },
   ) => Promise<SubmitWorkResponse | null>;
   /**
@@ -587,6 +598,18 @@ export async function bootstrapContainedWorkflows(
     return platformIngress.submit(req);
   };
 
+  // SPEC-1B reallocate initiator. Mirrors submitRileyPause: the cron iterates
+  // Riley's active ad-optimizer deployments and passes the resolved deployment.
+  // null ⇒ builder abstained (malformed / no-op delta); executor re-checks.
+  const submitRileyBudget = async (
+    input: RileyBudgetSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ): Promise<SubmitWorkResponse | null> => {
+    const req = buildRileyBudgetSubmitRequest(input, deployment);
+    if (!req) return null;
+    return platformIngress.submit(req);
+  };
+
   const submitMiraBriefCompose = async (
     input: MiraBriefComposeSubmitInput,
     deployment?: { deploymentId: string; skillSlug: string },
@@ -621,6 +644,7 @@ export async function bootstrapContainedWorkflows(
     submitScheduledReminder,
     submitRecommendationHandoff,
     submitRileyPause,
+    submitRileyBudget,
     submitMiraBriefCompose,
     submitMiraConceptDraft,
   };
