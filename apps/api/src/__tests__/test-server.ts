@@ -378,7 +378,10 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
       ],
       revenueByCampaign: async () => [],
     },
-    bookings: { countExcludingStatuses: async () => 10 },
+    bookings: {
+      countExcludingStatuses: async () => 10,
+      countMaturedAttendance: async () => ({ matured: 10, attended: 8 }),
+    },
     opportunities: { countClosedWon: async () => 3 },
     conversions: {
       countByType: async () => 50,
