@@ -323,6 +323,13 @@ describe("PrismaContactStore", () => {
         booking: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
         conversionRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
         pendingLeadRetry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        // F5 erasure cascade additions (assertions live in the dedicated
+        // prisma-contact-store-erasure.test.ts); mocked here so delete() runs.
+        workTrace: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        failedMessage: {
+          findMany: vi.fn().mockResolvedValue([]),
+          deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        },
       };
       // $transaction passes the same client to the callback so all deleteMany calls hit our mocks
       return Object.assign(px, {

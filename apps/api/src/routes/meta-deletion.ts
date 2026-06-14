@@ -13,10 +13,15 @@
 // signed_request against META_APP_SECRET.
 
 import { randomUUID } from "node:crypto";
-import type { FastifyPluginAsync } from "fastify";
-import { PrismaContactStore } from "@switchboard/db";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import { PrismaContactStore, type PrismaClient } from "@switchboard/db";
 import { maskPhone } from "@switchboard/core/audit";
 import { parseAndVerifySignedRequest } from "../lib/meta-signed-request.js";
+import { eraseContactFully } from "../lib/erase-contact.js";
+import {
+  createCalendarProviderFactory,
+  type CalendarProviderFactory,
+} from "../bootstrap/calendar-provider-factory.js";
 
 interface DeletionRequestBody {
   signed_request?: string;
@@ -25,6 +30,9 @@ interface DeletionRequestBody {
 interface MetaDeletionDeps {
   /** Override for tests; defaults to process.env.META_APP_SECRET. */
   appSecret?: string;
+  /** Override for tests; defaults to the real env-backed calendar factory built
+   *  from app.prisma. Used to cancel external calendar events during erasure. */
+  calendarProviderFactory?: CalendarProviderFactory;
 }
 
 /**
@@ -50,6 +58,23 @@ function describeDeletionError(
 }
 
 export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (app, deps) => {
+  // Resolve the calendar provider factory used to cancel a patient's external
+  // calendar events during erasure (F5). Built per request (rare endpoint; the
+  // factory caches per-org internally) rather than reusing the app-wide skill
+  // runtime factory, which is not decorated on `app`. Injectable for tests.
+  const resolveCalendarFactory = (
+    request: FastifyRequest,
+    prismaClient: PrismaClient,
+  ): CalendarProviderFactory =>
+    deps.calendarProviderFactory ??
+    createCalendarProviderFactory({
+      prismaClient,
+      logger: {
+        info: (m: string) => request.log.info(m),
+        error: (m: string) => request.log.error(m),
+      },
+    });
+
   // POST /api/meta/deletion — Meta data deletion callback
   app.post(
     "/",
@@ -99,6 +124,7 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
         : [userId, `+${userId}`];
 
       const contactStore = new PrismaContactStore(app.prisma);
+      const calendarProviderFactory = resolveCalendarFactory(request, app.prisma);
       const deletedIds: string[] = [];
       let failureReason: string | null = null;
 
@@ -109,7 +135,11 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
         });
 
         for (const match of matches) {
-          await contactStore.delete(match.organizationId, match.id);
+          await eraseContactFully(
+            { prisma: app.prisma, contactStore, calendarProviderFactory, logger: request.log },
+            match.organizationId,
+            match.id,
+          );
           deletedIds.push(match.id);
         }
       } catch (err) {

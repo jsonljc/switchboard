@@ -205,6 +205,13 @@ export class PrismaContactStore implements ContactStore {
       // route-governance: store-mutation-global
       await tx.pendingLeadRetry.deleteMany({ where: { leadId: id } });
 
+      // F5 (PDPA right-to-erasure): WorkTrace is the canonical audit log and
+      // carries contactId plus booking details inside parameters/executionOutputs.
+      // It is a loose lineage column (not FK-linked to Contact), so it survived
+      // the cascade and left the patient in the audit log. Org-scoped so the
+      // [organizationId, contactId] composite index is used (and tenant-safe).
+      await tx.workTrace.deleteMany({ where: { contactId: id, organizationId: orgId } });
+
       // phone-keyed children — only if we have a phone to match on
       if (phone) {
         await tx.whatsAppMessageStatus.deleteMany({
@@ -213,6 +220,28 @@ export class PrismaContactStore implements ContactStore {
         await tx.conversationState.deleteMany({
           where: { principalId: phone, organizationId: orgId },
         });
+
+        // F5 (PDPA right-to-erasure): the dead-letter queue stores the entire
+        // inbound webhook in rawPayload (message text + sender phone) keyed only
+        // by organizationId — there is no phone/contactId column to filter on, so
+        // it was never reached. Load this org's candidates and purge the rows
+        // whose payload carries this contact's phone (the WhatsApp sender key,
+        // messages[].from / contacts[].wa_id). No take cap: erasure must be
+        // complete, and a SQL take-before-JS-filter would silently starve matches.
+        // The candidate set stays small in practice (DLQ holds only failed
+        // webhooks); its growth is bounded separately by the F6 retention purge.
+        const dlqCandidates = await tx.failedMessage.findMany({
+          where: { organizationId: orgId },
+          select: { id: true, rawPayload: true },
+        });
+        const dlqMatchedIds = dlqCandidates
+          .filter((row) => payloadMentionsPhone(row.rawPayload, phone))
+          .map((row) => row.id);
+        if (dlqMatchedIds.length > 0) {
+          await tx.failedMessage.deleteMany({
+            where: { id: { in: dlqMatchedIds }, organizationId: orgId },
+          });
+        }
       }
 
       const del = await tx.contact.deleteMany({ where: { id, organizationId: orgId } });
@@ -422,4 +451,52 @@ function mapRowToContact(row: {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+// ---------------------------------------------------------------------------
+// PDPA erasure helpers (F5)
+// ---------------------------------------------------------------------------
+
+/** Minimum digit count for a value to be treated as a matchable phone number.
+ *  Guards against matching short numeric fields (ids, counts, timestamps in a
+ *  different shape) against a junk or partial phone. Real E.164 numbers are
+ *  8–15 digits. */
+const MIN_PHONE_DIGITS = 7;
+
+function digitsOnly(value: string): string {
+  return value.replace(/\D+/g, "");
+}
+
+/**
+ * True when any leaf of `payload` (a parsed-JSON value) is a string or number
+ * whose digit-normalization exactly equals `phone`'s digits.
+ *
+ * The dead-letter queue (`FailedMessage`) stores the raw inbound webhook with no
+ * phone column to filter on; the sender phone lives inside it (for WhatsApp, at
+ * `messages[].from` / `contacts[].wa_id`, digits-only). This scan is
+ * channel-agnostic, so it keeps working if the webhook shape drifts. Matching is
+ * EXACT per leaf (never substring): a sender field "6591234567" matches a stored
+ * "+6591234567", but a longer numeric id that merely contains those digits does
+ * not — so there are no false positives and no cross-patient over-deletion.
+ */
+export function payloadMentionsPhone(payload: unknown, phone: string): boolean {
+  const phoneDigits = digitsOnly(phone);
+  if (phoneDigits.length < MIN_PHONE_DIGITS) return false;
+  return leafMatchesPhone(payload, phoneDigits);
+}
+
+function leafMatchesPhone(value: unknown, phoneDigits: string): boolean {
+  if (value == null) return false;
+  if (typeof value === "string" || typeof value === "number") {
+    return digitsOnly(String(value)) === phoneDigits;
+  }
+  if (Array.isArray(value)) {
+    return value.some((entry) => leafMatchesPhone(entry, phoneDigits));
+  }
+  if (typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some((entry) =>
+      leafMatchesPhone(entry, phoneDigits),
+    );
+  }
+  return false;
 }

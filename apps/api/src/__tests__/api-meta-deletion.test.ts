@@ -3,7 +3,9 @@ import { createHmac } from "node:crypto";
 import { Writable } from "node:stream";
 import Fastify, { type FastifyInstance } from "fastify";
 import formbody from "@fastify/formbody";
+import type { CalendarProvider } from "@switchboard/schemas";
 import { metaDeletionRoutes } from "../routes/meta-deletion.js";
+import type { CalendarProviderFactory } from "../bootstrap/calendar-provider-factory.js";
 
 const APP_SECRET = "test-app-secret";
 
@@ -35,9 +37,14 @@ interface MockPrisma {
   escalationRecord: { deleteMany: ReturnType<typeof vi.fn> };
   handoff: { deleteMany: ReturnType<typeof vi.fn> };
   interactionSummary: { deleteMany: ReturnType<typeof vi.fn> };
-  booking: { deleteMany: ReturnType<typeof vi.fn> };
+  booking: { deleteMany: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
   conversionRecord: { deleteMany: ReturnType<typeof vi.fn> };
   pendingLeadRetry: { deleteMany: ReturnType<typeof vi.fn> };
+  workTrace: { deleteMany: ReturnType<typeof vi.fn> };
+  failedMessage: {
+    findMany: ReturnType<typeof vi.fn>;
+    deleteMany: ReturnType<typeof vi.fn>;
+  };
   dataDeletionRequest: {
     create: ReturnType<typeof vi.fn>;
     findUnique: ReturnType<typeof vi.fn>;
@@ -64,9 +71,17 @@ function makePrisma(): MockPrisma {
     escalationRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     handoff: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     interactionSummary: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    booking: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    booking: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     conversionRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     pendingLeadRetry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    workTrace: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    failedMessage: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     dataDeletionRequest: {
       create: vi.fn().mockImplementation(async ({ data }: { data: object }) => data),
       findUnique: vi.fn().mockResolvedValue(null),
@@ -80,12 +95,21 @@ function makePrisma(): MockPrisma {
   return px;
 }
 
-async function buildApp(prisma: MockPrisma): Promise<FastifyInstance> {
+async function buildApp(
+  prisma: MockPrisma,
+  opts: { calendarProviderFactory?: CalendarProviderFactory } = {},
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   await app.register(formbody);
   // PrismaContactStore is the real implementation; we only mock the prisma client.
   app.decorate("prisma", prisma as unknown as never);
-  await app.register(metaDeletionRoutes, { prefix: "/api/meta/deletion", appSecret: APP_SECRET });
+  await app.register(metaDeletionRoutes, {
+    prefix: "/api/meta/deletion",
+    appSecret: APP_SECRET,
+    ...(opts.calendarProviderFactory
+      ? { calendarProviderFactory: opts.calendarProviderFactory }
+      : {}),
+  });
   return app;
 }
 
@@ -246,6 +270,42 @@ describe("POST /api/meta/deletion", () => {
       data: expect.objectContaining({ status: "failed", failureReason: "db boom" }),
     });
     await app.close();
+  });
+
+  it("cancels the matched contact's external calendar events before deleting them (F5)", async () => {
+    await app.close(); // discard the default app; use one with an injected calendar factory
+    prisma.contact.findMany.mockResolvedValue([{ id: "c-1", organizationId: "org-1" }]);
+    prisma.contact.findFirst.mockResolvedValue({ id: "c-1", phone: "+6591234567" });
+    prisma.booking.findMany.mockResolvedValue([{ calendarEventId: "evt-google-1" }]);
+
+    const cancelBooking = vi.fn(async () => undefined);
+    const calendarProviderFactory = vi.fn(
+      async () => ({ cancelBooking }) as unknown as CalendarProvider,
+    );
+    const calApp = await buildApp(prisma, { calendarProviderFactory });
+
+    const sr = makeSignedRequest({ user_id: "6591234567" });
+    const res = await calApp.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: `signed_request=${encodeURIComponent(sr)}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Reads the contact's booking event ids (scoped), resolves the org's provider,
+    // and cancels the external event — all before the DB cascade removes the rows.
+    expect(prisma.booking.findMany).toHaveBeenCalledWith({
+      where: { contactId: "c-1", organizationId: "org-1" },
+      select: { calendarEventId: true },
+    });
+    expect(calendarProviderFactory).toHaveBeenCalledWith("org-1");
+    expect(cancelBooking).toHaveBeenCalledWith("evt-google-1", expect.any(String));
+    expect(prisma.contact.deleteMany).toHaveBeenCalled();
+    expect(prisma.dataDeletionRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ deletedContactIds: ["c-1"], status: "completed" }),
+    });
+    await calApp.close();
   });
 });
 
