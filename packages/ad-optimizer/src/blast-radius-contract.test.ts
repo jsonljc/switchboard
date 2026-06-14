@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   assertWithinBlastRadius,
+  DEFAULT_BLAST_RADIUS_CONTRACT,
   type BlastRadiusContract,
   type BlastRadiusGuardrailMetric,
 } from "./blast-radius-contract.js";
@@ -144,5 +145,33 @@ describe("BlastRadiusContract — forward interface shape", () => {
     // @ts-expect-error not_a_real_metric is outside the closed metric union.
     const widened: BlastRadiusGuardrailMetric = "not_a_real_metric";
     expect(widened).toBe("not_a_real_metric");
+  });
+});
+
+describe("DEFAULT_BLAST_RADIUS_CONTRACT — the v1 default the reallocate executor enforces", () => {
+  it("is a well-formed, conservative contract (finite positive caps, share in (0,1], capture-prior rollback)", () => {
+    const c = DEFAULT_BLAST_RADIUS_CONTRACT;
+    expect(Number.isFinite(c.maxDeltaCents)).toBe(true);
+    expect(c.maxDeltaCents).toBeGreaterThan(0);
+    expect(c.maxAccountSpendShare).toBeGreaterThan(0);
+    expect(c.maxAccountSpendShare).toBeLessThanOrEqual(1);
+    expect(c.guardrails.length).toBeGreaterThan(0);
+    expect(c.rollback).toEqual({ kind: "reset_prior_budget", capturePriorValue: true });
+  });
+
+  it("admits a typical small +20% scale and refuses an oversized move (composes with the cap)", () => {
+    // A $200/day campaign scaled +20% = +$40 delta on a $1000/day account: within both caps.
+    expect(assertWithinBlastRadius(DEFAULT_BLAST_RADIUS_CONTRACT, 40_00, 1000_00)).toEqual({
+      ok: true,
+    });
+    // A $900 delta blows the dollar cap.
+    expect(assertWithinBlastRadius(DEFAULT_BLAST_RADIUS_CONTRACT, 900_00, 100000_00).ok).toBe(
+      false,
+    );
+    // A small delta that is a huge share of a tiny account is refused.
+    expect(assertWithinBlastRadius(DEFAULT_BLAST_RADIUS_CONTRACT, 30_00, 40_00)).toEqual({
+      ok: false,
+      reason: "SHARE_CAP",
+    });
   });
 });

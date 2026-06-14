@@ -134,3 +134,22 @@ export function assertWithinBlastRadius(
 
   return { ok: true };
 }
+
+/**
+ * The conservative v1 default contract the Spec-1B reallocate executor enforces when an org carries
+ * no per-org override. A $50.00 absolute single-move ceiling and a 0.25 account-spend share ceiling
+ * are deliberately tight for the first autonomous money mover (the SG/MY pilot's small clinics): a
+ * larger move fails closed to an operator rather than auto-executing. The two guardrails are the
+ * forward outcome-attribution monitor's thresholds (slice 3), inert in the executor, which enforces
+ * only the two numeric caps. Per-org tuning is a deferred fast-follow; this is the single source of
+ * the default so the executor and any seed cannot drift.
+ */
+export const DEFAULT_BLAST_RADIUS_CONTRACT: BlastRadiusContract = {
+  maxDeltaCents: 50_00, // $50.00
+  maxAccountSpendShare: 0.25,
+  guardrails: [
+    { metric: "account_booked_conversions_drop_share", breachAbove: 0.2, windowHours: 72 },
+    { metric: "freed_budget_absorbed_share", breachAbove: 0.5, windowHours: 72 },
+  ],
+  rollback: { kind: "reset_prior_budget", capturePriorValue: true },
+};

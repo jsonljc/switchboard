@@ -84,6 +84,8 @@ export { PrismaMetaMutationAttemptStore } from "./stores/prisma-meta-mutation-at
 export type {
   CreateMetaMutationAttemptInput,
   MetaMutationAttemptStatus,
+  ClaimLeaseAndMarkInput,
+  ClaimLeaseResult,
 } from "./stores/prisma-meta-mutation-attempt-store.js";
 export { PrismaDeploymentStateStore } from "./stores/prisma-deployment-state-store.js";
 export { PrismaDeploymentConnectionStore } from "./stores/prisma-deployment-connection-store.js";
