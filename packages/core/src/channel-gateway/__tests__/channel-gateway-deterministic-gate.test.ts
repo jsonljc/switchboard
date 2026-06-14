@@ -365,10 +365,12 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     expect(savedVerdict.jurisdiction).toBe("SG");
     expect(savedVerdict.details?.sentence).toBeDefined();
 
-    // Status flipped
+    // Status flipped. principalId is the bare sessionId (deliverable address),
+    // matching the normal inbound path — NOT a "visitor-" prefixed value, which
+    // is not a valid WhatsApp Graph `to` and would silently fail operator sends.
     expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
       channel: "web_widget",
-      principalId: "visitor-sess-1",
+      principalId: "sess-1",
     });
 
     // Handoff saved. pregnancy_breastfeeding is a medical category: handoff
@@ -472,10 +474,11 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     expect(savedVerdict.clinicType).toBe("medical");
     expect(savedVerdict.details?.matchCategory).toBe("pregnancy_breastfeeding");
 
-    // Status flipped
+    // Status flipped. principalId is the bare sessionId (deliverable address)
+    // on the fail-closed cached-enforce path too.
     expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
       channel: "web_widget",
-      principalId: "visitor-sess-1",
+      principalId: "sess-1",
     });
 
     // SG handoff text sent
@@ -638,10 +641,10 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     expect(sendSpy).toHaveBeenCalledOnce();
     const sentText: string = sendSpy.mock.calls[0]![0];
     expect(sentText).toContain(SG_HANDOFF_SUBSTRING);
-    // Status still flipped
+    // Status still flipped, with the bare deliverable principalId
     expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
       channel: "web_widget",
-      principalId: "visitor-sess-1",
+      principalId: "sess-1",
     });
     // Handoff still saved
     expect(handoffStore.save).toHaveBeenCalledOnce();
@@ -649,9 +652,10 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
 
   // -------------------------------------------------------------------------
   // Test 10: first-message enforce upsert — setConversationStatus receives
-  //           upsertContext with channel + principalId derived from sessionId
+  //           upsertContext with channel + principalId == the bare sessionId
+  //           (the deliverable address, matching the normal inbound path)
   // -------------------------------------------------------------------------
-  it("10. enforce + match on first-message session → setConversationStatus called with upsertContext (channel + visitor-derived principalId)", async () => {
+  it("10. enforce + match on first-message session → setConversationStatus called with upsertContext (channel + bare-sessionId principalId)", async () => {
     const resolver: GovernanceConfigResolver = vi.fn().mockResolvedValue({
       status: "resolved",
       config: {
@@ -684,8 +688,11 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     // upsertContext must be present and correctly derived
     expect(calledCtx).not.toBeUndefined();
     expect(calledCtx!.channel).toBe("web_widget");
-    // principalId must match the visitor derivation from gateway-conversation-store
-    expect(calledCtx!.principalId).toBe("visitor-sess-1");
+    // principalId must be the bare sessionId: it is delivery data read back as
+    // destinationPrincipalId and POSTed to the channel `to`. A "visitor-" prefix
+    // is not a valid WhatsApp Graph address and would silently fail. This aligns
+    // the gate path with the normal inbound path (managed-webhook mints bare E.164).
+    expect(calledCtx!.principalId).toBe("sess-1");
   });
 
   // -------------------------------------------------------------------------
@@ -819,7 +826,7 @@ describe("ChannelGateway — freeze-gate live path (real triggers)", () => {
     expect(v.reasonCode).toBe("sensitive_inbound");
     expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
       channel: "web_widget",
-      principalId: "visitor-sess-1",
+      principalId: "sess-1",
     });
     expect(handoffStore.save).toHaveBeenCalledOnce();
     expect(sendSpy.mock.calls[0]![0]).toContain(SG_HANDOFF_SUBSTRING);
