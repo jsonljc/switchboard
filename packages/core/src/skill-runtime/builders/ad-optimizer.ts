@@ -2,19 +2,22 @@ import { resolveAdOptimizerConfig } from "@switchboard/schemas";
 
 import type { BatchParameterBuilder, BatchContextContract } from "../batch-types.js";
 
+// Must mirror the canonical INSIGHT_FIELDS in ad-optimizer's audit-runner.ts. It is DUPLICATED
+// (not imported) because core (Layer 3) must not import ad-optimizer (Layer 2). The AdsInsights
+// `/insights` edge does NOT return `status`/`effective_status`/`revenue` (Tier-1 D2-2) — money
+// comes from `action_values`. Keep this list in sync with audit-runner's export.
 const INSIGHT_FIELDS = [
   "campaign_id",
   "campaign_name",
-  "status",
   "impressions",
   "inline_link_clicks",
   "spend",
   "conversions",
-  "revenue",
   "frequency",
   "cpm",
   "inline_link_click_ctr",
   "cost_per_inline_link_click",
+  "action_values",
 ];
 
 export const AD_OPTIMIZER_CONTRACT: BatchContextContract = {

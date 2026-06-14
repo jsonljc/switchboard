@@ -35,7 +35,10 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
 
     const insights = await this.adsClient.getCampaignInsights({
       dateRange: { since: fmt(since), until: fmt(now) },
-      fields: ["campaign_id", "effective_status", "conversions"],
+      // `effective_status` is invalid on the `/insights` edge (it would always map
+      // to ""); effectiveStatus here is advisory (learning phase is authoritatively
+      // derived from learning_stage_info) and defaults to "UNKNOWN" below.
+      fields: ["campaign_id", "conversions"],
     });
 
     const match = insights.find((i) => i.campaignId === input.campaignId);
@@ -43,7 +46,9 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     const learningPhase = await this.deriveLearningPhase(input.campaignId);
 
     return {
-      effectiveStatus: match?.effectiveStatus ?? "UNKNOWN",
+      // effective_status is not requested off /insights, so the mapped row carries
+      // "" — treat empty (or missing) as the honest "UNKNOWN", not a blank string.
+      effectiveStatus: match?.effectiveStatus || "UNKNOWN",
       learningPhase,
       lastModifiedDays: LAST_MODIFIED_DAYS_UNKNOWN,
       optimizationEvents: match?.conversions ?? 0,

@@ -36,6 +36,35 @@ function finiteInt(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/**
+ * Money source on the AdsInsights `/insights` edge. The edge does NOT return a
+ * `revenue` field (that lives on the campaign-object edge); the monetary value of
+ * conversions arrives in `action_values` as { action_type, value } entries.
+ *
+ * Meta returns OVERLAPPING purchase action_types: `omni_purchase` is the deduplicated
+ * aggregate that already INCLUDES `offsite_conversion.fb_pixel_purchase` (and app / in-store
+ * variants). Summing every "purchase"-substring entry would double-count (pixel + omni),
+ * inflating revenue → ROAS → over-scale. So take ONE source: prefer `omni_purchase` (the
+ * dedup'd total); else the LARGEST single purchase entry (never sum overlapping types). Each
+ * value is finite-guarded (non-numeric → 0, never NaN). Returns 0 when there are no purchases.
+ */
+function purchaseValueFromActionValues(actionValues: unknown): number {
+  if (!Array.isArray(actionValues)) return 0;
+  let omni: number | null = null;
+  let maxPurchase = 0;
+  let sawPurchase = false;
+  for (const entry of actionValues) {
+    const actionType = String((entry as { action_type?: unknown })?.action_type ?? "");
+    if (!actionType.includes("purchase")) continue;
+    const value = finiteFloat((entry as { value?: unknown })?.value);
+    sawPurchase = true;
+    if (actionType === "omni_purchase") omni = value;
+    if (value > maxPurchase) maxPurchase = value;
+  }
+  if (omni !== null) return omni;
+  return sawPurchase ? maxPurchase : 0;
+}
+
 interface MetaAdsClientConfig {
   accessToken: string;
   accountId: string;
@@ -562,7 +591,10 @@ export class MetaAdsClient {
       inlineLinkClicks: finiteInt(raw.inline_link_clicks),
       spend: finiteFloat(raw.spend),
       conversions: finiteFloat(raw.conversions),
-      revenue: finiteFloat(raw.revenue),
+      // The `/insights` edge does NOT return a `revenue` field; money arrives in
+      // `action_values`. Source revenue centrally here (sum of purchase entries) so
+      // every downstream `insight.revenue` consumer stays correct with no change.
+      revenue: purchaseValueFromActionValues(raw.action_values),
       frequency: finiteFloat(raw.frequency),
       cpm: finiteFloat(raw.cpm),
       inlineLinkClickCtr: finiteFloat(raw.inline_link_click_ctr),
@@ -573,6 +605,11 @@ export class MetaAdsClient {
       // verbatim when present so action-type-scoped denominators can read it.
       ...(Array.isArray(raw.actions)
         ? { actions: raw.actions as { action_type: string; value: string }[] }
+        : {}),
+      // `action_values` carries the monetary value of each action; surface it so
+      // the recorded-fixture pin (and any analysis-only caller) can read it.
+      ...(Array.isArray(raw.action_values)
+        ? { actionValues: raw.action_values as { action_type: string; value: string }[] }
         : {}),
     };
   }
