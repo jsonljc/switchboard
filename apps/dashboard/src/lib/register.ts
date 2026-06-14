@@ -16,3 +16,16 @@ export function validateRegistration(email: string, password: string): Validatio
   if (!EMAIL_REGEX.test(email)) return { valid: false, error: "Invalid email address" };
   return validatePassword(password);
 }
+
+const SELF_SERVE_OPEN_MODES = new Set(["beta", "public"]);
+
+/**
+ * F-05: is self-serve signup currently open? Gated by NEXT_PUBLIC_LAUNCH_MODE.
+ * Fail-closed allowlist: only "beta" and "public" open signup; an unset, empty, or
+ * unknown mode is treated as closed ("waitlist"). Read at call time, server-side via
+ * static access (so it is inlined and does not trip the F-20 no-dynamic-public-env
+ * guard). The single source of truth for the register route and the NextAuth gate.
+ */
+export function isSelfServeSignupOpen(): boolean {
+  return SELF_SERVE_OPEN_MODES.has(process.env.NEXT_PUBLIC_LAUNCH_MODE || "waitlist");
+}

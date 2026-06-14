@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { validatePassword, validateRegistration } from "../register";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { validatePassword, validateRegistration, isSelfServeSignupOpen } from "../register";
 
 describe("validateRegistration", () => {
   it("rejects missing email", () => {
@@ -45,5 +45,25 @@ describe("validatePassword", () => {
 
   it("accepts a password of 8 or more characters", () => {
     expect(validatePassword("longenough")).toEqual({ valid: true, error: null });
+  });
+});
+
+describe("isSelfServeSignupOpen (F-05)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("is closed (false) for waitlist, empty, and any unknown mode (allowlist, fail-closed)", () => {
+    for (const mode of ["waitlist", "", "preview", "internal", "anything"]) {
+      vi.stubEnv("NEXT_PUBLIC_LAUNCH_MODE", mode);
+      expect(isSelfServeSignupOpen()).toBe(false);
+    }
+  });
+
+  it("is open (true) only for beta and public", () => {
+    for (const mode of ["beta", "public"]) {
+      vi.stubEnv("NEXT_PUBLIC_LAUNCH_MODE", mode);
+      expect(isSelfServeSignupOpen()).toBe(true);
+    }
   });
 });

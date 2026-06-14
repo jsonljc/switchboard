@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 
 // Mock next-auth/Prisma at the module level so `import("../auth")` does not
 // pull in Next.js server runtime (which is unavailable under vitest's jsdom
@@ -34,6 +34,19 @@ vi.mock("next-auth", () => ({
 vi.mock("next-auth/providers/credentials", () => ({ default: vi.fn(() => ({})) }));
 vi.mock("next-auth/providers/email", () => ({ default: vi.fn(() => ({})) }));
 vi.mock("next-auth/providers/google", () => ({ default: vi.fn(() => ({})) }));
+
+// F-05: stub provisioning so the createUser backstop test asserts on calls without a real DB write.
+const { provisionDashboardUserMock } = vi.hoisted(() => ({
+  provisionDashboardUserMock: vi.fn(async () => ({
+    id: "du_new",
+    email: "new@clinic.test",
+    name: null,
+    emailVerified: null,
+  })),
+}));
+vi.mock("../provision-dashboard-user", () => ({
+  provisionDashboardUser: provisionDashboardUserMock,
+}));
 
 // We test the callbacks in isolation by importing the config object.
 // If auth.ts doesn't export the config, refactor to export `authConfig`
@@ -104,5 +117,92 @@ describe("authConfig host trust (F-09)", () => {
     // injected VERCEL=1; setting it explicitly removes that implicit dependency so login also
     // works in local prod-mode and on any future off-Vercel host.
     expect(authConfig.trustHost).toBe(true);
+  });
+});
+
+describe("auth signIn gate (F-05 launch mode)", () => {
+  const signIn = (args: unknown) =>
+    (authConfig.callbacks!.signIn as (a: unknown) => Promise<boolean>)(args);
+
+  beforeEach(() => {
+    dashboardUserFindUnique.mockReset();
+  });
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("allows any sign-in when launch mode is open (public), without a DB lookup", async () => {
+    vi.stubEnv("NEXT_PUBLIC_LAUNCH_MODE", "public");
+    await expect(
+      signIn({ user: { email: "new@clinic.test" }, account: { provider: "google" } }),
+    ).resolves.toBe(true);
+    expect(dashboardUserFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("allows credentials logins even when closed (existing user, never the adapter)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_LAUNCH_MODE", "waitlist");
+    await expect(
+      signIn({
+        user: { id: "u1", email: "owner@clinic.test" },
+        account: { provider: "credentials" },
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it("denies a NET-NEW oauth signup when closed (waitlist)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_LAUNCH_MODE", "waitlist");
+    dashboardUserFindUnique.mockResolvedValue(null); // email not in DB => new user
+    await expect(
+      signIn({ user: { email: "stranger@example.com" }, account: { provider: "google" } }),
+    ).resolves.toBe(false);
+  });
+
+  it("ALLOWS an existing pre-provisioned user when closed (no lockout invariant)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_LAUNCH_MODE", "waitlist");
+    dashboardUserFindUnique.mockResolvedValue({ id: "u1", email: "pilot@clinic.test" });
+    await expect(
+      signIn({ user: { email: "pilot@clinic.test" }, account: { provider: "google" } }),
+    ).resolves.toBe(true);
+  });
+
+  it("allows an existing user's magic-link request phase when closed (verificationRequest, account null)", async () => {
+    // @auth/core populates user.email even in the email request phase (real row or a
+    // defaultUser built from the typed address), so an existing pilot requesting a magic
+    // link is never wrongly denied. Pins the no-lockout property against a future bump.
+    vi.stubEnv("NEXT_PUBLIC_LAUNCH_MODE", "waitlist");
+    dashboardUserFindUnique.mockResolvedValue({ id: "u1", email: "pilot@clinic.test" });
+    await expect(
+      signIn({
+        user: { email: "pilot@clinic.test" },
+        account: null,
+        email: { verificationRequest: true },
+      }),
+    ).resolves.toBe(true);
+  });
+});
+
+describe("auth createUser backstop (F-05 launch mode)", () => {
+  const createUser = (u: unknown) =>
+    (authConfig.adapter!.createUser as (a: unknown) => Promise<unknown>)(u);
+
+  beforeEach(() => {
+    provisionDashboardUserMock.mockClear();
+  });
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("throws and does NOT provision when signup is closed", async () => {
+    vi.stubEnv("NEXT_PUBLIC_LAUNCH_MODE", "waitlist");
+    await expect(
+      createUser({ email: "stranger@example.com", emailVerified: null }),
+    ).rejects.toThrow();
+    expect(provisionDashboardUserMock).not.toHaveBeenCalled();
+  });
+
+  it("provisions when signup is open", async () => {
+    vi.stubEnv("NEXT_PUBLIC_LAUNCH_MODE", "public");
+    await createUser({ email: "new@clinic.test", emailVerified: null });
+    expect(provisionDashboardUserMock).toHaveBeenCalledTimes(1);
   });
 });
