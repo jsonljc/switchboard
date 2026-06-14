@@ -12,7 +12,7 @@ const RATE_LIMIT_MS = 60_000;
 // Spec-1B defense-in-depth tripwire: a daily budget above $1,000,000/day is a bug, not a campaign.
 // The real cap is the blast-radius contract (assertWithinBlastRadius); this only catches a runaway
 // 100x/encoding bug that would otherwise reach Meta. Cents.
-const MAX_SANE_DAILY_BUDGET_CENTS = 1_000_000_00;
+const MAX_SANE_DAILY_BUDGET_CENTS = 100_000_000; // 100,000,000 cents == $1,000,000.00/day
 
 /**
  * Parse an external Meta numeric, coercing any non-finite result to a fallback
@@ -461,11 +461,14 @@ export class MetaAdsClient {
 
   /**
    * Read the account's current-day spend in CENTS for the blast-radius share-cap denominator (spec
-   * section 8a). Insights `spend` is a DOLLARS string (e.g. "5000.00") -> Math.round(x*100): the UNIT
-   * ASYMMETRY vs getCampaign's native cents. Window = today (intra-day partial spend under-states the
-   * denominator -> a larger share -> a more conservative cap; the safe direction). THROWS on a Meta
-   * error (load-bearing); null on an absent/non-numeric spend (assertWithinBlastRadius fails closed
-   * SHARE_CAP on a null/non-positive denominator). Strict parse, never coerces "5000abc".
+   * section 8a). Insights `spend` is a major-unit string (e.g. "5000.00") -> Math.round(x*100): the
+   * UNIT ASYMMETRY vs getCampaign's native cents. SCOPE: assumes a 2-decimal (hundredths) account
+   * currency, so x100 is unit-consistent with getCampaign's minor units; v1 = the SG/MY pilot
+   * (SGD/MYR). A zero-decimal currency (JPY/KRW) would mis-scale this denominator vs the verbatim
+   * budget, so it is out of v1 scope - currency-aware conversion is deferred. Window = today (partial
+   * intra-day spend under-states the denominator -> a larger share -> a more conservative cap). THROWS
+   * on a Meta error (load-bearing); null on an absent/non-numeric spend (assertWithinBlastRadius fails
+   * closed SHARE_CAP on a null/non-positive denominator). Strict parse, never coerces "5000abc".
    */
   async getAccountDailySpendCents(): Promise<number | null> {
     const response = await this.get(`/${this.accountId}/insights?date_preset=today&fields=spend`);

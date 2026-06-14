@@ -82,6 +82,16 @@ describe("MetaAdsClient — Spec-1B reallocation primitives", () => {
         "Meta API error (400): bad campaign",
       );
     });
+
+    it("reads a NUMERIC daily_budget (Meta may send a JSON number, not a string) as cents", async () => {
+      // Pins the String() coercion: a future parse that drops it would silently null a numeric budget.
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ id: "camp_1", name: "X", status: "ACTIVE", daily_budget: 5000 }),
+      });
+      expect((await client.getCampaign("camp_1")).dailyBudgetCents).toBe(5000);
+    });
   });
 
   describe("getAccountDailySpendCents (blast-radius denominator)", () => {
@@ -118,6 +128,24 @@ describe("MetaAdsClient — Spec-1B reallocation primitives", () => {
       await expect(client.getAccountDailySpendCents()).rejects.toThrow(
         "Meta API error (400): nope",
       );
+    });
+
+    it("rounds an IEEE-754-imperfect product to exact cents ('0.29' -> 29, not 28)", async () => {
+      // Pins the Math.round: 0.29 * 100 === 28.999999999999996 in IEEE-754; a truncating refactor
+      // (| 0 / Math.trunc) would under-count the denominator (inflating the share, wrong direction).
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: [{ spend: "0.29" }] }),
+      });
+      expect(await client.getAccountDailySpendCents()).toBe(29);
+    });
+
+    it("converts a single-decimal spend ('5000.5' -> 500050)", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: [{ spend: "5000.5" }] }),
+      });
+      expect(await client.getAccountDailySpendCents()).toBe(500050);
     });
   });
 
