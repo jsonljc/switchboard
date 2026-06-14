@@ -431,6 +431,26 @@ export class MetaAdsClient {
     };
   }
 
+  /**
+   * Read the account's current-day spend in CENTS for the Spec-1B blast-radius share-cap denominator
+   * (spec section 8a). Account insights `spend` is a major-unit DOLLARS string (e.g. "5000.00") and is
+   * converted with Math.round(x*100): this is the UNIT ASYMMETRY vs getCampaign (where daily_budget is
+   * native cents). Window = today (date_preset=today): intra-day partial spend under-states the
+   * denominator, which only makes the computed share LARGER and the cap MORE conservative - the safe
+   * direction. THROWS on a Meta error (load-bearing, like getCampaign); returns null on an absent or
+   * non-numeric spend (assertWithinBlastRadius already fails closed SHARE_CAP on a null/non-positive
+   * denominator). Strict parse, never coerces "5000abc".
+   */
+  async getAccountDailySpendCents(): Promise<number | null> {
+    const response = await this.get(`/${this.accountId}/insights?date_preset=today&fields=spend`);
+    const row = (response.data as Record<string, unknown>[] | undefined)?.[0];
+    if (!row) return null;
+    const raw = String(row.spend ?? "");
+    if (!/^\d+(\.\d{1,2})?$/.test(raw)) return null;
+    const cents = Math.round(Number(raw) * 100);
+    return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
+  }
+
   async getAdCampaignId(adId: string): Promise<string | null> {
     const cached = this.adCampaignCache.get(adId);
     if (cached !== undefined) return cached;

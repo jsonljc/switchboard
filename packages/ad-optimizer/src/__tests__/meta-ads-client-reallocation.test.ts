@@ -83,4 +83,41 @@ describe("MetaAdsClient — Spec-1B reallocation primitives", () => {
       );
     });
   });
+
+  describe("getAccountDailySpendCents (blast-radius denominator)", () => {
+    it("reads today's account spend (a DOLLARS string) and converts to CENTS (x100)", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: [{ spend: "5000.00" }] }),
+      });
+      expect(await client.getAccountDailySpendCents()).toBe(500000); // $5000.00 -> 500000 cents (NOT 5000)
+      const url = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(url).toContain("/act_123456/insights");
+      expect(url).toContain("date_preset=today");
+    });
+
+    it("null when no insights row exists (absent -> blast-radius SHARE_CAP fail-closed)", async () => {
+      fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [] }) });
+      expect(await client.getAccountDailySpendCents()).toBeNull();
+    });
+
+    it("null on a non-numeric spend (strict parse, never coerces '5000abc')", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: [{ spend: "5000abc" }] }),
+      });
+      expect(await client.getAccountDailySpendCents()).toBeNull();
+    });
+
+    it("THROWS on a Meta error (load-bearing; executor maps to ACCOUNT_SPEND_UNREADABLE)", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: { message: "nope", type: "x", code: 100 } }),
+      });
+      await expect(client.getAccountDailySpendCents()).rejects.toThrow(
+        "Meta API error (400): nope",
+      );
+    });
+  });
 });
