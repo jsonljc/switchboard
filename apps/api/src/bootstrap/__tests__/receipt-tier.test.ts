@@ -15,10 +15,7 @@ const BUSINESS_HOURS = {
 function makeBookingStore() {
   return {
     findOverlapping: async () => [],
-    createInTransaction: async () => ({ id: "booking_1" }),
     findById: async () => null,
-    cancel: async () => undefined,
-    reschedule: async () => ({ id: "booking_1" }),
   };
 }
 

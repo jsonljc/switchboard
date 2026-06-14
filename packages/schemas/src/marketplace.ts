@@ -162,6 +162,22 @@ export type DeploymentState = z.infer<typeof DeploymentStateSchema>;
 export const ConnectionStatus = z.enum(["active", "expired", "revoked"]);
 export type ConnectionStatus = z.infer<typeof ConnectionStatus>;
 
+/**
+ * Connection statuses whose stored token is dead and must never be resolved for
+ * use. Spans the DeploymentConnection enum dead values ("expired"/"revoked")
+ * and the runtime "needs_reauth" status the Meta token-refresh cron writes on
+ * refresh failure (the status column is a free string, so "needs_reauth" is
+ * written even though it is not a ConnectionStatus enum member). Single source
+ * of truth for credential resolvers across api + db so the two call sites
+ * cannot drift, a missed copy is how an "expired" token once slipped a review.
+ */
+export const DEAD_CONNECTION_STATUSES = ["expired", "revoked", "needs_reauth"] as const;
+
+/** True when a connection's token is usable (its status is not known-dead). */
+export function isUsableConnectionStatus(status: string | null | undefined): boolean {
+  return status == null ? true : !(DEAD_CONNECTION_STATUSES as readonly string[]).includes(status);
+}
+
 export const DeploymentConnectionSchema = z.object({
   id: z.string(),
   deploymentId: z.string(),

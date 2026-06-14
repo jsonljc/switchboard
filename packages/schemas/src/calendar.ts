@@ -82,6 +82,28 @@ export const BusinessHoursConfigSchema = z.object({
 });
 export type BusinessHoursConfig = z.infer<typeof BusinessHoursConfigSchema>;
 
+/**
+ * Canonical default business hours seeded into OrganizationConfig at org provisioning so a fresh
+ * org resolves LocalCalendarProvider (not Noop) and the booking loop works with no operator action
+ * and no external calendar credentials. Asia/Singapore matches the SG/MY pilot wedge and the
+ * BookingSchema timezone default; Mon-Fri 09:00-18:00. Operator-editable hours are follow-up work
+ * (there is no product write path for businessHours yet). This is the single source of truth, also
+ * consumed by the Google calendar factory's fallback default.
+ */
+export const DEFAULT_BUSINESS_HOURS: BusinessHoursConfig = {
+  timezone: "Asia/Singapore",
+  days: [
+    { day: 1, open: "09:00", close: "18:00" },
+    { day: 2, open: "09:00", close: "18:00" },
+    { day: 3, open: "09:00", close: "18:00" },
+    { day: 4, open: "09:00", close: "18:00" },
+    { day: 5, open: "09:00", close: "18:00" },
+  ],
+  defaultDurationMinutes: 30,
+  bufferMinutes: 15,
+  slotIncrementMinutes: 30,
+};
+
 export const CalendarHealthCheckSchema = z.object({
   status: z.enum(["connected", "disconnected", "degraded"]),
   latencyMs: z.number(),
@@ -89,12 +111,34 @@ export const CalendarHealthCheckSchema = z.object({
 });
 export type CalendarHealthCheck = z.infer<typeof CalendarHealthCheckSchema>;
 
+export interface BookingConfirmedNotification {
+  bookingId: string;
+  attendeeEmail: string | null;
+  attendeeName: string | null;
+  service: string;
+  startsAt: string;
+  endsAt: string;
+}
+
 export interface CalendarProvider {
   listAvailableSlots(query: SlotQuery): Promise<TimeSlot[]>;
   createBooking(input: CreateBookingInput): Promise<Booking>;
-  cancelBooking(bookingId: string, reason?: string): Promise<void>;
-  rescheduleBooking(bookingId: string, newSlot: TimeSlot): Promise<Booking>;
+  // For `cancelBooking`/`rescheduleBooking`, `eventId` is the provider's own calendar
+  // handle: the value returned as `Booking.calendarEventId` from `createBooking` (a Google
+  // event id, or the local provider's `local-<uuid>`), NOT the durable Booking row id.
+  // Callers pass `booking.calendarEventId`; the durable row mutation is owned by the
+  // booking store. (`getBooking` keys by the durable row id and is org-scoped through the
+  // per-org local store and the org-scoped PrismaBookingStore.findById.)
+  cancelBooking(eventId: string, reason?: string): Promise<void>;
+  rescheduleBooking(eventId: string, newSlot: TimeSlot): Promise<Booking>;
   getBooking(bookingId: string): Promise<Booking | null>;
+  /**
+   * Optional post-confirmation notification hook. The booking tool calls this AFTER the durable
+   * confirm transaction commits, so a confirmation is only ever sent for a booking that truly
+   * persisted. Providers that notify the attendee natively during createBooking (e.g. Google
+   * Calendar invites) omit it. Best-effort: implementations must not throw.
+   */
+  notifyBookingConfirmed?(notification: BookingConfirmedNotification): Promise<void>;
   healthCheck(): Promise<CalendarHealthCheck>;
 }
 

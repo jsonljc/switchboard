@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@prisma/client";
 import { StaleVersionError } from "@switchboard/core";
 import { BookingSlotConflictError } from "@switchboard/schemas";
 
@@ -19,8 +19,27 @@ interface CreateBookingInput {
 }
 
 // Advisory-lock namespace for per-org booking serialization. Distinct from the
-// audit-chain ledger lock (900_001). Two-int pg_advisory_xact_lock form.
+// audit-chain ledger lock (900_001). Internal: callers lock through acquireBookingLock,
+// which owns the mandatory ::int4 cast.
 const BOOKING_LOCK_NS = 920_001;
+
+/**
+ * Acquire the per-org booking advisory lock inside an OPEN transaction, serializing
+ * check-then-insert/update so two concurrent bookings for one org cannot both pass the
+ * overlap check and double-book a slot. Held until the transaction commits.
+ *
+ * The `::int4` cast is mandatory, and the reason this is a single shared helper: Prisma
+ * sends JS numbers as bigint, and the two-key signature `pg_advisory_xact_lock(bigint,
+ * integer)` does not exist (Postgres error 42883). Every durable booking write path
+ * (PrismaBookingStore.create / reschedule) locks through here so no call site can reintroduce
+ * that bug or drift from this namespace (F12).
+ */
+export async function acquireBookingLock(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}::int4, hashtext(${organizationId}))`;
+}
 
 export class PrismaBookingStore {
   constructor(private prisma: PrismaClient) {}
@@ -31,7 +50,7 @@ export class PrismaBookingStore {
     // until commit; half-open interval test mirrors the Local provider guard but on the
     // LIVE write path.
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}, hashtext(${input.organizationId}))`;
+      await acquireBookingLock(tx, input.organizationId);
       // Single-resource-per-org capacity assumption: overlap is org-wide (not per
       // calendarId/room/practitioner), mirroring the original Local-provider guard.
       const overlap = await tx.booking.findFirst({
@@ -74,8 +93,8 @@ export class PrismaBookingStore {
     return this.prisma.booking.findFirstOrThrow({ where: { id: bookingId, organizationId } });
   }
 
-  async findById(bookingId: string) {
-    return this.prisma.booking.findUnique({ where: { id: bookingId } });
+  async findById(organizationId: string, bookingId: string) {
+    return this.prisma.booking.findFirst({ where: { id: bookingId, organizationId } });
   }
 
   async countConfirmed(orgId: string) {
@@ -124,7 +143,7 @@ export class PrismaBookingStore {
     // land on a slot another LIVE booking already holds. Advisory lock held until
     // commit; overlap is half-open and excludes the booking being moved.
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${BOOKING_LOCK_NS}, hashtext(${orgId}))`;
+      await acquireBookingLock(tx, orgId);
       // Single-resource-per-org capacity assumption: overlap is org-wide (not per
       // calendarId/room/practitioner), mirroring the original Local-provider guard.
       // Exclude the booking being moved so a no-op/shrink reschedule doesn't self-conflict.

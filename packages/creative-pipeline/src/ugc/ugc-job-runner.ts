@@ -222,6 +222,22 @@ function getNextPhase(phase: UgcPhase): string {
   return UGC_PHASE_ORDER[idx + 1] as string;
 }
 
+/**
+ * Terminal-lifecycle check for replay / duplicate-delivery safety (D5-F2).
+ * Mirrors the canonical terminal set in @switchboard/core's status-mapper
+ * (mapCreativeJobToMiraStatus: draft_ready / stopped / failed => canContinue
+ * false) but stays schemas-only; creative-pipeline is Layer 2 and must not
+ * import core. The status-mapper's derived "failed" rule (allUgcAssetsRejected)
+ * is subsumed by the "complete" check: delivery is the last phase, so a job that
+ * trips it already advanced ugcPhase to "complete". "complete" is the headline
+ * case: it also yields UGC_PHASE_ORDER.indexOf === -1, so the resume loop must
+ * never run for it; stopped and failed carry a still-valid phase, so they need
+ * explicit checks.
+ */
+function isUgcJobTerminal(job: CreativeJob): boolean {
+  return job.ugcPhase === "complete" || job.stoppedAt != null || job.ugcFailure != null;
+}
+
 // ── Preload context ──
 
 async function preloadContext(
@@ -257,16 +273,43 @@ export async function executeUgcPipeline(
   const job = await step.run("load-job", () => deps.jobStore.findById(eventData.jobId));
   if (!job) throw new Error(`UGC job not found: ${eventData.jobId}`);
 
+  // D5-F2: a re-delivered or operator-replayed ugc.submitted against a terminal
+  // (complete / stopped / failed) job must be a clean no-op: no lifecycle
+  // mutation, no paid phase re-run, no spurious approval park, no throw. Without
+  // this, ugcPhase "complete" => UGC_PHASE_ORDER.indexOf(-1) => the loop runs at
+  // i=-1 (phase undefined): the no-op default + getNextPhase(undefined) persist
+  // "planning" OVER "complete", the regressed job reads awaiting_review
+  // (canContinue), and one operator Continue drives a real paid re-run.
+  if (isUgcJobTerminal(job)) {
+    console.warn(
+      `[ugc-job-runner] skipping terminal job ${job.id} ` +
+        `(ugcPhase=${String(job.ugcPhase)}, stopped=${job.stoppedAt != null}, ` +
+        `failed=${job.ugcFailure != null}); replayed/duplicate ugc.submitted is a no-op`,
+    );
+    return;
+  }
+
+  // Resume index, computed before any further work so an unrecognized phase
+  // bails before preload-context too. D5-F2 backstop: an unknown phase that is
+  // not a known terminal would otherwise run the loop at i=-1 (phase undefined)
+  // and regress lifecycle state. ("complete" is caught by isUgcJobTerminal
+  // above; this guards any other corrupt/unknown value for all time.)
+  const startPhase = (job.ugcPhase as UgcPhase) ?? "planning";
+  const startIdx = UGC_PHASE_ORDER.indexOf(startPhase);
+  if (startIdx < 0) {
+    console.warn(
+      `[ugc-job-runner] skipping job ${job.id}: unrecognized ugcPhase ` +
+        `"${String(startPhase)}" (not in UGC_PHASE_ORDER)`,
+    );
+    return;
+  }
+
   const context = await step.run("preload-context", () => preloadContext(job, deps));
 
   let phaseOutputs: Record<string, unknown> = (job.ugcPhaseOutputs ?? {}) as Record<
     string,
     unknown
   >;
-
-  // Resume from last completed phase
-  const startPhase = (job.ugcPhase as UgcPhase) ?? "planning";
-  const startIdx = UGC_PHASE_ORDER.indexOf(startPhase);
 
   for (let i = startIdx; i < UGC_PHASE_ORDER.length; i++) {
     const phase = UGC_PHASE_ORDER[i];
@@ -397,6 +440,11 @@ export function createUgcJobRunner(
       name: "UGC Pipeline Job Runner",
       retries: 3,
       triggers: [{ event: "creative-pipeline/ugc.submitted" }],
+      // D5-F2: dedupe a re-delivered/replayed ugc.submitted (Inngest 24h window;
+      // per-function-scoped) so even a mid-flight job is safe from a concurrent
+      // duplicate run. Defense-in-depth behind the terminal entry guard above;
+      // concurrency was unfit (a run parked on waitForEvent releases its slot).
+      idempotency: "event.data.jobId",
       ...(onFailure ? { onFailure } : {}),
     },
     async ({ event, step }: { event: { data: UgcJobEventData }; step: UgcStepTools }) => {

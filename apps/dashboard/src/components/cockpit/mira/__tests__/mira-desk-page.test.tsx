@@ -41,6 +41,7 @@ describe("MiraDeskPage", () => {
         ],
         readyToReviewCount: 2,
         keptDrafts: [],
+        needsAttention: [],
         counts: { ...counts, total: 3, inFlight: 1 },
         isEmpty: false,
       },
@@ -51,6 +52,34 @@ describe("MiraDeskPage", () => {
     render(<MiraDeskPage />);
     expect(screen.getByText(/2 drafts ready/i)).toBeInTheDocument();
     expect(screen.getByText(/drafting/i)).toBeInTheDocument();
+  });
+
+  it("surfaces a dead-lettered publish so a busy operator sees it on the desk they already open", () => {
+    deskMock.mockReturnValue({
+      data: {
+        inProduction: [],
+        readyToReviewCount: 0,
+        keptDrafts: [],
+        needsAttention: [
+          {
+            id: "pf",
+            title: "Botox promo",
+            stage: "production",
+            state: "approved_draft",
+            updatedAt: "x",
+            awaitingGo: false,
+            problem: "publish_failed",
+          },
+        ],
+        counts,
+        isEmpty: false,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    render(<MiraDeskPage />);
+    expect(screen.getByText(/publishing to meta failed/i)).toBeInTheDocument();
   });
 
   it("shows the skeleton while keys are pending (data undefined, no error)", () => {
@@ -67,7 +96,14 @@ describe("MiraDeskPage", () => {
 
   it("never renders a forbidden Phase-4/5 word", () => {
     deskMock.mockReturnValue({
-      data: { inProduction: [], readyToReviewCount: 0, keptDrafts: [], counts, isEmpty: true },
+      data: {
+        inProduction: [],
+        readyToReviewCount: 0,
+        keptDrafts: [],
+        needsAttention: [],
+        counts,
+        isEmpty: true,
+      },
       isLoading: false,
       isError: false,
       error: null,
@@ -80,7 +116,14 @@ describe("MiraDeskPage", () => {
     // Regression guard: gating the whole desk on emptiness hid MiraBriefBox — the
     // operator's only way to request a first draft — for brand-new orgs.
     deskMock.mockReturnValue({
-      data: { inProduction: [], readyToReviewCount: 0, keptDrafts: [], counts, isEmpty: true },
+      data: {
+        inProduction: [],
+        readyToReviewCount: 0,
+        keptDrafts: [],
+        needsAttention: [],
+        counts,
+        isEmpty: true,
+      },
       isLoading: false,
       isError: false,
       error: null,

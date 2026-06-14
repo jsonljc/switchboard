@@ -3,6 +3,7 @@ export { canonicalizeSync } from "./canonical-json.js";
 export type { AuditHashInput } from "./canonical-hash.js";
 export { redactSnapshot, DEFAULT_REDACTION_CONFIG } from "./redaction.js";
 export type { RedactionConfig, RedactionResult } from "./redaction.js";
+export { maskPhone, PHONE_MASK_FALLBACK } from "./mask-phone.js";
 export {
   storeEvidence,
   verifyEvidence,

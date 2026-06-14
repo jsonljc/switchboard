@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { Prisma } from "@prisma/client";
 import { PrismaCreativeJobStore } from "../prisma-creative-job-store.js";
 import { StaleVersionError } from "@switchboard/core";
 
@@ -185,6 +186,8 @@ describe("PrismaCreativeJobStore", () => {
         data: {
           currentStage: "hooks",
           stageOutputs: { trends: { angles: [] } },
+          // Forward progress clears any prior terminal marker (replay self-heal).
+          stageFailure: Prisma.JsonNull,
         },
       });
       expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
@@ -200,6 +203,42 @@ describe("PrismaCreativeJobStore", () => {
       await expect(store.updateStage("org_other", "cj_1", "hooks", {})).rejects.toThrow(
         StaleVersionError,
       );
+    });
+  });
+
+  describe("failPolished", () => {
+    it("sets stageFailure on a polished job org-scoped", async () => {
+      const failure = { kind: "terminal", code: "ASYNC_JOB_FAILED", message: "boom" };
+      const mockResult = { id: "cj_1", stageFailure: failure };
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue(mockResult);
+
+      const result = await store.failPolished("org_1", "cj_1", failure);
+
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+        data: { stageFailure: failure },
+      });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+      });
+      expect(result.stageFailure).toEqual(failure);
+    });
+
+    it("rejects failPolished on a ugc-mode job", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
+
+      await expect(store.failPolished("org_1", "cj_1", { code: "X" })).rejects.toThrow(
+        "Cannot update polished stage on a UGC-mode job",
+      );
+    });
+
+    it("throws StaleVersionError when count=0", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(store.failPolished("org_other", "cj_1", {})).rejects.toThrow(StaleVersionError);
     });
   });
 

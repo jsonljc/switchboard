@@ -617,7 +617,11 @@ async function main() {
   // deployment) so the governed Riley -> Mira handoff can fire end-to-end on
   // org_dev (the org /mira renders under dev-auth). org_demo keeps its own Riley
   // deployment (seedDemoData) untouched. Must run after seedMarketplace.
-  await seedRileyAdOptimizerDeployment(prisma, "org_dev");
+  // Wrapped in a transaction so the deployment + the both-or-neither pause
+  // policies (seedRileyPausePolicies) land atomically: a mid-seed crash can never
+  // leave the allow policy alone (which self-executes). Mirrors the production
+  // provisionOrgAgentDeployments path, which also runs this inside $transaction.
+  await prisma.$transaction((tx) => seedRileyAdOptimizerDeployment(tx, "org_dev"));
   console.warn("Seeded Riley ad-optimizer deployment for org_dev");
 
   // ── Marketplace Demo Data ──

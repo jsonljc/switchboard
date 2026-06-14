@@ -16,6 +16,7 @@ import type {
   MetricsViewModel,
   PipelineViewModel,
   WinsViewModel,
+  BookingWinsViewModel,
 } from "@/lib/agent-home/types";
 import type { MissionAggregatorResponse } from "@/lib/cockpit/mission-types";
 import type { MiraCreativeJobSummary, MiraCreativeCounts, MiraDeskModel } from "@switchboard/core";
@@ -351,6 +352,16 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
   async listPipeline(agentKey: string): Promise<{ vm: PipelineViewModel }> {
     const path = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/pipeline`;
     return this.request<{ vm: PipelineViewModel }>(path);
+  }
+
+  // Booking wins (F5 booking-outcome ledger → cockpit)
+  /**
+   * Reads Alex's booking-wins feed — converted bookings with trace + revenue.
+   * Endpoint: GET /api/dashboard/agents/:agentKey/booking-wins
+   */
+  async listBookingWins(agentKey: string): Promise<{ vm: BookingWinsViewModel }> {
+    const path = `/api/dashboard/agents/${encodeURIComponent(agentKey)}/booking-wins`;
+    return this.request<{ vm: BookingWinsViewModel }>(path);
   }
 
   // Mira creative review feed

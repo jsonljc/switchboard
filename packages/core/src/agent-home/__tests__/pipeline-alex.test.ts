@@ -86,6 +86,16 @@ describe("buildAlexPipelineViewModel", () => {
     expect(vm.tiles[0]!.name).toBe("Unnamed lead");
   });
 
+  it("falls back to 'Unnamed lead' when the phone has fewer than 4 digits", () => {
+    const vm = buildAlexPipelineViewModel({
+      rows: [row({ name: null, phone: "12" })],
+      totalCount: 1,
+      now: NOW,
+      timezone: TZ,
+    });
+    expect(vm.tiles[0]!.name).toBe("Unnamed lead");
+  });
+
   it("emits tiles with link kind 'contact'", () => {
     const vm = buildAlexPipelineViewModel({
       rows: [row()],

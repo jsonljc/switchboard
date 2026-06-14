@@ -137,6 +137,20 @@ export class SwitchboardMarketplaceClient extends SwitchboardSettingsClient {
     }>(`/api/connections/facebook/${deploymentId}/accounts`);
   }
 
+  // Mint a signed Facebook OAuth authorize URL. The API verifies the caller's org owns the
+  // deployment and signs the `state`; the proxy route then redirects the browser to the URL.
+  async getFacebookAuthorizeUrl(deploymentId: string) {
+    return this.request<{ authorizeUrl: string }>(
+      `/api/connections/facebook/authorize?deploymentId=${encodeURIComponent(deploymentId)}`,
+    );
+  }
+
+  async getGoogleCalendarAuthorizeUrl(deploymentId: string) {
+    return this.request<{ authorizeUrl: string }>(
+      `/api/connections/google-calendar/authorize?deploymentId=${encodeURIComponent(deploymentId)}`,
+    );
+  }
+
   async setAdAccountSelection(deploymentId: string, adAccountId: string, adAccountName: string) {
     return this.request<{ deployment: MarketplaceDeployment }>(
       `/api/marketplace/deployments/${deploymentId}`,

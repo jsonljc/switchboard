@@ -96,3 +96,13 @@ describe("auth callbacks: onboardingComplete plumbing", () => {
     expect((session as { onboardingComplete: boolean }).onboardingComplete).toBe(false);
   });
 });
+
+describe("authConfig host trust (F-09)", () => {
+  it("sets trustHost explicitly so prod-mode login works off Vercel, not only via VERCEL=1", () => {
+    // Config-pin: next-auth is mocked here, so this asserts the explicit setting, not runtime
+    // behavior. The dashboard runs on Vercel, where trustHost already resolves true via the
+    // injected VERCEL=1; setting it explicitly removes that implicit dependency so login also
+    // works in local prod-mode and on any future off-Vercel host.
+    expect(authConfig.trustHost).toBe(true);
+  });
+});

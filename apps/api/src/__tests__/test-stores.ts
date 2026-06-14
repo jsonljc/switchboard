@@ -362,18 +362,30 @@ export class TestHandoffStore implements HandoffStore {
     this.rows.set(pkg.id, pkg);
   }
 
-  async getById(id: string): Promise<Handoff | null> {
-    return this.rows.get(id) ?? null;
-  }
-
-  async getBySessionId(sessionId: string): Promise<Handoff | null> {
-    for (const r of this.rows.values()) if (r.sessionId === sessionId) return r;
-    return null;
-  }
-
-  async updateStatus(id: string, status: HandoffStatus, acknowledgedAt?: Date): Promise<void> {
+  async getById(organizationId: string, id: string): Promise<Handoff | null> {
     const r = this.rows.get(id);
-    if (!r) return;
+    return r && r.organizationId === organizationId ? r : null;
+  }
+
+  async getBySessionId(organizationId: string, sessionId: string): Promise<Handoff | null> {
+    // Mirror the real store: newest matching row by createdAt, scoped to the org.
+    return (
+      [...this.rows.values()]
+        .filter((r) => r.organizationId === organizationId && r.sessionId === sessionId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null
+    );
+  }
+
+  async updateStatus(
+    organizationId: string,
+    id: string,
+    status: HandoffStatus,
+    acknowledgedAt?: Date,
+  ): Promise<void> {
+    const r = this.rows.get(id);
+    if (!r || r.organizationId !== organizationId) {
+      throw new Error(`Handoff not found or does not belong to organization: ${id}`);
+    }
     this.rows.set(id, { ...r, status, ...(acknowledgedAt ? { acknowledgedAt } : {}) });
   }
 

@@ -44,6 +44,12 @@ export {
   type PipelineFreshness,
   type AgentHomeLink,
 } from "./pipeline.js";
+export {
+  projectBookingWins,
+  type BookingWinSignalRow,
+  type BookingWinViewModel,
+  type BookingWinsViewModel,
+} from "./booking-wins.js";
 
 // Metrics (PR-S5)
 export { projectMetrics, type ProjectMetricsInput } from "./metrics.js";

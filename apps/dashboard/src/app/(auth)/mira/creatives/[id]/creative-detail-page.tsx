@@ -104,6 +104,24 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                 : "Still drafting."}
       </div>
 
+      {/* The Meta draft-package lifecycle is a separate axis from the render
+          status above: an approved hand-off that dead-letters on Meta would
+          otherwise leave this page reading as a healthy completed draft
+          (D9-F3). */}
+      {job.publishStatus === "publish_failed" && (
+        <div
+          style={{
+            fontSize: 13,
+            color: T.red,
+            background: "hsl(var(--risk-tint))",
+            borderRadius: 8,
+            padding: "8px 12px",
+          }}
+        >
+          Publishing to Meta failed. No paused draft was created in Ads Manager.
+        </div>
+      )}
+
       {job.qa && (
         // Technical frame QA (slice-3): objective integrity only. Taste stays
         // the operator's call; this line never judges creative quality.

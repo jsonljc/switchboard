@@ -1,4 +1,4 @@
-import type { WorkflowHandler } from "@switchboard/core/platform";
+import type { WorkflowHandler, WorkTraceStore } from "@switchboard/core/platform";
 import type { MarkActedByExecutionResult } from "@switchboard/db";
 import {
   buildRileyPauseExecutionWorkflow,
@@ -6,6 +6,29 @@ import {
   type RileyPauseCredsResult,
   type RileyPauseExecutionDeps,
 } from "../services/workflows/riley-pause-execution-workflow.js";
+
+/**
+ * Last-mile approval-state reader (D5-2a). Reads the canonical WorkTrace for the
+ * work unit and reports its durable approval outcome to the pause executor. The
+ * read is ORG-SCOPED: a trace whose organizationId differs from the work unit's
+ * (or an absent trace) reads as no approval, so the executor fails closed rather
+ * than ever trusting another tenant's trace. Extracted + exported so the guard
+ * is unit-testable without standing up the executor.
+ */
+export function buildGetApprovalState(
+  workTraceStore: Pick<WorkTraceStore, "getByWorkUnitId">,
+): RileyPauseExecutionDeps["getApprovalState"] {
+  return async ({ organizationId, workUnitId }) => {
+    const read = await workTraceStore.getByWorkUnitId(workUnitId);
+    if (!read || read.trace.organizationId !== organizationId) {
+      return { approvalOutcome: undefined, approvalRespondedBy: undefined };
+    }
+    return {
+      approvalOutcome: read.trace.approvalOutcome,
+      approvalRespondedBy: read.trace.approvalRespondedBy,
+    };
+  };
+}
 
 /**
  * Slice 4f: the executor-facing transition dep over the db store. Extracted
@@ -43,7 +66,10 @@ export function buildMarkRecommendationActed(store: {
  * deployment row maps to org_mismatch too: a vanished deployment must not pause
  * anything, and the loud failure is the safe direction.
  */
-export async function buildRileyPauseExecutorHandler(prismaClient: unknown): Promise<{
+export async function buildRileyPauseExecutorHandler(
+  prismaClient: unknown,
+  workTraceStore: Pick<WorkTraceStore, "getByWorkUnitId">,
+): Promise<{
   intent: string;
   handler: WorkflowHandler;
 }> {
@@ -89,6 +115,7 @@ export async function buildRileyPauseExecutorHandler(prismaClient: unknown): Pro
     },
     createAdsClient: (creds) => new MetaAdsClient(creds),
     markRecommendationActed: buildMarkRecommendationActed(recommendationStore),
+    getApprovalState: buildGetApprovalState(workTraceStore),
   });
 
   return { intent: RILEY_PAUSE_INTENT, handler };

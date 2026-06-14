@@ -13,6 +13,7 @@ import {
   PrismaDeploymentStore,
   PrismaListingStore,
   PrismaDeploymentConnectionStore,
+  PrismaConnectionStore,
   PrismaAgentTaskStore,
   PrismaCreatorIdentityStore,
   PrismaProductIdentityStore,
@@ -32,6 +33,7 @@ import {
   PrismaReconciliationStore,
   PrismaBusinessFactsStore,
   PrismaOperationalStateStore,
+  PrismaFailedMessageRetentionStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -84,12 +86,25 @@ import { resolveHandoffBrief } from "../services/workflows/handoff-brief-enrichm
 import type { RecommendationHandoffSubmitInput } from "../services/workflows/recommendation-handoff-request.js";
 import type { RileyPauseSubmitInput } from "../services/workflows/riley-pause-submit-request.js";
 import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
+import { buildRileyCredentialResolver } from "./riley-credential-resolver.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
+import {
+  CREATIVE_POLISHED_RUNNER_FAILURE_PARAMS,
+  CREATIVE_UGC_RUNNER_FAILURE_PARAMS,
+} from "../services/creative-runner-failure-params.js";
+import { resolveMetaOAuthConfig } from "../utils/meta-oauth-config.js";
+import {
+  createDlqRetentionPurgeCron,
+  resolveRetentionWindows,
+} from "../services/cron/dlq-retention-purge.js";
+import type { DlqRetentionPurgeDeps } from "../services/cron/dlq-retention-purge.js";
 import {
   createCreativePublishFunction,
   type CreativePublishFunctionDeps,
 } from "../services/creative-publish-function.js";
+import { createCreativeFailureRecorder } from "../services/creative-failure-recorder.js";
+import { createCreativePublishFailureRecorder } from "../services/creative-publish-failure-recorder.js";
 import { assertPublishable } from "../services/creative-publish-preconditions.js";
 import {
   buildRunReconciliation,
@@ -129,6 +144,7 @@ import {
 } from "../services/cron/mira-self-brief.js";
 import { isAgentHomeAccessible } from "../lib/agent-home-access.js";
 import { createCreativeTasteSweep } from "../services/cron/creative-taste-sweep.js";
+import { createRevenueProvenPromotion } from "../services/cron/revenue-proven-promotion.js";
 import { buildCreativeTasteProvider } from "../services/creative-taste-context.js";
 import { buildCreativeAssetStorage } from "../lib/creative-asset-storage.js";
 
@@ -379,6 +395,28 @@ export async function registerInngest(
     log: app.log,
   });
 
+  // Riley credential resolver (Tier-0 PR 0.1): the primary source is the
+  // deployment-scoped DeploymentConnection (`connectionStore`); the pilot
+  // fallback is the org-level Connection(serviceId="meta-ads") an operator
+  // enters in the Settings UI. A needs_reauth/revoked connection is skipped so
+  // a dead token is never used (and never poisons the weekly fleet audit).
+  const orgConnectionStore = new PrismaConnectionStore(app.prisma!);
+  const getDeploymentCredentials = buildRileyCredentialResolver({
+    deploymentConnectionStore: connectionStore,
+    orgConnectionStore,
+    resolveOrgId: async (deploymentId) => {
+      const deployment = await deploymentStore.findById(deploymentId);
+      return deployment?.organizationId ?? null;
+    },
+    decrypt: (blob) => {
+      const creds = decryptCredentials(blob);
+      return {
+        accessToken: creds.accessToken as string,
+        accountId: creds.accountId as string,
+      };
+    },
+  });
+
   const adOptimizerDeps: CronDependencies = {
     listActiveDeployments: async () => {
       const listing = await listingStore.findBySlug("ad-optimizer");
@@ -396,16 +434,7 @@ export async function registerInngest(
           ] ?? false) === true,
       }));
     },
-    getDeploymentCredentials: async (deploymentId) => {
-      const connections = await connectionStore.listByDeployment(deploymentId);
-      const conn = connections.find((c) => c.type === "meta-ads");
-      if (!conn) return null;
-      const creds = decryptCredentials(conn.credentials);
-      return {
-        accessToken: creds.accessToken as string,
-        accountId: creds.accountId as string,
-      };
-    },
+    getDeploymentCredentials,
     createAdsClient: (creds) => new MetaAdsClient(creds),
     createCrmProvider: (_deploymentId) => {
       // Real Prisma-backed provider. The Inngest function passes the resolved
@@ -523,6 +552,10 @@ export async function registerInngest(
       return { buffer, type };
     },
     failure: asyncFailure,
+    // Reconcile the canonical publish trace queued -> completed once the paused
+    // draft parks (honest-success sibling of the failure recorder's queued ->
+    // failed reconcile, wired with the same app.workTraceStore below).
+    traceStore: app.workTraceStore,
   };
 
   const dailyPatternDecayCron = inngestClient.createFunction(
@@ -579,8 +612,8 @@ export async function registerInngest(
         }),
       );
     },
-    updateCredentials: async (organizationId, id, credentials) => {
-      await connectionStore.updateCredentials(organizationId, id, credentials);
+    updateCredentials: async (organizationId, id, credentials, metadata) => {
+      await connectionStore.updateCredentials(organizationId, id, credentials, metadata);
     },
     updateStatus: async (organizationId, id, status) => {
       await connectionStore.updateStatus(organizationId, id, status);
@@ -589,11 +622,42 @@ export async function registerInngest(
       const { refreshTokenIfNeeded } = await import("@switchboard/ad-optimizer");
       return refreshTokenIfNeeded(config, currentToken, expiresAt);
     },
-    getOAuthConfig: () => ({
-      appId: process.env["META_APP_ID"] ?? "",
-      appSecret: process.env["META_APP_SECRET"] ?? "",
-      redirectUri: process.env["META_OAUTH_REDIRECT_URI"] ?? "",
-    }),
+    // Resolve through the shared resolver so the cron honors the same META_* canonical / FACEBOOK_*
+    // deprecated-alias precedence the OAuth route uses (D10-4); throwing on missing config is fine
+    // here, the per-connection refresh catch turns it into a needs_reauth + operator alert.
+    getOAuthConfig: () => resolveMetaOAuthConfig(process.env),
+    notifyOperator: async (message, context) => {
+      const asString = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+      await asyncFailure.operatorAlerter?.alert({
+        errorType: "async_job_retry_exhausted",
+        severity: "warning",
+        errorMessage: message,
+        deploymentId: asString(context["deploymentId"]),
+        organizationId: asString(context["organizationId"]),
+        retryable: true,
+        occurredAt: new Date().toISOString(),
+        source: "inngest_function",
+      });
+    },
+  };
+
+  // Dead-letter-queue retention purge (PDPA F6). Deletes aged FailedMessage rows
+  // (terminal-status past the soft window OR any-status past the hard cap) so the
+  // DLQ — which stores the entire inbound webhook (patient text + phone) — does
+  // not retain PII forever. Cross-tenant by design; a thin orchestrator over the
+  // batched db-store purge. Windows env-configurable (defaults 30 / 90 days).
+  // Completes the F5/F6 retention+deletion pair (F5 = per-contact erasure).
+  const failedMessageRetentionStore = new PrismaFailedMessageRetentionStore(app.prisma);
+  const { soft: dlqSoftDays, hard: dlqHardDays } = resolveRetentionWindows(
+    process.env["DLQ_RETENTION_DAYS"],
+    process.env["DLQ_HARD_RETENTION_DAYS"],
+  );
+  const dlqRetentionPurgeDeps: DlqRetentionPurgeDeps = {
+    failure: asyncFailure,
+    purge: (input) => failedMessageRetentionStore.purgeExpired(input),
+    softRetentionDays: dlqSoftDays,
+    hardRetentionDays: dlqHardDays,
+    logger: { info: (msg) => app.log.info(msg), warn: (msg) => app.log.warn(msg) },
   };
 
   // Reconciliation cron dependencies
@@ -1075,6 +1139,16 @@ export async function registerInngest(
     memoryStore: deploymentMemoryStoreForTaste,
     logger: app.log,
   });
+  // F4 Riley->Mira channel: promote measured creative winners into revenue_proven
+  // memory on the creative deployment Mira reads. Reuses the same job + deployment
+  // memory stores; no external I/O, so (like the taste sweep) no kill-switch.
+  const revenueProvenPromotion = createRevenueProvenPromotion({
+    failure: asyncFailure,
+    jobStore,
+    memoryStore: deploymentMemoryStoreForTaste,
+    now: () => new Date(),
+    logger: app.log,
+  });
   const creativeTasteProvider = buildCreativeTasteProvider(deploymentMemoryStoreForTaste);
 
   await app.register(inngestFastify, {
@@ -1096,16 +1170,11 @@ export async function registerInngest(
         { apiKey, model: creativeModel },
         openaiApiKey ? { openaiApiKey } : undefined,
         assetStorage,
-        makeOnFailureHandler(
-          {
-            functionId: "creative-job-runner",
-            eventDomain: "creative.polished",
-            riskCategory: "medium",
-            alert: false,
-          },
-          asyncFailure,
-        ) as (arg: unknown) => Promise<void>,
+        makeOnFailureHandler(CREATIVE_POLISHED_RUNNER_FAILURE_PARAMS, asyncFailure) as (
+          arg: unknown,
+        ) => Promise<void>,
         creativeTasteProvider,
+        klingClient,
       ),
       createUgcJobRunner(
         {
@@ -1131,15 +1200,9 @@ export async function registerInngest(
           // a durableAssetUrl and become publishable.
           assetStorage,
         },
-        makeOnFailureHandler(
-          {
-            functionId: "ugc-job-runner",
-            riskCategory: "medium",
-            alert: false,
-            emitEvent: false,
-          },
-          asyncFailure,
-        ) as (arg: unknown) => Promise<void>,
+        makeOnFailureHandler(CREATIVE_UGC_RUNNER_FAILURE_PARAMS, asyncFailure) as (
+          arg: unknown,
+        ) => Promise<void>,
       ),
       createWeeklyAuditCron(
         adOptimizerDeps,
@@ -1179,7 +1242,14 @@ export async function registerInngest(
       ),
       dailyPatternDecayCron,
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
+      createDlqRetentionPurgeCron(dlqRetentionPurgeDeps),
       createCreativePublishFunction(creativePublishFunctionDeps),
+      createCreativeFailureRecorder({ jobStore, failure: asyncFailure }),
+      createCreativePublishFailureRecorder({
+        jobStore,
+        traceStore: app.workTraceStore,
+        failure: asyncFailure,
+      }),
       createReconciliationCron(reconciliationDeps),
       createStripeReconciliationCron(stripeReconciliationDeps),
       createLeadRetryCron(leadRetryDeps),
@@ -1198,6 +1268,7 @@ export async function registerInngest(
       creativeAttributionDispatch,
       creativeAttributionWorker,
       creativeTasteSweep,
+      revenueProvenPromotion,
       miraSelfBriefDispatch,
       miraSelfBriefWorker,
     ],

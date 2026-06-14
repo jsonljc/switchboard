@@ -33,7 +33,10 @@ import {
 import { buildGate, deploymentResolver, ORG } from "./recommendation-handoff-harness.js";
 import { buildRileyPauseExecutionWorkflow } from "../services/workflows/riley-pause-execution-workflow.js";
 import { RILEY_PAUSE_INTENT } from "../services/workflows/riley-pause-submit-request.js";
-import { buildMarkRecommendationActed } from "../bootstrap/riley-pause-executor.js";
+import {
+  buildGetApprovalState,
+  buildMarkRecommendationActed,
+} from "../bootstrap/riley-pause-executor.js";
 
 export function pauseAllowPolicy(): Policy {
   return {
@@ -148,6 +151,13 @@ export function buildPauseLifecycleWorld(opts?: {
     },
   });
 
+  // The trace store is created BEFORE the handler so the executor's last-mile
+  // approved-lifecycle check (D5-2a) reads the SAME store the real respond/approve
+  // flow writes approvalOutcome to. PlatformLifecycle sets the durable
+  // approvalOutcome="approved" BEFORE it dispatches to the executor, and the
+  // idempotent-replay path leaves that field honest (#1007), so a real (incl.
+  // replayed) approved park reads "approved" here and executes.
+  const traceStore = pauseTraceStore();
   const pauseHandler: WorkflowHandler = buildRileyPauseExecutionWorkflow({
     getDeploymentCredentials: async (organizationId, _deploymentId) =>
       organizationId === ORG
@@ -164,6 +174,7 @@ export function buildPauseLifecycleWorld(opts?: {
       },
     }),
     markRecommendationActed,
+    getApprovalState: buildGetApprovalState(traceStore),
   });
 
   const intentRegistry = new IntentRegistry();
@@ -182,7 +193,6 @@ export function buildPauseLifecycleWorld(opts?: {
     }),
   );
 
-  const traceStore = pauseTraceStore();
   const lifecycleStore = new InMemoryLifecycleStore();
   const lifecycleService = new ApprovalLifecycleService({ store: lifecycleStore });
   const ingress = new PlatformIngress({

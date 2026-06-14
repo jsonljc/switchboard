@@ -37,7 +37,7 @@ const APP_DIRS = ["apps/api/src", "apps/chat/src", "apps/dashboard/src"];
 const ENV_KEY_RE = /process\.env\.([A-Z_][A-Z0-9_]*)|process\.env\[["']([A-Z_][A-Z0-9_]*)["']\]/g;
 
 // Detect files that read env via a non-literal expression — e.g.
-// `process.env[name]`, `process.env[k]`, `process.env[TOOLS_LIVE_ENV[id]]`. These
+// `process.env[name]`, `process.env[k]`, `process.env[envMap[id]]`. These
 // indirections defeat ENV_KEY_RE, so for files that contain at least one such
 // dynamic lookup we additionally collect every UPPERCASE_SNAKE_CASE string
 // literal in the file (parseEnvInt-style helper args, REQUIRED_ENV arrays,

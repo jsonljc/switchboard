@@ -1,4 +1,4 @@
-import type { CreativeJobStage } from "@switchboard/schemas";
+import type { CreativeJobStage, CreativeMetaPublishStatus } from "@switchboard/schemas";
 
 export type MiraCreativeStatus =
   | "in_progress"
@@ -68,6 +68,14 @@ export interface MiraCreativeJobSummary {
    * default), so the tray and detail render from this for ugc summaries.
    */
   ugcPhase?: string;
+  /**
+   * Meta publish lifecycle (D9-F3), a separate axis from `status` (the render
+   * lifecycle): `parked_paused` once the paused draft exists in Ads Manager,
+   * `publish_failed` once a dead-lettered publish is recorded. Absent until a
+   * publish is attempted (or while one is in flight). Surfaces a retry-exhausted
+   * publish to the operator instead of it reading as "never published".
+   */
+  publishStatus?: CreativeMetaPublishStatus;
 }
 
 export interface MiraCreativeCounts {

@@ -6,6 +6,8 @@
 // Rate-limited to prevent spam.
 // ---------------------------------------------------------------------------
 
+import { maskPhone } from "../audit/mask-phone.js";
+
 /** Interface for sending proactive messages to business owners. */
 export interface AgentNotifier {
   sendProactive(chatId: string, channelType: string, message: string): Promise<void>;
@@ -43,7 +45,9 @@ export class ProactiveSender implements AgentNotifier {
 
   async sendProactive(chatId: string, channelType: string, message: string): Promise<void> {
     if (!this.checkRateLimit(chatId)) {
-      console.warn(`[ProactiveSender] Rate limit reached for chat ${chatId}. Message not sent.`);
+      // chatId is the phone only on the WhatsApp channel; Telegram/Slack ids are not phones.
+      const idForLog = channelType === "whatsapp" ? maskPhone(chatId) : chatId;
+      console.warn(`[ProactiveSender] Rate limit reached for chat ${idForLog}. Message not sent.`);
       return;
     }
 
@@ -134,7 +138,7 @@ export class ProactiveSender implements AgentNotifier {
       const withinWindow = await this.isWithinWindow(to);
       if (!withinWindow) {
         console.warn(
-          `[ProactiveSender] WhatsApp 24h window expired for ${to} — skipping freeform message`,
+          `[ProactiveSender] WhatsApp 24h window expired for ${maskPhone(to)} — skipping freeform message`,
         );
         return;
       }

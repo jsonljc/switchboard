@@ -45,7 +45,56 @@ function resultWith(usage: {
   };
 }
 
+function resultWithBookingCall(): SkillExecutionResult {
+  const base = resultWith({ input: 10, output: 5 });
+  return {
+    ...base,
+    toolCalls: [
+      {
+        toolId: "calendar-book",
+        operation: "booking.create",
+        params: { service: "botox" },
+        result: {
+          status: "success",
+          data: { bookingId: "bk_77" },
+          entityState: { bookingId: "bk_77", status: "confirmed" },
+        },
+        durationMs: 20,
+        governanceDecision: "auto-approved",
+      },
+    ],
+  };
+}
+
 describe("TracePersistenceHook", () => {
+  it("persists a typed booking outcome on the trace for a successful booking turn", async () => {
+    const created: SkillExecutionTrace[] = [];
+    const store = {
+      create: async (t: SkillExecutionTrace) => {
+        created.push(t);
+      },
+    };
+    const hook = new TracePersistenceHook(store, { trigger: "chat_message" });
+    await hook.afterSkill(baseCtx({}), resultWithBookingCall());
+    expect(created[0]!.linkedOutcomeId).toBe("bk_77");
+    expect(created[0]!.linkedOutcomeType).toBe("booking");
+    expect(created[0]!.linkedOutcomeResult).toBe("booked");
+  });
+
+  it("leaves linkedOutcome unset for a turn with no business outcome", async () => {
+    const created: SkillExecutionTrace[] = [];
+    const store = {
+      create: async (t: SkillExecutionTrace) => {
+        created.push(t);
+      },
+    };
+    const hook = new TracePersistenceHook(store, { trigger: "chat_message" });
+    await hook.afterSkill(baseCtx({}), resultWith({ input: 1, output: 1 }));
+    expect(created[0]!.linkedOutcomeId).toBeUndefined();
+    expect(created[0]!.linkedOutcomeType).toBeUndefined();
+    expect(created[0]!.linkedOutcomeResult).toBeUndefined();
+  });
+
   it("mints a distinct trace id per execution", async () => {
     const created: SkillExecutionTrace[] = [];
     const store = {

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { VideoProducerOutput, CreativeJobSchema } from "../creative-job.js";
+import {
+  VideoProducerOutput,
+  CreativeJobSchema,
+  CREATIVE_META_PUBLISH_STATUS,
+} from "../creative-job.js";
 
 describe("VideoProducerOutput", () => {
   it("validates basic tier output with clips only", () => {
@@ -155,6 +159,14 @@ describe("CreativeJobSchema meta-publish fields", () => {
     expect(job.metaAdId).toBe("ad_1");
     expect(job.metaPublishStatus).toBe("parked_paused");
     expect(job.durableAssetUrl).toBe("https://cdn.example.com/a.mp4");
+  });
+
+  // Cross-layer contract: the api publish producer and the core read model both
+  // compare metaPublishStatus against these literals; pin them so a rename can
+  // never silently desync the producer from the reader.
+  it("locks the meta-publish-status literals", () => {
+    expect(CREATIVE_META_PUBLISH_STATUS.parkedPaused).toBe("parked_paused");
+    expect(CREATIVE_META_PUBLISH_STATUS.publishFailed).toBe("publish_failed");
   });
 });
 

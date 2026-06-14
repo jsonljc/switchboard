@@ -1,4 +1,4 @@
-import type { PrismaClient, Prisma } from "@switchboard/db";
+import { type PrismaClient } from "@switchboard/db";
 import type { CalendarProvider, BusinessHoursConfig } from "@switchboard/schemas";
 import { NoopCalendarProvider } from "./noop-calendar-provider.js";
 
@@ -143,7 +143,11 @@ async function resolveForOrg(
   return new NoopCalendarProvider();
 }
 
-function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
+// Exported for the calendar provider integration tests. This is not a public construction
+// path; the calendar provider factory above is the only production caller. The local provider
+// reads through this store (free-slot computation + getBooking); the durable PrismaBookingStore
+// owns every booking write (F12).
+export function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
   return {
     findOverlapping: async (startsAt: Date, endsAt: Date) => {
       return prismaClient.booking.findMany({
@@ -156,59 +160,10 @@ function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
         select: { startsAt: true, endsAt: true },
       });
     },
-    createInTransaction: async (input: {
-      organizationId: string;
-      contactId: string;
-      opportunityId?: string | null;
-      service: string;
-      startsAt: Date;
-      endsAt: Date;
-      timezone: string;
-      status: string;
-      calendarEventId: string;
-      attendeeName?: string | null;
-      attendeeEmail?: string | null;
-      createdByType: string;
-      sourceChannel?: string | null;
-      workTraceId?: string | null;
-    }) => {
-      return prismaClient.$transaction(async (tx: Prisma.TransactionClient) => {
-        const conflicts = await tx.booking.findMany({
-          where: {
-            organizationId: input.organizationId,
-            startsAt: { lt: input.endsAt },
-            endsAt: { gt: input.startsAt },
-            status: { notIn: ["cancelled", "failed"] },
-          },
-          select: { id: true },
-          take: 1,
-        });
-        if (conflicts.length > 0) {
-          throw new Error("SLOT_CONFLICT");
-        }
-        return tx.booking.create({
-          data: {
-            organizationId: input.organizationId,
-            contactId: input.contactId,
-            opportunityId: input.opportunityId ?? null,
-            service: input.service,
-            startsAt: input.startsAt,
-            endsAt: input.endsAt,
-            timezone: input.timezone,
-            status: input.status,
-            calendarEventId: input.calendarEventId,
-            attendeeName: input.attendeeName ?? null,
-            attendeeEmail: input.attendeeEmail ?? null,
-            createdByType: input.createdByType,
-            sourceChannel: input.sourceChannel ?? null,
-            workTraceId: input.workTraceId ?? null,
-          },
-          select: { id: true },
-        });
-      });
-    },
     findById: async (bookingId: string) => {
-      const row = await prismaClient.booking.findUnique({ where: { id: bookingId } });
+      const row = await prismaClient.booking.findFirst({
+        where: { id: bookingId, organizationId: orgId },
+      });
       if (!row) return null;
       return {
         id: row.id,
@@ -232,24 +187,6 @@ function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
       };
-    },
-    cancel: async (bookingId: string) => {
-      await prismaClient.booking.update({
-        where: { id: bookingId },
-        data: { status: "cancelled" },
-      });
-    },
-    reschedule: async (bookingId: string, newSlot: { start: string; end: string }) => {
-      const updated = await prismaClient.booking.update({
-        where: { id: bookingId },
-        data: {
-          startsAt: new Date(newSlot.start),
-          endsAt: new Date(newSlot.end),
-          rescheduleCount: { increment: 1 },
-        },
-        select: { id: true },
-      });
-      return { id: updated.id };
     },
   };
 }

@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from "crypto";
 import type { PrismaClient } from "@prisma/client";
 import { seedOrgDayOneAgents } from "@switchboard/db";
+import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
 import { encryptApiKey } from "./crypto";
 
 interface ProvisionDashboardUserInput {
@@ -30,6 +31,14 @@ export async function provisionDashboardUser(
         governanceProfile: "guarded",
         onboardingComplete: false,
         provisioningStatus: "pending",
+        // F-01: seed valid default business hours so a fresh org resolves
+        // LocalCalendarProvider (not Noop) and the booking loop works out of the box.
+        businessHours: DEFAULT_BUSINESS_HOURS,
+        // F-02: comp the pilot org so a freshly provisioned org is entitled and can act
+        // out of the box. entitlementOverride is the documented comped-pilot field. Set
+        // ONLY by trusted provisioning; launch/pilot-only, unwound at billing-live. See
+        // docs/superpowers/specs/2026-06-14-fresh-org-entitlement-design.md
+        entitlementOverride: true,
       },
     });
 

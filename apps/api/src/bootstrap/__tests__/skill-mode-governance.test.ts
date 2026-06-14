@@ -97,6 +97,10 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   createScheduleFollowUpToolFactory: vi.fn(() => () => ({
     operations: { schedule: { effectCategory: "write" } },
   })),
+  createDepositLinkToolFactory: vi.fn(() => () => ({
+    id: "deposit-link",
+    operations: { "deposit.issue": { effectCategory: "read" } },
+  })),
 }));
 
 vi.mock("@switchboard/core/platform", () => ({
@@ -388,5 +392,36 @@ describe("bootstrapSkillMode governance wiring", () => {
     // The slice-4 readers ride SkillMode stores.
     expect(config.stores["deploymentMemoryReader"]).toBeDefined();
     expect(config.stores["miraReadModelReader"]).toBeDefined();
+  });
+
+  it("registers the deposit-link tool in both maps when a paymentPortFactory is provided", async () => {
+    await bootstrapSkillMode({
+      prismaClient: buildPrismaClient(),
+      intentRegistry: {} as never,
+      modeRegistry: { register } as never,
+      logger: { info: vi.fn(), error: vi.fn() },
+      paymentPortFactory: vi.fn() as never,
+    });
+    const mainArgs = SkillExecutorImpl.mock.calls[0]!;
+    expect((mainArgs[1] as Map<string, unknown>).has("deposit-link")).toBe(true);
+    expect((mainArgs[5] as Map<string, unknown>).has("deposit-link")).toBe(true);
+
+    // Excluded from the simulation executor (calls[1]): read+idempotent is NOT
+    // blocked by SimulationPolicyHook, but a live Stripe issue is a real side effect.
+    const simArgs = SkillExecutorImpl.mock.calls[1]!;
+    expect((simArgs[1] as Map<string, unknown>).has("deposit-link")).toBe(false);
+    expect((simArgs[5] as Map<string, unknown>).has("deposit-link")).toBe(false);
+  });
+
+  it("omits the deposit-link tool when no paymentPortFactory is provided (fail-closed)", async () => {
+    await bootstrapSkillMode({
+      prismaClient: buildPrismaClient(),
+      intentRegistry: {} as never,
+      modeRegistry: { register } as never,
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+    const mainArgs = SkillExecutorImpl.mock.calls[0]!;
+    expect((mainArgs[1] as Map<string, unknown>).has("deposit-link")).toBe(false);
+    expect((mainArgs[5] as Map<string, unknown>).has("deposit-link")).toBe(false);
   });
 });

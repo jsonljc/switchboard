@@ -59,6 +59,22 @@ describe("PrismaExecutionTraceStore", () => {
         }),
       });
     });
+
+    it("persists linked outcome fields when present", async () => {
+      const trace = makeTrace({
+        linkedOutcomeId: "bk_1",
+        linkedOutcomeType: "booking",
+        linkedOutcomeResult: "booked",
+      });
+      await store.create(trace);
+      expect(prisma.executionTrace.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          linkedOutcomeId: "bk_1",
+          linkedOutcomeType: "booking",
+          linkedOutcomeResult: "booked",
+        }),
+      });
+    });
   });
 
   describe("listByDeployment", () => {

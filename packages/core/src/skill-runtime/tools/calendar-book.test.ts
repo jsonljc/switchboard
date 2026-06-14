@@ -14,6 +14,7 @@ function makeCalendarProvider() {
     listAvailableSlots: vi.fn(),
     createBooking: vi.fn(),
     cancelBooking: vi.fn().mockResolvedValue(undefined),
+    notifyBookingConfirmed: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -887,6 +888,59 @@ describe("createCalendarBookToolFactory", () => {
       await tool.operations["booking.create"]!.execute(slotInput);
 
       expect(failedSpy).toHaveBeenCalledWith({ orgId: "org_trusted", reason });
+    });
+  });
+
+  describe("booking.create post-confirm notification", () => {
+    const validInput = {
+      service: "consultation",
+      slotStart: "2026-04-20T10:00:00+08:00",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    };
+
+    it("calls notifyBookingConfirmed with the durable booking id + attendee after a successful confirm", async () => {
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "local-xyz" });
+
+      const result = await tool.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("success");
+      expect(calendarProvider.notifyBookingConfirmed).toHaveBeenCalledWith({
+        bookingId: "bk_1",
+        attendeeEmail: "jane@example.com",
+        attendeeName: "Jane Tan",
+        service: "consultation",
+        startsAt: "2026-04-20T10:00:00+08:00",
+        endsAt: "2026-04-20T10:30:00+08:00",
+      });
+    });
+
+    it("does NOT fail the confirmed booking when notifyBookingConfirmed throws (best-effort)", async () => {
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "local-xyz" });
+      calendarProvider.notifyBookingConfirmed.mockRejectedValue(new Error("resend 500"));
+
+      const result = await tool.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("success");
+      expect(result.data?.status).toBe("confirmed");
+    });
+
+    it("confirms normally for a provider that omits the optional hook (Google/Noop path)", async () => {
+      // The Google adapter notifies attendees natively and does not implement
+      // notifyBookingConfirmed; the tool's guard must skip the call without failing.
+      delete (calendarProvider as { notifyBookingConfirmed?: unknown }).notifyBookingConfirmed;
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_123" });
+
+      const result = await tool.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("success");
+      expect(result.data?.status).toBe("confirmed");
     });
   });
 });

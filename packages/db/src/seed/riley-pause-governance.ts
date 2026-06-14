@@ -25,6 +25,8 @@
  * real-gate test so the two cannot drift.
  */
 
+import type { PrismaDbClient } from "../prisma-db.js";
+
 export const RILEY_PAUSE_ALLOW_POLICY_RULE = {
   conditions: [
     {
@@ -84,4 +86,37 @@ export function buildRileyPauseApprovalPolicyInput(organizationId: string) {
     effect: "require_approval",
     approvalRequirement: "mandatory",
   };
+}
+
+/**
+ * Seed the allow + mandatory-approval pause policies as a single BOTH-OR-NEITHER
+ * unit (D5-2c). They are load-bearing together: allow alone EXECUTES the pause
+ * with no human (the riley-pause-gate test pins "allow alone EXECUTES"); approval
+ * alone default-denies. A future seeder must never seed one without the other, so
+ * the coupling lives here in one named function rather than as two open-coded
+ * upserts a caller can split.
+ *
+ * The caller owns the transaction boundary: pass a `Prisma.TransactionClient`
+ * (provisionOrgAgentDeployments passes the tx client from its `$transaction`) so a
+ * crash between the two upserts can never leave allow-alone. A thrown upsert
+ * propagates out (not swallowed) so the surrounding transaction rolls back both.
+ * Idempotent on the deterministic per-org policy ids; safe to re-run.
+ */
+export async function seedRileyPausePolicies(
+  client: PrismaDbClient,
+  organizationId: string,
+): Promise<void> {
+  const { id: allowId, ...allowData } = buildRileyPauseAllowPolicyInput(organizationId);
+  await client.policy.upsert({
+    where: { id: allowId },
+    create: { id: allowId, ...allowData },
+    update: allowData,
+  });
+
+  const { id: approvalId, ...approvalData } = buildRileyPauseApprovalPolicyInput(organizationId);
+  await client.policy.upsert({
+    where: { id: approvalId },
+    create: { id: approvalId, ...approvalData },
+    update: approvalData,
+  });
 }

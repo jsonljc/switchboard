@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { StaleVersionError } from "@switchboard/core";
 import { BookingSlotConflictError, isBookingSlotConflictError } from "@switchboard/schemas";
-import { PrismaBookingStore } from "../prisma-booking-store.js";
+import { PrismaBookingStore, acquireBookingLock } from "../prisma-booking-store.js";
 
 function makePrisma() {
   return {
@@ -85,6 +85,18 @@ describe("PrismaBookingStore", () => {
     expect(prisma.$transaction).toHaveBeenCalled();
   });
 
+  it("acquireBookingLock issues pg_advisory_xact_lock with the int4-cast namespace", async () => {
+    const executeRaw = vi.fn().mockResolvedValue(0);
+    await acquireBookingLock({ $executeRaw: executeRaw } as never, "org-1");
+    const [strings, ...values] = executeRaw.mock.calls[0]!;
+    const sql = (strings as string[]).join("?");
+    expect(sql).toContain("pg_advisory_xact_lock");
+    // The ::int4 cast is mandatory: Prisma sends the namespace as bigint and
+    // pg_advisory_xact_lock(bigint, integer) does not exist (Postgres 42883).
+    expect(sql).toContain("::int4");
+    expect(values).toEqual([920_001, "org-1"]);
+  });
+
   it("confirms a booking by id with tenant scope (Pattern B)", async () => {
     (prisma.booking.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
     (prisma.booking.findFirstOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -114,14 +126,28 @@ describe("PrismaBookingStore", () => {
     expect(prisma.booking.findFirstOrThrow).not.toHaveBeenCalled();
   });
 
-  it("finds a booking by id", async () => {
-    (prisma.booking.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+  it("finds a booking by id scoped to the org (findFirst on id + organizationId)", async () => {
+    (prisma.booking.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "bk_1",
+      organizationId: "org_1",
       status: "confirmed",
     });
 
-    const result = await store.findById("bk_1");
+    const result = await store.findById("org_1", "bk_1");
     expect(result?.status).toBe("confirmed");
+    expect(prisma.booking.findFirst).toHaveBeenCalledWith({
+      where: { id: "bk_1", organizationId: "org_1" },
+    });
+  });
+
+  it("findById returns null for an id in another org (no cross-org read)", async () => {
+    (prisma.booking.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    const result = await store.findById("org_other", "bk_1");
+    expect(result).toBeNull();
+    expect(prisma.booking.findFirst).toHaveBeenCalledWith({
+      where: { id: "bk_1", organizationId: "org_other" },
+    });
   });
 
   it("counts confirmed bookings for an org", async () => {
@@ -265,6 +291,15 @@ describe("PrismaBookingStore.create overlap guard", () => {
     );
     expect(tx.booking.create).toHaveBeenCalled();
     expect(row).toEqual({ id: "new-booking" });
+    // Order proof migrated from the removed buildLocalStore.createInTransaction unit test: the
+    // advisory lock is taken BEFORE the overlap check, which runs BEFORE the insert.
+    const lockOrder = (tx.$executeRaw as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!;
+    const findOrder = (tx.booking.findFirst as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    const createOrder = (tx.booking.create as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(findOrder);
+    expect(findOrder).toBeLessThan(createOrder);
   });
 
   it("throws BookingSlotConflictError (not insert) when a live booking overlaps", async () => {

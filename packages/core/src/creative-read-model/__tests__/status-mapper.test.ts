@@ -62,6 +62,28 @@ describe("mapCreativeJobToMiraStatus", () => {
       ),
     ).toBe("failed");
   });
+  it("polished stageFailure → failed (beats awaiting_review)", () => {
+    expect(
+      mapCreativeJobToMiraStatus(
+        job({
+          currentStage: "hooks",
+          stageOutputs: { trends: { angles: [] } },
+          stageFailure: { kind: "terminal", code: "ASYNC_JOB_FAILED", message: "boom" },
+        }),
+      ),
+    ).toBe("failed");
+  });
+  it("null stageFailure leaves polished status unchanged (awaiting_review)", () => {
+    expect(
+      mapCreativeJobToMiraStatus(
+        job({
+          currentStage: "hooks",
+          stageOutputs: { trends: { angles: [] } },
+          stageFailure: null,
+        }),
+      ),
+    ).toBe("awaiting_review");
+  });
   it("complete WITH assembled video despite errors → draft_ready", () => {
     expect(
       mapCreativeJobToMiraStatus(

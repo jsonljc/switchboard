@@ -177,4 +177,22 @@ describe("POST /api/internal/ingress/submit (F-15)", () => {
     expect(body.error.type).toBe("intent_not_found");
     await app.close();
   });
+
+  it("refuses the service-only payment.record_verified intent with 403 (F3), never submits", async () => {
+    vi.stubEnv("INTERNAL_API_SECRET", SECRET);
+    const { app, submit } = await buildApp({ authEnabled: true });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/internal/ingress/submit",
+      headers: { authorization: `Bearer ${SECRET}` },
+      payload: {
+        ...BASE,
+        actor: { id: "system", type: "service" as const },
+        intent: "payment.record_verified",
+      },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(submit).not.toHaveBeenCalled();
+    await app.close();
+  });
 });

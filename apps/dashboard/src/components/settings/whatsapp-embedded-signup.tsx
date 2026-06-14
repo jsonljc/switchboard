@@ -5,23 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 
-declare global {
-  interface Window {
-    FB?: {
-      init(params: { appId: string; cookie: boolean; xfbml: boolean; version: string }): void;
-      login(
-        callback: (response: { authResponse?: { accessToken: string } }) => void,
-        params: {
-          config_id: string;
-          response_type: string;
-          override_default_response_type: boolean;
-          extras: Record<string, unknown>;
-        },
-      ): void;
-    };
-  }
-}
-
 interface Props {
   _metaAppId: string;
   metaConfigId: string;

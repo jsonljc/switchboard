@@ -21,8 +21,13 @@ export type {
 
 export interface HandoffStore {
   save(pkg: Handoff): Promise<void>;
-  getById(id: string): Promise<Handoff | null>;
-  getBySessionId(sessionId: string): Promise<Handoff | null>;
-  updateStatus(id: string, status: HandoffStatus, acknowledgedAt?: Date): Promise<void>;
+  getById(organizationId: string, id: string): Promise<Handoff | null>;
+  getBySessionId(organizationId: string, sessionId: string): Promise<Handoff | null>;
+  updateStatus(
+    organizationId: string,
+    id: string,
+    status: HandoffStatus,
+    acknowledgedAt?: Date,
+  ): Promise<void>;
   listPending(organizationId: string): Promise<Handoff[]>;
 }

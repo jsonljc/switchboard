@@ -128,6 +128,19 @@ describe("creative.job.continue / stop workflow", () => {
     expect(updateProductionTier).not.toHaveBeenCalled();
   });
 
+  it("failed polished job (stageFailure set) → CREATIVE_JOB_NOT_AWAITING_APPROVAL", async () => {
+    // A dead-lettered polished render is terminal; a forced continue must not
+    // phantom-queue a stage.approved that no run will hear.
+    findById.mockResolvedValue(makeJob({ currentStage: "hooks", stageFailure: { code: "X" } }));
+    const res = await buildCreativeJobDecisionWorkflow({}, "continue").execute(
+      workUnit({ jobId: JOB_ID }),
+      services,
+    );
+    expect(res.outcome).toBe("failed");
+    expect(res.error?.code).toBe("CREATIVE_JOB_NOT_AWAITING_APPROVAL");
+    expect(inngestSend).not.toHaveBeenCalled();
+  });
+
   // ── Slice-3 mode-aware guard (spec 3.3c) ────────────────────────────────────
   it("completed UGC job (ugcPhase complete) → CREATIVE_JOB_NOT_AWAITING_APPROVAL", async () => {
     // UGC jobs never advance currentStage (stays "trends" default); the guard

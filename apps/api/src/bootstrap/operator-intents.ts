@@ -48,6 +48,7 @@ import {
   buildRecordVerifiedPaymentHandler,
   RECORD_VERIFIED_PAYMENT_INTENT,
   type ReceiptWriter,
+  type PaymentVerifier,
 } from "./operator-intents/record-verified-payment.js";
 import { buildActOnRecommendationHandler } from "./operator-intents/recommendation.js";
 import {
@@ -101,9 +102,13 @@ interface OperatorIntentsBootstrapDeps {
   revenueStore?: RevenueStore;
   outboxWriter?: OutboxWriter;
   runInTransaction?: RunInTransaction;
-  /** Required (with revenueStore+outboxWriter+runInTransaction) to register the
-   *  payment.record_verified intent. Writes the verified payment Receipt. */
+  /** Required (with revenueStore+outboxWriter+runInTransaction+paymentVerifier) to
+   *  register the payment.record_verified intent. Writes the verified payment Receipt. */
   receiptWriter?: ReceiptWriter;
+  /** Required (with receiptWriter+revenueStore+outboxWriter+runInTransaction) to
+   *  register payment.record_verified. The server-side PSP fetch-back that anchors
+   *  `verified` to a real settled charge (F3) — never the caller-supplied provider. */
+  paymentVerifier?: PaymentVerifier;
   logger?: { info(msg: string): void };
 }
 
@@ -138,6 +143,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     outboxWriter,
     runInTransaction,
     receiptWriter,
+    paymentVerifier,
     logger,
   } = deps;
 
@@ -181,7 +187,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     );
   }
 
-  if (receiptWriter && revenueStore && outboxWriter && runInTransaction) {
+  if (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier) {
     handlers.set(
       RECORD_VERIFIED_PAYMENT_INTENT,
       buildRecordVerifiedPaymentHandler(
@@ -189,6 +195,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
         revenueStore,
         outboxWriter,
         runInTransaction,
+        paymentVerifier,
       ),
     );
   }
@@ -213,7 +220,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
   if (revenueStore && outboxWriter && runInTransaction) {
     registerOperatorIntent(intentRegistry, RECORD_REVENUE_INTENT);
   }
-  if (receiptWriter && revenueStore && outboxWriter && runInTransaction) {
+  if (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier) {
     registerOperatorIntent(intentRegistry, RECORD_VERIFIED_PAYMENT_INTENT);
   }
 
@@ -223,7 +230,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     (disqualificationHook ? 2 : 0) +
     (consentService ? 3 : 0) +
     (revenueStore && outboxWriter && runInTransaction ? 1 : 0) +
-    (receiptWriter && revenueStore && outboxWriter && runInTransaction ? 1 : 0);
+    (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );

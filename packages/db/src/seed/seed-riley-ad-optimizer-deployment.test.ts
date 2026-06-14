@@ -134,4 +134,9 @@ describe("seedRileyAdOptimizerDeployment", () => {
       "policy_require_approval_riley_pause_org_dev",
     ]);
   });
+
+  it("returns the provisioned deployment id", async () => {
+    const result = await seedRileyAdOptimizerDeployment(prisma, "org_dev");
+    expect(result).toEqual({ deploymentId: "deploy_riley_1" });
+  });
 });

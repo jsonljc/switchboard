@@ -192,6 +192,10 @@ export const scopedKeys = (orgId: string) => ({
     all: () => [orgId, "pipeline"] as const,
     feed: (agentKey: string) => [orgId, "pipeline", "feed", agentKey] as const,
   },
+  bookingWins: {
+    all: () => [orgId, "bookingWins"] as const,
+    feed: (agentKey: string) => [orgId, "bookingWins", "feed", agentKey] as const,
+  },
   billing: {
     all: () => [orgId, "billing"] as const,
     status: () => [orgId, "billing", "status"] as const,

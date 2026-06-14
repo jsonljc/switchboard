@@ -6,8 +6,10 @@ import {
   decryptCredentials,
   seedOrgDayOneAgents,
   seedAlexSkillPack,
+  provisionOrgAgentDeployments,
 } from "@switchboard/db";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { LAZY_ORG_CONFIG_CREATE_DEFAULTS } from "../lib/org-config-defaults.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
 import { probeWhatsAppHealth } from "../lib/whatsapp-health-probe.js";
@@ -63,16 +65,9 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
 
       const config = await app.prisma.organizationConfig.upsert({
         where: { id: orgId },
-        create: {
-          id: orgId,
-          name: "",
-          runtimeType: "http",
-          runtimeConfig: {},
-          governanceProfile: "guarded",
-          onboardingComplete: false,
-          managedChannels: [],
-          provisioningStatus: "pending",
-        },
+        // F-02: comped pilot defaults (entitlementOverride) live in one documented,
+        // trusted-path-only source. See ../lib/org-config-defaults.ts.
+        create: { id: orgId, ...LAZY_ORG_CONFIG_CREATE_DEFAULTS },
         update: {},
       });
 
@@ -90,6 +85,21 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
         await seedAlexSkillPack(app.prisma, orgId);
       } catch (err) {
         console.warn(`[organizations] seedAlexSkillPack failed for ${orgId} (continuing):`, err);
+      }
+
+      // F3: provision Riley's deployment (day-one) so the cross-agent revenue loop
+      // exists for a real org, not just org_dev. Idempotent + atomic. Mira
+      // (day-thirty) is provisioned separately via scripts/provision-mira-for-org.ts.
+      // Guarded like seedAlexSkillPack: a provisioning hiccup must not fail config
+      // load; the orchestrator is idempotent, so the retry is the next config load.
+      try {
+        await provisionOrgAgentDeployments(app.prisma, orgId, { mira: false });
+      } catch (err) {
+        console.warn(
+          `[organizations] day-one Riley provisioning failed for ${orgId}; ` +
+            `will retry on next config load:`,
+          err,
+        );
       }
 
       return reply.send({ config });

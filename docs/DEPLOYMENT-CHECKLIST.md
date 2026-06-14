@@ -50,10 +50,12 @@ Copy `.env.example` to `.env` and fill in:
 
 **Infrastructure:**
 
-| Variable       | For                            |
-| -------------- | ------------------------------ |
-| `SENTRY_DSN_SERVER` | Sentry error tracking DSN |
-| `NGINX_DOMAIN` | Domain name for TLS cert paths |
+| Variable                        | For                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| `SENTRY_DSN_SERVER`             | Sentry error tracking DSN                                                       |
+| `OPERATOR_ALERT_WEBHOOK_URL`    | Operator paging webhook for terminal failures (unset = paging off, logged only) |
+| `OPERATOR_ALERT_WEBHOOK_SECRET` | Optional Bearer secret sent with the paging webhook                             |
+| `NGINX_DOMAIN`                  | Domain name for TLS cert paths                                                  |
 
 **Optional (enable when needed):**
 

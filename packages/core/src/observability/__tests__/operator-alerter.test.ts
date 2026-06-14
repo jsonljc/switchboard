@@ -16,9 +16,13 @@ afterEach(() => {
 });
 
 describe("NoopOperatorAlerter", () => {
-  it("resolves without throwing and performs no I/O", async () => {
+  it("resolves without throwing and logs at error so a misconfigured prod is visible", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const alerter = new NoopOperatorAlerter();
     await expect(alerter.alert(samplePayload)).resolves.toBeUndefined();
+    // No webhook configured: the alert is dropped but at least surfaces in host
+    // logs instead of being fully silent (D9-F1).
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("no webhook configured"));
   });
 });
 

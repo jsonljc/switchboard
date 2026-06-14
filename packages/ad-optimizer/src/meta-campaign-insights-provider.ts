@@ -6,6 +6,7 @@ import type {
   TargetBreachResult,
   WeeklyCampaignSnapshot,
 } from "@switchboard/schemas";
+import { ZERO_CONVERSION_DAY_CLICK_FLOOR } from "./evidence-floor.js";
 
 const MATERIAL_CHILD_SPEND_SHARE = 0.1;
 const MIN_LEARNING_COVERAGE = 0.8;
@@ -133,9 +134,8 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     // Below the click floor, a quiet low-traffic day is noise — counting it as a breach lets
     // a near-zero-traffic campaign accrue durability and get paused on nothing. Days WITH
     // conversions are unaffected (breach iff cpa > target).
-    const MIN_WINDOW_CLICKS_FOR_ZERO_DAY_BREACH = 20;
     const windowClicks = campaignDays.reduce((s, d) => s + d.inlineLinkClicks, 0);
-    const zeroDayCounts = windowClicks >= MIN_WINDOW_CLICKS_FOR_ZERO_DAY_BREACH;
+    const zeroDayCounts = windowClicks >= ZERO_CONVERSION_DAY_CLICK_FLOOR;
 
     // Selected per-day conversions denominator (Gate 1): the configured action
     // type's value when set, else the aggregate `conversions` field. This single

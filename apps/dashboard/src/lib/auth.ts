@@ -82,6 +82,15 @@ if (process.env.EMAIL_SERVER_HOST) {
 
 export const authConfig: NextAuthConfig = {
   secret: process.env.NEXTAUTH_SECRET,
+  // F-09: make host trust explicit instead of relying on the platform-injected VERCEL=1
+  // signal. The dashboard deploys on Vercel, where NextAuth v5 already defaults
+  // trustHost=true via VERCEL, so this is NOT a live-outage fix; it removes the implicit
+  // dependency so prod-mode login also works off Vercel (local `next start`, a future
+  // non-Vercel host). Safe here: prod runs CredentialsProvider only (no OAuth/magic-link
+  // callback to poison) and NextAuth's default redirect callback stays same-origin. If the
+  // Google/Email providers are later enabled, NEXTAUTH_URL/AUTH_URL MUST be set so callback
+  // URLs do not derive from the now-trusted Host header.
+  trustHost: true,
   providers,
   adapter: {
     async createUser(user) {

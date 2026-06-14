@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { OperatorChatWidget } from "@/components/operator-chat/operator-chat-widget";
 import { Toaster } from "@/components/ui/toaster";
+import { MetaSdkScript } from "@/components/settings/meta-sdk-script";
 import { getServerSession } from "@/lib/session";
 import { getDataMode } from "@/lib/data-mode/server";
 import { isFixtureModeAllowed } from "@/lib/data-mode/shared";
@@ -21,6 +22,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
         </ErrorBoundary>
         <OperatorChatWidget />
         <Toaster />
+        {session && <MetaSdkScript />}
       </DataModeProvider>
     </AuthProvider>
   );

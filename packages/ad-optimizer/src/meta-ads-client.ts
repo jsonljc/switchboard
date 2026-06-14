@@ -9,6 +9,33 @@ import type {
 const API_BASE = "https://graph.facebook.com/v21.0";
 const RATE_LIMIT_MS = 60_000;
 
+// Spec-1B defense-in-depth tripwire: a daily budget above $1,000,000/day is a bug, not a campaign.
+// The real cap is the blast-radius contract (assertWithinBlastRadius); this only catches a runaway
+// 100x/encoding bug that would otherwise reach Meta. Cents.
+const MAX_SANE_DAILY_BUDGET_CENTS = 100_000_000; // 100,000,000 cents == $1,000,000.00/day
+
+/**
+ * Parse an external Meta numeric, coercing any non-finite result to a fallback
+ * (default 0). Meta returns numerics as strings; a non-numeric sentinel ("N/A",
+ * an empty string, a malformed payload) makes parseFloat/parseInt yield NaN,
+ * which must never reach a comparison gate: a `>`-gate reads NaN as false
+ * silently and voids a recommendation, and one NaN row poisons a whole `reduce`
+ * sum (feedback_nan_blind_comparison_gates, #939). 0 is the honest fallback for
+ * every field here (spend/conversions/revenue/impressions/clicks/rates): it is
+ * the safe no-false-action direction and isolates damage to the single bad row.
+ * The peer guard at meta-campaign-insights-provider.ts (action-type denominator)
+ * uses the same Number.isFinite discipline; this keeps both boundaries symmetric.
+ */
+function finiteFloat(value: unknown, fallback = 0): number {
+  const n = parseFloat(String(value ?? "0"));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function finiteInt(value: unknown, fallback = 0): number {
+  const n = parseInt(String(value ?? "0"), 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 interface MetaAdsClientConfig {
   accessToken: string;
   accountId: string;
@@ -262,9 +289,9 @@ export class MetaAdsClient {
       accountId: metadata.id as string,
       accountName: metadata.name as string,
       currency: metadata.currency as string,
-      totalSpend: parseFloat(insights.spend ?? "0"),
-      totalImpressions: parseInt(insights.impressions ?? "0", 10),
-      totalClicks: parseInt(insights.clicks ?? "0", 10),
+      totalSpend: finiteFloat(insights.spend),
+      totalImpressions: finiteInt(insights.impressions),
+      totalClicks: finiteInt(insights.clicks),
       activeCampaigns,
     };
   }
@@ -363,6 +390,31 @@ export class MetaAdsClient {
   }
 
   /**
+   * Set one campaign's daily budget (Spec-1B reallocation write). CENTS (Meta native minor units,
+   * passed VERBATIM; dollars happen only at the spend gate + trueRoas, spec section 11, never here).
+   * A single POST, no internal idempotency map: interactive paths use a FRESH client per call
+   * (feedback_meta_ads_client_rate_limiter_fresh_instance), so idempotency is the executor's durable
+   * job. Refuses a malformed amount BEFORE any fetch (the 100x guard): safe-integer, positive, under
+   * the sanity ceiling. Budget edits ARE allowed on ACTIVE campaigns (only status->ACTIVE is forbidden).
+   */
+  async updateCampaignBudget(campaignId: string, dailyBudgetCents: number): Promise<void> {
+    if (!Number.isSafeInteger(dailyBudgetCents)) {
+      throw new Error(
+        `SAFETY: daily budget must be a safe integer cents value, got ${dailyBudgetCents}`,
+      );
+    }
+    if (dailyBudgetCents <= 0) {
+      throw new Error(`SAFETY: daily budget must be positive cents, got ${dailyBudgetCents}`);
+    }
+    if (dailyBudgetCents > MAX_SANE_DAILY_BUDGET_CENTS) {
+      throw new Error(
+        `SAFETY: daily budget ${dailyBudgetCents} exceeds the sanity ceiling ${MAX_SANE_DAILY_BUDGET_CENTS}`,
+      );
+    }
+    await this.post(`/${campaignId}`, { daily_budget: dailyBudgetCents });
+  }
+
+  /**
    * Read one campaign's status (Phase-C pause executor pre-read). Degrades to
    * null on any error: the pause write itself is the honest test; a status-read
    * blip must not block an approved pause.
@@ -379,6 +431,53 @@ export class MetaAdsClient {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Read one campaign's budget + status for the Spec-1B read-modify-re-read executor (spec section 7).
+   * THROWS on a Meta error (unlike getCampaignStatus): a money move cannot proceed on an unknown
+   * budget. dailyBudgetCents is Meta's NATIVE cents, parsed VERBATIM (no x100; contrast
+   * getAccountDailySpendCents's dollars string). null when absent (ad-set-level budget -> executor
+   * refuses UNSUPPORTED_BUDGET_TOPOLOGY), non-numeric (strict /^\d+$/), or zero: honest-null, never a
+   * coerced 0 (feedback_nan_blind_comparison_gates).
+   */
+  async getCampaign(campaignId: string): Promise<{
+    campaignId: string;
+    name: string;
+    status: string;
+    dailyBudgetCents: number | null;
+  }> {
+    const response = await this.get(`/${campaignId}?fields=id,name,status,daily_budget`);
+    const rawStr = response.daily_budget == null ? "" : String(response.daily_budget);
+    const parsed = /^\d+$/.test(rawStr) ? Number(rawStr) : Number.NaN;
+    const dailyBudgetCents = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+    return {
+      campaignId: String(response.id ?? campaignId),
+      name: String(response.name ?? ""),
+      status: String(response.status ?? ""),
+      dailyBudgetCents,
+    };
+  }
+
+  /**
+   * Read the account's current-day spend in CENTS for the blast-radius share-cap denominator (spec
+   * section 8a). Insights `spend` is a major-unit string (e.g. "5000.00") -> Math.round(x*100): the
+   * UNIT ASYMMETRY vs getCampaign's native cents. SCOPE: assumes a 2-decimal (hundredths) account
+   * currency, so x100 is unit-consistent with getCampaign's minor units; v1 = the SG/MY pilot
+   * (SGD/MYR). A zero-decimal currency (JPY/KRW) would mis-scale this denominator vs the verbatim
+   * budget, so it is out of v1 scope - currency-aware conversion is deferred. Window = today (partial
+   * intra-day spend under-states the denominator -> a larger share -> a more conservative cap). THROWS
+   * on a Meta error (load-bearing); null on an absent/non-numeric spend (assertWithinBlastRadius fails
+   * closed SHARE_CAP on a null/non-positive denominator). Strict parse, never coerces "5000abc".
+   */
+  async getAccountDailySpendCents(): Promise<number | null> {
+    const response = await this.get(`/${this.accountId}/insights?date_preset=today&fields=spend`);
+    const row = (response.data as Record<string, unknown>[] | undefined)?.[0];
+    if (!row) return null;
+    const raw = String(row.spend ?? "");
+    if (!/^\d+(\.\d{1,2})?$/.test(raw)) return null;
+    const cents = Math.round(Number(raw) * 100);
+    return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
   }
 
   async getAdCampaignId(adId: string): Promise<string | null> {
@@ -459,15 +558,15 @@ export class MetaAdsClient {
       campaignName: String(raw.campaign_name ?? ""),
       status: String(raw.status ?? ""),
       effectiveStatus: String(raw.effective_status ?? ""),
-      impressions: parseInt(String(raw.impressions ?? "0"), 10),
-      inlineLinkClicks: parseInt(String(raw.inline_link_clicks ?? "0"), 10),
-      spend: parseFloat(String(raw.spend ?? "0")),
-      conversions: parseFloat(String(raw.conversions ?? "0")),
-      revenue: parseFloat(String(raw.revenue ?? "0")),
-      frequency: parseFloat(String(raw.frequency ?? "0")),
-      cpm: parseFloat(String(raw.cpm ?? "0")),
-      inlineLinkClickCtr: parseFloat(String(raw.inline_link_click_ctr ?? "0")),
-      costPerInlineLinkClick: parseFloat(String(raw.cost_per_inline_link_click ?? "0")),
+      impressions: finiteInt(raw.impressions),
+      inlineLinkClicks: finiteInt(raw.inline_link_clicks),
+      spend: finiteFloat(raw.spend),
+      conversions: finiteFloat(raw.conversions),
+      revenue: finiteFloat(raw.revenue),
+      frequency: finiteFloat(raw.frequency),
+      cpm: finiteFloat(raw.cpm),
+      inlineLinkClickCtr: finiteFloat(raw.inline_link_click_ctr),
+      costPerInlineLinkClick: finiteFloat(raw.cost_per_inline_link_click),
       dateStart: String(raw.date_start ?? ""),
       dateStop: String(raw.date_stop ?? ""),
       // Meta returns `actions` as an array of { action_type, value }. Surface it
@@ -483,14 +582,14 @@ export class MetaAdsClient {
       adSetId: raw.adset_id ?? "",
       adSetName: raw.adset_name ?? "",
       campaignId: raw.campaign_id ?? "",
-      impressions: parseInt(raw.impressions ?? "0", 10),
-      inlineLinkClicks: parseInt(raw.inline_link_clicks ?? "0", 10),
-      spend: parseFloat(raw.spend ?? "0"),
-      conversions: parseFloat(raw.conversions ?? "0"),
-      frequency: parseFloat(raw.frequency ?? "0"),
-      cpm: parseFloat(raw.cpm ?? "0"),
-      inlineLinkClickCtr: parseFloat(raw.inline_link_click_ctr ?? "0"),
-      costPerInlineLinkClick: parseFloat(raw.cost_per_inline_link_click ?? "0"),
+      impressions: finiteInt(raw.impressions),
+      inlineLinkClicks: finiteInt(raw.inline_link_clicks),
+      spend: finiteFloat(raw.spend),
+      conversions: finiteFloat(raw.conversions),
+      frequency: finiteFloat(raw.frequency),
+      cpm: finiteFloat(raw.cpm),
+      inlineLinkClickCtr: finiteFloat(raw.inline_link_click_ctr),
+      costPerInlineLinkClick: finiteFloat(raw.cost_per_inline_link_click),
       dateStart: raw.date_start ?? "",
       dateStop: raw.date_stop ?? "",
     };

@@ -51,6 +51,27 @@ describe("buildMiraCreativeReadModel", () => {
     expect(rm.jobs.find((j) => j.id === "p1")!.ugcPhase).toBeUndefined();
   });
 
+  it("surfaces metaPublishStatus as publishStatus, orthogonal to the render status (D9-F3)", () => {
+    const base = { currentStage: "complete" as const, stageOutputs: { trends: {} } };
+    const rm = buildMiraCreativeReadModel(
+      [
+        job({ id: "failed", ...base, metaPublishStatus: "publish_failed" }),
+        job({ id: "parked", ...base, metaPublishStatus: "parked_paused" }),
+        job({ id: "none", ...base, metaPublishStatus: null }),
+        job({ id: "unknown", ...base, metaPublishStatus: "something_else" }),
+      ],
+      opts,
+    );
+    const byId = (id: string) => rm.jobs.find((j) => j.id === id)!;
+    expect(byId("failed").publishStatus).toBe("publish_failed");
+    expect(byId("parked").publishStatus).toBe("parked_paused");
+    expect(byId("none").publishStatus).toBeUndefined();
+    expect(byId("unknown").publishStatus).toBeUndefined();
+    // A render-complete job whose publish failed still reads draft_ready: the
+    // publish lifecycle is a separate axis from the render status.
+    expect(byId("failed").status).toBe("draft_ready");
+  });
+
   it("empty org → empty jobs, zero counts", () => {
     const rm = buildMiraCreativeReadModel([], opts);
     expect(rm.jobs).toEqual([]);

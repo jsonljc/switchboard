@@ -44,6 +44,15 @@ describe.skipIf(!process.env["DATABASE_URL"])("payment.record_verified replay (r
           outbox.write(id, type, payload, tx as never).then(() => {}),
       },
       (fn) => prisma.$transaction((tx: StoreTransactionContext) => fn(tx)),
+      // F3: server-side fetch-back stub — a confirmed paid stripe charge.
+      async () => ({
+        provider: "stripe",
+        externalReference,
+        amountCents: 5000,
+        currency: "SGD",
+        status: "paid",
+        bookingId: "itest-booking",
+      }),
     );
 
     const wu = (): WorkUnit =>

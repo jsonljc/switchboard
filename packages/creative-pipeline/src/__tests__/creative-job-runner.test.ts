@@ -94,9 +94,9 @@ describe("executeCreativePipeline", () => {
   it("runs all 5 stages when buyer approves each", async () => {
     await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
 
-    // 1 load-job + 5 stage runs + 5 save calls = 11 step.run calls
+    // 1 load-job + 1 load-production-tier + 5 stage runs + 5 save calls = 12 step.run calls
     // + 4 waitForEvent calls (no wait after production)
-    expect(step.run).toHaveBeenCalledTimes(11);
+    expect(step.run).toHaveBeenCalledTimes(12);
     expect(step.waitForEvent).toHaveBeenCalledTimes(4);
   });
 
@@ -214,6 +214,55 @@ describe("executeCreativePipeline", () => {
     await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
     expect(jobStore.setDurableAsset).not.toHaveBeenCalled();
   });
+
+  it("threads the injected klingClient into the production stage input", async () => {
+    const { runStage } = await import("../stages/run-stage.js");
+    const mockRunStage = runStage as ReturnType<typeof vi.fn>;
+    mockRunStage.mockClear();
+    mockRunStage.mockResolvedValue({ placeholder: true });
+
+    const klingClient = { generateVideo: vi.fn() };
+    await executeCreativePipeline(
+      jobData,
+      step as never,
+      jobStore as never,
+      llmConfig,
+      undefined,
+      undefined,
+      undefined,
+      klingClient,
+    );
+
+    const productionCall = mockRunStage.mock.calls.find((c) => c[0] === "production");
+    expect((productionCall?.[1] as { klingClient?: unknown }).klingClient).toBe(klingClient);
+  });
+
+  it("forwards an injected klingClient through the created runner handler into production", async () => {
+    createFunctionSpy.mockClear();
+    const { runStage } = await import("../stages/run-stage.js");
+    const mockRunStage = runStage as ReturnType<typeof vi.fn>;
+    mockRunStage.mockClear();
+    mockRunStage.mockResolvedValue({ placeholder: true });
+
+    const klingClient = { generateVideo: vi.fn() };
+    createCreativeJobRunner(
+      jobStore as never,
+      llmConfig,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      klingClient,
+    );
+    const handler = createFunctionSpy.mock.calls[0]?.[1] as (arg: {
+      event: { data: typeof jobData };
+      step: typeof step;
+    }) => Promise<void>;
+    await handler({ event: { data: jobData }, step });
+
+    const productionCall = mockRunStage.mock.calls.find((c) => c[0] === "production");
+    expect((productionCall?.[1] as { klingClient?: unknown }).klingClient).toBe(klingClient);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -244,6 +293,14 @@ describe("createCreativeJobRunner — onFailure wiring", () => {
 
     const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(config?.["onFailure"]).toBeUndefined();
+  });
+
+  it("declares jobId idempotency on the created function (D5-F2 duplicate-delivery dedup)", () => {
+    createFunctionSpy.mockClear();
+    createCreativeJobRunner(mockJobStore as never, llmConf);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(config?.["idempotency"]).toBe("event.data.jobId");
   });
 });
 
@@ -394,7 +451,211 @@ describe("slice-2 feed-back threading (taste provider + measured history)", () =
   it("absent provider changes nothing (no extra step.run)", async () => {
     const step = mkStep();
     await executeCreativePipeline(jobData, step as never, mkStore(null) as never, llmConfig);
-    // 1 load-job + 5 stage runs + 5 saves = 11 (unchanged from the M1 contract)
-    expect(step.run).toHaveBeenCalledTimes(11);
+    // 1 load-job + 1 load-production-tier + 5 stage runs + 5 saves = 12
+    expect(step.run).toHaveBeenCalledTimes(12);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D1-F2 regression: the operator's production-tier choice is written AFTER the
+// load-job snapshot is memoized, so the production stage must re-read it from
+// authoritative state instead of the snapshot. The default createMockStep is
+// pass-through (no replay memoization), which is precisely why this defect went
+// untested; this block memoizes step outputs the way Inngest replays them.
+// ---------------------------------------------------------------------------
+describe("productionTier propagation: replay-safe re-read [D1-F2]", () => {
+  const llmConfig = { apiKey: "test-key" };
+  const jobData = {
+    jobId: "job_1",
+    taskId: "task_1",
+    organizationId: "org_1",
+    deploymentId: "dep_1",
+  };
+
+  // Inngest memoizes each step's first-run output and replays it verbatim. A
+  // stale-snapshot read passes under a pass-through mock but fails here, because
+  // a correct fix must observe state written after load-job was memoized, and
+  // must do so under a fresh, distinctly-named step (reusing "load-job" returns
+  // the cached null and fails this test too).
+  function createReplayStep() {
+    const memo = new Map<string, unknown>();
+    return {
+      run: vi.fn(async (name: string, fn: () => unknown) => {
+        if (memo.has(name)) return memo.get(name);
+        const result = await fn();
+        memo.set(name, result);
+        return result;
+      }),
+      waitForEvent: vi.fn(
+        async () => ({ data: { action: "continue" } }) as { data: { action: string } } | null,
+      ),
+    };
+  }
+
+  it("renders the tier persisted after the load-job snapshot, not stale basic", async () => {
+    const { runStage } = await import("../stages/run-stage.js");
+    const mockRunStage = runStage as ReturnType<typeof vi.fn>;
+    mockRunStage.mockClear();
+    mockRunStage.mockResolvedValue({ placeholder: true });
+
+    // Invariant: load-job is memoized with productionTier null; before production
+    // begins the persisted row reads "pro"; production must use the fresh value.
+    // The storyboard-gate decision persists the tier once currentStage advances
+    // to "storyboard", i.e. when the scripts output is saved, which is the
+    // updateStage(stage: "storyboard") call below.
+    let dbTier: "basic" | "pro" | null = null;
+    const findById = vi.fn(async () => ({
+      id: "job_1",
+      taskId: "task_1",
+      organizationId: "org_1",
+      deploymentId: "dep_1",
+      productDescription: "AI scheduling tool",
+      targetAudience: "Small business owners",
+      platforms: ["meta"],
+      brandVoice: null,
+      productImages: [],
+      references: [],
+      pastPerformance: null,
+      generateReferenceImages: false,
+      currentStage: "trends",
+      stageOutputs: {},
+      productionTier: dbTier, // read at call time → the load-job snapshot stays null
+      stoppedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+    const jobStore = {
+      findById,
+      updateStage: vi.fn(
+        async (_org: string, _id: string, stage: string, outputs: Record<string, unknown>) => {
+          if (stage === "storyboard") dbTier = "pro";
+          return { id: "job_1", currentStage: stage, stageOutputs: outputs };
+        },
+      ),
+      stop: vi.fn(),
+      setDurableAsset: vi.fn(),
+    };
+
+    await executeCreativePipeline(
+      jobData,
+      createReplayStep() as never,
+      jobStore as never,
+      llmConfig,
+    );
+
+    const productionCall = mockRunStage.mock.calls.find((call) => call[0] === "production");
+    expect(productionCall).toBeDefined();
+    expect((productionCall?.[1] as { productionTier?: string }).productionTier).toBe("pro");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D5-F2: replay / duplicate-delivery integrity. A re-delivered or operator-
+// replayed polished.submitted against a terminal (complete/stopped/failed) job
+// must be a clean no-op: no lifecycle mutation, no paid stage re-run, no
+// approval park, no throw. The stage loop restarts at STAGE_ORDER[0] on every
+// fresh invocation, so without the guard a duplicate re-runs the trends stage
+// (LLM spend) and overwrites currentStage "complete" => "hooks".
+// ---------------------------------------------------------------------------
+describe("executeCreativePipeline: replay/terminal integrity [D5-F2]", () => {
+  let step: ReturnType<typeof createMockStep>;
+  let jobStore: ReturnType<typeof createMockJobStore>;
+  const llmConfig = { apiKey: "test-key" };
+  const jobData = {
+    jobId: "job_1",
+    taskId: "task_1",
+    organizationId: "org_1",
+    deploymentId: "dep_1",
+  };
+
+  const base = {
+    id: "job_1",
+    taskId: "task_1",
+    organizationId: "org_1",
+    deploymentId: "dep_1",
+    productDescription: "AI scheduling tool",
+    targetAudience: "Small business owners",
+    platforms: ["meta"],
+    brandVoice: null,
+    productImages: [],
+    references: [],
+    pastPerformance: null,
+    generateReferenceImages: false,
+    stageOutputs: { trends: {}, hooks: {}, scripts: {}, storyboard: {}, production: {} },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  beforeEach(async () => {
+    step = createMockStep();
+    jobStore = createMockJobStore();
+    const { runStage } = await import("../stages/run-stage.js");
+    const mockRunStage = runStage as ReturnType<typeof vi.fn>;
+    mockRunStage.mockClear();
+    mockRunStage.mockResolvedValue({ placeholder: true });
+  });
+
+  async function expectNoMutationNoSpend() {
+    const { runStage } = await import("../stages/run-stage.js");
+    expect(runStage as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+    expect(jobStore.updateStage).not.toHaveBeenCalled();
+    expect(jobStore.stop).not.toHaveBeenCalled();
+    expect(jobStore.setDurableAsset).not.toHaveBeenCalled();
+    expect(step.waitForEvent).not.toHaveBeenCalled();
+    // Only load-job ran (no load-taste-context, no stage loop)
+    expect(step.run).toHaveBeenCalledTimes(1);
+    expect(step.run.mock.calls[0]![0]).toBe("load-job");
+  }
+
+  it("no-ops on a completed job (currentStage=complete): the STAGE_ORDER-from-0 regression", async () => {
+    jobStore.findById.mockResolvedValue({ ...base, currentStage: "complete", stoppedAt: null });
+
+    await expect(
+      executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig),
+    ).resolves.toBeUndefined();
+    await expectNoMutationNoSpend();
+  });
+
+  it("no-ops on a stopped job (stoppedAt set)", async () => {
+    jobStore.findById.mockResolvedValue({ ...base, currentStage: "hooks", stoppedAt: "hooks" });
+
+    await expect(
+      executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig),
+    ).resolves.toBeUndefined();
+    await expectNoMutationNoSpend();
+  });
+
+  it("no-ops on a failed job (stageFailure set)", async () => {
+    jobStore.findById.mockResolvedValue({
+      ...base,
+      currentStage: "production",
+      stoppedAt: null,
+      stageFailure: { code: "RENDER_FAILED" },
+    });
+
+    await expect(
+      executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig),
+    ).resolves.toBeUndefined();
+    await expectNoMutationNoSpend();
+  });
+
+  it("still runs a brand-new job (currentStage=trends): the guard does not over-trigger", async () => {
+    jobStore.findById.mockResolvedValue({
+      ...base,
+      currentStage: "trends",
+      stageOutputs: {},
+      stoppedAt: null,
+    });
+    jobStore.updateStage.mockImplementation((_o, _i, stage, outputs) => ({
+      ...base,
+      currentStage: stage,
+      stageOutputs: outputs,
+    }));
+
+    await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
+
+    const { runStage } = await import("../stages/run-stage.js");
+    expect(runStage as ReturnType<typeof vi.fn>).toHaveBeenCalled();
+    expect(jobStore.updateStage).toHaveBeenCalled();
   });
 });

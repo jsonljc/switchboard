@@ -236,6 +236,119 @@ describe("executeUgcPipeline", () => {
 });
 
 // ---------------------------------------------------------------------------
+// D5-F2: replay / duplicate-delivery integrity. A re-delivered or operator-
+// replayed ugc.submitted against a terminal (or unknown-phase) job must be a
+// clean no-op: no lifecycle mutation, no paid phase re-run, no approval park,
+// no throw. Without the guard, ugcPhase "complete" => indexOf(-1) => the loop
+// runs at i=-1 (phase undefined) and persists "planning" OVER "complete".
+// ---------------------------------------------------------------------------
+describe("executeUgcPipeline: replay/terminal integrity [D5-F2]", () => {
+  let step: ReturnType<typeof createMockStep>;
+  let deps: ReturnType<typeof createMockDeps>;
+
+  const eventData = {
+    jobId: "job_1",
+    taskId: "task_1",
+    organizationId: "org_1",
+    deploymentId: "dep_1",
+  };
+
+  beforeEach(() => {
+    step = createMockStep();
+    deps = createMockDeps();
+    executeProductionPhaseMock.mockClear();
+  });
+
+  function expectNoMutationNoSpend() {
+    // No lifecycle writes
+    expect(deps.jobStore.updateUgcPhase).not.toHaveBeenCalled();
+    expect(deps.jobStore.stopUgc).not.toHaveBeenCalled();
+    expect(deps.jobStore.failUgc).not.toHaveBeenCalled();
+    expect(deps.jobStore.setDurableAsset).not.toHaveBeenCalled();
+    // No spend: the production phase executor is never invoked
+    expect(executeProductionPhaseMock).not.toHaveBeenCalled();
+    // No spurious approval park, no emitted events
+    expect(step.waitForEvent).not.toHaveBeenCalled();
+    expect(step.sendEvent).not.toHaveBeenCalled();
+    // Only load-job ran (no preload-context, no phase loop)
+    expect(step.run).toHaveBeenCalledTimes(1);
+    expect(step.run.mock.calls[0]![0]).toBe("load-job");
+  }
+
+  it("no-ops on a completed job (ugcPhase=complete): the indexOf(-1) regression", async () => {
+    deps.jobStore.findById.mockResolvedValue({
+      id: "job_1",
+      deploymentId: "dep_1",
+      mode: "ugc",
+      ugcPhase: "complete",
+      ugcPhaseOutputs: { planning: {}, scripting: {}, production: {}, delivery: {} },
+      ugcConfig: {},
+      stoppedAt: null,
+      ugcFailure: null,
+    } as never);
+
+    await expect(
+      executeUgcPipeline(eventData, step as never, deps as never),
+    ).resolves.toBeUndefined();
+    expectNoMutationNoSpend();
+  });
+
+  it("no-ops on a stopped job (stoppedAt set, valid phase)", async () => {
+    deps.jobStore.findById.mockResolvedValue({
+      id: "job_1",
+      deploymentId: "dep_1",
+      mode: "ugc",
+      ugcPhase: "scripting",
+      ugcPhaseOutputs: { planning: {} },
+      ugcConfig: {},
+      stoppedAt: "scripting",
+      ugcFailure: null,
+    } as never);
+
+    await expect(
+      executeUgcPipeline(eventData, step as never, deps as never),
+    ).resolves.toBeUndefined();
+    expectNoMutationNoSpend();
+  });
+
+  it("no-ops on a failed job (ugcFailure set)", async () => {
+    deps.jobStore.findById.mockResolvedValue({
+      id: "job_1",
+      deploymentId: "dep_1",
+      mode: "ugc",
+      ugcPhase: "production",
+      ugcPhaseOutputs: { planning: {}, scripting: {} },
+      ugcConfig: {},
+      stoppedAt: null,
+      ugcFailure: { kind: "terminal", code: "PHASE_EXECUTION_FAILED" },
+    } as never);
+
+    await expect(
+      executeUgcPipeline(eventData, step as never, deps as never),
+    ).resolves.toBeUndefined();
+    expectNoMutationNoSpend();
+  });
+
+  it("no-ops on an unrecognized phase (indexOf < 0, not a known terminal)", async () => {
+    deps.jobStore.findById.mockResolvedValue({
+      id: "job_1",
+      deploymentId: "dep_1",
+      mode: "ugc",
+      ugcPhase: "frobnicate",
+      ugcPhaseOutputs: { planning: {} },
+      ugcConfig: {},
+      stoppedAt: null,
+      ugcFailure: null,
+    } as never);
+
+    await expect(
+      executeUgcPipeline(eventData, step as never, deps as never),
+    ).resolves.toBeUndefined();
+    expectNoMutationNoSpend();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // onFailure wiring — createUgcJobRunner (Class B, emitEvent:false)
 // ---------------------------------------------------------------------------
 
@@ -263,5 +376,13 @@ describe("createUgcJobRunner — onFailure wiring", () => {
 
     const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(config?.["onFailure"]).toBeUndefined();
+  });
+
+  it("declares jobId idempotency on the created function (D5-F2 duplicate-delivery dedup)", () => {
+    createFunctionSpy.mockClear();
+    createUgcJobRunner(makeMinimalDeps() as never);
+
+    const config = createFunctionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(config?.["idempotency"]).toBe("event.data.jobId");
   });
 });

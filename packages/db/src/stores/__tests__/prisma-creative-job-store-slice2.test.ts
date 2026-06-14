@@ -176,4 +176,52 @@ describe("PrismaCreativeJobStore (slice-2 attribution + taste)", () => {
       expect(out).toEqual([]);
     });
   });
+
+  // ── F4 revenue-proven promotion (same attribution/watermark store surface) ──
+
+  describe("setRevenueProvenPromotedAt", () => {
+    it("writes the watermark org-scoped via updateMany, resolves void", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      const at = new Date("2026-06-11T07:00:00Z");
+
+      await expect(store.setRevenueProvenPromotedAt("org_1", "cj_1", at)).resolves.toBeUndefined();
+
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+        data: { revenueProvenPromotedAt: at },
+      });
+    });
+
+    it("throws StaleVersionError when count=0 (cross-org / missing)", async () => {
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+      await expect(store.setRevenueProvenPromotedAt("org_x", "cj_1", new Date())).rejects.toThrow(
+        StaleVersionError,
+      );
+    });
+  });
+
+  describe("listRevenueProvenCandidates", () => {
+    it("filters published-and-not-yet-promoted (the NULL watermark bounds PENDING work in SQL), oldest first", async () => {
+      prisma.creativeJob.findMany.mockResolvedValue([]);
+
+      await store.listRevenueProvenCandidates(500);
+
+      expect(prisma.creativeJob.findMany).toHaveBeenCalledWith({
+        where: { metaCampaignId: { not: null }, revenueProvenPromotedAt: null },
+        select: {
+          id: true,
+          organizationId: true,
+          deploymentId: true,
+          mode: true,
+          stageOutputs: true,
+          ugcPhaseOutputs: true,
+          pastPerformance: true,
+          metaCampaignId: true,
+          metaVideoId: true,
+        },
+        orderBy: { createdAt: "asc" },
+        take: 500,
+      });
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
+import rawBody from "fastify-raw-body";
 import { createHmac } from "node:crypto";
 import { InstagramAdapter } from "../instagram.js";
 import { registerManagedWebhookRoutes } from "../../routes/managed-webhook.js";
@@ -78,6 +79,13 @@ describe("Instagram webhook replay protection (AU-1)", () => {
     // production. Without `initDedup()`, `checkDedup` falls back to its
     // in-memory FIFO — which is exactly what we want to validate here.
     app = Fastify({ logger: false });
+    // Mirror production wiring so the route sees the true raw bytes for HMAC (F9).
+    await app.register(rawBody, {
+      field: "rawBody",
+      global: false,
+      encoding: "utf8",
+      runFirst: true,
+    });
     registerManagedWebhookRoutes(app, { registry, dedup: { checkDedup } });
     await app.ready();
   });

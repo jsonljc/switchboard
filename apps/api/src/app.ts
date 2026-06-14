@@ -14,7 +14,7 @@ import rawBody from "fastify-raw-body";
 import formbody from "@fastify/formbody";
 import { setMetrics, evaluate, resolveIdentity } from "@switchboard/core";
 import type { StorageContext, PolicyCache, AgentNotifier } from "@switchboard/core";
-import { AuditLedger, NoopOperatorAlerter, WebhookOperatorAlerter } from "@switchboard/core";
+import { AuditLedger } from "@switchboard/core";
 import type { OperatorAlerter } from "@switchboard/core";
 import {
   IntentRegistry,
@@ -37,9 +37,12 @@ import { buildDevAuthFallback } from "./utils/auth-fallback.js";
 import { bootstrapStorage } from "./bootstrap/storage.js";
 import { ensureSystemIdentity } from "./bootstrap/system-identity.js";
 import { registerRoutes } from "./bootstrap/routes.js";
+import { selectOperatorAlerter } from "./bootstrap/select-operator-alerter.js";
 import { registerInngest } from "./bootstrap/inngest.js";
 import { registerSwagger } from "./bootstrap/swagger.js";
 import { wireMetricsProvider } from "./bootstrap/wire-metrics.js";
+import { assertSafeSelfApprovalEnv } from "./bootstrap/self-approval-env.js";
+import type { StripeConnectClient } from "./payments/stripe-connect-payment-adapter.js";
 import type { Redis } from "ioredis";
 
 declare module "fastify" {
@@ -97,6 +100,12 @@ declare module "fastify" {
 }
 
 export async function buildServer() {
+  // Fail fast on prod-unsafe env before any I/O. Mirrors the dashboard's
+  // assertSafeDashboardAuthEnv(): a production boot with ALLOW_SELF_APPROVAL
+  // enabled but unacknowledged crashes here rather than silently disabling
+  // four-eyes approval (security audit 2026-06-10, F7).
+  assertSafeSelfApprovalEnv();
+
   // Initialize OpenTelemetry before Fastify starts (must be first)
   await initTelemetry();
 
@@ -444,14 +453,10 @@ export async function buildServer() {
 
   // --- OperatorAlerter + WorkTraceStore (moved before SkillMode so workTraceStore
   //     can be threaded into PrismaOpportunityStore inside bootstrapSkillMode) ---
-  const operatorAlerter: OperatorAlerter = process.env.OPERATOR_ALERT_WEBHOOK_URL
-    ? new WebhookOperatorAlerter({
-        webhookUrl: process.env.OPERATOR_ALERT_WEBHOOK_URL,
-        headers: process.env.OPERATOR_ALERT_WEBHOOK_SECRET
-          ? { Authorization: `Bearer ${process.env.OPERATOR_ALERT_WEBHOOK_SECRET}` }
-          : undefined,
-      })
-    : new NoopOperatorAlerter();
+  // Single source of truth for the operator alerter; the same instance is
+  // threaded to the WorkTraceStore, PlatformIngress, and the Inngest async
+  // path (registerInngest) below, so every failure path shares one alerter (D9-F1).
+  const operatorAlerter: OperatorAlerter = selectOperatorAlerter(process.env);
 
   let workTraceStore: import("@switchboard/db").PrismaWorkTraceStore | undefined;
   let deploymentResolver: import("@switchboard/core/platform").DeploymentResolver | null = null;
@@ -500,6 +505,31 @@ export async function buildServer() {
   const { createChildWorkSubmitter } = await import("./bootstrap/delegation-submitter.js");
   const childWorkSubmitter = createChildWorkSubmitter(() => submitChildWorkRef);
 
+  // Per-org PaymentPort factory (PR 1A-4d). Constructed BEFORE bootstrapSkillMode so the
+  // SAME instance backs both Alex's deposit-link tool and the payments webhook: the Noop
+  // adapter's in-process issued map only round-trips when one instance is shared. Stripe-first,
+  // Noop fail-closed; never a global env secret.
+  let paymentPortFactory:
+    | import("./bootstrap/payment-port-factory.js").PaymentPortFactory
+    | undefined;
+  if (prismaClient) {
+    const { createPaymentPortFactory, DEFAULT_PAYMENT_REDIRECT_BASE_URL } =
+      await import("./bootstrap/payment-port-factory.js");
+    // Pilot-global patient-payment-page origin (Fork 2): a dedicated PAYMENT_PUBLIC_URL
+    // (the documented per-origin hook), falling back to the existing DASHBOARD_URL (the
+    // pages ARE dashboard pages) then the localhost dev default. `||` (not `??`) so a
+    // blank env value falls through to the next source instead of yielding an empty origin.
+    const paymentRedirectBaseUrl =
+      process.env.PAYMENT_PUBLIC_URL ||
+      process.env.DASHBOARD_URL ||
+      DEFAULT_PAYMENT_REDIRECT_BASE_URL;
+    paymentPortFactory = createPaymentPortFactory({
+      prismaClient,
+      logger: app.log,
+      paymentRedirectBaseUrl,
+    });
+  }
+
   try {
     if (!prismaClient) {
       throw new Error("SkillMode requires DATABASE_URL — prismaClient is null");
@@ -512,6 +542,7 @@ export async function buildServer() {
       logger: app.log,
       contextBuilder,
       childWorkSubmitter,
+      paymentPortFactory,
     });
     simulationExecutor = skillModeResult.simulationExecutor;
     simulationSkill = skillModeResult.alexSkill;
@@ -573,13 +604,38 @@ export async function buildServer() {
     app.decorate("orgAgentEnablementStore", orgAgentEnablementStore);
   }
 
-  // Per-org PaymentPort factory — selects the Stripe Connect adapter when the org
-  // has a connected 'stripe' Connection with full Connect creds; falls back to the
-  // Noop adapter (DEGRADED) otherwise. Fail-closed: never uses a global env secret.
+  // Per-org PaymentPort factory, constructed above and shared with Alex's deposit-link
+  // tool so the Noop issued map round-trips with the webhook's retrievePayment.
   // The /api/webhooks/payments/webhook route 503s when this is missing.
-  if (prismaClient) {
-    const { createPaymentPortFactory } = await import("./bootstrap/payment-port-factory.js");
-    app.decorate("paymentPortFactory", createPaymentPortFactory({ prismaClient, logger: app.log }));
+  if (paymentPortFactory) {
+    app.decorate("paymentPortFactory", paymentPortFactory);
+  }
+
+  // Native Stripe Connect webhook verifier (platform-level endpoint, one signing
+  // secret). constructEvent verifies the Stripe-Signature over the raw body and
+  // returns the typed event (event.account carries the connected account). Gated on
+  // both the platform key and the Connect endpoint secret; absent either, the
+  // /api/webhooks/payments/webhook route 503s (fail-closed, no live verification).
+  {
+    const connectWebhookSecret = process.env["STRIPE_CONNECT_WEBHOOK_SECRET"];
+    const stripeSecretKey = process.env["STRIPE_SECRET_KEY"];
+    if (connectWebhookSecret && stripeSecretKey) {
+      // Reuse the platform Stripe singleton (getStripe is keyed on STRIPE_SECRET_KEY,
+      // guaranteed present by the guard above). constructEvent uses only the signing
+      // secret for its HMAC, so the client is just the carrier for the verify method;
+      // reusing the singleton avoids a second client and a duplicate apiVersion pin.
+      const { getStripe } = await import("./services/stripe-service.js");
+      const { verifyConnectWebhookSignature } =
+        await import("./payments/stripe-connect-payment-adapter.js");
+      const platformClient = getStripe() as unknown as StripeConnectClient;
+      app.decorate("paymentWebhookVerifier", (rawBodyStr: string | Buffer, signature: string) =>
+        verifyConnectWebhookSignature(platformClient, rawBodyStr, signature, connectWebhookSecret),
+      );
+    } else {
+      app.log.info(
+        "Stripe Connect webhook verifier not configured (need STRIPE_SECRET_KEY + STRIPE_CONNECT_WEBHOOK_SECRET); payments webhook will 503",
+      );
+    }
   }
 
   // Report cache store + report projection stores for /api/dashboard/reports
@@ -743,12 +799,21 @@ export async function buildServer() {
     | undefined;
   if (prismaClient) {
     const { bootstrapContainedWorkflows } = await import("./bootstrap/contained-workflows.js");
+    // workTraceStore is always constructed alongside prismaClient (above); the
+    // pause executor's last-mile approved-lifecycle check (D5-2a) reads it, so a
+    // missing store here is a wiring bug, not a degraded mode. Fail loud.
+    if (!workTraceStore) {
+      throw new Error(
+        "workTraceStore must be initialized when prismaClient is present (riley pause last-mile gate)",
+      );
+    }
     const result = await bootstrapContainedWorkflows({
       prismaClient,
       intentRegistry,
       modeRegistry,
       platformIngress,
       deploymentResolver,
+      workTraceStore,
       logger: app.log,
     });
     instantFormAdapter = result.instantFormAdapter;
@@ -827,6 +892,12 @@ export async function buildServer() {
       receiptWriter: {
         write: (input, tx) => prismaReceipts.mint(input, tx as never).then(() => {}),
       },
+      // F3: anchor `verified` to a server-side PSP fetch-back via the per-org
+      // payment port. Without it, payment.record_verified is not registered.
+      paymentVerifier: app.paymentPortFactory
+        ? (orgId: string, externalReference: string) =>
+            app.paymentPortFactory!(orgId).then((port) => port.retrievePayment(externalReference))
+        : undefined,
       logger: app.log,
     });
   }

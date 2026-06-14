@@ -13,6 +13,7 @@ import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
 import { decisionsRoutes } from "../routes/decisions.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
 import { pipelineRoute } from "../routes/agent-home/pipeline.js";
+import { bookingWinsRoute } from "../routes/agent-home/booking-wins.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
 import { greetingRoutes } from "../routes/greeting.js";
 import { idempotencyMiddleware } from "../middleware/idempotency.js";
@@ -524,6 +525,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   await app.register(decisionsRoutes, { prefix: "/api/dashboard" });
   await app.register(winsRoute, { prefix: "/api/dashboard" });
   await app.register(pipelineRoute, { prefix: "/api/dashboard" });
+  await app.register(bookingWinsRoute, { prefix: "/api/dashboard" });
   await app.register(metricsRoute, { prefix: "/api/dashboard" });
   await app.register(greetingRoutes, { prefix: "/api/dashboard" });
 

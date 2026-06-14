@@ -83,6 +83,7 @@ export { PrismaDeploymentStateStore } from "./stores/prisma-deployment-state-sto
 export { PrismaDeploymentConnectionStore } from "./stores/prisma-deployment-connection-store.js";
 export { PrismaCreativeJobStore } from "./stores/prisma-creative-job-store.js";
 export type { TasteCandidate } from "./stores/prisma-creative-job-store.js";
+export type { RevenueProvenCandidate } from "./stores/prisma-creative-job-store.js";
 export { PrismaInteractionSummaryStore } from "./stores/prisma-interaction-summary-store.js";
 export { PrismaDeploymentMemoryStore } from "./stores/prisma-deployment-memory-store.js";
 export { PrismaDeploymentMemoryEvidenceStore } from "./stores/prisma-deployment-memory-evidence-store.js";
@@ -94,12 +95,21 @@ export type { WriteActivityLogInput } from "./stores/prisma-activity-log-store.j
 export { PrismaCustomerMemoryStore } from "./stores/prisma-customer-memory-store.js";
 export { PrismaOwnerMemoryStore } from "./stores/prisma-owner-memory-store.js";
 export { PrismaAggregateMemoryStore } from "./stores/prisma-aggregate-memory-store.js";
+export { PrismaFailedMessageRetentionStore } from "./stores/prisma-failed-message-retention-store.js";
+export type {
+  PurgeExpiredInput,
+  PurgeExpiredResult,
+} from "./stores/prisma-failed-message-retention-store.js";
 export { PrismaCreatorIdentityStore } from "./stores/prisma-creator-identity-store.js";
 export { PrismaAssetRecordStore } from "./stores/prisma-asset-record-store.js";
 export { PrismaExecutionTraceStore } from "./stores/prisma-execution-trace-store.js";
+export {
+  PrismaBookingOutcomeLedgerStore,
+  type BookingOutcomeLedgerRow,
+} from "./stores/prisma-booking-outcome-ledger-store.js";
 export { PrismaKnowledgeEntryStore } from "./stores/prisma-knowledge-entry-store.js";
 export { PrismaWorkTraceStore } from "./stores/prisma-work-trace-store.js";
-export { PrismaBookingStore } from "./stores/prisma-booking-store.js";
+export { PrismaBookingStore, acquireBookingLock } from "./stores/prisma-booking-store.js";
 export { PrismaBookingAttributionStore } from "./stores/prisma-booking-attribution-store.js";
 export { PrismaOutboxStore } from "./stores/prisma-outbox-store.js";
 export { PrismaConversionRecordStore } from "./stores/prisma-conversion-record-store.js";
@@ -151,6 +161,10 @@ export { PrismaScheduledFollowUpStore } from "./stores/prisma-scheduled-follow-u
 export { PrismaScheduledReminderStore } from "./stores/prisma-scheduled-reminder-store.js";
 export { seedOrgDayOneAgents } from "./seed/seed-org-day-one-agents.js";
 export { seedMiraPilotOrgs } from "./seed/seed-mira-pilot-orgs.js";
+export {
+  provisionOrgAgentDeployments,
+  type ProvisionOrgAgentsResult,
+} from "./seed/provision-org-agents.js";
 export {
   CREATIVE_GOVERNANCE_SETTINGS,
   CREATIVE_SPEND_APPROVAL_THRESHOLD,

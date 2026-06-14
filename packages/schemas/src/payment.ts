@@ -65,3 +65,14 @@ export interface PaymentPort {
   createDepositLink(input: DepositLinkInput): Promise<DepositLink>;
   retrievePayment(externalReference: string): Promise<VerifiedPayment | null>;
 }
+
+/**
+ * Path suffixes for the patient-facing payment redirect pages, served by the
+ * dashboard `(public)` route group. SINGLE SOURCE OF TRUTH for the api -> dashboard
+ * seam: the api builds `${PAYMENT_PUBLIC_URL}${PAYMENT_SUCCESS_PATH}` for the Stripe
+ * Checkout success_url (apps/api payment-port-factory.ts), and the dashboard serves a
+ * page at the matching route (apps/dashboard (public)/payment/...). A dashboard
+ * route-pin test asserts a page exists at each path so the two cannot drift silently.
+ */
+export const PAYMENT_SUCCESS_PATH = "/payment/success";
+export const PAYMENT_CANCEL_PATH = "/payment/cancel";

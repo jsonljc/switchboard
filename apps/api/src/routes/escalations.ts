@@ -9,6 +9,20 @@ import { requireOrganizationScope } from "../utils/require-org.js";
 import { resolveOperatorActor } from "./operator-actor.js";
 import { finalizeOperatorTrace } from "./work-trace-delivery-enrichment.js";
 
+/** A rendered conversation turn: role "user"=lead, "assistant"=agent, "owner"=operator. */
+interface ConversationTurn {
+  role?: string;
+  text?: string;
+  timestamp?: string;
+}
+
+/**
+ * Cap on transcript turns returned with an escalation. The handoff sheet renders
+ * only the most recent turns, so a long thread does not need its full history
+ * loaded; bound the read and return the most recent slice in chronological order.
+ */
+const MAX_TRANSCRIPT_MESSAGES = 100;
+
 export const escalationsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/escalations — list escalations filtered by status
   app.get(
@@ -97,21 +111,41 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
       }
 
-      // Extract conversation history if sessionId exists. Scope by organizationId
-      // (defense-in-depth, TI-5/TI-6): even though the Handoff orgId guard above
-      // already gates access, the conversation row may have a divergent or null
-      // organizationId — so we re-assert the scope on the conversation lookup.
-      let conversationHistory: unknown[] = [];
+      // Assemble the lead/agent transcript. On the managed-channel path those
+      // turns are written by the gateway to ConversationMessage, keyed by
+      // contactId. Handoff.sessionId is NOT a session/thread key: it is the
+      // WorkUnit traceId of the turn that escalated (skill-mode sets the skill
+      // context sessionId to workUnit.traceId). So resolve the contact via that
+      // turn's WorkTrace lineage (the gateway threads contactId onto every
+      // turn's trace), then read the transcript by contactId.
+      //
+      // Both lookups are org-scoped (defense-in-depth, TI-5/TI-6): the Handoff
+      // orgId guard above gates access, but a WorkTrace or ConversationMessage
+      // row may carry a divergent org, so each lookup re-asserts the scope.
+      let conversationHistory: ConversationTurn[] = [];
       if (handoff.sessionId) {
-        const conversation = await app.prisma.conversationState.findFirst({
-          where: { threadId: handoff.sessionId, organizationId: orgId },
+        const trace = await app.prisma.workTrace.findFirst({
+          where: {
+            traceId: handoff.sessionId,
+            organizationId: orgId,
+            contactId: { not: null },
+          },
+          orderBy: { requestedAt: "desc" },
+          select: { contactId: true },
         });
 
-        if (conversation && conversation.messages) {
-          // Validate that messages is an array
-          if (Array.isArray(conversation.messages)) {
-            conversationHistory = conversation.messages;
-          }
+        if (trace?.contactId) {
+          const messages = await app.prisma.conversationMessage.findMany({
+            where: { contactId: trace.contactId, orgId },
+            orderBy: { createdAt: "desc" },
+            take: MAX_TRANSCRIPT_MESSAGES,
+          });
+          // Reverse the newest-first slice back into chronological order.
+          conversationHistory = messages.reverse().map((m) => ({
+            role: m.direction === "inbound" ? "user" : "assistant",
+            text: m.content,
+            timestamp: m.createdAt.toISOString(),
+          }));
         }
       }
 
@@ -177,16 +211,27 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       // Update handoff status to released. The handoff mutation is owned by
-      // the escalations route directly — only the conversationState-side work
+      // the escalations route directly; only the conversationState-side work
       // (message append + status transition + WorkTrace) is delegated to
-      // ConversationStateStore.
-      const updatedHandoff = await app.prisma.handoff.update({
-        where: { id },
+      // ConversationStateStore. The write is org-scoped at the query level via
+      // updateMany so it fails closed independently of the guard above;
+      // updateMany drops Prisma's P2025 not-found, hence the count===0 guard.
+      const releaseResult = await app.prisma.handoff.updateMany({
+        where: { id, organizationId: orgId },
         data: {
           status: "released",
           acknowledgedAt: new Date(),
         },
       });
+      if (releaseResult.count === 0) {
+        return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
+      }
+      const updatedHandoff = await app.prisma.handoff.findFirst({
+        where: { id, organizationId: orgId },
+      });
+      if (!updatedHandoff) {
+        return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
+      }
 
       const escalation = {
         id: updatedHandoff.id,
@@ -309,14 +354,25 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
       }
 
-      const updatedHandoff = await app.prisma.handoff.update({
-        where: { id },
+      // Org-scoped write (updateMany + count===0 guard) so the mutation fails
+      // closed independently of the guard above; updateMany drops P2025.
+      const resolveResult = await app.prisma.handoff.updateMany({
+        where: { id, organizationId: orgId },
         data: {
           status: "resolved",
           resolutionNote: resolutionNote ?? null,
           resolvedAt: new Date(),
         },
       });
+      if (resolveResult.count === 0) {
+        return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
+      }
+      const updatedHandoff = await app.prisma.handoff.findFirst({
+        where: { id, organizationId: orgId },
+      });
+      if (!updatedHandoff) {
+        return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
+      }
 
       return reply.send({
         escalation: {

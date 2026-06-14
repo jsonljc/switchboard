@@ -140,6 +140,87 @@ describe("decideForCampaign (characterization)", () => {
     });
   });
 
+  describe("zero-conversion burn (D1-1)", () => {
+    // A campaign spending $2100 with ZERO attributed conversions and 600 clicks, with a
+    // durable daily breach already accrued. cpa = safeDivide(2100, 0) = 0.
+    const burnInsight = insight({ spend: 2100, conversions: 0, inlineLinkClicks: 600, revenue: 0 });
+    const durableDailyBreach = {
+      periodsAboveTarget: 14,
+      granularity: "daily" as const,
+      isApproximate: false,
+    };
+
+    it("never emits a positive 'maintained ROAS' insight on a zero-conversion burn (targetROAS=0)", () => {
+      // targetROAS:0 is the ONLY condition under which isPerformingWell returns true at
+      // cpa=0 (0<=target AND 0>=0). PRE-FIX the engine emitted a positive
+      // "maintained 0.0x ROAS" stable_performance insight and returned early.
+      const r = decideForCampaign({
+        campaignId: "c1",
+        campaignName: "C1",
+        currentInsight: burnInsight,
+        previousInsight: burnInsight,
+        targetBreach: durableDailyBreach,
+        learningStatus: successStatus,
+        economicTier: "booked_cac",
+        effectiveTarget: 100,
+        revenueState: assembleRevenueState({
+          measurementTrusted: true,
+          marginBasis: "unavailable",
+        }),
+        targetROAS: 0,
+        nextCycleDate: "2026-05-14",
+      });
+      // The stable-performance insight must NOT appear; the burn must surface instead.
+      expect(r.insights.some((i) => i.category === "stable_performance")).toBe(false);
+      expect(r.recommendations.length + r.watches.length).toBeGreaterThan(0);
+    });
+
+    it("routes a durable zero-conversion burn to a pause recommendation (targetROAS=3, not silent)", () => {
+      const r = decideForCampaign({
+        campaignId: "c1",
+        campaignName: "C1",
+        currentInsight: burnInsight,
+        previousInsight: burnInsight,
+        targetBreach: durableDailyBreach,
+        learningStatus: successStatus,
+        economicTier: "booked_cac",
+        effectiveTarget: 100,
+        revenueState: assembleRevenueState({
+          measurementTrusted: true,
+          marginBasis: "unavailable",
+        }),
+        targetROAS: 3,
+        nextCycleDate: "2026-05-14",
+      });
+      expect(r.recommendations.some((x) => x.action === "pause")).toBe(true);
+      expect(r.insights).toHaveLength(0);
+    });
+
+    it("holds the zero-conversion burn as a measurement_untrusted watch when the denominator is untrusted", () => {
+      // The pause is a destructive rec, so the existing Gate-1 measurement-trust hold
+      // still demotes it when an account-wide conversion-reporting shift is suspected —
+      // the right safety valve for "the zero might be attribution blindness".
+      const r = decideForCampaign({
+        campaignId: "c1",
+        campaignName: "C1",
+        currentInsight: burnInsight,
+        previousInsight: burnInsight,
+        targetBreach: durableDailyBreach,
+        learningStatus: successStatus,
+        economicTier: "booked_cac",
+        effectiveTarget: 100,
+        revenueState: assembleRevenueState({
+          measurementTrusted: false,
+          marginBasis: "unavailable",
+        }),
+        targetROAS: 3,
+        nextCycleDate: "2026-05-14",
+      });
+      expect(r.recommendations.some((x) => x.action === "pause")).toBe(false);
+      expect(r.watches.some((w) => w.pattern === "measurement_untrusted")).toBe(true);
+    });
+  });
+
   it("stamps checkBackDate on engine-emitted insufficient_evidence watch from nextCycleDate", () => {
     // Sub-floor evidence (2 clicks, 0 conversions) means the destructive-family
     // add_creative recommendation is demoted by Gate 2 to an insufficient_evidence

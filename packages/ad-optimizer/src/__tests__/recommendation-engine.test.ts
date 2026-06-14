@@ -457,4 +457,186 @@ describe("generateRecommendations", () => {
       expect(destructiveRec).toBeUndefined();
     });
   });
+
+  describe("zero-conversion burn (D1-1)", () => {
+    const kindsOf = (out: (RecommendationOutput | WatchOutput)[]): string[] =>
+      out.map((o) => (o.type === "recommendation" ? o.action : o.pattern));
+
+    // A DURABLE zero-conversion burn meeting both floors (spend 2100 > 50, clicks 600 >=
+    // 20). cpa reads 0 because safeDivide(spend, 0) = 0, so every cpa-multiple gate is
+    // false and the engine would go silent without the dedicated burn rule.
+    const burnInput = (over: Partial<RecommendationInput> = {}): RecommendationInput => ({
+      campaignId: "camp-burn",
+      campaignName: "Zero Conversion Burn",
+      diagnoses: [],
+      deltas: [makeDelta("cpa", 0, 0, "stable", false)],
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 2100,
+      targetBreach: { periodsAboveTarget: 14, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 600, conversions: 0, days: 7 },
+      ...over,
+    });
+
+    it("does NOT go silent on a durable burn (spend>floor, conversions=0, clicks>=20)", () => {
+      const out = generateRecommendations(burnInput());
+      // The accrued breach must surface SOMETHING actionable, never [].
+      expect(out.length).toBeGreaterThan(0);
+      const kinds = kindsOf(out);
+      // Either a pause-class rec OR a burn watch — never silence, never a manufactured
+      // "good"/scale signal from a cpa=0 reading.
+      expect(kinds.some((k) => k === "pause" || k === "review_budget" || k === "burn")).toBe(true);
+      expect(kinds).not.toContain("scale");
+    });
+
+    it("routes a durable zero-conversion burn to a pause", () => {
+      expect(kindsOf(generateRecommendations(burnInput()))).toContain("pause");
+    });
+
+    it("emits a burn watch (not a pause) when the burn is not yet durable", () => {
+      const out = generateRecommendations(
+        burnInput({
+          targetBreach: { periodsAboveTarget: 3, granularity: "daily", isApproximate: false },
+        }),
+      );
+      expect(kindsOf(out)).toContain("burn");
+      // Sub-durable: visible, but never an actual pause below the durability threshold.
+      expect(recs(out).some((r) => r.action === "pause")).toBe(false);
+    });
+
+    it("does NOT fire below the click floor (a quiet zero-day is noise)", () => {
+      const out = generateRecommendations(
+        burnInput({ evidence: { clicks: 8, conversions: 0, days: 7 } }), // < 20-click floor
+      );
+      expect(recs(out).some((r) => r.action === "pause")).toBe(false);
+      expect(kindsOf(out)).not.toContain("burn");
+    });
+
+    it("does NOT fire below the spend floor (trivial spend is a no-data day)", () => {
+      const out = generateRecommendations(
+        burnInput({ currentSpend: 40, evidence: { clicks: 600, conversions: 0, days: 7 } }),
+      );
+      expect(recs(out).some((r) => r.action === "pause")).toBe(false);
+      expect(kindsOf(out)).not.toContain("burn");
+    });
+
+    it("abstains on a non-finite spend (a NaN must not pass the floor as a burn)", () => {
+      const out = generateRecommendations(
+        burnInput({ currentSpend: NaN, evidence: { clicks: 600, conversions: 0, days: 7 } }),
+      );
+      expect(recs(out).some((r) => r.action === "pause")).toBe(false);
+      expect(kindsOf(out)).not.toContain("burn");
+    });
+
+    it("leaves the normal cpa-multiple path intact for a real (nonzero-conversion) breach", () => {
+      const out = generateRecommendations(
+        burnInput({
+          deltas: [makeDelta("cpa", 350, 350, "stable", false)], // cpa 350 = 3.5x target
+          evidence: { clicks: 600, conversions: 6, days: 7 }, // meets the destructive floor
+        }),
+      );
+      const kinds = kindsOf(out);
+      // The real durable breach still pauses through the existing gate, and the burn rule
+      // does NOT fire (conversions != 0), so no `burn` watch is manufactured.
+      expect(kinds).toContain("pause");
+      expect(kinds).not.toContain("burn");
+    });
+  });
+
+  describe("non-durable breach visibility (D1-2)", () => {
+    const watchPatternsOf = (out: (RecommendationOutput | WatchOutput)[]): string[] =>
+      out.filter((o): o is WatchOutput => o.type === "watch").map((w) => w.pattern);
+
+    // CPA 3.5x target on real conversion volume (600 clicks / 6 conv, clearing the
+    // destructive floor), so the ONLY thing between this and an add_creative+pause is the
+    // 7-day durability gate. Below day 7 the engine emits no rec; D1-2 makes that
+    // accumulating breach visible as an informational breach_building watch, not silence.
+    const buildingInput = (over: Partial<RecommendationInput> = {}): RecommendationInput => ({
+      campaignId: "camp-building",
+      campaignName: "Breach Building",
+      diagnoses: [],
+      deltas: [makeDelta("cpa", 350, 350, "stable", false)], // cpa 350 = 3.5x target
+      targetCPA: 100,
+      targetROAS: 3,
+      currentSpend: 2100,
+      targetBreach: { periodsAboveTarget: 4, granularity: "daily", isApproximate: false },
+      evidence: { clicks: 600, conversions: 6, days: 7 },
+      ...over,
+    });
+
+    it("emits a breach_building watch for a 1-6/14-day daily breach (not a pause, not silence)", () => {
+      const out = generateRecommendations(buildingInput());
+      expect(watchPatternsOf(out)).toContain("breach_building");
+      // Below the durability threshold the engine must NOT act.
+      expect(recs(out).some((r) => r.action === "pause" || r.action === "add_creative")).toBe(
+        false,
+      );
+    });
+
+    it("does NOT emit breach_building once the breach is durable (>=7 days); add_creative owns it", () => {
+      const out = generateRecommendations(
+        buildingInput({
+          targetBreach: { periodsAboveTarget: 9, granularity: "daily", isApproximate: false },
+        }),
+      );
+      expect(watchPatternsOf(out)).not.toContain("breach_building");
+      // The durable case is byte-unchanged: the existing add_creative path still owns it.
+      expect(recs(out).some((r) => r.action === "add_creative")).toBe(true);
+    });
+
+    it("fires at the upper edge (periods=6) and stops at the durability threshold (periods=7)", () => {
+      const atSix = generateRecommendations(
+        buildingInput({
+          targetBreach: { periodsAboveTarget: 6, granularity: "daily", isApproximate: false },
+        }),
+      );
+      expect(watchPatternsOf(atSix)).toContain("breach_building");
+      expect(recs(atSix).some((r) => r.action === "add_creative" || r.action === "pause")).toBe(
+        false,
+      );
+
+      const atSeven = generateRecommendations(
+        buildingInput({
+          targetBreach: { periodsAboveTarget: 7, granularity: "daily", isApproximate: false },
+        }),
+      );
+      expect(watchPatternsOf(atSeven)).not.toContain("breach_building");
+      expect(recs(atSeven).some((r) => r.action === "add_creative")).toBe(true);
+    });
+
+    it("does NOT fire at periods=0 even above the add-creative multiple (no breach has accrued)", () => {
+      const out = generateRecommendations(
+        buildingInput({
+          targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+        }),
+      );
+      // The >=1 lower bound: a campaign over target on a single snapshot with zero accrued
+      // breach days is not yet "building", so the watch must stay silent.
+      expect(watchPatternsOf(out)).not.toContain("breach_building");
+    });
+
+    it("does NOT emit breach_building for a weekly breach (review_budget owns weekly)", () => {
+      const out = generateRecommendations(
+        buildingInput({
+          targetBreach: { periodsAboveTarget: 3, granularity: "weekly", isApproximate: true },
+        }),
+      );
+      expect(watchPatternsOf(out)).not.toContain("breach_building");
+      expect(recs(out).some((r) => r.action === "review_budget")).toBe(true);
+    });
+
+    it("stays silent below the add-creative multiple (a mild sub-2x breach is not yet worth surfacing)", () => {
+      const out = generateRecommendations(
+        buildingInput({ deltas: [makeDelta("cpa", 150, 150, "stable", false)] }), // 1.5x < 2x
+      );
+      expect(watchPatternsOf(out)).not.toContain("breach_building");
+    });
+
+    it("abstains on a non-finite cpa (a NaN must not surface a phantom breach)", () => {
+      const out = generateRecommendations(
+        buildingInput({ deltas: [makeDelta("cpa", NaN, NaN, "stable", false)] }),
+      );
+      expect(watchPatternsOf(out)).not.toContain("breach_building");
+    });
+  });
 });

@@ -4,6 +4,7 @@
 // creds, else returns Noop (fail-closed — never a global env secret).
 import Stripe from "stripe";
 import type { PaymentPort } from "@switchboard/schemas";
+import { PAYMENT_SUCCESS_PATH, PAYMENT_CANCEL_PATH } from "@switchboard/schemas";
 import { decryptCredentials as defaultDecryptCredentials } from "@switchboard/db";
 import { NoopPaymentAdapter } from "./noop-payment-adapter.js";
 import {
@@ -11,8 +12,15 @@ import {
   type StripeConnectClient,
 } from "../payments/stripe-connect-payment-adapter.js";
 import { parseStripeConnectCredentials } from "../payments/stripe-connect-credentials.js";
+import {
+  classifyStripeReadiness,
+  STRIPE_LIVE_CONNECTION_STATUS,
+} from "../payments/stripe-readiness.js";
 
 export type PaymentPortFactory = (orgId: string) => Promise<PaymentPort>;
+
+/** Dev default for the patient-payment-page origin; production sets PAYMENT_PUBLIC_URL. */
+export const DEFAULT_PAYMENT_REDIRECT_BASE_URL = "http://localhost:3002";
 
 export interface PaymentPortFactoryDeps {
   // Matches the bootstrap logger shape used by calendar-provider-factory.ts.
@@ -27,8 +35,13 @@ export interface PaymentPortFactoryDeps {
     connection: {
       findFirst(args: {
         where: { organizationId: string; serviceId: string; status: string };
-        select: { id: boolean; credentials: boolean };
-      }): Promise<{ id: string; credentials: unknown } | null>;
+        select: { id: boolean; credentials: boolean; externalAccountId: boolean; status: boolean };
+      }): Promise<{
+        id: string;
+        credentials: unknown;
+        externalAccountId: string | null;
+        status: string;
+      } | null>;
     };
   };
   // Optional injectable decryptCredentials for tests. Defaults to @switchboard/db's
@@ -37,6 +50,11 @@ export interface PaymentPortFactoryDeps {
   // Optional injectable Stripe client factory for tests. Defaults to a real new
   // Stripe(secretKey, { apiVersion }) constructor matching stripe-service.ts:13.
   stripeClientFactory?: (secretKey: string) => StripeConnectClient;
+  // Public origin (scheme + host) where the patient-facing /payment/success and
+  // /payment/cancel pages are served (the dashboard app). Resolved in app.ts from
+  // PAYMENT_PUBLIC_URL (Fork 2). Optional so existing call sites/tests keep compiling;
+  // defaults to the localhost dev origin. Cosmetic to settlement (webhook-only).
+  paymentRedirectBaseUrl?: string;
 }
 
 export function createPaymentPortFactory(deps: PaymentPortFactoryDeps): PaymentPortFactory {
@@ -79,34 +97,56 @@ async function resolveForOrg(deps: PaymentPortFactoryDeps, orgId: string): Promi
 
   if (deps.prismaClient) {
     const connection = await deps.prismaClient.connection.findFirst({
-      where: { organizationId: orgId, serviceId: "stripe", status: "connected" },
-      select: { id: true, credentials: true },
+      where: { organizationId: orgId, serviceId: "stripe", status: STRIPE_LIVE_CONNECTION_STATUS },
+      select: { id: true, credentials: true, externalAccountId: true, status: true },
     });
 
     if (connection) {
       const creds = parseStripeConnectCredentials(decrypt(connection.credentials));
-      if (creds) {
+      // The readiness predicate is the single source of truth for live-vs-Noop; the readiness
+      // CLI calls the same function, so the diagnostic cannot drift from this decision. The
+      // query already constrains status to STRIPE_LIVE_CONNECTION_STATUS, so the predicate's
+      // status gate is a confirmed no-op here; it is the live gate for the CLI's broader query.
+      const readiness = classifyStripeReadiness(
+        { status: connection.status, externalAccountId: connection.externalAccountId },
+        creds,
+      );
+
+      if (readiness.live && creds) {
+        // Trim + empty-guard so a blank or whitespace base cannot produce a relative redirect
+        // URL that Stripe Checkout rejects; fall back to the dev default, then strip trailing
+        // slashes. (Unchanged #1015 redirect wiring.)
+        const configuredBaseUrl = (
+          deps.paymentRedirectBaseUrl ?? DEFAULT_PAYMENT_REDIRECT_BASE_URL
+        ).trim();
+        const baseUrl = (configuredBaseUrl || DEFAULT_PAYMENT_REDIRECT_BASE_URL).replace(
+          /\/+$/,
+          "",
+        );
         deps.logger.info(
           `Payment[${orgId}]: using StripeConnectPaymentAdapter (connected account)`,
         );
         return new StripeConnectPaymentAdapter({
           client: buildStripeClient(creds.secretKey),
           connectedAccountId: creds.connectedAccountId,
-          // GO-LIVE: replace these placeholders with the org's real success/cancel redirect
-          // URLs before enabling a live Stripe Connection. Inert until then — deposit-link
-          // issuance is deferred; the live webhook path uses only retrievePayment, which
-          // never reads these.
-          successUrl: "https://switchboard.local/payment/success",
-          cancelUrl: "https://switchboard.local/payment/cancel",
+          successUrl: `${baseUrl}${PAYMENT_SUCCESS_PATH}`,
+          cancelUrl: `${baseUrl}${PAYMENT_CANCEL_PATH}`,
         });
       }
-      deps.logger.info(
-        `Payment[${orgId}]: 'stripe' Connection present but Connect creds incomplete — using Noop (fail-closed)`,
-      );
+
+      if (readiness.reason === "account_mismatch") {
+        deps.logger.error(
+          `Payment[${orgId}]: 'stripe' Connection externalAccountId does not match credentials.connectedAccountId - using Noop (fail-closed; settlement would not resolve)`,
+        );
+      } else {
+        deps.logger.info(
+          `Payment[${orgId}]: 'stripe' Connection present but not live-ready (${readiness.reason}) - using Noop (fail-closed)`,
+        );
+      }
     }
   }
 
-  // Fall through to Noop — every org that lacks a connected Stripe Connection gets a
+  // Fall through to Noop - every org that lacks a connected Stripe Connection gets a
   // DEGRADED (T3) noop payment posture that is never a production-countable paid visit.
   deps.logger.info(`Payment[${orgId}]: using NoopPaymentAdapter (Stripe Connect not configured)`);
   return new NoopPaymentAdapter();

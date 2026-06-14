@@ -20,7 +20,12 @@ interface DeploymentConnectionRecord {
 export interface MetaTokenRefreshDeps {
   failure: AsyncFailureContext;
   listMetaConnections: () => Promise<DeploymentConnectionRecord[]>;
-  updateCredentials: (organizationId: string, id: string, credentials: string) => Promise<void>;
+  updateCredentials: (
+    organizationId: string,
+    id: string,
+    credentials: string,
+    metadata?: Record<string, unknown>,
+  ) => Promise<void>;
   updateStatus: (organizationId: string, id: string, status: string) => Promise<void>;
   refreshTokenIfNeeded: (
     config: FacebookOAuthConfig,
@@ -28,7 +33,9 @@ export interface MetaTokenRefreshDeps {
     expiresAt: Date,
   ) => Promise<TokenResult | null>;
   getOAuthConfig: () => FacebookOAuthConfig;
-  notifyOperator?: (message: string, context: Record<string, unknown>) => Promise<void>;
+  // Required (not optional): a wired operator alert is the whole point of surfacing a dead token.
+  // Leaving it optional is how the existing failure alert silently never fired in production.
+  notifyOperator: (message: string, context: Record<string, unknown>) => Promise<void>;
 }
 
 export interface StepTools {
@@ -50,12 +57,27 @@ export async function executeMetaTokenRefresh(
     await step.run(`refresh-${conn.id}`, async () => {
       const creds = decryptCredentials(conn.credentials);
       const accessToken = creds.accessToken as string | undefined;
-      const expiresAtRaw = creds.tokenExpiresAt as string | undefined;
+      // The OAuth callback persists the expiry as `expiresAt` (facebook-oauth.ts:117,125). Read
+      // that field, falling back to the legacy `tokenExpiresAt` only for any pre-existing row, so
+      // the cron actually sees the expiry instead of silently skipping every connection (D10-2).
+      const expiresAtRaw = (creds.expiresAt ?? creds.tokenExpiresAt) as string | undefined;
 
       if (!accessToken || !expiresAtRaw) {
+        // An active meta-ads connection with no usable token or expiry cannot be lifecycle-managed
+        // and will die unrefreshed; surface it to the operator instead of returning silently.
         console.warn(
-          `[meta-token-refresh] Connection ${conn.id} missing accessToken or tokenExpiresAt`,
+          `[meta-token-refresh] Connection ${conn.id} is active but missing its accessToken or expiry`,
         );
+        await deps
+          .notifyOperator(
+            `Meta connection ${conn.id} is active but missing its access token or expiry`,
+            {
+              connectionId: conn.id,
+              deploymentId: conn.deploymentId,
+              organizationId: conn.organizationId,
+            },
+          )
+          .catch(() => {}); // never let an alert failure break the cron
         return;
       }
 
@@ -75,25 +97,30 @@ export async function executeMetaTokenRefresh(
           const updatedCreds = {
             ...creds,
             accessToken: result.accessToken,
-            tokenExpiresAt: newExpiresAt.toISOString(),
+            expiresAt: newExpiresAt.toISOString(),
           };
           const encrypted = encryptCredentials(updatedCreds);
-          await deps.updateCredentials(conn.organizationId, conn.id, encrypted);
+          // Keep metadata.expiresAt in lockstep with the credential expiry: readiness/activation
+          // reads the metadata column, so a credentials-only update would leave it reporting the
+          // pre-refresh expiry.
+          await deps.updateCredentials(conn.organizationId, conn.id, encrypted, {
+            ...(conn.metadata ?? {}),
+            expiresAt: newExpiresAt.toISOString(),
+          });
           refreshed++;
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.warn(`[meta-token-refresh] Failed to refresh connection ${conn.id}: ${msg}`);
         await deps.updateStatus(conn.organizationId, conn.id, "needs_reauth");
-        if (deps.notifyOperator) {
-          await deps
-            .notifyOperator(`Meta token refresh failed for connection ${conn.id}`, {
-              connectionId: conn.id,
-              deploymentId: conn.deploymentId,
-              error: msg,
-            })
-            .catch(() => {}); // don't let notification failure break the cron
-        }
+        await deps
+          .notifyOperator(`Meta token refresh failed for connection ${conn.id}`, {
+            connectionId: conn.id,
+            deploymentId: conn.deploymentId,
+            organizationId: conn.organizationId,
+            error: msg,
+          })
+          .catch(() => {}); // don't let notification failure break the cron
         failed++;
       }
     });

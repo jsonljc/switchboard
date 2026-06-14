@@ -227,6 +227,9 @@ export const CreativeJobSchema = z.object({
   currentStage: CreativeJobStage,
   stageOutputs: z.record(z.unknown()),
   stoppedAt: z.string().nullable(),
+  // Terminal failure marker for a retry-exhausted polished render (dead-letter
+  // consumer write). Mirrors ugcFailure; null = not failed.
+  stageFailure: z.record(z.unknown()).nullable().optional(),
   mode: CreativeJobMode.default("polished"),
   ugcPhase: z.string().nullable().optional(),
   ugcPhaseOutputs: z.record(z.unknown()).nullable().optional(),
@@ -239,6 +242,9 @@ export const CreativeJobSchema = z.object({
   // last captured (never wall-clock now), so a re-decision during a sweep
   // stays strictly newer and is re-observed next run.
   tasteCapturedAt: z.coerce.date().nullable().optional(),
+  // F4 revenue-proven promotion idempotency watermark: set once a measured creative
+  // first crosses the promotion floors, so the daily sweep counts it exactly once.
+  revenueProvenPromotedAt: z.coerce.date().nullable().optional(),
   // Meta publish (P2 parked draft package). All nullable/optional — populated only
   // by the creative.job.publish handler (and durableAssetUrl by PR A).
   metaVideoId: z.string().nullable().optional(),
@@ -252,6 +258,22 @@ export const CreativeJobSchema = z.object({
   updatedAt: z.coerce.date(),
 });
 export type CreativeJob = z.infer<typeof CreativeJobSchema>;
+
+/**
+ * Lifecycle values for the free-form `metaPublishStatus` column above. The
+ * publish handler sets `parked_paused` at the terminal create-ad checkpoint; a
+ * dead-lettered publish is marked `publish_failed` by the publish-failure
+ * recorder so a retry-exhausted Meta draft is observable to the operator
+ * instead of reading as "never published". Absent (null) = not published, or in
+ * flight. Single-sourced here (Layer 1) so the api producer and the core read
+ * model agree on the literals without a cross-layer import.
+ */
+export const CREATIVE_META_PUBLISH_STATUS = {
+  parkedPaused: "parked_paused",
+  publishFailed: "publish_failed",
+} as const;
+export type CreativeMetaPublishStatus =
+  (typeof CREATIVE_META_PUBLISH_STATUS)[keyof typeof CREATIVE_META_PUBLISH_STATUS];
 
 // ── Measured past performance (slice-2 attribution sweep) ──
 

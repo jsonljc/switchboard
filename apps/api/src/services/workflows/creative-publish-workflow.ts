@@ -1,8 +1,7 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
 import type { PrismaCreativeJobStore } from "@switchboard/db";
-import { PARKED_PAUSED } from "../creative-publish-function.js";
+import { PARKED_PAUSED, PAUSED_DRAFT_SUMMARY } from "../creative-publish-function.js";
 
-const PAUSED_DRAFT_SUMMARY = "Created paused Meta draft package (review & activate in Ads Manager)";
 const QUEUED_SUMMARY =
   "Queued paused Meta draft package creation (finalize in Ads Manager once ready)";
 
@@ -50,10 +49,12 @@ export function buildCreativePublishWorkflow(deps: CreativePublishDeps): Workflo
       }
 
       // Hand off the rate-limited Meta chain to the dead-lettered Inngest function.
+      // Carry workUnit.id so it rides the dead-letter `trigger` passthrough and the
+      // publish-failure recorder can reconcile THIS trace queued -> failed (D5-F1).
       const { inngestClient } = await import("@switchboard/creative-pipeline");
       await inngestClient.send({
         name: "creative-pipeline/publish.requested",
-        data: { jobId, organizationId: orgId },
+        data: { jobId, organizationId: orgId, workUnitId: workUnit.id },
       });
 
       return { outcome: "queued", summary: QUEUED_SUMMARY, outputs: { jobId } };

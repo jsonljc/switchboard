@@ -11,8 +11,7 @@ import { runHookGenerator } from "./hook-generator.js";
 import { runScriptWriter } from "./script-writer.js";
 import { runStoryboardBuilder } from "./storyboard-builder.js";
 import { runVideoProducer, createPromptOptimizer } from "./video-producer.js";
-import type { VideoProducerDeps, AssetStorageClient } from "./video-producer.js";
-import { KlingClient } from "./kling-client.js";
+import type { VideoProducerDeps, AssetStorageClient, KlingLike } from "./video-producer.js";
 import { ElevenLabsClient } from "./elevenlabs-client.js";
 import { WhisperClient } from "./whisper-client.js";
 import { VideoAssembler } from "./video-assembler.js";
@@ -42,6 +41,9 @@ export interface StageInput {
   imageGenerator?: ImageGenerator;
   productionTier?: string;
   assetStorage?: AssetStorageClient;
+  /** Kling video client, injected from the apps layer (bootstrap). Undefined =
+   *  KLING_API_KEY unset; the production stage throws rather than render blind. */
+  klingClient?: KlingLike;
 }
 
 type StageOutput =
@@ -147,9 +149,18 @@ export async function runStage(stage: string, input: StageInput): Promise<StageO
       const scripts = ScriptWriterOutput.parse(rawScripts);
       const tier = (input.productionTier ?? "basic") as "basic" | "pro";
 
-      const klingClient = new KlingClient({ apiKey: process.env.KLING_API_KEY ?? "" });
+      // The Kling client is injected from the apps layer (the only layer that may
+      // read env, per the dependency-layer rule). An unset KLING_API_KEY leaves it
+      // undefined; fail loud here rather than build a doomed empty-key client that
+      // 401s per scene and then "succeeds" with zero clips (the silent failure this
+      // fix closes). The throw reaches the runner's retries + onFailure dead-letter.
+      if (!input.klingClient) {
+        throw new Error(
+          "Kling client not configured (KLING_API_KEY unset); cannot render polished clips",
+        );
+      }
       const deps: VideoProducerDeps = {
-        klingClient,
+        klingClient: input.klingClient,
         optimizePrompt: createPromptOptimizer(input.apiKey),
       };
       if (input.assetStorage) {

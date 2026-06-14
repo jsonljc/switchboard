@@ -23,10 +23,16 @@ export type MiraDeskSeamState = Extract<
   "in_production" | "ready_to_review" | "approved_draft" | "reviewed_stopped"
 >;
 
-// Structured problem codes — NO user copy here (the dashboard maps these). Only
-// `quality_failed` is emitted in Phase 2; the rest are reserved for when the
+// Structured problem codes — NO user copy here (the dashboard maps these).
+// `quality_failed` (render dead-letter) and `publish_failed` (a retry-exhausted
+// Meta publish, D9-F3) are emitted today; the rest are reserved for when the
 // seam carries richer failure detail.
-export type MiraDeskProblemCode = "needs_input" | "reference_missing" | "unsafe" | "quality_failed";
+export type MiraDeskProblemCode =
+  | "needs_input"
+  | "reference_missing"
+  | "unsafe"
+  | "quality_failed"
+  | "publish_failed";
 
 export interface MiraDeskItem {
   id: string;
@@ -50,6 +56,14 @@ export interface MiraDeskModel {
   inProduction: MiraDeskItem[];
   readyToReviewCount: number;
   keptDrafts: MiraDeskItem[];
+  /**
+   * Approved (kept) drafts whose Meta publish dead-lettered (D9-F3). Pulled out
+   * of the calm `keptDrafts` shelf so a retry-exhausted publish is discoverable
+   * on the desk the operator already opens, not only on the creative's own
+   * detail page. Each item carries `problem: "publish_failed"`. Empty in the
+   * happy path.
+   */
+  needsAttention: MiraDeskItem[];
   counts: MiraCreativeCounts;
   isEmpty: boolean;
 }
@@ -72,6 +86,18 @@ export function deriveDeskItemState(job: MiraCreativeJobSummary): MiraDeskSeamSt
   }
 }
 
+/**
+ * Desk problem code for a job, by precedence. A render dead-letter
+ * (`quality_failed`) outranks a publish dead-letter (`publish_failed`); the two
+ * never co-occur in real data (publish runs only after a kept draft_ready), but
+ * the order keeps a render failure from ever reading as a publish failure.
+ */
+function deriveProblem(job: MiraCreativeJobSummary): MiraDeskProblemCode | undefined {
+  if (job.status === "failed") return "quality_failed";
+  if (job.publishStatus === "publish_failed") return "publish_failed";
+  return undefined;
+}
+
 function toItem(job: MiraCreativeJobSummary, state: MiraDeskItemState): MiraDeskItem {
   return {
     id: job.id,
@@ -79,7 +105,7 @@ function toItem(job: MiraCreativeJobSummary, state: MiraDeskItemState): MiraDesk
     stage: job.stage,
     state,
     thumbnailUrl: job.draft?.thumbnailUrl,
-    problem: job.status === "failed" ? "quality_failed" : undefined,
+    problem: deriveProblem(job),
     updatedAt: job.updatedAt,
     ...(job.ugcPhase ? { ugcPhase: job.ugcPhase } : {}),
     awaitingGo: job.status === "awaiting_review" && typeof job.draft?.videoUrl !== "string",
@@ -98,13 +124,22 @@ const KEPT_SHELF_CAP = 8;
 export function buildMiraDeskModel(rm: MiraCreativeReadModel): MiraDeskModel {
   const inProduction: MiraDeskItem[] = [];
   const keptDrafts: MiraDeskItem[] = [];
+  const needsAttention: MiraDeskItem[] = [];
   let readyToReviewCount = 0;
 
   for (const job of rm.jobs) {
     if (job.reviewDecision === "passed") continue; // dismissed — gone from the desk
     if (job.reviewDecision === "kept") {
-      // the verdict → shelf
-      keptDrafts.push(toItem(job, "approved_draft"));
+      // A kept draft whose publish dead-lettered needs the operator (D9-F3): it
+      // leaves the calm shelf for the attention bucket. Route on the item's
+      // derived problem (not raw publishStatus) so the bucket and the badge it
+      // renders can never disagree — needsAttention ⇔ a publish_failed problem.
+      const item = toItem(job, "approved_draft");
+      if (item.problem === "publish_failed") {
+        needsAttention.push(item);
+      } else {
+        keptDrafts.push(item);
+      }
       continue;
     }
     const state = deriveDeskItemState(job); // undecided → status buckets
@@ -118,6 +153,9 @@ export function buildMiraDeskModel(rm: MiraCreativeReadModel): MiraDeskModel {
     inProduction,
     readyToReviewCount,
     keptDrafts: keptDrafts.slice(0, KEPT_SHELF_CAP),
+    // Bounded by the read-model window (FETCH_CAP); a publish failure older than
+    // the window ages out, consistent with the kept-shelf caveat above.
+    needsAttention,
     counts: rm.counts,
     // "no jobs at all in the window" — NOT "all three modules are empty". An org
     // with only kept/passed drafts is NOT isEmpty. Don't gate an onboarding nudge

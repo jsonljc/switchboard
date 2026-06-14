@@ -3,6 +3,7 @@ import { GovernanceGate } from "../governance/governance-gate.js";
 import type { GovernanceGateDeps, GovernanceCartridge } from "../governance/governance-gate.js";
 import type { WorkUnit } from "../work-unit.js";
 import type { IntentRegistration } from "../intent-registration.js";
+import { SpendBearingAutoApproveError } from "../intent-registration.js";
 import type { DecisionTrace, IdentitySpec, RiskInput, GuardrailConfig } from "@switchboard/schemas";
 import type { ResolvedIdentity } from "../../identity/spec.js";
 
@@ -668,20 +669,44 @@ describe("GovernanceGate spend-approval threshold", () => {
     expect(decision.matchedPolicies).not.toContain("SPEND_APPROVAL_THRESHOLD");
   });
 
-  it("leaves the system_auto_approved short-circuit untouched", async () => {
+  // F4 (security audit 2026-06-10): the auto-approve short-circuit returns
+  // `execute` before the spend-approval threshold AND the hard spend floor. A
+  // spend-bearing intent must therefore never reach it. This pair replaces the
+  // prior test that pinned the exact anti-pattern (a `budgetChange: 500`
+  // `system_auto_approved` intent returning `execute`).
+  it("refuses to auto-approve a spend-bearing intent even if it bypassed register() (F4 defence in depth)", async () => {
+    const deps = makeDeps();
+    const gate = new GovernanceGate(deps);
+
+    // Hand-constructed registration bypasses IntentRegistry.register()'s guard;
+    // the gate must still refuse to route a spend-bearing budget mutation to execute.
+    await expect(
+      gate.evaluate(
+        autonomousWorkUnit({ budgetChange: 500 }),
+        makeRegistration({
+          intent: "digital-ads.campaign.adjust_budget",
+          mutationClass: "write",
+          spendBearing: true,
+          approvalMode: "system_auto_approved",
+        }),
+      ),
+    ).rejects.toThrow(SpendBearingAutoApproveError);
+  });
+
+  it("leaves the short-circuit intact for a NON-spend-bearing auto-approved intent", async () => {
     const deps = makeDeps();
     const gate = new GovernanceGate(deps);
 
     const decision = await gate.evaluate(
-      autonomousWorkUnit({ budgetChange: 500 }),
+      autonomousWorkUnit({ note: "no money here" }),
       makeRegistration({
-        intent: "digital-ads.campaign.adjust_budget",
+        intent: "operator.transition_opportunity_stage",
         mutationClass: "write",
         approvalMode: "system_auto_approved",
+        // spendBearing omitted ⇒ false ⇒ short-circuit still returns execute.
       }),
     );
 
-    // The auto-approve path returns before the threshold post-processor runs.
     expect(decision.outcome).toBe("execute");
     expect(decision.matchedPolicies).not.toContain("SPEND_APPROVAL_THRESHOLD");
   });

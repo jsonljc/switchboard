@@ -1,8 +1,5 @@
-import type { PrismaClient } from "@prisma/client";
-import {
-  buildRileyPauseAllowPolicyInput,
-  buildRileyPauseApprovalPolicyInput,
-} from "./riley-pause-governance.js";
+import type { PrismaDbClient } from "../prisma-db.js";
+import { seedRileyPausePolicies } from "./riley-pause-governance.js";
 
 /** The marketplace listing that backs Riley. Seeded by seedMarketplace (slug "ad-optimizer"). */
 export const AD_OPTIMIZER_LISTING_SLUG = "ad-optimizer";
@@ -32,9 +29,9 @@ export const AD_OPTIMIZER_LISTING_SLUG = "ad-optimizer";
  * error if the listing is missing so the seed fails loudly.
  */
 export async function seedRileyAdOptimizerDeployment(
-  prisma: PrismaClient,
+  prisma: PrismaDbClient,
   orgId: string,
-): Promise<void> {
+): Promise<{ deploymentId: string }> {
   const listing = await prisma.agentListing.findUnique({
     where: { slug: AD_OPTIMIZER_LISTING_SLUG },
     select: { id: true },
@@ -63,7 +60,7 @@ export async function seedRileyAdOptimizerDeployment(
     connectionIds: [] as string[],
   };
 
-  await prisma.agentDeployment.upsert({
+  const deployment = await prisma.agentDeployment.upsert({
     where: {
       organizationId_listingId: { organizationId: orgId, listingId: listing.id },
     },
@@ -74,22 +71,13 @@ export async function seedRileyAdOptimizerDeployment(
   // Phase-C pause self-execution governance (adoptimizer.campaign.pause): a
   // workflow intent default-denies without an allow policy, and a Riley-initiated
   // pause mutates live spend state, so seed the allow + mandatory-approval
-  // policies together (mirrors the handoff gate; never one without the other).
+  // policies together as one both-or-neither unit (never one without the other).
   // The per-org dispatch flag (governanceSettings.pauseSelfExecutionEnabled) is
   // deliberately NOT seeded: the governed path is armed, the initiator stays OFF
   // until an operator flips the org via scripts/riley-pause-flag.ts (auditable).
-  // Idempotent on the deterministic per-org policy ids.
-  const { id: pauseAllowId, ...pauseAllowData } = buildRileyPauseAllowPolicyInput(orgId);
-  await prisma.policy.upsert({
-    where: { id: pauseAllowId },
-    create: { id: pauseAllowId, ...pauseAllowData },
-    update: pauseAllowData,
-  });
+  // When this runs inside provisionOrgAgentDeployments' $transaction, a partial
+  // crash rolls back BOTH rows; idempotent on the deterministic per-org ids.
+  await seedRileyPausePolicies(prisma, orgId);
 
-  const { id: pauseApprovalId, ...pauseApprovalData } = buildRileyPauseApprovalPolicyInput(orgId);
-  await prisma.policy.upsert({
-    where: { id: pauseApprovalId },
-    create: { id: pauseApprovalId, ...pauseApprovalData },
-    update: pauseApprovalData,
-  });
+  return { deploymentId: deployment.id };
 }

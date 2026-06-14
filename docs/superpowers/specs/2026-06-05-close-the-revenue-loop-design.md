@@ -111,6 +111,23 @@ The structured verdict `{paid, held, tier, basis, degraded}` keeps this honest: 
 - **Verified-payment writer** is a **new `payment.record_verified` intent registered `system_auto_approved`** — authority is the external PSP fetch-back, not human judgment. `operator.record_revenue` stays separate and demoted to `verified=false`.
 - **Deposit-link issuance** is an idempotent external read riding on the already-approved booking — no new approval.
 
+## 8a. Blast-radius contract (Spec-1B entry criterion)
+
+The act-leg reallocation (`adoptimizer.campaign.reallocate`) is autonomous once approved and it moves real budget, so the declarative `reversibility`/`rollbackPlan`/`guardrailMetrics` STRINGS of §7 (`PhaseCExecutionContract`, recorded into `WorkTrace` but not enforced) are insufficient for it. They stay correct for the reversible, human-gated pause class, which moves no dollars; for the money-move class they graduate from prose to an ENFORCED contract.
+
+**The contract.** The reallocation intent MUST carry a `BlastRadiusContract` (`packages/ad-optimizer/src/blast-radius-contract.ts`, Layer 2, schemas-only) with enforced numeric caps:
+
+- `maxDeltaCents` (cents): a hard ceiling on the absolute dollar delta the move may shift.
+- `maxAccountSpendShare` (0..1): a ceiling on the move's share of the account's current daily spend, guarding the small-account, large-relative-move case a flat dollar cap misses.
+- `guardrails: BlastRadiusGuardrail[]`: machine-comparable thresholds (`metric` in a closed union `account_booked_conversions_drop_share | freed_budget_absorbed_share`, a numeric `breachAbove`, and `windowHours`), NOT prose.
+- `rollback: { kind: "reset_prior_budget"; capturePriorValue: true }`: the automated inverse for the reallocate class (the pause class keeps a human resume).
+
+**The enforced check.** The executor MUST call the pure `assertWithinBlastRadius(contract, deltaCents, accountDailySpendCents)` immediately BEFORE the Meta budget write, using the signed delta and the account daily spend from its read-modify-re-read of live Meta state (§7). A breach returns `{ ok: false; reason: "DELTA_CAP" | "SHARE_CAP" }` and the executor FAILS CLOSED (`outcome:"failed"`, recovery-required); it NEVER clamps the move to fit. The check fails closed on every non-finite input, a non-finite cap, and a non-positive account-spend denominator (a missing or zero account spend cannot size the move, so the share cap refuses rather than skips: `Number.isFinite` guards every comparison, per `feedback_nan_blind_comparison_gates`). It composes with the §13 `BUDGET_DRIFTED` test (the re-read guard) and the §11 cents-end-to-end rule (the contract is cents; normalize to dollars exactly once at the gate boundary).
+
+**Forward monitoring and rollback (Spec-1B / Tier 3, not wired by D4-6).** The guardrails are typed thresholds for a forward monitor. The slice-3 outcome-attribution cron (`packages/core/src/recommendations/outcome-attribution.ts`, gated by `RILEY_OUTCOME_ATTRIBUTION_ENABLED`) is the intended home, but the two metrics (`account_booked_conversions_drop_share`, `freed_budget_absorbed_share`) are NEW per-window computations that cron does not implement today (it currently derives only a windowed corroboration ratio for trust-scoring). Tier 3 / Spec-1B adds those computations and the breach-to-`reset_prior_budget` rollback (using the prior budget the executor captured). Note also that the executor's `accountDailySpendCents` (the pre-write cap denominator) is a live point-in-time daily-spend read, distinct from the cron's windowed `accountSpendCents` corroboration denominator. D4-6 ships the enforced TYPE and the pure pre-write check only; no auto-monitoring exists today and this section claims none.
+
+**Spec-1B entry gate.** This enforced blast-radius contract (D4-6) is one of the THREE Tier-5 entry criteria gating Spec-1B, alongside the financial-intent auto-approve guard (D9-2, PR #1020) and the human-pause-gate hardening (D5-2, PR #1013). All three have landed on `main`; no Spec-1B implementation PR merges until they are green (overview decision #4, `docs/superpowers/plans/2026-06-10-riley-remediation-00-overview.md`; the contract design and failing-test sketch are in the Tier-5 plan, `docs/superpowers/plans/2026-06-10-riley-remediation-tier5-spec1b-prerequisites.md`, PR 5.3). This supersedes the act leg's reliance on the declarative `reversibility`/`guardrailMetrics` strings; §7's `ExecutionReceipt` is unchanged.
+
 ## 9. Anti-fake measures (each maps to a verified defect)
 
 1. **Replay** — deterministic booked `eventId`; PSP charges deduped by global-unique `externalRef`.

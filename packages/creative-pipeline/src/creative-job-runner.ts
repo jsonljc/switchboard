@@ -5,7 +5,7 @@ import { CreativePerformanceHistorySchema } from "@switchboard/schemas";
 import type { CreativeJob, VideoProducerOutput } from "@switchboard/schemas";
 import { DalleImageGenerator } from "./stages/image-generator.js";
 import type { ImageGenerator } from "./stages/image-generator.js";
-import type { AssetStorageClient } from "./stages/video-producer.js";
+import type { AssetStorageClient, KlingLike } from "./stages/video-producer.js";
 import type { CreativeMemoryProvider } from "./creative-memory.js";
 
 // 24-hour timeout for buyer approval between stages
@@ -49,6 +49,22 @@ interface JobEventData {
 }
 
 /**
+ * Terminal-lifecycle check for replay / duplicate-delivery safety (D5-F2).
+ * Mirrors the canonical terminal set in @switchboard/core's status-mapper
+ * (mapCreativeJobToMiraStatus: draft_ready / stopped / failed => canContinue
+ * false) but stays schemas-only; creative-pipeline is Layer 2 and must not
+ * import core. The status-mapper's derived "failed" rule
+ * (productionErrorsWithoutVideo) is subsumed by the "complete" check: production
+ * is the last stage, so a job that trips it already advanced currentStage to
+ * "complete". The stage loop always restarts at STAGE_ORDER[0], so a fresh
+ * duplicate invocation against a terminal job would otherwise re-run the trends
+ * stage (LLM spend) and overwrite currentStage.
+ */
+function isPolishedJobTerminal(job: CreativeJob): boolean {
+  return job.currentStage === "complete" || job.stoppedAt != null || job.stageFailure != null;
+}
+
+/**
  * Core pipeline logic extracted for testability.
  * Called by the Inngest function handler with real step tools,
  * or by tests with mocked step tools.
@@ -61,11 +77,28 @@ export async function executeCreativePipeline(
   imageConfig?: ImageConfig,
   assetStorage?: AssetStorageClient,
   creativeMemoryProvider?: CreativeMemoryProvider,
+  klingClient?: KlingLike,
 ): Promise<void> {
   const job = await step.run("load-job", () => jobStore.findById(eventData.jobId));
 
   if (!job) {
     throw new Error(`Creative job not found: ${eventData.jobId}`);
+  }
+
+  // D5-F2: a re-delivered or operator-replayed polished.submitted against a
+  // terminal (complete / stopped / failed) job must be a clean no-op: no
+  // lifecycle mutation, no paid stage re-run, no approval park, no throw. The
+  // stage loop below restarts at STAGE_ORDER[0] on every fresh invocation, so
+  // without this guard a duplicate event re-runs the trends stage (LLM spend)
+  // and overwrites currentStage "complete" => "hooks", parking at the trends
+  // gate (canContinue) one operator Continue away from a full paid re-run.
+  if (isPolishedJobTerminal(job)) {
+    console.warn(
+      `[creative-job-runner] skipping terminal job ${job.id} ` +
+        `(currentStage=${String(job.currentStage)}, stopped=${job.stoppedAt != null}, ` +
+        `failed=${job.stageFailure != null}); replayed/duplicate polished.submitted is a no-op`,
+    );
+    return;
   }
 
   // Create image generator if configured and job requests it
@@ -103,6 +136,25 @@ export async function executeCreativePipeline(
   let stageOutputs: Record<string, unknown> = (job.stageOutputs ?? {}) as Record<string, unknown>;
 
   for (const stage of STAGE_ORDER) {
+    // production is the only consumer of productionTier and the only stage gated
+    // on the operator's tier choice. That choice is written by the storyboard-gate
+    // decision (creative-job-decision-workflow) AFTER the load-job snapshot above
+    // is captured, and Inngest memoizes load-job across replays, so reading
+    // job.productionTier here always yields basic: the pro assembly path never
+    // runs, durableAssetUrl is never set, and polished publish always fails its
+    // CREATIVE_ASSET_NOT_DURABLE precondition. Re-read the persisted tier in a
+    // fresh, distinctly-named step the first time we reach production (after the
+    // storyboard-gate wait has resolved); the string result is JSON-memoized for
+    // later replays. This heals new and not-yet-rendered runs, not a run whose
+    // stage-production step already memoized a basic output.
+    const productionTier =
+      stage === "production"
+        ? await step.run("load-production-tier", async () => {
+            const current = await jobStore.findById(eventData.jobId);
+            return current?.productionTier ?? "basic";
+          })
+        : undefined;
+
     // Run the stage
     const output = await step.run(`stage-${stage}`, () =>
       runStage(stage, {
@@ -123,8 +175,9 @@ export async function executeCreativePipeline(
         openaiApiKey: imageConfig?.openaiApiKey,
         generateReferenceImages: job.generateReferenceImages,
         imageGenerator,
-        productionTier: job.productionTier ?? "basic",
+        ...(productionTier ? { productionTier } : {}),
         assetStorage,
+        klingClient,
       }),
     );
 
@@ -178,6 +231,7 @@ export function createCreativeJobRunner(
   assetStorage?: AssetStorageClient,
   onFailure?: (arg: unknown) => Promise<void>,
   creativeMemoryProvider?: CreativeMemoryProvider,
+  klingClient?: KlingLike,
 ) {
   return inngestClient.createFunction(
     {
@@ -185,6 +239,12 @@ export function createCreativeJobRunner(
       name: "Creative Pipeline Job Runner",
       retries: 3,
       triggers: [{ event: "creative-pipeline/polished.submitted" }],
+      // D5-F2: dedupe a re-delivered/replayed polished.submitted (Inngest 24h
+      // window; per-function-scoped) so even a mid-flight job is safe from a
+      // concurrent duplicate run. Defense-in-depth behind the terminal entry
+      // guard; concurrency was unfit (a run parked on waitForEvent releases its
+      // slot, so a limit of 1 would not serialize across an approval wait).
+      idempotency: "event.data.jobId",
       ...(onFailure ? { onFailure } : {}),
     },
     async ({ event, step }: { event: { data: JobEventData }; step: StepTools }) => {
@@ -196,6 +256,7 @@ export function createCreativeJobRunner(
         imageConfig,
         assetStorage,
         creativeMemoryProvider,
+        klingClient,
       );
     },
   );

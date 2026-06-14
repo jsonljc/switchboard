@@ -12,6 +12,8 @@ import { agentDisplay, type PanelAgentKey } from "./lib/agent-display";
 import { MiraPanel } from "./mira-panel";
 import { IdentityStatus } from "./identity-status";
 import { KeyResult } from "./key-result";
+import { AlexPipeline } from "./alex-pipeline";
+import { AlexWins } from "./alex-wins";
 import { OpenDecisions } from "./open-decisions";
 import { WorkLog } from "./work-log";
 import type { Decision } from "@/lib/decisions/types";
@@ -105,6 +107,11 @@ export function AgentPanel({
               <IdentityStatus agentKey={agentKey} />
               {/* Slot ②: Key result hero (lifetime/week/activation/paused) */}
               <KeyResult agentKey={agentKey} onActivate={onActivate} />
+              {/* Alex-only (F10): live consultations pipeline (was an orphaned
+                  hook) + converted bookings with trace + revenue from the F5
+                  ledger (was a dark read). Booking is Alex-exclusive. */}
+              {agentKey === "alex" && <AlexPipeline />}
+              {agentKey === "alex" && <AlexWins />}
               {/* Slot ③: Open decisions → routes out to decision-detail */}
               <OpenDecisions agentKey={agentKey} onOpenDecision={onOpenDecision ?? (() => {})} />
               {/* Slot ④: Recent work log → "See all in Results →" */}

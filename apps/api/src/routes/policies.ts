@@ -6,6 +6,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { CreatePolicyBodySchema, UpdatePolicyBodySchema } from "../validation.js";
 import { assertOrgAccess } from "../utils/org-access.js";
 import { requireRole } from "../utils/require-role.js";
+import { extractActionTypeMatchers } from "../utils/policy-rule-matchers.js";
 
 const createPolicyJsonSchema = zodToJsonSchema(CreatePolicyBodySchema, { target: "openApi3" });
 const updatePolicyJsonSchema = zodToJsonSchema(UpdatePolicyBodySchema, { target: "openApi3" });
@@ -179,6 +180,37 @@ export const policiesRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Policy not found", statusCode: 404 });
       }
       if (!assertOrgAccess(request, existing.organizationId, reply)) return;
+
+      // D5-2b: refuse to orphan an allow policy. Deleting a require_approval policy
+      // while a matching allow policy for the SAME actionType survives leaves
+      // "allow alone" - which EXECUTES the governed action with no human
+      // (riley-pause-gate.test.ts:164 pins this decomposition). Scope the sibling
+      // search to the deleted policy's OWN org (existing.organizationId), not the
+      // caller's auth org: a global super-admin deleting an org-scoped approval row
+      // must still see that org's allow sibling.
+      if (existing.effect === "require_approval") {
+        const guardedActionTypes = extractActionTypeMatchers(existing.rule);
+        if (guardedActionTypes.length > 0) {
+          const siblings = await app.storageContext.policies.listActive({
+            organizationId: existing.organizationId,
+          });
+          const orphanedAllow = siblings.some(
+            (p) =>
+              p.id !== existing.id &&
+              p.effect === "allow" &&
+              extractActionTypeMatchers(p.rule).some((v) => guardedActionTypes.includes(v)),
+          );
+          if (orphanedAllow) {
+            return reply.code(409).send({
+              error:
+                "Refusing to delete: this require_approval policy guards an action whose allow " +
+                "policy would survive, leaving the action ungated (allow alone self-executes). " +
+                "Delete the matching allow policy first, or both together.",
+              statusCode: 409,
+            });
+          }
+        }
+      }
 
       const deleted = await app.storageContext.policies.delete(id, existing.organizationId);
       if (!deleted) {

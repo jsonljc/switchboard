@@ -15,6 +15,8 @@ import {
   AgentActionType,
   AgentActionStatus,
   ConnectionStatus,
+  DEAD_CONNECTION_STATUSES,
+  isUsableConnectionStatus,
   ScannedBusinessProfileSchema,
   OnboardingConfigSchema,
   SetupSchema,
@@ -253,6 +255,26 @@ describe("Marketplace schemas", () => {
   describe("ConnectionStatus enum", () => {
     it("has expected values", () => {
       expect(ConnectionStatus.options).toEqual(["active", "expired", "revoked"]);
+    });
+  });
+
+  describe("isUsableConnectionStatus", () => {
+    it("treats every dead-token status as unusable", () => {
+      expect(DEAD_CONNECTION_STATUSES).toEqual(["expired", "revoked", "needs_reauth"]);
+      for (const dead of DEAD_CONNECTION_STATUSES) {
+        expect(isUsableConnectionStatus(dead)).toBe(false);
+      }
+    });
+
+    it("treats healthy statuses from both stores as usable", () => {
+      // "active" = DeploymentConnection default; "connected" = org Connection default.
+      expect(isUsableConnectionStatus("active")).toBe(true);
+      expect(isUsableConnectionStatus("connected")).toBe(true);
+    });
+
+    it("treats a missing status as usable (no false dead-token positive)", () => {
+      expect(isUsableConnectionStatus(undefined)).toBe(true);
+      expect(isUsableConnectionStatus(null)).toBe(true);
     });
   });
 

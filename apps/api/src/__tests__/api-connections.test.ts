@@ -274,6 +274,32 @@ describe("Connections API", () => {
       expect(res.statusCode).toBe(404);
       expect(res.json().error).toContain("not found");
     });
+
+    it("redacts a stripe connection's secret key (never returns sk_ over the wire)", async () => {
+      mockStore.getById.mockResolvedValue({
+        id: "conn_stripe",
+        serviceId: "stripe",
+        serviceName: "stripe",
+        organizationId: "org_test",
+        authType: "api_key",
+        credentials: { connectedAccountId: "acct_x", secretKey: "sk_live_must_not_leak" },
+        scopes: [],
+        refreshStrategy: "auto",
+        status: "connected",
+        lastHealthCheck: null,
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-01"),
+      });
+
+      const res = await app.inject({ method: "GET", url: "/api/connections/conn_stripe" });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.connection.credentials).toBe("***");
+      // strong "secret never on the wire" assertion: the raw response carries no key material
+      expect(res.body).not.toContain("sk_live_must_not_leak");
+      expect(res.body).not.toContain("sk_");
+    });
   });
 
   // ── DELETE /api/connections/:id ────────────────────────────────────
