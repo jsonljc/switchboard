@@ -159,6 +159,11 @@ vi.mock("@/hooks/use-agent-wins", () => ({
   useAgentWins: () => ({ data: winsData, isLoading: winsIsLoading, isError: false, error: null }),
 }));
 
+// -- useRecordAttendance -- (avoids QueryClient dependency in AttendanceCheckIn)
+vi.mock("@/hooks/use-record-attendance", () => ({
+  useRecordAttendance: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 // -- InboxAgentAvatar -- (avoids sprite/canvas setup)
 vi.mock("@/components/inbox/inbox-agent-avatar", () => ({
   InboxAgentAvatar: ({ agentKey }: { agentKey: string }) => (
