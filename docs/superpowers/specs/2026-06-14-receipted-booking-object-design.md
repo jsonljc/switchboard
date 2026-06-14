@@ -1,6 +1,6 @@
 # Receipted-booking object (Ledger's core) — design spec
 
-Status: design spec (2026-06-14). Consumes the direction spec
+Status: design spec (2026-06-14, rev2 after a 4-lens review). Consumes the direction spec
 `docs/superpowers/specs/2026-06-14-revenue-proof-medspa-direction.md`.
 Scope owner: the future Ledger agent. This spec defines the DATA MOAT only.
 
@@ -15,150 +15,169 @@ reconciliation aggregate does not exist, so `attribution_confidence`, `exception
 
 ## Ground truth (verified on main, 2026-06-14)
 
-Of the 13 thesis fields, the existing primitives already cover most via clean foreign keys:
+Of the 13 thesis fields, the existing primitives already cover most via foreign keys:
 
-| Field                               | Source primitive                                             | Status                                |
-| ----------------------------------- | ------------------------------------------------------------ | ------------------------------------- |
-| `receipt_id` (this object's own id) | new table                                                    | new                                   |
-| `booking_id`                        | `Booking.id`                                                 | clean FK                              |
-| `contact_key`                       | `Contact.id` (pseudonymous)                                  | clean FK (`Booking.contactId`)        |
-| `trace_id`                          | `WorkTrace.traceId` via `Booking.workTraceId`                | clean FK                              |
-| `attendance_state`                  | `Booking.attendance` (null \| attended \| no_show)           | clean                                 |
-| `payment_event_ids[]`               | `LifecycleRevenueEvent` by `bookingId`                       | clean FK                              |
-| `expected_value`                    | `Opportunity.estimatedValue` (via `Booking.opportunityId`)   | partial (join)                        |
-| `consent_id`                        | `Contact` PDPA fields / `ConsentRecord`                      | partial (not FK'd to booking)         |
-| `source_evidence[]`                 | `Contact.source/sourceType/attribution` + `ConversionRecord` | partial (scattered)                   |
-| `policy_check_id`                   | `WorkTrace.matchedPolicies`                                  | partial (embedded, not indexed)       |
-| `human_approval_id`                 | `WorkTrace.approvalId` / `ApprovalRecord`                    | partial (not joinable from a receipt) |
-| `attribution_confidence`            | none                                                         | MISSING (derived judgment)            |
-| `exceptions[]`                      | none                                                         | MISSING (derived judgment)            |
+| Field                    | Source primitive                                                                 | Status                          |
+| ------------------------ | -------------------------------------------------------------------------------- | ------------------------------- |
+| `receipt_id`             | `Receipt.id` (the proof primitive) by join                                       | exists; NOT this aggregate's id |
+| `booking_id`             | `Booking.id`                                                                     | clean FK                        |
+| `contact_key`            | `Contact.id` (pseudonymous)                                                      | clean FK (`Booking.contactId`)  |
+| `trace_id`               | `WorkTrace.traceId` via `Booking.workTraceId`                                    | clean FK                        |
+| `attendance_state`       | `Booking.attendance` (null \| attended \| no_show)                               | clean                           |
+| `payment_event_ids[]`    | `LifecycleRevenueEvent` by `bookingId`                                           | clean FK                        |
+| `expected_value`         | `Opportunity.estimatedValue` (via `Booking.opportunityId`)                       | partial (join)                  |
+| `consent_id`             | `Contact` PDPA fields (`consentGrantedAt`/`consentRevokedAt`/`pdpaJurisdiction`) | clean (on Contact)              |
+| `source_evidence[]`      | `ConversionRecord` (by `bookingId`) + `Contact.source/sourceType/attribution`    | clean FK + partial              |
+| `policy_check_id`        | `WorkTrace.matchedPolicies`                                                      | partial (embedded)              |
+| `human_approval_id`      | `WorkTrace.approvalId` / `ApprovalRecord`                                        | partial                         |
+| `attribution_confidence` | none                                                                             | MISSING (derived judgment)      |
+| `exceptions[]`           | none                                                                             | MISSING (derived judgment)      |
 
-The three missing fields are derived judgments, not facts in any source primitive. They cannot be
-recomputed losslessly (attribution scoring evolves; manual overrides are human input), so they need
-a durable home.
+Only `attribution_confidence` and `exceptions[]` are genuinely missing: derived judgments not
+present in any source primitive, not losslessly recomputable (scoring evolves; manual overrides are
+human input). Everything else has a home and is recomputable by join.
+
+Review correction: `consent_id` is the `Contact` PDPA fields, NOT the `ConsentRecord` model.
+`ConsentRecord` is the creative-pipeline UGC release registry (keyed `orgId`, no contact/booking
+link, cross-tenant-unsafe to join here). `source_evidence[]` is less scattered than first thought:
+`ConversionRecord` carries `bookingId` + `sourceAdId`/`sourceCampaignId`/`sourceChannel` as a clean
+per-booking FK and is the attribution fact store; do not migrate those columns onto this aggregate.
 
 ## Decisions (locked)
 
 1. **Hybrid persistence.** A thin persisted `ReceiptedBooking` row holds ONLY the derived and
-   snapshot fields plus foreign-key references. The live fields (attendance, payment, consent, trace,
-   current source evidence) are read through joins at query time. No duplication of facts that already
-   have a home; a durable audit anchor for the judgments and for what was counted.
-2. **Issuance at booking creation, refined on events.** A row is issued the moment a booking is
-   created, seeding the derived fields from what is known then. It is re-evaluated as attendance,
-   payment, consent, and override events arrive. Guarantees every booking is countable and flagged
-   (matching "unattributed is not uncounted"), and gives a stable `issuedAt` for weekly cohorting.
-3. **Sits above `Receipt`, does not replace it.** `Receipt` stays the proof primitive. The projection
-   resolves a booking's receipts by join. `ReceiptedBooking.id` is the thesis `receipt_id` (the
-   proof-object id).
+   snapshot fields (`attributionConfidence`, `exceptions[]`, `expectedValueAtIssue`, override
+   provenance) plus FK references. Live fields (attendance, payment, consent, trace, current source
+   evidence) are read through joins. No duplication of facts that already have a home.
+2. **Identity.** `ReceiptedBooking.id` is this aggregate's own id. It is NOT the thesis `receipt_id`
+   — that resolves to the linked `Receipt` row(s) by join. `Receipt` stays the proof primitive; this
+   aggregate sits above it.
+3. **Read-model, not canonical (Doctrine §3).** `ReceiptedBooking` is a derived read-model and
+   judgment anchor; it is not operational truth and records no action-lifecycle state. `WorkTrace`
+   remains the canonical record. It is not a parallel persistence/control plane.
+4. **Revenue counting.** Weekly receipted-bookings revenue counts `expectedValueAtIssue` (the stable
+   per-cohort snapshot); the live `Opportunity.estimatedValue` is exposed only as a drift indicator.
+   A booking with no `opportunityId` has a null snapshot: it counts toward the booking COUNT, and is
+   excluded from the revenue SUM.
 
-## Persisted model: `ReceiptedBooking` (new Prisma model)
+## Persisted model: `ReceiptedBooking` (shipped, slice 1)
 
-One row per booking (`bookingId` unique). Stores derived + snapshot fields only.
+One row per booking (`bookingId @unique`). Stores derived + snapshot fields only.
 
 ```
 model ReceiptedBooking {
-  id                     String   @id @default(uuid())   // = thesis receipt_id
-  organizationId         String
-  bookingId              String   @unique                // FK -> Booking.id
-  issuedAt               DateTime @default(now())         // weekly cohort key
-  attributionConfidence  String                           // enum below; derived
-  attributionUpdatedAt   DateTime
-  expectedValueAtIssue   Int?                             // cents, snapshot of Opportunity.estimatedValue
-  currency               String?                          // snapshot
-  exceptions             Json                             // ExceptionEntry[] (below); derived
-  overriddenBy           String?                          // set when a human overrides attribution/exception
-  overrideReason         String?
-  overriddenAt           DateTime?
-  lastEvaluatedAt        DateTime
-  createdAt              DateTime @default(now())
+  id                    String    @id @default(uuid())   // this aggregate's own id (NOT receipt_id)
+  organizationId        String
+  bookingId             String    @unique                // FK -> Booking.id (bare string, like Receipt)
+  issuedAt              DateTime  @default(now())          // weekly cohort key
+  attributionConfidence String                            // enum below; derived
+  attributionUpdatedAt  DateTime
+  expectedValueAtIssue  Int?                              // cents, snapshot of Opportunity.estimatedValue
+  currency              String?                           // org default at issuance
+  exceptions            Json                              // ExceptionEntry[]
+  overriddenBy          String?
+  overrideReason        String?
+  overriddenAt          DateTime?
+  lastEvaluatedAt       DateTime
+  createdAt             DateTime  @default(now())
 
   @@index([organizationId, issuedAt])
   @@index([organizationId, attributionConfidence])
 }
 ```
 
-Migration is hand-written (mirror the Booking/Receipt migration conventions; no in-schema partial
-unique is needed here). `bookingId @unique` makes issuance idempotent.
-
 ## Schemas (`@switchboard/schemas`)
 
 ```
 AttributionConfidence = "deterministic" | "high" | "medium" | "low" | "unattributed"
 ExceptionCode = "missing_source" | "missing_consent" | "manual_override" | "duplicate_contact_risk"
-ExceptionEntry = { code: ExceptionCode; detail?: string; raisedAt: Date; resolvedAt?: Date | null }
-ReceiptedBooking = { ...persisted fields, exceptions: ExceptionEntry[] }
-ReceiptedBookingView = the full assembled object (persisted + joined live fields)
+ExceptionEntry = { code; detail?; raisedAt: Date; resolvedAt?: Date | null }
+ReceiptedBooking = persisted fields, exceptions: ExceptionEntry[]
+ReceiptedBookingView = the full assembled object (persisted + joined live fields). This type MUST
+  live in @switchboard/schemas (it crosses into apps), not as a db-local interface.
 ```
 
-`expectedValueAtIssue` is cents (Int), never dollars (the receipted-bookings note records the dollars
-vs cents trap). Validate with the positive-safe-cents pattern already used for receipts.
+`expectedValueAtIssue` is cents (Int), nonnegative.
 
 ## Attribution-confidence ladder (pure function, `core/receipts`)
 
-A deterministic mapping over existing source fields. Enum mapping, no numeric thresholds (so no
-NaN-blind comparison gate). Defined as a pure function `scoreAttribution(evidence)` reused at
-issuance and re-evaluation:
+Deterministic enum mapping over existing source fields (no numeric thresholds, so no NaN-blind gate).
+Pure `scoreAttribution(evidence)` reused everywhere a booking is labelled:
 
-- **deterministic**: a hard click/lead identifier ties the booking to one ad/campaign
-  (`Contact.leadgenId` present, or `ConversionRecord.sourceAdId` matched, or a CTWA click id).
-- **high**: strong first-party source with a campaign id but no single deterministic click
-  (`sourceType` in {ctwa, instant_form} with `sourceCampaignId`).
-- **medium**: channel known, no campaign/ad id (`sourceChannel` or `sourceType` present only).
-- **low**: coarse self-reported or organic source.
-- **unattributed**: no usable source evidence. Still counted; raises a `missing_source` exception.
+- **deterministic**: a hard click/lead id ties the booking to one ad/campaign (`Contact.leadgenId`,
+  or `ConversionRecord.sourceAdId` matched, or a CTWA click id).
+- **high**: first-party source with a campaign id, no single deterministic click (`sourceType` in
+  {ctwa, instant_form} with `sourceCampaignId`).
+- **medium**: channel known, no campaign/ad id.
+- **low**: coarse self-reported / organic source.
+- **unattributed**: no usable source evidence. Still counted; raises `missing_source`.
 
 ## Exceptions taxonomy (pure function, `core/receipts`)
 
-`evaluateExceptions(context) -> ExceptionEntry[]`, reused at issuance and re-eval:
+`evaluateExceptions(context) -> ExceptionEntry[]`:
 
 - **missing_source**: attribution resolved to `unattributed`.
-- **missing_consent**: no valid channel-scoped, non-revoked consent for the contact.
-- **manual_override**: a human overrode attribution or status (set alongside `overriddenBy`).
+- **missing_consent**: `Contact.consentGrantedAt` absent or `consentRevokedAt` set (channel-scoped
+  per `messagingOptIn` for WhatsApp). Reads Contact PDPA fields, never `ConsentRecord`.
+- **manual_override**: a human overrode attribution/status (set alongside `overriddenBy`).
 - **duplicate_contact_risk**: the contact matches another by phone/email (identity ambiguity).
-
-Exceptions are resolved by stamping `resolvedAt`, not by deletion (keeps the "why was this flagged"
-trail). v1 stores the current exception set on the row; the full append-only action audit already
-lives in `WorkTrace`, so a per-receipt event log is deferred (YAGNI) and noted as a future option.
 
 ## Read-projection: `ReceiptedBookingView`
 
-A db-level read store assembles the full object by joining the persisted row with live primitives
-(it is a read that spans several Prisma tables, so it belongs in db, not core):
-
 `PrismaReceiptedBookingStore.getView(orgId, bookingId)` and `listForCohort(orgId, fromIssuedAt,
-toIssuedAt)`. The view resolves: `receipts` (Receipt by bookingId), `contact_key` + `consent_id` +
-live `source_evidence[]` (Contact + ConversionRecord), `trace_id` + `policy_check_id` +
+toIssuedAt)` in db (db owns the Prisma joins; core stays store-free). The view resolves `receipts`
+(Receipt by bookingId, including the proof `receipt_id`), `contact_key` + `consent_id` + live
+`source_evidence[]` (Contact + ConversionRecord), `trace_id` + `policy_check_id` +
 `human_approval_id` (WorkTrace), `attendance_state` (Booking), `payment_event_ids[]`
-(LifecycleRevenueEvent), and current `expected_value` (Opportunity, alongside the snapshot for audit).
-All reads are org-scoped (IDOR-safe, per the F12 read-side lesson).
+(LifecycleRevenueEvent), and live `expected_value` (Opportunity, alongside the snapshot).
+
+EVERY join leg WHERE must carry `organizationId` (the F12 read-side IDOR lesson) — not only the
+Booking read but the ConversionRecord / WorkTrace / LifecycleRevenueEvent legs too. Null-guard the
+Booking join: an orphaned aggregate row (booking hard-deleted) is filtered, not surfaced.
 
 ## Layering
 
-schemas (types + enums) -> core/receipts (pure `scoreAttribution` + `evaluateExceptions`, like
-`is-paid-visit`) -> db (`PrismaReceiptedBookingStore` + migration; assembles the view). The issuance
-hook is wired at the booking-create path (app/core seam) in a later slice. No core -> db import; the
-scoring functions are pure and store-free.
+schemas (types + enums + the View type) -> core/receipts (pure `scoreAttribution` +
+`evaluateExceptions`, like `is-paid-visit`) -> db (`PrismaReceiptedBookingStore` + the read joins).
+No core -> db import; scoring functions are pure and store-free.
 
-## Implementation slices (each its own PR, consumes this spec)
+## Implementation slices (re-sequenced after review)
 
-1. **Schema + model + migration**: `ReceiptedBooking` Prisma model + hand-written migration +
-   `@switchboard/schemas` types/enums. Co-located tests; `db:check-drift`. (Touches `prisma/` =>
-   surface before merge.)
+The review flagged that persisting derived fields via an issuance hook + re-eval triggers BEFORE any
+consumer exists is "data with no consumer". So we ship the pure logic and the read path (which serve
+the north-star count immediately), and DEFER the persisted write-path until a consumer needs it.
+
+1. **DONE** — `ReceiptedBooking` model + migration + `@switchboard/schemas` types/enums (PR #1062).
 2. **Scoring functions**: pure `scoreAttribution` + `evaluateExceptions` in `core/receipts` with
-   exhaustive enum tests (one per ladder rung + each exception code).
-3. **Issuance hook**: issue a `ReceiptedBooking` at booking creation (idempotent on `bookingId`),
-   seeding derived fields. Wired at the booking-create seam.
-4. **Read-projection**: `PrismaReceiptedBookingStore.getView` + `listForCohort`, org-scoped, with
-   the join assembly and a producer->consumer safeParse seam test.
-5. **Re-evaluation triggers**: recompute derived fields on attendance / payment / consent / override
-   events (booked->held already ships; this adds the attribution/exception refresh).
+   exhaustive enum tests (one per ladder rung + each exception code). Cheap, pure, reusable, no
+   drift risk.
+3. **Weekly count + owner-report read (the north-star mover)**: a `countReceiptedBookings(orgId,
+window)` read + a `receiptedBookings` field on `ReportDataV1` + an owner-report tile, mirroring
+   the shipped `computeHeldRate` / `computeConsentCompleteness` reads. Assembled lazily over existing
+   FKs (Booking + Receipt + Contact + ConversionRecord), labelling each via the slice-2 functions.
+   No dependency on the persisted write-path. This is the cheapest slice that moves the metric.
+4. **Read-projection**: `PrismaReceiptedBookingStore.getView` + `listForCohort`, org-scoped per leg,
+   computing confidence/exceptions lazily via the slice-2 functions (not reading a persisted copy),
+   with a producer->consumer safeParse seam test.
 
-Deferred to their own specs: the Ledger agent, the weekly receipted-bookings report/UI, and the
-Robin / recovery workstream.
+DEFERRED until a real consumer (the Ledger agent / weekly UI / an override workflow) exists:
+
+- **Issuance hook**: issue/refresh a `ReceiptedBooking` row. When built, it MUST be wired inside the
+  governed `calendar-book` tool seam (`packages/core/src/skill-runtime/tools/calendar-book.ts`, the
+  only non-test caller of `bookingStore.create`, reached only through PlatformIngress), in the SAME
+  `$transaction` as the booking + receipt mint, idempotent via findFirst-by-`bookingId`-before-create
+  (mirroring the receipt-mint P2002 avoidance). NEVER at the db store (would bypass governance) and
+  NEVER as a post-submit write (would orphan / be ingress-less).
+- **Re-evaluation triggers** (attendance / payment / consent / override). When built: `exceptions`
+  re-eval merges against the prior array (key open entries by `code`; newly-absent codes get
+  `resolvedAt` stamped; newly-present codes with no open entry get a new `raisedAt`; existing open
+  entries untouched) — never overwrite, to preserve history and avoid double-add. `attributionConfidence`
+  is a single mutable value (audit via `attributionUpdatedAt` + WorkTrace); confidence MAY drop on
+  re-eval (e.g. after a contact merge). A manual override MUST route through a WorkTrace-writing
+  governed path, with the override columns as the resulting snapshot.
 
 ## Out of scope
 
-- The Ledger agent itself (operates this object; separate spec).
-- The weekly report and owner-facing UI.
-- Robin (recovery/show-rate) and the other new agents (Casey, Quinn-lite).
-- A full append-only per-receipt event log (WorkTrace already provides the action audit).
+The Ledger agent, the weekly report UI beyond the slice-3 read/tile, Robin (recovery/show-rate) and
+the other new agents (Casey, Quinn-lite), and a full append-only per-receipt event log (WorkTrace
+already provides the action audit).
