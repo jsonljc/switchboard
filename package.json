@@ -94,8 +94,10 @@
   "devDependencies": {
     "@commitlint/cli": "^20",
     "@commitlint/config-conventional": "^19",
+    "bcryptjs": "^3.0.3",
     "@switchboard/db": "workspace:*",
     "@switchboard/schemas": "workspace:*",
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^25.5.0",
     "@typescript-eslint/eslint-plugin": "^7",
     "@typescript-eslint/parser": "^7",
