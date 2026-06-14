@@ -166,6 +166,8 @@ export * from "./recommendation-handoff.js";
 export * from "./riley-pause-execution.js";
 // Spec-1B act leg: the executed-reallocation success receipt (persisted to WorkTrace.executionOutputs)
 export * from "./execution-receipt.js";
+// Spec-1B act leg: the frozen, human-approved reallocate parameters the executor replays
+export * from "./riley-budget-execution.js";
 
 // Reports v1 view-model (operator deep-dive surface)
 export * from "./reports/v1.js";
