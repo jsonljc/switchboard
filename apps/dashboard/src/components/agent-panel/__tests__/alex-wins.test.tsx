@@ -9,6 +9,13 @@ vi.mock("@/hooks/use-agent-wins", () => ({
   useAgentWins: () => ({ data, isLoading, isError, error }),
 }));
 
+// Mock AttendanceCheckIn so alex-wins tests don't depend on its internals
+vi.mock("../attendance-check-in", () => ({
+  AttendanceCheckIn: ({ bookingId }: { bookingId: string }) => (
+    <div data-testid="attendance-check-in" data-booking-id={bookingId} />
+  ),
+}));
+
 import { AlexWins } from "../alex-wins";
 
 function win(over: Record<string, unknown> = {}) {
@@ -81,5 +88,21 @@ describe("AlexWins", () => {
     render(<AlexWins />);
     expect(screen.getByText(/Booked botox · revenue pending/)).toBeInTheDocument();
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+
+  it("renders an AttendanceCheckIn for each win row with the correct bookingId", () => {
+    data = {
+      wins: [
+        win({ bookingId: "bk_aaa", traceId: "trace_aaa00000" }),
+        win({ bookingId: "bk_bbb", traceId: "trace_bbb00000" }),
+      ],
+      hasMore: false,
+      freshness: { generatedAt: "x", dataSource: "live" },
+    };
+    const { container } = render(<AlexWins />);
+    const controls = container.querySelectorAll('[data-testid="attendance-check-in"]');
+    expect(controls).toHaveLength(2);
+    expect(controls[0].getAttribute("data-booking-id")).toBe("bk_aaa");
+    expect(controls[1].getAttribute("data-booking-id")).toBe("bk_bbb");
   });
 });
