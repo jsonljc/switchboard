@@ -130,6 +130,7 @@ export * from "./conversion.js";
 export * from "./calendar.js";
 export * from "./payment.js";
 export * from "./receipt.js";
+export * from "./receipted-booking.js";
 export * from "./crm.js";
 
 // CRM Outcome types (shared across ad-optimizer + db)
