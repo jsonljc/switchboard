@@ -242,11 +242,13 @@ export async function bootstrapContainedWorkflows(
   // resolver) lives in bootstrap/riley-pause-executor.ts.
   const rileyPauseExecutor = await buildRileyPauseExecutorHandler(prismaClient, workTraceStore);
 
-  // Spec-1B PR 1B-1.2: the governed reallocate intent is registered + seeded (allow +
-  // require_approval(mandatory)) so an approved reallocation parks; the EXECUTOR is a fail-closed
-  // placeholder (EXECUTOR_NOT_WIRED, never "completed", never touches Meta). The real
-  // read-modify-re-read executor (blast-radius cap + drift + receipt) replaces it in PR 1B-1.5.
-  const rileyBudgetExecutor = buildRileyBudgetExecutorHandler();
+  // Spec-1B 1B-1.5b: the governed reallocate intent is registered + seeded (allow +
+  // require_approval(mandatory)) so an approved reallocation parks; the EXECUTOR is now the real
+  // read-modify-re-read handler (approval + content-binding check, replay-first, frozen-account
+  // lock, drift check, signed-delta blast-radius cap, durable marker committed before the Meta
+  // write, post-write re-read, ExecutionReceipt). The sink that initiates a reallocation stays
+  // flag-gated and unwired until 1B-1.6, so this executes only operator-approved reallocations.
+  const rileyBudgetExecutor = await buildRileyBudgetExecutorHandler(prismaClient, workTraceStore);
 
   // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
   // difference between callers is how the WhatsApp 24h-window timestamp is resolved
