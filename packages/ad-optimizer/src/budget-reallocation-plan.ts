@@ -22,3 +22,19 @@ export function assessBudgetDrift(frozenFromCents: number, liveCents: number): B
   if (liveCents !== frozenFromCents) return { ok: false, reason: "BUDGET_DRIFTED" };
   return { ok: true };
 }
+
+/**
+ * Signed delta (for the blast-radius cap + the ExecutionReceipt) and its non-negative magnitude
+ * (for the governance spend gate, which sizes on absolute dollars). Returns null on a non-finite
+ * input so a caller never sees a NaN delta (a NaN would sail through a `>` cap; spec section 3.5,
+ * feedback_nan_blind_comparison_gates). Cents in, cents out - the dollars normalization happens once
+ * at the gate boundary and at trueRoas, never here.
+ */
+export function computeBudgetDelta(
+  currentCents: number,
+  proposedCents: number,
+): { deltaCentsSigned: number; deltaCentsMagnitude: number } | null {
+  if (!Number.isFinite(currentCents) || !Number.isFinite(proposedCents)) return null;
+  const deltaCentsSigned = proposedCents - currentCents;
+  return { deltaCentsSigned, deltaCentsMagnitude: Math.abs(deltaCentsSigned) };
+}

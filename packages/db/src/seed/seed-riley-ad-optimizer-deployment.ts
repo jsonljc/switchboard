@@ -1,5 +1,6 @@
 import type { PrismaDbClient } from "../prisma-db.js";
 import { seedRileyPausePolicies } from "./riley-pause-governance.js";
+import { seedRileyReallocatePolicies } from "./riley-budget-governance.js";
 
 /** The marketplace listing that backs Riley. Seeded by seedMarketplace (slug "ad-optimizer"). */
 export const AD_OPTIMIZER_LISTING_SLUG = "ad-optimizer";
@@ -78,6 +79,11 @@ export async function seedRileyAdOptimizerDeployment(
   // When this runs inside provisionOrgAgentDeployments' $transaction, a partial
   // crash rolls back BOTH rows; idempotent on the deterministic per-org ids.
   await seedRileyPausePolicies(prisma, orgId);
+
+  // Spec-1B: seed the reallocation allow + mandatory-approval pair the SAME both-or-neither way.
+  // The per-org dispatch flag stays OFF (the act-leg initiator is wired in PR 1B-1.3+); this only
+  // arms the governed path so an approved reallocation parks for a human instead of hard-denying.
+  await seedRileyReallocatePolicies(prisma, orgId);
 
   return { deploymentId: deployment.id };
 }
