@@ -221,6 +221,47 @@ describe("executeUgcPipeline", () => {
     expect(deps.jobStore.setDurableAsset).not.toHaveBeenCalled();
   });
 
+  it("persists the durable asset strictly before ugcPhase reaches complete [F13]", async () => {
+    // F13 symmetry guard. Unlike the polished runner (where production IS the
+    // terminal stage, so its save writes "complete"), the UGC production save
+    // writes the NON-terminal "delivery" phase; "complete" is only written by
+    // the later delivery iteration. So the durable asset (written in the
+    // production iteration) always lands BEFORE any "complete" flip; there is
+    // no "complete-but-no-asset" window. This test pins that invariant so a
+    // future refactor cannot regress UGC into the polished-style defect.
+    executeProductionPhaseMock.mockResolvedValueOnce({
+      assets: [
+        {
+          approvalState: "approved",
+          durableAssetUrl: "https://durable.example.com/creative-assets/job_1/ugc.mp4",
+          outputs: {},
+        },
+      ],
+      qaResults: {},
+      failedSpecs: [],
+    });
+
+    // Record the call order across the two writers of interest.
+    const order: string[] = [];
+    deps.jobStore.setDurableAsset.mockImplementation(async () => {
+      order.push("durable-asset");
+      return mockUgcJob;
+    });
+    deps.jobStore.updateUgcPhase.mockImplementation(
+      async (_org: string, _id: string, phase: string) => {
+        if (phase === "complete") order.push("complete");
+        return mockUgcJob;
+      },
+    );
+
+    await executeUgcPipeline(eventData, step as never, deps as never);
+
+    expect(order).toContain("durable-asset");
+    expect(order).toContain("complete");
+    // Durable asset persisted strictly before the completion flip.
+    expect(order.indexOf("durable-asset")).toBeLessThan(order.indexOf("complete"));
+  });
+
   it("a decision-workflow-shaped emit (persisted NEXT phase) resumes the wait", async () => {
     // Simulate exactly what creative-job-decision-workflow sends after the
     // planning gate: phase carries the persisted value ("scripting"), not the

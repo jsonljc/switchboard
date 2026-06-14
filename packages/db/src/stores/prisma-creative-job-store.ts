@@ -238,6 +238,40 @@ export class PrismaCreativeJobStore {
   }
 
   /**
+   * F13: atomically flip the stage (to "complete" at the production tail) AND
+   * persist the durable asset URL in ONE row update. The polished runner used to
+   * issue updateStage then setDurableAsset as two separate Inngest steps, so a
+   * crash between them left a job marked complete with no durable asset, a
+   * transient inconsistent state the publish precondition had to defend against.
+   * Combining the writes removes that window. Same org-scoped updateMany +
+   * count===0 ⇒ StaleVersionError contract as updateStage, and the same
+   * forward-progress terminal-marker clear (a replayed completion is not failed).
+   */
+  async completeWithAsset(
+    organizationId: string,
+    id: string,
+    stage: string,
+    stageOutputs: Record<string, unknown>,
+    durableAssetUrl: string,
+  ): Promise<CreativeJob> {
+    await this.assertMode(id, "polished");
+    const result = await this.prisma.creativeJob.updateMany({
+      where: { id, organizationId },
+      data: {
+        currentStage: stage,
+        stageOutputs: stageOutputs as object,
+        durableAssetUrl,
+        // Forward progress clears any prior terminal marker (replay self-heal;
+        // mirrors updateStage).
+        stageFailure: Prisma.JsonNull,
+      },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+    const row = await this.prisma.creativeJob.findFirstOrThrow({ where: { id, organizationId } });
+    return row as unknown as CreativeJob;
+  }
+
+  /**
    * Persist the attribution sweep's measured-performance snapshot (slice 2).
    * Org-scoped updateMany (doctrine #12); count===0 ⇒ missing/cross-org ⇒
    * throw StaleVersionError (the sweep treats it as a benign vanished-job

@@ -31,6 +31,20 @@ interface JobStore {
   ): Promise<CreativeJob>;
   stop(organizationId: string, id: string, stoppedAt: string): Promise<CreativeJob>;
   setDurableAsset(organizationId: string, id: string, url: string): Promise<CreativeJob>;
+  /**
+   * F13: write the stage flip (to "complete") AND the durable asset URL in ONE
+   * row update. The production tail previously issued two un-atomic step.run
+   * writes (save-${stage} flipping to "complete", then save-durable-asset), so a
+   * crash between them left a job marked complete with no durable asset. This
+   * combined write removes that window entirely.
+   */
+  completeWithAsset(
+    organizationId: string,
+    id: string,
+    stage: string,
+    stageOutputs: Record<string, unknown>,
+    durableAssetUrl: string,
+  ): Promise<CreativeJob>;
 }
 
 interface StepTools {
@@ -185,19 +199,32 @@ export async function executeCreativePipeline(
     stageOutputs = { ...stageOutputs, [stage]: output };
     const nextStage = getNextStage(stage);
 
-    await step.run(`save-${stage}`, () =>
-      jobStore.updateStage(eventData.organizationId, job.id, nextStage, stageOutputs),
-    );
+    // F13: production is the terminal stage, so save-${stage} flips currentStage
+    // to "complete". When production also assembled a durable asset, the
+    // completion flag and the durable URL MUST land in one row update; two
+    // separate step.run writes (the old save-${stage} then save-durable-asset)
+    // left a crash window where the job read "complete" with no durable asset,
+    // an inconsistent state the publish precondition (assertPublishable) would
+    // otherwise have to defend against. The combined write removes the window.
+    // Non-production stages, and a production run that produced no durable asset,
+    // keep the plain stage save (no durableAssetUrl column write to clobber).
+    const productionDurableAssetUrl =
+      stage === "production" ? (output as VideoProducerOutput).durableAssetUrl : undefined;
 
-    // Once production has assembled + uploaded, persist the durable URL so the
-    // creative.job.publish precondition (assertPublishable) can find it.
-    if (stage === "production") {
-      const durableAssetUrl = (output as VideoProducerOutput).durableAssetUrl;
-      if (durableAssetUrl) {
-        await step.run("save-durable-asset", () =>
-          jobStore.setDurableAsset(eventData.organizationId, job.id, durableAssetUrl),
-        );
-      }
+    if (productionDurableAssetUrl) {
+      await step.run(`save-${stage}`, () =>
+        jobStore.completeWithAsset(
+          eventData.organizationId,
+          job.id,
+          nextStage,
+          stageOutputs,
+          productionDurableAssetUrl,
+        ),
+      );
+    } else {
+      await step.run(`save-${stage}`, () =>
+        jobStore.updateStage(eventData.organizationId, job.id, nextStage, stageOutputs),
+      );
     }
 
     // After the last stage, no approval needed
