@@ -49,11 +49,15 @@ export function buildRileyBudgetSubmitRequest(
     intent: RILEY_REALLOCATE_INTENT,
     parameters: {
       recommendationId: input.recommendationId,
-      actionType: "shift_budget_to_source",
+      actionType: "scale",
       adAccountId: input.adAccountId,
       campaignId: input.campaignId,
       fromCents: input.fromCents,
       toCents: input.toCents,
+      // Structured spend-delta in DOLLARS (the gate's unit, spend-limits.ts SPEND_KEYS): the absolute
+      // size of the daily-budget move, |to - from| cents / 100. The gate sizes approval/limits on
+      // this magnitude; the signed direction lives in fromCents/toCents for the executor.
+      spendAmount: delta.deltaCentsMagnitude / 100,
       rationale: input.rationale,
       evidence: input.evidence,
     },

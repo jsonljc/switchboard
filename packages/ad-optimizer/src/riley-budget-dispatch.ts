@@ -38,9 +38,10 @@ export type RileyBudgetSubmitter = (
 
 /**
  * Decide whether ONE emitted recommendation becomes a reallocation candidate. Pure + deterministic.
- * Abstains (returns null) for a non-reallocation action, a dropped router surface, missing
- * per-campaign context or ids, an unknown (null) current/proposed budget, or a zero-magnitude
- * no-op. The seeded require_approval(mandatory) policy is the real human gate; this only decides
+ * The trigger is the `scale` recommendation (Riley's "scale the daily budget up ~20%" semantics); the
+ * proposed budget is current x REALLOCATE_SCALE_FACTOR, sized by the sink. Abstains (returns null) for
+ * any action other than `scale`, a dropped router surface, missing per-campaign context or ids, an
+ * unknown (null) current/proposed budget, or a zero-magnitude no-op. The seeded require_approval(mandatory) policy is the real human gate; this only decides
  * whether there is a well-formed money move to surface. Arbitration ("which reallocation is the
  * primary") and the evidence floor are applied at the sink wiring (PR 1B-1.3), not here.
  */
@@ -68,7 +69,7 @@ export function buildRileyBudgetCandidate(args: {
     deploymentId,
     adAccountId,
   } = args;
-  if (emitted.actionType !== "shift_budget_to_source") return null;
+  if (emitted.actionType !== "scale") return null;
   if (emitted.surface === "dropped") return null;
   if (!context) return null;
   if (!deploymentId) return null;

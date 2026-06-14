@@ -161,7 +161,12 @@ export type {
 } from "./blast-radius-contract.js";
 // Spec-1B act leg: pure fail-closed drift guard the reallocate executor composes
 // with the blast-radius cap before the Meta budget write (read-modify-re-read, spec section 7).
-export { assessBudgetDrift, computeBudgetDelta } from "./budget-reallocation-plan.js";
+export {
+  assessBudgetDrift,
+  computeBudgetDelta,
+  proposeCampaignReallocationCents,
+  REALLOCATE_SCALE_FACTOR,
+} from "./budget-reallocation-plan.js";
 export type { BudgetDriftVerdict } from "./budget-reallocation-plan.js";
 // Spec-1B reallocation dispatch (L2): the candidate producer + injected-submitter type the
 // apps/api submit-request builder + sink consume (the L2->L5->L3 governed path).

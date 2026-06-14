@@ -5,9 +5,9 @@ const context = { evidence: { clicks: 100, conversions: 10, days: 7 }, learningP
 const base = {
   emitted: {
     recommendationId: "rec_1",
-    actionType: "shift_budget_to_source" as const,
+    actionType: "scale" as const,
     campaignId: "camp_1",
-    rationale: "Shift budget toward the higher-paid source",
+    rationale: "Campaign performing under target CPA, scale the daily budget up",
     surface: "queue" as const,
   },
   currentDailyBudgetCents: 5000 as number | null,
@@ -28,7 +28,7 @@ describe("buildRileyBudgetCandidate (Spec-1B reallocation producer)", () => {
       campaignId: "camp_1",
       currentDailyBudgetCents: 5000,
       proposedDailyBudgetCents: 8000,
-      rationale: "Shift budget toward the higher-paid source",
+      rationale: "Campaign performing under target CPA, scale the daily budget up",
       evidence: { clicks: 100, conversions: 10, days: 7 },
     });
   });
