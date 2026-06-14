@@ -8,8 +8,8 @@ import {
   seedAlexSkillPack,
   provisionOrgAgentDeployments,
 } from "@switchboard/db";
-import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../utils/require-org.js";
+import { LAZY_ORG_CONFIG_CREATE_DEFAULTS } from "../lib/org-config-defaults.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
 import { probeWhatsAppHealth } from "../lib/whatsapp-health-probe.js";
@@ -65,17 +65,9 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
 
       const config = await app.prisma.organizationConfig.upsert({
         where: { id: orgId },
-        create: {
-          id: orgId,
-          name: "",
-          runtimeType: "http",
-          runtimeConfig: {},
-          governanceProfile: "guarded",
-          onboardingComplete: false,
-          managedChannels: [],
-          provisioningStatus: "pending",
-          businessHours: DEFAULT_BUSINESS_HOURS, // F-01: resolve Local (not Noop) for fresh orgs
-        },
+        // F-02: comped pilot defaults (entitlementOverride) live in one documented,
+        // trusted-path-only source. See ../lib/org-config-defaults.ts.
+        create: { id: orgId, ...LAZY_ORG_CONFIG_CREATE_DEFAULTS },
         update: {},
       });
 
