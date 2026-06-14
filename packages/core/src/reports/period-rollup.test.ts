@@ -20,6 +20,7 @@ function stubStores(): ReportStores {
     },
     bookings: {
       countExcludingStatuses: async () => 10,
+      countMaturedAttendance: async () => ({ matured: 0, attended: 0 }),
     },
     opportunities: {
       countClosedWon: async () => 3,

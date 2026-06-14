@@ -8,6 +8,7 @@ import type {
   FunnelNarrative,
   CampaignRow,
   CostBreakdown,
+  HeldRateData,
   ManagedComparisonData,
 } from "./types";
 
@@ -27,6 +28,7 @@ export interface ResultsModel {
   worstCampaign: CampaignRow | null; // min roas, spend > 0
   cost: CostBreakdown;
   costNarrative: string;
+  heldRate: HeldRateData; // attended / matured, rate null when no matured bookings
   managedComparison: ManagedComparisonData | null;
 }
 
@@ -62,6 +64,7 @@ export function buildResultsModel(data: ReportData): ResultsModel {
     worstCampaign,
     cost: data.cost,
     costNarrative: data.costNarrative,
+    heldRate: data.heldRate ?? { attended: 0, matured: 0, rate: null },
     managedComparison: data.managedComparison,
   };
 }

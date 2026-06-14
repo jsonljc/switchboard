@@ -91,6 +91,13 @@ export interface ReportStores {
       from: Date;
       to: Date;
     }): Promise<number>;
+
+    countMaturedAttendance(input: {
+      orgId: string;
+      from: Date;
+      to: Date;
+      now: Date;
+    }): Promise<{ matured: number; attended: number }>;
   };
 
   opportunities: {

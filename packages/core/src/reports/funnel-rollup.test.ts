@@ -61,6 +61,7 @@ function makeStores(opts: {
         const isCurrent = from.getTime() === new Date("2026-04-01T00:00:00Z").getTime();
         return isCurrent ? (opts.currentBookings ?? 0) : (opts.priorBookings ?? 0);
       },
+      countMaturedAttendance: async () => ({ matured: 0, attended: 0 }),
     },
     opportunities: {
       countClosedWon: async ({ from }) => {

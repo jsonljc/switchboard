@@ -11,6 +11,7 @@ export type {
   FunnelNarrative,
   CampaignRow,
   CostBreakdown,
+  HeldRateData,
   ManagedComparisonData,
   ManagedComparisonPair,
   ManagedComparisonMetrics,

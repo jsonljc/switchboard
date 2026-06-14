@@ -20,6 +20,7 @@ const sample: ReportDataV1 = {
   cost: { paid: 0, alt: 0, saving: 0 },
   costNarrative: "",
   managedComparison: null,
+  heldRate: { attended: 38, matured: 45, rate: 38 / 45 },
 };
 
 describe("PrismaReportCacheStore", () => {

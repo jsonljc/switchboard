@@ -13,6 +13,7 @@ import { computeFunnel } from "./funnel-rollup.js";
 import { computeCostVsValue } from "./cost-vs-value-rule.js";
 import { computeCampaignRollup } from "./campaign-rollup.js";
 import { computeManagedComparison } from "./managed-comparison-rollup.js";
+import { computeHeldRate } from "./compute-held-rate.js";
 
 export interface ReportDependencies {
   stores: ReportStores;
@@ -31,15 +32,15 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
 
     const ctx: RollupContext = { orgId, current, prior, computedAt };
 
-    const [attribution, funnelResult, costResult, campaigns, managedComparison] = await Promise.all(
-      [
+    const [attribution, funnelResult, costResult, campaigns, managedComparison, heldRate] =
+      await Promise.all([
         computeAttribution(ctx, deps.stores),
         computeFunnel(ctx, deps.stores, deps.insightsProvider),
         computeCostVsValue(ctx, deps.planMonthlyUSD),
         computeCampaignRollup(ctx, deps.insightsProvider, deps.stores.revenue),
         computeManagedComparison(ctx, deps.insightsProvider, deps.baselineStore, deps.stores),
-      ],
-    );
+        computeHeldRate(ctx, deps.stores.bookings),
+      ]);
 
     const pullquote = await deps.pullQuoteGenerator({
       ctx,
@@ -60,6 +61,7 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
       cost: costResult.cost,
       costNarrative: costResult.costNarrative,
       managedComparison,
+      heldRate,
     };
   };
 }

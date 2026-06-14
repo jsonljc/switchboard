@@ -281,4 +281,22 @@ export class PrismaBookingStore {
       },
     });
   }
+
+  async countMaturedAttendance(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+    now: Date;
+  }): Promise<{ matured: number; attended: number }> {
+    const where = {
+      organizationId: input.orgId,
+      status: { notIn: ["cancelled", "failed"] },
+      startsAt: { gte: input.from, lt: input.to, lte: input.now },
+    };
+    const [matured, attended] = await Promise.all([
+      this.prisma.booking.count({ where }),
+      this.prisma.booking.count({ where: { ...where, attendance: "attended" } }),
+    ]);
+    return { matured, attended };
+  }
 }
