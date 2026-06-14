@@ -120,4 +120,62 @@ describe("MetaAdsClient — Spec-1B reallocation primitives", () => {
       );
     });
   });
+
+  describe("updateCampaignBudget (write)", () => {
+    it("POSTs daily_budget in CENTS verbatim (no x100, no division)", async () => {
+      fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) });
+      await client.updateCampaignBudget("camp_1", 5000);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy.mock.calls[0]?.[0]).toBe(`${BASE_URL}/camp_1`);
+      expect(JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string)).toEqual({
+        daily_budget: 5000,
+      });
+    });
+
+    it("allows a budget edit on an ACTIVE campaign (only status->ACTIVE is forbidden)", async () => {
+      fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) });
+      await expect(client.updateCampaignBudget("camp_active", 3000)).resolves.toBeUndefined();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("REFUSES a non-integer cents value WITHOUT calling Meta", async () => {
+      await expect(client.updateCampaignBudget("camp_1", 50.5)).rejects.toThrow(/integer cents/i);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("REFUSES a non-safe-integer value WITHOUT calling Meta", async () => {
+      await expect(
+        client.updateCampaignBudget("camp_1", Number.MAX_SAFE_INTEGER + 2),
+      ).rejects.toThrow(/integer cents/i);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("REFUSES a non-positive budget WITHOUT calling Meta", async () => {
+      await expect(client.updateCampaignBudget("camp_1", 0)).rejects.toThrow(/positive/i);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("REFUSES an absurd budget above the sanity ceiling WITHOUT calling Meta (100x-bug tripwire)", async () => {
+      await expect(client.updateCampaignBudget("camp_1", 1_000_000_01)).rejects.toThrow(
+        /sanity ceiling/i,
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("REFUSES a non-finite budget WITHOUT calling Meta (NaN-guard)", async () => {
+      await expect(client.updateCampaignBudget("camp_1", Number.NaN)).rejects.toThrow();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("THROWS on a Meta error (executor marks the attempt recovery_required)", async () => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: { message: "budget too low", type: "x", code: 100 } }),
+      });
+      await expect(client.updateCampaignBudget("camp_1", 100)).rejects.toThrow(
+        "Meta API error (400): budget too low",
+      );
+    });
+  });
 });

@@ -9,6 +9,11 @@ import type {
 const API_BASE = "https://graph.facebook.com/v21.0";
 const RATE_LIMIT_MS = 60_000;
 
+// Spec-1B defense-in-depth tripwire: a daily budget above $1,000,000/day is a bug, not a campaign.
+// The real cap is the blast-radius contract (assertWithinBlastRadius); this only catches a runaway
+// 100x/encoding bug that would otherwise reach Meta. Cents.
+const MAX_SANE_DAILY_BUDGET_CENTS = 1_000_000_00;
+
 /**
  * Parse an external Meta numeric, coercing any non-finite result to a fallback
  * (default 0). Meta returns numerics as strings; a non-numeric sentinel ("N/A",
@@ -385,6 +390,31 @@ export class MetaAdsClient {
   }
 
   /**
+   * Set one campaign's daily budget (Spec-1B reallocation write). CENTS (Meta native minor units,
+   * passed VERBATIM; dollars happen only at the spend gate + trueRoas, spec section 11, never here).
+   * A single POST, no internal idempotency map: interactive paths use a FRESH client per call
+   * (feedback_meta_ads_client_rate_limiter_fresh_instance), so idempotency is the executor's durable
+   * job. Refuses a malformed amount BEFORE any fetch (the 100x guard): safe-integer, positive, under
+   * the sanity ceiling. Budget edits ARE allowed on ACTIVE campaigns (only status->ACTIVE is forbidden).
+   */
+  async updateCampaignBudget(campaignId: string, dailyBudgetCents: number): Promise<void> {
+    if (!Number.isSafeInteger(dailyBudgetCents)) {
+      throw new Error(
+        `SAFETY: daily budget must be a safe integer cents value, got ${dailyBudgetCents}`,
+      );
+    }
+    if (dailyBudgetCents <= 0) {
+      throw new Error(`SAFETY: daily budget must be positive cents, got ${dailyBudgetCents}`);
+    }
+    if (dailyBudgetCents > MAX_SANE_DAILY_BUDGET_CENTS) {
+      throw new Error(
+        `SAFETY: daily budget ${dailyBudgetCents} exceeds the sanity ceiling ${MAX_SANE_DAILY_BUDGET_CENTS}`,
+      );
+    }
+    await this.post(`/${campaignId}`, { daily_budget: dailyBudgetCents });
+  }
+
+  /**
    * Read one campaign's status (Phase-C pause executor pre-read). Degrades to
    * null on any error: the pause write itself is the honest test; a status-read
    * blip must not block an approved pause.
@@ -404,14 +434,12 @@ export class MetaAdsClient {
   }
 
   /**
-   * Read one campaign's budget + status for the Spec-1B reallocation read-modify-re-read executor
-   * (close-the-revenue-loop spec section 7). THROWS on a Meta error (unlike getCampaignStatus, which
-   * degrades to null): a money move cannot proceed on an unknown budget, so the executor fails closed.
-   * dailyBudgetCents is Meta's NATIVE minor units (cents), parsed VERBATIM (no x100; contrast
-   * getAccountDailySpendCents, where insights `spend` is a dollars string). null when absent (the
-   * campaign budgets at the ad-set level -> the executor refuses UNSUPPORTED_BUDGET_TOPOLOGY),
-   * non-numeric (strict /^\d+$/, never coerces "5000abc"), or zero - honest-null, NEVER a coerced 0
-   * (a 0 would read as "free to move the whole budget"; feedback_nan_blind_comparison_gates).
+   * Read one campaign's budget + status for the Spec-1B read-modify-re-read executor (spec section 7).
+   * THROWS on a Meta error (unlike getCampaignStatus): a money move cannot proceed on an unknown
+   * budget. dailyBudgetCents is Meta's NATIVE cents, parsed VERBATIM (no x100; contrast
+   * getAccountDailySpendCents's dollars string). null when absent (ad-set-level budget -> executor
+   * refuses UNSUPPORTED_BUDGET_TOPOLOGY), non-numeric (strict /^\d+$/), or zero: honest-null, never a
+   * coerced 0 (feedback_nan_blind_comparison_gates).
    */
   async getCampaign(campaignId: string): Promise<{
     campaignId: string;
@@ -432,14 +460,12 @@ export class MetaAdsClient {
   }
 
   /**
-   * Read the account's current-day spend in CENTS for the Spec-1B blast-radius share-cap denominator
-   * (spec section 8a). Account insights `spend` is a major-unit DOLLARS string (e.g. "5000.00") and is
-   * converted with Math.round(x*100): this is the UNIT ASYMMETRY vs getCampaign (where daily_budget is
-   * native cents). Window = today (date_preset=today): intra-day partial spend under-states the
-   * denominator, which only makes the computed share LARGER and the cap MORE conservative - the safe
-   * direction. THROWS on a Meta error (load-bearing, like getCampaign); returns null on an absent or
-   * non-numeric spend (assertWithinBlastRadius already fails closed SHARE_CAP on a null/non-positive
-   * denominator). Strict parse, never coerces "5000abc".
+   * Read the account's current-day spend in CENTS for the blast-radius share-cap denominator (spec
+   * section 8a). Insights `spend` is a DOLLARS string (e.g. "5000.00") -> Math.round(x*100): the UNIT
+   * ASYMMETRY vs getCampaign's native cents. Window = today (intra-day partial spend under-states the
+   * denominator -> a larger share -> a more conservative cap; the safe direction). THROWS on a Meta
+   * error (load-bearing); null on an absent/non-numeric spend (assertWithinBlastRadius fails closed
+   * SHARE_CAP on a null/non-positive denominator). Strict parse, never coerces "5000abc".
    */
   async getAccountDailySpendCents(): Promise<number | null> {
     const response = await this.get(`/${this.accountId}/insights?date_preset=today&fields=spend`);
