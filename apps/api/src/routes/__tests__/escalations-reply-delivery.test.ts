@@ -323,4 +323,111 @@ describe("POST /api/escalations/:id/reply", () => {
     expect(updateMany).toHaveBeenCalled();
     expect(res.statusCode).toBe(502);
   });
+
+  it("is idempotent: a re-POST after release short-circuits without re-delivering", async () => {
+    // The handoff is already released (its reply was delivered on a prior POST).
+    const releaseEscalationToAi = vi.fn();
+    const sendProactive = vi.fn();
+    const updateMany = vi.fn();
+    const prisma = makePrisma({
+      handoffFindUnique: vi
+        .fn()
+        .mockResolvedValue({ ...handoff, status: "released", acknowledgedAt: new Date() }),
+      handoffUpdateMany: updateMany,
+    });
+    const app = await buildConversationTestApp({
+      conversationStateStore: {
+        setOverride: vi.fn(),
+        sendOperatorMessage: vi.fn(),
+        releaseEscalationToAi,
+      },
+      workTraceStore: makeWorkTraceStore(),
+      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      prisma,
+      organizationId: "org_1",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/reply",
+      payload: { message: "We can fit you in at 3pm tomorrow." },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { replySent: boolean };
+    expect(body.replySent).toBe(true);
+    // No second delivery, no second release.
+    expect(releaseEscalationToAi).not.toHaveBeenCalled();
+    expect(sendProactive).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rolls the release back to pending when delivery fails, so the owner can retry", async () => {
+    const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
+    const sendProactive = vi.fn().mockRejectedValue(new Error("WhatsApp API 500"));
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const app = await buildConversationTestApp({
+      conversationStateStore: {
+        setOverride: vi.fn(),
+        sendOperatorMessage: vi.fn(),
+        releaseEscalationToAi,
+      },
+      workTraceStore: makeWorkTraceStore(),
+      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      prisma: makePrisma({ handoffUpdateMany: updateMany }),
+      organizationId: "org_1",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/reply",
+      payload: { message: "test" },
+    });
+
+    expect(res.statusCode).toBe(502);
+    // The release is rolled back to pending after the delivery failure, so the
+    // escalation reopens and a retry is not swallowed by the idempotency guard.
+    const datas = updateMany.mock.calls.map(
+      (c) => (c[0] as { data: Record<string, unknown> }).data,
+    );
+    expect(datas).toContainEqual(expect.objectContaining({ status: "released" }));
+    expect(datas).toContainEqual(
+      expect.objectContaining({ status: "pending", acknowledgedAt: null }),
+    );
+  });
+
+  it("releases the handoff org-scoped and does not roll back when delivery succeeds", async () => {
+    const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
+    const sendProactive = vi.fn().mockResolvedValue(undefined);
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const app = await buildConversationTestApp({
+      conversationStateStore: {
+        setOverride: vi.fn(),
+        sendOperatorMessage: vi.fn(),
+        releaseEscalationToAi,
+      },
+      workTraceStore: makeWorkTraceStore(),
+      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      prisma: makePrisma({ handoffUpdateMany: updateMany }),
+      organizationId: "org_1",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/reply",
+      payload: { message: "We can fit you in at 3pm tomorrow." },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sendProactive).toHaveBeenCalled();
+    // Exactly one mutation: the org-scoped release. A successful delivery does
+    // not roll back.
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: "esc-1", organizationId: "org_1" }),
+        data: expect.objectContaining({ status: "released" }),
+      }),
+    );
+  });
 });

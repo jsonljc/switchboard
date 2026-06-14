@@ -23,6 +23,42 @@ interface ConversationTurn {
  */
 const MAX_TRANSCRIPT_MESSAGES = 100;
 
+/** The Handoff fields the escalation payload needs. Structural (not the generated
+ *  Prisma model type) so the route's Handoff rows satisfy it without apps/api
+ *  taking a direct @prisma/client dependency. */
+interface EscalationHandoffRow {
+  id: string;
+  sessionId: string | null;
+  leadId: unknown;
+  status: unknown;
+  reason: unknown;
+  conversationSummary: unknown;
+  leadSnapshot: unknown;
+  qualificationSnapshot: unknown;
+  slaDeadlineAt: Date;
+  acknowledgedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** Serialize a Handoff row into the escalation payload the inbox UI consumes. */
+function toEscalationResponse(h: EscalationHandoffRow) {
+  return {
+    id: h.id,
+    sessionId: h.sessionId,
+    leadId: h.leadId,
+    status: h.status,
+    reason: h.reason,
+    conversationSummary: h.conversationSummary,
+    leadSnapshot: h.leadSnapshot,
+    qualificationSnapshot: h.qualificationSnapshot,
+    slaDeadlineAt: h.slaDeadlineAt.toISOString(),
+    acknowledgedAt: h.acknowledgedAt?.toISOString() ?? null,
+    createdAt: h.createdAt.toISOString(),
+    updatedAt: h.updatedAt.toISOString(),
+  };
+}
+
 export const escalationsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/escalations — list escalations filtered by status
   app.get(
@@ -210,18 +246,23 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
       }
 
-      // Update handoff status to released. The handoff mutation is owned by
-      // the escalations route directly; only the conversationState-side work
-      // (message append + status transition + WorkTrace) is delegated to
-      // ConversationStateStore. The write is org-scoped at the query level via
-      // updateMany so it fails closed independently of the guard above;
-      // updateMany drops Prisma's P2025 not-found, hence the count===0 guard.
+      // Idempotency: a successful reply flips the handoff to "released" and leaves
+      // it there, so an already-released handoff means this reply was already
+      // delivered. Treat a re-POST as an idempotent no-op rather than delivering
+      // the message a second time.
+      if (handoff.status === "released") {
+        return reply.send({ escalation: toEscalationResponse(handoff), replySent: true });
+      }
+
+      // Release the handoff up front. The mutation is org-scoped via updateMany so
+      // it fails closed independently of the guard above (updateMany drops
+      // Prisma's P2025, hence the count===0 guard). The release is NOT terminal:
+      // if delivery then fails it is rolled back to "pending" (below) so the
+      // escalation never lingers as released-but-undelivered and the owner can
+      // retry — which the idempotency short-circuit would otherwise swallow.
       const releaseResult = await app.prisma.handoff.updateMany({
         where: { id, organizationId: orgId },
-        data: {
-          status: "released",
-          acknowledgedAt: new Date(),
-        },
+        data: { status: "released", acknowledgedAt: new Date() },
       });
       if (releaseResult.count === 0) {
         return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
@@ -232,25 +273,25 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
       if (!updatedHandoff) {
         return reply.code(404).send({ error: "Escalation not found", statusCode: 404 });
       }
+      const escalation = toEscalationResponse(updatedHandoff);
 
-      const escalation = {
-        id: updatedHandoff.id,
-        sessionId: updatedHandoff.sessionId,
-        leadId: updatedHandoff.leadId,
-        status: updatedHandoff.status,
-        reason: updatedHandoff.reason,
-        conversationSummary: updatedHandoff.conversationSummary,
-        leadSnapshot: updatedHandoff.leadSnapshot,
-        qualificationSnapshot: updatedHandoff.qualificationSnapshot,
-        slaDeadlineAt: updatedHandoff.slaDeadlineAt.toISOString(),
-        acknowledgedAt: updatedHandoff.acknowledgedAt?.toISOString() ?? null,
-        createdAt: updatedHandoff.createdAt.toISOString(),
-        updatedAt: updatedHandoff.updatedAt.toISOString(),
-      };
+      // Compensating undo of the release above so a failed delivery reopens the
+      // escalation for a retry. Scoped to status "released" so a concurrent
+      // transition is never clobbered. CAVEAT: this reverts only the Handoff
+      // status; the ConversationMessage transcript that releaseEscalationToAi
+      // writes before delivery is NOT undone, so a retry re-appends the owner
+      // line. That duplication is pre-existing (the prior code re-ran the store
+      // call on every retry too); making releaseEscalationToAi idempotent is a
+      // tracked follow-up, not in scope here.
+      const rollbackRelease = () =>
+        app.prisma!.handoff.updateMany({
+          where: { id, organizationId: orgId, status: "released" },
+          data: { status: "pending", acknowledgedAt: null },
+        });
 
-      // No session means no conversation to release back to AI. Skip the
-      // store call (and channel delivery) and return 502 — same shape as
-      // before for compatibility.
+      // No session means no conversation to deliver to. Preserve the historical
+      // behavior: the escalation stays released (the owner closed an undeliverable
+      // handoff) and we return 502.
       if (!handoff.sessionId) {
         return reply.code(502).send({
           escalation,
@@ -261,6 +302,7 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       if (!app.conversationStateStore || !app.workTraceStore) {
+        await rollbackRelease();
         return reply.code(503).send({ error: "Conversation store unavailable", statusCode: 503 });
       }
 
@@ -293,9 +335,10 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
           target,
         });
       } catch (err) {
-        // A genuine contact data gap (escalate-tool path): the reply is saved as
-        // an audit intent but delivery is unresolved => 502, not 404.
+        // Delivery is unresolved, so roll back the release => the escalation
+        // reopens (pending) and the owner can retry.
         if (err instanceof ContactNotFoundError) {
+          await rollbackRelease();
           return reply.code(502).send({
             escalation,
             replySent: false,
@@ -305,10 +348,12 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
         }
         // Missing phone-threaded ConversationState (gateway path): unchanged 404.
         if (err instanceof ConversationStateNotFoundError) {
+          await rollbackRelease();
           return reply
             .code(404)
             .send({ error: "Conversation not found for escalation", statusCode: 404 });
         }
+        await rollbackRelease();
         throw err;
       }
 
@@ -340,6 +385,10 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
       });
 
       if (deliveryResult !== "delivered") {
+        // Roll back the release so the escalation reopens (pending) and the owner
+        // can retry; the idempotency short-circuit at the top only swallows
+        // re-POSTs once the reply is actually delivered.
+        await rollbackRelease();
         return reply.code(502).send({
           escalation,
           replySent: false,
