@@ -161,7 +161,9 @@ export function buildLocalStore(prismaClient: PrismaClient, orgId: string) {
       });
     },
     findById: async (bookingId: string) => {
-      const row = await prismaClient.booking.findUnique({ where: { id: bookingId } });
+      const row = await prismaClient.booking.findFirst({
+        where: { id: bookingId, organizationId: orgId },
+      });
       if (!row) return null;
       return {
         id: row.id,

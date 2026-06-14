@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
-import { createCalendarProviderFactory } from "../calendar-provider-factory.js";
+import { buildLocalStore, createCalendarProviderFactory } from "../calendar-provider-factory.js";
 import { isNoopCalendarProvider, NoopCalendarProvider } from "../noop-calendar-provider.js";
 
 function makePrisma(rowByOrg: Record<string, { businessHours: unknown } | null>) {
@@ -230,5 +230,45 @@ describe("createCalendarProviderFactory: Local provider email wiring (#9a regres
     const provider = (await factory("org-local")) as unknown as { onSendFailure?: unknown };
 
     expect(provider.onSendFailure).toBeTypeOf("function");
+  });
+});
+
+describe("buildLocalStore.findById: org-scoping (read-side IDOR fix)", () => {
+  function makeBookingPrisma(row: Record<string, unknown> | null) {
+    return { booking: { findFirst: vi.fn(async () => row) } };
+  }
+
+  it("reads through findFirst scoped to the closed-over org id", async () => {
+    const prisma = makeBookingPrisma({
+      id: "bk_1",
+      contactId: "ct_1",
+      organizationId: "org-A",
+      service: "consultation",
+      status: "confirmed",
+      startsAt: new Date("2026-04-20T10:00:00Z"),
+      endsAt: new Date("2026-04-20T10:30:00Z"),
+      createdAt: new Date("2026-04-19T00:00:00Z"),
+      updatedAt: new Date("2026-04-19T00:00:00Z"),
+    });
+    const store = buildLocalStore(prisma as never, "org-A");
+
+    const result = await store.findById("bk_1");
+
+    expect(prisma.booking.findFirst).toHaveBeenCalledWith({
+      where: { id: "bk_1", organizationId: "org-A" },
+    });
+    expect(result?.id).toBe("bk_1");
+  });
+
+  it("returns null for an id that belongs to another org (findFirst no-match)", async () => {
+    const prisma = makeBookingPrisma(null);
+    const store = buildLocalStore(prisma as never, "org-A");
+
+    const result = await store.findById("bk-from-org-B");
+
+    expect(result).toBeNull();
+    expect(prisma.booking.findFirst).toHaveBeenCalledWith({
+      where: { id: "bk-from-org-B", organizationId: "org-A" },
+    });
   });
 });
