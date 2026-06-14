@@ -50,6 +50,9 @@ importers:
       '@switchboard/schemas':
         specifier: workspace:*
         version: link:packages/schemas
+      '@types/bcryptjs':
+        specifier: ^3.0.0
+        version: 3.0.0
       '@types/node':
         specifier: ^25.5.0
         version: 25.6.0
@@ -62,6 +65,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@25.6.0)(jiti@2.6.1)(jsdom@29.1.0(@noble/hashes@2.2.0))(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
       eslint:
         specifier: ^8.56.0
         version: 8.57.1

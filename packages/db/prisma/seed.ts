@@ -1,7 +1,8 @@
 /* eslint-disable max-lines, no-console */
 import { PrismaClient } from "@prisma/client";
-import { createCipheriv, createHash, randomBytes } from "crypto";
+import { createHash } from "crypto";
 import bcrypt from "bcryptjs";
+import { encryptApiKey } from "../src/crypto/api-key.js";
 import { seedMarketplace, seedDemoData } from "./seed-marketplace.js";
 import { seedKnowledge } from "./seed-knowledge.js";
 import { seedDevData } from "./seed-dev-data.js";
@@ -15,29 +16,10 @@ import { seedRileyAdOptimizerDeployment } from "../src/seed/seed-riley-ad-optimi
 const prisma = new PrismaClient();
 
 // ── Encryption for dev seed data ──
-// Must match apps/dashboard/src/lib/crypto.ts: AES-256-GCM with a key derived
-// as sha256(CREDENTIALS_ENCRYPTION_KEY). If this drifts from runtime, every
-// seeded user's apiKeyEncrypted becomes undecryptable at request time.
-function getKey(): Buffer {
-  const secret = process.env["CREDENTIALS_ENCRYPTION_KEY"];
-  if (!secret) {
-    throw new Error(
-      "CREDENTIALS_ENCRYPTION_KEY is not set. Seed needs the same secret the dashboard/API runtime use to decrypt apiKeyEncrypted.",
-    );
-  }
-  return createHash("sha256").update(secret).digest();
-}
-
-function encryptApiKey(apiKey: string): string {
-  // AES-256-GCM requires a unique IV per encryption — use random bytes
-  const iv = randomBytes(16);
-  const cipher = createCipheriv("aes-256-gcm", getKey(), iv);
-  let encrypted = cipher.update(apiKey, "utf8", "hex");
-  encrypted += cipher.final("hex");
-  const authTag = cipher.getAuthTag().toString("hex");
-  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
-}
-
+// encryptApiKey is the canonical impl from @switchboard/db (src/crypto/api-key.ts):
+// AES-256-GCM keyed by sha256(CREDENTIALS_ENCRYPTION_KEY). Sharing one impl with the
+// dashboard/API runtime guarantees every seeded user's apiKeyEncrypted stays
+// decryptable at request time (the previous local copy carried that invariant by hand).
 function sha256(input: string): string {
   return createHash("sha256").update(input).digest("hex");
 }

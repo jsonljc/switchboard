@@ -43,6 +43,7 @@ export {
 } from "./storage/index.js";
 export type { ConnectionRecord } from "./storage/index.js";
 export { encryptCredentials, decryptCredentials, isEncrypted } from "./crypto/credentials.js";
+export { encryptApiKey, decryptApiKey } from "./crypto/api-key.js";
 export { refreshMetaOAuthToken } from "./oauth/token-refresh.js";
 export type { TokenRefreshResult } from "./oauth/token-refresh.js";
 export { WORK_TRACE_INTEGRITY_CUTOFF_AT } from "./integrity-cutoff.js";
@@ -165,6 +166,11 @@ export {
   provisionOrgAgentDeployments,
   type ProvisionOrgAgentsResult,
 } from "./seed/provision-org-agents.js";
+export {
+  provisionOrgWithOwner,
+  provisionPilotOrg,
+  type ProvisionOrgWithOwnerInput,
+} from "./seed/provision-org-with-owner.js";
 export {
   CREATIVE_GOVERNANCE_SETTINGS,
   CREATIVE_SPEND_APPROVAL_THRESHOLD,
