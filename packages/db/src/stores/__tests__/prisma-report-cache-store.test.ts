@@ -21,6 +21,7 @@ const sample: ReportDataV1 = {
   costNarrative: "",
   managedComparison: null,
   heldRate: { attended: 38, matured: 45, rate: 38 / 45 },
+  consentCompleteness: { validConsent: 0, bookable: 0, rate: null },
 };
 
 describe("PrismaReportCacheStore", () => {

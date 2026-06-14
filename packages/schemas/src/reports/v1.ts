@@ -150,6 +150,13 @@ export interface HeldRateData {
   rate: number | null;
 }
 
+export interface ConsentCompletenessData {
+  validConsent: number;
+  bookable: number;
+  /** null = no PDPA-applicable (jurisdiction-tagged) contacts (render "no data", never NaN). */
+  rate: number | null;
+}
+
 export interface ReportDataV1 {
   label: ReportWindow;
   period: string;
@@ -163,6 +170,7 @@ export interface ReportDataV1 {
   costNarrative: string;
   managedComparison: ManagedComparisonData | null;
   heldRate: HeldRateData;
+  consentCompleteness: ConsentCompletenessData;
 }
 
 // ---------------------------------------------------------------------------

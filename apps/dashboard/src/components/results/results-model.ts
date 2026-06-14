@@ -9,6 +9,7 @@ import type {
   CampaignRow,
   CostBreakdown,
   HeldRateData,
+  ConsentCompletenessData,
   ManagedComparisonData,
 } from "./types";
 
@@ -29,6 +30,7 @@ export interface ResultsModel {
   cost: CostBreakdown;
   costNarrative: string;
   heldRate: HeldRateData; // attended / matured, rate null when no matured bookings
+  consentCompleteness: ConsentCompletenessData; // validConsent / bookable, point-in-time snapshot
   managedComparison: ManagedComparisonData | null;
 }
 
@@ -65,6 +67,7 @@ export function buildResultsModel(data: ReportData): ResultsModel {
     cost: data.cost,
     costNarrative: data.costNarrative,
     heldRate: data.heldRate ?? { attended: 0, matured: 0, rate: null },
+    consentCompleteness: data.consentCompleteness ?? { validConsent: 0, bookable: 0, rate: null },
     managedComparison: data.managedComparison,
   };
 }

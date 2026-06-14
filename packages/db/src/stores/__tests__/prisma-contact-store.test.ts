@@ -13,6 +13,7 @@ function makeMockPrisma() {
       findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      count: vi.fn(),
     },
   };
 }
@@ -603,6 +604,25 @@ describe("PrismaContactStore", () => {
 
       expect(prisma.contact.findMany).toHaveBeenCalledWith({
         where: { organizationId: "org-1", id: { in: ["c1"] } },
+      });
+    });
+  });
+
+  describe("countConsentCompleteness", () => {
+    it("counts bookable (pdpaJurisdiction set) + validConsent (granted, not revoked)", async () => {
+      prisma.contact.count = vi.fn().mockResolvedValueOnce(45).mockResolvedValueOnce(42);
+      const res = await store.countConsentCompleteness({ orgId: "o1" });
+      expect(res).toEqual({ bookable: 45, validConsent: 42 });
+      expect(prisma.contact.count).toHaveBeenNthCalledWith(1, {
+        where: { organizationId: "o1", pdpaJurisdiction: { not: null } },
+      });
+      expect(prisma.contact.count).toHaveBeenNthCalledWith(2, {
+        where: {
+          organizationId: "o1",
+          pdpaJurisdiction: { not: null },
+          consentGrantedAt: { not: null },
+          consentRevokedAt: null,
+        },
       });
     });
   });

@@ -401,6 +401,20 @@ export class PrismaContactStore implements ContactStore {
     }
     return map;
   }
+
+  async countConsentCompleteness(input: { orgId: string }): Promise<{
+    bookable: number;
+    validConsent: number;
+  }> {
+    const bookableWhere = { organizationId: input.orgId, pdpaJurisdiction: { not: null } };
+    const [bookable, validConsent] = await Promise.all([
+      this.prisma.contact.count({ where: bookableWhere }),
+      this.prisma.contact.count({
+        where: { ...bookableWhere, consentGrantedAt: { not: null }, consentRevokedAt: null },
+      }),
+    ]);
+    return { bookable, validConsent };
+  }
 }
 
 // ---------------------------------------------------------------------------

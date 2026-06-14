@@ -648,6 +648,7 @@ export async function buildServer() {
       PrismaConversionRecordStore,
       PrismaRecommendationStore: PrismaRecStore,
       PrismaConversationThreadStore,
+      PrismaContactStore: PrismaContactStoreForReports,
     } = await import("@switchboard/db");
 
     app.decorate("reportCacheStore", new PrismaReportCacheStore(prismaClient));
@@ -677,6 +678,7 @@ export async function buildServer() {
           return config?.stripePriceId ?? null;
         },
       },
+      contacts: new PrismaContactStoreForReports(prismaClient),
     };
     app.decorate("reportStores", reportStores);
 

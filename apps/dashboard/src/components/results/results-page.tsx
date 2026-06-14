@@ -15,6 +15,7 @@ import { VerdictLine } from "./verdict-line";
 import { HeroOutcomes } from "./hero-outcomes";
 import { WhatsWorking } from "./whats-working";
 import { HeldRateTile } from "./held-rate-tile";
+import { ConsentCompletenessTile } from "./consent-completeness-tile";
 import { AgentContribution } from "./agent-contribution";
 import { WorthIt } from "./worth-it";
 import { DetailsDisclosure } from "./details-disclosure";
@@ -110,6 +111,7 @@ export function ResultsPage() {
               {(!showNoMeta || model.managedComparison) && (
                 <DetailsDisclosure>
                   {!showNoMeta && <HeldRateTile model={model} />}
+                  {!showNoMeta && <ConsentCompletenessTile model={model} />}
                   {!showNoMeta && (
                     <FunnelSection funnel={model.funnel} narrative={model.funnelNarrative} />
                   )}

@@ -140,6 +140,12 @@ export interface ReportStores {
   deployment: {
     getAlexSlug(orgId: string): Promise<string | null>;
   };
+
+  contacts: {
+    countConsentCompleteness(input: {
+      orgId: string;
+    }): Promise<{ bookable: number; validConsent: number }>;
+  };
 }
 
 // ---------------------------------------------------------------------------

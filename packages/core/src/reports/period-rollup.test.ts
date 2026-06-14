@@ -43,6 +43,9 @@ function stubStores(): ReportStores {
     deployment: {
       getAlexSlug: async () => null,
     },
+    contacts: {
+      countConsentCompleteness: async () => ({ bookable: 0, validConsent: 0 }),
+    },
   };
 }
 
