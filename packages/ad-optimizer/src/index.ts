@@ -159,6 +159,10 @@ export type {
   BlastRadiusRollback,
   BlastRadiusVerdict,
 } from "./blast-radius-contract.js";
+// Spec-1B act leg: pure fail-closed drift guard the reallocate executor composes
+// with the blast-radius cap before the Meta budget write (read-modify-re-read, spec section 7).
+export { assessBudgetDrift } from "./budget-reallocation-plan.js";
+export type { BudgetDriftVerdict } from "./budget-reallocation-plan.js";
 // Phase-C wiring: raised execution floor for the self-submitted pause.
 export {
   RILEY_PAUSE_EXECUTION_EVIDENCE_FLOOR,
