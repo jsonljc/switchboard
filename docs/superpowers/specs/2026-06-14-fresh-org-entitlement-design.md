@@ -131,14 +131,26 @@ change or migration, and the financial-gate lessons are satisfied because compin
 every governance spend and approval gate intact. Exposure during the pilot is bounded by the
 launch-mode registration gate.
 
+**Guardrail (the comp is launch and pilot only).** `entitlementOverride: true` is set ONLY by trusted
+org provisioning paths: dashboard signup (`provisionDashboardUser`) and the auth-scoped lazy
+`GET /config`. It is a pilot entitlement, not a permanent comp. Billing-live must enumerate and clear
+or classify all existing overrides (see "Required follow-up at billing-live"). This was the central
+caution from plan review: this seam decides who becomes entitled, automatically, and forever, so it
+stays scoped to trusted producers and has a named unwind.
+
 ## Scope
 
 In scope:
 
-- Set `entitlementOverride: true` in `provisionDashboardUser` (dashboard signup) and in the
-  `organizations.ts` lazy `GET /config` create branch, mirroring how F-01 (#1024) seeded
-  `businessHours` at the same two sites.
-- Tests pinning the producer and the producer to consumer seam (see Test strategy).
+- Set `entitlementOverride: true` in `provisionDashboardUser` (dashboard signup, inline with an F-02
+  comment) and in the `organizations.ts` lazy `GET /config` create branch, mirroring how F-01 (#1024)
+  seeded `businessHours` at the same two sites.
+- Extract the lazy-create defaults into a small co-located module
+  (`apps/api/src/lib/org-config-defaults.ts`). This is the single documented source for the API
+  fresh-org config defaults, and it drops `organizations.ts` about ten lines clear of the 600-line
+  arch limit (the file is 598 now). The module's doc comment carries the trusted-path safety note.
+- Tests pinning the producer, the defaults source, the producer-to-consumer seam, and one real
+  enforcement chokepoint (see Test strategy).
 
 Out of scope (flagged, not fixed here):
 
@@ -149,6 +161,22 @@ Out of scope (flagged, not fixed here):
   forgotten.
 - F-05 (launch-mode), F-09 (trustHost), F-20 (client flag). Not folded in.
 
+## Why the lazy GET /config path is safe to seed entitlement
+
+Seeding `entitlementOverride` from a GET route is a powerful side effect, so it is worth stating why
+it cannot become a billing bypass. The lazy `GET /config` create branch is reachable only after
+`requireOrganizationScope` (`apps/api/src/utils/require-org.ts`) authenticates the caller, and the
+handler then returns 403 unless the URL `orgId` equals the authenticated `authOrgId` (proven by the
+existing "returns 403 for wrong org" test). So a caller can seed entitlement only for the org they are
+ALREADY authenticated as, never an arbitrary org and never another tenant's. Authentication itself is
+minted only by trusted provisioning: the API key / session is created inside `provisionDashboardUser`
+in the same transaction as the `OrganizationConfig` row, so a normally provisioned org already has
+its config and never reaches the create branch. The branch fires only for an authenticated org whose
+config row is somehow absent, and it can only comp that same authenticated org. Entitling an org you
+already control is not a privilege escalation. If org identity could ever be authenticated WITHOUT
+trusted provisioning, this assumption must be revisited and the lazy path must stop seeding
+entitlement.
+
 ## Non-goals
 
 - No schema default change. The defaults (`none`/`false`) stay correct for non-provisioning create
@@ -157,35 +185,57 @@ Out of scope (flagged, not fixed here):
 
 ## Test strategy (TDD)
 
-Write each failing test first and watch it fail for the right reason before implementing.
+Write each failing test first and watch it fail for the right reason before implementing. The tests
+span the whole chain so the fix cannot be inert: producer writes the field, the defaults source comps
+the org, and a real enforcement chokepoint lets a fresh org through.
 
 1. **Dashboard producer + seam** (`apps/dashboard/src/lib/__tests__/provision-dashboard-user.test.ts`):
-   assert the captured `organizationConfig.create` payload has `entitlementOverride === true`, then
-   feed the provisioned values (`subscriptionStatus` defaults to `"none"` since the producer omits
-   it, plus the producer-set `entitlementOverride`) into `evaluateEntitlement` and assert
-   `{ entitled: true, reason: "override" }`. This pins the seam from real producer output, mirroring
-   the F-01 `businessHours` assertion at line 49-50.
-2. **API lazy-create producer + seam** (`apps/api/src/__tests__/api-organizations.test.ts`):
-   extend the "auto-creates default config" test to assert the `upsert` `create` objectContaining
-   includes `entitlementOverride: true`, and run `evaluateEntitlement` over the created values to
-   assert entitled. Mirrors the existing `businessHours: DEFAULT_BUSINESS_HOURS` assertion at
-   line 135.
-3. **Consumer documentation** (`packages/core/src/billing/__tests__/entitlement.test.ts`): add an
-   explicit named case documenting the fresh-pilot tuple `{ subscriptionStatus: "none",
-entitlementOverride: true } -> { entitled: true, reason: "override" }`. The existing
-   override-wins loop already covers this mechanically; the named case ties it to provisioning.
+   assert `organizationConfig.create` is called exactly once, capture the payload, assert
+   `entitlementOverride === true`, then feed the provisioned values (`subscriptionStatus` defaults to
+   `"none"` since the producer omits it, plus the producer-set `entitlementOverride`) into
+   `evaluateEntitlement` and assert `{ entitled: true, reason: "override" }`. The called-once guard
+   makes the position-zero mock read explicit instead of fragile.
+2. **Defaults source seam** (`apps/api/src/lib/__tests__/org-config-defaults.test.ts`, new): assert the
+   extracted `LAZY_ORG_CONFIG_CREATE_DEFAULTS` carries `entitlementOverride: true` and evaluates to
+   entitled. This pins the API producer-of-record from the real defaults object.
+3. **API lazy-create uses the defaults** (`apps/api/src/__tests__/api-organizations.test.ts`): extend
+   the "auto-creates default config" test to assert the `upsert` `create` objectContaining includes
+   `entitlementOverride: true`, proving the route passes the comped defaults through (the seam itself
+   is owned by test 2). Mirrors the existing `businessHours: DEFAULT_BUSINESS_HOURS` assertion.
+4. **Real enforcement chokepoint**
+   (`apps/api/src/middleware/__tests__/billing-guard.integration.test.ts`): construct a fresh org's
+   actual DB row (`{ subscriptionStatus: "none", entitlementOverride: true }`), run it through the
+   real `PrismaBillingEntitlementResolver` and the `billingGuard`, and assert a mutating
+   `POST /api/actions/propose` returns 200, not 402. This is the F-02 regression: it proves the exact
+   tuple a fresh org is provisioned with survives the actual gate, not just the pure function.
+
+The consumer pure function is already covered: `entitlement.test.ts` has an "override wins regardless
+of status" case over a status set that includes `"none"`, so no separate consumer test is added (it
+would duplicate existing coverage).
 
 ## Risks and mitigations
 
-- **`organizations.ts` is at the 600-line arch-check limit** (598 lines now; the hard cap means
-  `wc -l` must stay <= 599). Adding the field as a single inline-commented line keeps it at 599.
-  Verify `wc -l` and `pnpm arch:check` are green after the edit. Fallback if it would exceed: extract
-  the lazy-create default object into a small co-located module and reference it, which reduces the
-  route file rather than splitting it. Do not fold in unrelated refactors.
-- **Billing-live exit (documented, out of scope):** when `NEXT_PUBLIC_LAUNCH_MODE=public` and Stripe
-  is enabled, provisioning must switch to a real trial or checkout, and a one-time migration must
-  clear pilot-era `entitlementOverride` for orgs that should convert. This PR makes the comp explicit
-  and greppable (`F-02` comment + this spec) so that milestone is easy to find.
+- **`organizations.ts` line budget.** The file is 598 lines against a 600-line arch-check hard cap.
+  Rather than the brittle one-line patch (which would sit at 599, one edit from breaking), the plan
+  extracts the lazy-create defaults into `apps/api/src/lib/org-config-defaults.ts`, which removes the
+  inline object and the now-unused `DEFAULT_BUSINESS_HOURS` import and drops the route to about 588
+  lines. Verify `wc -l` and `pnpm arch:check` after the change. Do not fold in unrelated refactors.
+- **Comp lifecycle.** `entitlementOverride: true` has no built-in expiry, so it must be unwound
+  deliberately at billing-live (see the named follow-up below). The guardrail keeps it set only by
+  trusted producers in the meantime.
+
+## Required follow-up at billing-live (named, not in F-02)
+
+This must happen when billing goes live (`NEXT_PUBLIC_LAUNCH_MODE=public` and Stripe enabled), and it
+is named here so it is not forgotten. It does NOT block F-02.
+
+1. Switch provisioning off the unconditional comp: new orgs go through a real Stripe trial or checkout
+   instead of `entitlementOverride: true`.
+2. Run a one-time migration that enumerates every `entitlementOverride = true` org, classifies each as
+   paid, trial, internal, or demo/test, and clears the override except for explicitly comped or
+   internal accounts. Without this, pilot-era comps persist forever and mask genuine non-payment.
+3. The comp is greppable by the `F-02` markers and `org-config-defaults.ts`, so the cleanup has a
+   precise inventory of where the override is produced.
 
 ## Verification gate (before push)
 
