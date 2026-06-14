@@ -17,21 +17,22 @@
 // --email is required. --name defaults to the email. --password defaults to a strong
 // generated value (printed once). Requires DATABASE_URL + CREDENTIALS_ENCRYPTION_KEY in
 // the environment (the apiKey is encrypted with the same key the dashboard/API decrypt
-// with). Re-running for an existing email is safe: it re-ensures Riley and reports the
-// org as already provisioned (it does not reset the password or re-mint the apiKey).
+// with). Re-running for an existing email is safe: it re-runs the idempotent day-one
+// seeders (agent enablement + Riley's deployment) so a partially-provisioned org
+// converges, and reports the org as already provisioned (it does not reset the password
+// or re-mint the apiKey).
 //
 // .mts (not .ts): @switchboard/db is ESM-only (see provision-mira-for-org.mts for the
 // full ERR_PACKAGE_PATH_NOT_EXPORTED rationale). bcryptjs is a root devDependency so a
 // root-level script can resolve it.
 import { randomBytes } from "crypto";
-import { PrismaClient, provisionPilotOrg, provisionOrgAgentDeployments } from "@switchboard/db";
+import {
+  PrismaClient,
+  provisionPilotOrg,
+  provisionOrgAgentDeployments,
+  seedOrgDayOneAgents,
+} from "@switchboard/db";
 import bcrypt from "bcryptjs";
-
-interface PilotArgs {
-  email: string;
-  name?: string;
-  password: string;
-}
 
 /** Parse `--email`, `--name`, `--password` (each as `--flag value`). */
 function parseArgs(argv: string[]): { email?: string; name?: string; password?: string } {
@@ -76,9 +77,11 @@ async function main(): Promise<void> {
   try {
     const existing = await prisma.dashboardUser.findUnique({ where: { email } });
     if (existing) {
-      // Idempotent re-run: do not re-mint the org/apiKey or reset the password. Just
-      // re-ensure Riley's deployment (a no-clobber no-op if already provisioned) so a
-      // partially-provisioned org converges.
+      // Idempotent re-run: do not re-mint the org/apiKey or reset the password. Converge a
+      // possibly-partial org by re-running BOTH idempotent day-one seeders, mirroring the
+      // new-org path: enablement rows (seedOrgDayOneAgents, post-tx and so exposed to a
+      // partial failure) plus Riley's deployment (provisionOrgAgentDeployments, no-clobber).
+      await seedOrgDayOneAgents(prisma, existing.organizationId);
       await provisionOrgAgentDeployments(prisma, existing.organizationId, { mira: false });
       console.warn(
         `[provision-pilot] already provisioned: email=${email} org=${existing.organizationId} ` +
