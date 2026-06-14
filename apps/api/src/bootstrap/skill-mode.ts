@@ -269,8 +269,8 @@ export async function bootstrapSkillMode(
         }),
       ),
     bookingStore: {
-      findById: async (bookingId: string) => {
-        const b = await bookingStore.findById(bookingId);
+      findById: async (orgId: string, bookingId: string) => {
+        const b = await bookingStore.findById(orgId, bookingId);
         return b ? { id: b.id, status: b.status } : null;
       },
     },
@@ -376,7 +376,8 @@ export async function bootstrapSkillMode(
     const { buildDepositLinkToolFactory } = await import("./deposit-link-wiring.js");
     depositLinkFactory = buildDepositLinkToolFactory({
       paymentPortFactory: deps.paymentPortFactory,
-      findBookingById: (bookingId: string) => bookingStore.findById(bookingId),
+      findBookingById: (orgId: string, bookingId: string) =>
+        bookingStore.findById(orgId, bookingId),
     });
   }
 

@@ -21,7 +21,7 @@ export interface BookingFailureResult {
 }
 
 interface BookingStoreSubset {
-  findById(bookingId: string): Promise<{ id: string; status: string } | null>;
+  findById(orgId: string, bookingId: string): Promise<{ id: string; status: string } | null>;
 }
 
 interface EscalationLookup {
@@ -64,7 +64,7 @@ export class BookingFailureHandler {
   constructor(private deps: BookingFailureHandlerDeps) {}
 
   async handle(input: BookingFailureInput): Promise<BookingFailureResult> {
-    const booking = await this.deps.bookingStore.findById(input.bookingId);
+    const booking = await this.deps.bookingStore.findById(input.orgId, input.bookingId);
     if (booking?.status === "failed") {
       const existing = await this.deps.escalationLookup.findByBookingId(input.bookingId);
       return {

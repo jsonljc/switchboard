@@ -31,10 +31,11 @@ export interface DepositLinkWiringDeps {
    */
   paymentPortFactory: PaymentPortFactory;
   /**
-   * PrismaBookingStore.findById is org-UNAWARE (takes only bookingId). Org
-   * isolation is enforced in the adapter below, never delegated to the tool.
+   * Resolves the durable booking row by id. `PrismaBookingStore.findById` is now org-scoped
+   * (it takes orgId), so this lookup is keyed by org; the adapter below keeps an explicit
+   * tenant check as a redundant second barrier (defense-in-depth).
    */
-  findBookingById: (bookingId: string) => Promise<BookingRow | null>;
+  findBookingById: (orgId: string, bookingId: string) => Promise<BookingRow | null>;
   /** Test override; defaults to the pilot constant. */
   depositAmountCents?: number;
   /** Test override; defaults to the pilot currency. */
@@ -52,7 +53,9 @@ export function buildDepositLinkToolFactory(deps: DepositLinkWiringDeps): Deposi
   return createDepositLinkToolFactory({
     paymentPortFactory: deps.paymentPortFactory,
     findById: async (orgId: string, bookingId: string) => {
-      const booking = await deps.findBookingById(bookingId);
+      const booking = await deps.findBookingById(orgId, bookingId);
+      // Defense-in-depth: the store is org-scoped, but keep an explicit tenant check so the
+      // deposit tool's isolation never silently depends on the store query shape.
       if (!booking || booking.organizationId !== orgId) return null;
       return { id: booking.id, organizationId: booking.organizationId, status: booking.status };
     },
