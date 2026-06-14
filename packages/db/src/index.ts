@@ -43,6 +43,7 @@ export {
 } from "./storage/index.js";
 export type { ConnectionRecord } from "./storage/index.js";
 export { encryptCredentials, decryptCredentials, isEncrypted } from "./crypto/credentials.js";
+export { encryptApiKey, decryptApiKey } from "./crypto/api-key.js";
 export { refreshMetaOAuthToken } from "./oauth/token-refresh.js";
 export type { TokenRefreshResult } from "./oauth/token-refresh.js";
 export { WORK_TRACE_INTEGRITY_CUTOFF_AT } from "./integrity-cutoff.js";
