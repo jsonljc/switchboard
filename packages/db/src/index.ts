@@ -79,6 +79,11 @@ export { PrismaAgentTaskStore } from "./stores/prisma-agent-task-store.js";
 export { PrismaTrustScoreStore } from "./stores/prisma-trust-score-store.js";
 export { PrismaAgentPersonaStore } from "./stores/prisma-agent-persona-store.js";
 export { PrismaActionRequestStore } from "./stores/prisma-action-request-store.js";
+export { PrismaMetaMutationAttemptStore } from "./stores/prisma-meta-mutation-attempt-store.js";
+export type {
+  CreateMetaMutationAttemptInput,
+  MetaMutationAttemptStatus,
+} from "./stores/prisma-meta-mutation-attempt-store.js";
 export { PrismaDeploymentStateStore } from "./stores/prisma-deployment-state-store.js";
 export { PrismaDeploymentConnectionStore } from "./stores/prisma-deployment-connection-store.js";
 export { PrismaCreativeJobStore } from "./stores/prisma-creative-job-store.js";
