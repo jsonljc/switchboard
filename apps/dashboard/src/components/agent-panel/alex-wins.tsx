@@ -2,6 +2,7 @@
 
 import { useAgentWins } from "@/hooks/use-agent-wins";
 import { QueryStates } from "@/components/query-states";
+import { AttendanceCheckIn } from "./attendance-check-in";
 import { formatCents } from "./lib/format";
 import styles from "./agent-panel.module.css";
 
@@ -67,6 +68,7 @@ export function AlexWins() {
                   <span className={styles.apLogTime} title={w.traceId}>
                     {`${w.timeFolio} · #${w.traceId.slice(0, 8)}`}
                   </span>
+                  <AttendanceCheckIn bookingId={w.bookingId} />
                 </div>
               );
             })}
