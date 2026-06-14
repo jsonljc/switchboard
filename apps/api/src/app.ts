@@ -905,6 +905,8 @@ export async function buildServer() {
             app.paymentPortFactory!(orgId).then((port) => port.retrievePayment(externalReference))
         : undefined,
       bookingAttendanceWriter: bookingAttendanceStore,
+      // Same store: an "attended" outcome promotes the booking's calendar receipt booked -> held.
+      receiptHeldPromoter: prismaReceipts,
       logger: app.log,
     });
   }

@@ -14,23 +14,29 @@ export interface BookingAttendanceWriter {
   ): Promise<{ id: string; attendance: string | null }>;
 }
 
+/**
+ * Promotes a booking's calendar receipt booked -> held once attendance is confirmed.
+ * PrismaReceiptStore satisfies it structurally. Optional: when unwired the handler still
+ * records attendance, it just does not weld the receipt primitive.
+ */
+export interface ReceiptHeldPromoter {
+  promoteCalendarBookedToHeld(organizationId: string, bookingId: string): Promise<number>;
+}
+
 export function buildRecordAttendanceHandler(
   writer: BookingAttendanceWriter,
+  receiptPromoter?: ReceiptHeldPromoter,
 ): OperatorMutationHandler {
   return {
     async execute(workUnit) {
       const params = RecordAttendanceParametersSchema.parse(workUnit.parameters);
+      let booking: { id: string; attendance: string | null };
       try {
-        const booking = await writer.recordAttendance(
+        booking = await writer.recordAttendance(
           workUnit.organizationId,
           params.bookingId,
           params.outcome,
         );
-        return {
-          outcome: "completed" as const,
-          summary: `Recorded ${params.outcome} for booking ${params.bookingId}`,
-          outputs: { booking },
-        };
       } catch (err) {
         if (err instanceof StaleVersionError) {
           return {
@@ -44,6 +50,24 @@ export function buildRecordAttendanceHandler(
         }
         throw err;
       }
+
+      // Attendance is the source of truth (and is already persisted). Promoting the calendar
+      // receipt booked -> held is a secondary proof write, only on "attended". A failure here
+      // propagates (fail loud) rather than silently desyncing the receipt; recordAttendance is
+      // idempotent on (id, org), so retrying the whole action is safe.
+      let receiptsPromoted = 0;
+      if (receiptPromoter && params.outcome === "attended") {
+        receiptsPromoted = await receiptPromoter.promoteCalendarBookedToHeld(
+          workUnit.organizationId,
+          params.bookingId,
+        );
+      }
+
+      return {
+        outcome: "completed" as const,
+        summary: `Recorded ${params.outcome} for booking ${params.bookingId}`,
+        outputs: { booking, receiptsPromoted },
+      };
     },
   };
 }
