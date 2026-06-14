@@ -166,4 +166,54 @@ describe("GET /api/escalations/:id — conversation history source (F-19)", () =
     const body = JSON.parse(res.body) as { conversationHistory: Turn[] };
     expect(body.conversationHistory).toEqual([]);
   });
+
+  it("labels an owner reply as role 'owner', agent-outbound as 'assistant', inbound as 'user'", async () => {
+    const conversationMessageFindMany = vi.fn().mockResolvedValue([
+      // Newest first (route reads desc, reverses to chrono before returning).
+      {
+        direction: "outbound",
+        content: "I will call you back shortly.",
+        metadata: { sender: "owner" },
+        createdAt: new Date("2026-04-29T10:00:10Z"),
+      },
+      {
+        direction: "outbound",
+        content: "Sure, let me check availability.",
+        metadata: null,
+        createdAt: new Date("2026-04-29T10:00:05Z"),
+      },
+      {
+        direction: "inbound",
+        content: "Can I speak to someone directly?",
+        createdAt: new Date("2026-04-29T10:00:00Z"),
+      },
+    ]);
+
+    const res = await getDetail({
+      handoff: { findUnique: vi.fn().mockResolvedValue(baseHandoff) },
+      workTrace: { findFirst: vi.fn().mockResolvedValue({ contactId: "contact-1" }) },
+      conversationMessage: { findMany: conversationMessageFindMany },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { conversationHistory: Turn[] };
+    // Chronological order after reverse: inbound, agent-outbound, owner-outbound.
+    expect(body.conversationHistory).toEqual([
+      {
+        role: "user",
+        text: "Can I speak to someone directly?",
+        timestamp: "2026-04-29T10:00:00.000Z",
+      },
+      {
+        role: "assistant",
+        text: "Sure, let me check availability.",
+        timestamp: "2026-04-29T10:00:05.000Z",
+      },
+      {
+        role: "owner",
+        text: "I will call you back shortly.",
+        timestamp: "2026-04-29T10:00:10.000Z",
+      },
+    ]);
+  });
 });

@@ -177,11 +177,12 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
             take: MAX_TRANSCRIPT_MESSAGES,
           });
           // Reverse the newest-first slice back into chronological order.
-          conversationHistory = messages.reverse().map((m) => ({
-            role: m.direction === "inbound" ? "user" : "assistant",
-            text: m.content,
-            timestamp: m.createdAt.toISOString(),
-          }));
+          conversationHistory = messages.reverse().map((m) => {
+            const sender = (m.metadata as { sender?: string } | null | undefined)?.sender;
+            const role =
+              sender === "owner" ? "owner" : m.direction === "inbound" ? "user" : "assistant";
+            return { role, text: m.content, timestamp: m.createdAt.toISOString() };
+          });
         }
       }
 
