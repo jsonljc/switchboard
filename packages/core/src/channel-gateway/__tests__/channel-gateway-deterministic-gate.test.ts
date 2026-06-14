@@ -366,7 +366,7 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     expect(savedVerdict.details?.sentence).toBeDefined();
 
     // Status flipped. principalId is the bare sessionId (deliverable address),
-    // matching the normal inbound path — NOT a "visitor-" prefixed value, which
+    // matching the normal inbound path, NOT a "visitor-" prefixed value, which
     // is not a valid WhatsApp Graph `to` and would silently fail operator sends.
     expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
       channel: "web_widget",
