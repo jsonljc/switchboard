@@ -8,6 +8,7 @@ import type {
   SendOperatorMessageResult,
   ReleaseEscalationInput,
   ReleaseEscalationResult,
+  ReleaseEscalationTarget,
 } from "../conversation-state-store.js";
 
 describe("ConversationStateStore type surface", () => {
@@ -18,6 +19,27 @@ describe("ConversationStateStore type surface", () => {
       "escalation.reply.release_to_ai",
     ];
     expect(kinds).toHaveLength(3);
+  });
+
+  it("models the release-escalation target as a discriminated union", () => {
+    const contactTarget: ReleaseEscalationTarget = { contactId: "c1" };
+    const threadTarget: ReleaseEscalationTarget = { threadId: "t1" };
+    const contactInput: ReleaseEscalationInput = {
+      organizationId: "org_1",
+      handoffId: "h_1",
+      operator: { type: "user", id: "user_op_1" },
+      reply: { text: "hi" },
+      target: contactTarget,
+    };
+    const threadInput: ReleaseEscalationInput = {
+      organizationId: "org_1",
+      handoffId: "h_1",
+      operator: { type: "user", id: "user_op_1" },
+      reply: { text: "hi" },
+      target: threadTarget,
+    };
+    expect("contactId" in contactInput.target).toBe(true);
+    expect("threadId" in threadInput.target).toBe(true);
   });
 
   it("has the three method signatures", () => {

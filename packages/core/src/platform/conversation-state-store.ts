@@ -35,12 +35,20 @@ export interface SendOperatorMessageResult {
   appendedMessage: { role: "owner"; text: string; timestamp: string };
 }
 
+// Discriminated target for releasing an escalation back to the AI. The two
+// producer paths key the transcript differently:
+//   - escalate-tool handoffs resolve a Contact (ConversationMessage transcript +
+//     Contact-keyed delivery);
+//   - gateway pre-input-gate handoffs key a phone-threaded ConversationState
+//     (the historical behavior, unchanged).
+export type ReleaseEscalationTarget = { contactId: string } | { threadId: string };
+
 export interface ReleaseEscalationInput {
   organizationId: string;
   handoffId: string;
-  threadId: string;
   operator: Actor;
   reply: { text: string };
+  target: ReleaseEscalationTarget;
 }
 
 export interface ReleaseEscalationResult {
