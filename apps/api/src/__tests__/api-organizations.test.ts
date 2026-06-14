@@ -133,6 +133,8 @@ describe("Organizations API — Config", () => {
             // F-01: a fresh org must be seeded with valid default business hours so the
             // calendar provider factory resolves Local (not Noop) and bookings work.
             businessHours: DEFAULT_BUSINESS_HOURS,
+            // F-02: a fresh org must be comped so it is entitled out of the box.
+            entitlementOverride: true,
           }),
           update: {},
         }),

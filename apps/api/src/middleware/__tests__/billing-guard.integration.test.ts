@@ -5,6 +5,7 @@ import type {
   BillingEntitlementResolver,
   OrganizationEntitlement,
 } from "@switchboard/core/billing";
+import { PrismaBillingEntitlementResolver } from "../../services/billing-entitlement-resolver.js";
 
 function makeResolver(map: Record<string, OrganizationEntitlement>): BillingEntitlementResolver {
   return {
@@ -124,6 +125,23 @@ describe("billingGuard integration", () => {
     );
     const res = await app.inject({ method: "POST", url: "/api/actions/propose" });
     expect(res.statusCode).toBe(200);
+  });
+
+  it("allows POST from a freshly provisioned org's real config row through the real resolver (F-02)", async () => {
+    // The exact tuple provisioning writes: schema-default "none" status + comped override.
+    // Runs through the real PrismaBillingEntitlementResolver (not a stubbed outcome) and the
+    // guard, proving a fresh org survives the actual enforcement chokepoint instead of 402.
+    const fakePrisma = {
+      organizationConfig: {
+        findUnique: async () => ({ subscriptionStatus: "none", entitlementOverride: true }),
+      },
+    };
+    const resolver = new PrismaBillingEntitlementResolver(fakePrisma as never);
+    app = await makeApp(resolver);
+
+    const res = await app.inject({ method: "POST", url: "/api/actions/propose" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
   });
 
   it("allows GET from canceled org (read-only bypass)", async () => {
