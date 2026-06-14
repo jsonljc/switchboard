@@ -33,6 +33,9 @@ export interface SwitchboardMetrics {
   bookingSlotConflict: Counter;
   bookingReschedule: Counter;
   bookingCancel: Counter;
+  /** F15 — booking attempts blocked by the flag-gated consent precondition
+   *  (enforce mode only). Labeled by orgId + reason (consent_pending/consent_revoked). */
+  bookingConsentBlocked: Counter;
   skillLlmTokensTotal: Counter;
   skillLlmCostUsdTotal: Counter;
   governanceVerdictsRecorded: Counter;
@@ -109,6 +112,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     bookingSlotConflict: new InMemoryCounter(),
     bookingReschedule: new InMemoryCounter(),
     bookingCancel: new InMemoryCounter(),
+    bookingConsentBlocked: new InMemoryCounter(),
     skillLlmTokensTotal: new InMemoryCounter(),
     skillLlmCostUsdTotal: new InMemoryCounter(),
     governanceVerdictsRecorded: new InMemoryCounter(),
