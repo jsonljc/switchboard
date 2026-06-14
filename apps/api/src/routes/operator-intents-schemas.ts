@@ -93,3 +93,13 @@ export const RecordRevenueParametersSchema = z.object({
 });
 
 export type RecordRevenueParameters = z.infer<typeof RecordRevenueParametersSchema>;
+
+export const RecordAttendanceParametersSchema = z.object({
+  bookingId: z.string().min(1),
+  outcome: z.enum(["attended", "no_show"]),
+  // Not persisted on Booking in this slice; rides into the WorkTrace audit record so
+  // "who recorded it" is captured (canonical persistence).
+  recordedBy: z.enum(["owner", "staff"]).default("owner"),
+});
+
+export type RecordAttendanceParameters = z.infer<typeof RecordAttendanceParametersSchema>;
