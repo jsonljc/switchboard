@@ -439,4 +439,27 @@ describe("PrismaBookingStore reschedule/cancel/find", () => {
       data: { status: "cancelled" },
     });
   });
+
+  describe("countMaturedAttendance", () => {
+    it("counts matured (startsAt in [from,to) and <= now, not cancelled/failed) + attended", async () => {
+      const prisma = makePrisma();
+      const count = vi.fn().mockResolvedValueOnce(45).mockResolvedValueOnce(38);
+      prisma.booking.count = count;
+      const now = new Date("2026-06-14T00:00:00Z");
+      const res = await new PrismaBookingStore(prisma as never).countMaturedAttendance({
+        orgId: "o1",
+        from: new Date("2026-06-08"),
+        to: new Date("2026-06-15"),
+        now,
+      });
+      expect(res).toEqual({ matured: 45, attended: 38 });
+      const base = {
+        organizationId: "o1",
+        status: { notIn: ["cancelled", "failed"] },
+        startsAt: { gte: new Date("2026-06-08"), lt: new Date("2026-06-15"), lte: now },
+      };
+      expect(count).toHaveBeenNthCalledWith(1, { where: base });
+      expect(count).toHaveBeenNthCalledWith(2, { where: { ...base, attendance: "attended" } });
+    });
+  });
 });
