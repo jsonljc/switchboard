@@ -1,5 +1,6 @@
 import type { Resend } from "resend";
 import type { ApprovalNotifier, ApprovalNotification } from "@switchboard/core/notifications";
+import { maskEmail } from "@switchboard/core/audit";
 
 export interface EmailEscalationConfig {
   resendApiKey: string;
@@ -63,7 +64,9 @@ export class EmailEscalationNotifier implements ApprovalNotifier {
       if (attempt < 2) {
         return this.sendWithRetry(resend, to, subject, html, attempt + 1);
       }
-      console.error(`[email-escalation] Failed to send to ${to} after ${attempt} attempts: ${msg}`);
+      console.error(
+        `[email-escalation] Failed to send to ${maskEmail(to)} after ${attempt} attempts: ${msg}`,
+      );
       return { recipient: to, status: "failed", error: msg, attempts: attempt };
     }
   }
