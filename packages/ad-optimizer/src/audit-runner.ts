@@ -35,6 +35,7 @@ import {
   type RecommendationHandoffSubmitter,
 } from "./recommendation-handoff-dispatch.js";
 import type { RileyPauseSubmitter } from "./riley-pause-dispatch.js";
+import type { RileyBudgetSubmitter } from "./riley-budget-dispatch.js";
 import { computeAuditEconomicsSections } from "./analyzers/source-reallocation.js";
 import { arbitrate } from "./analyzers/opportunity-arbitrator.js";
 import type {
@@ -89,6 +90,11 @@ export interface AdsClientInterface {
     since: string;
     until: string;
   }): Promise<AdSetLearningInput[]>;
+  /** Optional (Spec-1B): strict cents read of a campaign's daily budget, for the reallocate
+   * sink's current-budget source. Absent on fakes -> reallocate abstains (no current budget). */
+  getCampaign?(
+    campaignId: string,
+  ): Promise<{ campaignId: string; name: string; status: string; dailyBudgetCents: number | null }>;
 }
 
 export interface AuditConfig {
@@ -198,6 +204,10 @@ export interface AuditDependencies {
    * cron passes it ONLY for deployments whose
    * governanceSettings.pauseSelfExecutionEnabled is true (both default OFF). */
   rileyPauseSubmitter?: RileyPauseSubmitter;
+  /** Optional (Spec-1B 1B-1.6). When present, a `scale` rec is proposed as a campaign budget
+   * reallocation (parking for mandatory approval). Capability = permission: the cron passes it
+   * ONLY when RILEY_REALLOCATE_SELF_EXECUTION_ENABLED is on (default OFF). */
+  rileyBudgetSubmitter?: RileyBudgetSubmitter;
   /** Optional (slice 4c). Feeds RevenueState.businessContextFreshness; read
    * POST-ABORT only. Absent ⇒ freshness stays "unknown" (back-compat: the
    * eval harness and analysis-only callers are unaffected). */
@@ -283,6 +293,7 @@ export class AuditRunner {
   private readonly bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
   private readonly recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
   private readonly rileyPauseSubmitter?: RileyPauseSubmitter;
+  private readonly rileyBudgetSubmitter?: RileyBudgetSubmitter;
   private readonly operationalStateProvider?: OperationalStateProvider;
 
   constructor(deps: AuditDependencies) {
@@ -301,6 +312,7 @@ export class AuditRunner {
     this.bookedValueByCampaignProvider = deps.bookedValueByCampaignProvider;
     this.recommendationHandoffSubmitter = deps.recommendationHandoffSubmitter;
     this.rileyPauseSubmitter = deps.rileyPauseSubmitter;
+    this.rileyBudgetSubmitter = deps.rileyBudgetSubmitter;
     this.operationalStateProvider = deps.operationalStateProvider;
 
     if (deps.recommendationEmitter && !deps.recommendationEmissionContext) {
@@ -650,6 +662,33 @@ export class AuditRunner {
     let pauseParkedIndex: number | undefined;
     if (this.recommendationEmitter) {
       const auditRunId = `audit:${this.config.accountId}:${dateRange.since}:${dateRange.until}`;
+
+      // Spec-1B 1B-1.6: when reallocate self-submission is wired (flag-on), pre-read each scale-rec
+      // campaign's live current daily budget so the sink can propose current x factor. Flag-off ->
+      // no submitter -> ZERO extra Meta calls. A per-campaign read failure degrades to null (the
+      // candidate abstains), never aborting the audit (no first-failure fleet halt).
+      let currentDailyBudgetCentsByCampaign: Map<string, number | null> | undefined;
+      const getCampaignFn = this.adsClient.getCampaign?.bind(this.adsClient);
+      if (this.rileyBudgetSubmitter && getCampaignFn) {
+        const scaleCampaignIds = [
+          ...new Set(recommendations.filter((r) => r.action === "scale").map((r) => r.campaignId)),
+        ];
+        if (scaleCampaignIds.length > 0) {
+          currentDailyBudgetCentsByCampaign = new Map();
+          for (const campaignId of scaleCampaignIds) {
+            try {
+              const campaign = await getCampaignFn(campaignId);
+              currentDailyBudgetCentsByCampaign.set(campaignId, campaign.dailyBudgetCents);
+            } catch (err) {
+              currentDailyBudgetCentsByCampaign.set(campaignId, null);
+              console.warn(
+                `[ad-optimizer] reallocate current-budget pre-read failed campaign=${campaignId}: ${String(err)}`,
+              );
+            }
+          }
+        }
+      }
+
       // Constructor invariant: recommendationEmissionContext is always defined
       // when recommendationEmitter is. The non-null assertion is safe.
       const sinkResult = await runRecommendationSink({
@@ -661,8 +700,13 @@ export class AuditRunner {
         recommendationHandoffSubmitter: this.recommendationHandoffSubmitter,
         rileyPauseSubmitter: this.rileyPauseSubmitter,
         pausePrimaryIndex,
+        rileyBudgetSubmitter: this.rileyBudgetSubmitter,
+        adAccountId: this.config.accountId,
+        ...(currentDailyBudgetCentsByCampaign ? { currentDailyBudgetCentsByCampaign } : {}),
         campaignEvidenceByCampaign:
-          this.recommendationHandoffSubmitter || this.rileyPauseSubmitter
+          this.recommendationHandoffSubmitter ||
+          this.rileyPauseSubmitter ||
+          this.rileyBudgetSubmitter
             ? campaignEvidenceByCampaign
             : undefined,
         // PR2 Gate-4: per-campaign economics (built above) so each rec's approval

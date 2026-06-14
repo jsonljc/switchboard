@@ -20,6 +20,7 @@ vi.mock("inngest", () => ({
 import { executeWeeklyAudit, type CronDependencies } from "../inngest-functions.js";
 import type { RecommendationHandoffSubmitter } from "../recommendation-handoff-dispatch.js";
 import type { RileyPauseSubmitter } from "../riley-pause-dispatch.js";
+import type { RileyBudgetSubmitter } from "../riley-budget-dispatch.js";
 
 function makeStep() {
   return { run: vi.fn((_name: string, fn: () => unknown) => fn()) };
@@ -58,6 +59,33 @@ describe("executeWeeklyAudit — Riley -> agent handoff threading", () => {
   it("omits the submitter from the AuditRunner when not configured (back-compat)", async () => {
     await executeWeeklyAudit(makeStep() as never, makeDeps());
     expect(auditRunnerCtor.mock.calls[0]![0].recommendationHandoffSubmitter).toBeUndefined();
+  });
+});
+
+describe("executeWeeklyAudit — Spec-1B reallocate submitter threading (1B-1.6)", () => {
+  beforeEach(() => {
+    auditRunnerCtor.mockClear();
+  });
+
+  it("threads rileyBudgetSubmitter into EVERY deployment's AuditRunner when the flag-gated dep is present", async () => {
+    const budgetSubmitter: RileyBudgetSubmitter = vi.fn(async () => ({ parked: true }));
+    const deps = makeDeps({
+      listActiveDeployments: vi.fn().mockResolvedValue([
+        { id: "dep-1", organizationId: "org-1", inputConfig: {} },
+        { id: "dep-2", organizationId: "org-2", inputConfig: {} },
+      ]),
+      rileyBudgetSubmitter: budgetSubmitter,
+    });
+    await executeWeeklyAudit(makeStep() as never, deps);
+    expect(auditRunnerCtor).toHaveBeenCalledTimes(2);
+    // v1 is env-only (no per-deployment flag): a wired dep reaches every org's runner.
+    expect(auditRunnerCtor.mock.calls[0]![0].rileyBudgetSubmitter).toBe(budgetSubmitter);
+    expect(auditRunnerCtor.mock.calls[1]![0].rileyBudgetSubmitter).toBe(budgetSubmitter);
+  });
+
+  it("omits rileyBudgetSubmitter from the AuditRunner when the flag is off (no dep)", async () => {
+    await executeWeeklyAudit(makeStep() as never, makeDeps());
+    expect(auditRunnerCtor.mock.calls[0]![0].rileyBudgetSubmitter).toBeUndefined();
   });
 });
 

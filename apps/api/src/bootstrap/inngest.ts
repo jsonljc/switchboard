@@ -80,12 +80,15 @@ import type {
   InstantFormAdapter,
   RecommendationHandoffSubmitter,
   RileyPauseSubmitter,
+  RileyBudgetSubmitter,
 } from "@switchboard/ad-optimizer";
 import { synthesizeCreativeBrief } from "../services/workflows/creative-brief-synthesis.js";
 import { resolveHandoffBrief } from "../services/workflows/handoff-brief-enrichment.js";
 import type { RecommendationHandoffSubmitInput } from "../services/workflows/recommendation-handoff-request.js";
 import type { RileyPauseSubmitInput } from "../services/workflows/riley-pause-submit-request.js";
+import type { RileyBudgetSubmitInput } from "../services/workflows/riley-budget-submit-request.js";
 import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
+import { buildRileyBudgetSubmitter } from "./riley-budget-submitter.js";
 import { buildRileyCredentialResolver } from "./riley-credential-resolver.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
@@ -203,6 +206,12 @@ export interface RegisterInngestOptions {
    */
   submitRileyPause?: (
     input: RileyPauseSubmitInput,
+    deployment: { deploymentId: string; skillSlug: string },
+  ) => Promise<SubmitWorkResponse | null>;
+  /** SPEC-1B: submit closure for the reallocate initiator (sink PR 1B-1.3). Built in
+   * bootstrapContainedWorkflows; absent when the bootstrap could not build it. */
+  submitRileyBudget?: (
+    input: RileyBudgetSubmitInput,
     deployment: { deploymentId: string; skillSlug: string },
   ) => Promise<SubmitWorkResponse | null>;
   /**
@@ -395,6 +404,13 @@ export async function registerInngest(
     log: app.log,
   });
 
+  // SPEC-1B reallocate initiator: mirrors riley-pause-submitter factory pattern.
+  // See bootstrap/riley-budget-submitter.ts.
+  const rileyBudgetSubmitter: RileyBudgetSubmitter = buildRileyBudgetSubmitter({
+    submitRileyBudget: options.submitRileyBudget,
+    log: app.log,
+  });
+
   // Riley credential resolver (Tier-0 PR 0.1): the primary source is the
   // deployment-scoped DeploymentConnection (`connectionStore`); the pilot
   // fallback is the org-level Connection(serviceId="meta-ads") an operator
@@ -471,6 +487,12 @@ export async function registerInngest(
     // governanceSettings flag then gates per org). Both default OFF.
     ...(process.env["RILEY_PAUSE_SELF_EXECUTION_ENABLED"] === "true"
       ? { rileyPauseSubmitter }
+      : {}),
+    // SPEC-1B: RILEY_REALLOCATE_SELF_EXECUTION_ENABLED=true wires the budget
+    // reallocate initiator; default absent = dark. Env-only gate (no per-deployment
+    // field in v1; mirrors RILEY_PAUSE_SELF_EXECUTION_ENABLED pattern).
+    ...(process.env["RILEY_REALLOCATE_SELF_EXECUTION_ENABLED"] === "true"
+      ? { rileyBudgetSubmitter }
       : {}),
     getLatestOperationalState: (organizationId) => operationalStateStore.getLatest(organizationId),
   };

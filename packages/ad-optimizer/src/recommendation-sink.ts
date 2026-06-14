@@ -13,6 +13,8 @@ import {
   type RecommendationHandoffSubmitter,
 } from "./recommendation-handoff-dispatch.js";
 import { buildRileyPauseCandidate, type RileyPauseSubmitter } from "./riley-pause-dispatch.js";
+import type { RileyBudgetSubmitter } from "./riley-budget-dispatch.js";
+import { dispatchRileyBudgetReallocation } from "./budget-sink-dispatch.js";
 
 /**
  * Sink that bridges ad-optimizer's RecommendationOutput[] (audit-runner output)
@@ -114,6 +116,17 @@ export interface RunRecommendationSinkArgs {
   rileyPauseSubmitter?: RileyPauseSubmitter;
   /** The arbitration primary's index WHEN that primary is a pause; undefined otherwise. */
   pausePrimaryIndex?: number;
+  /**
+   * Optional (Spec-1B 1B-1.6). When provided, a `scale` recommendation is proposed as a campaign
+   * budget reallocation (current x REALLOCATE_SCALE_FACTOR) via this bootstrap-injected callback,
+   * parking for mandatory human approval. Present only for flag-on deployments (capability =
+   * permission). Best-effort: a submit failure never breaks the audit.
+   */
+  rileyBudgetSubmitter?: RileyBudgetSubmitter;
+  /** The Meta ad-account that owns the audited campaigns; frozen onto the reallocate candidate. */
+  adAccountId?: string;
+  /** Live current daily budgets (cents) read at audit time, by campaignId; null when unreadable. */
+  currentDailyBudgetCentsByCampaign?: Map<string, number | null>;
 }
 
 export interface RunRecommendationSinkResult {
@@ -521,6 +534,27 @@ export async function runRecommendationSink(
           );
         }
       }
+    }
+
+    // Spec-1B 1B-1.6: reallocate self-submission. A `scale` rec with a known current daily budget
+    // becomes a proposed (x REALLOCATE_SCALE_FACTOR) reallocation, parked for mandatory approval.
+    // Gated on the bootstrap-injected submitter (flag-on only) + the frozen ad-account + a persisted
+    // id; the candidate builder owns the scale/context/budget abstentions. Best-effort.
+    if (args.rileyBudgetSubmitter && args.adAccountId && result.id) {
+      await dispatchRileyBudgetReallocation({
+        rileyBudgetSubmitter: args.rileyBudgetSubmitter,
+        recommendationId: result.id,
+        actionType: rec.action,
+        campaignId: rec.campaignId,
+        rationale: humanizeRecommendation(rec),
+        surface: result.surface,
+        currentDailyBudgetCents:
+          args.currentDailyBudgetCentsByCampaign?.get(rec.campaignId) ?? null,
+        context: args.campaignEvidenceByCampaign?.get(rec.campaignId),
+        organizationId: args.orgId,
+        deploymentId: args.emissionContext.deploymentId ?? "",
+        adAccountId: args.adAccountId,
+      });
     }
   }
 

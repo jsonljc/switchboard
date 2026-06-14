@@ -116,6 +116,12 @@ function buildMockDeps(insights: CampaignInsight[]): AuditDependencies {
     getCampaignInsights: vi.fn().mockResolvedValueOnce(insights).mockResolvedValueOnce(insights),
     getAdSetInsights: vi.fn().mockResolvedValue([]),
     getAccountSummary: vi.fn().mockResolvedValue(makeAccountSummary()),
+    getCampaign: vi.fn().mockResolvedValue({
+      campaignId: "camp-1",
+      name: "C",
+      status: "ACTIVE",
+      dailyBudgetCents: 5000,
+    }),
   };
   const crmDataProvider: CrmDataProvider = {
     getFunnelData: vi.fn().mockResolvedValue(makeFunnelData()),
@@ -321,5 +327,41 @@ describe("AuditRunner — Phase-C pause submitter threading", () => {
     expect(sinkArgs.pausePrimaryIndex).toBeDefined();
     const recs = sinkArgs.recommendations as Array<{ action: string }>;
     expect(recs[sinkArgs.pausePrimaryIndex as number]!.action).toBe("pause");
+  });
+});
+
+describe("AuditRunner — Spec-1B reallocate submitter threading (1B-1.6)", () => {
+  beforeEach(() => {
+    (runRecommendationSink as ReturnType<typeof vi.fn>).mockClear();
+  });
+
+  it("threads the budget submitter + frozen adAccountId to the sink when flag-on", async () => {
+    const budgetSubmitter = vi.fn(async () => ({ parked: true }));
+    await new AuditRunner({
+      ...buildMockDeps([makeCampaignInsight({ campaignId: "camp-1" })]),
+      recommendationEmitter: vi.fn(async () => ({ surface: "queue" as const, id: "rec_1" })),
+      recommendationEmissionContext: { cronId: "cron", deploymentId: "dep_riley" },
+      rileyBudgetSubmitter: budgetSubmitter,
+    }).run(RANGE);
+
+    const sinkArgs = (runRecommendationSink as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(sinkArgs.rileyBudgetSubmitter).toBe(budgetSubmitter);
+    expect(sinkArgs.adAccountId).toBe("act-123");
+    // evidence context is threaded for the reallocate candidate too
+    expect(sinkArgs.campaignEvidenceByCampaign).toBeDefined();
+  });
+
+  it("reads NO campaign budgets and threads no submitter when the flag is off (inert)", async () => {
+    const deps = buildMockDeps([makeCampaignInsight()]);
+    await new AuditRunner({
+      ...deps,
+      recommendationEmitter: vi.fn(async () => ({ surface: "queue" as const, id: "rec_1" })),
+      recommendationEmissionContext: { cronId: "cron", deploymentId: "dep_riley" },
+    }).run(RANGE);
+
+    const sinkArgs = (runRecommendationSink as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(sinkArgs.rileyBudgetSubmitter).toBeUndefined();
+    // The flag-off path must make ZERO Meta budget reads (no current-budget pre-compute).
+    expect(deps.adsClient.getCampaign).not.toHaveBeenCalled();
   });
 });

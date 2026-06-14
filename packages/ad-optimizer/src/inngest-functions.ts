@@ -14,6 +14,7 @@ import type { RecommendationEmitter } from "./recommendation-sink.js";
 import type { CoverageReport } from "./onboarding/coverage-validator.js";
 import type { RecommendationHandoffSubmitter } from "./recommendation-handoff-dispatch.js";
 import type { RileyPauseSubmitter } from "./riley-pause-dispatch.js";
+import type { RileyBudgetSubmitter } from "./riley-budget-dispatch.js";
 
 interface DeploymentInfo {
   id: string;
@@ -107,6 +108,14 @@ export interface CronDependencies {
    * pauses. ad-optimizer (Layer 2) never imports PlatformIngress.
    */
   rileyPauseSubmitter?: RileyPauseSubmitter;
+  /**
+   * Spec-1B 1B-1.6: the reallocate self-submission initiator, present only under the
+   * RILEY_REALLOCATE_SELF_EXECUTION_ENABLED env kill switch (default OFF). Unlike pause, v1 gates at
+   * the env level only (no per-deployment flag); when present it reaches every deployment's
+   * AuditRunner, and every proposed reallocation still parks for mandatory human approval. Absent =
+   * the weekly audit proposes no reallocations.
+   */
+  rileyBudgetSubmitter?: RileyBudgetSubmitter;
   /**
    * Optional (slice 4c). Latest operator operational-state confirmation per
    * org, feeding RevenueState.businessContextFreshness in the weekly audit.
@@ -271,6 +280,10 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         ...(deps.rileyPauseSubmitter && deployment.pauseSelfExecutionEnabled
           ? { rileyPauseSubmitter: deps.rileyPauseSubmitter }
           : {}),
+        // Spec-1B 1B-1.6: reallocate self-submission. v1 is env-gated only (the dep exists solely
+        // under RILEY_REALLOCATE_SELF_EXECUTION_ENABLED); no per-deployment flag, so a wired dep
+        // reaches every org's runner. Every proposed move still parks for mandatory approval.
+        ...(deps.rileyBudgetSubmitter ? { rileyBudgetSubmitter: deps.rileyBudgetSubmitter } : {}),
         ...(deps.getLatestOperationalState
           ? { operationalStateProvider: { getLatest: deps.getLatestOperationalState } }
           : {}),
