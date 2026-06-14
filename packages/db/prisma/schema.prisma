@@ -1630,6 +1630,12 @@ model PendingActionRecord {
   expiresAt            DateTime?
   resolvedAt           DateTime?
   resolvedBy           String?
+  // Spec-1B execution truth (machine path only): the work unit that actually executed this
+  // recommendation and the instant the platform's money move landed. Null = the platform did not
+  // execute it (operator-acted, dismissed, or still pending). The "score only executed moves"
+  // gate that reads executedAt lands with the paid-attribution wiring (PR 1B-2), not here.
+  executionWorkUnitId  String?
+  executedAt           DateTime?
 
   workflow              WorkflowExecution?    @relation(fields: [workflowId], references: [id])
   recommendationOutcome RecommendationOutcome?
@@ -1637,8 +1643,34 @@ model PendingActionRecord {
   @@index([organizationId, status])
   @@index([organizationId, surface, status])
   @@index([organizationId, undoableUntil])
+  @@index([organizationId, status, executedAt])
   @@index([workflowId])
   @@index([sourceAgent])
+}
+
+/// Spec-1B at-most-once external-write marker AND campaign serialization lease for the budget
+/// reallocation executor (close-the-revenue-loop spec sections 3.1 and 3.3). Exactly one row per
+/// execution work unit (executionWorkUnitId is the @unique replay key): the executor claims it in
+/// its own transaction immediately BEFORE the Meta write, so a crash/throw after the write still
+/// leaves a durable record that blocks an ambiguous auto-replay. `status` is the state machine
+/// pending | applied | recovery_required; `heldUntil` is the TTL lease that serializes two approved
+/// work units racing on the same campaign. The conditional-claim raw SQL lands with the real
+/// executor (PR 1B-1.5); this slice creates the table + the unique replay key.
+model MetaMutationAttempt {
+  id                  String   @id @default(uuid())
+  organizationId      String
+  adAccountId         String
+  campaignId          String
+  executionWorkUnitId String   @unique
+  status              String
+  heldUntil           DateTime
+  observedPriorCents  Int
+  requestedToCents    Int
+  workTraceId         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([organizationId, adAccountId, campaignId, status, heldUntil])
 }
 
 model ApprovalCheckpointRecord {

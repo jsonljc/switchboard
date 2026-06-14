@@ -333,6 +333,11 @@ export class PrismaRecommendationStore implements RecommendationStore {
           status: "acted",
           resolvedAt: args.executedAt,
           resolvedBy: args.resolvedBy,
+          // Spec-1B: promote execution truth to top-level columns (queryable + the future
+          // "score only executed moves" gate, PR 1B-2). The __recommendation.executedWorkUnitId
+          // JSON stash below is preserved for projectBaseCandidate, which still reads it.
+          executedAt: args.executedAt,
+          executionWorkUnitId: args.executableWorkUnitId,
           parameters: { ...params, __recommendation: updatedMeta } as object,
         },
       });

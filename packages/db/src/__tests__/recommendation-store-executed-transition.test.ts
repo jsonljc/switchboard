@@ -86,6 +86,9 @@ describe("PrismaRecommendationStore.markActedByExecution", () => {
       status: "acted",
       resolvedAt: ARGS.executedAt,
       resolvedBy: "riley_self_execution",
+      // Spec-1B execution truth promoted to top-level columns (the JSON stash also survives, below).
+      executedAt: ARGS.executedAt,
+      executionWorkUnitId: "wu_99",
     });
     const params = update.data.parameters as {
       source: string;
