@@ -34,8 +34,9 @@ export type ExceptionEntry = z.infer<typeof ExceptionEntrySchema>;
 /**
  * The persisted ReceiptedBooking row: the derived + snapshot fields only. Live fields
  * (attendance, payment, consent, trace, current source evidence) are joined into the
- * ReceiptedBookingView at read time, not stored here. `id` is the thesis receipt_id.
- * expectedValueAtIssue is CENTS (Int), never dollars.
+ * ReceiptedBookingView at read time, not stored here. `id` is this aggregate's own id, NOT
+ * the proof-object id: the thesis receipt_id resolves to the linked `Receipt` row(s) by join
+ * (Receipt stays the proof primitive). expectedValueAtIssue is CENTS (Int), never dollars.
  */
 export const ReceiptedBookingSchema = z.object({
   id: z.string(),

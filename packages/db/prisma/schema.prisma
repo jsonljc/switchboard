@@ -2150,8 +2150,9 @@ model Receipt {
 // Hybrid persistence: stores ONLY the derived/snapshot fields + FK refs; live fields
 // (attendance, payment, consent, trace, current source) are joined at read time into the
 // ReceiptedBookingView. One row per booking (bookingId unique => issuance is idempotent).
-// `id` is the thesis receipt_id. expectedValueAtIssue is CENTS. Spec:
-// docs/superpowers/specs/2026-06-14-receipted-booking-object-design.md
+// `id` is this aggregate's own id, NOT the proof-object id: the thesis receipt_id resolves to
+// the linked Receipt row(s) by join (Receipt stays the proof primitive). expectedValueAtIssue
+// is CENTS. Spec: docs/superpowers/specs/2026-06-14-receipted-booking-object-design.md
 // ---------------------------------------------------------------------------
 
 model ReceiptedBooking {
