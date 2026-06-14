@@ -24,6 +24,7 @@
 import type { RevenueStore, StoreTransactionContext, MintReceiptInput } from "@switchboard/core";
 import type { OperatorMutationHandler } from "@switchboard/core/platform";
 import type { VerifiedPayment } from "@switchboard/schemas";
+import type { ReceiptExceptionReason } from "@switchboard/schemas";
 import { RecordVerifiedPaymentParametersSchema } from "../../routes/operator-intents-schemas-payment.js";
 import { resolvePaymentReceiptTier } from "../../payments/resolve-payment-tier.js";
 import { OPERATOR_INTENT_ERROR_CODES } from "./shared.js";
@@ -102,6 +103,11 @@ export function buildRecordVerifiedPaymentHandler(
       const chargedAt = new Date().toISOString();
 
       const event = await runInTransaction(async (tx) => {
+        // Slice 5: an unverified (noop) payment receipt has no verifiable external source-of-truth
+        // (no real PSP fetch-back), so stamp the durable provenance exception. Same condition that
+        // sets evidence.basis = payment_degraded and degrades the PaidVisitVerdict.
+        const exceptions: ReceiptExceptionReason[] = verdict.verified ? [] : ["missing_source"];
+
         // 1. Payment receipt — tier/verified are the fetch-back verdict.
         await receiptWriter.write(
           {
@@ -126,6 +132,7 @@ export function buildRecordVerifiedPaymentHandler(
             },
             capturedBy: "payment.record_verified",
             verifiedAt: verdict.verified ? new Date() : null,
+            exceptions,
           },
           tx,
         );

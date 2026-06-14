@@ -105,7 +105,12 @@ describe("buildRecordVerifiedPaymentHandler", () => {
     expect(verifyPayment).toHaveBeenCalledWith("org-1", "pi_abc");
     expect(result.outcome).toBe("completed");
     expect(receiptWriter.write).toHaveBeenCalledWith(
-      expect.objectContaining({ tier: "T1_FETCH_BACK", amount: 5000, status: "paid" }),
+      expect.objectContaining({
+        tier: "T1_FETCH_BACK",
+        amount: 5000,
+        status: "paid",
+        exceptions: [],
+      }),
       TX,
     );
     expect(revenueStore.record).toHaveBeenCalledWith(
@@ -162,7 +167,11 @@ describe("buildRecordVerifiedPaymentHandler", () => {
     );
 
     expect(receiptWriter.write).toHaveBeenCalledWith(
-      expect.objectContaining({ tier: "T3_ADMIN_AUDIT", verifiedAt: null }),
+      expect.objectContaining({
+        tier: "T3_ADMIN_AUDIT",
+        verifiedAt: null,
+        exceptions: ["missing_source"],
+      }),
       TX,
     );
     expect(revenueStore.record).toHaveBeenCalledWith(
