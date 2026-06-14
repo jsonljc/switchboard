@@ -211,6 +211,45 @@ describe.skipIf(!DB_INTEGRATION_ENABLED)(
   },
 );
 
+// Read-side cross-org isolation (this slice, F12 read-scoping leg): a read keyed to the wrong org
+// returns null for BOTH the per-org local store (buildLocalStore, the getBooking read path) and the
+// durable PrismaBookingStore.findById; the owning org still reads the row. Mirrors the write-path proof.
+describe.skipIf(!DB_INTEGRATION_ENABLED)(
+  "calendar booking read-side cross-org isolation (integration, F12 read-scoping)",
+  () => {
+    it("a findById keyed to another org returns null; the owning org still reads it", async () => {
+      const prisma = new PrismaClient();
+      const durable = new PrismaBookingStore(prisma);
+      const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const orgA = `f12rd-a-${suffix}`;
+      const orgB = `f12rd-b-${suffix}`;
+
+      try {
+        const a = await durable.create({
+          organizationId: orgA,
+          contactId: "pa",
+          service: "consultation",
+          startsAt: new Date("2026-10-09T02:00:00.000Z"),
+          endsAt: new Date("2026-10-09T03:00:00.000Z"),
+        });
+
+        // Durable store: org B cannot read org A's booking; org A can.
+        expect(await durable.findById(orgB, a.id)).toBeNull();
+        expect((await durable.findById(orgA, a.id))?.id).toBe(a.id);
+
+        // Per-org local store (the getBooking read path): org B's store returns null; org A's returns it.
+        expect(await buildLocalStore(prisma, orgB).findById(a.id)).toBeNull();
+        expect((await buildLocalStore(prisma, orgA).findById(a.id))?.id).toBe(a.id);
+      } finally {
+        await prisma.booking
+          .deleteMany({ where: { organizationId: { in: [orgA, orgB] } } })
+          .catch(() => {});
+        await prisma.$disconnect();
+      }
+    });
+  },
+);
+
 // THE RESCHEDULE BUG-FIX PROOF (#1018): drive the reschedule TOOL exactly as production wires it
 // for a no-PMS org (a real LocalCalendarProvider whose rescheduleBooking is a no-op, plus a real
 // PrismaBookingStore as the durable bookingStore). The row moves once (no double-count) and a
