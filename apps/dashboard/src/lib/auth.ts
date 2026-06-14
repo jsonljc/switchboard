@@ -6,6 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import { assertSafeDashboardAuthEnv } from "./dev-auth";
 import { verifyPassword } from "./password";
 import { provisionDashboardUser } from "./provision-dashboard-user";
+import { isSelfServeSignupOpen } from "./register";
 
 /* ------------------------------------------------------------------ */
 /* Production guards                                                   */
@@ -94,6 +95,15 @@ export const authConfig: NextAuthConfig = {
   providers,
   adapter: {
     async createUser(user) {
+      // F-05 backstop (defense-in-depth): signIn already denies net-new signups when
+      // closed, so this is normally unreachable for them; the throw guarantees no comped
+      // org is ever minted if signIn is bypassed.
+      if (!isSelfServeSignupOpen()) {
+        console.warn(
+          "[auth] Refusing to provision a new org: self-serve signup is closed (launch mode).",
+        );
+        throw new Error("Self-serve signup is not available.");
+      }
       const dashboardUser = await provisionDashboardUser(prisma, {
         email: user.email!,
         name: user.name,
@@ -189,6 +199,19 @@ export const authConfig: NextAuthConfig = {
     verifyRequest: "/login?verify=true",
   },
   callbacks: {
+    // F-05: gate net-new self-serve signups by launch mode. Allow credentials logins and
+    // any sign-in whose email already exists (pre-provisioned pilots); deny only a brand-new
+    // OAuth/email signup when signup is closed. Returning false yields the client-safe
+    // AccessDenied and runs before any adapter/DB write; the email-existence check is what
+    // prevents locking out existing users.
+    async signIn({ user, account }) {
+      if (account?.provider === "credentials") return true;
+      if (isSelfServeSignupOpen()) return true;
+      const email = user?.email;
+      if (!email) return false;
+      const existing = await prisma.dashboardUser.findUnique({ where: { email } });
+      return existing !== null;
+    },
     async jwt({ token, user }) {
       if (user) {
         // Initial sign-in: populate JWT from user object

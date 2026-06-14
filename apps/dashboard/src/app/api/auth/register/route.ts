@@ -3,17 +3,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "@/lib/password";
 import { provisionDashboardUser } from "@/lib/provision-dashboard-user";
-import { validateRegistration } from "@/lib/register";
+import { validateRegistration, isSelfServeSignupOpen } from "@/lib/register";
 import { sendVerificationEmail, checkRegistrationRateLimit } from "@/lib/email";
 
 const globalForPrisma = globalThis as unknown as { __prisma?: PrismaClient };
 const prisma = globalForPrisma.__prisma ?? (globalForPrisma.__prisma = new PrismaClient());
 
-const OPEN_MODES = new Set(["beta", "public"]);
-
 export async function POST(request: NextRequest) {
-  const launchMode = process.env.NEXT_PUBLIC_LAUNCH_MODE || "waitlist";
-  if (!OPEN_MODES.has(launchMode)) {
+  // F-05: gate self-serve signup by launch mode (shared helper, also enforced on the
+  // OAuth/email path via the NextAuth signIn callback).
+  if (!isSelfServeSignupOpen()) {
     return NextResponse.json(
       { error: "Registration is not available. Join the waitlist instead." },
       { status: 403 },
