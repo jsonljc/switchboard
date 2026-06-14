@@ -2140,6 +2140,7 @@ model Receipt {
   verifiedAt     DateTime?
   workTraceId    String?
   createdAt      DateTime  @default(now())
+  exceptions     String[] @default([]) // Slice 5: structured provenance exception reasons (ReceiptExceptionReasonSchema)
 
   @@index([organizationId, bookingId])
   @@index([organizationId, kind, status])

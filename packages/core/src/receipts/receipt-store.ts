@@ -4,6 +4,7 @@ import type {
   ReceiptTier,
   ReceiptStatus,
   ReceiptEvidence,
+  ReceiptExceptionReason,
 } from "@switchboard/schemas";
 
 /** Forwarded opaque tx context (mirrors lifecycle/revenue-store.ts ReceiptStoreTransactionContext). */
@@ -26,6 +27,7 @@ export interface MintReceiptInput {
   capturedBy: string;
   verifiedAt?: Date | null;
   workTraceId?: string | null;
+  exceptions?: ReceiptExceptionReason[];
 }
 
 export interface ReceiptStore {

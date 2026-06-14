@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaDbClient } from "../prisma-db.js";
-import type { Receipt, ReceiptEvidence } from "@switchboard/schemas";
+import type { Receipt, ReceiptEvidence, ReceiptExceptionReason } from "@switchboard/schemas";
 import type { MintReceiptInput, ReceiptStore } from "@switchboard/core";
 
 // Structural match with @switchboard/core ReceiptStore (db imports core types directly;
@@ -48,6 +48,7 @@ export class PrismaReceiptStore implements ReceiptStore {
         capturedBy: input.capturedBy,
         verifiedAt: input.verifiedAt ?? null,
         workTraceId: input.workTraceId ?? null,
+        exceptions: input.exceptions ?? [],
       },
     });
     return mapRowToReceipt(created);
@@ -101,6 +102,7 @@ interface ReceiptRow {
   verifiedAt: Date | null;
   workTraceId: string | null;
   createdAt: Date;
+  exceptions: string[];
 }
 
 function mapRowToReceipt(row: ReceiptRow): Receipt {
@@ -123,5 +125,6 @@ function mapRowToReceipt(row: ReceiptRow): Receipt {
     verifiedAt: row.verifiedAt,
     workTraceId: row.workTraceId,
     createdAt: row.createdAt,
+    exceptions: (row.exceptions ?? []) as ReceiptExceptionReason[],
   };
 }

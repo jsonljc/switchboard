@@ -34,6 +34,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     verifiedAt: null,
     workTraceId: "wt-1",
     createdAt: now,
+    exceptions: [],
     ...overrides,
   };
 }
@@ -92,6 +93,28 @@ describe("PrismaReceiptStore", () => {
       orderBy: { createdAt: "desc" },
     });
     expect(result[0]!.id).toBe("rcpt-1");
+  });
+
+  it("mint forwards exceptions to the create data (defaults to [])", async () => {
+    prisma.receipt.create.mockResolvedValue(makeRow());
+    await store.mint(mintInput);
+    expect(prisma.receipt.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ exceptions: [] }),
+    });
+  });
+
+  it("mint forwards provided exceptions to the create data", async () => {
+    prisma.receipt.create.mockResolvedValue(makeRow({ exceptions: ["missing_source"] }));
+    await store.mint({ ...mintInput, exceptions: ["missing_source"] });
+    expect(prisma.receipt.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ exceptions: ["missing_source"] }),
+    });
+  });
+
+  it("mapRowToReceipt surfaces exceptions from the row", async () => {
+    prisma.receipt.findMany.mockResolvedValue([makeRow({ exceptions: ["missing_source"] })]);
+    const result = await store.findByBooking("org-1", "bk-1");
+    expect(result[0]!.exceptions).toEqual(["missing_source"]);
   });
 
   describe("mint — idempotency guard on externalRef", () => {
