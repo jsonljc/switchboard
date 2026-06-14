@@ -155,10 +155,13 @@ export async function runPreInputGate(
     try {
       // Pass upsertContext so the adapter can create the ConversationState
       // row for brand-new sessions (first-message path) where no row exists
-      // yet. principalId mirrors gateway-conversation-store.ts derivation.
+      // yet. principalId is the bare sessionId: it is read back as
+      // destinationPrincipalId and POSTed to the channel `to` (a "visitor-"
+      // prefix is not a deliverable address). This matches the normal inbound
+      // path, which mints principalId = the bare channel identity.
       const upsertContext: ConversationStatusUpsertContext = {
         channel,
-        principalId: `visitor-${sessionId}`,
+        principalId: sessionId,
       };
       await conversationStatusSetter.setConversationStatus(
         sessionId,
@@ -312,10 +315,13 @@ async function handleInputGateResolverError(
     try {
       // Pass upsertContext so the adapter can create the ConversationState
       // row for brand-new sessions (first-message path) where no row exists
-      // yet. principalId mirrors gateway-conversation-store.ts derivation.
+      // yet. principalId is the bare sessionId: it is read back as
+      // destinationPrincipalId and POSTed to the channel `to` (a "visitor-"
+      // prefix is not a deliverable address). This matches the normal inbound
+      // path, which mints principalId = the bare channel identity.
       const upsertContext: ConversationStatusUpsertContext = {
         channel,
-        principalId: `visitor-${sessionId}`,
+        principalId: sessionId,
       };
       await conversationStatusSetter.setConversationStatus(
         sessionId,

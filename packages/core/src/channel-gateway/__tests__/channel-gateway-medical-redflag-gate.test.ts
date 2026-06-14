@@ -208,10 +208,12 @@ describe("medical red-flag triggers through the real gate (future enforce postur
       await gw.handleIncoming(makeMessage(flag.text), { send: deps.sendSpy });
 
       expect(deps.submitSpy).not.toHaveBeenCalled();
+      // principalId is the bare sessionId (deliverable address), matching the
+      // normal inbound path, not a "visitor-" prefix that would fail channel sends.
       expect(deps.statusSetter.setConversationStatus).toHaveBeenCalledWith(
         "sess-1",
         "human_override",
-        { channel: "web_widget", principalId: "visitor-sess-1" },
+        { channel: "web_widget", principalId: "sess-1" },
       );
       expect(deps.handoffStore.save).toHaveBeenCalledOnce();
       expect(deps.handoffStore.save.mock.calls[0]![0].reason).toBe("medical_safety");
