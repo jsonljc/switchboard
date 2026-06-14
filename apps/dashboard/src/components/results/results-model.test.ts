@@ -47,7 +47,7 @@ describe("buildResultsModel", () => {
 
   it("defaults heldRate to { attended: 0, matured: 0, rate: null } when absent from a stale cached payload", () => {
     const stale = { ...goodFixture } as unknown as import("./types").ReportData;
-    delete (stale as Record<string, unknown>)["heldRate"];
+    delete (stale as unknown as Record<string, unknown>)["heldRate"];
     const m = buildResultsModel(stale);
     expect(m.heldRate).toEqual({ attended: 0, matured: 0, rate: null });
   });
