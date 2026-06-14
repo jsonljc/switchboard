@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BookingSlotConflictError } from "@switchboard/schemas";
 import { setMetrics, createInMemoryMetrics } from "../../telemetry/metrics.js";
 import { createCalendarBookToolFactory } from "./calendar-book.js";
+import type { BookingConsentState, ConsentPrecondition } from "./calendar-book-consent.js";
+import type { GovernanceMode } from "@switchboard/schemas";
 import type { SkillRequestContext } from "../types.js";
 
 function makeCalendarProvider() {
@@ -941,6 +943,161 @@ describe("createCalendarBookToolFactory", () => {
 
       expect(result.status).toBe("success");
       expect(result.data?.status).toBe("confirmed");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // F15 — flag-gated consent precondition on booking. INERT BY DEFAULT.
+  // These tests construct their OWN factory with a typed consentPrecondition.
+  // The shared `beforeEach` factory above OMITS the dep entirely — every test in
+  // every other block therefore also proves the optional dep is back-compatible
+  // (no precondition => legacy behavior).
+  // ---------------------------------------------------------------------------
+  describe("F15 consent precondition", () => {
+    const validInput = {
+      service: "consultation",
+      slotStart: "2026-04-20T10:00:00+08:00",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    };
+
+    const AFFIRMATIVE: BookingConsentState = {
+      pdpaJurisdiction: "SG",
+      consentGrantedAt: "2026-04-01T00:00:00.000Z",
+      consentRevokedAt: null,
+    };
+    const PENDING: BookingConsentState = {
+      pdpaJurisdiction: "SG",
+      consentGrantedAt: null,
+      consentRevokedAt: null,
+    };
+
+    // Typed mocks (no arg-less vi.fn — would yield a [] tuple and TS2493 at build).
+    let resolveMode: ReturnType<typeof vi.fn<(deploymentId: string) => Promise<GovernanceMode>>>;
+    let read: ReturnType<
+      typeof vi.fn<(orgId: string, contactId: string) => Promise<BookingConsentState>>
+    >;
+    let consentTool: ReturnType<ReturnType<typeof createCalendarBookToolFactory>>;
+
+    // Fresh in-memory metrics + a spy on bookingConsentBlocked.inc, installed
+    // before the tool runs (mirrors the failure-paths `spyCounter` pattern).
+    function spyConsentBlocked() {
+      const metrics = createInMemoryMetrics();
+      const spy = vi.spyOn(metrics.bookingConsentBlocked, "inc");
+      setMetrics(metrics);
+      return spy;
+    }
+
+    beforeEach(() => {
+      // Clean registry per test so a stale counter never leaks across cases.
+      setMetrics(createInMemoryMetrics());
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+
+      resolveMode = vi.fn<(deploymentId: string) => Promise<GovernanceMode>>();
+      read = vi.fn<(orgId: string, contactId: string) => Promise<BookingConsentState>>();
+      const consentPrecondition: ConsentPrecondition = { resolveMode, read };
+
+      const factoryWithConsent = createCalendarBookToolFactory({
+        calendarProviderFactory: calendarProviderFactory as never,
+        isCalendarProviderConfigured: isCalendarProviderConfigured as never,
+        bookingStore: bookingStore as never,
+        opportunityStore: opportunityStore as never,
+        runTransaction: runTransaction as never,
+        failureHandler: failureHandler as never,
+        contactStore: contactStore as never,
+        defaultCurrency: "SGD",
+        receiptTierForProvider: () => "T1_FETCH_BACK",
+        isProduction: false,
+        consentPrecondition,
+      });
+      consentTool = factoryWithConsent({ ...TRUSTED_CTX, contactId: "ct_1" });
+    });
+
+    // (a) DEFAULT-OFF INERT PROOF. resolveMode("off") => the gate must NOT read
+    // consent and the booking must proceed. Paired with the enforce-block test
+    // below, this proves the gate is a no-op until an org opts in — the entire
+    // point of F15. If the precondition were deleted, (b)/(c)/(e) below would
+    // fail; this test pins the zero-overhead/zero-behavior-change contract.
+    it("mode 'off' (default): does NOT read consent and booking proceeds", async () => {
+      resolveMode.mockResolvedValue("off");
+
+      const result = await consentTool.operations["booking.create"]!.execute(validInput);
+
+      expect(resolveMode).toHaveBeenCalledWith("dep_1");
+      expect(read).not.toHaveBeenCalled();
+      expect(bookingStore.create).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe("success");
+    });
+
+    // (b) ENFORCE + non-affirmative => fail-closed CONSENT_REQUIRED, write nothing.
+    it("mode 'enforce' + non-affirmative consent: fails CONSENT_REQUIRED and writes nothing", async () => {
+      resolveMode.mockResolvedValue("enforce");
+      read.mockResolvedValue(PENDING);
+      const blockedSpy = spyConsentBlocked();
+
+      const result = await consentTool.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("CONSENT_REQUIRED");
+      expect(result.error?.retryable).toBe(false);
+      // Write-nothing: neither the booking NOR a new opportunity is persisted, and
+      // the provider is never called.
+      expect(bookingStore.create).not.toHaveBeenCalled();
+      expect(opportunityStore.create).not.toHaveBeenCalled();
+      expect(opportunityStore.findActiveByContact).not.toHaveBeenCalled();
+      expect(calendarProvider.createBooking).not.toHaveBeenCalled();
+      expect(blockedSpy).toHaveBeenCalledWith({
+        orgId: "org_trusted",
+        reason: "consent_pending",
+      });
+    });
+
+    // (c) ENFORCE + affirmative => booking proceeds.
+    it("mode 'enforce' + affirmative consent: booking proceeds", async () => {
+      resolveMode.mockResolvedValue("enforce");
+      read.mockResolvedValue(AFFIRMATIVE);
+
+      const result = await consentTool.operations["booking.create"]!.execute(validInput);
+
+      expect(read).toHaveBeenCalledWith("org_trusted", "ct_1");
+      expect(bookingStore.create).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe("success");
+    });
+
+    // (d) OBSERVE + non-affirmative => never blocks (telemetry-only posture).
+    it("mode 'observe' + non-affirmative consent: booking proceeds (no block)", async () => {
+      resolveMode.mockResolvedValue("observe");
+      read.mockResolvedValue(PENDING);
+
+      const result = await consentTool.operations["booking.create"]!.execute(validInput);
+
+      expect(bookingStore.create).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe("success");
+    });
+
+    // (e) FAIL-CLOSED on read error under enforce: cannot prove consent => block.
+    it("mode 'enforce' + consent read throws: fails CONSENT_REQUIRED (fail-closed), writes nothing", async () => {
+      resolveMode.mockResolvedValue("enforce");
+      read.mockRejectedValue(new Error("contact not found"));
+
+      const result = await consentTool.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("error");
+      expect(result.error?.code).toBe("CONSENT_REQUIRED");
+      expect(bookingStore.create).not.toHaveBeenCalled();
+    });
+
+    // (f) Read error under OBSERVE must NOT block (mirrors enforce-only blocking).
+    it("mode 'observe' + consent read throws: booking still proceeds (no block)", async () => {
+      resolveMode.mockResolvedValue("observe");
+      read.mockRejectedValue(new Error("contact not found"));
+
+      const result = await consentTool.operations["booking.create"]!.execute(validInput);
+
+      expect(bookingStore.create).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe("success");
     });
   });
 });

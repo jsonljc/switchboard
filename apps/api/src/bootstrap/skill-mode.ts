@@ -15,6 +15,8 @@ import type {
   WhatsAppWindowGateConfig,
 } from "@switchboard/core/skill-runtime";
 import type { ConsentService, ContactConsentReader, PlaybookReader } from "@switchboard/core";
+import { resolveConsentStateConfig } from "@switchboard/schemas";
+import type { GovernanceMode } from "@switchboard/schemas";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
 import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
 import { receiptTierForCalendarProvider } from "./receipt-tier.js";
@@ -173,6 +175,9 @@ export async function bootstrapSkillMode(
   // ---------------------------------------------------------------------------
   const deploymentStore = new PrismaDeploymentStore(prismaClient);
   const governanceConfigResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
+  // Constructed here (ahead of the Phase 1c hook block below) so the F15 booking
+  // consent precondition can close over the SAME reader instance.
+  const contactConsentReader = createPrismaContactConsentReader({ prisma: prismaClient });
   // onWrite mirrors every persisted verdict into the dual-prom counter
   // (switchboard_governance_verdicts_total) — the observe-bake read surface.
   // NOTE: the slot is single-callback; the deferred lifecycle escalation hook
@@ -308,6 +313,25 @@ export async function bootstrapSkillMode(
       })
     : undefined;
 
+  // F15 — flag-gated consent precondition for booking. INERT BY DEFAULT: the
+  // booking tool only reads consent when an org has flipped its consentState
+  // mode to "observe"/"enforce" (default "off" => zero read, zero block, zero
+  // live change). resolveMode reuses the SAME governanceConfigResolver +
+  // resolveConsentStateConfig as the outbound PdpaConsentGateHook, so the two
+  // consent surfaces can never disagree on an org's mode. A missing/unparseable
+  // config resolves to "off" (the gate stays inert — it is strictly opt-in;
+  // it never blocks a booking for a non-enrolled org). read() forwards to the
+  // SAME ContactConsentReader instance; the core helper handles read errors
+  // fail-closed under enforce, so no try/catch is needed here.
+  const bookingConsentPrecondition = {
+    resolveMode: async (deploymentId: string): Promise<GovernanceMode> => {
+      const resolution = await governanceConfigResolver(deploymentId);
+      if (resolution.status !== "resolved") return "off";
+      return resolveConsentStateConfig(resolution.config).mode;
+    },
+    read: (_orgId: string, contactId: string) => contactConsentReader.read(contactId),
+  };
+
   const calendarBookFactory = createCalendarBookToolFactory({
     calendarProviderFactory,
     isCalendarProviderConfigured: (provider) => !isNoopCalendarProvider(provider),
@@ -359,6 +383,7 @@ export async function bootstrapSkillMode(
     defaultCurrency: "SGD",
     receiptTierForProvider: receiptTierForCalendarProvider,
     isProduction: process.env["NODE_ENV"] === "production",
+    consentPrecondition: bookingConsentPrecondition,
   });
 
   const crmQueryFactory = createCrmQueryToolFactory(contactStore, activityStore);
@@ -479,7 +504,8 @@ export async function bootstrapSkillMode(
   // docs/superpowers/plans/2026-05-11-alex-medspa-1c-followups.md
   // ---------------------------------------------------------------------------
   const consentStore = createPrismaConsentStore({ prisma: prismaClient });
-  const contactConsentReader = createPrismaContactConsentReader({ prisma: prismaClient });
+  // contactConsentReader is constructed earlier (next to governanceConfigResolver)
+  // so the F15 booking consent precondition and this hook share one instance.
   const consentPostureCache = new InMemoryGovernancePostureCache();
 
   // sessionContactResolver: maps sessionId → contactId via ConversationThread.

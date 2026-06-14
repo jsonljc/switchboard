@@ -8,6 +8,8 @@ import {
   isBookingSlotConflictError,
 } from "@switchboard/schemas";
 import type { CalendarProvider, AttributionChain } from "@switchboard/schemas";
+import { enforceConsentPrecondition } from "./calendar-book-consent.js";
+import type { ConsentPrecondition } from "./calendar-book-consent.js";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
 import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
 import { buildRescheduleOperations } from "./calendar-reschedule.js";
@@ -130,6 +132,14 @@ interface CalendarBookToolDeps {
    * core must not read process.env directly.
    */
   isProduction: boolean;
+  /**
+   * F15 — OPTIONAL flag-gated consent precondition. When omitted, booking
+   * behaves exactly as before (no consent read, no block) — this preserves
+   * every existing construction/test that does not pass it. When present, the
+   * tool enforces consent BEFORE persisting iff the deployment's consent mode is
+   * "enforce". Default mode "off" makes the gate fully inert.
+   */
+  consentPrecondition?: ConsentPrecondition;
 }
 
 const NOT_CONFIGURED_REMEDIATION =
@@ -242,6 +252,21 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               retryable: false,
             });
           }
+
+          // F15 — flag-gated consent precondition (INERT BY DEFAULT). Runs AFTER
+          // contactId is resolved and BEFORE any write (no opportunity, no
+          // booking). Absent dep => legacy behavior (no read, no block). Mode
+          // "off" => not even a consent read, so zero overhead and zero behavior
+          // change for every org that has not opted in.
+          if (deps.consentPrecondition) {
+            const consentResult = await enforceConsentPrecondition(deps.consentPrecondition, {
+              deploymentId: ctx.deploymentId,
+              orgId,
+              contactId,
+            });
+            if (consentResult) return consentResult;
+          }
+
           const contactRecord = await deps.contactStore.findById(orgId, contactId);
           const attendeeName = contactRecord?.name ?? null;
           const attendeeEmail = contactRecord?.email ?? null;

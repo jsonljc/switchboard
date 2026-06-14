@@ -193,6 +193,11 @@ export function createPromMetrics(): SwitchboardMetrics {
     bookingCancel: new PromCounter("switchboard_booking_cancel_total", "Bookings cancelled", [
       "orgId",
     ]),
+    bookingConsentBlocked: new PromCounter(
+      "switchboard_booking_consent_blocked_total",
+      "Booking attempts blocked by the flag-gated consent precondition (enforce mode)",
+      ["orgId", "reason"],
+    ),
     skillLlmTokensTotal: new PromCounter(
       "switchboard_skill_llm_tokens_total",
       "LLM tokens per skill execution, labeled by model and kind (input/output/cache_read/cache_creation)",
