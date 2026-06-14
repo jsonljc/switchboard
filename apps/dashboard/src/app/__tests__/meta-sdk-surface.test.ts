@@ -19,8 +19,14 @@ function walk(dir: string): string[] {
 // could slip past a source-text scan). The running-app network-panel check is
 // the authoritative proof. See the spec, section 6.
 describe("Meta SDK loads only in the authenticated app", () => {
-  it("the (auth) layout mounts MetaSdkScript", () => {
-    expect(readSource("src/app/(auth)/layout.tsx")).toContain("MetaSdkScript");
+  it("the (auth) layout mounts MetaSdkScript only for an authenticated session", () => {
+    const authLayout = readSource("src/app/(auth)/layout.tsx");
+    expect(authLayout).toContain("MetaSdkScript");
+    // Gate on the real session, not merely (auth) route-group membership: a few
+    // (auth) routes (for example /mira, /operator) are not in the middleware
+    // auth matcher, so an unauthenticated request could otherwise reach the
+    // layout and load the SDK. With null session in production, it does not.
+    expect(authLayout).toMatch(/session\s*&&\s*<MetaSdkScript/);
   });
 
   it("the root layout no longer references the Meta SDK", () => {

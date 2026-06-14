@@ -22,7 +22,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
         </ErrorBoundary>
         <OperatorChatWidget />
         <Toaster />
-        <MetaSdkScript />
+        {session && <MetaSdkScript />}
       </DataModeProvider>
     </AuthProvider>
   );
