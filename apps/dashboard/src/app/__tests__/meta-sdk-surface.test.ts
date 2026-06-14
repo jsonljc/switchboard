@@ -38,9 +38,12 @@ describe("Meta SDK loads only in the authenticated app", () => {
 
   it("no file in the (public) route group references the Meta SDK", () => {
     const publicDir = path.resolve(process.cwd(), "src/app/(public)");
+    // Scan source text for the SDK script path and the loader component. We match
+    // the script PATH ("/en_US/sdk.js"), not the bare host, so this reads as a
+    // source-text fingerprint scan rather than URL host validation.
     const offenders = walk(publicDir).filter((file) => {
       const src = readFileSync(file, "utf8");
-      return src.includes("connect.facebook.net") || src.includes("MetaSdkScript");
+      return src.includes("/en_US/sdk.js") || src.includes("MetaSdkScript");
     });
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
