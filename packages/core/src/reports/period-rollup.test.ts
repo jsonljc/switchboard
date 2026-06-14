@@ -46,6 +46,9 @@ function stubStores(): ReportStores {
     contacts: {
       countConsentCompleteness: async () => ({ bookable: 0, validConsent: 0 }),
     },
+    receipts: {
+      countReceiptedBookingsInWindow: async () => 41,
+    },
   };
 }
 
@@ -106,6 +109,7 @@ describe("createPeriodRollup", () => {
     expect(result.campaigns).toBeDefined();
     expect(result.managedComparison).toBeDefined();
     expect(result.pullquote).toBeDefined();
+    expect(result.receiptedBookings).toEqual({ count: 41 });
   });
 
   it("throws when current.window is null", async () => {

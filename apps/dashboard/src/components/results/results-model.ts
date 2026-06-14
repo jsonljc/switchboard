@@ -10,6 +10,7 @@ import type {
   CostBreakdown,
   HeldRateData,
   ConsentCompletenessData,
+  ReceiptedBookingsData,
   ManagedComparisonData,
 } from "./types";
 
@@ -31,6 +32,7 @@ export interface ResultsModel {
   costNarrative: string;
   heldRate: HeldRateData; // attended / matured, rate null when no matured bookings
   consentCompleteness: ConsentCompletenessData; // validConsent / bookable, point-in-time snapshot
+  receiptedBookings: ReceiptedBookingsData; // count of non-void calendar receipts in the window
   managedComparison: ManagedComparisonData | null;
 }
 
@@ -68,6 +70,7 @@ export function buildResultsModel(data: ReportData): ResultsModel {
     costNarrative: data.costNarrative,
     heldRate: data.heldRate ?? { attended: 0, matured: 0, rate: null },
     consentCompleteness: data.consentCompleteness ?? { validConsent: 0, bookable: 0, rate: null },
+    receiptedBookings: data.receiptedBookings ?? { count: 0 },
     managedComparison: data.managedComparison,
   };
 }

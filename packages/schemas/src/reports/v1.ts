@@ -157,6 +157,12 @@ export interface ConsentCompletenessData {
   rate: number | null;
 }
 
+export interface ReceiptedBookingsData {
+  /** Count of non-void calendar Receipts (status booked|held) created in the window, org-scoped.
+   *  A "receipted booking" is a booking that produced a proof receipt at booking time. */
+  count: number;
+}
+
 export interface ReportDataV1 {
   label: ReportWindow;
   period: string;
@@ -171,6 +177,7 @@ export interface ReportDataV1 {
   managedComparison: ManagedComparisonData | null;
   heldRate: HeldRateData;
   consentCompleteness: ConsentCompletenessData;
+  receiptedBookings: ReceiptedBookingsData;
 }
 
 // ---------------------------------------------------------------------------

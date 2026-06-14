@@ -10,6 +10,7 @@ function makeMockPrisma() {
       findFirst: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      count: vi.fn().mockResolvedValue(0),
     },
   };
 }
@@ -154,6 +155,36 @@ describe("PrismaReceiptStore", () => {
     it("returns 0 without throwing when no booked calendar receipt matches (best-effort, unlike recordAttendance)", async () => {
       prisma.receipt.updateMany.mockResolvedValueOnce({ count: 0 });
       const count = await store.promoteCalendarBookedToHeld("org-1", "no-receipt");
+      expect(count).toBe(0);
+    });
+  });
+
+  describe("countReceiptedBookingsInWindow", () => {
+    it("counts only org-scoped, non-void calendar receipts (status booked|held) created in [from, to)", async () => {
+      const from = new Date("2026-06-08T00:00:00Z");
+      const to = new Date("2026-06-15T00:00:00Z");
+      prisma.receipt.count.mockResolvedValueOnce(41);
+
+      const count = await store.countReceiptedBookingsInWindow({ orgId: "org-1", from, to });
+
+      expect(prisma.receipt.count).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          kind: "calendar",
+          status: { in: ["booked", "held"] },
+          createdAt: { gte: from, lt: to },
+        },
+      });
+      expect(count).toBe(41);
+    });
+
+    it("returns 0 when no calendar receipts fall in the window", async () => {
+      prisma.receipt.count.mockResolvedValueOnce(0);
+      const count = await store.countReceiptedBookingsInWindow({
+        orgId: "org-1",
+        from: new Date("2026-06-08T00:00:00Z"),
+        to: new Date("2026-06-15T00:00:00Z"),
+      });
       expect(count).toBe(0);
     });
   });

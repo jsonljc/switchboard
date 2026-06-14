@@ -146,6 +146,13 @@ export interface ReportStores {
       orgId: string;
     }): Promise<{ bookable: number; validConsent: number }>;
   };
+
+  receipts: {
+    /** Count of non-void CALENDAR Receipts (status booked|held) created in [from, to), org-scoped.
+     *  This is the receipted-bookings north-star count: a calendar receipt is minted at booking
+     *  time, so a non-void calendar receipt is one receipted booking. */
+    countReceiptedBookingsInWindow(input: { orgId: string; from: Date; to: Date }): Promise<number>;
+  };
 }
 
 // ---------------------------------------------------------------------------
