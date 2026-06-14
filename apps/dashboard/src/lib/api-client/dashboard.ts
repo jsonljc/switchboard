@@ -68,6 +68,19 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
     return this.request(`/api/${orgId}/roi/summary${qs ? `?${qs}` : ""}`);
   }
 
+  async recordAttendance(
+    orgId: string,
+    bookingId: string,
+    body: { outcome: "attended" | "no_show"; recordedBy?: "owner" | "staff" },
+    idempotencyKey: string,
+  ) {
+    return this.request(`/api/${orgId}/bookings/${bookingId}/attendance`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(body),
+    });
+  }
+
   async recordRevenue(
     orgId: string,
     body: {
