@@ -53,6 +53,26 @@ export class PrismaReceiptStore implements ReceiptStore {
     return mapRowToReceipt(created);
   }
 
+  /**
+   * Promote a booking's calendar receipt booked -> held once attendance is confirmed.
+   * Scoped to (org, booking, kind=calendar, status=booked) so it never touches a payment
+   * receipt, a void, or an already-held row, and stays org-isolated. Returns the number of
+   * rows promoted. Unlike recordAttendance, a zero count is a legitimate no-op (a booking may
+   * carry no calendar receipt yet, or attendance was re-recorded) — best-effort, never throws.
+   */
+  async promoteCalendarBookedToHeld(organizationId: string, bookingId: string): Promise<number> {
+    const result = await this.prisma.receipt.updateMany({
+      where: {
+        organizationId,
+        bookingId,
+        kind: "calendar",
+        status: "booked",
+      },
+      data: { status: "held" },
+    });
+    return result.count;
+  }
+
   async findByBooking(orgId: string, bookingId: string): Promise<Receipt[]> {
     const rows = await this.prisma.receipt.findMany({
       where: { organizationId: orgId, bookingId },

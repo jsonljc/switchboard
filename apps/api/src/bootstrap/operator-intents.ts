@@ -42,6 +42,7 @@ import {
 import {
   buildRecordAttendanceHandler,
   type BookingAttendanceWriter,
+  type ReceiptHeldPromoter,
 } from "./operator-intents/attendance.js";
 import { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
 import {
@@ -117,6 +118,9 @@ interface OperatorIntentsBootstrapDeps {
   paymentVerifier?: PaymentVerifier;
   /** Optional: registers the booking.record_attendance intent + handler when provided. */
   bookingAttendanceWriter?: BookingAttendanceWriter;
+  /** Optional: when provided alongside bookingAttendanceWriter, an "attended" outcome promotes
+   *  the booking's calendar receipt booked -> held. */
+  receiptHeldPromoter?: ReceiptHeldPromoter;
   logger?: { info(msg: string): void };
 }
 
@@ -153,6 +157,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     receiptWriter,
     paymentVerifier,
     bookingAttendanceWriter,
+    receiptHeldPromoter,
     logger,
   } = deps;
 
@@ -210,7 +215,10 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
   }
 
   if (bookingAttendanceWriter) {
-    handlers.set(RECORD_ATTENDANCE_INTENT, buildRecordAttendanceHandler(bookingAttendanceWriter));
+    handlers.set(
+      RECORD_ATTENDANCE_INTENT,
+      buildRecordAttendanceHandler(bookingAttendanceWriter, receiptHeldPromoter),
+    );
   }
 
   modeRegistry.register(new OperatorMutationMode({ handlers }));

@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import type { WorkUnit } from "@switchboard/core/platform";
 import { StaleVersionError } from "@switchboard/core";
-import { buildRecordAttendanceHandler, type BookingAttendanceWriter } from "./attendance.js";
+import {
+  buildRecordAttendanceHandler,
+  type BookingAttendanceWriter,
+  type ReceiptHeldPromoter,
+} from "./attendance.js";
 
 function makeWorkUnit(params: Record<string, unknown>): WorkUnit {
   return {
@@ -43,5 +47,60 @@ describe("buildRecordAttendanceHandler", () => {
     );
     expect(result.outcome).toBe("failed");
     expect(result.error?.code).toBe("BOOKING_NOT_FOUND");
+  });
+
+  it("promotes the booking's calendar receipt booked->held when attendance is attended", async () => {
+    const writer: BookingAttendanceWriter = {
+      recordAttendance: vi.fn(async () => ({ id: "b1", attendance: "attended" })),
+    };
+    const promoter: ReceiptHeldPromoter = {
+      promoteCalendarBookedToHeld: vi.fn(async () => 1),
+    };
+    const result = await buildRecordAttendanceHandler(writer, promoter).execute(
+      makeWorkUnit({ bookingId: "b1", outcome: "attended", recordedBy: "owner" }),
+    );
+    expect(promoter.promoteCalendarBookedToHeld).toHaveBeenCalledWith("org-1", "b1");
+    expect(result.outcome).toBe("completed");
+    expect(result.outputs?.receiptsPromoted).toBe(1);
+  });
+
+  it("does NOT promote a receipt when the outcome is no_show", async () => {
+    const writer: BookingAttendanceWriter = {
+      recordAttendance: vi.fn(async () => ({ id: "b1", attendance: "no_show" })),
+    };
+    const promoter: ReceiptHeldPromoter = {
+      promoteCalendarBookedToHeld: vi.fn(async () => 0),
+    };
+    const result = await buildRecordAttendanceHandler(writer, promoter).execute(
+      makeWorkUnit({ bookingId: "b1", outcome: "no_show", recordedBy: "owner" }),
+    );
+    expect(promoter.promoteCalendarBookedToHeld).not.toHaveBeenCalled();
+    expect(result.outcome).toBe("completed");
+  });
+
+  it("completes without promotion when no promoter is wired (back-compat)", async () => {
+    const writer: BookingAttendanceWriter = {
+      recordAttendance: vi.fn(async () => ({ id: "b1", attendance: "attended" })),
+    };
+    const result = await buildRecordAttendanceHandler(writer).execute(
+      makeWorkUnit({ bookingId: "b1", outcome: "attended", recordedBy: "owner" }),
+    );
+    expect(result.outcome).toBe("completed");
+  });
+
+  it("propagates a promoter failure (fail loud; attendance is idempotent on retry)", async () => {
+    const writer: BookingAttendanceWriter = {
+      recordAttendance: vi.fn(async () => ({ id: "b1", attendance: "attended" })),
+    };
+    const promoter: ReceiptHeldPromoter = {
+      promoteCalendarBookedToHeld: vi.fn(async () => {
+        throw new Error("db down");
+      }),
+    };
+    await expect(
+      buildRecordAttendanceHandler(writer, promoter).execute(
+        makeWorkUnit({ bookingId: "b1", outcome: "attended", recordedBy: "owner" }),
+      ),
+    ).rejects.toThrow("db down");
   });
 });
