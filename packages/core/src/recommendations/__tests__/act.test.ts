@@ -220,3 +220,39 @@ describe("actOnRecommendation — boundary checks", () => {
     expect(store.rows[0]?.status).toBe("expired");
   });
 });
+
+describe("characterization (Spec-1B step 0): act_on_recommendation is money-inert", () => {
+  // PIN: actOnRecommendation(store, input) takes ONLY a RecommendationStore - no Meta/ads/budget
+  // client is in scope, so acting on ANY recommendation (including a budget-move one) can only flip
+  // status. The Spec-1B reallocation that ACTUALLY moves Meta budget is a SEPARATE governed intent
+  // (adoptimizer.campaign.reallocate), never an extension of this path (close-the-revenue-loop spec
+  // section 11). If this test ever needs a Meta spy to stay green, money has leaked into this path.
+  it("acting 'primary' on a budget-move recommendation only flips status to acted", async () => {
+    const store = createInMemoryRecommendationStore();
+    await emitRecommendation(store, {
+      orgId: "org-1",
+      agentKey: "riley",
+      intent: "recommendation.shift_budget_to_source",
+      action: "shift_budget_to_source",
+      humanSummary: "Shift budget on Lunchtime",
+      confidence: 0.9,
+      dollarsAtRisk: 50,
+      riskLevel: "medium",
+      parameters: { from: "ig", to: "fb", fromTrueRoas: "1.2", toTrueRoas: "3.4" },
+      presentation: {
+        primaryLabel: "Shift budget",
+        secondaryLabel: "Wait",
+        dismissLabel: "Dismiss",
+        dataLines: [],
+      },
+    });
+    const result = await actOnRecommendation(store, {
+      recommendationId: store.rows[0]!.id,
+      orgId: "org-1",
+      actor,
+      action: "primary",
+    });
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") expect(result.row.status).toBe("acted");
+  });
+});
