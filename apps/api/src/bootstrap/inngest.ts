@@ -1335,20 +1335,24 @@ async function listRileyActiveOrgs(prisma: {
         sourceAgent: string;
         intent: { startsWith: string };
         status: string;
+        executedAt: { not: null };
       };
       distinct: ["organizationId"];
       select: { organizationId: true };
     }) => Promise<{ organizationId: string }[]>;
   };
 }): Promise<string[]> {
-  // Filter to status="acted" so we only dispatch to orgs that actually have
-  // attributable rows. Without this, orgs with only queued/shadow_action
-  // recommendations get noisy dispatch events that resolve to zero candidates.
+  // Filter to status="acted" + executedAt set so we only dispatch to orgs that actually have
+  // attributable rows. Without this, orgs with only queued/shadow_action recommendations (or
+  // approved-but-unexecuted moves) get noisy dispatch events that resolve to zero candidates.
+  // Mirrors the scorer's executedAt:{not:null} gate (Spec-1B 1B-2) so the prefilter and the
+  // scorer agree on what "attributable" means.
   const rows = await prisma.pendingActionRecord.findMany({
     where: {
       sourceAgent: "riley",
       intent: { startsWith: "recommendation." },
       status: "acted",
+      executedAt: { not: null },
     },
     distinct: ["organizationId"],
     select: { organizationId: true },

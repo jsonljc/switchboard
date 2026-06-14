@@ -331,6 +331,8 @@ describe("PrismaAttributableRecommendationStore.findAttributableCandidates", () 
     expect(call.where.status).toBe("acted");
     expect(call.where.intent.startsWith).toBe("recommendation.");
     expect(call.where.resolvedAt.not).toBeNull();
+    // Spec-1B 1B-2: the scorer counts ONLY executed moves.
+    expect(call.where.executedAt).toEqual({ not: null });
     expect(call.where.recommendationOutcome.is).toBeNull();
     expect(call.orderBy).toEqual({ resolvedAt: "asc" });
   });
@@ -486,5 +488,23 @@ describe("PrismaAttributableRecommendationStore.findOverlapsForCampaign", () => 
       windowEnd: new Date("2026-05-08T12:00:00Z"),
     });
     expect(out).toEqual([{ id: "rec-mid-window", actionKind: "pause" }]);
+  });
+
+  it("gates overlap detection on executedAt:{not:null} (Spec-1B 1B-2: only executed moves overlap)", async () => {
+    const prisma = buildPrismaMock();
+    (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    const store = new PrismaAttributableRecommendationStore(prisma as never);
+    await store.findOverlapsForCampaign({
+      organizationId: "org-1",
+      campaignId: "camp-A",
+      excludeRecommendationId: "rec-1",
+      windowStart: new Date("2026-04-17T12:00:00Z"),
+      windowEnd: new Date("2026-05-08T12:00:00Z"),
+    });
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const call = (prisma.pendingActionRecord.findMany as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0];
+    expect(call.where.executedAt).toEqual({ not: null });
+    expect(call.where.status).toBe("acted");
   });
 });

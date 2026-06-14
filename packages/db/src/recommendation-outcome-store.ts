@@ -260,6 +260,11 @@ export class PrismaAttributableRecommendationStore implements AttributableRecomm
         status: "acted",
         intent: { startsWith: "recommendation." },
         resolvedAt: { not: null, lte: cutoff },
+        // Spec-1B 1B-2: score ONLY moves that actually executed. The machine path stamps executedAt
+        // only on a confirmed Meta write (an approved-but-failed reallocation never does), and the
+        // operator path stamps it on acted (applyAct). status="acted" alone would also count
+        // approved-but-unexecuted machine moves; this gate excludes them from the learning signal.
+        executedAt: { not: null },
         recommendationOutcome: { is: null },
       },
       orderBy: { resolvedAt: "asc" },
@@ -287,6 +292,9 @@ export class PrismaAttributableRecommendationStore implements AttributableRecomm
         status: "acted",
         intent: { startsWith: "recommendation." },
         resolvedAt: { not: null, gte: args.windowStart, lte: args.windowEnd },
+        // Spec-1B 1B-2: overlap detection must also count only executed moves (mirror the
+        // findAttributableCandidates gate) — an approved-but-unexecuted move is not an overlap.
+        executedAt: { not: null },
       },
     });
 

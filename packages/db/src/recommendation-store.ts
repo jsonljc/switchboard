@@ -237,14 +237,20 @@ export class PrismaRecommendationStore implements RecommendationStore {
         note: args.note ?? null,
       };
       let updated;
+      const now = new Date();
       try {
         updated = await tx.pendingActionRecord.update({
           where: { id: args.id, status: args.fromStatus, organizationId: args.orgId },
           data: {
             status: args.toStatus,
-            resolvedAt: new Date(),
+            resolvedAt: now,
             resolvedBy: args.actor.principalId,
             parameters: { ...params, __recommendation: updatedMeta } as object,
+            // Spec-1B 1B-2: an operator transition TO "acted" IS an execution; stamp executedAt so
+            // the outcome scorer (which gates on executedAt:{not:null} to score only executed moves)
+            // keeps scoring operator-acted recs. Other transitions (dismissed/expired/...) leave
+            // executedAt null — nothing executed, nothing to attribute.
+            ...(args.toStatus === "acted" ? { executedAt: now } : {}),
           },
         });
       } catch (err: unknown) {
