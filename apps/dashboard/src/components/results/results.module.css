@@ -199,6 +199,51 @@
   text-underline-offset: 3px;
 }
 
+/* ─── Held-appointment rate tile ─── */
+
+/* Outer wrapper — single metric stack, same rhythm as a worthIt cell */
+.heldRate {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Eyebrow label — small caps mono, quiet */
+.heldRateEyebrow {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin: 0;
+}
+
+/* Rate number — large mono tabular (matches worthItNum scale) */
+.heldRateNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin: 0.125rem 0 0;
+}
+
+@media (min-width: 768px) {
+  .heldRateNum {
+    font-size: 2.25rem;
+  }
+}
+
+/* Cohort caption — quiet prose qualifier */
+.heldRateCohort {
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  margin: 0.0625rem 0 0;
+}
+
 /* ─── Verdict line ─── */
 
 /* Serif prose container (Fraunces via --font-home-serif, a complete stack value) */

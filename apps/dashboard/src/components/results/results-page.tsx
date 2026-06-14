@@ -14,6 +14,7 @@ import { ResultsHeader } from "./results-header";
 import { VerdictLine } from "./verdict-line";
 import { HeroOutcomes } from "./hero-outcomes";
 import { WhatsWorking } from "./whats-working";
+import { HeldRateTile } from "./held-rate-tile";
 import { AgentContribution } from "./agent-contribution";
 import { WorthIt } from "./worth-it";
 import { DetailsDisclosure } from "./details-disclosure";
@@ -108,6 +109,7 @@ export function ResultsPage() {
                   whole disclosure when there's nothing left to reveal. */}
               {(!showNoMeta || model.managedComparison) && (
                 <DetailsDisclosure>
+                  {!showNoMeta && <HeldRateTile model={model} />}
                   {!showNoMeta && (
                     <FunnelSection funnel={model.funnel} narrative={model.funnelNarrative} />
                   )}
