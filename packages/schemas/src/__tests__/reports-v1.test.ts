@@ -70,8 +70,10 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
       managedComparison: null,
       heldRate: { attended: 38, matured: 45, rate: 38 / 45 },
       consentCompleteness: { validConsent: 42, bookable: 45, rate: 42 / 45 },
+      receiptedBookings: { count: 41 },
     };
     expect(sample.managedComparison).toBeNull();
+    expect(sample.receiptedBookings.count).toBe(41);
   });
 
   it("ManagedComparisonData accepts an in-period-cohort source", () => {

@@ -80,6 +80,36 @@ export class PrismaReceiptStore implements ReceiptStore {
     });
     return rows.map(mapRowToReceipt);
   }
+
+  /**
+   * Receipted-bookings north-star count: non-void CALENDAR receipts (status booked|held) created
+   * in [from, to), org-scoped. A calendar receipt is minted at booking time, so each one is a
+   * booking that produced a proof receipt. Scalar count, mirroring countMaturedAttendance.
+   * Org-scoped per the F12 read-side IDOR lesson; voids (status "void") are excluded by the
+   * booked|held filter.
+   */
+  async countReceiptedBookingsInWindow(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<number> {
+    // Count DISTINCT bookings, not rows: calendar receipts carry a NULL externalRef, so the
+    // (org, kind, externalRef) partial-unique does NOT dedupe them — a confirm-failure + same-slot
+    // retry can mint a second "booked" receipt for one booking (see mint-calendar-receipt.ts). As
+    // the first receipt-counting consumer we must dedupe by bookingId or the metric over-reports.
+    const rows = await this.prisma.receipt.findMany({
+      where: {
+        organizationId: input.orgId,
+        kind: "calendar",
+        status: { in: ["booked", "held"] },
+        createdAt: { gte: input.from, lt: input.to },
+        bookingId: { not: null },
+      },
+      select: { bookingId: true },
+      distinct: ["bookingId"],
+    });
+    return rows.length;
+  }
 }
 
 interface ReceiptRow {

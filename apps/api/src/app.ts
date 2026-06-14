@@ -649,6 +649,7 @@ export async function buildServer() {
       PrismaRecommendationStore: PrismaRecStore,
       PrismaConversationThreadStore,
       PrismaContactStore: PrismaContactStoreForReports,
+      PrismaReceiptStore: PrismaReceiptStoreForReports,
     } = await import("@switchboard/db");
 
     app.decorate("reportCacheStore", new PrismaReportCacheStore(prismaClient));
@@ -679,6 +680,7 @@ export async function buildServer() {
         },
       },
       contacts: new PrismaContactStoreForReports(prismaClient),
+      receipts: new PrismaReceiptStoreForReports(prismaClient),
     };
     app.decorate("reportStores", reportStores);
 

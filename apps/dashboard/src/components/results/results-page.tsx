@@ -16,6 +16,7 @@ import { HeroOutcomes } from "./hero-outcomes";
 import { WhatsWorking } from "./whats-working";
 import { HeldRateTile } from "./held-rate-tile";
 import { ConsentCompletenessTile } from "./consent-completeness-tile";
+import { ReceiptedBookingsTile } from "./receipted-bookings-tile";
 import { AgentContribution } from "./agent-contribution";
 import { WorthIt } from "./worth-it";
 import { DetailsDisclosure } from "./details-disclosure";
@@ -110,6 +111,7 @@ export function ResultsPage() {
                   whole disclosure when there's nothing left to reveal. */}
               {(!showNoMeta || model.managedComparison) && (
                 <DetailsDisclosure>
+                  {!showNoMeta && <ReceiptedBookingsTile model={model} />}
                   {!showNoMeta && <HeldRateTile model={model} />}
                   {!showNoMeta && <ConsentCompletenessTile model={model} />}
                   {!showNoMeta && (

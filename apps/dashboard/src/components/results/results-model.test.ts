@@ -58,6 +58,13 @@ describe("buildResultsModel", () => {
     const m = buildResultsModel(stale);
     expect(m.consentCompleteness).toEqual({ validConsent: 0, bookable: 0, rate: null });
   });
+
+  it("defaults receiptedBookings to { count: 0 } when absent from a stale cached payload", () => {
+    const stale = { ...goodFixture } as unknown as import("./types").ReportData;
+    delete (stale as unknown as Record<string, unknown>)["receiptedBookings"];
+    const m = buildResultsModel(stale);
+    expect(m.receiptedBookings).toEqual({ count: 0 });
+  });
 });
 
 describe("fmtRatio", () => {

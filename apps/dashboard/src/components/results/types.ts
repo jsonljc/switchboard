@@ -13,6 +13,7 @@ export type {
   CostBreakdown,
   HeldRateData,
   ConsentCompletenessData,
+  ReceiptedBookingsData,
   ManagedComparisonData,
   ManagedComparisonPair,
   ManagedComparisonMetrics,
