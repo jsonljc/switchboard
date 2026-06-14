@@ -2022,6 +2022,9 @@ model Booking {
   origin          String    @default("live")
   rescheduledAt   DateTime?
   rescheduleCount Int       @default(0)
+  // Attendance outcome -- a SEPARATE axis from lifecycle `status`. null = not yet recorded.
+  // Values: "attended" | "no_show". Producer: booking.record_attendance (operator-direct).
+  attendance      String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -2032,6 +2035,7 @@ model Booking {
   @@index([organizationId, createdAt])
   @@index([contactId])
   @@index([status])
+  @@index([organizationId, attendance])
 }
 
 // ---------------------------------------------------------------------------

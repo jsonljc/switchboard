@@ -229,6 +229,29 @@ describe("PrismaBookingStore", () => {
     });
   });
 
+  describe("recordAttendance", () => {
+    it("updates attendance scoped by org+id and returns the row", async () => {
+      prisma.booking.updateMany = vi.fn(async () => ({ count: 1 }));
+      prisma.booking.findFirstOrThrow = vi.fn(async () => ({ id: "b1", attendance: "attended" }));
+
+      const row = await store.recordAttendance("org-1", "b1", "attended");
+
+      expect(prisma.booking.updateMany).toHaveBeenCalledWith({
+        where: { id: "b1", organizationId: "org-1" },
+        data: { attendance: "attended" },
+      });
+      expect(row).toEqual({ id: "b1", attendance: "attended" });
+    });
+
+    it("throws StaleVersionError on no match (no-match abort, not phantom success)", async () => {
+      prisma.booking.updateMany = vi.fn(async () => ({ count: 0 }));
+
+      await expect(store.recordAttendance("org-1", "missing", "no_show")).rejects.toBeInstanceOf(
+        StaleVersionError,
+      );
+    });
+  });
+
   describe("listByDate", () => {
     it("returns bookings for a specific date excluding cancelled", async () => {
       const bookings = [

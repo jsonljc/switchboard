@@ -874,8 +874,12 @@ export async function buildServer() {
     const { bootstrapOperatorIntents } = await import("./bootstrap/operator-intents.js");
     const { PrismaOutboxStore } = await import("@switchboard/db");
     const { PrismaReceiptStore } = await import("@switchboard/db");
+    const { PrismaBookingStore } = await import("@switchboard/db");
     const prismaOutbox = new PrismaOutboxStore(prismaClient);
     const prismaReceipts = new PrismaReceiptStore(prismaClient);
+    // Fresh instance: the `reportStores.bookings` above is scoped to a different
+    // `if (prismaClient)` block and is not in scope here.
+    const bookingAttendanceStore = new PrismaBookingStore(prismaClient);
     bootstrapOperatorIntents({
       intentRegistry,
       modeRegistry,
@@ -898,6 +902,7 @@ export async function buildServer() {
         ? (orgId: string, externalReference: string) =>
             app.paymentPortFactory!(orgId).then((port) => port.retrievePayment(externalReference))
         : undefined,
+      bookingAttendanceWriter: bookingAttendanceStore,
       logger: app.log,
     });
   }

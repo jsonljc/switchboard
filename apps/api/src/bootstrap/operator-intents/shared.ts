@@ -19,6 +19,7 @@ export const GRANT_CONSENT_INTENT = "operator.grant_consent";
 export const REVOKE_CONSENT_INTENT = "operator.revoke_consent";
 export const CLEAR_CONSENT_INTENT = "operator.clear_consent";
 export const RECORD_REVENUE_INTENT = "operator.record_revenue";
+export const RECORD_ATTENDANCE_INTENT = "booking.record_attendance";
 
 /**
  * Sentinel deployment ID used for admin-consent verdict context. The admin
@@ -53,4 +54,5 @@ export const OPERATOR_INTENT_ERROR_CODES = {
   // is anchored to a server-side PSP fetch-back — never the caller's `provider`.
   PAYMENT_FORBIDDEN_ACTOR: "PAYMENT_FORBIDDEN_ACTOR",
   PAYMENT_NOT_VERIFIED: "PAYMENT_NOT_VERIFIED",
+  BOOKING_NOT_FOUND: "BOOKING_NOT_FOUND",
 } as const;

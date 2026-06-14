@@ -34,10 +34,15 @@ import {
   CONFIRM_DISQUALIFICATION_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,
   GRANT_CONSENT_INTENT,
+  RECORD_ATTENDANCE_INTENT,
   RECORD_REVENUE_INTENT,
   REVOKE_CONSENT_INTENT,
   TRANSITION_OPPORTUNITY_STAGE_INTENT,
 } from "./operator-intents/shared.js";
+import {
+  buildRecordAttendanceHandler,
+  type BookingAttendanceWriter,
+} from "./operator-intents/attendance.js";
 import { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
 import {
   buildRecordRevenueHandler,
@@ -70,6 +75,7 @@ export {
   DISMISS_DISQUALIFICATION_INTENT,
   GRANT_CONSENT_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
+  RECORD_ATTENDANCE_INTENT,
   RECORD_REVENUE_INTENT,
   REVOKE_CONSENT_INTENT,
   TRANSITION_OPPORTUNITY_STAGE_INTENT,
@@ -109,6 +115,8 @@ interface OperatorIntentsBootstrapDeps {
    *  register payment.record_verified. The server-side PSP fetch-back that anchors
    *  `verified` to a real settled charge (F3) — never the caller-supplied provider. */
   paymentVerifier?: PaymentVerifier;
+  /** Optional: registers the booking.record_attendance intent + handler when provided. */
+  bookingAttendanceWriter?: BookingAttendanceWriter;
   logger?: { info(msg: string): void };
 }
 
@@ -144,6 +152,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     runInTransaction,
     receiptWriter,
     paymentVerifier,
+    bookingAttendanceWriter,
     logger,
   } = deps;
 
@@ -200,6 +209,10 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     );
   }
 
+  if (bookingAttendanceWriter) {
+    handlers.set(RECORD_ATTENDANCE_INTENT, buildRecordAttendanceHandler(bookingAttendanceWriter));
+  }
+
   modeRegistry.register(new OperatorMutationMode({ handlers }));
 
   if (opportunityStore) {
@@ -223,6 +236,9 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
   if (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier) {
     registerOperatorIntent(intentRegistry, RECORD_VERIFIED_PAYMENT_INTENT);
   }
+  if (bookingAttendanceWriter) {
+    registerOperatorIntent(intentRegistry, RECORD_ATTENDANCE_INTENT);
+  }
 
   const intentCount =
     (opportunityStore ? 1 : 0) +
@@ -230,7 +246,8 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     (disqualificationHook ? 2 : 0) +
     (consentService ? 3 : 0) +
     (revenueStore && outboxWriter && runInTransaction ? 1 : 0) +
-    (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier ? 1 : 0);
+    (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier ? 1 : 0) +
+    (bookingAttendanceWriter ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );

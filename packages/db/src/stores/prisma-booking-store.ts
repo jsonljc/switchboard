@@ -183,6 +183,17 @@ export class PrismaBookingStore {
     });
   }
 
+  async recordAttendance(organizationId: string, bookingId: string, outcome: string) {
+    const result = await this.prisma.booking.updateMany({
+      where: { id: bookingId, organizationId },
+      data: { attendance: outcome },
+    });
+    // count === 0 => no booking for this org. updateMany swallows the no-row case,
+    // so guard it (else a wrong/cross-org id reports phantom success).
+    if (result.count === 0) throw new StaleVersionError(bookingId, -1, -1);
+    return this.prisma.booking.findFirstOrThrow({ where: { id: bookingId, organizationId } });
+  }
+
   async listByDate(
     orgId: string,
     date: Date,
