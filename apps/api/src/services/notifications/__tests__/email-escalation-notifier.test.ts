@@ -126,4 +126,24 @@ describe("EmailEscalationNotifier", () => {
     expect(notifier.lastDeliveryResults[0]?.status).toBe("delivered");
     expect(notifier.lastDeliveryResults[0]?.attempts).toBe(2);
   });
+
+  it("masks recipient email in failure log (PDPA)", async () => {
+    mockSend.mockRejectedValue(new Error("Resend API error: 500"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const notifier = new EmailEscalationNotifier({
+      resendApiKey: "re_test_123",
+      fromAddress: "noreply@switchboard.app",
+      dashboardBaseUrl: "https://app.switchboard.app",
+    });
+
+    await notifier.notify(makeNotification({ approvers: ["jason@live.com"] }));
+
+    expect(errorSpy).toHaveBeenCalledOnce();
+    const logged = errorSpy.mock.calls[0]?.[0] as string;
+    expect(logged).toContain("j…@live.com");
+    expect(logged).not.toContain("jason@");
+
+    errorSpy.mockRestore();
+  });
 });
