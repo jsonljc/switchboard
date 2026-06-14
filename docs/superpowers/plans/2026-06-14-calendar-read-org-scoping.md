@@ -26,6 +26,27 @@
 
 ---
 
+## Task 0: Caller audit (pre-flight, no code change)
+
+Mechanically confirm the tenant-safety blast radius before touching code, and paste the result into the PR summary. This protects the "zero production callers" and "only two `findById` consumers" claims against a hidden third caller.
+
+- [ ] **Step 1: Run the audit greps from the worktree root**
+
+```bash
+rg -n "getBooking" apps packages
+rg -n "\.findById\(" apps packages | rg -i "booking"
+rg -n "PrismaBookingStore" apps packages
+```
+
+Expected (record in PR summary):
+
+- `getBooking`: only the three provider implementations (`noop`/`google`/`local`) and the `CalendarProvider` interface decl, plus tests. No production caller invokes `provider.getBooking(...)`, so its signature is intentionally left unchanged.
+- booking-store `.findById(`: only `skill-mode.ts` (the failure-handler adapter and the deposit `findBookingById`) and `booking-failure-handler.ts` call it. `app.ts`, `inngest.ts`, `dashboard-overview.ts` construct a `PrismaBookingStore` but use `create`/`confirm`/`cancel`/`reschedule`/`listByDate`/`findUpcomingConfirmed` only.
+
+If a caller outside that set appears, stop and reconcile before proceeding (it would either fail typecheck after the signature change or, worse, compile against a loose type).
+
+---
+
 ## Task 1: Fix A - org-scope `buildLocalStore.findById` (api) + retire schema comment
 
 **Files:**
@@ -303,7 +324,7 @@ git commit -m "fix(db): org-scope PrismaBookingStore.findById and thread orgId t
 
 - [ ] **Step 1: Add the gated cross-org read proof**
 
-Append a new block (after the existing reschedule/cancel cross-org block). `buildLocalStore`, `PrismaBookingStore`, and `PrismaClient` are already imported:
+Append a new block (after the existing reschedule/cancel cross-org block). `buildLocalStore`, `PrismaBookingStore`, and `PrismaClient` are already imported. No fixture setup is needed: the `Booking` model has no foreign keys (verified in the schema and asserted by this file's own header comment), so free-string `organizationId`/`contactId` ids written via `durable.create` are valid, exactly as the existing F12 proofs in this file do.
 
 ```ts
 // Read-side cross-org isolation (this slice, F12 read-scoping leg): a read keyed to the wrong org
@@ -403,3 +424,9 @@ git add -A && git commit -m "chore: prettier format"
 - Spec coverage: Fix A (Task 1), Fix B store + both consumers (Task 2), comment retirement (Task 1 Step 4), CI-safe proofs (Tasks 1-2), gated real-PG proof (Task 3), gates (Task 4). Option 3 (CalendarProvider.getBooking signature) deliberately not implemented, per the spec.
 - Type consistency: `findById(organizationId, bookingId)` order is identical in the db store, the core `BookingStoreSubset`, the skill-mode adapter, the deposit `findBookingById`, and the deposit-link `BookingLookup` (already `(orgId, bookingId)`). Return type `Booking | null` unchanged.
 - No production caller of `PrismaBookingStore.findById` exists beyond the two threaded consumers; `app.ts`/`inngest.ts`/`dashboard-overview.ts` use other booking methods. `pnpm typecheck` is the backstop.
+
+## Plan-review dispositions (2026-06-14)
+
+- Caller audit: ADOPTED as Task 0 (mechanical grep, result recorded in the PR summary), so the tenant-safety blast radius is verified, not asserted from memory.
+- Integration fixture realism: VERIFIED. `Booking` has no foreign keys, so the gated proof needs no org/contact fixtures; Task 3 cites this and mirrors the existing F12 proofs. Not a flaky fixture test.
+- Method rename `findById(orgId, id)` -> `findByIdForOrg`: DECLINED, with reason. The codebase convention for org-scoped reads is uniformly `findById(orgId, id)` (`PrismaContactStore`, `PrismaOpportunityStore`, `PrismaExecutionTraceStore`, the `crm-query`/`parameter-builder` interfaces), and the `deposit-link` `BookingLookup` contract this store feeds is already `findById(orgId, bookingId)`. Renaming would make the booking store the lone outlier. The transposition risk the reviewer flagged is mitigated exactly as they allowed: the unit tests lock the argument order (where-clause assertions, cross-org -> null cases, and `toHaveBeenCalledWith(orgId, bookingId)` on both consumers). A composite-unique or shared org-scoped-id helper is reasonable future work but out of scope for this slice.
