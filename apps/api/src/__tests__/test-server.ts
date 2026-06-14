@@ -9,6 +9,7 @@ import { auditRoutes } from "../routes/audit.js";
 import { identityRoutes } from "../routes/identity.js";
 import { recommendationsRoutes } from "../routes/recommendations.js";
 import { revenueRoutes } from "../routes/revenue.js";
+import { bookingAttendanceRoutes } from "../routes/booking-attendance.js";
 import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
 import { decisionsRoutes } from "../routes/decisions.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
@@ -138,6 +139,11 @@ export interface BuildTestServerOptions {
   /** Provide a mock OutboxWriter for revenue ingress tests (#654-B).
    * Required alongside `revenueStore` for the revenue intent to register. */
   outboxWriter?: import("../bootstrap/operator-intents/revenue.js").OutboxWriter;
+  /** Provide a mock BookingAttendanceWriter for booking-attendance ingress tests.
+   * When provided, the booking.record_attendance intent is registered and the
+   * writer is threaded into `bootstrapOperatorIntents`. The route is always
+   * registered; without this the intent is unregistered and submit() 404s. */
+  bookingAttendanceWriter?: import("../bootstrap/operator-intents/attendance.js").BookingAttendanceWriter;
   /**
    * Transaction runner for the revenue handler. Defaults to a no-op sentinel
    * `async (fn) => fn(undefined)` so handler unit tests work without a real
@@ -483,6 +489,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     revenueStore: app.revenueEventStore ?? undefined,
     outboxWriter: options.outboxWriter,
     runInTransaction: options.runInTransaction ?? (async (fn) => fn(undefined)),
+    bookingAttendanceWriter: options.bookingAttendanceWriter,
   });
 
   const platformLifecycle = new PlatformLifecycle({
@@ -521,6 +528,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   await app.register(identityRoutes, { prefix: "/api/identity" });
   await app.register(recommendationsRoutes, { prefix: "/api/recommendations" });
   await app.register(revenueRoutes, { prefix: "/api" });
+  await app.register(bookingAttendanceRoutes, { prefix: "/api" });
   await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
   await app.register(decisionsRoutes, { prefix: "/api/dashboard" });
   await app.register(winsRoute, { prefix: "/api/dashboard" });
