@@ -93,8 +93,8 @@ export class PrismaBookingStore {
     return this.prisma.booking.findFirstOrThrow({ where: { id: bookingId, organizationId } });
   }
 
-  async findById(bookingId: string) {
-    return this.prisma.booking.findUnique({ where: { id: bookingId } });
+  async findById(organizationId: string, bookingId: string) {
+    return this.prisma.booking.findFirst({ where: { id: bookingId, organizationId } });
   }
 
   async countConfirmed(orgId: string) {

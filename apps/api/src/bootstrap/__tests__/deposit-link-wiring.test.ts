@@ -60,7 +60,7 @@ describe("buildDepositLinkToolFactory", () => {
     const result = await factory(CTX).operations["deposit.issue"]!.execute({ bookingId: "bk_1" });
     expect(result.status).toBe("error");
     expect(result.error!.code).toBe("MISSING_BOOKING");
-    expect(findBookingById).toHaveBeenCalledWith("bk_1");
+    expect(findBookingById).toHaveBeenCalledWith("org_1", "bk_1");
     expect(createDepositLink).not.toHaveBeenCalled();
   });
 

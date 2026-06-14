@@ -90,6 +90,9 @@ describe("BookingFailureHandler", () => {
     // Verify transaction was called (booking update + escalation + outbox)
     expect(txHelper.fn).toHaveBeenCalledTimes(1);
 
+    // Read-side org-scoping: the idempotency lookup is keyed by org + booking id.
+    expect(bookingStore.findById).toHaveBeenCalledWith("org_1", "bk_1");
+
     // Booking must NOT remain pending_confirmation
     const txFn = txHelper.fn.mock.calls[0]![0] as (tx: unknown) => Promise<unknown>;
     const mockTx = {

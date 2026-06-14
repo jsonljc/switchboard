@@ -126,14 +126,28 @@ describe("PrismaBookingStore", () => {
     expect(prisma.booking.findFirstOrThrow).not.toHaveBeenCalled();
   });
 
-  it("finds a booking by id", async () => {
-    (prisma.booking.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+  it("finds a booking by id scoped to the org (findFirst on id + organizationId)", async () => {
+    (prisma.booking.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "bk_1",
+      organizationId: "org_1",
       status: "confirmed",
     });
 
-    const result = await store.findById("bk_1");
+    const result = await store.findById("org_1", "bk_1");
     expect(result?.status).toBe("confirmed");
+    expect(prisma.booking.findFirst).toHaveBeenCalledWith({
+      where: { id: "bk_1", organizationId: "org_1" },
+    });
+  });
+
+  it("findById returns null for an id in another org (no cross-org read)", async () => {
+    (prisma.booking.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    const result = await store.findById("org_other", "bk_1");
+    expect(result).toBeNull();
+    expect(prisma.booking.findFirst).toHaveBeenCalledWith({
+      where: { id: "bk_1", organizationId: "org_other" },
+    });
   });
 
   it("counts confirmed bookings for an org", async () => {

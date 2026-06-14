@@ -127,8 +127,8 @@ export interface CalendarProvider {
   // handle: the value returned as `Booking.calendarEventId` from `createBooking` (a Google
   // event id, or the local provider's `local-<uuid>`), NOT the durable Booking row id.
   // Callers pass `booking.calendarEventId`; the durable row mutation is owned by the
-  // booking store. (`getBooking` still keys by the durable row id on the local provider;
-  // aligning its read-side keying is tracked as separate out-of-scope work.)
+  // booking store. (`getBooking` keys by the durable row id and is org-scoped through the
+  // per-org local store and the org-scoped PrismaBookingStore.findById.)
   cancelBooking(eventId: string, reason?: string): Promise<void>;
   rescheduleBooking(eventId: string, newSlot: TimeSlot): Promise<Booking>;
   getBooking(bookingId: string): Promise<Booking | null>;
