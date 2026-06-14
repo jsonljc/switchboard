@@ -11,7 +11,11 @@ const securityHeaders = [
       "default-src 'self'",
       "img-src 'self' data: https:",
       "media-src 'self' blob: https:",
-      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+      // connect.facebook.net is allowed globally (Next headers() is global). The
+      // SDK is rendered ONLY by the (auth) layout (MetaSdkScript), so only authed
+      // pages load it. Render-time exclusion, not this allowance, is the
+      // public-surface guard (see the meta-sdk-surface test and the spec).
+      `script-src 'self' 'unsafe-inline' https://connect.facebook.net${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "connect-src 'self' https:",
       "frame-ancestors 'none'",
