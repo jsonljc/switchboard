@@ -15,6 +15,18 @@ export type ReceiptTier = z.infer<typeof ReceiptTierSchema>;
 export const ReceiptStatusSchema = z.enum(["booked", "held", "paid", "void"]);
 export type ReceiptStatus = z.infer<typeof ReceiptStatusSchema>;
 
+/** Structured provenance exceptions on a Receipt (Slice 5): zero or more reasons a receipt's
+ *  proof is weak/exceptional. Producers populate incrementally; this slice wires `missing_source`
+ *  for unverified/noop payment receipts (no verifiable PSP fetch-back). Other reasons are forward
+ *  vocabulary for later producer slices. Distinct from the computed PaidVisitVerdict.degraded. */
+export const ReceiptExceptionReasonSchema = z.enum([
+  "missing_source",
+  "missing_consent",
+  "manual_override",
+  "duplicate_risk",
+]);
+export type ReceiptExceptionReason = z.infer<typeof ReceiptExceptionReasonSchema>;
+
 const CalendarEvidenceSchema = z.object({
   kind: z.literal("calendar"),
   basis: z.literal("calendar_confirmed"),
@@ -53,6 +65,7 @@ const ReceiptBaseSchema = z.object({
   verifiedAt: z.date().nullable().optional(),
   workTraceId: z.string().nullable().optional(),
   createdAt: z.date(),
+  exceptions: z.array(ReceiptExceptionReasonSchema).default([]),
 });
 
 /** R2: evidence.kind must match receipt.kind (no cross-kind contamination). */

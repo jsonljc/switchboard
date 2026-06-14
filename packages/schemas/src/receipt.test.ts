@@ -59,6 +59,39 @@ describe("ReceiptSchema", () => {
   });
 });
 
+describe("Receipt exceptions", () => {
+  const base = {
+    id: "rcpt-x",
+    organizationId: "org-1",
+    kind: "payment" as const,
+    tier: "T3_ADMIN_AUDIT" as const,
+    status: "paid" as const,
+    capturedBy: "payment.record_verified",
+    evidence: {
+      kind: "payment" as const,
+      basis: "payment_degraded" as const,
+      chargeId: "noop_1",
+      amountFetched: 5000,
+    },
+    createdAt: new Date("2026-06-06T00:00:00Z"),
+  };
+
+  it("defaults exceptions to [] when omitted", () => {
+    const parsed = ReceiptSchema.parse(base);
+    expect(parsed.exceptions).toEqual([]);
+  });
+
+  it("accepts a known exception reason", () => {
+    const parsed = ReceiptSchema.parse({ ...base, exceptions: ["missing_source"] });
+    expect(parsed.exceptions).toEqual(["missing_source"]);
+  });
+
+  it("rejects an unknown exception reason", () => {
+    const parsed = ReceiptSchema.safeParse({ ...base, exceptions: ["nope"] });
+    expect(parsed.success).toBe(false);
+  });
+});
+
 describe("clampTierForUntrustedProvider", () => {
   it("clamps T1 and T2 down to T3 for untrusted providers", () => {
     expect(clampTierForUntrustedProvider("T1_FETCH_BACK")).toBe("T3_ADMIN_AUDIT");
