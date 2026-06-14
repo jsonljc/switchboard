@@ -25,6 +25,7 @@ const samplePayload: ReportDataV1 = {
   costNarrative: "",
   managedComparison: null,
   heldRate: { attended: 0, matured: 0, rate: null },
+  consentCompleteness: { validConsent: 0, bookable: 0, rate: null },
 };
 
 describe("createInMemoryReportCacheStore", () => {
