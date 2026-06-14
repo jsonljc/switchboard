@@ -194,6 +194,15 @@ export {
   rileyPauseApprovalPolicyId,
   buildRileyPauseApprovalPolicyInput,
 } from "./seed/riley-pause-governance.js";
+export {
+  RILEY_REALLOCATE_ALLOW_POLICY_RULE,
+  rileyReallocateAllowPolicyId,
+  buildRileyReallocateAllowPolicyInput,
+  RILEY_REALLOCATE_APPROVAL_POLICY_RULE,
+  rileyReallocateApprovalPolicyId,
+  buildRileyReallocateApprovalPolicyInput,
+  seedRileyReallocatePolicies,
+} from "./seed/riley-budget-governance.js";
 export { setRileyPauseSelfExecution } from "./seed/riley-pause-flag-toggle.js";
 export type { CapabilityAuditRecorder } from "./seed/riley-pause-flag-toggle.js";
 export {

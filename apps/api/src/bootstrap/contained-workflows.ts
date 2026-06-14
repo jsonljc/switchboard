@@ -1,3 +1,9 @@
+/* eslint-disable max-lines */
+// This central workflow-registration orchestrator grows by one block per governed intent; it was
+// already extracted once (riley-pause-executor.ts) and sits at the 600-line gate. Registering the
+// Spec-1B reallocate intent crossed it, so the line cap is acknowledged here as legacy debt
+// (arch-check.ts treats this marker as 🟡, matching app.ts / inngest.ts / skill-mode.ts). A future
+// split of the workflowIntents registry into a data module is the real fix.
 import type {
   ExecutionModeRegistry,
   WorkflowHandler,
@@ -171,6 +177,7 @@ export async function bootstrapContainedWorkflows(
   const { buildCreativePublishWorkflow } =
     await import("../services/workflows/creative-publish-workflow.js");
   const { buildRileyPauseExecutorHandler } = await import("./riley-pause-executor.js");
+  const { buildRileyBudgetExecutorHandler } = await import("./riley-budget-executor.js");
   const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
   const {
     PrismaLeadIntakeStore,
@@ -234,6 +241,12 @@ export async function bootstrapContainedWorkflows(
   // org's own meta-ads credentials. Wiring (incl. the org-isolation credential
   // resolver) lives in bootstrap/riley-pause-executor.ts.
   const rileyPauseExecutor = await buildRileyPauseExecutorHandler(prismaClient, workTraceStore);
+
+  // Spec-1B PR 1B-1.2: the governed reallocate intent is registered + seeded (allow +
+  // require_approval(mandatory)) so an approved reallocation parks; the EXECUTOR is a fail-closed
+  // placeholder (EXECUTOR_NOT_WIRED, never "completed", never touches Meta). The real
+  // read-modify-re-read executor (blast-radius cap + drift + receipt) replaces it in PR 1B-1.5.
+  const rileyBudgetExecutor = buildRileyBudgetExecutorHandler();
 
   // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
   // difference between callers is how the WhatsApp 24h-window timestamp is resolved
@@ -336,6 +349,7 @@ export async function bootstrapContainedWorkflows(
     ["creative.concept.draft", creativeConceptDraftWorkflow],
     ["adoptimizer.recommendation.handoff", recommendationHandoffWorkflow],
     [rileyPauseExecutor.intent, rileyPauseExecutor.handler],
+    [rileyBudgetExecutor.intent, rileyBudgetExecutor.handler],
     ["creative.job.continue", buildCreativeJobDecisionWorkflow(prismaClient, "continue")],
     ["creative.job.stop", buildCreativeJobDecisionWorkflow(prismaClient, "stop")],
     ["creative.job.publish", creativePublishWorkflow],
@@ -437,6 +451,20 @@ export async function bootstrapContainedWorkflows(
       // Zod parse. Internal-trigger-only (not reachable from the public API).
       intent: rileyPauseExecutor.intent,
       workflowId: rileyPauseExecutor.intent,
+      budgetClass: "cheap",
+      approvalPolicy: "always",
+      allowedTriggers: ["internal"],
+    },
+    {
+      // Spec-1B budget reallocation self-execution. A Riley-initiated (system) MONEY MOVE:
+      // deliberately NOT system_auto_approved (it is also on the D9-2 FINANCIAL_AUTO_APPROVE_DENYLIST,
+      // governance-gate.ts) - the seeded require_approval(mandatory) policy (db seed
+      // riley-budget-governance.ts) parks it for a human, and "mandatory" survives the
+      // autonomous-deployment spend lever. approvalPolicy here is decorative (the policy engine reads
+      // policyApprovalOverride). The executor is a fail-closed placeholder (EXECUTOR_NOT_WIRED) until
+      // the real read-modify-re-read executor lands in PR 1B-1.5. Internal-trigger-only.
+      intent: rileyBudgetExecutor.intent,
+      workflowId: rileyBudgetExecutor.intent,
       budgetClass: "cheap",
       approvalPolicy: "always",
       allowedTriggers: ["internal"],
