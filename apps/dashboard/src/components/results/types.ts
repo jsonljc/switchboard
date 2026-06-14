@@ -12,6 +12,7 @@ export type {
   CampaignRow,
   CostBreakdown,
   HeldRateData,
+  ConsentCompletenessData,
   ManagedComparisonData,
   ManagedComparisonPair,
   ManagedComparisonMetrics,

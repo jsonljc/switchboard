@@ -140,6 +140,7 @@ export const goodFixture: ReportDataV1 = {
   ],
   cost: { paid: 612, alt: 8000, saving: 7388 },
   heldRate: { attended: 38, matured: 45, rate: 38 / 45 },
+  consentCompleteness: { validConsent: 42, bookable: 45, rate: 42 / 45 },
   costNarrative:
     "vs. an SDR at ~S$5,000/month plus a small ad-agency retainer at ~S$3,000. Your team replaces both, and they're on duty after hours.",
   managedComparison: {
@@ -242,6 +243,7 @@ export const quietFixture: ReportDataV1 = {
   ],
   cost: { paid: 142, alt: 1846, saving: 1704 },
   heldRate: { attended: 0, matured: 0, rate: null },
+  consentCompleteness: { validConsent: 0, bookable: 0, rate: null },
   costNarrative:
     "vs. an SDR + agency retainer pro-rated weekly. Even at low volume the base cost is a small fraction.",
   managedComparison: null,
@@ -371,6 +373,7 @@ export const problemFixture: ReportDataV1 = {
   ],
   cost: { paid: 1343, alt: 24000, saving: 22657 },
   heldRate: { attended: 71, matured: 118, rate: 71 / 118 },
+  consentCompleteness: { validConsent: 64, bookable: 118, rate: 64 / 118 },
   costNarrative:
     "vs. SDR + agency retainer across three months. Even in a soft quarter the price gap is roughly one-eighteenth.",
   managedComparison: {
