@@ -630,4 +630,55 @@ describe("PrismaCreativeJobStore", () => {
       );
     });
   });
+
+  describe("completeWithAsset [F13]", () => {
+    it("writes the stage flip, stageOutputs, durableAssetUrl, and terminal-clear in ONE updateMany", async () => {
+      const url = "https://cdn.example.com/creative-assets/cj_1/u.mp4";
+      const outputs = { production: { durableAssetUrl: url } };
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.creativeJob.findFirstOrThrow.mockResolvedValue({
+        id: "cj_1",
+        currentStage: "complete",
+        durableAssetUrl: url,
+      });
+
+      const result = await store.completeWithAsset("org_1", "cj_1", "complete", outputs, url);
+
+      // The whole point of F13: a SINGLE row update carries both the completion
+      // flag and the durable asset (no second write, no crash window).
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.creativeJob.updateMany).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+        data: {
+          currentStage: "complete",
+          stageOutputs: outputs,
+          durableAssetUrl: url,
+          stageFailure: Prisma.JsonNull,
+        },
+      });
+      expect(prisma.creativeJob.findFirstOrThrow).toHaveBeenCalledWith({
+        where: { id: "cj_1", organizationId: "org_1" },
+      });
+      expect((result as { currentStage?: string }).currentStage).toBe("complete");
+      expect((result as { durableAssetUrl?: string }).durableAssetUrl).toBe(url);
+    });
+
+    it("rejects on a ugc-mode job (polished-only completion path)", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "ugc" });
+
+      await expect(
+        store.completeWithAsset("org_1", "cj_1", "complete", {}, "https://x"),
+      ).rejects.toThrow("Cannot update polished stage on a UGC-mode job");
+    });
+
+    it("throws StaleVersionError when count=0 (cross-org / missing)", async () => {
+      prisma.creativeJob.findUnique.mockResolvedValue({ id: "cj_1", mode: "polished" });
+      prisma.creativeJob.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        store.completeWithAsset("org_other", "cj_1", "complete", {}, "https://x"),
+      ).rejects.toThrow(StaleVersionError);
+    });
+  });
 });

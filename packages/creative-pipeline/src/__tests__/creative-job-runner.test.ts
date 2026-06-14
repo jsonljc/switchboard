@@ -39,12 +39,30 @@ function createMockStep() {
   };
 }
 
+// Typed mocks: the ARGUMENT signatures are what matter (an arg-less vi.fn()
+// types mock.calls as an empty tuple and trips TS2493 when tsc compiles the
+// tests at build time). The return is `unknown` (not Promise<unknown>) so a
+// synchronous or async mockImplementation both satisfy it; the runner awaits
+// the result either way.
 function createMockJobStore() {
   return {
-    findById: vi.fn(),
-    updateStage: vi.fn(),
-    stop: vi.fn(),
-    setDurableAsset: vi.fn(),
+    findById: vi.fn<(id: string) => unknown>(),
+    updateStage:
+      vi.fn<
+        (orgId: string, id: string, stage: string, outputs: Record<string, unknown>) => unknown
+      >(),
+    stop: vi.fn<(orgId: string, id: string, stoppedAt: string) => unknown>(),
+    setDurableAsset: vi.fn<(orgId: string, id: string, url: string) => unknown>(),
+    completeWithAsset:
+      vi.fn<
+        (
+          orgId: string,
+          id: string,
+          stage: string,
+          outputs: Record<string, unknown>,
+          durableAssetUrl: string,
+        ) => unknown
+      >(),
   };
 }
 
@@ -185,7 +203,7 @@ describe("executeCreativePipeline", () => {
     expect(firstCall?.[1]?.imageGenerator).toBeUndefined();
   });
 
-  it("persists durableAssetUrl after production when the output carries one", async () => {
+  it("persists durableAssetUrl atomically with completion when production carries one [F13]", async () => {
     const { runStage } = await import("../stages/run-stage.js");
     const mockRunStage = runStage as ReturnType<typeof vi.fn>;
     try {
@@ -197,12 +215,27 @@ describe("executeCreativePipeline", () => {
 
       await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
 
-      expect(jobStore.setDurableAsset).toHaveBeenCalledTimes(1);
-      expect(jobStore.setDurableAsset).toHaveBeenCalledWith(
+      // F13: the completion flip ("complete") and the durable URL land in ONE
+      // store write. A standalone setDurableAsset (the second of two writes) is
+      // never issued, so there is no window where currentStage="complete" but
+      // the durable asset is missing.
+      expect(jobStore.completeWithAsset).toHaveBeenCalledTimes(1);
+      expect(jobStore.completeWithAsset).toHaveBeenCalledWith(
         "org_1",
         "job_1",
+        "complete",
+        expect.objectContaining({
+          production: { durableAssetUrl: "https://cdn.example.com/creative-assets/job_1/u.mp4" },
+        }),
         "https://cdn.example.com/creative-assets/job_1/u.mp4",
       );
+      expect(jobStore.setDurableAsset).not.toHaveBeenCalled();
+      // The production completion is NOT also written via the plain updateStage
+      // path (that would re-introduce the two-write split).
+      const productionCompletionViaUpdateStage = jobStore.updateStage.mock.calls.some(
+        (c) => c[3] != null && "production" in (c[3] as Record<string, unknown>),
+      );
+      expect(productionCompletionViaUpdateStage).toBe(false);
     } finally {
       // Restore the shared module-level mock so later tests see the default.
       mockRunStage.mockReset();
@@ -210,9 +243,18 @@ describe("executeCreativePipeline", () => {
     }
   });
 
-  it("does not persist durableAssetUrl when production output lacks one", async () => {
+  it("flips to complete via updateStage when production output lacks a durable asset", async () => {
     await executeCreativePipeline(jobData, step as never, jobStore as never, llmConfig);
+    // No durable asset → no atomic-combined write, no standalone durable write;
+    // the completion flip still goes through the plain updateStage path.
+    expect(jobStore.completeWithAsset).not.toHaveBeenCalled();
     expect(jobStore.setDurableAsset).not.toHaveBeenCalled();
+    expect(jobStore.updateStage).toHaveBeenCalledWith(
+      "org_1",
+      "job_1",
+      "complete",
+      expect.any(Object),
+    );
   });
 
   it("threads the injected klingClient into the production stage input", async () => {
@@ -275,6 +317,7 @@ describe("createCreativeJobRunner — onFailure wiring", () => {
     updateStage: vi.fn(),
     stop: vi.fn(),
     setDurableAsset: vi.fn(),
+    completeWithAsset: vi.fn(),
   };
   const llmConf = { apiKey: "test-key" };
 
@@ -372,6 +415,7 @@ describe("slice-2 feed-back threading (taste provider + measured history)", () =
       })),
       stop: vi.fn(),
       setDurableAsset: vi.fn(),
+      completeWithAsset: vi.fn(),
     };
   }
 
@@ -534,6 +578,7 @@ describe("productionTier propagation: replay-safe re-read [D1-F2]", () => {
       ),
       stop: vi.fn(),
       setDurableAsset: vi.fn(),
+      completeWithAsset: vi.fn(),
     };
 
     await executeCreativePipeline(
@@ -601,6 +646,7 @@ describe("executeCreativePipeline: replay/terminal integrity [D5-F2]", () => {
     expect(jobStore.updateStage).not.toHaveBeenCalled();
     expect(jobStore.stop).not.toHaveBeenCalled();
     expect(jobStore.setDurableAsset).not.toHaveBeenCalled();
+    expect(jobStore.completeWithAsset).not.toHaveBeenCalled();
     expect(step.waitForEvent).not.toHaveBeenCalled();
     // Only load-job ran (no load-taste-context, no stage loop)
     expect(step.run).toHaveBeenCalledTimes(1);
