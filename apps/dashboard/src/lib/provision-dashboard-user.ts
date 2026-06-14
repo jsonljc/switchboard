@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from "crypto";
-import type { PrismaClient } from "@prisma/client";
+import type { DashboardUser, PrismaClient } from "@prisma/client";
 import { seedOrgDayOneAgents } from "@switchboard/db";
 import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
 import { encryptApiKey } from "./crypto";
@@ -15,7 +15,7 @@ interface ProvisionDashboardUserInput {
 export async function provisionDashboardUser(
   prisma: PrismaClient,
   input: ProvisionDashboardUserInput,
-) {
+): Promise<DashboardUser> {
   const orgId = `org_${randomUUID()}`;
   const principalId = `principal_${randomUUID()}`;
   const specId = `spec_${randomUUID()}`;
