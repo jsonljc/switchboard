@@ -68,6 +68,7 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
       cost: { paid: 100, alt: 8000, saving: 7900 },
       costNarrative: "vs. SDR + agency",
       managedComparison: null,
+      heldRate: { attended: 38, matured: 45, rate: 38 / 45 },
     };
     expect(sample.managedComparison).toBeNull();
   });

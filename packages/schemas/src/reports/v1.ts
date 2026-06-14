@@ -143,6 +143,13 @@ export interface ManagedComparisonData {
   emptyMessage?: string;
 }
 
+export interface HeldRateData {
+  attended: number;
+  matured: number;
+  /** null = no matured bookings in the window (render "no data", never NaN). */
+  rate: number | null;
+}
+
 export interface ReportDataV1 {
   label: ReportWindow;
   period: string;
@@ -155,6 +162,7 @@ export interface ReportDataV1 {
   cost: CostBreakdown;
   costNarrative: string;
   managedComparison: ManagedComparisonData | null;
+  heldRate: HeldRateData;
 }
 
 // ---------------------------------------------------------------------------
