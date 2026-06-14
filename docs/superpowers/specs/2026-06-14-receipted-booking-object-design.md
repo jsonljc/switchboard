@@ -108,8 +108,9 @@ Pure `scoreAttribution(evidence)` reused everywhere a booking is labelled:
   or `ConversionRecord.sourceAdId` matched, or a CTWA click id).
 - **high**: first-party source with a campaign id, no single deterministic click (`sourceType` in
   {ctwa, instant_form} with `sourceCampaignId`).
-- **medium**: channel known, no campaign/ad id.
-- **low**: coarse self-reported / organic source.
+- **medium**: a campaign id or channel is known, but not a first-party click (`sourceCampaignId`
+  without a first-party `sourceType`, or a bare `sourceChannel`).
+- **low**: only a coarse `sourceType` (e.g. organic / web / self-reported), no campaign or channel.
 - **unattributed**: no usable source evidence. Still counted; raises `missing_source`.
 
 ## Exceptions taxonomy (pure function, `core/receipts`)
