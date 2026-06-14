@@ -64,6 +64,11 @@ export class BookingFailureHandler {
   constructor(private deps: BookingFailureHandlerDeps) {}
 
   async handle(input: BookingFailureInput): Promise<BookingFailureResult> {
+    // `input.bookingId` is the booking the calendar tool just minted for `input.orgId`
+    // (calendar-book.ts passes booking.id alongside the trusted ctx.orgId), so it is same-org
+    // and caller-trusted. The org-scoped read here is defense-in-depth; a future caller that
+    // feeds an external bookingId must also org-scope the id-only escalation lookup and the
+    // tx.booking.update write below.
     const booking = await this.deps.bookingStore.findById(input.orgId, input.bookingId);
     if (booking?.status === "failed") {
       const existing = await this.deps.escalationLookup.findByBookingId(input.bookingId);
