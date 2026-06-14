@@ -160,26 +160,41 @@ describe("PrismaReceiptStore", () => {
   });
 
   describe("countReceiptedBookingsInWindow", () => {
-    it("counts only org-scoped, non-void calendar receipts (status booked|held) created in [from, to)", async () => {
+    it("counts DISTINCT bookings among org-scoped, non-void calendar receipts in [from, to)", async () => {
       const from = new Date("2026-06-08T00:00:00Z");
       const to = new Date("2026-06-15T00:00:00Z");
-      prisma.receipt.count.mockResolvedValueOnce(41);
+      // Two distinct bookings (a confirm-retry dupe for bk-1 would still be one distinct row here).
+      prisma.receipt.findMany.mockResolvedValueOnce([{ bookingId: "bk-1" }, { bookingId: "bk-2" }]);
 
       const count = await store.countReceiptedBookingsInWindow({ orgId: "org-1", from, to });
 
-      expect(prisma.receipt.count).toHaveBeenCalledWith({
+      expect(prisma.receipt.findMany).toHaveBeenCalledWith({
         where: {
           organizationId: "org-1",
           kind: "calendar",
           status: { in: ["booked", "held"] },
           createdAt: { gte: from, lt: to },
+          bookingId: { not: null },
         },
+        select: { bookingId: true },
+        distinct: ["bookingId"],
       });
-      expect(count).toBe(41);
+      expect(count).toBe(2);
+    });
+
+    it("dedupes by bookingId so a confirm-retry double-mint counts once (distinct rows = the count)", async () => {
+      // Prisma's distinct returns one row per bookingId; the store returns the row count.
+      prisma.receipt.findMany.mockResolvedValueOnce([{ bookingId: "bk-1" }]);
+      const count = await store.countReceiptedBookingsInWindow({
+        orgId: "org-1",
+        from: new Date("2026-06-08T00:00:00Z"),
+        to: new Date("2026-06-15T00:00:00Z"),
+      });
+      expect(count).toBe(1);
     });
 
     it("returns 0 when no calendar receipts fall in the window", async () => {
-      prisma.receipt.count.mockResolvedValueOnce(0);
+      prisma.receipt.findMany.mockResolvedValueOnce([]);
       const count = await store.countReceiptedBookingsInWindow({
         orgId: "org-1",
         from: new Date("2026-06-08T00:00:00Z"),

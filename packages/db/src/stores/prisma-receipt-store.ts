@@ -93,14 +93,22 @@ export class PrismaReceiptStore implements ReceiptStore {
     from: Date;
     to: Date;
   }): Promise<number> {
-    return this.prisma.receipt.count({
+    // Count DISTINCT bookings, not rows: calendar receipts carry a NULL externalRef, so the
+    // (org, kind, externalRef) partial-unique does NOT dedupe them — a confirm-failure + same-slot
+    // retry can mint a second "booked" receipt for one booking (see mint-calendar-receipt.ts). As
+    // the first receipt-counting consumer we must dedupe by bookingId or the metric over-reports.
+    const rows = await this.prisma.receipt.findMany({
       where: {
         organizationId: input.orgId,
         kind: "calendar",
         status: { in: ["booked", "held"] },
         createdAt: { gte: input.from, lt: input.to },
+        bookingId: { not: null },
       },
+      select: { bookingId: true },
+      distinct: ["bookingId"],
     });
+    return rows.length;
   }
 }
 
