@@ -152,6 +152,9 @@ describe("Routes never mutate prisma.conversationState directly", () => {
             acknowledgedAt: new Date(),
           }),
         },
+        // The reply route now resolves the escalate-tool contact via the
+        // WorkTrace lineage before delegating; null => gateway fallback path.
+        workTrace: { findFirst: vi.fn().mockResolvedValue(null) },
       },
       organizationId: "org_1",
     });
