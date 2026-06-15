@@ -1,15 +1,22 @@
 // @route-class: ingress-receiver
 import type { FastifyPluginAsync } from "fastify";
-import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
+import {
+  fetchWabaIdFromToken,
+  registerWebhookOverride,
+  exchangeEsuCodeForToken,
+} from "../lib/whatsapp-meta.js";
 import { notifyChatProvisionedChannel } from "../lib/notify-chat-provisioned-channel.js";
 import { resolveOrganizationForMutation } from "../utils/org-access.js";
 
-type OnboardBody = { esToken?: string; organizationId?: string };
+type OnboardBody = { esToken?: string; code?: string; organizationId?: string };
 
 interface OnboardingOptions {
   metaSystemUserToken: string;
   metaSystemUserId: string;
   appSecret: string;
+  /** Meta app id (client_id) for the ESU `code` -> token exchange. Optional so
+   *  the legacy `esToken` path and existing tests keep working without it. */
+  appId?: string;
   apiVersion: string;
   webhookBaseUrl: string;
   /**
@@ -85,9 +92,9 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
       return reply.code(401).send({ error: "Authentication required" });
     }
 
-    const { esToken } = request.body ?? {};
-    if (!esToken) {
-      return reply.code(400).send({ error: "esToken is required" });
+    const { esToken, code } = request.body ?? {};
+    if (!esToken && !code) {
+      return reply.code(400).send({ error: "code or esToken is required" });
     }
 
     // Org-scope the connection to the authenticated operator. In prod this is
@@ -106,13 +113,41 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
     const verifyToken = opts.appSecret;
 
     try {
+      // Resolve the token used to introspect the WABA. Prefer the ESU OAuth
+      // `code` (exchanged server-side with the app secret, NO redirect_uri); fall
+      // back to a pre-exchanged `esToken` (legacy / direct).
+      let userToken: string;
+      if (code) {
+        if (!opts.appId) {
+          return reply
+            .code(500)
+            .send({ error: "Server is missing META_APP_ID for the ESU code exchange" });
+        }
+        const exchanged = await exchangeEsuCodeForToken({
+          apiVersion,
+          appId: opts.appId,
+          appSecret: opts.appSecret,
+          code,
+          fetchImpl: helperFetch,
+        });
+        if (!exchanged.ok) {
+          return reply
+            .code(502)
+            .send({ error: "Failed to exchange code for token", detail: exchanged.reason });
+        }
+        userToken = exchanged.accessToken;
+      } else {
+        // esToken is guaranteed present here (the !esToken && !code check 400'd).
+        userToken = esToken as string;
+      }
+
       // 1. Extract WABA ID from debug_token.
       // appToken: system app token authorizes the introspection.
-      // userToken: the customer's ESU token is the subject being introspected.
+      // userToken: the ESU token (exchanged from `code`, or the direct esToken).
       const wabaResult = await fetchWabaIdFromToken({
         apiVersion,
         appToken: metaSystemUserToken,
-        userToken: esToken,
+        userToken,
         fetchImpl: helperFetch,
       });
       if (!wabaResult.ok) {

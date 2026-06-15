@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { registerWebhookOverride, fetchWabaIdFromToken } from "../whatsapp-meta.js";
+import {
+  registerWebhookOverride,
+  fetchWabaIdFromToken,
+  exchangeEsuCodeForToken,
+} from "../whatsapp-meta.js";
 
 describe("whatsapp-meta helper", () => {
   beforeEach(() => {
@@ -272,6 +276,67 @@ describe("whatsapp-meta helper", () => {
       const headers = (init as { headers?: Record<string, string> } | undefined)?.headers;
       if (headers) {
         expect(headers["Authorization"]).toBeUndefined();
+      }
+    });
+  });
+
+  describe("exchangeEsuCodeForToken", () => {
+    it("GETs oauth/access_token with client_id/secret/code and NO redirect_uri", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: "BISU_TOKEN" }),
+      });
+      const result = await exchangeEsuCodeForToken({
+        apiVersion: "v21.0",
+        appId: "app_1",
+        appSecret: "secret_1",
+        code: "auth_code_xyz",
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      });
+      expect(result).toEqual({ ok: true, accessToken: "BISU_TOKEN" });
+      const [url] = fetchSpy.mock.calls[0]!;
+      expect(String(url)).toContain("/v21.0/oauth/access_token");
+      expect(String(url)).toContain("client_id=app_1");
+      expect(String(url)).toContain("client_secret=secret_1");
+      expect(String(url)).toContain("code=auth_code_xyz");
+      // ESU JS-SDK codes are exchanged WITHOUT a redirect_uri (unlike the Ads
+      // redirect OAuth). A redirect_uri here makes Graph reject the code.
+      expect(String(url)).not.toContain("redirect_uri");
+    });
+
+    it("returns ok=false when the response carries no access_token", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ error: { message: "bad code" } }),
+      });
+      const result = await exchangeEsuCodeForToken({
+        apiVersion: "v21.0",
+        appId: "a",
+        appSecret: "s",
+        code: "bad",
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      });
+      expect(result.ok).toBe(false);
+    });
+
+    it("returns ok=false with the error message on a non-2xx exchange", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: "invalid_code" } }),
+      });
+      const result = await exchangeEsuCodeForToken({
+        apiVersion: "v21.0",
+        appId: "a",
+        appSecret: "s",
+        code: "bad",
+        fetchImpl: fetchSpy as unknown as typeof fetch,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toContain("invalid_code");
       }
     });
   });
