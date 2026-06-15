@@ -30,19 +30,22 @@ describe("MetaAdsClient", () => {
           Promise.resolve({
             data: [
               {
+                // Real `/insights` edge shape: no status/effective_status/revenue
+                // keys; money arrives in action_values (see fixture test).
                 campaign_id: "camp_1",
                 campaign_name: "Summer Sale",
-                status: "ACTIVE",
-                effective_status: "ACTIVE",
                 impressions: "50000",
                 inline_link_clicks: "1200",
                 spend: "350.50",
                 conversions: "45",
-                revenue: "2250.00",
                 frequency: "2.5",
                 cpm: "7.01",
                 inline_link_click_ctr: "2.40",
                 cost_per_inline_link_click: "0.29",
+                actions: [{ action_type: "offsite_conversion.fb_pixel_purchase", value: "45" }],
+                action_values: [
+                  { action_type: "offsite_conversion.fb_pixel_purchase", value: "2250.00" },
+                ],
                 date_start: "2024-01-01",
                 date_stop: "2024-01-31",
               },
@@ -75,12 +78,14 @@ describe("MetaAdsClient", () => {
       expect(result[0]).toEqual({
         campaignId: "camp_1",
         campaignName: "Summer Sale",
-        status: "ACTIVE",
-        effectiveStatus: "ACTIVE",
+        // No status field off the /insights edge → honest "".
+        status: "",
+        effectiveStatus: "",
         impressions: 50000,
         inlineLinkClicks: 1200,
         spend: 350.5,
         conversions: 45,
+        // revenue is derived from the purchase action_values entry, not a `revenue` field.
         revenue: 2250.0,
         frequency: 2.5,
         cpm: 7.01,
@@ -88,6 +93,8 @@ describe("MetaAdsClient", () => {
         costPerInlineLinkClick: 0.29,
         dateStart: "2024-01-01",
         dateStop: "2024-01-31",
+        actions: [{ action_type: "offsite_conversion.fb_pixel_purchase", value: "45" }],
+        actionValues: [{ action_type: "offsite_conversion.fb_pixel_purchase", value: "2250.00" }],
       });
     });
 

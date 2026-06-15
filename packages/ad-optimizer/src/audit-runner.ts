@@ -216,20 +216,25 @@ export interface AuditDependencies {
 
 // ── Helpers ──
 
+// The AdsInsights `/insights` edge does NOT return `status`/`effective_status`/
+// `revenue` (those live on the campaign-object edge); requesting them yields a Graph
+// error or silent zeros. Money is sourced from `action_values` (summed in the mapper
+// into `insight.revenue`); `status` is "" off this edge and is not consumed by the
+// audit logic. See docs/runbooks/riley-meta-insights-live-verify.md.
 const INSIGHT_FIELDS = [
   "campaign_id",
   "campaign_name",
-  "status",
   "impressions",
   "inline_link_clicks",
   "spend",
   "conversions",
-  "revenue",
   "frequency",
   "cpm",
   "inline_link_click_ctr",
   "cost_per_inline_link_click",
+  "action_values", // money source on the insights edge (NOT `revenue`)
 ];
+export { INSIGHT_FIELDS }; // pinned by the recorded-fixture test
 
 function safeDivide(a: number, b: number): number {
   return b === 0 ? 0 : a / b;

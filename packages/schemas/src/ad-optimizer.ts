@@ -111,6 +111,10 @@ export const CampaignInsightSchema = z.object({
   // value (under a pinned attribution window) becomes the conversions denominator;
   // otherwise the aggregate `conversions` field is used (back-compat).
   actions: z.array(z.object({ action_type: z.string(), value: z.string() })).optional(),
+  // Optional per-action monetary value from Meta's `action_values` field. This is
+  // the money source on the AdsInsights `/insights` edge (the edge does NOT return
+  // a `revenue` field); the mapper sums the purchase entries into `revenue`.
+  actionValues: z.array(z.object({ action_type: z.string(), value: z.string() })).optional(),
 });
 export type CampaignInsightSchema = z.infer<typeof CampaignInsightSchema>;
 

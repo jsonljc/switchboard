@@ -141,17 +141,20 @@ describe("MetaCampaignInsightsProvider", () => {
   describe("getCampaignLearningData", () => {
     it("delegates to adsClient", async () => {
       const adsClient = makeAdsClient();
+      // The /insights edge does NOT return effective_status (we no longer request
+      // it), so the mapped row carries effectiveStatus === "" and the provider must
+      // fall back to "UNKNOWN". optimizationEvents still reads from `conversions`.
       (adsClient.getCampaignInsights as ReturnType<typeof vi.fn>).mockResolvedValue([
         {
           campaignId: "c1",
           campaignName: "Test",
-          status: "ACTIVE",
-          effectiveStatus: "ACTIVE",
+          status: "",
+          effectiveStatus: "",
           impressions: 10000,
           clicks: 200,
           spend: 1000,
           conversions: 50,
-          revenue: 5000,
+          revenue: 0,
           frequency: 2,
           cpm: 100,
           ctr: 2,
@@ -168,7 +171,7 @@ describe("MetaCampaignInsightsProvider", () => {
         campaignId: "c1",
       });
 
-      expect(result.effectiveStatus).toBe("ACTIVE");
+      expect(result.effectiveStatus).toBe("UNKNOWN");
       expect(result.optimizationEvents).toBe(50);
     });
   });
