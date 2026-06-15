@@ -181,6 +181,22 @@ export interface ReceiptedBookingQualityData {
   bookingsNeedingAttention: number;
 }
 
+/** Weekly receipted-booking REVENUE: the sum of per-booking expected value over the cohort, in CENTS.
+ *  Uses the stable snapshot (expectedValueAtIssue) when a persisted issuance row exists; falls back to
+ *  the live Opportunity value for pre-hook bookings so historical bookings are not silently zero.
+ *  NaN-safe: only finite, nonnegative terms sum, so revenueCents never renders NaN. Advances the
+ *  north star from count to proven booked revenue. */
+export interface ReceiptedBookingRevenueData {
+  /** Sum of expected value over the cohort, CENTS. Only finite, nonnegative terms sum (never NaN). */
+  revenueCents: number;
+  /** ISO-4217 currency of the snapshotted values (org default); null when none carried a currency. */
+  currency: string | null;
+  /** Cohort members that contributed a finite value (others had no opportunity / null snapshot). */
+  bookingsWithValue: number;
+  /** Total receipted-booking cohort this window (matches receiptedBookings.count, modulo orphans). */
+  cohortSize: number;
+}
+
 export interface ReportDataV1 {
   label: ReportWindow;
   period: string;
