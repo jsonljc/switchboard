@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { AttributionConfidence, ReceiptedBookingWorklistItem } from "@switchboard/schemas";
 import { createIdempotencyKey } from "@/lib/idempotency";
+import { useScopedQueryKeys } from "@/hooks/use-query-keys";
 import styles from "./results.module.css";
 
 /** The five attribution-confidence rungs, strongest to weakest. */
@@ -18,6 +20,8 @@ type FormState = "idle" | "override" | "flag" | "pending" | "error";
 
 interface Props {
   row: ReceiptedBookingWorklistItem;
+  /** Called after any successful reconcile action so the parent can refresh. */
+  onReconciled?: () => void;
 }
 
 /**
@@ -27,7 +31,10 @@ interface Props {
  *   - "Dismiss" (resolve_exception, code duplicate_contact_risk): gated on issuedAt != null.
  * missing_consent rows surface a link to the consent flow, not a resolve button (PDPA).
  */
-export function ReconcileRowAction({ row }: Props) {
+export function ReconcileRowAction({ row, onReconciled }: Props) {
+  const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
+
   const [formState, setFormState] = useState<FormState>("idle");
   const [confidence, setConfidence] = useState<AttributionConfidence>(row.attributionConfidence);
   const [reason, setReason] = useState("");
@@ -37,6 +44,13 @@ export function ReconcileRowAction({ row }: Props) {
   const hasMissingConsent = row.openExceptionCodes.includes("missing_consent");
   const hasDuplicateRisk = row.openExceptionCodes.includes("duplicate_contact_risk");
   const hasIssuedRow = row.issuedAt != null;
+
+  function handleReconcileSuccess(): void {
+    if (keys) {
+      void queryClient.invalidateQueries({ queryKey: keys.reports.all() });
+    }
+    onReconciled?.();
+  }
 
   async function postReconcile(body: Record<string, unknown>): Promise<void> {
     const res = await fetch(`/api/dashboard/bookings/${row.bookingId}/reconcile`, {
@@ -61,6 +75,7 @@ export function ReconcileRowAction({ row }: Props) {
       await postReconcile({ action: "override_attribution", confidence, reason: reason.trim() });
       setFormState("idle");
       setReason("");
+      handleReconcileSuccess();
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
       setFormState("error");
@@ -75,6 +90,7 @@ export function ReconcileRowAction({ row }: Props) {
       await postReconcile({ action: "flag_duplicate", detail: flagDetail.trim() });
       setFormState("idle");
       setFlagDetail("");
+      handleReconcileSuccess();
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
       setFormState("error");
@@ -87,6 +103,7 @@ export function ReconcileRowAction({ row }: Props) {
     try {
       await postReconcile({ action: "resolve_exception", code: "duplicate_contact_risk" });
       setFormState("idle");
+      handleReconcileSuccess();
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
       setFormState("error");
@@ -207,9 +224,9 @@ export function ReconcileRowAction({ row }: Props) {
           )}
 
           {hasMissingConsent && (
-            <a href="/consent" className={styles.reconcileConsentLink}>
-              {"Record consent"}
-            </a>
+            <span className={styles.reconcileConsentNote}>
+              {"Record consent on the contact's profile."}
+            </span>
           )}
         </div>
       )}

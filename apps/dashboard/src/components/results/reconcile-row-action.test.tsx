@@ -7,10 +7,27 @@ vi.mock("@/lib/idempotency", () => ({
   createIdempotencyKey: vi.fn(() => "test-idem-key"),
 }));
 
+const invalidateQueriesMock = vi.fn<[{ queryKey: unknown }], Promise<void>>(() =>
+  Promise.resolve(),
+);
+
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: invalidateQueriesMock }),
+}));
+
+vi.mock("@/hooks/use-query-keys", () => ({
+  useScopedQueryKeys: () => ({
+    reports: {
+      all: () => ["test-org", "reports"],
+    },
+  }),
+}));
+
 const fetchMock = vi.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
+  invalidateQueriesMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -59,8 +76,9 @@ describe("ReconcileRowAction", () => {
 
   it("submits override_attribution with the selected confidence and reason", async () => {
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    const onReconciled = vi.fn<[], void>();
 
-    render(<ReconcileRowAction row={makeRow()} />);
+    render(<ReconcileRowAction row={makeRow()} onReconciled={onReconciled} />);
 
     // Open the override form
     fireEvent.click(screen.getByRole("button", { name: /fix attribution/i }));
@@ -83,9 +101,15 @@ describe("ReconcileRowAction", () => {
     expect(body.action).toBe("override_attribution");
     expect(body.reason).toBe("owner knows the source");
     expect(body).not.toHaveProperty("bookingId");
+
+    // Callback and cache invalidation must fire on success
+    await waitFor(() => expect(onReconciled).toHaveBeenCalledTimes(1));
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: ["test-org", "reports"],
+    });
   });
 
-  it("does not show a resolve button for missing_consent (PDPA: link only)", () => {
+  it("does not show a resolve button for missing_consent (PDPA: inline note only)", () => {
     render(
       <ReconcileRowAction
         row={makeRow({
@@ -94,8 +118,9 @@ describe("ReconcileRowAction", () => {
         })}
       />,
     );
-    // The consent code must surface a link, not a "resolve" button
+    // The consent code must surface a note, not a "resolve" button and not a link
     expect(screen.queryByRole("button", { name: /resolve/i })).toBeNull();
-    expect(screen.getByRole("link", { name: /consent/i })).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText(/record consent on the contact/i)).toBeTruthy();
   });
 });
