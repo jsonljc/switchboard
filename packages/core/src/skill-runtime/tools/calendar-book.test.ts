@@ -52,6 +52,13 @@ function makeRunTransaction() {
       receipt: {
         create: vi.fn().mockResolvedValue({ id: "rcpt_1" }),
       },
+      receiptedBooking: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: "rb_1" }),
+      },
+      contact: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
     }),
   );
 }
@@ -366,6 +373,11 @@ describe("createCalendarBookToolFactory", () => {
         outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
         opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
         receipt: { create: receiptCreateSpy },
+        receiptedBooking: {
+          findFirst: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockResolvedValue({ id: "rb_1" }),
+        },
+        contact: { findFirst: vi.fn().mockResolvedValue(null) },
       };
       capturedTx = tx;
       return fn(tx);
@@ -404,6 +416,109 @@ describe("createCalendarBookToolFactory", () => {
     expect(arg.data.tier).toBe("T1_FETCH_BACK");
   });
 
+  describe("booking.create receipted-booking issuance", () => {
+    function buildToolWithIssuanceCapture(opts: {
+      existingRow?: { id: string } | null;
+      evidenceContact?: Record<string, unknown> | null;
+    }) {
+      const rbCreate = vi.fn().mockResolvedValue({ id: "rb_1" });
+      const rbFindFirst = vi.fn().mockResolvedValue(opts.existingRow ?? null);
+      const contactFindFirst = vi.fn().mockResolvedValue(opts.evidenceContact ?? null);
+      const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          booking: {
+            update: vi
+              .fn()
+              .mockResolvedValue({ id: "bk_1", status: "confirmed", calendarEventId: "gcal_1" }),
+          },
+          outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
+          opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+          receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
+          receiptedBooking: { findFirst: rbFindFirst, create: rbCreate },
+          contact: { findFirst: contactFindFirst },
+        }),
+      );
+      const t = createCalendarBookToolFactory({
+        calendarProviderFactory: calendarProviderFactory as never,
+        isCalendarProviderConfigured: isCalendarProviderConfigured as never,
+        bookingStore: bookingStore as never,
+        opportunityStore: opportunityStore as never,
+        runTransaction: runTx as never,
+        failureHandler: failureHandler as never,
+        contactStore: contactStore as never,
+        defaultCurrency: "SGD",
+        receiptTierForProvider: () => "T1_FETCH_BACK",
+        isProduction: false,
+      })({ ...TRUSTED_CTX, contactId: "ct_1" });
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue({
+        id: "opp_1",
+        estimatedValue: 45000,
+      });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+      return { t, rbCreate, rbFindFirst, contactFindFirst };
+    }
+
+    const validInput = {
+      service: "botox",
+      slotStart: "2026-07-01T10:00:00Z",
+      slotEnd: "2026-07-01T11:00:00Z",
+      calendarId: "cal-1",
+    };
+
+    it("issues a ReceiptedBooking row in the tx: org-scoped, scored, snapshotted", async () => {
+      const { t, rbCreate, rbFindFirst, contactFindFirst } = buildToolWithIssuanceCapture({
+        evidenceContact: {
+          leadgenId: "lead_1", // hard lead id => deterministic
+          sourceType: "ctwa",
+          firstTouchChannel: "instagram",
+          consentGrantedAt: null, // => raises missing_consent even at deterministic attribution
+          consentRevokedAt: null,
+        },
+      });
+
+      const result = await t.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("success");
+      // Idempotency check + evidence read are both org-scoped (F12) before any create.
+      expect(rbFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { organizationId: "org_trusted", bookingId: "bk_1" } }),
+      );
+      expect(contactFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { organizationId: "org_trusted", id: "ct_1" } }),
+      );
+      expect(rbCreate).toHaveBeenCalledTimes(1);
+      const data = rbCreate.mock.calls[0]![0] as {
+        data: {
+          organizationId: string;
+          bookingId: string;
+          attributionConfidence: string;
+          expectedValueAtIssue: number | null;
+          currency: string | null;
+          exceptions: Array<{ code: string; raisedAt: unknown }>;
+        };
+      };
+      expect(data.data).toMatchObject({
+        organizationId: "org_trusted",
+        bookingId: "bk_1",
+        attributionConfidence: "deterministic",
+        expectedValueAtIssue: 45000,
+        currency: "SGD",
+      });
+      expect(data.data.exceptions.map((e) => e.code)).toEqual(["missing_consent"]);
+      // INFALLIBILITY LOCK (same-tx safety): the exceptions Json payload carries no Date objects, so
+      // the in-tx create cannot raise a Prisma Json-validation error and roll back the booking.
+      expect(data.data.exceptions.every((e) => typeof e.raisedAt === "string")).toBe(true);
+    });
+
+    it("does not re-issue when a ReceiptedBooking row already exists (idempotent)", async () => {
+      const { t, rbCreate } = buildToolWithIssuanceCapture({ existingRow: { id: "rb_existing" } });
+      const result = await t.operations["booking.create"]!.execute(validInput);
+      expect(result.status).toBe("success");
+      expect(rbCreate).not.toHaveBeenCalled();
+    });
+  });
+
   describe("booking.create opportunity stage advance", () => {
     // Build a tool whose runTransaction exposes the opportunity.updateMany spy
     // (asserts the monotonic stage-advance args / no-op) plus booking-counter
@@ -416,6 +531,11 @@ describe("createCalendarBookToolFactory", () => {
           outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
           opportunity: { updateMany: updateManySpy },
           receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
+          receiptedBooking: {
+            findFirst: vi.fn().mockResolvedValue(null),
+            create: vi.fn().mockResolvedValue({ id: "rb_1" }),
+          },
+          contact: { findFirst: vi.fn().mockResolvedValue(null) },
         }),
       );
       bookingStore.create.mockResolvedValue({ id: "bk_1" });
@@ -667,6 +787,11 @@ describe("createCalendarBookToolFactory", () => {
           },
           opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
           receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
+          receiptedBooking: {
+            findFirst: vi.fn().mockResolvedValue(null),
+            create: vi.fn().mockResolvedValue({ id: "rb_1" }),
+          },
+          contact: { findFirst: vi.fn().mockResolvedValue(null) },
         }),
       );
       bookingStore.create.mockResolvedValue({ id: "bk_1" });

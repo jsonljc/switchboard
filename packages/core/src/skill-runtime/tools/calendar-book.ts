@@ -14,6 +14,7 @@ import type { BookingFailureHandler } from "./booking-failure-handler.js";
 import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
 import { buildRescheduleOperations } from "./calendar-reschedule.js";
 import { buildCalendarReceiptData } from "../../receipts/mint-calendar-receipt.js";
+import { buildReceiptedBookingData } from "../../receipts/build-receipted-booking-data.js";
 import type { ReceiptTier } from "@switchboard/schemas";
 
 interface BookingStoreSubset {
@@ -83,6 +84,25 @@ type TransactionFn = (
       }): Promise<{ count: number }>;
     };
     receipt: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
+    receiptedBooking: {
+      findFirst(args: {
+        where: Record<string, unknown>;
+        select?: Record<string, boolean>;
+      }): Promise<{ id: string } | null>;
+      create(args: { data: Record<string, unknown> }): Promise<unknown>;
+    };
+    contact: {
+      findFirst(args: {
+        where: Record<string, unknown>;
+        select?: Record<string, boolean>;
+      }): Promise<{
+        leadgenId?: string | null;
+        sourceType?: string | null;
+        firstTouchChannel?: string | null;
+        consentGrantedAt?: Date | null;
+        consentRevokedAt?: Date | null;
+      } | null>;
+    };
   }) => Promise<unknown>,
 ) => Promise<unknown>;
 
@@ -450,6 +470,66 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                   data: { stage: "booked" },
                 });
                 stageAdvanced = adv.count > 0;
+              }
+
+              // Issue the derived ReceiptedBooking read-model row in the SAME durable tx as the
+              // booking confirm + receipt mint (spec + non-negotiable: same-tx, governed, never a
+              // post-submit write). Idempotent by bookingId: findFirst-then-create, with a P2002
+              // swallow for the (practically unreachable) concurrent-retry race.
+              //
+              // DOCTRINE NOTE (the key reviewer decision): ReceiptedBooking is a derived read-model,
+              // not canonical (Doctrine #3) and must not be able to fail the canonical booking. Under
+              // Postgres a thrown statement aborts the whole tx, so a swallow-and-continue cannot
+              // isolate this write; the honest mitigation that keeps it same-tx is to make the write
+              // INFALLIBLE BY CONSTRUCTION, giving it the same accepted risk profile as the receipt
+              // mint already above: exceptions are JSON-native (no Date), every required column is
+              // set, and the unique(bookingId) collision is unreachable (booking.id is freshly minted
+              // and findFirst-guarded). If the row ever fails to mint it is recomputable (the lazy
+              // getView path and the revenue live-value fallback both work without it).
+              //
+              // ATTRIBUTION SOURCE: evidence is the booking-time AttributionChain (via `conversion`),
+              // the richest signal at confirm time; the lazy read path scores from the ConversionRecord
+              // (written downstream, absent here). The snapshot is therefore the issuance-time judgment
+              // by design. No consumer in this slice reads the persisted attributionConfidence (the
+              // #1074 quality tile stays lazy), so there is no drift.
+              const existingReceiptedBooking = await tx.receiptedBooking.findFirst({
+                where: { organizationId: orgId, bookingId: booking.id },
+                select: { id: true },
+              });
+              if (!existingReceiptedBooking) {
+                const evidenceContact = await tx.contact.findFirst({
+                  where: { organizationId: orgId, id: contactId },
+                  select: {
+                    leadgenId: true,
+                    sourceType: true,
+                    firstTouchChannel: true,
+                    consentGrantedAt: true,
+                    consentRevokedAt: true,
+                  },
+                });
+                const receiptedBookingData = buildReceiptedBookingData({
+                  organizationId: orgId,
+                  bookingId: booking.id,
+                  evidence: {
+                    leadgenId: evidenceContact?.leadgenId ?? null,
+                    sourceAdId: conversion.sourceAdId,
+                    sourceCampaignId: conversion.sourceCampaignId,
+                    sourceType: evidenceContact?.sourceType ?? null,
+                    sourceChannel: evidenceContact?.firstTouchChannel ?? null,
+                  },
+                  consentGrantedAt: evidenceContact?.consentGrantedAt ?? null,
+                  consentRevokedAt: evidenceContact?.consentRevokedAt ?? null,
+                  estimatedValueCents: estimatedValue,
+                  currency: deps.defaultCurrency,
+                  now: new Date(),
+                });
+                try {
+                  await tx.receiptedBooking.create({
+                    data: receiptedBookingData as unknown as Record<string, unknown>,
+                  });
+                } catch (issuanceErr) {
+                  if (!isPrismaUniqueConstraintError(issuanceErr)) throw issuanceErr;
+                }
               }
             });
           } catch (error) {
