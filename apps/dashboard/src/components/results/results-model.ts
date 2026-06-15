@@ -11,6 +11,7 @@ import type {
   HeldRateData,
   ConsentCompletenessData,
   ReceiptedBookingsData,
+  ReceiptedBookingQualityData,
   ManagedComparisonData,
 } from "./types";
 
@@ -33,6 +34,7 @@ export interface ResultsModel {
   heldRate: HeldRateData; // attended / matured, rate null when no matured bookings
   consentCompleteness: ConsentCompletenessData; // validConsent / bookable, point-in-time snapshot
   receiptedBookings: ReceiptedBookingsData; // count of non-void calendar receipts in the window
+  receiptedBookingQuality: ReceiptedBookingQualityData; // confidence breakdown + exceptions worklist
   managedComparison: ManagedComparisonData | null;
 }
 
@@ -71,6 +73,17 @@ export function buildResultsModel(data: ReportData): ResultsModel {
     heldRate: data.heldRate ?? { attended: 0, matured: 0, rate: null },
     consentCompleteness: data.consentCompleteness ?? { validConsent: 0, bookable: 0, rate: null },
     receiptedBookings: data.receiptedBookings ?? { count: 0 },
+    receiptedBookingQuality: data.receiptedBookingQuality ?? {
+      cohortSize: 0,
+      confidence: { deterministic: 0, high: 0, medium: 0, low: 0, unattributed: 0 },
+      exceptions: {
+        missing_source: 0,
+        missing_consent: 0,
+        manual_override: 0,
+        duplicate_contact_risk: 0,
+      },
+      bookingsNeedingAttention: 0,
+    },
     managedComparison: data.managedComparison,
   };
 }
