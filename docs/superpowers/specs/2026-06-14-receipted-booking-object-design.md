@@ -163,6 +163,10 @@ window)` read + a `receiptedBookings` field on `ReportDataV1` + an owner-report 
 
 DEFERRED until a real consumer (the Ledger agent / weekly UI / an override workflow) exists:
 
+> STATUS (2026-06-15, after #1080): the issuance hook below SHIPPED in #1080; the re-evaluation
+> triggers item is RESOLVED as not-needed for the recomputable signals. See "Re-evaluation triggers:
+> resolution (2026-06-15)" at the end of this section.
+
 - **Issuance hook**: issue/refresh a `ReceiptedBooking` row. When built, it MUST be wired inside the
   governed `calendar-book` tool seam (`packages/core/src/skill-runtime/tools/calendar-book.ts`, the
   only non-test caller of `bookingStore.create`, reached only through PlatformIngress), in the SAME
@@ -176,6 +180,49 @@ DEFERRED until a real consumer (the Ledger agent / weekly UI / an override workf
   is a single mutable value (audit via `attributionUpdatedAt` + WorkTrace); confidence MAY drop on
   re-eval (e.g. after a contact merge). A manual override MUST route through a WorkTrace-writing
   governed path, with the override columns as the resulting snapshot.
+
+## Re-evaluation triggers: resolution (2026-06-15)
+
+After #1080 shipped the issuance hook, the re-evaluation-triggers item was re-examined against what
+actually shipped. Conclusion: it is NOT needed for the recomputable signals (attendance, consent,
+source evidence), because the owner tiles never consume a frozen copy of the derived fields.
+
+- `PrismaReceiptedBookingStore.getView` reads only the SNAPSHOT + override-provenance columns from the
+  persisted row (`issuedAt`, `expectedValueAtIssue`, `currency`, `overriddenBy`, `overrideReason`,
+  `overriddenAt`). It recomputes `attributionConfidence` and `exceptions` LAZILY on every read, via the
+  pure `scoreAttribution` / `evaluateExceptions` functions, from live Contact + ConversionRecord +
+  consent facts.
+- Both owner rollups (`computeReceiptedBookingQuality`, `computeReceiptedBookingRevenue`) consume that
+  lazy `listForCohort` projection. Quality reads the always-fresh derived fields; revenue reads the
+  frozen `expectedValueAtIssue` snapshot (snapshot-if-present-else-live).
+
+Three consequences close the recomputable-signal triggers:
+
+1. **Attendance is not an input** to `scoreAttribution` or `evaluateExceptions`, and `getView` already
+   surfaces `attendanceState` as a live join. An attendance trigger would re-score nothing.
+2. **Consent and source evidence are recomputed live** on every read, so a consent or attribution
+   trigger is redundant with the lazy path.
+3. **Re-scoring the persisted derived columns would corrupt their meaning.** The persisted
+   `attributionConfidence` (with `attributionUpdatedAt`) is the ISSUANCE-TIME judgment, an audit
+   anchor, deliberately write-only on the read path. Mutating it in place would conflate "what we
+   judged at issuance" with "what we judge now," for no consumer benefit, since the live value is
+   already available lazily via `getView`.
+
+What remains genuinely missing is the two NON-recomputable signals, which the lazy path cannot derive
+and `getView` currently hardcodes off (`overriddenBy: null`, `duplicateContactRisk: false`):
+
+- `manual_override`: a human overriding attribution or status. No source fact to recompute from.
+- `duplicate_contact_risk`: an identity-ambiguity match between contacts.
+
+Each needs a NEW governed producer (a manual-override action through `PlatformIngress` writing a
+`WorkTrace`; an identity matcher) PLUS the matching `getView` consumer fix (translate the persisted
+override or identity signal into the returned `exceptions` and attribution). That is a new operator
+product surface that touches the governance and ingress seam, not a derived-read-model tweak, so it is
+scheduled as its own slice when the capability is wanted. When built, the `exceptions` merge stays
+append-only (key open entries by `code`; stamp `resolvedAt` on newly-absent codes; add a new `raisedAt`
+for newly-present codes; leave existing open entries untouched), and the override routes through the
+WorkTrace-writing governed path with the override columns as the resulting snapshot. Payment re-eval
+stays out of scope (comped pilot, Stripe off).
 
 ## Out of scope
 
