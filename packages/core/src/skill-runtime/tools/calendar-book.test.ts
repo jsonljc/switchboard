@@ -9,7 +9,7 @@ import { setMetrics, createInMemoryMetrics } from "../../telemetry/metrics.js";
 import { createCalendarBookToolFactory } from "./calendar-book.js";
 import { getToolGovernanceDecision } from "../governance.js";
 import type { BookingConsentState, ConsentPrecondition } from "./calendar-book-consent.js";
-import type { GovernanceMode } from "@switchboard/schemas";
+import type { GovernanceMode, PlaybookService } from "@switchboard/schemas";
 import type { SkillRequestContext } from "../types.js";
 
 function makeCalendarProvider() {
@@ -600,6 +600,148 @@ describe("createCalendarBookToolFactory", () => {
       expect(result.status).toBe("success");
       expect(confirmedSpy).toHaveBeenCalledWith({ orgId: "org_trusted" });
       expect(advancedSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("booking.create booked-value (D3-1)", () => {
+    const PRICED_SERVICES: PlaybookService[] = [
+      {
+        id: "botox",
+        name: "Botox",
+        price: 300, // dollars -> 30000 cents
+        bookingBehavior: "ask_first",
+        status: "ready",
+        source: "manual",
+      },
+    ];
+
+    function buildToolWithValueCapture(opts: {
+      getServicesForOrg?: (orgId: string) => Promise<readonly PlaybookService[] | undefined>;
+      existingOpp?: { id: string; estimatedValue?: number | null } | null;
+    }) {
+      const outboxCreate = vi.fn().mockResolvedValue({ id: "ob_1" });
+      const updateManySpy = vi.fn().mockResolvedValue({ count: 1 });
+      const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+        cb({
+          booking: { update: vi.fn().mockResolvedValue({}) },
+          outboxEvent: { create: outboxCreate },
+          opportunity: { updateMany: updateManySpy },
+          receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
+          receiptedBooking: {
+            findFirst: vi.fn().mockResolvedValue(null),
+            create: vi.fn().mockResolvedValue({ id: "rb_1" }),
+          },
+          contact: { findFirst: vi.fn().mockResolvedValue(null) },
+        }),
+      );
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue(
+        opts.existingOpp === undefined ? { id: "opp_1" } : opts.existingOpp,
+      );
+      opportunityStore.create.mockResolvedValue({ id: "opp_new" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_1" });
+      const t = createCalendarBookToolFactory({
+        calendarProviderFactory: calendarProviderFactory as never,
+        isCalendarProviderConfigured: isCalendarProviderConfigured as never,
+        bookingStore: bookingStore as never,
+        opportunityStore: opportunityStore as never,
+        runTransaction: runTx as never,
+        failureHandler: failureHandler as never,
+        contactStore: contactStore as never,
+        defaultCurrency: "SGD",
+        receiptTierForProvider: () => "T1_FETCH_BACK",
+        isProduction: false,
+        getServicesForOrg: opts.getServicesForOrg,
+      })({ ...TRUSTED_CTX, contactId: "ct_1" });
+      return { t, outboxCreate, updateManySpy };
+    }
+
+    const input = {
+      service: "Botox", // free-text from Alex; matches PRICED_SERVICES by display name
+      slotStart: "2026-07-01T10:00:00Z",
+      slotEnd: "2026-07-01T11:00:00Z",
+      calendarId: "cal-1",
+    };
+
+    const STAGE_GUARD = { notIn: ["booked", "showed", "won", "lost"] };
+
+    it("existing opp: prefers the booked-service playbook value over the stored estimate", async () => {
+      const { t, outboxCreate, updateManySpy } = buildToolWithValueCapture({
+        getServicesForOrg: async () => PRICED_SERVICES,
+        existingOpp: { id: "opp_1", estimatedValue: 45000 },
+      });
+      const result = await t.operations["booking.create"]!.execute(input);
+      expect(result.status).toBe("success");
+      const ob = outboxCreate.mock.calls[0]![0] as { data: { payload: { value: number } } };
+      expect(ob.data.payload.value).toBe(30000);
+      expect(updateManySpy).toHaveBeenCalledWith({
+        where: { id: "opp_1", organizationId: "org_trusted", stage: STAGE_GUARD },
+        data: { stage: "booked", estimatedValue: 30000 },
+      });
+    });
+
+    it("new opp: stamps the resolved playbook value on the booked transition + conversion", async () => {
+      const { t, outboxCreate, updateManySpy } = buildToolWithValueCapture({
+        getServicesForOrg: async () => PRICED_SERVICES,
+        existingOpp: null, // no active opp -> create
+      });
+      const result = await t.operations["booking.create"]!.execute(input);
+      expect(result.status).toBe("success");
+      const ob = outboxCreate.mock.calls[0]![0] as { data: { payload: { value: number } } };
+      expect(ob.data.payload.value).toBe(30000);
+      expect(updateManySpy).toHaveBeenCalledWith({
+        where: { id: "opp_new", organizationId: "org_trusted", stage: STAGE_GUARD },
+        data: { stage: "booked", estimatedValue: 30000 },
+      });
+    });
+
+    it("unpriced/no-match abstains: falls back to the stored estimate and never wipes it", async () => {
+      const { t, outboxCreate, updateManySpy } = buildToolWithValueCapture({
+        getServicesForOrg: async () => PRICED_SERVICES, // only "Botox"
+        existingOpp: { id: "opp_1", estimatedValue: 45000 },
+      });
+      const result = await t.operations["booking.create"]!.execute({
+        ...input,
+        service: "Dermaplaning", // not in the playbook -> resolver abstains
+      });
+      expect(result.status).toBe("success");
+      const ob = outboxCreate.mock.calls[0]![0] as { data: { payload: { value: number } } };
+      expect(ob.data.payload.value).toBe(45000); // local value falls back to the stored estimate
+      // Row stamp omits estimatedValue entirely (no wipe, no fabricated 0).
+      expect(updateManySpy).toHaveBeenCalledWith({
+        where: { id: "opp_1", organizationId: "org_trusted", stage: STAGE_GUARD },
+        data: { stage: "booked" },
+      });
+    });
+
+    it("no getServicesForOrg dep: unchanged behavior (conversion value 0)", async () => {
+      const { t, outboxCreate, updateManySpy } = buildToolWithValueCapture({
+        existingOpp: { id: "opp_1" }, // no stored estimate, no playbook dep
+      });
+      const result = await t.operations["booking.create"]!.execute(input);
+      expect(result.status).toBe("success");
+      const ob = outboxCreate.mock.calls[0]![0] as { data: { payload: { value: number } } };
+      expect(ob.data.payload.value).toBe(0);
+      expect(updateManySpy).toHaveBeenCalledWith({
+        where: { id: "opp_1", organizationId: "org_trusted", stage: STAGE_GUARD },
+        data: { stage: "booked" },
+      });
+    });
+
+    it("a playbook-read failure never blocks the booking; the value abstains", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { t, outboxCreate } = buildToolWithValueCapture({
+        getServicesForOrg: async () => {
+          throw new Error("db down");
+        },
+        existingOpp: { id: "opp_1" },
+      });
+      const result = await t.operations["booking.create"]!.execute(input);
+      expect(result.status).toBe("success");
+      const ob = outboxCreate.mock.calls[0]![0] as { data: { payload: { value: number } } };
+      expect(ob.data.payload.value).toBe(0);
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
     });
   });
 

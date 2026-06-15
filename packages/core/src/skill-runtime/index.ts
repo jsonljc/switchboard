@@ -39,6 +39,7 @@ export {
   createDelegateToolFactory,
   createScheduleFollowUpToolFactory,
   buildRescheduleOperations,
+  resolveBookedValueCents,
 } from "./tools/index.js";
 export type {
   EscalateToolFactory,
@@ -50,6 +51,7 @@ export type {
   CalendarProviderFactory,
   ScheduleFollowUpToolFactory,
   CalendarRescheduleDeps,
+  ResolveBookedValueInput,
 } from "./tools/index.js";
 export type {
   ChildWorkSubmitter,

@@ -71,6 +71,7 @@ export { PrismaContactReader } from "./stores/prisma-contact-reader.js";
 export type { ContactReader, ContactReaderRecord } from "./stores/prisma-contact-reader.js";
 export { PrismaOperatorChannelBindingStore } from "./stores/prisma-operator-channel-binding-store.js";
 export { PrismaOpportunityStore } from "./stores/prisma-opportunity-store.js";
+export { PrismaPlaybookReader } from "./stores/prisma-playbook-reader.js";
 export { PrismaRevenueStore } from "./stores/prisma-revenue-store.js";
 export { PrismaReceiptStore } from "./stores/prisma-receipt-store.js";
 export { PrismaReceiptedBookingStore } from "./stores/prisma-receipted-booking-store.js";

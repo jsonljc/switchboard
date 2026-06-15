@@ -7,11 +7,12 @@ import {
   STAGES_AT_OR_BEYOND_BOOKED,
   isBookingSlotConflictError,
 } from "@switchboard/schemas";
-import type { CalendarProvider, AttributionChain } from "@switchboard/schemas";
+import type { CalendarProvider, AttributionChain, PlaybookService } from "@switchboard/schemas";
 import { enforceConsentPrecondition } from "./calendar-book-consent.js";
 import type { ConsentPrecondition } from "./calendar-book-consent.js";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
 import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
+import { resolveBookedValueForBooking } from "./booking-value.js";
 import { buildRescheduleOperations } from "./calendar-reschedule.js";
 import { buildCalendarReceiptData } from "../../receipts/mint-calendar-receipt.js";
 import {
@@ -154,6 +155,15 @@ interface CalendarBookToolDeps {
    * "enforce". Default mode "off" makes the gate fully inert.
    */
   consentPrecondition?: ConsentPrecondition;
+  /**
+   * D3-1: OPTIONAL per-org playbook services lookup. When provided, a booked
+   * service is valued from the playbook's numeric price (major units -> cents) and
+   * stamped onto Opportunity.estimatedValue + the booked-conversion value. When
+   * omitted (tests / orgs without a playbook), booking behaves exactly as before:
+   * the booked value abstains to null and the conversion records 0. Returns
+   * undefined when the org has no playbook.
+   */
+  getServicesForOrg?: (orgId: string) => Promise<readonly PlaybookService[] | undefined>;
 }
 
 const NOT_CONFIGURED_REMEDIATION =
@@ -296,13 +306,26 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           if ("failure" in resolved) return resolved.failure;
           const provider = resolved.provider;
 
+          // D3-1: value the booked service from the org playbook (cents), abstaining to
+          // null when there is no playbook / no exact id-or-name match / unpriced / the
+          // read fails. Resolved BEFORE the opp branch so the freshly-booked service's
+          // price is preferred over a stale placeholder estimate (Alex's general-inquiry
+          // opp is typically unpriced).
+          const bookedValueCents = await resolveBookedValueForBooking(
+            deps.getServicesForOrg,
+            input.service,
+            orgId,
+          );
+
           // Resolve or create opportunity
           let opportunityId: string | null = null;
           let estimatedValue: number | null = null;
           const existing = await deps.opportunityStore.findActiveByContact(orgId, contactId);
           if (existing) {
             opportunityId = existing.id;
-            estimatedValue = existing.estimatedValue ?? null;
+            // Prefer the freshly-resolved booked-service value; fall back to the opp's
+            // stored estimate only when the booked service is unpriced (abstained).
+            estimatedValue = bookedValueCents ?? existing.estimatedValue ?? null;
           } else {
             const created = await deps.opportunityStore.create({
               organizationId: orgId,
@@ -310,6 +333,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               service: input.service,
             });
             opportunityId = created.id;
+            estimatedValue = bookedValueCents;
           }
 
           // 1. Persist booking as pending (with duplicate guard)
@@ -461,7 +485,13 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                     organizationId: orgId,
                     stage: { notIn: STAGES_AT_OR_BEYOND_BOOKED },
                   },
-                  data: { stage: "booked" },
+                  // D3-1: stamp the booked-service value at the booked transition,
+                  // ONLY when the playbook resolved a real price. The conditional spread
+                  // never writes a fabricated 0 nor wipes a prior estimate when abstaining.
+                  data: {
+                    stage: "booked",
+                    ...(bookedValueCents !== null ? { estimatedValue: bookedValueCents } : {}),
+                  },
                 });
                 stageAdvanced = adv.count > 0;
               }
