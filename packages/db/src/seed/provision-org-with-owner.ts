@@ -3,7 +3,8 @@ import type { PrismaClient } from "@prisma/client";
 import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
 import { encryptApiKey } from "../crypto/api-key.js";
 import { seedOrgDayOneAgents } from "./seed-org-day-one-agents.js";
-import { provisionOrgAgentDeployments } from "./provision-org-agents.js";
+import { provisionOrgAgentDeployments, ensureAlexForOrg } from "./provision-org-agents.js";
+import { seedAlexSkillPack } from "./seed-alex-skill-pack.js";
 
 export interface ProvisionOrgWithOwnerInput {
   email: string;
@@ -129,5 +130,11 @@ export async function provisionOrgWithOwner(
 export async function provisionPilotOrg(prisma: PrismaClient, input: ProvisionOrgWithOwnerInput) {
   const user = await provisionOrgWithOwner(prisma, input);
   await provisionOrgAgentDeployments(prisma, user.organizationId, { mira: false });
+  // Eagerly provision Alex whole (global listing + this org's active deployment + the
+  // medspa skill pack) so a CLI-onboarded pilot org is immediately actionable on the
+  // first inbound lead, without waiting for the lazy GET /config route to seed Alex.
+  // Both are idempotent, so a re-run converges a partially-provisioned org.
+  await ensureAlexForOrg(prisma, user.organizationId);
+  await seedAlexSkillPack(prisma, user.organizationId);
   return user;
 }

@@ -34,6 +34,62 @@ async function ensureAdOptimizerListing(db: PrismaDbClient): Promise<string> {
   return listing.id;
 }
 
+export interface EnsureAlexResult {
+  listingId: string;
+  deploymentId: string;
+}
+
+/**
+ * Idempotently ensures Alex's global listing + this org's active Alex deployment.
+ *
+ * This mirrors `apps/api/src/lib/ensure-alex-listing.ts` (`ensureAlexListingForOrg`),
+ * the seeder the lazy `GET /config` route runs. It is duplicated into @switchboard/db
+ * so the pilot CLI / `provisionPilotOrg` can provision a whole org WITHOUT depending on
+ * a dashboard config load (otherwise a CLI-onboarded pilot org has no Alex until someone
+ * opens the dashboard). Both writers are no-clobber slug upserts with identical create
+ * payloads, so whichever runs first wins; the payload below MUST stay in sync with the
+ * apps/api sibling.
+ *
+ * Deliberately NOT called from `provisionOrgAgentDeployments`: that runs on the hot
+ * `GET /config` route, which already ensures Alex via the apps/api seeder, so calling it
+ * there too would redundantly re-upsert Alex on every config load.
+ */
+export async function ensureAlexForOrg(
+  db: PrismaDbClient,
+  orgId: string,
+): Promise<EnsureAlexResult> {
+  const listing = await db.agentListing.upsert({
+    where: { slug: "alex-conversion" },
+    update: {},
+    create: {
+      slug: "alex-conversion",
+      name: "Alex",
+      description: "AI-powered lead conversion agent",
+      type: "ai-agent",
+      // Published listing status is "listed" (the resolver gates on it); the deployment
+      // below is "active" (a DeploymentStatus).
+      status: "listed",
+      trustScore: 0,
+      autonomyLevel: "supervised",
+      priceTier: "free",
+      metadata: {},
+    },
+  });
+  const deployment = await db.agentDeployment.upsert({
+    where: {
+      organizationId_listingId: { organizationId: orgId, listingId: listing.id },
+    },
+    update: {},
+    create: {
+      organizationId: orgId,
+      listingId: listing.id,
+      status: "active",
+      skillSlug: "alex",
+    },
+  });
+  return { listingId: listing.id, deploymentId: deployment.id };
+}
+
 /** As ensureAdOptimizerListing, for the creative listing Mira's deployment resolves. */
 async function ensureCreativeListing(db: PrismaDbClient): Promise<string> {
   const listing = await db.agentListing.upsert({

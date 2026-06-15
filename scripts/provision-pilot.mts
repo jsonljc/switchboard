@@ -1,8 +1,11 @@
 // Fully provisions one vetted pilot clinic org so a real clinic can be onboarded while
 // self-serve signup is closed (waitlist launch mode). Creates the org (comped
 // entitlement + default business hours), the owner (Principal + IdentitySpec +
-// DashboardUser with a bcrypt-hashed temp password and an encrypted apiKey) AND Riley's
-// deployment, all via the canonical @switchboard/db provisioners (provisionPilotOrg).
+// DashboardUser with a bcrypt-hashed temp password and an encrypted apiKey) AND both
+// agents the clinic needs day-one: Riley's deployment plus Alex (listing + deployment +
+// medspa skill pack), all via the canonical @switchboard/db provisioners
+// (provisionPilotOrg). Seeding Alex eagerly here means the clinic is actionable on the
+// first inbound lead without waiting for a lazy dashboard GET /config load.
 // F-05 flagged this as required before flipping prod to waitlist.
 //
 // The owner logs in with email + password (the prod CredentialsProvider). emailVerified
@@ -31,6 +34,8 @@ import {
   provisionPilotOrg,
   provisionOrgAgentDeployments,
   seedOrgDayOneAgents,
+  ensureAlexForOrg,
+  seedAlexSkillPack,
 } from "@switchboard/db";
 import bcrypt from "bcryptjs";
 
@@ -83,9 +88,13 @@ async function main(): Promise<void> {
       // partial failure) plus Riley's deployment (provisionOrgAgentDeployments, no-clobber).
       await seedOrgDayOneAgents(prisma, existing.organizationId);
       await provisionOrgAgentDeployments(prisma, existing.organizationId, { mira: false });
+      // Converge Alex too (listing + deployment + skill pack), mirroring provisionPilotOrg,
+      // so a pilot org provisioned before this seeding existed gains its concierge on re-run.
+      await ensureAlexForOrg(prisma, existing.organizationId);
+      await seedAlexSkillPack(prisma, existing.organizationId);
       console.warn(
         `[provision-pilot] already provisioned: email=${email} org=${existing.organizationId} ` +
-          "(re-ensured Riley; password + apiKey left unchanged)",
+          "(re-ensured Riley + Alex; password + apiKey left unchanged)",
       );
       return;
     }
