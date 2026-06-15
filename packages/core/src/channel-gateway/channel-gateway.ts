@@ -84,6 +84,24 @@ async function dispatchResponse(params: {
       await replySink.send("I'm having trouble right now. Let me connect you with the team.");
       return;
     }
+    if (response.result.outcome === "pending_approval") {
+      // The outer governance gate parked the whole turn for human approval.
+      // Never surface the raw framework summary ("Awaiting approval") to the
+      // lead. Like the failed branch above, send ONLY a framework-generated
+      // holding notice (no agent-authored text, so it bypasses the consent gate)
+      // and persist a metadata-only marker so operators see the park.
+      try {
+        await conversationStore.addMessage(
+          conversationId,
+          "assistant",
+          "[suppressed:pending_approval]",
+        );
+      } catch (err) {
+        console.error("[channel-gateway] pending-approval marker persist failed", err);
+      }
+      await replySink.send("Thanks! Let me check on that and get back to you shortly.");
+      return;
+    }
     const text =
       typeof response.result.outputs.response === "string"
         ? response.result.outputs.response
