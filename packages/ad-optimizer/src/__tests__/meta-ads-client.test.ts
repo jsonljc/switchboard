@@ -462,6 +462,7 @@ describe("MetaAdsClient", () => {
       fetchSpy.mockResolvedValueOnce({
         ok: false,
         status: 400,
+        headers: { get: () => null },
         json: () =>
           Promise.resolve({
             error: {
@@ -484,6 +485,7 @@ describe("MetaAdsClient", () => {
       fetchSpy.mockResolvedValueOnce({
         ok: false,
         status: 500,
+        headers: { get: () => null },
         json: () => Promise.reject(new Error("not JSON")),
       });
 
@@ -559,6 +561,7 @@ describe("MetaAdsClient", () => {
       fetchSpy.mockResolvedValueOnce({
         ok: false,
         status: 404,
+        headers: { get: () => null },
         json: () => Promise.resolve({ error: { message: "Ad not found" } }),
       });
 
@@ -590,6 +593,7 @@ describe("MetaAdsClient", () => {
       fetchSpy.mockResolvedValueOnce({
         ok: false,
         status: 400,
+        headers: { get: () => null },
         json: () => Promise.resolve({ error: { message: "nope", type: "x", code: 100 } }),
       });
 

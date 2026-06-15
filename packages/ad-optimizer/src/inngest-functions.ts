@@ -175,18 +175,20 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
   const dateRanges = getWeeklyDateRanges();
 
   for (const deployment of deployments) {
-    const creds = await step.run(`creds-${deployment.id}`, () =>
-      deps.getDeploymentCredentials(deployment.id),
-    );
-    if (!creds) continue;
-
     // Pixel id resolution is its own Inngest step so it gets persisted +
-    // retried independently from the audit itself.
+    // retried independently from the audit itself. pixelId is not a secret, so it
+    // may be memoized as step output; the access token must not (D2-4). For a
+    // credential-less deployment the pixel step runs and the audit step returns early.
     const pixelId = deps.getDeploymentPixelId
       ? await step.run(`pixel-${deployment.id}`, () => deps.getDeploymentPixelId!(deployment.id))
       : null;
 
     await step.run(`audit-${deployment.id}`, async () => {
+      // D2-4: resolve credentials INSIDE the consuming step so the cleartext access
+      // token lives only in this step's local scope and never becomes memoized step
+      // output (Inngest serializes step return values as JSON). Missing creds → skip.
+      const creds = await deps.getDeploymentCredentials(deployment.id);
+      if (!creds) return;
       const adsClient = deps.createAdsClient(creds);
       // NOTE (PR2): read as a strict number. Sibling inputConfig fields (targetCPA/
       // targetROAS) are stored as strings by the seed/wizard; a future producer that
@@ -302,12 +304,11 @@ export async function executeDailyCheck(step: StepTools, deps: CronDependencies)
   const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
 
   for (const deployment of deployments) {
-    const creds = await step.run(`creds-${deployment.id}`, () =>
-      deps.getDeploymentCredentials(deployment.id),
-    );
-    if (!creds) continue;
-
     await step.run(`check-${deployment.id}`, async () => {
+      // D2-4: resolve credentials inside the step (cleartext token stays in local
+      // scope, never memoized as step output). Missing creds → skip this deployment.
+      const creds = await deps.getDeploymentCredentials(deployment.id);
+      if (!creds) return;
       const adsClient = deps.createAdsClient(creds);
       await adsClient.getAccountSummary();
     });
@@ -367,17 +368,17 @@ export async function executeDailySignalHealthCheck(
   const deployments = await step.run("list-deployments", () => deps.listActiveDeployments());
 
   for (const deployment of deployments) {
-    const creds = await step.run(`creds-${deployment.id}`, () =>
-      deps.getDeploymentCredentials(deployment.id),
-    );
-    if (!creds) continue;
-
+    // pixelId is not a secret, so it may be memoized as step output and gate the run.
     const pixelId = await step.run(`pixel-${deployment.id}`, () =>
       deps.getDeploymentPixelId(deployment.id),
     );
     if (!pixelId) continue;
 
     await step.run(`signal-health-${deployment.id}`, async () => {
+      // D2-4: resolve credentials inside the step (cleartext token stays in local
+      // scope, never memoized as step output). Missing creds → skip this deployment.
+      const creds = await deps.getDeploymentCredentials(deployment.id);
+      if (!creds) return;
       const checker = deps.createSignalHealthChecker(creds);
       const report = await checker.getSignalHealthReport(pixelId);
       if (report.score === "red") {
