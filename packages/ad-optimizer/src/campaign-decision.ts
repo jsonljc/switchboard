@@ -95,6 +95,14 @@ export interface CampaignDecisionInput {
    * (back-compat with every existing caller and the eval).
    */
   confidenceModifierByKind?: (action: RecommendationOutput["action"]) => number;
+  /**
+   * D7-1 / D9-5 (the IMPROVE consumer): a bounded, abstaining per-action-kind multiplier
+   * resolved upstream from last cycle's CORROBORATED outcome ledger (outcome-readback.ts).
+   * Composed with confidenceModifierByKind into a single per-kind modifier and applied through
+   * the engine's one clamp (base * approvalModifier * outcomeMultiplier). `undefined` ⇒ no
+   * outcome adjustment (back-compat with every existing caller and the eval).
+   */
+  outcomeMultiplierByKind?: (action: RecommendationOutput["action"]) => number;
 }
 
 export interface CampaignDecisionResult {
@@ -158,6 +166,18 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
     return { insights, watches, recommendations };
   }
 
+  // D7-2 + D7-1: compose the two bounded, abstaining learned modifiers (operator approval rate
+  // and measured-outcome readback) into ONE per-kind modifier so the engine applies them through
+  // its SINGLE clamp (base * approvalModifier * outcomeMultiplier, each abstaining to 1.0, clamped
+  // to [0,1]). No second scaling path. Absent both ⇒ undefined ⇒ no adjustment (back-compat).
+  const approvalMod = input.confidenceModifierByKind;
+  const outcomeMod = input.outcomeMultiplierByKind;
+  const learnedModifier =
+    approvalMod || outcomeMod
+      ? (action: RecommendationOutput["action"]): number =>
+          (approvalMod?.(action) ?? 1) * (outcomeMod?.(action) ?? 1)
+      : undefined;
+
   const campaignRecs = generateRecommendations({
     campaignId: input.campaignId,
     campaignName: input.campaignName,
@@ -174,10 +194,8 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
       // only `clicks`/`conversions` actually gate the evidence floor.
       days: 7,
     },
-    // D7-2: forward the learned confidence modifier (absent ⇒ no adjustment).
-    ...(input.confidenceModifierByKind
-      ? { confidenceModifierByKind: input.confidenceModifierByKind }
-      : {}),
+    // D7-2 + D7-1: the single composed learned modifier (absent ⇒ no adjustment).
+    ...(learnedModifier ? { confidenceModifierByKind: learnedModifier } : {}),
   });
 
   for (const item of campaignRecs) {

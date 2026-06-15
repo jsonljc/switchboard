@@ -24,6 +24,8 @@ export {
   MIN_VERDICTS_FOR_MODIFIER,
 } from "./confidence-modifier.js";
 export type { KindVerdictCounts } from "./confidence-modifier.js";
+export { outcomeAdjustmentForKind, MIN_OUTCOMES_FOR_READBACK } from "./outcome-readback.js";
+export type { OutcomeCountsByKind, OutcomeAdjustment } from "./outcome-readback.js";
 export {
   decideForCampaign,
   insightToMetrics,

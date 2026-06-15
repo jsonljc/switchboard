@@ -512,6 +512,14 @@ export async function registerInngest(
     // its own flag + mandatory approval). Reads the same store applyAct writes verdicts to.
     approvalRateProvider: (organizationId) =>
       recommendationStore.aggregateApprovalRateByKind(organizationId),
+    // D7-1 / D9-5 (the IMPROVE consumer): feed last cycle's CORROBORATED outcome ledger into the
+    // weekly audit so this cycle's confidence learns from MEASURED outcomes (the readback composes
+    // with the approval modifier through the engine's one clamp). The readback abstains until
+    // enough corroborated rows accrue, so this is safe to wire even while the attribution PRODUCER
+    // is still flag-off (RILEY_OUTCOME_ATTRIBUTION_ENABLED, flipped in Tier 0 PR 0.6): it stays
+    // inert until outcome rows exist. This is the consumer half D9-5 was missing.
+    outcomeSignalProvider: (organizationId) =>
+      recommendationOutcomeStore.aggregateOutcomeSignalByKind(organizationId),
     recommendationHandoffSubmitter,
     // Kill switch: RILEY_PAUSE_SELF_EXECUTION_ENABLED=true wires the pause
     // initiator; default absent = the deploy is dark (the per-deployment

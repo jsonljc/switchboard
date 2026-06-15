@@ -284,3 +284,61 @@ describe("decideForCampaign targetSource (PR2 Gate-4)", () => {
     expect(r.recommendations.every((rec) => rec.targetSource === undefined)).toBe(true);
   });
 });
+
+describe("decideForCampaign composed learned modifiers (D7-2 approval + D7-1 outcome)", () => {
+  // The pause case from above (cpa 350 = 3.5x, durable breach, booked_cac) emits pause @ base 0.9.
+  function pauseCase(
+    over: Partial<Parameters<typeof decideForCampaign>[0]> = {},
+  ): Parameters<typeof decideForCampaign>[0] {
+    return {
+      campaignId: "c1",
+      campaignName: "C1",
+      currentInsight: insight({ spend: 2800, conversions: 8 }),
+      previousInsight: insight({ spend: 2800, conversions: 8 }),
+      targetBreach: { periodsAboveTarget: 8, granularity: "daily", isApproximate: false },
+      learningStatus: successStatus,
+      economicTier: "booked_cac",
+      effectiveTarget: 100,
+      revenueState: assembleRevenueState({ measurementTrusted: true, marginBasis: "unavailable" }),
+      targetROAS: 3,
+      nextCycleDate: "2026-05-14",
+      ...over,
+    };
+  }
+  const pauseConfidence = (r: ReturnType<typeof decideForCampaign>): number => {
+    const rec = r.recommendations.find((x) => x.action === "pause");
+    if (!rec) throw new Error("expected a pause rec");
+    return rec.confidence;
+  };
+
+  it("base confidence stands when neither learned modifier is supplied (back-compat)", () => {
+    expect(pauseConfidence(decideForCampaign(pauseCase()))).toBe(0.9);
+  });
+
+  it("applies the outcome multiplier alone (no approval history)", () => {
+    const r = decideForCampaign(
+      pauseCase({ outcomeMultiplierByKind: (a) => (a === "pause" ? 0.9 : 1) }),
+    );
+    expect(pauseConfidence(r)).toBeCloseTo(0.81, 5); // 0.9 * 0.9
+  });
+
+  it("composes approval * outcome through the engine's single clamp", () => {
+    const r = decideForCampaign(
+      pauseCase({
+        confidenceModifierByKind: (a) => (a === "pause" ? 1.1 : 1),
+        outcomeMultiplierByKind: (a) => (a === "pause" ? 0.9 : 1),
+      }),
+    );
+    expect(pauseConfidence(r)).toBeCloseTo(0.891, 5); // 0.9 * 1.1 * 0.9
+  });
+
+  it("clamps the composed product to [0,1] (a high pair cannot exceed 1)", () => {
+    const r = decideForCampaign(
+      pauseCase({
+        confidenceModifierByKind: (a) => (a === "pause" ? 1.15 : 1),
+        outcomeMultiplierByKind: (a) => (a === "pause" ? 1.1 : 1),
+      }),
+    );
+    expect(pauseConfidence(r)).toBe(1); // 0.9 * 1.15 * 1.1 = 1.1385 -> clamped
+  });
+});

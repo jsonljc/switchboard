@@ -73,6 +73,13 @@ export const RileyCaseSchema = z.object({
   approvalHistory: z
     .record(z.string(), z.object({ approved: z.number(), rejected: z.number() }))
     .optional(),
+  /** D7-1: optional per-action-kind CORROBORATED-direction history ({ corroboratedUp,
+   * corroboratedDown }). When present, the harness builds the bounded, abstaining outcome multiplier
+   * (outcomeAdjustmentForKind) and composes it with the approval modifier in decideForCampaign,
+   * exactly as the live audit does, proving the readback wire end-to-end through the REAL engine. */
+  outcomeHistory: z
+    .record(z.string(), z.object({ corroboratedUp: z.number(), corroboratedDown: z.number() }))
+    .optional(),
   /** D7-2: optional per-action confidence assertions. The engine's emitted confidence for
    * the named action must satisfy the bound(s). `equals` pins an exact value (close to 5
    * decimals); `min`/`max` pin the bounded band. Proves the modifier moved (or abstained
