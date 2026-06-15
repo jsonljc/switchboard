@@ -124,6 +124,10 @@ export function deriveCorroboration(input: DeriveCorroborationInput): Corroborat
   // P1: pause-only. refresh_creative is a recorded deferral (spec 4d
   // section 6): per-campaign booking sparsity, lag contamination without a
   // differencing majority, and weak agreement semantics.
+  // D7-5 (prep): shift_budget_to_source corroboration is likewise deferred until the action is
+  // executable (Spec-1B); it would otherwise re-state pause's per-campaign sparsity at the source
+  // level. The SPEC_1B_PENDING_KINDS blueprint (outcome-attribution-config.ts) stages the eventual
+  // config. No behavior change: the kind is not attributable, so it never reaches this predicate.
   if (input.actionKind !== "pause") return reject("not_pause");
   // P2: the first estimate must exist and be clean (the row would be
   // directional today).
