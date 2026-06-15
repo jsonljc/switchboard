@@ -44,7 +44,7 @@ export interface BuildReceiptedBookingArgs {
  * NaN-safe cents snapshot: a finite, nonnegative value rounded to whole cents, else null. A null
  * snapshot still counts toward the booking COUNT but is excluded from the revenue SUM (spec §4).
  */
-function snapshotCents(v: number | null | undefined): number | null {
+export function snapshotCents(v: number | null | undefined): number | null {
   return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.round(v) : null;
 }
 

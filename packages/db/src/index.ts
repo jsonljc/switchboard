@@ -74,6 +74,7 @@ export { PrismaOpportunityStore } from "./stores/prisma-opportunity-store.js";
 export { PrismaRevenueStore } from "./stores/prisma-revenue-store.js";
 export { PrismaReceiptStore } from "./stores/prisma-receipt-store.js";
 export { PrismaReceiptedBookingStore } from "./stores/prisma-receipted-booking-store.js";
+export type { ApplyReconcileResult } from "./stores/prisma-receipted-booking-store.js";
 export { PrismaOwnerTaskStore } from "./stores/prisma-owner-task-store.js";
 export { PrismaListingStore } from "./stores/prisma-listing-store.js";
 export { PrismaDeploymentStore } from "./stores/prisma-deployment-store.js";
