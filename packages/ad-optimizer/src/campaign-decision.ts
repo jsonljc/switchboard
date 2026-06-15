@@ -88,6 +88,13 @@ export interface CampaignDecisionInput {
    * stamped for operator visibility. `undefined` ⇒ unstamped (back-compat).
    */
   targetSource?: TargetSource;
+  /**
+   * D7-2 (the first learning wire): a bounded, abstaining per-action-kind confidence
+   * modifier resolved upstream from the org's operator approve/reject history. Forwarded
+   * verbatim to the engine, which applies it once per rec. `undefined` ⇒ no adjustment
+   * (back-compat with every existing caller and the eval).
+   */
+  confidenceModifierByKind?: (action: RecommendationOutput["action"]) => number;
 }
 
 export interface CampaignDecisionResult {
@@ -167,6 +174,10 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
       // only `clicks`/`conversions` actually gate the evidence floor.
       days: 7,
     },
+    // D7-2: forward the learned confidence modifier (absent ⇒ no adjustment).
+    ...(input.confidenceModifierByKind
+      ? { confidenceModifierByKind: input.confidenceModifierByKind }
+      : {}),
   });
 
   for (const item of campaignRecs) {

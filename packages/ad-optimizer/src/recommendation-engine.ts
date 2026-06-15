@@ -10,6 +10,7 @@ import type {
 import type { SignalHealthReport, Breach } from "./signal-health-checker.js";
 import { resetsLearningFor, learningPhaseImpactText } from "./action-reset-classification.js";
 import { meetsEvidenceFloor, ZERO_CONVERSION_DAY_CLICK_FLOOR } from "./evidence-floor.js";
+import { applyConfidenceModifierToRecs } from "./confidence-modifier.js";
 
 // ── Re-export types ──
 
@@ -58,6 +59,10 @@ export interface RecommendationInput {
    * dispatch state, so this is a heuristic input rather than computed.
    */
   capiAttributionStale?: boolean;
+  /** D7-2 (first learning wire): a bounded, abstaining per-kind confidence modifier from
+   * the org's operator approve/reject history (confidence-modifier.ts), applied once per
+   * rec, scaling the hardcoded base prior. Absent ⇒ no adjustment (back-compat). */
+  confidenceModifierByKind?: (action: RecommendationOutput["action"]) => number;
 }
 
 // ── Helpers ──
@@ -474,7 +479,14 @@ export function generateRecommendations(
   // action family lacks the clicks/conversions/days to act is demoted to an
   // abstention watch. Measurement-family fixes (0/0/0 floor) and most diagnostics
   // pass; destructive (pause/add_creative) and scale recs get gated on thin data.
-  const floored: (RecommendationOutput | WatchOutput)[] = results.map((rec) =>
+  // D7-2: apply the bounded, abstaining per-kind learning modifier once — the single point
+  // every rec THIS engine produces funnels through — before the evidence floor (which gates on
+  // evidence, not confidence). Absent modifier ⇒ results unchanged. NOTE: the weekly audit also
+  // assembles signal-health / reallocation / learning-limited recs OUTSIDE generateRecommendations;
+  // v1 deliberately scopes the modifier to this per-campaign engine path (see audit-runner).
+  const adjusted = applyConfidenceModifierToRecs(results, input.confidenceModifierByKind);
+
+  const floored: (RecommendationOutput | WatchOutput)[] = adjusted.map((rec) =>
     meetsEvidenceFloor(rec.action, input.evidence)
       ? rec
       : insufficientEvidenceWatch(base, rec.action, input.evidence),

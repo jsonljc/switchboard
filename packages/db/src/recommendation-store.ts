@@ -216,6 +216,45 @@ export class PrismaRecommendationStore implements RecommendationStore {
     return rows.map(rowToRecommendation);
   }
 
+  /**
+   * D7-2: aggregate the org's resolved operator verdicts by action kind into
+   * `{ approved, rejected }` counts (DB status `acted` -> approved, `dismissed` ->
+   * rejected). The read side of Riley's first learning wire: the confidence modifier
+   * (packages/ad-optimizer/src/confidence-modifier.ts) turns this into a bounded,
+   * abstaining prior on the next cycle's recommendation confidence.
+   *
+   * Scope: org-only, resolved (`resolvedAt not null`), recommendation-intent rows whose
+   * status is a verdict (`acted`/`dismissed`). `confirmed`/`dismissed_by_undo`/`expired`
+   * are NOT operator approve/reject verdicts and are excluded. Read-only (no mutation, so
+   * no route-allowlist concern). The action kind lives in the JSONB stash
+   * (`parameters.__recommendation.action`), which Prisma cannot `groupBy`, so we group in
+   * memory; a row with no action kind is skipped (never fabricates a bucket).
+   */
+  async aggregateApprovalRateByKind(
+    orgId: string,
+  ): Promise<Map<string, { approved: number; rejected: number }>> {
+    const rows = await this.prisma.pendingActionRecord.findMany({
+      where: {
+        organizationId: orgId,
+        intent: { startsWith: RECOMMENDATION_INTENT_PREFIX },
+        resolvedAt: { not: null },
+        status: { in: ["acted", "dismissed"] },
+      },
+      select: { parameters: true, status: true },
+    });
+    const agg = new Map<string, { approved: number; rejected: number }>();
+    for (const row of rows) {
+      const params = (row.parameters ?? {}) as RecommendationParams;
+      const action = params.__recommendation?.action;
+      if (!action) continue;
+      const counts = agg.get(action) ?? { approved: 0, rejected: 0 };
+      if (row.status === "acted") counts.approved += 1;
+      else if (row.status === "dismissed") counts.rejected += 1;
+      agg.set(action, counts);
+    }
+    return agg;
+  }
+
   async applyAct(args: {
     id: string;
     orgId: string;

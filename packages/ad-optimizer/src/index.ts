@@ -18,6 +18,13 @@ export {
 } from "./recommendation-engine.js";
 export type { RecommendationInput } from "./recommendation-engine.js";
 export {
+  confidenceModifierForKind,
+  applyConfidenceModifier,
+  applyConfidenceModifierToRecs,
+  MIN_VERDICTS_FOR_MODIFIER,
+} from "./confidence-modifier.js";
+export type { KindVerdictCounts } from "./confidence-modifier.js";
+export {
   decideForCampaign,
   insightToMetrics,
   deriveLearningPhaseActive,

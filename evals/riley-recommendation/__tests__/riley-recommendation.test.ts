@@ -26,5 +26,15 @@ describe("riley recommendation matrix (real decideForCampaign)", () => {
     for (const pattern of c.expectedWatchPatterns ?? []) {
       expect(decision.watchPatterns).toContain(pattern);
     }
+    // D7-2: confidence-modifier assertions. The engine's emitted confidence for the named
+    // action must satisfy the pinned bound — proving the bounded, abstaining approval-rate
+    // modifier is wired into the real engine and moved (or abstained on) the right kind.
+    for (const ec of c.expectedConfidence ?? []) {
+      const got = decision.confidenceByAction[ec.action];
+      expect(got, `confidence for ${ec.action}`).toBeTypeOf("number");
+      if (ec.equals !== undefined) expect(got).toBeCloseTo(ec.equals, 5);
+      if (ec.min !== undefined) expect(got).toBeGreaterThanOrEqual(ec.min);
+      if (ec.max !== undefined) expect(got).toBeLessThanOrEqual(ec.max);
+    }
   });
 });

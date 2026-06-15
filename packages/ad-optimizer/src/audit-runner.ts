@@ -122,6 +122,15 @@ export interface AuditConfig {
    * unvalidated manual-cast V2 surface). Ad-set details + learning counts are always
    * computed from real data; only the recs are deferred until output validation + tests land. */
   surfaceAdSetLearning?: boolean;
+  /**
+   * D7-2 (the first learning wire): a bounded, abstaining per-action-kind confidence
+   * modifier resolved per-org from the operator approve/reject aggregate (built in the
+   * weekly audit from the injected `approvalRateProvider`). Forwarded verbatim into each
+   * `decideForCampaign` call. Absent ⇒ no adjustment (back-compat). Typed `(string) =>
+   * number` (the aggregate keys are arbitrary action strings); assignable to the engine's
+   * narrower `(RecommendationOutput["action"]) => number` by parameter contravariance.
+   */
+  confidenceModifierByKind?: (action: string) => number;
 }
 
 /**
@@ -629,6 +638,13 @@ export class AuditRunner {
         nextCycleDate,
         learningPhaseActive,
         targetSource: campaignTarget.targetSource,
+        // D7-2: forward the per-org learned confidence modifier into the per-campaign decision
+        // (absent ⇒ no adjustment). v1 SCOPE: only recs from generateRecommendations are modified;
+        // the learning-limited, reallocation, and signal-health recs assembled later in this run
+        // keep their base confidence (a deliberate v1 boundary, not every kind is learned on yet).
+        ...(this.config.confidenceModifierByKind
+          ? { confidenceModifierByKind: this.config.confidenceModifierByKind }
+          : {}),
       });
       insights.push(...decision.insights);
       watches.push(...decision.watches);
