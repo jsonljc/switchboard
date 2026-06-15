@@ -305,13 +305,20 @@ export async function bootstrapSkillMode(
   // delegate tool exposes one operation per allowlisted target; the child carries
   // the real governance weight at PlatformIngress.
   const { DELEGATION_TARGETS } = await import("./delegation-targets.js");
-  const delegateFactory = deps.childWorkSubmitter
-    ? createDelegateToolFactory({
-        submitter: deps.childWorkSubmitter,
-        targets: DELEGATION_TARGETS,
-        maxDepth: 1,
-      })
-    : undefined;
+  let delegateFactory: SkillToolFactory | undefined;
+  if (deps.childWorkSubmitter) {
+    delegateFactory = createDelegateToolFactory({
+      submitter: deps.childWorkSubmitter,
+      targets: DELEGATION_TARGETS,
+      maxDepth: 1,
+    });
+  } else {
+    // F18 — fail-closed but NOT silent. Prod (app.ts) supplies childWorkSubmitter;
+    // a bootstrap that omits it loses Alex's delegate capability, so surface it.
+    // The injected logger exposes only info/error (no warn), so the warning rides
+    // logger.error to guarantee operator visibility.
+    logger.error("delegate tool disabled: childWorkSubmitter not supplied to skill-mode bootstrap");
+  }
 
   // F15 — flag-gated consent precondition for booking. INERT BY DEFAULT: the
   // booking tool only reads consent when an org has flipped its consentState
