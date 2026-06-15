@@ -82,11 +82,32 @@ services:
         sync: false
       - key: META_WEBHOOK_VERIFY_TOKEN
         sync: false
-      # App-scoped WhatsApp Graph token for provisioning/health checks — distinct
+      # App-scoped WhatsApp Graph token for provisioning/health checks. Distinct
       # from META_SYSTEM_USER_TOKEN (the Tech-Provider token for client WABAs).
       - key: WHATSAPP_GRAPH_TOKEN
         sync: false
-      # Public-safe — surfaced in browser-side Meta Pixel events.
+      # WhatsApp Cloud API send credentials for the api service's PROACTIVE
+      # outbound workflows (appointment reminders, lead greetings, follow-ups)
+      # and the escalation-reply agentNotifier in app.ts. Without these the api
+      # service has no send token and every proactive WhatsApp message silently
+      # no-ops in prod ("WhatsApp not configured; ... skipped").
+      # NOTE on the two token names: app.ts + the chat service read WHATSAPP_TOKEN;
+      # the reminder/greeting/follow-up workflows read WHATSAPP_ACCESS_TOKEN. Set
+      # BOTH to the same Cloud API token value until the code is de-duped to one
+      # canonical name. WHATSAPP_PHONE_NUMBER_ID is read by both paths.
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      # Used by WhatsApp channel webhook auto-registration during provisioning
+      # (organizations.ts), alongside WHATSAPP_GRAPH_TOKEN. Absent => channel
+      # provisioning reports "config_error_meta: missing WHATSAPP_APP_SECRET".
+      # Distinct from META_APP_SECRET (Meta OAuth / ad-webhook signature).
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      # Public-safe. Surfaced in browser-side Meta Pixel events.
       # `sync: false` here is not about secrecy but about forcing the operator
       # to enter the value via Render's UI at provisioning. Public-safe means
       # it can leak; that doesn't change that we still need a real value.
