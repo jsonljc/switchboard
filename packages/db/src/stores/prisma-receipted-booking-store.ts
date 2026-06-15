@@ -5,11 +5,13 @@ import { scoreAttribution, evaluateExceptions } from "@switchboard/core";
 /**
  * Read-projection store for the receipted-booking view (Ledger's data plane, spec slice 4).
  *
- * The view is assembled LAZILY over existing foreign keys (Booking + Receipt + ConversionRecord +
- * Contact + LifecycleRevenueEvent + Opportunity + WorkTrace). No persisted `ReceiptedBooking` row is
- * read: the issuance write-path is deferred until a consumer (the Ledger agent / weekly UI / an
- * override workflow) exists. `attributionConfidence` and `exceptions` are derived on the fly via the
- * pure `core/receipts` functions, so the projection never drifts from the source facts.
+ * Live fields are assembled LAZILY over existing foreign keys (Booking + Receipt + ConversionRecord +
+ * Contact + LifecycleRevenueEvent + Opportunity + WorkTrace), and `attributionConfidence` /
+ * `exceptions` are derived on the fly via the pure `core/receipts` functions, so those never drift
+ * from the source facts. The persisted `ReceiptedBooking` issuance row (now minted in the governed
+ * calendar-book transaction) is also read when present, surfacing the stable snapshot fields
+ * (issuedAt / expectedValueAtIssue / currency / override provenance); it is null for historical
+ * bookings created before the issuance hook, in which case only the live fields are exposed.
  *
  * Every Prisma leg is org-scoped (the F12 read-side IDOR lesson): not only the Booking read but each
  * ConversionRecord / Contact / WorkTrace / LifecycleRevenueEvent / Opportunity leg too.
@@ -39,7 +41,7 @@ export class PrismaReceiptedBookingStore {
     });
     if (!booking) return null;
 
-    const [receipts, conversion, contact, revenueEvents, opportunity, workTrace] =
+    const [receipts, conversion, contact, revenueEvents, opportunity, workTrace, persisted] =
       await Promise.all([
         this.prisma.receipt.findMany({
           where: { organizationId: orgId, bookingId },
@@ -78,6 +80,21 @@ export class PrismaReceiptedBookingStore {
               select: { traceId: true, matchedPolicies: true, approvalId: true },
             })
           : null,
+        // The persisted issuance snapshot (the deferred write-path's row), org-scoped per the F12
+        // read-side IDOR lesson. Null for historical bookings created before the issuance hook; the
+        // view then exposes only the live fields. attributionConfidence / exceptions stay lazily
+        // derived above (re-evaluation against the persisted judgment is a separate, deferred concern).
+        this.prisma.receiptedBooking.findFirst({
+          where: { organizationId: orgId, bookingId },
+          select: {
+            issuedAt: true,
+            expectedValueAtIssue: true,
+            currency: true,
+            overriddenBy: true,
+            overrideReason: true,
+            overriddenAt: true,
+          },
+        }),
       ]);
 
     const sourceEvidence = {
@@ -114,6 +131,15 @@ export class PrismaReceiptedBookingStore {
       attendanceState: booking.attendance ?? null,
       paymentEventIds: revenueEvents.map((e) => e.id),
       expectedValue: opportunity?.estimatedValue ?? null,
+      // Persisted issuance snapshot (null on the lazy/historical path). issuedAt presence is the
+      // discriminator the revenue rollup uses to choose snapshot-vs-live, so it is set ONLY from a
+      // real persisted row (never defaulted to now).
+      issuedAt: persisted?.issuedAt ?? null,
+      expectedValueAtIssue: persisted?.expectedValueAtIssue ?? null,
+      currency: persisted?.currency ?? null,
+      overriddenBy: persisted?.overriddenBy ?? null,
+      overrideReason: persisted?.overrideReason ?? null,
+      overriddenAt: persisted?.overriddenAt ?? null,
     };
   }
 

@@ -14,6 +14,10 @@ import type { BookingFailureHandler } from "./booking-failure-handler.js";
 import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
 import { buildRescheduleOperations } from "./calendar-reschedule.js";
 import { buildCalendarReceiptData } from "../../receipts/mint-calendar-receipt.js";
+import {
+  isPrismaUniqueConstraintError,
+  issueReceiptedBookingInTx,
+} from "./issue-receipted-booking.js";
 import type { ReceiptTier } from "@switchboard/schemas";
 
 interface BookingStoreSubset {
@@ -83,17 +87,27 @@ type TransactionFn = (
       }): Promise<{ count: number }>;
     };
     receipt: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
+    receiptedBooking: {
+      findFirst(args: {
+        where: Record<string, unknown>;
+        select?: Record<string, boolean>;
+      }): Promise<{ id: string } | null>;
+      create(args: { data: Record<string, unknown> }): Promise<unknown>;
+    };
+    contact: {
+      findFirst(args: {
+        where: Record<string, unknown>;
+        select?: Record<string, boolean>;
+      }): Promise<{
+        leadgenId?: string | null;
+        sourceType?: string | null;
+        firstTouchChannel?: string | null;
+        consentGrantedAt?: Date | null;
+        consentRevokedAt?: Date | null;
+      } | null>;
+    };
   }) => Promise<unknown>,
 ) => Promise<unknown>;
-
-function isPrismaUniqueConstraintError(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code: string }).code === "P2002"
-  );
-}
 
 // Type duplicated locally because packages/core cannot import from apps/api.
 // Structurally identical to apps/api/src/bootstrap/calendar-provider-factory.ts.
@@ -451,6 +465,21 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                 });
                 stageAdvanced = adv.count > 0;
               }
+
+              // Issue the derived ReceiptedBooking read-model row in the SAME durable tx (idempotent,
+              // governed, never a post-submit write). The doctrine tradeoff (a read-model write inside
+              // the canonical booking tx) and the infallible-by-construction mitigation live in the
+              // helper. `conversion` carries the booking-time attribution evidence.
+              await issueReceiptedBookingInTx(tx, {
+                organizationId: orgId,
+                bookingId: booking.id,
+                contactId,
+                sourceAdId: conversion.sourceAdId,
+                sourceCampaignId: conversion.sourceCampaignId,
+                estimatedValueCents: estimatedValue,
+                currency: deps.defaultCurrency,
+                now: new Date(),
+              });
             });
           } catch (error) {
             // Provider event created but durable confirm failed: best-effort

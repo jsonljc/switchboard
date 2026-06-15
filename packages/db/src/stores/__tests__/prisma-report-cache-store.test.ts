@@ -34,6 +34,12 @@ const sample: ReportDataV1 = {
     },
     bookingsNeedingAttention: 0,
   },
+  receiptedBookingRevenue: {
+    revenueCents: 6150000,
+    currency: "SGD",
+    bookingsWithValue: 41,
+    cohortSize: 41,
+  },
 };
 
 describe("PrismaReportCacheStore", () => {

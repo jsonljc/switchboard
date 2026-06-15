@@ -12,6 +12,7 @@ import type {
   ConsentCompletenessData,
   ReceiptedBookingsData,
   ReceiptedBookingQualityData,
+  ReceiptedBookingRevenueData,
   ManagedComparisonData,
 } from "./types";
 
@@ -35,6 +36,7 @@ export interface ResultsModel {
   consentCompleteness: ConsentCompletenessData; // validConsent / bookable, point-in-time snapshot
   receiptedBookings: ReceiptedBookingsData; // count of non-void calendar receipts in the window
   receiptedBookingQuality: ReceiptedBookingQualityData; // confidence breakdown + exceptions worklist
+  receiptedBookingRevenue: ReceiptedBookingRevenueData; // Σ expectedValueAtIssue (cents), snapshot-else-live
   managedComparison: ManagedComparisonData | null;
 }
 
@@ -83,6 +85,12 @@ export function buildResultsModel(data: ReportData): ResultsModel {
         duplicate_contact_risk: 0,
       },
       bookingsNeedingAttention: 0,
+    },
+    receiptedBookingRevenue: data.receiptedBookingRevenue ?? {
+      revenueCents: 0,
+      currency: null,
+      bookingsWithValue: 0,
+      cohortSize: 0,
     },
     managedComparison: data.managedComparison,
   };

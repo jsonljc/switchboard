@@ -369,6 +369,19 @@ export async function bootstrapSkillMode(
           }): Promise<{ count: number }>;
         };
         receipt: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
+        receiptedBooking: {
+          findFirst(args: {
+            where: Record<string, unknown>;
+            select?: Record<string, boolean>;
+          }): Promise<{ id: string } | null>;
+          create(args: { data: Record<string, unknown> }): Promise<unknown>;
+        };
+        contact: {
+          findFirst(args: {
+            where: Record<string, unknown>;
+            select?: Record<string, boolean>;
+          }): Promise<Record<string, unknown> | null>;
+        };
       }) => Promise<unknown>,
     ) =>
       prismaClient.$transaction((tx) =>
@@ -377,6 +390,8 @@ export async function bootstrapSkillMode(
           outboxEvent: tx.outboxEvent,
           opportunity: tx.opportunity,
           receipt: tx.receipt,
+          receiptedBooking: tx.receiptedBooking,
+          contact: tx.contact,
         }),
       ),
     failureHandler,

@@ -17,6 +17,7 @@ import { computeHeldRate } from "./compute-held-rate.js";
 import { computeConsentCompleteness } from "./compute-consent-completeness.js";
 import { computeReceiptedBookings } from "./compute-receipted-bookings.js";
 import { computeReceiptedBookingQuality } from "./compute-receipted-booking-quality.js";
+import { computeReceiptedBookingRevenue } from "./compute-receipted-booking-revenue.js";
 
 export interface ReportDependencies {
   stores: ReportStores;
@@ -45,6 +46,7 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
       consentCompleteness,
       receiptedBookings,
       receiptedBookingQuality,
+      receiptedBookingRevenue,
     ] = await Promise.all([
       computeAttribution(ctx, deps.stores),
       computeFunnel(ctx, deps.stores, deps.insightsProvider),
@@ -55,6 +57,7 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
       computeConsentCompleteness(ctx, deps.stores.contacts),
       computeReceiptedBookings(ctx, deps.stores.receipts),
       computeReceiptedBookingQuality(ctx, deps.stores.receiptedBookings),
+      computeReceiptedBookingRevenue(ctx, deps.stores.receiptedBookings),
     ]);
 
     const pullquote = await deps.pullQuoteGenerator({
@@ -80,6 +83,7 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
       consentCompleteness,
       receiptedBookings,
       receiptedBookingQuality,
+      receiptedBookingRevenue,
     };
   };
 }

@@ -18,6 +18,7 @@ import { HeldRateTile } from "./held-rate-tile";
 import { ConsentCompletenessTile } from "./consent-completeness-tile";
 import { ReceiptedBookingsTile } from "./receipted-bookings-tile";
 import { ReceiptedBookingQualityTile } from "./receipted-booking-quality-tile";
+import { ReceiptedBookingRevenueTile } from "./receipted-booking-revenue-tile";
 import { AgentContribution } from "./agent-contribution";
 import { WorthIt } from "./worth-it";
 import { DetailsDisclosure } from "./details-disclosure";
@@ -113,6 +114,7 @@ export function ResultsPage() {
               {(!showNoMeta || model.managedComparison) && (
                 <DetailsDisclosure>
                   {!showNoMeta && <ReceiptedBookingsTile model={model} />}
+                  {!showNoMeta && <ReceiptedBookingRevenueTile model={model} />}
                   {!showNoMeta && <HeldRateTile model={model} />}
                   {!showNoMeta && <ConsentCompletenessTile model={model} />}
                   {!showNoMeta && <ReceiptedBookingQualityTile model={model} />}
