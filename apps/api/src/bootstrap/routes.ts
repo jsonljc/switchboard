@@ -45,6 +45,7 @@ import { paymentsWebhookRoutes } from "../routes/payments-webhook.js";
 import { facebookOAuthRoutes } from "../routes/facebook-oauth.js";
 import { whatsappTestRoutes } from "../routes/whatsapp-test.js";
 import { whatsappOnboardingRoutes } from "../routes/whatsapp-onboarding.js";
+import { buildWhatsAppOnboardConnection } from "../lib/whatsapp-connection-data.js";
 import { whatsappManagementRoutes } from "../routes/whatsapp-management.js";
 import { whatsappSendTestRoutes } from "../routes/whatsapp-send-test.js";
 import { whatsappTemplateCreateRoutes } from "../routes/whatsapp-template-create.js";
@@ -195,22 +196,24 @@ export async function registerRoutes(
       return (await res.json()) as Record<string, unknown>;
     },
     createConnection: async (data) => {
-      const encrypted = (await import("@switchboard/db")).encryptCredentials({
-        token: data.wabaId,
+      // Build a real, usable, org-scoped connection. The prior persistence wrote
+      // `token: data.wabaId` (the WABA id, not a token) and `organizationId: ""`,
+      // with no appSecret/verifyToken, so the row could never send or receive.
+      const built = buildWhatsAppOnboardConnection({
+        organizationId: data.organizationId,
+        wabaId: data.wabaId,
         phoneNumberId: data.phoneNumberId,
-        primaryPhoneNumberId: data.phoneNumberId,
         displayPhoneNumber: data.displayPhoneNumber,
+        runtimeToken: data.runtimeToken,
+        appSecret: process.env.META_APP_SECRET ?? "",
+        verifyToken: data.verifyToken,
       });
+      const { encryptCredentials } = await import("@switchboard/db");
       const conn = await app.prisma!.connection.create({
         data: {
           id: `conn_${crypto.randomUUID().slice(0, 8)}`,
-          organizationId: "",
-          serviceId: "whatsapp",
-          serviceName: "whatsapp",
-          authType: "bot_token",
-          credentials: encrypted,
-          scopes: [],
-          externalAccountId: data.wabaId,
+          ...built.connection,
+          credentials: encryptCredentials(built.credentials),
         },
       });
       return { id: conn.id, webhookPath: `/webhook/managed/${conn.id}` };

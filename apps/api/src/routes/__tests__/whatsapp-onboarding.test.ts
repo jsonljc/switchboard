@@ -9,6 +9,9 @@ describe("WhatsApp onboarding routes", () => {
 
   beforeAll(async () => {
     app = Fastify({ logger: false });
+    // Onboarding is now an org-scoped mutation (resolveOrganizationForMutation).
+    // Dev-mode (authDisabled) lets the test pass the org via the request body.
+    app.decorate("authDisabled", true);
     await app.register(whatsappOnboardingRoutes, {
       metaSystemUserToken: "suat_test",
       metaSystemUserId: "sys_user_123",
@@ -61,7 +64,7 @@ describe("WhatsApp onboarding routes", () => {
     const response = await app.inject({
       method: "POST",
       url: "/whatsapp/onboard",
-      payload: { esToken: "short_lived_token_123" },
+      payload: { esToken: "short_lived_token_123", organizationId: "org_test" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -97,13 +100,30 @@ describe("WhatsApp onboarding routes", () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it("rejects onboarding when no organization resolves (no orphan connections)", async () => {
+    // Dev-mode app, esToken present but NO organizationId -> org cannot resolve.
+    // Regression guard for the persisted `organizationId: ""` bug: onboarding
+    // must refuse rather than persist an unowned connection, and must do so
+    // before any Graph call or createConnection write.
+    const response = await app.inject({
+      method: "POST",
+      url: "/whatsapp/onboard",
+      payload: { esToken: "tok_no_org" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/organizationId/i);
+    expect(mockCreateConnection).not.toHaveBeenCalled();
+    expect(mockGraphApi).not.toHaveBeenCalled();
+  });
+
   it("should return 502 when debug_token fails", async () => {
     mockGraphApi.mockRejectedValueOnce(new Error("Network error"));
 
     const response = await app.inject({
       method: "POST",
       url: "/whatsapp/onboard",
-      payload: { esToken: "bad_token" },
+      payload: { esToken: "bad_token", organizationId: "org_test" },
     });
 
     expect(response.statusCode).toBe(502);
@@ -119,7 +139,7 @@ describe("WhatsApp onboarding routes", () => {
     const response = await app.inject({
       method: "POST",
       url: "/whatsapp/onboard",
-      payload: { esToken: "token_no_waba" },
+      payload: { esToken: "token_no_waba", organizationId: "org_test" },
     });
 
     expect(response.statusCode).toBe(400);
@@ -158,7 +178,7 @@ describe("WhatsApp onboarding routes", () => {
     const response = await app.inject({
       method: "POST",
       url: "/whatsapp/onboard",
-      payload: { esToken: "persist_token" },
+      payload: { esToken: "persist_token", organizationId: "org_test" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -168,6 +188,12 @@ describe("WhatsApp onboarding routes", () => {
         phoneNumberId: "phone_persist_1",
         verifiedName: "Persist Biz",
         displayPhoneNumber: "+1555999",
+        // Regression guards: the route must thread a REAL org (was ""), the
+        // central system token as the runtime Bearer (was the WABA id), and the
+        // verify token registered with Meta (was absent).
+        organizationId: "org_test",
+        runtimeToken: "suat_test",
+        verifyToken: "test_secret",
       }),
     );
   });
@@ -222,6 +248,9 @@ describe("WhatsApp onboarding ESU integration (helper-extracted path)", () => {
 
   beforeAll(async () => {
     app = Fastify({ logger: false });
+    // Onboarding is now an org-scoped mutation (resolveOrganizationForMutation).
+    // Dev-mode (authDisabled) lets the test pass the org via the request body.
+    app.decorate("authDisabled", true);
     await app.register(whatsappOnboardingRoutes, {
       metaSystemUserToken: "SYSTEM_TOKEN_FAKE",
       metaSystemUserId: "SYSTEM_USER_FAKE",
@@ -242,7 +271,7 @@ describe("WhatsApp onboarding ESU integration (helper-extracted path)", () => {
     const response = await app.inject({
       method: "POST",
       url: "/whatsapp/onboard",
-      payload: { esToken: "ESU_SHORT_LIVED_TOKEN" },
+      payload: { esToken: "ESU_SHORT_LIVED_TOKEN", organizationId: "org_test" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -292,6 +321,12 @@ describe("WhatsApp onboarding ESU integration (helper-extracted path)", () => {
       phoneNumberId: "PHONE_ESU_888",
       verifiedName: "ESU Test Biz",
       displayPhoneNumber: "+15555550100",
+      // Org-scoped persistence + the D-b token model: the route hands
+      // createConnection the resolved org, the central system token (the runtime
+      // Bearer), and the verify token it registered via subscribed_apps.
+      organizationId: "org_test",
+      runtimeToken: "SYSTEM_TOKEN_FAKE",
+      verifyToken: "APP_SECRET_FAKE",
     });
   });
 });
@@ -339,6 +374,7 @@ describe("WhatsApp onboarding ESU chat-registration (Task 8.5)", () => {
     }) as unknown as typeof fetch;
 
     const app = Fastify({ logger: false });
+    app.decorate("authDisabled", true);
     await app.register(whatsappOnboardingRoutes, {
       metaSystemUserToken: "TKN",
       metaSystemUserId: "SYS",
@@ -359,7 +395,7 @@ describe("WhatsApp onboarding ESU chat-registration (Task 8.5)", () => {
     const response = await app.inject({
       method: "POST",
       url: "/whatsapp/onboard",
-      payload: { esToken: "ESU_TOKEN" },
+      payload: { esToken: "ESU_TOKEN", organizationId: "org_test" },
     });
     expect(response.statusCode).toBe(200);
     const body = response.json();
@@ -386,6 +422,7 @@ describe("WhatsApp onboarding ESU chat-registration (Task 8.5)", () => {
     }) as unknown as typeof fetch;
 
     const app = Fastify({ logger: false });
+    app.decorate("authDisabled", true);
     await app.register(whatsappOnboardingRoutes, {
       metaSystemUserToken: "TKN",
       metaSystemUserId: "SYS",
@@ -406,7 +443,7 @@ describe("WhatsApp onboarding ESU chat-registration (Task 8.5)", () => {
     const response = await app.inject({
       method: "POST",
       url: "/whatsapp/onboard",
-      payload: { esToken: "ESU_TOKEN" },
+      payload: { esToken: "ESU_TOKEN", organizationId: "org_test" },
     });
     expect(response.statusCode).toBe(200);
     const body = response.json();
@@ -431,6 +468,7 @@ describe("WhatsApp onboarding ESU chat-registration (Task 8.5)", () => {
     }) as unknown as typeof fetch;
 
     const app = Fastify({ logger: false });
+    app.decorate("authDisabled", true);
     await app.register(whatsappOnboardingRoutes, {
       metaSystemUserToken: "TKN",
       metaSystemUserId: "SYS",
@@ -450,7 +488,7 @@ describe("WhatsApp onboarding ESU chat-registration (Task 8.5)", () => {
     const response = await app.inject({
       method: "POST",
       url: "/whatsapp/onboard",
-      payload: { esToken: "ESU_TOKEN" },
+      payload: { esToken: "ESU_TOKEN", organizationId: "org_test" },
     });
     expect(response.statusCode).toBe(200);
     const body = response.json();
