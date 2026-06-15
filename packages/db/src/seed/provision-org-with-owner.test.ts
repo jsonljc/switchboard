@@ -11,11 +11,21 @@ vi.mock("./seed-org-day-one-agents.js", () => ({
 }));
 vi.mock("./provision-org-agents.js", () => ({
   provisionOrgAgentDeployments: vi.fn(async () => ({ riley: { deploymentId: "deploy_riley" } })),
+  ensureAlexForOrg: vi.fn(async () => ({
+    listingId: "listing_alex-conversion",
+    deploymentId: "deploy_alex",
+  })),
+}));
+// seedAlexSkillPack reads reference .md files from disk + writes KnowledgeEntry rows; stub
+// it so the pilot path can be asserted without disk I/O or a knowledgeEntry mock.
+vi.mock("./seed-alex-skill-pack.js", () => ({
+  seedAlexSkillPack: vi.fn(async () => {}),
 }));
 
 import { provisionOrgWithOwner, provisionPilotOrg } from "./provision-org-with-owner.js";
 import { seedOrgDayOneAgents } from "./seed-org-day-one-agents.js";
-import { provisionOrgAgentDeployments } from "./provision-org-agents.js";
+import { provisionOrgAgentDeployments, ensureAlexForOrg } from "./provision-org-agents.js";
+import { seedAlexSkillPack } from "./seed-alex-skill-pack.js";
 
 const TEST_SECRET = "test-encryption-secret-at-least-32-chars-long";
 
@@ -156,6 +166,13 @@ describe("provisionOrgWithOwner", () => {
     await provisionOrgWithOwner(prisma as never, { email: "owner@clinic.test" });
     expect(provisionOrgAgentDeployments).not.toHaveBeenCalled();
   });
+
+  it("does NOT eagerly provision Alex either (signup defers it to lazy GET /config)", async () => {
+    const { prisma } = makeTxPrisma();
+    await provisionOrgWithOwner(prisma as never, { email: "owner@clinic.test" });
+    expect(ensureAlexForOrg).not.toHaveBeenCalled();
+    expect(seedAlexSkillPack).not.toHaveBeenCalled();
+  });
 });
 
 describe("provisionPilotOrg", () => {
@@ -194,5 +211,21 @@ describe("provisionPilotOrg", () => {
     const user = await provisionPilotOrg(prisma as never, { email: "owner@clinic.test" });
     expect(user.id).toBe("du_1");
     expect(user.email).toBe("owner@clinic.test");
+  });
+
+  it("eagerly provisions Alex (listing+deployment AND skill pack) for the new org", async () => {
+    // A CLI-provisioned pilot org never hits the lazy GET /config route that otherwise
+    // seeds Alex, so the pilot org would have no concierge until a dashboard load. The
+    // pilot provisioner must seed Alex whole, scoped to the new org.
+    const { prisma } = makeTxPrisma();
+    const user = await provisionPilotOrg(prisma as never, { email: "owner@clinic.test" });
+
+    expect(ensureAlexForOrg).toHaveBeenCalledTimes(1);
+    const [, alexOrg] = (ensureAlexForOrg as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(alexOrg).toBe(user.organizationId);
+
+    expect(seedAlexSkillPack).toHaveBeenCalledTimes(1);
+    const [, packOrg] = (seedAlexSkillPack as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(packOrg).toBe(user.organizationId);
   });
 });

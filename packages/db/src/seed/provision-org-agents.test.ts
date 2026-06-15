@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { provisionOrgAgentDeployments } from "./provision-org-agents.js";
+import { provisionOrgAgentDeployments, ensureAlexForOrg } from "./provision-org-agents.js";
 // Direct source import (NOT the @switchboard/db barrel) to avoid a self-referential
 // cycle now that the orchestrator is also exported from index.ts.
 import { recommendationHandoffApprovalPolicyId } from "./recommendation-handoff-governance.js";
@@ -68,7 +68,11 @@ function buildMockPrisma(
         deploymentUpserts.push(args);
         const skillSlug = args.create.skillSlug as string;
         writeOrder.push(`deployment:${skillSlug}`);
-        return { id: skillSlug === "ad-optimizer" ? "deploy_riley" : "deploy_mira" };
+        const idBySlug: Record<string, string> = {
+          "ad-optimizer": "deploy_riley",
+          alex: "deploy_alex",
+        };
+        return { id: idBySlug[skillSlug] ?? "deploy_mira" };
       }),
     },
     policy: {
@@ -226,6 +230,61 @@ describe("provisionOrgAgentDeployments", () => {
       expect(p._deploymentUpserts.find((d) => d.create.skillSlug === "creative")).toBeUndefined();
       expect(p._enablementUpserts).toHaveLength(0);
       expect(result.mira).toEqual({ deploymentId: "existing_mira" });
+    });
+  });
+
+  describe("ensureAlexForOrg", () => {
+    it("ensures the Alex listing no-clobber with the canonical create payload", async () => {
+      await ensureAlexForOrg(prisma, "org_acme");
+      const listing = prisma._listingUpserts.find((l) => l.where.slug === "alex-conversion");
+      expect(listing).toBeDefined();
+      expect(listing!.update).toEqual({});
+      // Payload MUST match apps/api/src/lib/ensure-alex-listing.ts (the sibling no-clobber
+      // writer on the lazy GET /config path); whichever runs first wins, so they must agree.
+      expect(listing!.create).toMatchObject({
+        slug: "alex-conversion",
+        name: "Alex",
+        type: "ai-agent",
+        status: "listed",
+        autonomyLevel: "supervised",
+        priceTier: "free",
+      });
+    });
+
+    it("upserts the Alex deployment keyed by org + listing with skillSlug 'alex', status active", async () => {
+      await ensureAlexForOrg(prisma, "org_acme");
+      expect(prisma._deploymentUpserts).toHaveLength(1);
+      const dep = prisma._deploymentUpserts[0]!;
+      expect(dep.where.organizationId_listingId).toEqual({
+        organizationId: "org_acme",
+        listingId: "listing_alex-conversion",
+      });
+      expect(dep.create).toMatchObject({ skillSlug: "alex", status: "active" });
+      // No-clobber so a re-run never overwrites operator-set deployment state.
+      expect(dep.update).toEqual({});
+    });
+
+    it("ensures the listing BEFORE the deployment (protects the no-clobber create)", async () => {
+      await ensureAlexForOrg(prisma, "org_acme");
+      expect(prisma._writeOrder.indexOf("listing:alex-conversion")).toBeLessThan(
+        prisma._writeOrder.indexOf("deployment:alex"),
+      );
+    });
+
+    it("returns the Alex listing + deployment ids", async () => {
+      const result = await ensureAlexForOrg(prisma, "org_acme");
+      expect(result).toEqual({
+        listingId: "listing_alex-conversion",
+        deploymentId: "deploy_alex",
+      });
+    });
+
+    it("is idempotent: two runs produce identical deployment create payloads", async () => {
+      await ensureAlexForOrg(prisma, "org_acme");
+      const first = prisma._deploymentUpserts[0]!.create;
+      await ensureAlexForOrg(prisma, "org_acme");
+      const second = prisma._deploymentUpserts[1]!.create;
+      expect(second).toEqual(first);
     });
   });
 
