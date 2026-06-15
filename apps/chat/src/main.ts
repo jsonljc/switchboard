@@ -24,6 +24,7 @@ import { FailedMessageStore } from "./dlq/failed-message-store.js";
 import { registerManagedWebhookRoutes } from "./routes/managed-webhook.js";
 import { chatHealthRoutes } from "./routes/health.js";
 import { buildWhatsAppStatusBridge } from "./bridges/whatsapp-test-send-status-bridge.js";
+import { makeWhatsAppStatusHandler } from "./bridges/whatsapp-status-persistence.js";
 import { CtwaAdapter } from "@switchboard/ad-optimizer";
 
 async function main() {
@@ -130,12 +131,15 @@ async function main() {
   // DLQ store
   let failedMessageStore: FailedMessageStore | null = null;
   let testSendStore: import("@switchboard/db").PrismaWhatsAppTestSendStore | null = null;
+  let whatsappStatusStore: import("@switchboard/db").PrismaWhatsAppStatusStore | null = null;
   if (process.env["DATABASE_URL"]) {
-    const { getDb, PrismaWhatsAppTestSendStore } = await import("@switchboard/db");
+    const { getDb, PrismaWhatsAppTestSendStore, PrismaWhatsAppStatusStore } =
+      await import("@switchboard/db");
     const prisma = getDb();
     healthPrisma = prisma;
     failedMessageStore = new FailedMessageStore(prisma);
     testSendStore = new PrismaWhatsAppTestSendStore(prisma);
+    whatsappStatusStore = new PrismaWhatsAppStatusStore(prisma);
   }
 
   // Initialize Redis-backed security store if Redis is available
@@ -346,26 +350,35 @@ async function main() {
 
   // --- Managed channel webhook routes (GET verification + POST messages) ---
   const statusBridge = testSendStore ? buildWhatsAppStatusBridge({ testSendStore }) : null;
+  // Persist real-conversation delivery/read/failed receipts to the general
+  // status store (audit #6: only the test-send bridge consumed status before, so
+  // production receipts were dropped). The test-send bridge stays wired as the
+  // downstream handler, preserving its orgId guard.
+  const onStatusUpdate =
+    whatsappStatusStore || statusBridge
+      ? makeWhatsAppStatusHandler({
+          statusStore: whatsappStatusStore,
+          next: statusBridge
+            ? async (update, orgId) => {
+                if (!orgId) {
+                  app.log.warn(
+                    { messageId: update.messageId },
+                    "WhatsApp status webhook arrived without orgId; skipping test-send bridge",
+                  );
+                  return;
+                }
+                await statusBridge.onStatusUpdate(update, orgId);
+              }
+            : undefined,
+        })
+      : undefined;
   if (registry) {
     registerManagedWebhookRoutes(app, {
       registry,
       failedMessageStore,
       ctwaAdapter,
       dedup: { checkDedup },
-      ...(statusBridge
-        ? {
-            onStatusUpdate: async (update, orgId) => {
-              if (!orgId) {
-                app.log.warn(
-                  { messageId: update.messageId },
-                  "WhatsApp status webhook arrived without orgId; skipping test-send bridge",
-                );
-                return;
-              }
-              await statusBridge.onStatusUpdate(update, orgId);
-            },
-          }
-        : {}),
+      ...(onStatusUpdate ? { onStatusUpdate } : {}),
     });
   }
 
