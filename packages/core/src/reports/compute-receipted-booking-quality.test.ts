@@ -13,12 +13,15 @@ const ctx = {
 } as never;
 
 const RAISED = new Date("2026-06-10");
+const STARTS = new Date("2026-06-16T02:00:00Z");
 
-/** Minimal valid ReceiptedBookingView: only attributionConfidence + exceptions drive the aggregate. */
+/** Minimal valid ReceiptedBookingView. attributionConfidence + exceptions drive the aggregate;
+ *  service + startsAt drive the worklist row (handles + ordering tiebreaks). */
 function mkView(
   attributionConfidence: AttributionConfidence,
   exceptions: ExceptionEntry[] = [],
   bookingId = "bk",
+  opts: { startsAt?: Date; service?: string } = {},
 ): ReceiptedBookingView {
   return {
     bookingId,
@@ -34,6 +37,8 @@ function mkView(
     matchedPolicies: null,
     humanApprovalId: null,
     attendanceState: null,
+    service: opts.service ?? `svc-${bookingId}`,
+    startsAt: opts.startsAt ?? STARTS,
     paymentEventIds: [],
     expectedValue: null,
   };
@@ -59,18 +64,24 @@ describe("computeReceiptedBookingQuality", () => {
 
     const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
 
-    expect(result).toEqual({
-      cohortSize: 5,
-      confidence: { deterministic: 2, high: 1, medium: 1, low: 0, unattributed: 1 },
-      exceptions: {
-        missing_source: 1,
-        missing_consent: 2,
-        manual_override: 0,
-        duplicate_contact_risk: 1,
-      },
-      // b3, b4, b5 each carry an open exception; b1, b2 are clean.
-      bookingsNeedingAttention: 3,
+    expect(result.cohortSize).toBe(5);
+    expect(result.confidence).toEqual({
+      deterministic: 2,
+      high: 1,
+      medium: 1,
+      low: 0,
+      unattributed: 1,
     });
+    expect(result.exceptions).toEqual({
+      missing_source: 1,
+      missing_consent: 2,
+      manual_override: 0,
+      duplicate_contact_risk: 1,
+    });
+    // b3, b4, b5 each carry an open exception; b1, b2 are clean.
+    expect(result.bookingsNeedingAttention).toBe(3);
+    // Worst-first: b4 (2 codes) > b5 (unattributed, 1 code) > b3 (high, 1 code).
+    expect(result.worklist.map((w) => w.bookingId)).toEqual(["b4", "b5", "b3"]);
     expect(receiptedBookings.listForCohort).toHaveBeenCalledWith({
       orgId: "o1",
       from: new Date("2026-06-08"),
@@ -92,11 +103,12 @@ describe("computeReceiptedBookingQuality", () => {
 
     expect(result.exceptions.missing_consent).toBe(0);
     expect(result.bookingsNeedingAttention).toBe(0);
+    expect(result.worklist).toEqual([]);
     expect(result.confidence.low).toBe(1);
     expect(result.cohortSize).toBe(1);
   });
 
-  it("returns an all-zero breakdown for an empty cohort", async () => {
+  it("returns an all-zero breakdown with an empty worklist for an empty cohort", async () => {
     const receiptedBookings = { listForCohort: vi.fn(async () => []) };
 
     const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
@@ -111,6 +123,7 @@ describe("computeReceiptedBookingQuality", () => {
         duplicate_contact_risk: 0,
       },
       bookingsNeedingAttention: 0,
+      worklist: [],
     });
   });
 
@@ -131,5 +144,68 @@ describe("computeReceiptedBookingQuality", () => {
 
     expect(result.exceptions.missing_consent).toBe(1);
     expect(result.bookingsNeedingAttention).toBe(1);
+    expect(result.worklist).toHaveLength(1);
+    expect(result.worklist[0]?.openExceptionCodes).toEqual(["missing_consent"]);
+  });
+
+  it("builds each worklist row with the handle, confidence, and deduped codes in canonical order", async () => {
+    const views: ReceiptedBookingView[] = [
+      mkView(
+        "medium",
+        // Entries supplied out of canonical order + a duplicate; row must be deduped + canonical.
+        [
+          { code: "duplicate_contact_risk", raisedAt: RAISED },
+          { code: "missing_consent", raisedAt: RAISED },
+          { code: "missing_consent", raisedAt: RAISED },
+        ],
+        "b1",
+        { service: "Botox consult", startsAt: new Date("2026-06-16T02:00:00Z") },
+      ),
+    ];
+    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
+
+    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+
+    expect(result.worklist[0]).toEqual({
+      bookingId: "b1",
+      service: "Botox consult",
+      startsAt: "2026-06-16T02:00:00.000Z",
+      attributionConfidence: "medium",
+      // Canonical taxonomy order: missing_consent before duplicate_contact_risk.
+      openExceptionCodes: ["missing_consent", "duplicate_contact_risk"],
+    });
+  });
+
+  it("caps the worklist and keeps bookingsNeedingAttention as the true total", async () => {
+    const views: ReceiptedBookingView[] = Array.from({ length: 30 }, (_, i) =>
+      mkView("unattributed", [{ code: "missing_source", raisedAt: RAISED }], `b${i}`),
+    );
+    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
+
+    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+
+    expect(result.bookingsNeedingAttention).toBe(30);
+    expect(result.worklist).toHaveLength(25);
+  });
+
+  it("breaks ties by oldest appointment first, then bookingId", async () => {
+    const views: ReceiptedBookingView[] = [
+      // Same code-count + confidence; differ only on startsAt. Older 'bz' must precede newer 'ba'.
+      mkView("low", [{ code: "missing_source", raisedAt: RAISED }], "ba", {
+        startsAt: new Date("2026-06-18T00:00:00Z"),
+      }),
+      mkView("low", [{ code: "missing_source", raisedAt: RAISED }], "bz", {
+        startsAt: new Date("2026-06-16T00:00:00Z"),
+      }),
+      // Same startsAt as 'bz'; bookingId 'bk' breaks the final tie (bk < bz).
+      mkView("low", [{ code: "missing_source", raisedAt: RAISED }], "bk", {
+        startsAt: new Date("2026-06-16T00:00:00Z"),
+      }),
+    ];
+    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
+
+    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+
+    expect(result.worklist.map((w) => w.bookingId)).toEqual(["bk", "bz", "ba"]);
   });
 });

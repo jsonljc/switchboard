@@ -165,6 +165,20 @@ export interface ReceiptedBookingsData {
   count: number;
 }
 
+/** One bookings-needing-attention row for the owner worklist: the booking behind the aggregate
+ *  count, with a human-recognizable handle (service + appointment time, non-PII) so the owner can
+ *  act on it. `startsAt` is an ISO string (the report payload is JSON-serialized and cached). */
+export interface ReceiptedBookingWorklistItem {
+  bookingId: string;
+  /** The booked service, e.g. "Botox consult" (Booking.service). */
+  service: string;
+  /** Appointment start, ISO-8601 (Booking.startsAt). */
+  startsAt: string;
+  attributionConfidence: AttributionConfidence;
+  /** Distinct OPEN exception codes for this booking, in canonical taxonomy order. */
+  openExceptionCodes: ExceptionCode[];
+}
+
 /** Proof-quality breakdown of the receipted-booking cohort: how attributable each booking is, and
  *  which bookings are missing the evidence the proof chain needs. Computed lazily over the slice-4
  *  read-projection (`receiptedBookings.listForCohort`), so `cohortSize` matches `receiptedBookings.count`
@@ -179,6 +193,9 @@ export interface ReceiptedBookingQualityData {
   exceptions: Record<ExceptionCode, number>;
   /** Distinct receipted bookings with at least one open exception (the worklist size). */
   bookingsNeedingAttention: number;
+  /** The bookings behind `bookingsNeedingAttention`, worst-first, capped (the drill-down worklist).
+   *  `worklist.length <= bookingsNeedingAttention`; when capped the consumer surfaces "N of M". */
+  worklist: ReceiptedBookingWorklistItem[];
 }
 
 /** Weekly receipted-booking REVENUE: the sum of per-booking expected value over the cohort, in CENTS.

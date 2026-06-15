@@ -37,6 +37,7 @@ const samplePayload: ReportDataV1 = {
       duplicate_contact_risk: 0,
     },
     bookingsNeedingAttention: 0,
+    worklist: [],
   },
   receiptedBookingRevenue: { revenueCents: 0, currency: null, bookingsWithValue: 0, cohortSize: 0 },
 };

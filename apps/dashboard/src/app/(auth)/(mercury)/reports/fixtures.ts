@@ -152,6 +152,37 @@ export const goodFixture: ReportDataV1 = {
       duplicate_contact_risk: 1,
     },
     bookingsNeedingAttention: 4,
+    // The 4 bookings behind the count, worst-first (server-sorted, capped at 25; here under the cap).
+    worklist: [
+      {
+        bookingId: "bk-good-1",
+        service: "Lip filler",
+        startsAt: "2026-06-16T02:30:00.000Z",
+        attributionConfidence: "unattributed",
+        openExceptionCodes: ["missing_source"],
+      },
+      {
+        bookingId: "bk-good-2",
+        service: "Botox consult",
+        startsAt: "2026-06-17T01:00:00.000Z",
+        attributionConfidence: "low",
+        openExceptionCodes: ["missing_consent"],
+      },
+      {
+        bookingId: "bk-good-3",
+        service: "Skin assessment",
+        startsAt: "2026-06-18T06:00:00.000Z",
+        attributionConfidence: "medium",
+        openExceptionCodes: ["missing_consent"],
+      },
+      {
+        bookingId: "bk-good-4",
+        service: "Microneedling",
+        startsAt: "2026-06-19T08:15:00.000Z",
+        attributionConfidence: "high",
+        openExceptionCodes: ["duplicate_contact_risk"],
+      },
+    ],
   },
   receiptedBookingRevenue: {
     revenueCents: 6150000,
@@ -273,6 +304,7 @@ export const quietFixture: ReportDataV1 = {
       duplicate_contact_risk: 0,
     },
     bookingsNeedingAttention: 0,
+    worklist: [],
   },
   receiptedBookingRevenue: {
     revenueCents: 0,
@@ -421,6 +453,52 @@ export const problemFixture: ReportDataV1 = {
       duplicate_contact_risk: 5,
     },
     bookingsNeedingAttention: 33,
+    // 33 bookings need attention; this sample shows the worst few (the production worklist is
+    // server-sorted and capped at 25, so the surface shows "first N of 33").
+    worklist: [
+      {
+        bookingId: "bk-q-1",
+        service: "Lip filler",
+        startsAt: "2026-04-06T02:00:00.000Z",
+        attributionConfidence: "unattributed",
+        openExceptionCodes: ["missing_source", "missing_consent"],
+      },
+      {
+        bookingId: "bk-q-2",
+        service: "Botox",
+        startsAt: "2026-04-07T03:30:00.000Z",
+        attributionConfidence: "unattributed",
+        openExceptionCodes: ["missing_source", "missing_consent"],
+      },
+      {
+        bookingId: "bk-q-3",
+        service: "Chemical peel",
+        startsAt: "2026-04-08T05:00:00.000Z",
+        attributionConfidence: "unattributed",
+        openExceptionCodes: ["missing_source"],
+      },
+      {
+        bookingId: "bk-q-4",
+        service: "Skin assessment",
+        startsAt: "2026-04-09T01:30:00.000Z",
+        attributionConfidence: "low",
+        openExceptionCodes: ["missing_consent"],
+      },
+      {
+        bookingId: "bk-q-5",
+        service: "Microneedling",
+        startsAt: "2026-04-10T07:00:00.000Z",
+        attributionConfidence: "medium",
+        openExceptionCodes: ["missing_consent"],
+      },
+      {
+        bookingId: "bk-q-6",
+        service: "Filler top-up",
+        startsAt: "2026-04-11T04:00:00.000Z",
+        attributionConfidence: "medium",
+        openExceptionCodes: ["duplicate_contact_risk"],
+      },
+    ],
   },
   receiptedBookingRevenue: {
     revenueCents: 9800000,

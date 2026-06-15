@@ -4,6 +4,7 @@ import { PrismaReceiptedBookingStore } from "../prisma-receipted-booking-store.j
 
 const now = new Date("2026-06-15T00:00:00Z");
 const consentAt = new Date("2026-06-10T00:00:00Z");
+const startsAt = new Date("2026-06-16T02:00:00Z");
 
 function makeMockPrisma() {
   return {
@@ -42,6 +43,8 @@ describe("PrismaReceiptedBookingStore.getView", () => {
       opportunityId: "opp-1",
       workTraceId: "wt-1",
       attendance: "attended",
+      service: "Botox consult",
+      startsAt,
     });
     prisma.receipt.findMany.mockResolvedValueOnce([
       { id: "rcpt-1", kind: "calendar", status: "booked" },
@@ -91,6 +94,8 @@ describe("PrismaReceiptedBookingStore.getView", () => {
       matchedPolicies: "[]",
       humanApprovalId: null,
       attendanceState: "attended",
+      service: "Botox consult",
+      startsAt,
       paymentEventIds: ["pe-1"],
       expectedValue: 45000,
     });
@@ -103,6 +108,8 @@ describe("PrismaReceiptedBookingStore.getView", () => {
       opportunityId: "opp-1",
       workTraceId: "wt-1",
       attendance: null,
+      service: "Facial",
+      startsAt,
     });
     prisma.contact.findFirst.mockResolvedValueOnce({ id: "ct-1" });
 
@@ -133,6 +140,8 @@ describe("PrismaReceiptedBookingStore.getView", () => {
       opportunityId: "opp-1",
       workTraceId: null,
       attendance: null,
+      service: "Facial",
+      startsAt,
     });
     prisma.opportunity.findFirst.mockResolvedValueOnce({ estimatedValue: 30000 }); // live differs
     const issuedAt = new Date("2026-06-14T00:00:00Z");
@@ -160,6 +169,8 @@ describe("PrismaReceiptedBookingStore.getView", () => {
       opportunityId: null,
       workTraceId: null,
       attendance: null,
+      service: "Facial",
+      startsAt,
     });
     // receiptedBooking.findFirst defaults to null (no persisted row)
     const view = await store.getView("org-1", "bk-2", now);
@@ -176,6 +187,8 @@ describe("PrismaReceiptedBookingStore.getView", () => {
       opportunityId: null,
       workTraceId: null,
       attendance: null,
+      service: "Facial",
+      startsAt,
     });
     prisma.conversionRecord.findFirst.mockResolvedValueOnce(null);
     prisma.contact.findFirst.mockResolvedValueOnce({
@@ -203,6 +216,8 @@ describe("PrismaReceiptedBookingStore.getView", () => {
       opportunityId: null,
       workTraceId: null,
       attendance: null,
+      service: "Facial",
+      startsAt,
     });
     prisma.contact.findFirst.mockResolvedValueOnce({
       id: "ct-3",
@@ -241,6 +256,8 @@ describe("PrismaReceiptedBookingStore.listForCohort", () => {
       opportunityId: null,
       workTraceId: null,
       attendance: null,
+      service: "Facial",
+      startsAt,
     });
 
     await store.listForCohort("org-1", from, to, now);
@@ -270,6 +287,8 @@ describe("PrismaReceiptedBookingStore.listForCohort", () => {
         opportunityId: null,
         workTraceId: null,
         attendance: null,
+        service: "Facial",
+        startsAt,
       })
       .mockResolvedValueOnce(null);
 

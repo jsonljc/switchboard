@@ -12,6 +12,7 @@ import type {
   Delta,
   PaidVisitRow,
   AttributionBasis,
+  ReceiptedBookingQualityData,
 } from "../reports/v1.js";
 import { REPORT_WINDOWS, DEFAULT_REPORT_WINDOW } from "../reports/v1.js";
 
@@ -81,6 +82,7 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
           duplicate_contact_risk: 1,
         },
         bookingsNeedingAttention: 4,
+        worklist: [],
       },
       receiptedBookingRevenue: {
         revenueCents: 6150000,
@@ -92,6 +94,32 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
     expect(sample.managedComparison).toBeNull();
     expect(sample.receiptedBookings.count).toBe(41);
     expect(sample.receiptedBookingQuality.cohortSize).toBe(41);
+  });
+
+  it("ReceiptedBookingQualityData carries a per-booking worklist", () => {
+    const quality: ReceiptedBookingQualityData = {
+      cohortSize: 3,
+      confidence: { deterministic: 1, high: 0, medium: 0, low: 0, unattributed: 2 },
+      exceptions: {
+        missing_source: 2,
+        missing_consent: 1,
+        manual_override: 0,
+        duplicate_contact_risk: 0,
+      },
+      bookingsNeedingAttention: 2,
+      worklist: [
+        {
+          bookingId: "bk-1",
+          service: "Botox consult",
+          startsAt: "2026-06-16T02:00:00.000Z",
+          attributionConfidence: "unattributed",
+          openExceptionCodes: ["missing_source", "missing_consent"],
+        },
+      ],
+    };
+    expect(quality.worklist).toHaveLength(1);
+    expect(quality.worklist[0]?.openExceptionCodes).toContain("missing_source");
+    expect(quality.worklist[0]?.startsAt).toBe("2026-06-16T02:00:00.000Z");
   });
 
   it("ManagedComparisonData accepts an in-period-cohort source", () => {

@@ -123,6 +123,7 @@ describe("createPeriodRollup", () => {
         duplicate_contact_risk: 0,
       },
       bookingsNeedingAttention: 0,
+      worklist: [],
     });
   });
 

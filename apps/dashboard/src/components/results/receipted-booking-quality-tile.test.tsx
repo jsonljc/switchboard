@@ -21,6 +21,28 @@ describe("ReceiptedBookingQualityTile", () => {
     expect(text).toContain("Missing source");
     // A zero-count exception code is not shown in the worklist.
     expect(text).not.toContain("Manual override");
+
+    // The per-booking drill-down: the actual bookings behind the count, by service + appointment.
+    expect(text).toContain("Lip filler");
+    expect(text).toContain("Botox consult");
+    expect(text).toContain("16 Jun"); // bk-good-1 startsAt 02:30Z => 10:30 SGT, 16 Jun
+    // Nothing is truncated when the worklist holds every needing-attention booking (4 of 4).
+    expect(text).not.toContain("showing first");
+  });
+
+  it("surfaces an honest truncation indicator when the worklist is capped below the total", () => {
+    const truncated = buildResultsModel({
+      ...goodFixture,
+      receiptedBookingQuality: {
+        ...goodFixture.receiptedBookingQuality,
+        bookingsNeedingAttention: 5,
+        worklist: goodFixture.receiptedBookingQuality.worklist.slice(0, 2),
+      },
+    });
+    const { container } = render(<ReceiptedBookingQualityTile model={truncated} />);
+    const text = container.textContent ?? "";
+
+    expect(text).toContain("showing first 2 of 5");
   });
 
   it("shows a quiet empty state (no rungs, no dash) when the cohort is empty", () => {

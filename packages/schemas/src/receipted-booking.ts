@@ -100,6 +100,9 @@ export const ReceiptedBookingViewSchema = z.object({
   matchedPolicies: z.string().nullable(),
   humanApprovalId: z.string().nullable(),
   attendanceState: z.string().nullable(),
+  // Booking handles for the owner worklist: human-recognizable, non-PII (no name/phone/email).
+  service: z.string(),
+  startsAt: z.date(),
   paymentEventIds: z.array(z.string()),
   expectedValue: z.number().int().nullable(),
   issuedAt: z.date().nullable().optional(),

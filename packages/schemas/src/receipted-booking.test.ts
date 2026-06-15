@@ -72,6 +72,8 @@ const baseView = {
   matchedPolicies: "[]",
   humanApprovalId: null,
   attendanceState: "attended",
+  service: "Botox consult",
+  startsAt: new Date("2026-06-16T02:00:00Z"),
   paymentEventIds: ["pe-1"],
   expectedValue: 45000,
 };
@@ -96,6 +98,8 @@ describe("ReceiptedBookingViewSchema", () => {
       matchedPolicies: null,
       humanApprovalId: null,
       attendanceState: null,
+      service: "Lip filler",
+      startsAt: new Date("2026-06-17T03:00:00Z"),
       paymentEventIds: [],
       expectedValue: null,
     });
@@ -125,5 +129,20 @@ describe("ReceiptedBookingViewSchema", () => {
       ReceiptedBookingViewSchema.safeParse({ ...baseView, attributionConfidence: "guessed" })
         .success,
     ).toBe(false);
+  });
+
+  it("requires the service and startsAt booking handles", () => {
+    const withoutService = { ...baseView } as Record<string, unknown>;
+    delete withoutService.service;
+    expect(ReceiptedBookingViewSchema.safeParse(withoutService).success).toBe(false);
+    const withoutStartsAt = { ...baseView } as Record<string, unknown>;
+    delete withoutStartsAt.startsAt;
+    expect(ReceiptedBookingViewSchema.safeParse(withoutStartsAt).success).toBe(false);
+  });
+
+  it("carries the service and startsAt handles when present", () => {
+    const r = ReceiptedBookingViewSchema.parse(baseView);
+    expect(r.service).toBe("Botox consult");
+    expect(r.startsAt).toEqual(new Date("2026-06-16T02:00:00Z"));
   });
 });

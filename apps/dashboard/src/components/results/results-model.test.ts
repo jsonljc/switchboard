@@ -80,7 +80,20 @@ describe("buildResultsModel", () => {
         duplicate_contact_risk: 0,
       },
       bookingsNeedingAttention: 0,
+      worklist: [],
     });
+  });
+
+  it("defaults a missing worklist to [] when a stale cached payload predates the field", () => {
+    // A payload cached after the quality block shipped but before the worklist field: the block is
+    // present, but worklist is absent. The whole-object fallback does not fire, so normalize the
+    // nested field, or the tile crashes on worklist.map for up to one cache TTL post-deploy.
+    const stale = { ...goodFixture } as unknown as import("./types").ReportData;
+    delete (stale.receiptedBookingQuality as unknown as Record<string, unknown>)["worklist"];
+    const m = buildResultsModel(stale);
+    expect(m.receiptedBookingQuality.worklist).toEqual([]);
+    // The rest of the (present) block is preserved, not zeroed.
+    expect(m.receiptedBookingQuality.cohortSize).toBe(41);
   });
 });
 
