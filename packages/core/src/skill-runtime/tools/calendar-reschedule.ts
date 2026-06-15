@@ -55,6 +55,10 @@ export function buildRescheduleOperations(
       description:
         "Reschedule the contact's upcoming appointment to a new slot. The booking is resolved from the active contact — never pass a contactId.",
       effectCategory: "external_mutation" as const,
+      // See calendar-book booking.create: auto-approve at the default "guided"
+      // trust so Alex can manage bookings on a real org (the in-skill approval
+      // hook cannot park, so a gate here dead-ends); "supervised" still gates.
+      governanceOverride: { guided: "auto-approve" as const },
       idempotent: false,
       inputSchema: {
         type: "object",
@@ -151,6 +155,10 @@ export function buildRescheduleOperations(
       description:
         "Cancel the contact's upcoming appointment. Resolved from the active contact — never pass a contactId.",
       effectCategory: "external_mutation" as const,
+      // See calendar-book booking.create: auto-approve at the default "guided"
+      // trust so Alex can manage bookings on a real org (the in-skill approval
+      // hook cannot park, so a gate here dead-ends); "supervised" still gates.
+      governanceOverride: { guided: "auto-approve" as const },
       idempotent: false,
       inputSchema: {
         type: "object",
