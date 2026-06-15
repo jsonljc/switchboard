@@ -7,7 +7,7 @@ vi.mock("@/lib/idempotency", () => ({
   createIdempotencyKey: vi.fn(() => "test-idem-key"),
 }));
 
-const invalidateQueriesMock = vi.fn<[{ queryKey: unknown }], Promise<void>>(() =>
+const invalidateQueriesMock = vi.fn<(args: { queryKey: unknown }) => Promise<void>>(() =>
   Promise.resolve(),
 );
 
@@ -76,7 +76,7 @@ describe("ReconcileRowAction", () => {
 
   it("submits override_attribution with the selected confidence and reason", async () => {
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
-    const onReconciled = vi.fn<[], void>();
+    const onReconciled = vi.fn<() => void>();
 
     render(<ReconcileRowAction row={makeRow()} onReconciled={onReconciled} />);
 

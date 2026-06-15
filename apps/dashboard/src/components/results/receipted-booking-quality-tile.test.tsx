@@ -8,7 +8,9 @@ import { ReceiptedBookingQualityTile } from "./receipted-booking-quality-tile";
 // tile test does not require a QueryClientProvider wrapper.
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
-    invalidateQueries: vi.fn<[{ queryKey: unknown }], Promise<void>>(() => Promise.resolve()),
+    invalidateQueries: vi.fn<(args: { queryKey: unknown }) => Promise<void>>(() =>
+      Promise.resolve(),
+    ),
   }),
 }));
 vi.mock("@/hooks/use-query-keys", () => ({
