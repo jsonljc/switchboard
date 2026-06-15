@@ -1707,7 +1707,7 @@
 
 /* ─── Reconcile row action ─── */
 
-/* Outer wrapper — inline flex, sits inside a worklist row */
+/* Outer wrapper: inline flex, sits inside a worklist row */
 .reconcileRowAction {
   display: flex;
   flex-direction: column;
@@ -1722,7 +1722,7 @@
   gap: 0.375rem;
 }
 
-/* Label wrapping a select — stacks vertically, compact */
+/* Label wrapping a select: stacks vertically, compact */
 .reconcileLabel {
   display: flex;
   flex-direction: column;
