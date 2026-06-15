@@ -236,6 +236,11 @@ export {
   type WebhookStatus,
 } from "./stores/prisma-whatsapp-test-send-store.js";
 export {
+  PrismaWhatsAppStatusStore,
+  type WhatsAppStatusRecord,
+  type UpsertStatusInput,
+} from "./stores/prisma-whatsapp-status-store.js";
+export {
   PrismaRecommendationOutcomeStore,
   PrismaAttributableRecommendationStore,
   RecommendationOutcomeAlreadyExistsError,
