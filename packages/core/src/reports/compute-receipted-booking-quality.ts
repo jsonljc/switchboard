@@ -9,9 +9,9 @@ import type {
 /**
  * Roll the receipted-booking read-projection (spec slice 4) up into a proof-quality summary for the
  * owner report: how many receipted bookings sit at each attribution-confidence rung, and how many
- * carry each open exception code (the worklist). Consumes `receiptedBookings.listForCohort` — the
- * same distinct booked|held calendar-receipt cohort as the north-star count — so `cohortSize` always
- * equals `receiptedBookings.count`.
+ * carry each open exception code (the worklist). Consumes `receiptedBookings.listForCohort` (the same
+ * distinct booked|held calendar-receipt cohort as the north-star count), so `cohortSize` matches
+ * `receiptedBookings.count` except for orphaned cohort rows (booking hard-deleted) the store filters out.
  *
  * Pure aggregation: `attributionConfidence` and `exceptions` were already derived per booking by the
  * store via the pure `core/receipts` functions, so this never re-implements scoring (no drift). The
@@ -45,10 +45,14 @@ export async function computeReceiptedBookingQuality(
 
   for (const view of views) {
     confidence[view.attributionConfidence] += 1;
-    const open = view.exceptions.filter((entry) => !entry.resolvedAt);
-    if (open.length > 0) bookingsNeedingAttention += 1;
-    for (const entry of open) {
-      exceptions[entry.code] += 1;
+    // A worklist counts bookings, not raw entries: dedupe a booking's open exceptions by code so each
+    // code counts the booking once (consistent with bookingsNeedingAttention). Resolved entries excluded.
+    const openCodes = new Set(
+      view.exceptions.filter((entry) => !entry.resolvedAt).map((entry) => entry.code),
+    );
+    if (openCodes.size > 0) bookingsNeedingAttention += 1;
+    for (const code of openCodes) {
+      exceptions[code] += 1;
     }
   }
 

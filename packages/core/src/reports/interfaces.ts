@@ -155,7 +155,7 @@ export interface ReportStores {
   };
 
   receiptedBookings: {
-    /** Lazily-assembled receipted-booking views for the [from, to) window — the same distinct
+    /** Lazily-assembled receipted-booking views for the [from, to) window: the same distinct
      *  booked|held calendar-receipt cohort as `receipts.countReceiptedBookingsInWindow`, org-scoped
      *  on every join leg (the F12 read-side IDOR lesson). Backs the owner-report proof-quality summary. */
     listForCohort(input: { orgId: string; from: Date; to: Date }): Promise<ReceiptedBookingView[]>;

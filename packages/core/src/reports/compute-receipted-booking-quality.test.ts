@@ -14,7 +14,7 @@ const ctx = {
 
 const RAISED = new Date("2026-06-10");
 
-/** Minimal valid ReceiptedBookingView — only attributionConfidence + exceptions drive the aggregate. */
+/** Minimal valid ReceiptedBookingView: only attributionConfidence + exceptions drive the aggregate. */
 function mkView(
   attributionConfidence: AttributionConfidence,
   exceptions: ExceptionEntry[] = [],
@@ -112,5 +112,24 @@ describe("computeReceiptedBookingQuality", () => {
       },
       bookingsNeedingAttention: 0,
     });
+  });
+
+  it("counts each open exception code once per booking, even with duplicate entries", async () => {
+    const views: ReceiptedBookingView[] = [
+      mkView(
+        "medium",
+        [
+          { code: "missing_consent", raisedAt: RAISED },
+          { code: "missing_consent", raisedAt: RAISED },
+        ],
+        "b1",
+      ),
+    ];
+    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
+
+    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+
+    expect(result.exceptions.missing_consent).toBe(1);
+    expect(result.bookingsNeedingAttention).toBe(1);
   });
 });

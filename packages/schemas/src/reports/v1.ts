@@ -167,15 +167,17 @@ export interface ReceiptedBookingsData {
 
 /** Proof-quality breakdown of the receipted-booking cohort: how attributable each booking is, and
  *  which bookings are missing the evidence the proof chain needs. Computed lazily over the slice-4
- *  read-projection (`receiptedBookings.listForCohort`), so `cohortSize` equals `receiptedBookings.count`. */
+ *  read-projection (`receiptedBookings.listForCohort`), so `cohortSize` matches `receiptedBookings.count`
+ *  except for orphaned cohort rows (booking hard-deleted) the read-projection filters out. */
 export interface ReceiptedBookingQualityData {
-  /** Total receipted bookings analyzed this window. Equals `receiptedBookings.count` (same cohort). */
+  /** Receipted bookings analyzed this window. Matches `receiptedBookings.count` except for orphaned
+   *  cohort rows (booking hard-deleted) the read-projection filters out. */
   cohortSize: number;
   /** Count of receipted bookings at each attribution-confidence rung; sums to `cohortSize`. */
   confidence: Record<AttributionConfidence, number>;
-  /** Count of receipted bookings carrying each OPEN exception code (a booking may have several). */
+  /** Count of receipted bookings carrying each OPEN exception code (a booking can appear under several). */
   exceptions: Record<ExceptionCode, number>;
-  /** Distinct receipted bookings with at least one open exception — the worklist size. */
+  /** Distinct receipted bookings with at least one open exception (the worklist size). */
   bookingsNeedingAttention: number;
 }
 

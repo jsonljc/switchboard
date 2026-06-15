@@ -336,14 +336,14 @@
 
 /* ─── Receipted-booking proof quality ─── */
 
-/* Section wrapper — richer than a single-metric tile (breakdown + worklist) */
+/* Section wrapper: richer than a single-metric tile (breakdown + worklist) */
 .proofQuality {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-/* Eyebrow label — small caps mono, quiet */
+/* Eyebrow label: small caps mono, quiet */
 .proofQualityEyebrow {
   font-family: var(--mono);
   font-size: 0.6875rem;
@@ -354,7 +354,7 @@
   margin: 0;
 }
 
-/* Lead stat — strongly-attributed share, mono tabular */
+/* Lead stat: strongly-attributed share, mono tabular */
 .proofQualityLead {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
@@ -366,7 +366,7 @@
   margin: 0.125rem 0 0.25rem;
 }
 
-/* Empty state — quiet serif prose, same register as the managed-comparison empty */
+/* Empty state: quiet serif prose, same register as the managed-comparison empty */
 .proofQualityEmpty {
   font-family: var(--font-home-serif);
   font-size: 1rem;
@@ -375,7 +375,7 @@
   margin: 0.125rem 0 0;
 }
 
-/* Confidence rungs — label, amber proportion bar, count (mirrors the funnel row grid) */
+/* Confidence rungs: label, amber proportion bar, count (mirrors the funnel row grid) */
 .proofQualityRungs {
   list-style: none;
   margin: 0;
@@ -398,7 +398,7 @@
   white-space: nowrap;
 }
 
-/* Bar track — muted bg */
+/* Bar track (muted bg) */
 .proofQualityRungTrack {
   height: 6px;
   background: var(--canvas-3);
@@ -406,7 +406,7 @@
   overflow: hidden;
 }
 
-/* Bar fill — amber (--action raw HSL triple); width set inline */
+/* Bar fill: amber (--action raw HSL triple); width set inline */
 .proofQualityRungBar {
   display: block;
   height: 100%;
@@ -430,7 +430,7 @@
   white-space: nowrap;
 }
 
-/* Worklist — the evidence gaps blocking complete proof; hairline rule above */
+/* Worklist: the evidence gaps blocking complete proof; hairline rule above */
 .proofQualityWorklist {
   display: flex;
   flex-direction: column;
@@ -479,7 +479,7 @@
   color: var(--ink-3);
 }
 
-/* All-clear line — quiet, hairline rule above (replaces the worklist when nothing is open) */
+/* All-clear line: quiet, hairline rule above (replaces the worklist when nothing is open) */
 .proofQualityClear {
   font-size: 0.8125rem;
   color: var(--ink-3);
