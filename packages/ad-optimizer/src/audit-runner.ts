@@ -328,6 +328,38 @@ export class AuditRunner {
     }
   }
 
+  /**
+   * D2-7 batching: when the provider supports it, fetch the account-level daily breach window and
+   * 7-day learning window ONCE and index the daily rows by campaignId, so the per-campaign loop
+   * reads its slice instead of re-fetching the whole account 2N times. Returns undefined when the
+   * provider lacks the capability (eval / analysis-only fakes) ⇒ caller keeps the per-campaign
+   * fetch path unchanged.
+   */
+  private async prefetchAndIndexAccountRows(dateRange: {
+    since: string;
+    until: string;
+  }): Promise<
+    { learning: CampaignInsight[]; dailyByCampaign: Map<string, CampaignInsight[]> } | undefined
+  > {
+    if (!this.insightsProvider.prefetchAccountRows) return undefined;
+    const rows = await this.insightsProvider.prefetchAccountRows({
+      endDate: new Date(dateRange.until),
+      ...(this.config.conversionActionType
+        ? { conversionActionType: this.config.conversionActionType }
+        : {}),
+      ...(this.config.attributionWindows
+        ? { attributionWindows: this.config.attributionWindows }
+        : {}),
+    });
+    const dailyByCampaign = new Map<string, CampaignInsight[]>();
+    for (const row of rows.daily) {
+      const existing = dailyByCampaign.get(row.campaignId);
+      if (existing) existing.push(row);
+      else dailyByCampaign.set(row.campaignId, [row]);
+    }
+    return { learning: rows.learning, dailyByCampaign };
+  }
+
   async run(params: {
     dateRange: { since: string; until: string };
     previousDateRange: { since: string; until: string };
@@ -524,12 +556,20 @@ export class AuditRunner {
       previousMap.set(prev.campaignId, prev);
     }
 
+    // D2-7 batching: when the provider exposes the prefetch capability, pull the account-level
+    // daily breach window AND the 7-day learning window ONCE for the whole account, indexed by
+    // campaignId, then feed the per-campaign slices into the loop's provider calls below. This
+    // collapses the previous 2N per-campaign account re-fetches to 2. Absent (eval / analysis-only
+    // fake providers) ⇒ undefined ⇒ each provider call fetches per-campaign as before (back-compat).
+    const prefetched = await this.prefetchAndIndexAccountRows(dateRange);
+
     for (const insight of currentInsights) {
       // 5a: Check learning phase
       const learningInput = await this.insightsProvider.getCampaignLearningData({
         orgId: this.config.orgId,
         accountId: this.config.accountId,
         campaignId: insight.campaignId,
+        ...(prefetched ? { prefetchedLearningRows: prefetched.learning } : {}),
       });
       const learningStatus = this.learningGuard.check(insight.campaignId, learningInput);
       // Task 8 Step 4: derived from the already-fetched `learningStatus` — no extra Graph call.
@@ -570,6 +610,9 @@ export class AuditRunner {
           : {}),
         ...(this.config.attributionWindows
           ? { attributionWindows: this.config.attributionWindows }
+          : {}),
+        ...(prefetched
+          ? { prefetchedDailyRows: prefetched.dailyByCampaign.get(insight.campaignId) ?? [] }
           : {}),
       });
       const decision = decideForCampaign({

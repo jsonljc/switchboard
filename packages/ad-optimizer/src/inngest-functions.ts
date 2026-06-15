@@ -155,15 +155,19 @@ function fmt(d: Date): string {
 }
 
 // TODO(scale): Both weekly-audit and daily-signal-health crons loop
-// deployments serially. Each deployment runs ~4–6 Graph API calls inside a
-// single Inngest step, so wall time scales O(N). With the real
-// MetaCampaignInsightsProvider wired in, cost is now per-campaign (not just
-// per-deployment): each campaign adds ~4 serialized Graph calls (learning
-// inputs + daily breach window) behind the 60s RATE_LIMIT_MS, so total wall
-// time ≈ N_deployments × N_campaigns × 60s. Per-source attribution adds 2 more
-// ACCOUNT-level Graph calls per weekly deployment (the /adsets config edge +
-// account ad-set insights), i.e. +~60s/deployment — flat, not per-campaign.
-// Acceptable at current tenancy; revisit (parallelize via Promise.all of
+// deployments serially inside a single Inngest step, so wall time scales O(N).
+// D2-7 (PR 1.2) hoisted the two ACCOUNT-level insight re-fetches the per-campaign
+// loop used to make — the 7-day learning read and the daily breach window — ABOVE
+// the loop via MetaCampaignInsightsProvider.prefetchAccountRows. They are now 2
+// flat account pulls per deployment, not 2N (previously each campaign re-fetched
+// the whole account twice behind the 60s RATE_LIMIT_MS, i.e. ≈ N_campaigns × 2 ×
+// 60s — the dominant timeout term, now gone). Per weekly deployment that leaves a
+// flat ~6–7 account-level Graph calls (2 window pulls + 2 batched prefetch + the
+// account summary + the per-source /adsets config + account ad-set insights). The
+// remaining per-campaign cost is the ad-set learning read in deriveLearningPhase
+// (getAdSetLearningInputs(campaignId)), a lighter campaign-scoped edge; do NOT relax
+// the proactive 60s limiter until PR 1.3 (D2-5) adds reactive 429/Retry-After
+// backoff. Acceptable at current tenancy; revisit (parallelize via Promise.all of
 // step.run) if launch tenancy crosses ~25 deployments or avg campaign count > 5.
 
 export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies): Promise<void> {

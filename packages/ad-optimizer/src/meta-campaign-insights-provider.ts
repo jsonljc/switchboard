@@ -28,18 +28,14 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     orgId: string;
     accountId: string;
     campaignId: string;
+    /**
+     * D2-7 batching: account-level learning rows pre-fetched ONCE above the per-campaign loop.
+     * Present ⇒ used directly (matched by campaignId) and the account re-fetch is skipped. The
+     * per-campaign ad-set learning call (deriveLearningPhase) is a separate endpoint, unaffected.
+     */
+    prefetchedLearningRows?: CampaignInsight[];
   }): Promise<CampaignLearningInput> {
-    const now = new Date();
-    const since = new Date(now);
-    since.setDate(since.getDate() - 7);
-
-    const insights = await this.adsClient.getCampaignInsights({
-      dateRange: { since: fmt(since), until: fmt(now) },
-      // `effective_status` is invalid on the `/insights` edge (it would always map
-      // to ""); effectiveStatus here is advisory (learning phase is authoritatively
-      // derived from learning_stage_info) and defaults to "UNKNOWN" below.
-      fields: ["campaign_id", "conversions"],
-    });
+    const insights = input.prefetchedLearningRows ?? (await this.fetchAccountLearningRows());
 
     const match = insights.find((i) => i.campaignId === input.campaignId);
 
@@ -97,29 +93,24 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     conversionActionType?: string;
     /** Attribution windows to pin when `conversionActionType` is set. Default ["7d_click"]. */
     attributionWindows?: string[];
+    /**
+     * D2-7 batching: account-level daily rows pre-fetched ONCE above the per-campaign loop.
+     * When present they are used directly (filtered by campaignId below) and the per-campaign
+     * account re-fetch is skipped. Absent ⇒ fetch as before (back-compat for analysis-only /
+     * eval callers that inject a provider without batching).
+     */
+    prefetchedDailyRows?: CampaignInsight[];
   }): Promise<TargetBreachResult> {
-    const BREACH_WINDOW_DAYS = 14;
-    const until = input.endDate;
-    const since = new Date(until);
-    // -(N-1): Meta's time_range is inclusive of both ends, so this spans exactly
-    // BREACH_WINDOW_DAYS daily buckets.
-    since.setDate(since.getDate() - (BREACH_WINDOW_DAYS - 1));
-
-    // Denominator selection (Gate 1): an action-type denominator requires the
-    // `actions` breakdown and a PINNED attribution window so the per-day value is
-    // stable run-to-run. When unset we leave both off — exact back-compat: the
-    // aggregate `conversions` field under Meta's account-default windows.
-    const useActionDenominator = Boolean(input.conversionActionType);
-    const rows = await this.adsClient.getCampaignInsights({
-      dateRange: { since: fmt(since), until: fmt(until) },
-      fields: useActionDenominator
-        ? ["campaign_id", "spend", "conversions", "inline_link_clicks", "actions"]
-        : ["campaign_id", "spend", "conversions", "inline_link_clicks"],
-      timeIncrement: 1,
-      ...(useActionDenominator
-        ? { actionAttributionWindows: input.attributionWindows ?? ["7d_click"] }
-        : {}),
-    });
+    // When pre-fetched rows are supplied, skip the account re-fetch entirely; otherwise fetch the
+    // account-level daily breach window exactly as before. fetchAccountDailyRows owns the window +
+    // denominator field-set logic so the hoisted and per-campaign paths can never drift.
+    const rows =
+      input.prefetchedDailyRows ??
+      (await this.fetchAccountDailyRows({
+        endDate: input.endDate,
+        ...(input.conversionActionType ? { conversionActionType: input.conversionActionType } : {}),
+        ...(input.attributionWindows ? { attributionWindows: input.attributionWindows } : {}),
+      }));
 
     const campaignDays = rows.filter((r) => r.campaignId === input.campaignId);
 
@@ -164,6 +155,79 @@ export class MetaCampaignInsightsProvider implements CampaignInsightsProvider {
     }
 
     return { periodsAboveTarget, granularity: "daily", isApproximate: false };
+  }
+
+  /**
+   * D2-7 batching: pull the account-level daily breach window AND the 7-day learning window ONCE
+   * for the whole account (2 Graph calls total, independent of campaign count). The audit-runner
+   * calls this above the per-campaign loop and feeds the rows back via prefetched* inputs. Reuses
+   * the same private fetchers as the per-campaign path, so the field sets cannot diverge.
+   */
+  async prefetchAccountRows(input: {
+    endDate: Date;
+    conversionActionType?: string;
+    attributionWindows?: string[];
+  }): Promise<{ daily: CampaignInsight[]; learning: CampaignInsight[] }> {
+    const [daily, learning] = await Promise.all([
+      this.fetchAccountDailyRows({
+        endDate: input.endDate,
+        ...(input.conversionActionType ? { conversionActionType: input.conversionActionType } : {}),
+        ...(input.attributionWindows ? { attributionWindows: input.attributionWindows } : {}),
+      }),
+      this.fetchAccountLearningRows(),
+    ]);
+    return { daily, learning };
+  }
+
+  /**
+   * Fetch the account-level 7-day learning window ONCE (one row per campaign, aggregated).
+   * Shared by getCampaignLearningData's per-campaign fallback AND prefetchAccountRows.
+   */
+  private async fetchAccountLearningRows(): Promise<CampaignInsight[]> {
+    const now = new Date();
+    const since = new Date(now);
+    since.setDate(since.getDate() - 7);
+    return this.adsClient.getCampaignInsights({
+      dateRange: { since: fmt(since), until: fmt(now) },
+      // `effective_status` is invalid on the `/insights` edge (it would always map to "");
+      // effectiveStatus is advisory (learning phase is authoritatively derived from
+      // learning_stage_info) and defaults to "UNKNOWN" in the caller.
+      fields: ["campaign_id", "conversions"],
+    });
+  }
+
+  /**
+   * Fetch the account-level daily breach window ONCE (time_increment=1, 14 inclusive days
+   * ending at `endDate`). Shared by getTargetBreachStatus's per-campaign fallback AND the
+   * batched prefetchAccountRows path, so the requested field set never diverges between them.
+   */
+  private async fetchAccountDailyRows(input: {
+    endDate: Date;
+    conversionActionType?: string;
+    attributionWindows?: string[];
+  }): Promise<CampaignInsight[]> {
+    const BREACH_WINDOW_DAYS = 14;
+    const until = input.endDate;
+    const since = new Date(until);
+    // -(N-1): Meta's time_range is inclusive of both ends, so this spans exactly
+    // BREACH_WINDOW_DAYS daily buckets.
+    since.setDate(since.getDate() - (BREACH_WINDOW_DAYS - 1));
+
+    // Denominator selection (Gate 1): an action-type denominator requires the
+    // `actions` breakdown and a PINNED attribution window so the per-day value is
+    // stable run-to-run. When unset we leave both off — exact back-compat: the
+    // aggregate `conversions` field under Meta's account-default windows.
+    const useActionDenominator = Boolean(input.conversionActionType);
+    return this.adsClient.getCampaignInsights({
+      dateRange: { since: fmt(since), until: fmt(until) },
+      fields: useActionDenominator
+        ? ["campaign_id", "spend", "conversions", "inline_link_clicks", "actions"]
+        : ["campaign_id", "spend", "conversions", "inline_link_clicks"],
+      timeIncrement: 1,
+      ...(useActionDenominator
+        ? { actionAttributionWindows: input.attributionWindows ?? ["7d_click"] }
+        : {}),
+    });
   }
 }
 

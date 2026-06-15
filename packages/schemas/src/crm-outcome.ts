@@ -1,3 +1,5 @@
+import type { CampaignInsightSchema as CampaignInsight } from "./ad-optimizer.js";
+
 // ── CRM Funnel Data ──
 
 export interface CrmFunnelData {
@@ -107,6 +109,8 @@ export interface CampaignInsightsProvider {
     orgId: string;
     accountId: string;
     campaignId: string;
+    /** D2-7 batching: account-level learning rows pre-fetched once above the loop (optional). */
+    prefetchedLearningRows?: CampaignInsight[];
   }): Promise<CampaignLearningInput>;
 
   getTargetBreachStatus(input: {
@@ -125,5 +129,19 @@ export interface CampaignInsightsProvider {
     conversionActionType?: string;
     /** Attribution windows pinned for `conversionActionType`. Default ["7d_click"]. */
     attributionWindows?: string[];
+    /** D2-7 batching: account-level daily breach rows pre-fetched once above the loop (optional). */
+    prefetchedDailyRows?: CampaignInsight[];
   }): Promise<TargetBreachResult>;
+
+  /**
+   * D2-7 batching capability (optional): fetch the account-level daily breach window and the
+   * 7-day learning window ONCE for the whole account. The audit-runner calls this above the
+   * per-campaign loop and feeds the rows back into the two methods above as prefetched* inputs,
+   * collapsing 2N account re-fetches to 2. Providers that omit it keep the per-campaign path.
+   */
+  prefetchAccountRows?(input: {
+    endDate: Date;
+    conversionActionType?: string;
+    attributionWindows?: string[];
+  }): Promise<{ daily: CampaignInsight[]; learning: CampaignInsight[] }>;
 }
