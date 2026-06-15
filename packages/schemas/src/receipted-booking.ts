@@ -104,6 +104,7 @@ export const ReceiptedBookingViewSchema = z.object({
   expectedValue: z.number().int().nullable(),
   issuedAt: z.date().nullable().optional(),
   expectedValueAtIssue: z.number().int().nonnegative().nullable().optional(),
+  currency: z.string().nullable().optional(),
   overriddenBy: z.string().nullable().optional(),
   overrideReason: z.string().nullable().optional(),
   overriddenAt: z.date().nullable().optional(),

@@ -114,6 +114,12 @@ describe("ReceiptedBookingViewSchema", () => {
     expect(r.success).toBe(true);
   });
 
+  it("retains an optional nullable currency snapshot", () => {
+    expect(ReceiptedBookingViewSchema.parse({ ...baseView, currency: "SGD" }).currency).toBe("SGD");
+    expect(ReceiptedBookingViewSchema.parse({ ...baseView, currency: null }).currency).toBeNull();
+    expect(ReceiptedBookingViewSchema.safeParse(baseView).success).toBe(true); // omitted ok
+  });
+
   it("rejects an unknown attribution-confidence value", () => {
     expect(
       ReceiptedBookingViewSchema.safeParse({ ...baseView, attributionConfidence: "guessed" })
