@@ -42,6 +42,26 @@ describe("buildRecommendationHandoffWorkflow", () => {
     expect(arg.parameters.brief.productDescription).toBe("Botox refresh");
   });
 
+  it("threads Riley's diagnosis into the child draft brief as structured data (D6-3)", async () => {
+    const submitChildWork = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outcome: "completed", outputs: { jobId: "job_9" } },
+      workUnit: { id: "wu_child" },
+    });
+    const handler = buildRecommendationHandoffWorkflow();
+    await handler.execute(wu(goodParams), { submitChildWork });
+    const brief = submitChildWork.mock.calls[0]![0].parameters.brief;
+    // The diagnosis reaches Mira AS DATA (routable), built from the validated handoff input.
+    expect(brief.rileyDiagnosis).toEqual({
+      campaignId: "camp_1",
+      actionType: "refresh_creative",
+      evidence: { clicks: 1000, conversions: 100, days: 30 },
+    });
+    // Back-compat: the existing brief fields still flow unchanged.
+    expect(brief.productDescription).toBe("Botox refresh");
+    expect(brief.targetAudience).toBe("women 30-45");
+  });
+
   it("abstains (no child) when below the evidence floor", async () => {
     const submitChildWork = vi.fn();
     const handler = buildRecommendationHandoffWorkflow();

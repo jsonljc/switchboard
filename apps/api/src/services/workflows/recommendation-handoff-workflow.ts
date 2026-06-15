@@ -83,6 +83,15 @@ export function buildRecommendationHandoffWorkflow(): WorkflowHandler {
             ...(briefParsed.data.valueContext
               ? { valueContext: briefParsed.data.valueContext }
               : {}),
+            // D6-3: thread Riley's diagnosis into the child draft as STRUCTURED data the creative
+            // pipeline can route on (campaignId/actionType/evidence), not just the brief's free
+            // text. Built from the validated RecommendationHandoffInput (all fields required), so
+            // every handoff carries it; the schema (rileyDiagnosis) accepts it on the child.
+            rileyDiagnosis: {
+              campaignId: input.campaignId,
+              actionType: input.actionType,
+              evidence: input.evidence,
+            },
           },
         },
       });
