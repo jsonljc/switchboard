@@ -4,6 +4,8 @@ export type { CrmWriteToolFactory } from "./crm-write.js";
 export { createWebScannerTool } from "./web-scanner.js";
 export { createCalendarBookToolFactory } from "./calendar-book.js";
 export type { CalendarBookToolFactory, CalendarProviderFactory } from "./calendar-book.js";
+export { resolveBookedValueCents } from "./booking-value.js";
+export type { ResolveBookedValueInput } from "./booking-value.js";
 export { createEscalateToolFactory } from "./escalate.js";
 export type { EscalateToolFactory } from "./escalate.js";
 export { createDepositLinkToolFactory } from "./deposit-link.js";

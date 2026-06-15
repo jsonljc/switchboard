@@ -141,6 +141,9 @@ vi.mock("@switchboard/db", () => ({
     findActiveByContact: vi.fn(async () => []),
     create: vi.fn(async () => ({ id: "opp_1" })),
   })),
+  PrismaPlaybookReader: vi.fn().mockImplementation(() => ({
+    readForOrganization: vi.fn(async () => null),
+  })),
   PrismaActivityLogStore: vi.fn().mockImplementation(() => ({})),
   PrismaBookingStore: vi.fn().mockImplementation(() => ({ findById: vi.fn(async () => null) })),
   PrismaHandoffStore: vi.fn().mockImplementation(() => ({})),

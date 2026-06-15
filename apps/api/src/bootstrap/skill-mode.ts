@@ -111,6 +111,7 @@ export async function bootstrapSkillMode(
   const {
     PrismaContactStore,
     PrismaOpportunityStore,
+    PrismaPlaybookReader,
     PrismaActivityLogStore,
     PrismaBookingStore,
     PrismaHandoffStore,
@@ -160,6 +161,12 @@ export async function bootstrapSkillMode(
   const activityStore = new PrismaActivityLogStore(prismaClient);
   const bookingStore = new PrismaBookingStore(prismaClient);
   const businessFactsStore = new PrismaBusinessFactsStore(prismaClient);
+  // D3-1: reads OrganizationConfig.onboardingPlaybook (numeric per-service price) so a
+  // booked service can be valued in cents. Scoped to the booking-value path ONLY
+  // (the calendar-book tool's getServicesForOrg below); it does NOT feed the
+  // lifecycle qualification/disqualification hooks (those keep their existing null
+  // stub in bootstrapLifecycle), so no lifecycle behaviour changes here.
+  const playbookReader = new PrismaPlaybookReader(prismaClient);
   // Live curated-knowledge resolver for SkillMode. Knowledge-entry only — the
   // alexBuilder owns BUSINESS_FACTS, so NO BusinessFactsStore is passed here.
   const knowledgeEntryStore = new PrismaKnowledgeEntryStore(prismaClient);
@@ -407,6 +414,10 @@ export async function bootstrapSkillMode(
     receiptTierForProvider: receiptTierForCalendarProvider,
     isProduction: process.env["NODE_ENV"] === "production",
     consentPrecondition: bookingConsentPrecondition,
+    // D3-1: value the booked service from the org playbook (abstains to null when
+    // absent/unpriced/unmatched). Best-effort: the calendar-book tool guards this
+    // read so a playbook miss never blocks a booking.
+    getServicesForOrg: async (orgId) => (await playbookReader.readForOrganization(orgId))?.services,
   });
 
   const crmQueryFactory = createCrmQueryToolFactory(contactStore, activityStore);
