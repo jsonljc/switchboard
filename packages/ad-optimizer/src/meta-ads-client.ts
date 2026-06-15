@@ -323,6 +323,56 @@ export class MetaAdsClient {
     });
   }
 
+  /**
+   * Campaign-level tracked-source coverage rows for the Gate-0 CoverageValidator
+   * (D9-4). `destination_type` is an AD-SET property on Meta, so this rolls up the
+   * account's ad sets (getAccountAdSetLearningInputs) by campaign: spend is summed
+   * and the campaign's destination_type is the one accruing the MOST spend among its
+   * ad sets. Campaigns are virtually always single-destination; spend-dominant is the
+   * correct single choice if an account ever mixes them and never inflates the
+   * majority source. Inherits the ad-set fetch's page-1/200-cap fail-safe (a
+   * truncated tail is unattributed -> lower coverage -> honest abstain). The query's
+   * accountId is satisfied by this client's own accountId (constructed per deployment);
+   * orgId is unused here (it scopes the intake-store side of the validator).
+   */
+  async listCampaigns(_query: {
+    orgId: string;
+    accountId: string;
+  }): Promise<{ id: string; destination_type: string; spend: number }[]> {
+    const adSets = await this.getAccountAdSetLearningInputs(this.last7DayRange());
+    const byCampaign = new Map<
+      string,
+      { spendByDestination: Map<string, number>; totalSpend: number }
+    >();
+    for (const adSet of adSets) {
+      if (!adSet.campaignId) continue;
+      const destination = adSet.destinationType ?? "";
+      const entry = byCampaign.get(adSet.campaignId) ?? {
+        spendByDestination: new Map<string, number>(),
+        totalSpend: 0,
+      };
+      entry.spendByDestination.set(
+        destination,
+        (entry.spendByDestination.get(destination) ?? 0) + adSet.spend,
+      );
+      entry.totalSpend += adSet.spend;
+      byCampaign.set(adSet.campaignId, entry);
+    }
+    const rows: { id: string; destination_type: string; spend: number }[] = [];
+    for (const [id, { spendByDestination, totalSpend }] of byCampaign) {
+      let destinationType = "";
+      let topSpend = -1;
+      for (const [destination, spend] of spendByDestination) {
+        if (spend > topSpend) {
+          topSpend = spend;
+          destinationType = destination;
+        }
+      }
+      rows.push({ id, destination_type: destinationType, spend: totalSpend });
+    }
+    return rows;
+  }
+
   private last7DayRange(): { since: string; until: string } {
     const now = new Date();
     const since = new Date(now);
