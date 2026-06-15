@@ -144,7 +144,7 @@ export class ProactiveSender implements AgentNotifier {
       }
     }
 
-    const res = await fetch(`https://graph.facebook.com/v18.0/${creds.phoneNumberId}/messages`, {
+    const res = await fetch(`https://graph.facebook.com/v21.0/${creds.phoneNumberId}/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
