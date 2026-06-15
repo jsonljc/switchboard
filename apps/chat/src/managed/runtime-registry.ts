@@ -5,6 +5,7 @@ import { TelegramAdapter } from "../adapters/telegram.js";
 import { SlackAdapter } from "../adapters/slack.js";
 import { WhatsAppAdapter } from "../adapters/whatsapp.js";
 import { PrismaConnectionStore, decryptCredentials } from "@switchboard/db";
+import { resolveWhatsAppRuntimeToken } from "./whatsapp-runtime-token.js";
 
 export interface GatewayEntry {
   gateway: ChannelGateway;
@@ -164,7 +165,10 @@ export class RuntimeRegistry {
       );
     }
     if (type === "whatsapp") {
-      const token = creds["token"] as string;
+      // Token model (D-b): prefer a per-connection (BYOT) token, else fall back
+      // to the central system-user token so a connection provisioned without a
+      // per-tenant token still runs. Null (unconfigured) if neither is present.
+      const token = resolveWhatsAppRuntimeToken(creds, process.env.META_SYSTEM_USER_TOKEN);
       const phoneNumberId = creds["phoneNumberId"] as string;
       if (!token || !phoneNumberId) return null;
       const appSecret = creds["appSecret"] as string | undefined;
