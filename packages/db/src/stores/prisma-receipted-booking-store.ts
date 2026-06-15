@@ -37,6 +37,8 @@ export class PrismaReceiptedBookingStore {
         opportunityId: true,
         workTraceId: true,
         attendance: true,
+        service: true,
+        startsAt: true,
       },
     });
     if (!booking) return null;
@@ -129,6 +131,9 @@ export class PrismaReceiptedBookingStore {
       matchedPolicies: workTrace?.matchedPolicies ?? null,
       humanApprovalId: workTrace?.approvalId ?? null,
       attendanceState: booking.attendance ?? null,
+      // Booking handles for the owner worklist (non-PII): always present on a real Booking row.
+      service: booking.service,
+      startsAt: booking.startsAt,
       paymentEventIds: revenueEvents.map((e) => e.id),
       expectedValue: opportunity?.estimatedValue ?? null,
       // Persisted issuance snapshot (null on the lazy/historical path). issuedAt presence is the

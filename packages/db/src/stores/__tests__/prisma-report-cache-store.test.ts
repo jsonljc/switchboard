@@ -33,6 +33,7 @@ const sample: ReportDataV1 = {
       duplicate_contact_risk: 0,
     },
     bookingsNeedingAttention: 0,
+    worklist: [],
   },
   receiptedBookingRevenue: {
     revenueCents: 6150000,
