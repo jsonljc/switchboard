@@ -20,6 +20,7 @@ export const REVOKE_CONSENT_INTENT = "operator.revoke_consent";
 export const CLEAR_CONSENT_INTENT = "operator.clear_consent";
 export const RECORD_REVENUE_INTENT = "operator.record_revenue";
 export const RECORD_ATTENDANCE_INTENT = "booking.record_attendance";
+export const RECONCILE_BOOKING_INTENT = "receipt.reconcile_booking";
 
 /**
  * Sentinel deployment ID used for admin-consent verdict context. The admin
@@ -55,4 +56,8 @@ export const OPERATOR_INTENT_ERROR_CODES = {
   PAYMENT_FORBIDDEN_ACTOR: "PAYMENT_FORBIDDEN_ACTOR",
   PAYMENT_NOT_VERIFIED: "PAYMENT_NOT_VERIFIED",
   BOOKING_NOT_FOUND: "BOOKING_NOT_FOUND",
+  // receipt.reconcile_booking: flag/resolve hit a booking with no persisted ReceiptedBooking row,
+  // or a resolve_exception targeted a code outside the v1-supported set.
+  RECEIPTED_BOOKING_NOT_ISSUED: "RECEIPTED_BOOKING_NOT_ISSUED",
+  RECONCILE_UNSUPPORTED_CODE: "RECONCILE_UNSUPPORTED_CODE",
 } as const;
