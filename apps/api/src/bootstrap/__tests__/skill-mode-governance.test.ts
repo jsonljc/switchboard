@@ -183,6 +183,9 @@ vi.mock("@switchboard/db", () => ({
   PrismaMiraCreativeReadModelReader: vi.fn().mockImplementation(() => ({
     read: vi.fn(async () => ({ jobs: [], counts: {} })),
   })),
+  PrismaBookingOutcomeLedgerStore: vi.fn().mockImplementation(() => ({
+    listForOrg: vi.fn(async () => []),
+  })),
   PrismaScheduledFollowUpStore: vi.fn().mockImplementation(() => ({
     findDue: vi.fn(async () => []),
     markSent: vi.fn(async () => {}),
