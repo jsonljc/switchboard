@@ -167,9 +167,12 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
       }
       const wabaId = wabaResult.wabaId;
 
-      // 2. Add system user to WABA
+      // 2. Add system user to WABA. tasks MUST be a URL-encoded JSON array
+      // (["MANAGE"]); a single-quote literal ['MANAGE'] is invalid JSON and Graph
+      // rejects or misparses it.
+      const assignedTasks = encodeURIComponent(JSON.stringify(["MANAGE"]));
       await graphCall(
-        `/${wabaId}/assigned_users?user=${metaSystemUserId}&tasks=['MANAGE']`,
+        `/${wabaId}/assigned_users?user=${metaSystemUserId}&tasks=${assignedTasks}`,
         "POST",
       );
 
