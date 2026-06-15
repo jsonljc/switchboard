@@ -2,6 +2,9 @@
 import type { FastifyPluginAsync } from "fastify";
 import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
 import { notifyChatProvisionedChannel } from "../lib/notify-chat-provisioned-channel.js";
+import { resolveOrganizationForMutation } from "../utils/org-access.js";
+
+type OnboardBody = { esToken?: string; organizationId?: string };
 
 interface OnboardingOptions {
   metaSystemUserToken: string;
@@ -27,6 +30,12 @@ interface OnboardingOptions {
     phoneNumberId: string;
     verifiedName?: string;
     displayPhoneNumber?: string;
+    /** Authenticated operator org — never "" (resolved upstream; 403 without a binding). */
+    organizationId: string;
+    /** Bearer the runtime adapter sends with (D-b: the central system token). */
+    runtimeToken: string;
+    /** Webhook GET-handshake token; equals the value registered via subscribed_apps. */
+    verifyToken: string;
   }) => Promise<{ id: string; webhookPath: string }>;
 }
 
@@ -71,7 +80,7 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
     } as unknown as Response;
   }) as typeof fetch;
 
-  app.post<{ Body: { esToken?: string } }>("/whatsapp/onboard", async (request, reply) => {
+  app.post<{ Body: OnboardBody }>("/whatsapp/onboard", async (request, reply) => {
     if (!request.principalIdFromAuth && process.env.NODE_ENV === "production") {
       return reply.code(401).send({ error: "Authentication required" });
     }
@@ -80,6 +89,21 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
     if (!esToken) {
       return reply.code(400).send({ error: "esToken is required" });
     }
+
+    // Org-scope the connection to the authenticated operator. In prod this is
+    // the Bearer's org (403 without a binding); in dev the request body's org.
+    // Fixes the persisted `organizationId: ""` — the row had no tenant owner.
+    const organizationId = resolveOrganizationForMutation(
+      request,
+      reply,
+      request.body?.organizationId,
+    );
+    if (organizationId === null) return;
+
+    // The webhook verify token MUST be identical at registration
+    // (subscribed_apps) and at storage (creds.verifyToken), or the inbound GET
+    // handshake 403s. Single source so the two cannot drift.
+    const verifyToken = opts.appSecret;
 
     try {
       // 1. Extract WABA ID from debug_token.
@@ -137,6 +161,11 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
         phoneNumberId: phone.id,
         verifiedName: phone.verified_name,
         displayPhoneNumber: phone.display_phone_number,
+        organizationId,
+        // D-b: the runtime sends on the central system token (already the
+        // credential for every Graph call in this route), not a per-tenant token.
+        runtimeToken: metaSystemUserToken,
+        verifyToken,
       });
 
       // 6. Subscribe to webhooks with per-WABA override.
@@ -150,7 +179,7 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
         userToken: metaSystemUserToken,
         wabaId,
         webhookUrl,
-        verifyToken: opts.appSecret,
+        verifyToken,
         fetchImpl: helperFetch,
       });
       if (!overrideResult.ok) {
