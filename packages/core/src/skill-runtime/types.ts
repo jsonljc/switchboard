@@ -34,7 +34,7 @@ export interface ResolvedModelProfile {
 // ---------------------------------------------------------------------------
 
 export interface SkillReferenceFile {
-  /** Relative path within skill directory, e.g. "references/markets/sg-medspa.md" */
+  /** Relative path within skill directory, e.g. "references/medspa/objection-handling.md" */
   path: string;
   metadata: ReferenceMetadata;
   /** Markdown body after frontmatter */

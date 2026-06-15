@@ -20,14 +20,16 @@ describe("alex skill context requirements", () => {
     });
   });
 
-  it("enforces required posture for all five context slots (advisory=false, BUSINESS_FACTS=true)", () => {
+  it("enforces required posture for all four context slots (advisory=false, BUSINESS_FACTS=true)", () => {
     const skill = loadSkill("alex", join(REPO_ROOT, "skills"));
     const req = (injectAs: string) => skill.context?.find((c) => c.injectAs === injectAs);
     expect(req("PLAYBOOK_CONTEXT")?.required).toBe(false);
-    expect(req("POLICY_CONTEXT")?.required).toBe(false);
     expect(req("QUALIFICATION_CONTEXT")?.required).toBe(false);
     expect(req("CLAIM_BOUNDARIES")?.required).toBe(false);
     expect(req("BUSINESS_FACTS")?.required).toBe(true);
+    // F7: the messaging-rules -> POLICY_CONTEXT slot was removed (it rendered
+    // blank for real orgs, which were never seeded the scope). Guard it stays gone.
+    expect(req("POLICY_CONTEXT")).toBeUndefined();
   });
 
   it("declares deposit-link in its tool list (registered in skill-mode for confirmed-booking deposits)", () => {

@@ -10,10 +10,12 @@ describe("Alex skill (real, not fixture)", () => {
     expect(skill.slug).toBe("alex");
   });
 
-  it("discovers all reference files with valid metadata", () => {
+  it("discovers reference files with valid metadata", () => {
     const skill = loadSkill("alex", SKILLS_DIR);
     expect(skill.references).toBeDefined();
-    expect(skill.references!.length).toBeGreaterThanOrEqual(10);
+    // 8 reference files today (4 conversation-patterns + 3 medspa + whatsapp-window);
+    // a floor guards against a future change silently dropping the live set.
+    expect(skill.references!.length).toBeGreaterThanOrEqual(7);
 
     // Every reference must have populated metadata
     for (const ref of skill.references!) {
@@ -34,13 +36,26 @@ describe("Alex skill (real, not fixture)", () => {
     expect(paths).toEqual(sorted);
   });
 
-  it("includes critical regulatory references with sources", () => {
+  it("loads the live medspa skill-pack references", () => {
     const skill = loadSkill("alex", SKILLS_DIR);
-    const critical = skill.references!.filter((r) => r.metadata.riskLevel === "critical");
-    expect(critical.length).toBeGreaterThan(0);
-    for (const ref of critical) {
-      expect(ref.metadata.sources).toBeDefined();
-      expect(ref.metadata.sources!.length).toBeGreaterThan(0);
+    const paths = skill.references!.map((r) => r.path);
+    expect(paths).toContain("references/medspa/objection-handling.md");
+    expect(paths).toContain("references/medspa/qualification-framework.md");
+    expect(paths).toContain("references/medspa/claim-boundaries.md");
+  });
+
+  it("does not ship dead per-market reference files (F6)", () => {
+    // F6: the SG/MY market voice files and the SG/MY regulatory rule files were
+    // loaded into SkillDefinition.references but never consumed by Alex (only the
+    // medspa/ pack reaches the prompt, via the seed path). They were deleted to
+    // stop implying per-jurisdiction capability that does not exist. Runtime
+    // compliance enforcement is unchanged: it lives in TS (governance/banned-phrases
+    // and the claim classifier), not in these markdown files.
+    const skill = loadSkill("alex", SKILLS_DIR);
+    const paths = skill.references!.map((r) => r.path);
+    for (const p of paths) {
+      expect(p).not.toMatch(/^references\/markets\//);
+      expect(p).not.toMatch(/^references\/regulatory\//);
     }
   });
 });
