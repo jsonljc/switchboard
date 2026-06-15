@@ -1,5 +1,5 @@
 // packages/core/src/reports/interfaces.ts
-import type { ReportDataV1 } from "@switchboard/schemas";
+import type { ReportDataV1, ReceiptedBookingView } from "@switchboard/schemas";
 import type { PeriodRange, RollupContext } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -152,6 +152,13 @@ export interface ReportStores {
      *  This is the receipted-bookings north-star count: a calendar receipt is minted at booking
      *  time, so a non-void calendar receipt is one receipted booking. */
     countReceiptedBookingsInWindow(input: { orgId: string; from: Date; to: Date }): Promise<number>;
+  };
+
+  receiptedBookings: {
+    /** Lazily-assembled receipted-booking views for the [from, to) window: the same distinct
+     *  booked|held calendar-receipt cohort as `receipts.countReceiptedBookingsInWindow`, org-scoped
+     *  on every join leg (the F12 read-side IDOR lesson). Backs the owner-report proof-quality summary. */
+    listForCohort(input: { orgId: string; from: Date; to: Date }): Promise<ReceiptedBookingView[]>;
   };
 }
 

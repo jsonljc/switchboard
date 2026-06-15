@@ -334,6 +334,160 @@
   margin: 0.0625rem 0 0;
 }
 
+/* ─── Receipted-booking proof quality ─── */
+
+/* Section wrapper: richer than a single-metric tile (breakdown + worklist) */
+.proofQuality {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Eyebrow label: small caps mono, quiet */
+.proofQualityEyebrow {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin: 0;
+}
+
+/* Lead stat: strongly-attributed share, mono tabular */
+.proofQualityLead {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0.125rem 0 0.25rem;
+}
+
+/* Empty state: quiet serif prose, same register as the managed-comparison empty */
+.proofQualityEmpty {
+  font-family: var(--font-home-serif);
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--ink-3);
+  margin: 0.125rem 0 0;
+}
+
+/* Confidence rungs: label, amber proportion bar, count (mirrors the funnel row grid) */
+.proofQualityRungs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.proofQualityRung {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.proofQualityRungLabel {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* Bar track (muted bg) */
+.proofQualityRungTrack {
+  height: 6px;
+  background: var(--canvas-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+/* Bar fill: amber (--action raw HSL triple); width set inline */
+.proofQualityRungBar {
+  display: block;
+  height: 100%;
+  background: hsl(var(--action));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+
+/* Empty rung keeps the lighter track colour so it stays legible at width 0 */
+.proofQualityRungBar[data-empty="true"] {
+  background: var(--canvas-3);
+}
+
+.proofQualityRungNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Worklist: the evidence gaps blocking complete proof; hairline rule above */
+.proofQualityWorklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--canvas-3);
+}
+
+.proofQualityWorklistHead {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.proofQualityExceptions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.proofQualityException {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.proofQualityExceptionNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  min-width: 1.5rem;
+}
+
+.proofQualityExceptionLabel {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+}
+
+/* All-clear line: quiet, hairline rule above (replaces the worklist when nothing is open) */
+.proofQualityClear {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+  margin: 0.25rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--canvas-3);
+}
+
 /* ─── Verdict line ─── */
 
 /* Serif prose container (Fraunces via --font-home-serif, a complete stack value) */

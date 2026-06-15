@@ -65,6 +65,23 @@ describe("buildResultsModel", () => {
     const m = buildResultsModel(stale);
     expect(m.receiptedBookings).toEqual({ count: 0 });
   });
+
+  it("defaults receiptedBookingQuality to an all-zero block when absent from a stale cached payload", () => {
+    const stale = { ...goodFixture } as unknown as import("./types").ReportData;
+    delete (stale as unknown as Record<string, unknown>)["receiptedBookingQuality"];
+    const m = buildResultsModel(stale);
+    expect(m.receiptedBookingQuality).toEqual({
+      cohortSize: 0,
+      confidence: { deterministic: 0, high: 0, medium: 0, low: 0, unattributed: 0 },
+      exceptions: {
+        missing_source: 0,
+        missing_consent: 0,
+        manual_override: 0,
+        duplicate_contact_risk: 0,
+      },
+      bookingsNeedingAttention: 0,
+    });
+  });
 });
 
 describe("fmtRatio", () => {

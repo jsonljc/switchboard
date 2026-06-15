@@ -71,9 +71,21 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
       heldRate: { attended: 38, matured: 45, rate: 38 / 45 },
       consentCompleteness: { validConsent: 42, bookable: 45, rate: 42 / 45 },
       receiptedBookings: { count: 41 },
+      receiptedBookingQuality: {
+        cohortSize: 41,
+        confidence: { deterministic: 18, high: 12, medium: 7, low: 3, unattributed: 1 },
+        exceptions: {
+          missing_source: 1,
+          missing_consent: 2,
+          manual_override: 0,
+          duplicate_contact_risk: 1,
+        },
+        bookingsNeedingAttention: 4,
+      },
     };
     expect(sample.managedComparison).toBeNull();
     expect(sample.receiptedBookings.count).toBe(41);
+    expect(sample.receiptedBookingQuality.cohortSize).toBe(41);
   });
 
   it("ManagedComparisonData accepts an in-period-cohort source", () => {

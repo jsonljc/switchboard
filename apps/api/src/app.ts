@@ -650,10 +650,12 @@ export async function buildServer() {
       PrismaConversationThreadStore,
       PrismaContactStore: PrismaContactStoreForReports,
       PrismaReceiptStore: PrismaReceiptStoreForReports,
+      PrismaReceiptedBookingStore,
     } = await import("@switchboard/db");
 
     app.decorate("reportCacheStore", new PrismaReportCacheStore(prismaClient));
 
+    const receiptedBookingViewStore = new PrismaReceiptedBookingStore(prismaClient);
     const reportStores = {
       revenue: new PrismaRevenueStore(prismaClient),
       bookings: new PrismaBookingStore(prismaClient),
@@ -681,6 +683,10 @@ export async function buildServer() {
       },
       contacts: new PrismaContactStoreForReports(prismaClient),
       receipts: new PrismaReceiptStoreForReports(prismaClient),
+      receiptedBookings: {
+        listForCohort: (input: { orgId: string; from: Date; to: Date }) =>
+          receiptedBookingViewStore.listForCohort(input.orgId, input.from, input.to),
+      },
     };
     app.decorate("reportStores", reportStores);
 

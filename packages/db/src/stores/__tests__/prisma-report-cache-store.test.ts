@@ -23,6 +23,17 @@ const sample: ReportDataV1 = {
   heldRate: { attended: 38, matured: 45, rate: 38 / 45 },
   consentCompleteness: { validConsent: 0, bookable: 0, rate: null },
   receiptedBookings: { count: 41 },
+  receiptedBookingQuality: {
+    cohortSize: 41,
+    confidence: { deterministic: 41, high: 0, medium: 0, low: 0, unattributed: 0 },
+    exceptions: {
+      missing_source: 0,
+      missing_consent: 0,
+      manual_override: 0,
+      duplicate_contact_risk: 0,
+    },
+    bookingsNeedingAttention: 0,
+  },
 };
 
 describe("PrismaReportCacheStore", () => {

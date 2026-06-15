@@ -395,6 +395,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     orgConfig: { getStripePriceId: async () => null },
     contacts: { countConsentCompleteness: async () => ({ bookable: 10, validConsent: 8 }) },
     receipts: { countReceiptedBookingsInWindow: async () => 7 },
+    receiptedBookings: { listForCohort: async () => [] },
   });
 
   // In-memory greeting signal store — tests can seed via app.greetingSignalStore.setSignal()

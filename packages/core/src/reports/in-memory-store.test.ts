@@ -27,6 +27,17 @@ const samplePayload: ReportDataV1 = {
   heldRate: { attended: 0, matured: 0, rate: null },
   consentCompleteness: { validConsent: 0, bookable: 0, rate: null },
   receiptedBookings: { count: 0 },
+  receiptedBookingQuality: {
+    cohortSize: 0,
+    confidence: { deterministic: 0, high: 0, medium: 0, low: 0, unattributed: 0 },
+    exceptions: {
+      missing_source: 0,
+      missing_consent: 0,
+      manual_override: 0,
+      duplicate_contact_risk: 0,
+    },
+    bookingsNeedingAttention: 0,
+  },
 };
 
 describe("createInMemoryReportCacheStore", () => {
