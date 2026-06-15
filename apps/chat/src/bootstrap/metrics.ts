@@ -198,6 +198,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "Booking attempts blocked by the flag-gated consent precondition (enforce mode)",
       ["orgId", "reason"],
     ),
+    policyContextSlotEmpty: new PromCounter(
+      "switchboard_policy_context_slot_empty_total",
+      "A policy-critical Alex context slot resolved empty for an entitled org (fail-open; output unchanged)",
+      ["orgId", "slot"],
+    ),
     skillLlmTokensTotal: new PromCounter(
       "switchboard_skill_llm_tokens_total",
       "LLM tokens per skill execution, labeled by model and kind (input/output/cache_read/cache_creation)",

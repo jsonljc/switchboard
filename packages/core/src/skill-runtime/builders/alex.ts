@@ -4,6 +4,7 @@ import type { SkillServices, SkillStores } from "../parameter-builder.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
 import { renderBusinessFacts } from "../context-resolver.js";
 import { sanitizeContactForPrompt } from "../pii.js";
+import { getMetrics } from "../../telemetry/metrics.js";
 
 /**
  * PR-3.2c: alex returns parameters AND the surfaced pattern IDs so they
@@ -101,6 +102,13 @@ export const alexBuilder = async (
     facts = (await stores.businessFactsStore.get(orgId)) as BusinessFacts | null;
     if (facts) {
       BUSINESS_FACTS = renderBusinessFacts(facts);
+    } else {
+      // F15 observability-only: BUSINESS_FACTS is a policy-critical slot, yet
+      // skills/alex/SKILL.md intentionally keeps it fail-open — a missing pack
+      // must degrade to "" rather than 500 a live turn. Being inside the Alex
+      // builder is the entitlement signal (this org is running Alex), so emit a
+      // metric on the empty resolution. The rendered output stays "" (unchanged).
+      getMetrics().policyContextSlotEmpty.inc({ orgId, slot: "business-facts" });
     }
   }
 
