@@ -700,4 +700,53 @@ describe("ChannelGateway identity resolution", () => {
     expect(req.contactId).toBe("contact-new");
     expect(req.conversationThreadId).toBe("thread-abc");
   });
+
+  it("never leaks the raw 'Awaiting approval' summary when a turn parks for approval (F12)", async () => {
+    // When the outer governance gate parks the WHOLE turn for human approval,
+    // the framework summary ("Awaiting approval") must never reach the lead.
+    // Like the failed/consent branches, send only a framework holding notice and
+    // persist a metadata-only marker so operators see the park.
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+    const addMessageSpy = vi.fn().mockResolvedValue(undefined);
+    const config = createMockConfig({
+      conversationStore: {
+        getOrCreateBySession: vi.fn().mockResolvedValue({ conversationId: "conv-1", messages: [] }),
+        addMessage: addMessageSpy,
+      },
+      platformIngress: {
+        submit: vi.fn().mockResolvedValue({
+          ok: true,
+          result: {
+            outcome: "pending_approval",
+            outputs: {},
+            summary: "Awaiting approval",
+            traceId: "trace-1",
+          },
+          workUnit: { id: "wu-1", traceId: "trace-1" },
+          approvalRequired: true,
+        }),
+      },
+    });
+    const gateway = new ChannelGateway(config);
+    const message: IncomingChannelMessage = {
+      channel: "web_widget",
+      token: "sw_valid123",
+      sessionId: "sess-1",
+      text: "can you book me in?",
+    };
+
+    await gateway.handleIncoming(message, { send: sendSpy });
+
+    // The internal framework summary must NEVER reach the customer...
+    expect(sendSpy).not.toHaveBeenCalledWith("Awaiting approval");
+    // ...exactly one neutral holding line is sent instead...
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    // ...and only a metadata marker (not the raw summary) is persisted as the reply.
+    expect(addMessageSpy).not.toHaveBeenCalledWith("conv-1", "assistant", "Awaiting approval");
+    expect(addMessageSpy).toHaveBeenCalledWith(
+      "conv-1",
+      "assistant",
+      "[suppressed:pending_approval]",
+    );
+  });
 });
