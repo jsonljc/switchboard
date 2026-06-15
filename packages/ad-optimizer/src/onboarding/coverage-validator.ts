@@ -1,3 +1,5 @@
+import { destinationTypeToSource } from "../analyzers/spend-attributor.js";
+
 type Tracking = "verified" | "no_recent_traffic" | "v2_pending" | "missing_webhook";
 
 interface Campaign {
@@ -8,11 +10,18 @@ interface Campaign {
 
 type SourceKey = "ctwa" | "instant_form" | "web";
 
-const DESTINATION_TO_SOURCE: Record<string, SourceKey> = {
-  WHATSAPP: "ctwa",
-  ON_AD: "instant_form",
-  WEBSITE: "web",
-};
+// Map a Meta ad-set destination_type to a coverage source key. Reuses the canonical
+// destinationTypeToSource (ctwa/instant_form) so the WHATSAPP-substring rule that guards
+// against Meta's WHATSAPP_* variants stays single-sourced with spend-attributor and
+// funnel-detector, and adds the WEBSITE -> web bucket the coverage gate needs. An
+// unrecognized destination returns undefined and is excluded from BOTH covered and total
+// spend (an unknown funnel is not a measurable blind spot).
+function destinationToCoverageSource(destinationType: string): SourceKey | undefined {
+  const funnel = destinationTypeToSource(destinationType);
+  if (funnel === "ctwa" || funnel === "instant_form") return funnel;
+  if (destinationType === "WEBSITE" || destinationType.includes("WEBSITE")) return "web";
+  return undefined;
+}
 
 interface SourceCoverage {
   campaigns: number;
@@ -53,7 +62,7 @@ export class CoverageValidator {
       web: { campaigns: 0, spend: 0, tracking: "v2_pending" },
     };
     for (const c of campaigns) {
-      const source = DESTINATION_TO_SOURCE[c.destination_type];
+      const source = destinationToCoverageSource(c.destination_type);
       if (!source) continue;
       bySource[source].campaigns += 1;
       bySource[source].spend += c.spend;

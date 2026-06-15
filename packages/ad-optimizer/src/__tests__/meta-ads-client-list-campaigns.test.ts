@@ -70,7 +70,7 @@ describe("listCampaigns", () => {
     );
   });
 
-  it("picks the spend-dominant destination for a mixed-destination campaign (no inflation)", async () => {
+  it("splits a mixed-destination campaign into one row per destination (no inflation)", async () => {
     mockTwoGet(
       [
         {
@@ -96,6 +96,26 @@ describe("listCampaigns", () => {
     await vi.advanceTimersByTimeAsync(61000);
     const rows = await rowsPromise;
 
-    expect(rows).toEqual([{ id: "c_1", destination_type: "WHATSAPP", spend: 100 }]);
+    // WEBSITE spend stays on web, NOT credited to ctwa: the coverage gate is not inflated.
+    expect(rows).toHaveLength(2);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { id: "c_1", destination_type: "WHATSAPP", spend: 90 },
+        { id: "c_1", destination_type: "WEBSITE", spend: 10 },
+      ]),
+    );
+  });
+
+  it("emits an empty destination_type when Meta returns an ad set without one (validator then skips it)", async () => {
+    mockTwoGet(
+      [{ id: "as_1", campaign_id: "c_1", learning_stage_info: { status: "SUCCESS" } }],
+      [{ adset_id: "as_1", spend: "40", conversions: "1", frequency: "1.1" }],
+    );
+    const client = new MetaAdsClient({ accessToken: "t", accountId: "act_1" });
+    const rowsPromise = client.listCampaigns({ orgId: "o1", accountId: "act_1" });
+    await vi.advanceTimersByTimeAsync(61000);
+    const rows = await rowsPromise;
+
+    expect(rows).toEqual([{ id: "c_1", destination_type: "", spend: 40 }]);
   });
 });

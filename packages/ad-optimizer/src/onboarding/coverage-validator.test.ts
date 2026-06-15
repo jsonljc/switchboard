@@ -42,6 +42,25 @@ describe("CoverageValidator", () => {
     expect(result.coveragePct).toBe(0);
     expect(isCoverageSufficient(result)).toBe(false);
   });
+
+  it("credits WhatsApp destination_type VARIANTS (not just literal WHATSAPP) as ctwa", async () => {
+    // Meta returns WHATSAPP_* variants, not always the literal "WHATSAPP"; the gate must
+    // reuse the substring rule (spend-attributor/funnel-detector) or it false-abstains a
+    // fully-tracked WhatsApp org (its spend would map to no source, so totalSpend is 0).
+    const adsClient = {
+      listCampaigns: vi
+        .fn()
+        .mockResolvedValue([{ id: "c1", destination_type: "WHATSAPP_NUMBER", spend: 500 }]),
+    };
+    const intakeStore = { hasRecentLead: vi.fn().mockResolvedValue(true) };
+    const validator = new CoverageValidator({ adsClient, intakeStore });
+    const result = await validator.validate({ orgId: "o1", accountId: "a1" });
+
+    expect(result.bySource.ctwa.campaigns).toBe(1);
+    expect(result.bySource.ctwa.spend).toBe(500);
+    expect(result.coveragePct).toBe(1);
+    expect(isCoverageSufficient(result)).toBe(true);
+  });
 });
 
 describe("isCoverageSufficient", () => {

@@ -31,7 +31,7 @@ export function buildCoverageValidator(deps: {
  *  SAFETY: the validator never threads orgId to `hasRecentLead`, so the org is
  *  resolved here (once per deployment, memoized). An unresolvable org yields
  *  `hasRecentLead=false` WITHOUT consulting the store, so the gate ABSTAINS rather
- *  than risk crediting another org's leads — the safe "don't analyze on blind
+ *  than risk crediting another org's leads, the safe "don't analyze on blind
  *  spots" direction. This whole factory is wired only behind RILEY_COVERAGE_GATE_ENABLED
  *  (default OFF); see apps/api/src/bootstrap/inngest.ts. */
 export function buildCreateCoverageValidator(deps: {
