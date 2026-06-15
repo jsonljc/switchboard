@@ -240,6 +240,10 @@ services:
 
 databases:
   - name: switchboard-postgres
-    plan: starter
+    # Render retired the legacy `starter`/`standard`/`pro` Postgres plans for NEW
+    # databases (2025). Current flexible-plan slugs: basic-256mb | basic-1gb |
+    # basic-4gb | pro-4gb. `free` is auto-deleted after 30 days, never for prod.
+    # basic-1gb = 1GB RAM / 10GB storage (~$19/mo): headroom for pgvector + bookings.
+    plan: basic-1gb
     region: oregon
     postgresMajorVersion: "16"
