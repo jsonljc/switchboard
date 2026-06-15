@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
@@ -21,6 +21,35 @@ export function WhatsAppEmbeddedSignup({ _metaAppId, metaConfigId, onSuccess }: 
     displayPhoneNumber?: string;
   } | null>(null);
 
+  // The ESU SDK delivers the selected WABA + phone-number-id out-of-band via a
+  // window `message` event (sessionInfoVersion 2), separately from the FB.login
+  // callback that returns the OAuth code. Capture it here and read it when the
+  // code arrives. The origin is validated so a hostile frame cannot inject ids.
+  const sessionInfoRef = useRef<{ wabaId?: string; phoneNumberId?: string }>({});
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (
+        event.origin !== "https://www.facebook.com" &&
+        event.origin !== "https://web.facebook.com"
+      ) {
+        return;
+      }
+      try {
+        const parsed = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (parsed?.type === "WA_EMBEDDED_SIGNUP" && parsed?.data) {
+          sessionInfoRef.current = {
+            wabaId: parsed.data.waba_id,
+            phoneNumberId: parsed.data.phone_number_id,
+          };
+        }
+      } catch {
+        // Non-JSON / unrelated message — ignore.
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
   const handleConnect = useCallback(() => {
     if (!window.FB) {
       setError("Meta SDK not loaded. Please refresh the page.");
@@ -30,10 +59,15 @@ export function WhatsAppEmbeddedSignup({ _metaAppId, metaConfigId, onSuccess }: 
 
     setStatus("connecting");
     setError(null);
+    // Clear any session info captured by a prior (cancelled) attempt so stale
+    // ids can't ride along with this attempt's code.
+    sessionInfoRef.current = {};
 
     window.FB.login(
       async (response) => {
-        if (!response.authResponse?.accessToken) {
+        const code = response.authResponse?.code;
+        if (!code) {
+          // No code (user closed/cancelled the dialog) — nothing to onboard.
           setStatus("idle");
           return;
         }
@@ -41,10 +75,11 @@ export function WhatsAppEmbeddedSignup({ _metaAppId, metaConfigId, onSuccess }: 
         setStatus("processing");
 
         try {
+          const { wabaId, phoneNumberId } = sessionInfoRef.current;
           const res = await fetch("/api/dashboard/connections/whatsapp-embedded", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ esToken: response.authResponse.accessToken }),
+            body: JSON.stringify({ code, wabaId, phoneNumberId }),
           });
 
           const data = await res.json();
