@@ -142,6 +142,17 @@ export const goodFixture: ReportDataV1 = {
   heldRate: { attended: 38, matured: 45, rate: 38 / 45 },
   consentCompleteness: { validConsent: 42, bookable: 45, rate: 42 / 45 },
   receiptedBookings: { count: 41 },
+  receiptedBookingQuality: {
+    cohortSize: 41,
+    confidence: { deterministic: 18, high: 12, medium: 7, low: 3, unattributed: 1 },
+    exceptions: {
+      missing_source: 1,
+      missing_consent: 2,
+      manual_override: 0,
+      duplicate_contact_risk: 1,
+    },
+    bookingsNeedingAttention: 4,
+  },
   costNarrative:
     "vs. an SDR at ~S$5,000/month plus a small ad-agency retainer at ~S$3,000. Your team replaces both, and they're on duty after hours.",
   managedComparison: {
@@ -246,6 +257,17 @@ export const quietFixture: ReportDataV1 = {
   heldRate: { attended: 0, matured: 0, rate: null },
   consentCompleteness: { validConsent: 0, bookable: 0, rate: null },
   receiptedBookings: { count: 0 },
+  receiptedBookingQuality: {
+    cohortSize: 0,
+    confidence: { deterministic: 0, high: 0, medium: 0, low: 0, unattributed: 0 },
+    exceptions: {
+      missing_source: 0,
+      missing_consent: 0,
+      manual_override: 0,
+      duplicate_contact_risk: 0,
+    },
+    bookingsNeedingAttention: 0,
+  },
   costNarrative:
     "vs. an SDR + agency retainer pro-rated weekly. Even at low volume the base cost is a small fraction.",
   managedComparison: null,
@@ -377,6 +399,17 @@ export const problemFixture: ReportDataV1 = {
   heldRate: { attended: 71, matured: 118, rate: 71 / 118 },
   consentCompleteness: { validConsent: 64, bookable: 118, rate: 64 / 118 },
   receiptedBookings: { count: 112 },
+  receiptedBookingQuality: {
+    cohortSize: 112,
+    confidence: { deterministic: 20, high: 18, medium: 30, low: 28, unattributed: 16 },
+    exceptions: {
+      missing_source: 16,
+      missing_consent: 14,
+      manual_override: 2,
+      duplicate_contact_risk: 5,
+    },
+    bookingsNeedingAttention: 33,
+  },
   costNarrative:
     "vs. SDR + agency retainer across three months. Even in a soft quarter the price gap is roughly one-eighteenth.",
   managedComparison: {

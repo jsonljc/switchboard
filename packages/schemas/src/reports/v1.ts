@@ -13,6 +13,8 @@
  *     baseline data exists.
  */
 
+import type { AttributionConfidence, ExceptionCode } from "../receipted-booking.js";
+
 export type ReportWindow = "THIS WEEK" | "THIS MONTH" | "THIS QUARTER";
 
 export const REPORT_WINDOWS: readonly ReportWindow[] = [
@@ -163,6 +165,20 @@ export interface ReceiptedBookingsData {
   count: number;
 }
 
+/** Proof-quality breakdown of the receipted-booking cohort: how attributable each booking is, and
+ *  which bookings are missing the evidence the proof chain needs. Computed lazily over the slice-4
+ *  read-projection (`receiptedBookings.listForCohort`), so `cohortSize` equals `receiptedBookings.count`. */
+export interface ReceiptedBookingQualityData {
+  /** Total receipted bookings analyzed this window. Equals `receiptedBookings.count` (same cohort). */
+  cohortSize: number;
+  /** Count of receipted bookings at each attribution-confidence rung; sums to `cohortSize`. */
+  confidence: Record<AttributionConfidence, number>;
+  /** Count of receipted bookings carrying each OPEN exception code (a booking may have several). */
+  exceptions: Record<ExceptionCode, number>;
+  /** Distinct receipted bookings with at least one open exception — the worklist size. */
+  bookingsNeedingAttention: number;
+}
+
 export interface ReportDataV1 {
   label: ReportWindow;
   period: string;
@@ -178,6 +194,7 @@ export interface ReportDataV1 {
   heldRate: HeldRateData;
   consentCompleteness: ConsentCompletenessData;
   receiptedBookings: ReceiptedBookingsData;
+  receiptedBookingQuality: ReceiptedBookingQualityData;
 }
 
 // ---------------------------------------------------------------------------
