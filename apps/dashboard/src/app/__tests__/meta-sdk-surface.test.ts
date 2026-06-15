@@ -64,4 +64,18 @@ describe("dashboard CSP", () => {
     expect(match, "script-src directive not found").not.toBeNull();
     expect(match![1]).toContain("https://connect.facebook.net");
   });
+
+  it("allows the Meta Embedded Signup frame hosts in the frame-src directive", () => {
+    // Embedded Signup runs cross-domain iframes: the SDK xd_arbiter on
+    // staticxx.facebook.com and the auth/ESU dialog on www.facebook.com. They
+    // deliver the OAuth code + session info back via postMessage. Without an
+    // explicit frame-src they fall back to default-src 'self' and are blocked,
+    // so the ESU handshake never completes. Match the directive only (not an
+    // unrelated line) up to the next backtick or comma.
+    const config = readFileSync(path.resolve(process.cwd(), "next.config.mjs"), "utf8");
+    const match = config.match(/frame-src([^`,]*)/);
+    expect(match, "frame-src directive not found").not.toBeNull();
+    expect(match![1]).toContain("https://www.facebook.com");
+    expect(match![1]).toContain("https://staticxx.facebook.com");
+  });
 });

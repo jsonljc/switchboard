@@ -18,6 +18,14 @@ const securityHeaders = [
       `script-src 'self' 'unsafe-inline' https://connect.facebook.net${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "connect-src 'self' https:",
+      // Meta Embedded Signup runs cross-domain iframes: the SDK xd_arbiter on
+      // staticxx.facebook.com and the auth/ESU dialog on www.facebook.com, which
+      // deliver the OAuth code + session info back via postMessage. Without
+      // listing these hosts they fall back to default-src 'self' and are
+      // blocked, so the handshake never completes. Scoped to the two Meta hosts
+      // (no https: wildcard). Same in dev and prod; frame-ancestors below still
+      // forbids anyone embedding US.
+      "frame-src 'self' https://www.facebook.com https://staticxx.facebook.com",
       "frame-ancestors 'none'",
     ].join("; "),
   },
