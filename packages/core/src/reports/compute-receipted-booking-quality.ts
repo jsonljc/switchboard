@@ -102,6 +102,8 @@ export async function computeReceiptedBookingQuality(
       startsAt: view.startsAt.toISOString(),
       attributionConfidence: view.attributionConfidence,
       openExceptionCodes: EXCEPTION_ORDER.filter((code) => openCodes.has(code)),
+      issuedAt: view.issuedAt != null ? view.issuedAt.toISOString() : null,
+      overridden: view.overriddenBy != null,
     });
   }
 
