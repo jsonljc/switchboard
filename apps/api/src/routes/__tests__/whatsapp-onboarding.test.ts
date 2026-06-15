@@ -599,3 +599,134 @@ describe("WhatsApp onboarding ESU code->token exchange", () => {
     await app.close();
   });
 });
+
+describe("WhatsApp onboarding phone registration (2-step PIN)", () => {
+  function makeGraphApiFetch(
+    registerOverride: (
+      url: string,
+      init?: RequestInit,
+    ) => Record<string, unknown> | undefined = () => undefined,
+  ) {
+    return vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("/debug_token")) {
+        return {
+          data: {
+            granular_scopes: [{ scope: "whatsapp_business_management", target_ids: ["WABA"] }],
+          },
+        };
+      }
+      if (url.includes("/phone_numbers")) {
+        return {
+          data: [{ id: "PH", verified_name: "Biz", display_phone_number: "+1555" }],
+        };
+      }
+      if (url.includes("/register")) {
+        const override = registerOverride(url, init);
+        if (override !== undefined) return override;
+      }
+      return { success: true };
+    });
+  }
+
+  it("returns 422 + whatsapp_registration_pin_required when register hits a 2SV PIN error (no phantom success)", async () => {
+    const graphApiFetch = makeGraphApiFetch(() => ({
+      error: { message: "Two-step verification PIN mismatch", code: 133005 },
+    }));
+
+    const app = Fastify({ logger: false });
+    app.decorate("authDisabled", true);
+    await app.register(whatsappOnboardingRoutes, {
+      metaSystemUserToken: "T",
+      metaSystemUserId: "SYS",
+      appSecret: "SECRET",
+      apiVersion: "v21.0",
+      webhookBaseUrl: "https://chat.example.com",
+      graphApiFetch,
+      createConnection: async () => ({ id: "conn_pin", webhookPath: "/webhook/managed/conn_pin" }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/whatsapp/onboard",
+      payload: { esToken: "T", organizationId: "org_test" },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().code).toBe("whatsapp_registration_pin_required");
+
+    await app.close();
+  });
+
+  it("forwards an operator-provided pin to /register", async () => {
+    let capturedRegisterBody: Record<string, unknown> | null = null;
+    const graphApiFetch = makeGraphApiFetch((_url, init) => {
+      capturedRegisterBody = JSON.parse((init as { body: string }).body) as Record<string, unknown>;
+      return { success: true };
+    });
+
+    const app = Fastify({ logger: false });
+    app.decorate("authDisabled", true);
+    await app.register(whatsappOnboardingRoutes, {
+      metaSystemUserToken: "T",
+      metaSystemUserId: "SYS",
+      appSecret: "SECRET",
+      apiVersion: "v21.0",
+      webhookBaseUrl: "https://chat.example.com",
+      graphApiFetch,
+      createConnection: async () => ({
+        id: "conn_pin2",
+        webhookPath: "/webhook/managed/conn_pin2",
+      }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/whatsapp/onboard",
+      payload: { esToken: "T", organizationId: "org_test", pin: "246810" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(capturedRegisterBody).not.toBeNull();
+    expect(capturedRegisterBody!["pin"]).toBe("246810");
+
+    await app.close();
+  });
+
+  it("defaults the register pin to 000000 when none provided (regression guard)", async () => {
+    let capturedRegisterBody: Record<string, unknown> | null = null;
+    const graphApiFetch = makeGraphApiFetch((_url, init) => {
+      capturedRegisterBody = JSON.parse((init as { body: string }).body) as Record<string, unknown>;
+      return { success: true };
+    });
+
+    const app = Fastify({ logger: false });
+    app.decorate("authDisabled", true);
+    await app.register(whatsappOnboardingRoutes, {
+      metaSystemUserToken: "T",
+      metaSystemUserId: "SYS",
+      appSecret: "SECRET",
+      apiVersion: "v21.0",
+      webhookBaseUrl: "https://chat.example.com",
+      graphApiFetch,
+      createConnection: async () => ({
+        id: "conn_pin3",
+        webhookPath: "/webhook/managed/conn_pin3",
+      }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/whatsapp/onboard",
+      payload: { esToken: "T", organizationId: "org_test" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(capturedRegisterBody).not.toBeNull();
+    expect(capturedRegisterBody!["pin"]).toBe("000000");
+
+    await app.close();
+  });
+});
