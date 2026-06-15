@@ -53,4 +53,11 @@ describe("POST /api/dashboard/connections/whatsapp-embedded (authed proxy)", () 
     expect(res.status).toBe(401);
     expect(onboardWhatsAppEmbedded).not.toHaveBeenCalled();
   });
+
+  it("forwards the pin to the api client", async () => {
+    onboardWhatsAppEmbedded.mockResolvedValueOnce({ status: 200, data: { success: true } });
+    const res = await POST(mkReq({ code: "C", pin: "246810" }));
+    expect(onboardWhatsAppEmbedded).toHaveBeenCalledWith({ code: "C", pin: "246810" });
+    expect(res.status).toBe(200);
+  });
 });

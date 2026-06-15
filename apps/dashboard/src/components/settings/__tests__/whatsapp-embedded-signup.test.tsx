@@ -100,4 +100,74 @@ describe("WhatsAppEmbeddedSignup", () => {
     expect(body.phoneNumberId).toBeUndefined();
     expect(body.code).toBe("AUTH_CODE_123");
   });
+
+  it("renders an optional two-step-verification PIN field", () => {
+    vi.stubGlobal("FB", { login: vi.fn() });
+    render(<WhatsAppEmbeddedSignup _metaAppId="app" metaConfigId="cfg" />);
+    expect(screen.getByLabelText(/two-step verification pin/i)).toBeDefined();
+  });
+
+  it("includes the entered pin in the POST body when provided", async () => {
+    const fbLogin = vi.fn((cb: (r: unknown) => void) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://www.facebook.com",
+          data: JSON.stringify({
+            type: "WA_EMBEDDED_SIGNUP",
+            event: "FINISH",
+            data: { phone_number_id: "PHONE_FROM_SDK", waba_id: "WABA_FROM_SDK" },
+          }),
+        }),
+      );
+      cb({ authResponse: { code: "AUTH_CODE_123" } });
+    });
+    vi.stubGlobal("FB", { login: fbLogin });
+
+    render(<WhatsAppEmbeddedSignup _metaAppId="app" metaConfigId="cfg" />);
+    fireEvent.change(screen.getByLabelText(/two-step verification pin/i), {
+      target: { value: "246810" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect WhatsApp" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.pin).toBe("246810");
+    expect(body.code).toBe("AUTH_CODE_123");
+    expect(body.wabaId).toBe("WABA_FROM_SDK");
+    expect(body.phoneNumberId).toBe("PHONE_FROM_SDK");
+  });
+
+  it("surfaces the pin-required error and marks the PIN field invalid on a 422", async () => {
+    fetchMock.mockResolvedValueOnce({
+      json: async () => ({
+        code: "whatsapp_registration_pin_required",
+        error:
+          "This WhatsApp number has two-step verification enabled. Enter its existing 6-digit PIN and try again. If you don't know it, reset it in WhatsApp Manager.",
+      }),
+    });
+    const fbLogin = vi.fn((cb: (r: unknown) => void) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://www.facebook.com",
+          data: JSON.stringify({
+            type: "WA_EMBEDDED_SIGNUP",
+            event: "FINISH",
+            data: { phone_number_id: "PHONE_FROM_SDK", waba_id: "WABA_FROM_SDK" },
+          }),
+        }),
+      );
+      cb({ authResponse: { code: "AUTH_CODE_123" } });
+    });
+    vi.stubGlobal("FB", { login: fbLogin });
+
+    render(<WhatsAppEmbeddedSignup _metaAppId="app" metaConfigId="cfg" />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect WhatsApp" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(screen.getAllByText(/two-step verification/i).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/two-step verification pin/i)).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+  });
 });
