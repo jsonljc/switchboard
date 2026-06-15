@@ -213,6 +213,7 @@ export interface ReportDataV1 {
   consentCompleteness: ConsentCompletenessData;
   receiptedBookings: ReceiptedBookingsData;
   receiptedBookingQuality: ReceiptedBookingQualityData;
+  receiptedBookingRevenue: ReceiptedBookingRevenueData;
 }
 
 // ---------------------------------------------------------------------------

@@ -82,6 +82,12 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
         },
         bookingsNeedingAttention: 4,
       },
+      receiptedBookingRevenue: {
+        revenueCents: 6150000,
+        currency: "SGD",
+        bookingsWithValue: 38,
+        cohortSize: 41,
+      },
     };
     expect(sample.managedComparison).toBeNull();
     expect(sample.receiptedBookings.count).toBe(41);
