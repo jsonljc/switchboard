@@ -944,6 +944,131 @@ describe("SkillExecutorImpl", () => {
     });
     expect(seen[0]).toBe("claude-haiku-4-5-20251001");
   });
+
+  // --- F16: key-free Alex booking-arc order + terminal success ---
+
+  it("runs the Alex booking arc (crm-query -> crm-write -> calendar-book) in order with a terminal success trace", async () => {
+    // F16 coverage: the only other key-free booking test is set-membership
+    // (no order, no executor, no persisted trace) and the real-executor arc
+    // tests are skipIf(!ANTHROPIC_API_KEY). This drives the REAL
+    // SkillExecutorImpl through the three booking-arc tools, scripted across
+    // turns, and proves (a) the executed tool order and (b) the arc reaches a
+    // genuine terminal success trace — entirely without an API key.
+    const bookingArcTools = (): Map<string, SkillTool> =>
+      new Map<string, SkillTool>([
+        [
+          "crm-query",
+          {
+            id: "crm-query",
+            operations: {
+              "contact.get": {
+                description: "Look up a contact.",
+                inputSchema: { type: "object", properties: {} },
+                effectCategory: "read" as const,
+                execute: vi.fn().mockResolvedValue(ok({ contactId: "c1", name: "Pat" })),
+              },
+            },
+          },
+        ],
+        [
+          "crm-write",
+          {
+            id: "crm-write",
+            operations: {
+              "stage.update": {
+                description: "Advance the contact's stage.",
+                inputSchema: { type: "object", properties: {} },
+                effectCategory: "write" as const,
+                execute: vi.fn().mockResolvedValue(ok({ stage: "qualified" })),
+              },
+            },
+          },
+        ],
+        [
+          "calendar-book",
+          {
+            id: "calendar-book",
+            operations: {
+              "booking.create": {
+                description: "Book an appointment.",
+                inputSchema: { type: "object", properties: {} },
+                effectCategory: "external_mutation" as const,
+                idempotent: false,
+                execute: vi.fn().mockResolvedValue(ok({ bookingId: "b1", status: "confirmed" })),
+              },
+            },
+          },
+        ],
+      ]);
+
+    const bookingArcSkill: SkillDefinition = {
+      ...mockSkill,
+      parameters: [],
+      tools: ["crm-query", "crm-write", "calendar-book"],
+      body: "Qualify the lead, then book them.",
+    };
+
+    // One tool per turn, in arc order, then a terminal text turn.
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "crm-query.contact.get", input: {} }],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [
+          {
+            type: "tool_use",
+            id: "t2",
+            name: "crm-write.stage.update",
+            input: { stage: "qualified" },
+          },
+        ],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [{ type: "tool_use", id: "t3", name: "calendar-book.booking.create", input: {} }],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [{ type: "text", text: "You're booked!" }],
+        stop_reason: "end_turn",
+      },
+    ]);
+
+    const toolMap = bookingArcTools();
+    const executor = new SkillExecutorImpl(adapter, toolMap);
+    const result = await executor.execute({
+      skill: bookingArcSkill,
+      parameters: {},
+      messages: [{ role: "user", content: "I'd like to book a consult." }],
+      deploymentId: "d1",
+      orgId: "org1",
+      trustScore: 100,
+      trustLevel: "autonomous",
+      sessionId: "s1",
+    });
+
+    // (a) ORDER: the executed tools, in sequence, are the booking arc.
+    expect(result.toolCalls.map((c) => c.toolId)).toEqual([
+      "crm-query",
+      "crm-write",
+      "calendar-book",
+    ]);
+    expect(result.toolCalls.map((c) => c.operation)).toEqual([
+      "contact.get",
+      "stage.update",
+      "booking.create",
+    ]);
+    // (b) TERMINAL TRACE: a real terminal success, not a false-complete.
+    expect(result.trace.status).toBe("success");
+    expect(result.response).toBe("You're booked!");
+    // The two mutating legs (write + external_mutation) were counted as writes,
+    // proving they actually ran through the executor (not just listed).
+    expect(result.trace.writeCount).toBe(2);
+    expect(
+      toolMap.get("calendar-book")!.operations["booking.create"]!.execute,
+    ).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("parseIntentTag", () => {
