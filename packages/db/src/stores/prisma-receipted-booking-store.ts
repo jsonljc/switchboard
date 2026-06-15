@@ -1,7 +1,43 @@
+import type { Prisma } from "@prisma/client";
 import type { PrismaDbClient } from "../prisma-db.js";
-import type { ReceiptedBookingView, AttributionConfidence } from "@switchboard/schemas";
-import { scoreAttribution, evaluateExceptions, assembleViewExceptions } from "@switchboard/core";
+import type {
+  ReceiptedBookingView,
+  AttributionConfidence,
+  ReconcileBookingParameters,
+} from "@switchboard/schemas";
+import {
+  scoreAttribution,
+  evaluateExceptions,
+  assembleViewExceptions,
+  mergeExceptions,
+  snapshotCents,
+} from "@switchboard/core";
 import type { SerializedExceptionEntry } from "@switchboard/core";
+
+/**
+ * Outcome of a reconcile write. `created` (only on `applied`) distinguishes a governed LATE issuance
+ * (a historical booking with no prior row, minted by override_attribution) from an in-place update.
+ * `not_issued` is flag/resolve hitting a booking with no persisted row; `unsupported_code` is a
+ * resolve_exception for a code outside the v1-supported set.
+ */
+export type ApplyReconcileResult =
+  | { status: "not_found" }
+  | { status: "not_issued" }
+  | { status: "applied"; created: boolean }
+  | { status: "unsupported_code" };
+
+/** The only exception codes a resolve_exception action may stamp in v1 (spec Decision 2). */
+const RESOLVABLE_CODES: ReadonlySet<string> = new Set(["duplicate_contact_risk"]);
+
+/** Duck-typed Prisma unique-constraint check (mirrors PrismaWorkTraceStore; no Prisma value import). */
+function isUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: string }).code === "P2002"
+  );
+}
 
 /**
  * Read-projection store for the receipted-booking view (Ledger's data plane, spec slice 4).
@@ -195,5 +231,146 @@ export class PrismaReceiptedBookingStore {
       rows.map((r) => this.getView(orgId, r.bookingId as string, now)),
     );
     return views.filter((v): v is ReceiptedBookingView => v !== null);
+  }
+
+  /**
+   * Apply a governed reconcile action to a booking's persisted ReceiptedBooking row, reached ONLY
+   * through PlatformIngress.submit (the handler returns an outcome; PlatformIngress writes the
+   * canonical WorkTrace). Idempotent + keyed on bookingId; org-scoped on EVERY leg (the F12 write-side
+   * IDOR lesson). NaN-safe via snapshotCents; JSON-native exceptions (no Date) so the write cannot
+   * raise a Prisma Json error.
+   *
+   * - override_attribution: writes the override columns. PRESENT row -> org-scoped updateMany (the
+   *   value snapshot stays frozen); a count===0 concurrent delete -> not_found. ABSENT row -> governed
+   *   late issuance: create a row snapshotting the live Opportunity.estimatedValue (org-scoped read)
+   *   into expectedValueAtIssue with issuedAt=now and exceptions=[] (manual_override is column-derived,
+   *   raised on the read path from overriddenBy). A P2002 unique-bookingId race converges to the
+   *   org-scoped updateMany.
+   * - flag_duplicate / resolve_exception: require an existing row (absent -> not_issued). The
+   *   exceptions array is reconciled append-only via mergeExceptions, scoped to {duplicate_contact_risk}.
+   *   resolve_exception validates the code is in the v1-supported set BEFORE the merge; an unsupported
+   *   code -> unsupported_code, so it can never stamp a false resolvedAt on a live signal.
+   */
+  async applyReconcile(input: {
+    orgId: string;
+    bookingId: string;
+    action: ReconcileBookingParameters;
+    actorId: string;
+    now?: Date;
+  }): Promise<ApplyReconcileResult> {
+    const now = input.now ?? new Date();
+    const { orgId, bookingId, action } = input;
+
+    const booking = await this.prisma.booking.findFirst({
+      where: { organizationId: orgId, id: bookingId },
+      select: { id: true, opportunityId: true },
+    });
+    if (!booking) return { status: "not_found" };
+
+    const prior = await this.prisma.receiptedBooking.findFirst({
+      where: { organizationId: orgId, bookingId },
+      select: { id: true, exceptions: true },
+    });
+
+    if (action.action === "override_attribution") {
+      if (prior) {
+        const updated = await this.prisma.receiptedBooking.updateMany({
+          where: { organizationId: orgId, bookingId },
+          data: {
+            attributionConfidence: action.confidence,
+            attributionUpdatedAt: now,
+            overriddenBy: input.actorId,
+            overrideReason: action.reason,
+            overriddenAt: now,
+            lastEvaluatedAt: now,
+          },
+        });
+        if (updated.count === 0) return { status: "not_found" };
+        return { status: "applied", created: false };
+      }
+      // Absent row: governed late issuance. Snapshot the live Opportunity value so the revenue rollup
+      // (which keys snapshot-vs-live on issuedAt != null) does not drop this booking's revenue to zero.
+      const opportunity = booking.opportunityId
+        ? await this.prisma.opportunity.findFirst({
+            where: { organizationId: orgId, id: booking.opportunityId },
+            select: { estimatedValue: true },
+          })
+        : null;
+      try {
+        await this.prisma.receiptedBooking.create({
+          data: {
+            organizationId: orgId,
+            bookingId,
+            issuedAt: now,
+            attributionConfidence: action.confidence,
+            attributionUpdatedAt: now,
+            expectedValueAtIssue: snapshotCents(opportunity?.estimatedValue ?? null),
+            currency: null,
+            exceptions: [] as unknown as Prisma.InputJsonValue,
+            overriddenBy: input.actorId,
+            overrideReason: action.reason,
+            overriddenAt: now,
+            lastEvaluatedAt: now,
+          },
+        });
+        return { status: "applied", created: true };
+      } catch (err) {
+        // A concurrent issuance/override won the unique-bookingId race; converge to the org-scoped
+        // updateMany so the action stays idempotent.
+        if (isUniqueConstraintError(err)) {
+          const updated = await this.prisma.receiptedBooking.updateMany({
+            where: { organizationId: orgId, bookingId },
+            data: {
+              attributionConfidence: action.confidence,
+              attributionUpdatedAt: now,
+              overriddenBy: input.actorId,
+              overrideReason: action.reason,
+              overriddenAt: now,
+              lastEvaluatedAt: now,
+            },
+          });
+          if (updated.count === 0) return { status: "not_found" };
+          return { status: "applied", created: false };
+        }
+        throw err;
+      }
+    }
+
+    // flag_duplicate / resolve_exception both reconcile the exceptions ARRAY and require an existing row.
+    if (action.action === "resolve_exception" && !RESOLVABLE_CODES.has(action.code)) {
+      // Reject BEFORE any merge: never stamp a false resolvedAt on a live recomputable signal.
+      return { status: "unsupported_code" };
+    }
+    if (!prior) return { status: "not_issued" };
+
+    const priorExceptions = (Array.isArray(prior.exceptions)
+      ? prior.exceptions
+      : []) as unknown as SerializedExceptionEntry[];
+    const desired: SerializedExceptionEntry[] =
+      action.action === "flag_duplicate"
+        ? [
+            {
+              code: "duplicate_contact_risk",
+              detail: action.detail,
+              raisedAt: now.toISOString(),
+              resolvedAt: null,
+            },
+          ]
+        : [];
+    const merged = mergeExceptions(
+      priorExceptions,
+      desired,
+      now,
+      new Set(["duplicate_contact_risk"]),
+    );
+    const updated = await this.prisma.receiptedBooking.updateMany({
+      where: { organizationId: orgId, bookingId },
+      data: {
+        exceptions: merged as unknown as Prisma.InputJsonValue,
+        lastEvaluatedAt: now,
+      },
+    });
+    if (updated.count === 0) return { status: "not_found" };
+    return { status: "applied", created: false };
   }
 }
