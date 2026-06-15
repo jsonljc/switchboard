@@ -24,6 +24,8 @@ function view(p: Partial<ReceiptedBookingView>): ReceiptedBookingView {
     matchedPolicies: null,
     humanApprovalId: null,
     attendanceState: null,
+    service: "svc",
+    startsAt: new Date("2026-06-16T02:00:00Z"),
     paymentEventIds: [],
     expectedValue: null,
     ...p,
