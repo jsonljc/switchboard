@@ -34,6 +34,7 @@ import {
   PrismaBusinessFactsStore,
   PrismaOperationalStateStore,
   PrismaFailedMessageRetentionStore,
+  PrismaLeadIntakeStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -91,6 +92,7 @@ import type { RileyBudgetSubmitInput } from "../services/workflows/riley-budget-
 import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
 import { buildRileyBudgetSubmitter } from "./riley-budget-submitter.js";
 import { buildRileyCredentialResolver } from "./riley-credential-resolver.js";
+import { buildCreateCoverageValidator } from "./coverage-validator-factory.js";
 import {
   buildAdOptimizerFailureHandlers,
   buildSaveAuditReport,
@@ -508,6 +510,23 @@ export async function registerInngest(
     // field in v1; mirrors RILEY_PAUSE_SELF_EXECUTION_ENABLED pattern).
     ...(process.env["RILEY_REALLOCATE_SELF_EXECUTION_ENABLED"] === "true"
       ? { rileyBudgetSubmitter }
+      : {}),
+    // Gate 0 (D9-4): RILEY_COVERAGE_GATE_ENABLED=true wires the production coverage
+    // validator so the weekly audit ABSTAINS on a zero-data org (spend without
+    // verified tracked-source leads) instead of optimizing on blind spots. Default
+    // absent = no gate (today's behavior; validator undefined). SAFETY: default-OFF
+    // until a Tier-0 credentialed-org walkthrough confirms a covered org passes AND a
+    // zero-data org abstains against real data; flipping it on while lead sourceTypes
+    // do not match real Meta destination_types would false-abstain the fleet
+    // (feedback_safety_gate_needs_producer_population).
+    ...(process.env["RILEY_COVERAGE_GATE_ENABLED"] === "true"
+      ? {
+          createCoverageValidator: buildCreateCoverageValidator({
+            deploymentStore,
+            leadIntakeStore: new PrismaLeadIntakeStore(app.prisma!),
+            makeAdsClient: (creds) => new MetaAdsClient(creds),
+          }),
+        }
       : {}),
     getLatestOperationalState: (organizationId) => operationalStateStore.getLatest(organizationId),
   };
