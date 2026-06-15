@@ -1,4 +1,9 @@
 // packages/core/src/ad-optimizer/meta-ads-client.ts
+/* eslint-disable max-lines -- cohesive Meta Graph client class just over the 600-line cap:
+   tier1 D2-2 added central revenue sourcing from action_values (this slice), and tier1 PR 1.3
+   (429/Retry-After classification) + PR 1.5 (listCampaigns) will grow it further. Splitting a
+   single client class across files hurts cohesion; extracting the response mappers is the right
+   follow-up, tracked for the tier1 close, not this slice. */
 import type {
   CampaignInsightSchema as CampaignInsight,
   AdSetInsightSchema as AdSetInsight,
