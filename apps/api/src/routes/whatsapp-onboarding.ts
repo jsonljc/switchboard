@@ -4,11 +4,12 @@ import {
   fetchWabaIdFromToken,
   registerWebhookOverride,
   exchangeEsuCodeForToken,
+  registerPhoneNumber,
 } from "../lib/whatsapp-meta.js";
 import { notifyChatProvisionedChannel } from "../lib/notify-chat-provisioned-channel.js";
 import { resolveOrganizationForMutation } from "../utils/org-access.js";
 
-type OnboardBody = { esToken?: string; code?: string; organizationId?: string };
+type OnboardBody = { esToken?: string; code?: string; organizationId?: string; pin?: string };
 
 interface OnboardingOptions {
   metaSystemUserToken: string;
@@ -92,7 +93,7 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
       return reply.code(401).send({ error: "Authentication required" });
     }
 
-    const { esToken, code } = request.body ?? {};
+    const { esToken, code, pin } = request.body ?? {};
     if (!esToken && !code) {
       return reply.code(400).send({ error: "code or esToken is required" });
     }
@@ -184,11 +185,33 @@ export const whatsappOnboardingRoutes: FastifyPluginAsync<OnboardingOptions> = a
       }
       const phone = phones[0];
 
-      // 4. Register phone for Cloud API
-      await graphCall(`/${phone.id}/register`, "POST", {
-        messaging_product: "whatsapp",
-        pin: "000000",
+      // 4. Register phone for Cloud API. Meta semantics: with no two-step
+      // verification (2SV) the supplied pin BECOMES the 2SV pin; with 2SV
+      // already set it must MATCH. Operators with an existing 2SV PIN pass it via
+      // the ESU flow; absent -> "000000" (unchanged for fresh numbers). A failure
+      // used to be swallowed (graphApiFetch ignores HTTP status, the result was
+      // discarded) -> phantom 200. Surface it instead, before persisting anything.
+      const registerResult = await registerPhoneNumber({
+        apiVersion,
+        userToken: metaSystemUserToken,
+        phoneNumberId: phone.id,
+        pin: pin || "000000",
+        fetchImpl: helperFetch,
       });
+      if (!registerResult.ok) {
+        if (registerResult.pinRequired) {
+          return reply.code(422).send({
+            error:
+              "This WhatsApp number has two-step verification enabled. Enter its existing 6-digit PIN and try again. If you don't know it, reset it in WhatsApp Manager.",
+            code: "whatsapp_registration_pin_required",
+            detail: registerResult.reason,
+          });
+        }
+        return reply.code(502).send({
+          error: "Phone registration failed. We could not register the number with WhatsApp.",
+          detail: registerResult.reason,
+        });
+      }
 
       // 5. Create connection and get webhook path
       const connection = await opts.createConnection({

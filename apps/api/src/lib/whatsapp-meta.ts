@@ -33,6 +33,84 @@
 
 export type FetchWabaIdResult = { ok: true; wabaId: string } | { ok: false; reason: string };
 
+export type RegisterPhoneResult =
+  | { ok: true }
+  | { ok: false; reason: string; pinRequired: boolean };
+
+interface MetaRegisterErrorBody {
+  error?: {
+    message?: string;
+    code?: number;
+    error_subcode?: number;
+    error_user_title?: string;
+    error_user_msg?: string;
+  };
+}
+
+// WhatsApp Cloud API two-step-verification error codes (133xxx family). Meta's
+// reference is JS-rendered and unverifiable from this environment, so this set is
+// best-effort; the message heuristic below is the backstop and the route ALWAYS
+// surfaces a register failure regardless of classification. Either signal flags a
+// PIN-actionable error.
+const TWO_STEP_PIN_ERROR_CODES = new Set([133005, 133006, 133008, 133009, 133010]);
+
+function isPinError(err: NonNullable<MetaRegisterErrorBody["error"]>): boolean {
+  if (typeof err.code === "number" && TWO_STEP_PIN_ERROR_CODES.has(err.code)) return true;
+  const text =
+    `${err.message ?? ""} ${err.error_user_title ?? ""} ${err.error_user_msg ?? ""}`.toLowerCase();
+  return text.includes("pin") || text.includes("two-step") || text.includes("two step");
+}
+
+/**
+ * Register a customer phone number for Cloud API.
+ *
+ * POST /<apiVersion>/<phoneNumberId>/register with { messaging_product, pin }.
+ * Meta semantics: with no two-step verification (2SV) the supplied `pin` BECOMES
+ * the 2SV PIN; with 2SV already set, `pin` must MATCH the existing PIN. A
+ * wrong/missing PIN -> a 2SV error. The route's helperFetch seam forces
+ * ok:true/status:200, so Graph errors arrive as a JSON body { error: {...} } -
+ * classify on the body, with an HTTP-status fallback for direct fetch callers.
+ * `pinRequired` lets the route surface an actionable "enter your existing PIN"
+ * message (422) distinct from other registration failures.
+ */
+export async function registerPhoneNumber(args: {
+  apiVersion: string;
+  userToken: string;
+  phoneNumberId: string;
+  pin: string;
+  fetchImpl?: typeof fetch;
+}): Promise<RegisterPhoneResult> {
+  const fetchImpl = args.fetchImpl ?? fetch;
+  const url = `https://graph.facebook.com/${args.apiVersion}/${args.phoneNumberId}/register`;
+  let res: Awaited<ReturnType<typeof fetch>>;
+  try {
+    res = await fetchImpl(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${args.userToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", pin: args.pin }),
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      reason: err instanceof Error ? err.message : "fetch error",
+      pinRequired: false,
+    };
+  }
+  let body: MetaRegisterErrorBody;
+  try {
+    body = (await res.json()) as MetaRegisterErrorBody;
+  } catch {
+    return res.ok ? { ok: true } : { ok: false, reason: `graph ${res.status}`, pinRequired: false };
+  }
+  if (body?.error) {
+    const e = body.error;
+    const reason = e.error_user_msg || e.message || `graph ${e.code ?? "error"}`;
+    return { ok: false, reason, pinRequired: isPinError(e) };
+  }
+  if (!res.ok) return { ok: false, reason: `graph ${res.status}`, pinRequired: false };
+  return { ok: true };
+}
+
 export type RegisterWebhookResult = { ok: true } | { ok: false; reason: string };
 
 interface MetaErrorBody {

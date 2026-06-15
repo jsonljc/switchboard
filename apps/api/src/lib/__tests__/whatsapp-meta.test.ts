@@ -3,6 +3,7 @@ import {
   registerWebhookOverride,
   fetchWabaIdFromToken,
   exchangeEsuCodeForToken,
+  registerPhoneNumber,
 } from "../whatsapp-meta.js";
 
 describe("whatsapp-meta helper", () => {
@@ -339,5 +340,103 @@ describe("whatsapp-meta helper", () => {
         expect(result.reason).toContain("invalid_code");
       }
     });
+  });
+});
+
+describe("registerPhoneNumber", () => {
+  it("returns ok=true on success body {success:true}", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
+    });
+    const result = await registerPhoneNumber({
+      apiVersion: "v21.0",
+      userToken: "T",
+      phoneNumberId: "PH",
+      pin: "000000",
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("returns ok=false, pinRequired=true for error code 133005 (known 2SV code)", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ error: { message: "Account locked", code: 133005 } }),
+    });
+    const result = await registerPhoneNumber({
+      apiVersion: "v21.0",
+      userToken: "T",
+      phoneNumberId: "PH",
+      pin: "000000",
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.pinRequired).toBe(true);
+    }
+  });
+
+  it("returns ok=false, pinRequired=true for message heuristic (contains 'pin')", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        error: { message: "Two-step verification PIN is incorrect", code: 999 },
+      }),
+    });
+    const result = await registerPhoneNumber({
+      apiVersion: "v21.0",
+      userToken: "T",
+      phoneNumberId: "PH",
+      pin: "000000",
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.pinRequired).toBe(true);
+    }
+  });
+
+  it("returns ok=false, pinRequired=false for a non-2SV error (code 100)", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ error: { message: "Some other failure", code: 100 } }),
+    });
+    const result = await registerPhoneNumber({
+      apiVersion: "v21.0",
+      userToken: "T",
+      phoneNumberId: "PH",
+      pin: "000000",
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.pinRequired).toBe(false);
+    }
+  });
+
+  it("POSTs to /<apiVersion>/<phoneNumberId>/register with correct auth and body", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
+    });
+    await registerPhoneNumber({
+      apiVersion: "v21.0",
+      userToken: "T",
+      phoneNumberId: "PH",
+      pin: "246810",
+      fetchImpl: fetchSpy as unknown as typeof fetch,
+    });
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(String(url)).toContain("/v21.0/PH/register");
+    expect((init as { method: string }).method).toBe("POST");
+    expect((init as { headers: Record<string, string> }).headers["Authorization"]).toBe("Bearer T");
+    const body = JSON.parse((init as { body: string }).body);
+    expect(body).toEqual({ messaging_product: "whatsapp", pin: "246810" });
   });
 });
