@@ -5,7 +5,6 @@ describe("ConversationStore interface", () => {
   it("can be implemented with an in-memory store", async () => {
     const history = new Map<string, Message[]>();
     const stages = new Map<string, LifecycleStage>();
-    const optOuts = new Set<string>();
 
     const store: ConversationStore = {
       async getHistory(contactId: string): Promise<Message[]> {
@@ -21,16 +20,6 @@ describe("ConversationStore interface", () => {
       },
       async setStage(contactId: string, stage: LifecycleStage): Promise<void> {
         stages.set(contactId, stage);
-      },
-      async isOptedOut(contactId: string): Promise<boolean> {
-        return optOuts.has(contactId);
-      },
-      async setOptOut(contactId: string, optedOut: boolean): Promise<void> {
-        if (optedOut) {
-          optOuts.add(contactId);
-        } else {
-          optOuts.delete(contactId);
-        }
       },
     };
 
@@ -49,11 +38,5 @@ describe("ConversationStore interface", () => {
     expect(await store.getStage("c1")).toBe("lead");
     await store.setStage("c1", "qualified");
     expect(await store.getStage("c1")).toBe("qualified");
-
-    expect(await store.isOptedOut("c1")).toBe(false);
-    await store.setOptOut("c1", true);
-    expect(await store.isOptedOut("c1")).toBe(true);
-    await store.setOptOut("c1", false);
-    expect(await store.isOptedOut("c1")).toBe(false);
   });
 });

@@ -73,14 +73,4 @@ describe("PrismaConversationStore", () => {
       }),
     );
   });
-
-  it("isOptedOut returns false when no record exists", async () => {
-    prisma.contactLifecycle.findUnique.mockResolvedValue(null);
-    expect(await store.isOptedOut("c1")).toBe(false);
-  });
-
-  it("setOptOut upserts opt-out status", async () => {
-    await store.setOptOut("c1", true);
-    expect(prisma.contactLifecycle.upsert).toHaveBeenCalledOnce();
-  });
 });

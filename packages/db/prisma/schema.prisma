@@ -997,7 +997,6 @@ model ContactLifecycle {
   contactId String
   orgId     String
   stage     String   @default("lead") // lead, qualified, booked, churned
-  optedOut  Boolean  @default(false)
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 

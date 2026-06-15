@@ -66,19 +66,4 @@ export class PrismaConversationStore {
       update: { stage },
     });
   }
-
-  async isOptedOut(contactId: string): Promise<boolean> {
-    const record = await this.prisma.contactLifecycle.findUnique({
-      where: { contactId_orgId: { contactId, orgId: this.orgId } },
-    });
-    return record?.optedOut ?? false;
-  }
-
-  async setOptOut(contactId: string, optedOut: boolean): Promise<void> {
-    await this.prisma.contactLifecycle.upsert({
-      where: { contactId_orgId: { contactId, orgId: this.orgId } },
-      create: { contactId, orgId: this.orgId, optedOut },
-      update: { optedOut },
-    });
-  }
 }
