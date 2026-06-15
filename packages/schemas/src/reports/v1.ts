@@ -177,6 +177,12 @@ export interface ReceiptedBookingWorklistItem {
   attributionConfidence: AttributionConfidence;
   /** Distinct OPEN exception codes for this booking, in canonical taxonomy order. */
   openExceptionCodes: ExceptionCode[];
+  /** ISO-8601 issuance timestamp from the persisted ReceiptedBooking row; null when no row
+   *  has been minted yet (pre-hook bookings). Null means flag_duplicate / resolve_exception
+   *  are unavailable; override_attribution is always available (it mints the row on first call). */
+  issuedAt: string | null;
+  /** True when the booking carries a non-null overriddenBy (the owner has asserted attribution). */
+  overridden: boolean;
 }
 
 /** Proof-quality breakdown of the receipted-booking cohort: how attributable each booking is, and

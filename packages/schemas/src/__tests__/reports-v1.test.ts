@@ -114,6 +114,8 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
           startsAt: "2026-06-16T02:00:00.000Z",
           attributionConfidence: "unattributed",
           openExceptionCodes: ["missing_source", "missing_consent"],
+          issuedAt: null,
+          overridden: false,
         },
       ],
     };
