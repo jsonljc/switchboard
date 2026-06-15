@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { alexBuilder } from "./alex.js";
 import type { AgentContext } from "@switchboard/sdk";
 import type { SkillStores } from "../parameter-builder.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
 import { interpolate } from "../template-engine.js";
+import { createInMemoryMetrics, setMetrics } from "../../telemetry/metrics.js";
 
 function createMockCtx(overrides?: Partial<AgentContext>): AgentContext {
   return {
@@ -455,5 +456,60 @@ describe("alexBuilder", () => {
     expect(dt).toContain("2026-06-02");
     // Falls back to Asia/Singapore
     expect(dt).toContain("Asia/Singapore");
+  });
+
+  describe("F15: policyContextSlotEmpty metric (observability-only)", () => {
+    afterEach(() => {
+      // Restore the module-singleton metrics so this block's spy doesn't leak
+      // into other test files sharing the same vitest worker.
+      setMetrics(createInMemoryMetrics());
+    });
+
+    it("emits policyContextSlotEmpty{slot:business-facts} once when facts are null, output unchanged", async () => {
+      const metrics = createInMemoryMetrics();
+      const spy = vi.spyOn(metrics.policyContextSlotEmpty, "inc");
+      setMetrics(metrics);
+
+      const ctx = createMockCtx();
+      const stores = createMockStores({
+        businessFactsStore: {
+          get: vi.fn().mockResolvedValue(null),
+        } as never,
+      });
+
+      const result = await alexBuilder(ctx, config, stores);
+
+      // The slot still degrades to "" — prompt render must stay byte-identical.
+      expect(result.parameters.BUSINESS_FACTS).toBe("");
+      // ...but the empty resolution is now observable for the entitled org.
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith({ orgId: "org_1", slot: "business-facts" });
+    });
+
+    it("does NOT emit policyContextSlotEmpty when facts are present", async () => {
+      const metrics = createInMemoryMetrics();
+      const spy = vi.spyOn(metrics.policyContextSlotEmpty, "inc");
+      setMetrics(metrics);
+
+      const ctx = createMockCtx();
+      const stores = createMockStores({
+        businessFactsStore: {
+          get: vi.fn().mockResolvedValue({
+            businessName: "Glow Aesthetics",
+            timezone: "Asia/Singapore",
+            locations: [{ name: "Orchard", address: "391 Orchard Rd" }],
+            openingHours: { monday: { open: "10:00", close: "20:00", closed: false } },
+            services: [{ name: "Botox", description: "Anti-wrinkle", price: "from $18/unit" }],
+            escalationContact: { name: "Front desk", channel: "whatsapp", address: "+6560000000" },
+            additionalFaqs: [],
+          }),
+        } as never,
+      });
+
+      const result = await alexBuilder(ctx, config, stores);
+
+      expect(result.parameters.BUSINESS_FACTS).not.toBe("");
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 });
