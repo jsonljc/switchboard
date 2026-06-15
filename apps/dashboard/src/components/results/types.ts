@@ -15,6 +15,7 @@ export type {
   ConsentCompletenessData,
   ReceiptedBookingsData,
   ReceiptedBookingQualityData,
+  ReceiptedBookingRevenueData,
   AttributionConfidence,
   ExceptionCode,
   ManagedComparisonData,

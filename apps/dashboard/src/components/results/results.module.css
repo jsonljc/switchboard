@@ -375,6 +375,34 @@
   margin: 0.125rem 0 0;
 }
 
+/* Receipted-revenue tile: shares the proof-quality eyebrow/empty register */
+.proofRevenue {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Headline revenue figure: mono tabular, mirrors the proof-quality lead stat */
+.proofRevenueAmount {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0.125rem 0 0;
+}
+
+/* Coverage sub-line: quiet mono caption (how much of the cohort carried a value) */
+.proofRevenueCoverage {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: var(--ink-4);
+  margin: 0;
+}
+
 /* Confidence rungs: label, amber proportion bar, count (mirrors the funnel row grid) */
 .proofQualityRungs {
   list-style: none;
