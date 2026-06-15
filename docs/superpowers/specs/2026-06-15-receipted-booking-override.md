@@ -88,12 +88,23 @@ booking") plus the `getView` consumer fix that kills both hardcodes.
    via the existing consent flow, a PDPA invariant; clearing `missing_source` is done by overriding
    attribution to a non-`unattributed` value).
 
-4. **The override requires an existing persisted row.** A booking with no `ReceiptedBooking` row
-   (historical, pre-#1080) cannot be reconciled: the executor returns a `RECEIPTED_BOOKING_NOT_ISSUED`
-   failure (mapped to 404). Minting a row here would create a second birth site and violate the
-   single-issuance-path invariant. `getView` already exposes `issuedAt` (non-null iff a row exists), so
-   the dashboard gates the action on `issuedAt` presence. Backfilling issuance for historical bookings
-   is a separate optional future slice.
+4. **`override_attribution` mints the row if absent (governed late issuance); `flag_duplicate` /
+   `resolve_exception` require an existing row.** A medspa pilot's worklist is dominated by historical
+   bookings (created before the #1080 issuance hook), which carry no `ReceiptedBooking` row. Making the
+   primary action return 404 for exactly those rows would leave it nearly dead at launch. So
+   `override_attribution` CREATES the row when absent, snapshotting the live `Opportunity.estimatedValue`
+   (cents) into `expectedValueAtIssue` with `issuedAt = now`. That snapshot is load-bearing: the revenue
+   rollup keys snapshot-vs-live on `issuedAt != null` (`compute-receipted-booking-revenue.ts`), so a
+   minted row with a null snapshot would silently drop the booking's revenue to zero. The create is
+   idempotent (find-by-`bookingId`; a P2002 unique-`bookingId` race converges to the org-scoped
+   `updateMany`). This does NOT breach the object-design "calendar-book is the only issuance birth site"
+   invariant in spirit: that invariant forbids an UNGOVERNED / ingress-less writer, whereas this create is
+   reached ONLY through `PlatformIngress.submit` (governed, WorkTraced, idempotent, org-scoped), so it is
+   a governed LATE issuance of the same judgment, not a parallel control plane. (The write path is a
+   SURFACE slice, so a human reviews this create-on-override decision before it merges.) `flag_duplicate`
+   and `resolve_exception` keep require-existing-row: a booking with no row has no `exceptions` array to
+   append to or resolve against, so they return `RECEIPTED_BOOKING_NOT_ISSUED` when absent (the owner can
+   override first to mint the row, then flag or resolve).
 
 5. **Read-model, not control plane (Doctrine 3).** The mutation routes through `PlatformIngress.submit`
    (the one control plane) and writes a `WorkTrace` (canonical). The `ReceiptedBooking` columns/array are
@@ -157,18 +168,23 @@ api route (`@route-class: operator-direct`, `requireOrgForMutation`, `requireIde
 organizationId: orgId, trigger: "api", surface: {surface:"api"}, idempotencyKey })` -> `operator_mutation`
 mode -> the reconcile handler -> `PrismaReceiptedBookingStore.applyReconcile`.
 
-`applyReconcile(orgId, bookingId, action, actorId, now)`:
+`applyReconcile(orgId, bookingId, action, actorId, now)`. A `booking.findFirst({where:{organizationId,
+id}})` not-found gate first (absent booking or wrong org -> `not_found`). Then, org-scoped on every write
+leg (the F12 write-side lesson):
 
-- org-scoped `updateMany` (the F12 write-side lesson); `count === 0` -> abort with
-  `RECEIPTED_BOOKING_NOT_ISSUED` (conflates missing-row and tenant-mismatch, the security-correct
-  behaviour). Reads the prior row first (org-scoped) to compute the merged array.
-- `override_attribution`: set the five override columns; `attributionUpdatedAt = overriddenAt = now`.
-- `flag_duplicate` / `resolve_exception`: `exceptions = mergeExceptions(prior.exceptions, desired, now,
-{duplicate_contact_risk})`. The handler validates a `resolve_exception` `code` is in the v1-supported
-  set (`duplicate_contact_risk`) BEFORE the merge; an unsupported code (e.g. a recomputable PDPA code) is
-  rejected with a clear failure and never reaches `mergeExceptions`, so it can never stamp a false
-  `resolvedAt` on a live signal.
-- `lastEvaluatedAt = now`.
+- `override_attribution`: read the prior `ReceiptedBooking` row (org-scoped). If PRESENT, org-scoped
+  `updateMany` setting the five override columns + `attributionUpdatedAt = overriddenAt = now` (the value
+  snapshot stays frozen); a `count === 0` concurrent delete -> `not_found`. If ABSENT, `create` a row that
+  snapshots the live `Opportunity.estimatedValue` (org-scoped read) into `expectedValueAtIssue`, with
+  `issuedAt = now`; a P2002 unique-`bookingId` race converges to the org-scoped `updateMany`.
+- `flag_duplicate` / `resolve_exception`: require an existing row (org-scoped read; absent / `count === 0`
+  -> `RECEIPTED_BOOKING_NOT_ISSUED`, the security-correct missing-row / tenant-mismatch conflation). Then
+  `exceptions = mergeExceptions(prior.exceptions, desired, now, {duplicate_contact_risk})` via org-scoped
+  `updateMany`. The handler validates a `resolve_exception` `code` is in the v1-supported set
+  (`duplicate_contact_risk`) BEFORE the merge; an unsupported code (a recomputable PDPA code) is rejected
+  with a clear failure and never reaches `mergeExceptions`, so it can never stamp a false `resolvedAt` on a
+  live signal.
+- `lastEvaluatedAt = now` on every write.
 
 The WorkTrace is written by PlatformIngress (the handler returns `{outcome, summary, outputs}`); the
 handler never hand-writes a trace.
@@ -182,13 +198,14 @@ from `view.issuedAt` / `view.overriddenBy` in `computeReceiptedBookingQuality`; 
 `issuedAt` without this. The worklist-row extension and the tile change ship together (producer +
 consumer).
 
-The worklist row (`receipted-booking-quality-tile.tsx`) then gains a compact per-row affordance, gated on
-`issuedAt != null`:
+The worklist row (`receipted-booking-quality-tile.tsx`) then gains a compact per-row affordance:
 
-- "Looks right" on a row whose only open code is `missing_source` -> `override_attribution` with a
-  confidence the owner picks and a one-line reason. Clearing `missing_source` is the immediate payoff.
-- "Flag duplicate" -> `flag_duplicate` with a short note.
-- A flagged duplicate row shows "Dismiss" -> `resolve_exception`.
+- "Looks right" -> `override_attribution`, available on ANY row (it mints the row if absent): the owner
+  picks a confidence and a one-line reason. On a row whose only open code is `missing_source`, clearing it
+  is the immediate payoff.
+- "Flag duplicate" -> `flag_duplicate`, and a flagged row's "Dismiss" -> `resolve_exception`: shown only
+  when `issuedAt != null` (an existing row), since they need a persisted `exceptions` array. After an
+  override mints the row, they become available.
 
 Confirmation, optimistic update with rollback on error, a generated `Idempotency-Key` per click. Keep the
 tile under the 400-line warn / 600-line error budget; extract the action control to its own component +
@@ -219,10 +236,11 @@ Adapt against fresh main each iteration; this spec governs.
    duplicate entry; a plain row). This alone KILLS BOTH hardcodes on the read side. Consumer = getView.
 3. **Governed write path (SURFACE; trips intent-registration / PlatformIngress / new-mutating-route /
    route-allowlist stop-globs).** schemas reconcile param union + pure `mergeExceptions` + db
-   `applyReconcile` (org-scoped `updateMany`, `count===0` abort) + the `operator_mutation` reconcile
-   handler + intent registration/bootstrap + the operator-direct api route. Producer + its handler
-   consumer ship together. `pnpm eval:governance` stays green (auto-approve operator-mutation needs no
-   new policy fixture; confirm, do not assume).
+   `applyReconcile` (override mints-if-absent with the live value snapshot + P2002 converge; flag/resolve
+   org-scoped `updateMany` + `count===0` abort) + the `operator_mutation` reconcile handler + intent
+   registration/bootstrap + the operator-direct api route. Producer + its handler consumer ship together.
+   `pnpm eval:governance` stays green (auto-approve operator-mutation needs no new policy fixture; confirm,
+   do not assume).
 4. **Dashboard action surface (SURFACE; trips the reports `(auth)` route-group glob as a known false
    positive + the new dashboard-proxy route).** The `ReceiptedBookingWorklistItem` `issuedAt` extension +
    rollup population + proxy route + api-client method + the worklist affordance +
