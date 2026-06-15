@@ -119,6 +119,7 @@ export async function bootstrapSkillMode(
     PrismaGovernanceVerdictStore,
     PrismaExecutionTraceStore,
     PrismaKnowledgeEntryStore,
+    PrismaBookingOutcomeLedgerStore,
     PrismaDeploymentMemoryStore,
     PrismaMiraCreativeReadModelReader,
     PrismaScheduledFollowUpStore,
@@ -852,6 +853,9 @@ export async function bootstrapSkillMode(
         // performance, consumed only by the "creative" builder.
         deploymentMemoryReader: new PrismaDeploymentMemoryStore(prismaClient),
         miraReadModelReader: new PrismaMiraCreativeReadModelReader(prismaClient),
+        // Alex -> Mira frontline conversion feed: which treatments the booking
+        // agent actually books (F5 ledger, already populated whenever Alex books).
+        bookingOutcomeLedgerReader: new PrismaBookingOutcomeLedgerStore(prismaClient),
       },
     }),
   );

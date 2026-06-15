@@ -1,6 +1,7 @@
 import type { AgentContext } from "@switchboard/sdk";
 import type { ContextBuilder } from "../memory/context-builder.js";
 import type { MiraCreativeReadModelReader } from "../creative-read-model/types.js";
+import type { FrontlineConversionLedgerReader } from "./builders/frontline-conversion.js";
 
 /**
  * The DeploymentMemory subset the mira builder reads (slice-4 spec 3.3).
@@ -71,6 +72,12 @@ export interface SkillStores {
   deploymentMemoryReader?: DeploymentMemoryHighConfidenceReader;
   /** Slice-4 mira brain: measured performance + pipeline counts at brief time. */
   miraReadModelReader?: MiraCreativeReadModelReader;
+  /**
+   * Alex -> Mira frontline conversion feed: which treatments the booking agent
+   * actually books (F5 org-scoped booking-outcome ledger). Optional for
+   * back-compat; absent -> the builder renders an empty signal.
+   */
+  bookingOutcomeLedgerReader?: FrontlineConversionLedgerReader;
 }
 
 /**

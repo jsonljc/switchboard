@@ -27,6 +27,7 @@ describe("skills/mira/SKILL.md (real file)", () => {
         "BUSINESS_FACTS",
         "BUSINESS_NAME",
         "CURRENT_DATETIME",
+        "FRONTLINE_CONVERSION_CONTEXT",
         "PERFORMANCE_CONTEXT",
         "PIPELINE_STATE",
         "TASTE_CONTEXT",

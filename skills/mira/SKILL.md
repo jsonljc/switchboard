@@ -29,6 +29,13 @@ parameters:
       when present, measured-winner lines. May be empty when nothing has
       surfaced yet.
 
+  - name: FRONTLINE_CONVERSION_CONTEXT
+    type: string
+    required: false
+    description: >
+      Which treatments the booking agent actually books, most to least, from
+      real frontline bookings. May be empty when no bookings have happened yet.
+
   - name: PERFORMANCE_CONTEXT
     type: string
     required: true
@@ -80,6 +87,10 @@ Today is {{CURRENT_DATETIME}}.
 
 {{PERFORMANCE_CONTEXT}}
 
+**Frontline booking demand** (which treatments the booking agent actually books):
+
+{{FRONTLINE_CONVERSION_CONTEXT}}
+
 **Pipeline right now:**
 
 {{PIPELINE_STATE}}
@@ -110,6 +121,9 @@ measured evidence for money questions, operator taste for tone questions.
   than a glossy one.
 - Ground every promise in the business facts above. If the facts are empty
   or thin, prefer to abstain over inventing.
+- Favor concepts for treatments with real frontline booking demand above. If a
+  treatment never books, a glossy concept for it will not fix that; spend the
+  concept on what customers already say yes to.
 
 ## Claim boundaries (non-negotiable)
 
