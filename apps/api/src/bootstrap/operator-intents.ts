@@ -34,6 +34,7 @@ import {
   CONFIRM_DISQUALIFICATION_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,
   GRANT_CONSENT_INTENT,
+  RECONCILE_BOOKING_INTENT,
   RECORD_ATTENDANCE_INTENT,
   RECORD_REVENUE_INTENT,
   REVOKE_CONSENT_INTENT,
@@ -45,6 +46,10 @@ import {
   type ReceiptHeldPromoter,
 } from "./operator-intents/attendance.js";
 import { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
+import {
+  buildReconcileBookingHandler,
+  type ReconcileBookingWriter,
+} from "./operator-intents/reconcile-booking.js";
 import {
   buildRecordRevenueHandler,
   type OutboxWriter,
@@ -76,12 +81,14 @@ export {
   DISMISS_DISQUALIFICATION_INTENT,
   GRANT_CONSENT_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
+  RECONCILE_BOOKING_INTENT,
   RECORD_ATTENDANCE_INTENT,
   RECORD_REVENUE_INTENT,
   REVOKE_CONSENT_INTENT,
   TRANSITION_OPPORTUNITY_STAGE_INTENT,
 } from "./operator-intents/shared.js";
 export { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
+export { buildReconcileBookingHandler } from "./operator-intents/reconcile-booking.js";
 export { buildRecordRevenueHandler } from "./operator-intents/revenue.js";
 export {
   buildRecordVerifiedPaymentHandler,
@@ -121,6 +128,8 @@ interface OperatorIntentsBootstrapDeps {
   /** Optional: when provided alongside bookingAttendanceWriter, an "attended" outcome promotes
    *  the booking's calendar receipt booked -> held. */
   receiptHeldPromoter?: ReceiptHeldPromoter;
+  /** Optional: registers the receipt.reconcile_booking intent + handler when provided. */
+  reconcileBookingWriter?: ReconcileBookingWriter;
   logger?: { info(msg: string): void };
 }
 
@@ -158,6 +167,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     paymentVerifier,
     bookingAttendanceWriter,
     receiptHeldPromoter,
+    reconcileBookingWriter,
     logger,
   } = deps;
 
@@ -221,6 +231,10 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     );
   }
 
+  if (reconcileBookingWriter) {
+    handlers.set(RECONCILE_BOOKING_INTENT, buildReconcileBookingHandler(reconcileBookingWriter));
+  }
+
   modeRegistry.register(new OperatorMutationMode({ handlers }));
 
   if (opportunityStore) {
@@ -247,6 +261,9 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
   if (bookingAttendanceWriter) {
     registerOperatorIntent(intentRegistry, RECORD_ATTENDANCE_INTENT);
   }
+  if (reconcileBookingWriter) {
+    registerOperatorIntent(intentRegistry, RECONCILE_BOOKING_INTENT);
+  }
 
   const intentCount =
     (opportunityStore ? 1 : 0) +
@@ -255,7 +272,8 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     (consentService ? 3 : 0) +
     (revenueStore && outboxWriter && runInTransaction ? 1 : 0) +
     (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier ? 1 : 0) +
-    (bookingAttendanceWriter ? 1 : 0);
+    (bookingAttendanceWriter ? 1 : 0) +
+    (reconcileBookingWriter ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );

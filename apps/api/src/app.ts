@@ -892,11 +892,14 @@ export async function buildServer() {
     const { PrismaOutboxStore } = await import("@switchboard/db");
     const { PrismaReceiptStore } = await import("@switchboard/db");
     const { PrismaBookingStore } = await import("@switchboard/db");
+    const { PrismaReceiptedBookingStore } = await import("@switchboard/db");
     const prismaOutbox = new PrismaOutboxStore(prismaClient);
     const prismaReceipts = new PrismaReceiptStore(prismaClient);
     // Fresh instance: the `reportStores.bookings` above is scoped to a different
     // `if (prismaClient)` block and is not in scope here.
     const bookingAttendanceStore = new PrismaBookingStore(prismaClient);
+    // The governed write-side store for receipt.reconcile_booking (override / flag / resolve).
+    const reconcileBookingStore = new PrismaReceiptedBookingStore(prismaClient);
     bootstrapOperatorIntents({
       intentRegistry,
       modeRegistry,
@@ -922,6 +925,7 @@ export async function buildServer() {
       bookingAttendanceWriter: bookingAttendanceStore,
       // Same store: an "attended" outcome promotes the booking's calendar receipt booked -> held.
       receiptHeldPromoter: prismaReceipts,
+      reconcileBookingWriter: reconcileBookingStore,
       logger: app.log,
     });
   }
