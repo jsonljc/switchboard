@@ -15,6 +15,7 @@ export type {
   ConsentCompletenessData,
   ReceiptedBookingsData,
   ReceiptedBookingQualityData,
+  ReceiptedBookingWorklistItem,
   ReceiptedBookingRevenueData,
   AttributionConfidence,
   ExceptionCode,
