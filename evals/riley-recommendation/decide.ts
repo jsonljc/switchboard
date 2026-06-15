@@ -1,5 +1,6 @@
 import {
   assembleRevenueState,
+  confidenceModifierForKind,
   decideForCampaign,
   deriveLearningPhaseActive,
   LearningPhaseGuardV2,
@@ -80,6 +81,10 @@ export interface RileyDecision {
   /** PR2 Gate-4: the resolved per-campaign target source when the case carries a
    * `hybrid` block (campaign Tier-1 vs account Tier-2); undefined otherwise. */
   targetSource?: TargetSource;
+  /** D7-2: the engine's emitted confidence per recommendation action (last wins on a
+   * duplicated action). Lets a fixture assert that the bounded confidence modifier moved
+   * (or abstained on) a given kind by the right amount. */
+  confidenceByAction: Record<string, number>;
 }
 
 function sortedUnique(values: string[]): string[] {
@@ -99,6 +104,7 @@ export type RileyDecisionInputCase = Pick<
   | "targetROAS"
   | "measurementTrusted"
   | "hybrid"
+  | "approvalHistory"
 >;
 
 export interface RileyRawDecision {
@@ -142,6 +148,14 @@ export function decideRawForCase(
     targetSource = resolved.targetSource;
   }
 
+  // D7-2: when the case carries operator approval history, build the SAME bounded,
+  // abstaining per-kind confidence modifier the live audit builds and feed it into the
+  // engine. Absent ⇒ no modifier (the existing 28 cases are byte-unchanged).
+  const confidenceModifierByKind = c.approvalHistory
+    ? (action: string): number =>
+        confidenceModifierForKind(c.approvalHistory?.[action] ?? { approved: 0, rejected: 0 })
+    : undefined;
+
   const r = decideForCampaign({
     campaignId,
     campaignName,
@@ -165,6 +179,7 @@ export function decideRawForCase(
     // runner uses (deriveLearningPhaseActive), so the eval and audit-runner never drift.
     learningPhaseActive: deriveLearningPhaseActive(c.learningState),
     ...(targetSource ? { targetSource } : {}),
+    ...(confidenceModifierByKind ? { confidenceModifierByKind } : {}),
   });
 
   return {
@@ -196,5 +211,16 @@ export function decideForCase(c: RileyCase): RileyDecision {
           ? "insight"
           : "none";
 
-  return { actions, watchPatterns, hasInsight, primary, targetSource: raw.targetSource };
+  // D7-2: expose the emitted confidence per action so a fixture can pin the modifier's effect.
+  const confidenceByAction: Record<string, number> = {};
+  for (const rec of raw.recommendations) confidenceByAction[rec.action] = rec.confidence;
+
+  return {
+    actions,
+    watchPatterns,
+    hasInsight,
+    primary,
+    confidenceByAction,
+    targetSource: raw.targetSource,
+  };
 }

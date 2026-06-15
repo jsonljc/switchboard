@@ -498,6 +498,20 @@ export async function registerInngest(
     createSignalHealthChecker,
     recommendationEmitter: rileyRecommendationEmitter,
     bookedValueByCampaignProvider: bookedValueByCampaignStore,
+    // D7-2 (Riley's first learning wire): feed the per-org operator approval-rate
+    // aggregate into the weekly audit so the per-campaign recommendation engine applies a
+    // bounded, abstaining per-kind confidence modifier (v1 scopes it to that path; the
+    // signal-health / reallocation / learning-limited recs keep base confidence).
+    // Unconditional (no env gate) BECAUSE it is
+    // safe-by-default: it abstains below an 8-verdict-per-kind floor and on any
+    // non-finite count, and is bounded to ±15%, so a sparse or noisy history can never
+    // degrade recommendation quality; gating it would only recreate the "shipped but
+    // inert" anti-pattern this audit exists to close. The modifier scales the rec
+    // confidence the v1 router thresholds on (queue vs shadow vs dropped) — a deliberate,
+    // bounded, human-gated effect (it never auto-executes; pause self-exec stays behind
+    // its own flag + mandatory approval). Reads the same store applyAct writes verdicts to.
+    approvalRateProvider: (organizationId) =>
+      recommendationStore.aggregateApprovalRateByKind(organizationId),
     recommendationHandoffSubmitter,
     // Kill switch: RILEY_PAUSE_SELF_EXECUTION_ENABLED=true wires the pause
     // initiator; default absent = the deploy is dark (the per-deployment

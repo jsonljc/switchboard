@@ -66,6 +66,27 @@ export const RileyCaseSchema = z.object({
   /** Expected resolution source when `hybrid` is present (campaign Tier-1 vs
    * account Tier-2). */
   expectedTargetSource: z.enum(["campaign", "account"]).optional(),
+  /** D7-2: optional per-action-kind operator approve/reject history. When present, the
+   * harness builds the bounded, abstaining confidence modifier (confidenceModifierForKind)
+   * and feeds it into decideForCampaign exactly as the live weekly audit does — proving the
+   * learning wire end-to-end through the REAL engine, not a hand-built modifier. */
+  approvalHistory: z
+    .record(z.string(), z.object({ approved: z.number(), rejected: z.number() }))
+    .optional(),
+  /** D7-2: optional per-action confidence assertions. The engine's emitted confidence for
+   * the named action must satisfy the bound(s). `equals` pins an exact value (close to 5
+   * decimals); `min`/`max` pin the bounded band. Proves the modifier moved (or abstained
+   * on) the right kind by the right amount. */
+  expectedConfidence: z
+    .array(
+      z.object({
+        action: z.string().min(1),
+        equals: z.number().optional(),
+        min: z.number().optional(),
+        max: z.number().optional(),
+      }),
+    )
+    .optional(),
   notes: z.string().optional(),
 });
 export type RileyCase = z.infer<typeof RileyCaseSchema>;

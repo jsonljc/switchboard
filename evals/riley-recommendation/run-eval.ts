@@ -50,6 +50,26 @@ async function main(): Promise<void> {
         );
       }
     }
+    // D7-2: the confidence modifier is part of the quality floor — enforce it in the gate,
+    // not just the vitest suite, so a regression in the learning wire fails CI.
+    for (const ec of c.expectedConfidence ?? []) {
+      const got = decision.confidenceByAction[ec.action];
+      if (typeof got !== "number") {
+        mismatches.push(`${c.id}: expected a confidence for "${ec.action}", got none ${ctx}`);
+        continue;
+      }
+      if (ec.equals !== undefined && Math.abs(got - ec.equals) > 1e-6) {
+        mismatches.push(
+          `${c.id}: expected confidence ${ec.equals} for "${ec.action}", got ${got} ${ctx}`,
+        );
+      }
+      if (ec.min !== undefined && got < ec.min) {
+        mismatches.push(`${c.id}: confidence for "${ec.action}" ${got} < min ${ec.min} ${ctx}`);
+      }
+      if (ec.max !== undefined && got > ec.max) {
+        mismatches.push(`${c.id}: confidence for "${ec.action}" ${got} > max ${ec.max} ${ctx}`);
+      }
+    }
     if (c.expectedTargetSource && decision.targetSource !== c.expectedTargetSource) {
       mismatches.push(
         `${c.id}: expected targetSource ${c.expectedTargetSource}, got ${decision.targetSource ?? "undefined"} ${ctx}`,
