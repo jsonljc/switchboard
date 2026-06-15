@@ -108,12 +108,10 @@ describe("createStubContextStore.findActive", () => {
     expect(byScope.get("claim-boundaries")).toMatch(/Claim boundaries/i);
   });
 
-  it("returns a benign stub row for the required non-pack scope policy/messaging-rules", async () => {
+  it("omits policy/messaging-rules (F7: Alex no longer declares the slot)", async () => {
     const store = createStubContextStore();
     const rows = await store.findActive("eval-org", [{ kind: "policy", scope: "messaging-rules" }]);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.content).toMatch(/Messaging rules/i);
-    expect(rows[0]!.content.startsWith("---")).toBe(false);
+    expect(rows).toHaveLength(0);
   });
 
   it("omits unknown scopes (resolver surfaces a missing required scope loudly)", async () => {

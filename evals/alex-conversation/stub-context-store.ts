@@ -61,29 +61,6 @@ export const SKILL_PACK_SCOPES: ReadonlyArray<{
   { kind: "policy", scope: "claim-boundaries", file: "claim-boundaries.md" },
 ];
 
-/**
- * Benign stub content for Alex's required-but-not-skill-pack knowledge scope.
- * `policy/messaging-rules` -> POLICY_CONTEXT is `required: true` in the skill,
- * so resolution would throw without a row. The content is deliberately minimal
- * and non-vertical-specific — it only needs to exist so resolution succeeds.
- *
- * (`business-facts/operator-approved` -> BUSINESS_FACTS is ALSO required but the
- * resolver routes `business-facts` kind through a BusinessFactsStore, not
- * findActive — see createBusinessFactsStore below.)
- */
-const STUB_SCOPES: ReadonlyMap<string, string> = new Map([
-  [
-    "policy::messaging-rules",
-    [
-      "# Messaging rules (eval stub)",
-      "",
-      "- One outbound message per turn.",
-      "- Respect opt-out immediately.",
-      "- No medical claims beyond approved boundaries.",
-    ].join("\n"),
-  ],
-]);
-
 function findRepoRoot(start: string): string {
   let dir = start;
   while (dir !== parse(dir).root) {
@@ -101,13 +78,11 @@ function defaultRefsDir(): string {
 }
 
 /**
- * Builds a stub `KnowledgeEntryStoreForResolver`. Its `findActive` returns, for
- * each requested (kind, scope):
- *   - the REAL frontmatter-stripped medspa markdown for the three skill-pack
- *     scopes (so Alex runs with the same content production injects), and
- *   - a minimal benign row for `policy/messaging-rules` (required:true).
- * Unknown (kind, scope) pairs yield no row — the resolver treats a missing
- * required scope as a `ContextResolutionError`, surfacing config drift loudly.
+ * Builds a stub `KnowledgeEntryStoreForResolver`. Its `findActive` returns the
+ * REAL frontmatter-stripped medspa markdown for the three skill-pack scopes (so
+ * Alex runs with the same content production injects). Unknown (kind, scope)
+ * pairs yield no row: the resolver treats a missing required scope as a
+ * `ContextResolutionError`, surfacing config drift loudly.
  *
  * @param refsDir Override the medspa references directory (tests pass a fixture dir).
  */
@@ -131,7 +106,7 @@ export function createStubContextStore(refsDir?: string): StubKnowledgeStore {
       const rows: StubKnowledgeRow[] = [];
       for (const f of filters) {
         const key = `${f.kind}::${f.scope}`;
-        const content = packContent.get(key) ?? STUB_SCOPES.get(key);
+        const content = packContent.get(key);
         if (content !== undefined) {
           rows.push({ kind: f.kind, scope: f.scope, content, priority: 0, updatedAt: now });
         }

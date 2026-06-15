@@ -72,10 +72,6 @@ context:
     scope: objection-handling
     inject_as: PLAYBOOK_CONTEXT
     required: false
-  - kind: policy
-    scope: messaging-rules
-    inject_as: POLICY_CONTEXT
-    required: false
   - kind: business-facts
     scope: operator-approved
     inject_as: BUSINESS_FACTS
@@ -390,10 +386,6 @@ Keep it to one short line in the WhatsApp voice, for example: "To secure your sl
 
 {{PERSONA_CONFIG.tone}}
 {{PERSONA_CONFIG.customInstructions}}
-
-## Messaging Policy
-
-{{POLICY_CONTEXT}}
 
 ## Business Facts
 
