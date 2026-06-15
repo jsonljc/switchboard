@@ -127,4 +127,19 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
 
     return { id: row.id };
   }
+
+  /**
+   * Gate-0 data-presence read for the CoverageValidator (D9-4): has this org
+   * received a lead from `sourceType` within the last `days`? Uses the indexed
+   * `(organizationId, sourceType, createdAt)` composite. `sourceType` matches the
+   * values the lead-intake writes ("ctwa" | "instant_form" | ...), so the validator's
+   * source keys join directly. Count-based (`> 0`) so it stops at the first match.
+   */
+  async hasRecentLead(organizationId: string, sourceType: string, days: number): Promise<boolean> {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const count = await this.prisma.contact.count({
+      where: { organizationId, sourceType, createdAt: { gte: since } },
+    });
+    return count > 0;
+  }
 }
