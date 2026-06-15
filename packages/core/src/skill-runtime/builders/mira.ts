@@ -7,6 +7,12 @@ import type {
   MiraCreativeReadModel,
   MiraCreativeJobSummary,
 } from "../../creative-read-model/types.js";
+import {
+  summarizeConvertingServices,
+  renderFrontlineConversionContext,
+  FRONTLINE_LEDGER_LIMIT,
+} from "./frontline-conversion.js";
+import type { FrontlineBookingRow } from "./frontline-conversion.js";
 
 /**
  * Slice-4 brain builder (spec 3.3,
@@ -200,7 +206,12 @@ export const miraBuilder = async (
   config: MiraBuilderConfig,
   stores: SkillStores,
 ): Promise<MiraBuilderResult> => {
-  const { deploymentMemoryReader, miraReadModelReader, businessFactsStore } = stores;
+  const {
+    deploymentMemoryReader,
+    miraReadModelReader,
+    businessFactsStore,
+    bookingOutcomeLedgerReader,
+  } = stores;
   if (!deploymentMemoryReader || !miraReadModelReader || !businessFactsStore) {
     throw new ParameterResolutionError(
       "mira-stores-missing",
@@ -238,8 +249,9 @@ export const miraBuilder = async (
 
   let memoryRows: MemoryRow[];
   let readModel: MiraCreativeReadModel;
+  let frontlineRows: FrontlineBookingRow[];
   try {
-    [memoryRows, readModel] = await Promise.all([
+    [memoryRows, readModel, frontlineRows] = await Promise.all([
       deploymentMemoryReader.listHighConfidence(
         config.orgId,
         config.deploymentId,
@@ -247,6 +259,15 @@ export const miraBuilder = async (
         SURFACING_THRESHOLD.minSourceCount,
       ),
       miraReadModelReader.read(config.orgId, { now, timezone }),
+      // Alex -> Mira: which treatments the booking agent actually books. Folded
+      // into this Promise.all so a ledger read failure fails the compose loudly
+      // via the catch below, never a silent empty signal pretending it was read.
+      bookingOutcomeLedgerReader
+        ? bookingOutcomeLedgerReader.listForOrg({
+            orgId: config.orgId,
+            limit: FRONTLINE_LEDGER_LIMIT,
+          })
+        : Promise.resolve<FrontlineBookingRow[]>([]),
     ]);
   } catch (err) {
     // Failure honesty (spec 3.3): a context read failing fails the compose
@@ -258,12 +279,16 @@ export const miraBuilder = async (
   }
 
   const taste = renderTasteContext(memoryRows);
+  const FRONTLINE_CONVERSION_CONTEXT = renderFrontlineConversionContext(
+    summarizeConvertingServices(frontlineRows),
+  );
   const counts = readModel.counts;
 
   const parameters: Record<string, unknown> = {
     BUSINESS_NAME,
     BUSINESS_FACTS,
     TASTE_CONTEXT: taste.lines.join("\n"),
+    FRONTLINE_CONVERSION_CONTEXT,
     PERFORMANCE_CONTEXT: renderPerformanceContext(readModel),
     PIPELINE_STATE:
       `${counts.inFlight} in flight (${counts.awaitingReview} awaiting review), ` +

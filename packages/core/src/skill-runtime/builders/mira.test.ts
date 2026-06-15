@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { miraBuilder, hasSurfacedCreativeMemorySignal } from "./mira.js";
+import { FRONTLINE_LEDGER_LIMIT } from "./frontline-conversion.js";
+import { loadSkill } from "../skill-loader.js";
+import { interpolate } from "../template-engine.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
 import type { SkillStores } from "../parameter-builder.js";
 import type { MiraCreativeReadModel } from "../../creative-read-model/types.js";
+
+// builders/ is one level deeper than skill-runtime/, so five `../` reach root.
+const SKILLS_DIR = new URL("../../../../../skills", import.meta.url).pathname;
 
 const FIXED_NOW = new Date("2026-06-05T10:00:00Z");
 
@@ -373,5 +379,64 @@ describe("hasSurfacedCreativeMemorySignal", () => {
         { id: "2", category: "taste", canonicalKey: "nope", sourceCount: 5, confidence: 0.9 },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("miraBuilder frontline conversion feed (Alex -> Mira)", () => {
+  it("surfaces the top converting treatments from the booking-outcome ledger", async () => {
+    const listForOrg = vi.fn().mockResolvedValue([
+      { service: "Botox", bookingStatus: "confirmed" },
+      { service: "Botox", bookingStatus: "confirmed" },
+      { service: "Lip filler", bookingStatus: "confirmed" },
+    ]);
+    const stores = makeStores({ bookingOutcomeLedgerReader: { listForOrg } });
+    const result = await miraBuilder(weeklyConfig, stores);
+    const ctx = result.parameters["FRONTLINE_CONVERSION_CONTEXT"] as string;
+    expect(ctx).toContain("Botox (2)");
+    expect(ctx).toContain("Lip filler (1)");
+    // Fetched org-scoped, bounded by the ledger limit.
+    expect(listForOrg).toHaveBeenCalledWith({ orgId: "org1", limit: FRONTLINE_LEDGER_LIMIT });
+  });
+
+  it("degrades to empty context when no ledger reader is wired (back-compat)", async () => {
+    const result = await miraBuilder(weeklyConfig, makeStores());
+    expect(result.parameters["FRONTLINE_CONVERSION_CONTEXT"]).toBe("");
+  });
+
+  it("renders empty context when the org has no bookings yet", async () => {
+    const stores = makeStores({
+      bookingOutcomeLedgerReader: { listForOrg: vi.fn().mockResolvedValue([]) },
+    });
+    const result = await miraBuilder(weeklyConfig, stores);
+    expect(result.parameters["FRONTLINE_CONVERSION_CONTEXT"]).toBe("");
+  });
+
+  it("fails the compose loudly when the ledger read fails (no silent empty signal)", async () => {
+    const stores = makeStores({
+      bookingOutcomeLedgerReader: {
+        listForOrg: vi.fn().mockRejectedValue(new Error("db down")),
+      },
+    });
+    await expect(miraBuilder(weeklyConfig, stores)).rejects.toBeInstanceOf(
+      ParameterResolutionError,
+    );
+  });
+
+  it("renders the frontline signal into the REAL Mira prompt body (not inert)", async () => {
+    // End-to-end seam: builder -> parameters -> real SKILL.md body interpolation.
+    // Guards against a built-but-inert feed where the param is emitted but the
+    // prompt template never references it.
+    const stores = makeStores({
+      bookingOutcomeLedgerReader: {
+        listForOrg: vi.fn().mockResolvedValue([
+          { service: "Botox", bookingStatus: "confirmed" },
+          { service: "Botox", bookingStatus: "confirmed" },
+        ]),
+      },
+    });
+    const { parameters } = await miraBuilder(weeklyConfig, stores);
+    const skill = loadSkill("mira", SKILLS_DIR);
+    const rendered = interpolate(skill.body, parameters, skill.parameters);
+    expect(rendered).toContain("Botox (2)");
   });
 });
