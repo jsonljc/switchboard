@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BookingSlotConflictError } from "@switchboard/schemas";
 import { setMetrics, createInMemoryMetrics } from "../../telemetry/metrics.js";
 import { createCalendarBookToolFactory } from "./calendar-book.js";
+import { getToolGovernanceDecision } from "../governance.js";
 import type { BookingConsentState, ConsentPrecondition } from "./calendar-book-consent.js";
 import type { GovernanceMode } from "@switchboard/schemas";
 import type { SkillRequestContext } from "../types.js";
@@ -138,6 +139,23 @@ describe("createCalendarBookToolFactory", () => {
 
   it("booking.create has governance tier 'external_mutation'", () => {
     expect(tool.operations["booking.create"]!.effectCategory).toBe("external_mutation");
+  });
+
+  // Booking is Alex's core revenue action. A real onboarded org resolves to the
+  // default "guided" trust (no trustLevelOverride), where external_mutation would
+  // otherwise require approval, and the in-skill approval hook dead-ends (the
+  // booking never persists). A scoped governanceOverride lets Alex book at guided
+  // while a deliberately-conservative "supervised" deployment still gates.
+  it("booking.create auto-approves at the default 'guided' trust so Alex can book on a real org", () => {
+    expect(getToolGovernanceDecision(tool.operations["booking.create"]!, "guided")).toBe(
+      "auto-approve",
+    );
+  });
+
+  it("booking.create still requires approval at the conservative 'supervised' trust", () => {
+    expect(getToolGovernanceDecision(tool.operations["booking.create"]!, "supervised")).toBe(
+      "require-approval",
+    );
   });
 
   it("slots.query is idempotent", () => {
