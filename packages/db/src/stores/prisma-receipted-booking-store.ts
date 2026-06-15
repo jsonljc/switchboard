@@ -1,6 +1,7 @@
 import type { PrismaDbClient } from "../prisma-db.js";
-import type { ReceiptedBookingView } from "@switchboard/schemas";
-import { scoreAttribution, evaluateExceptions } from "@switchboard/core";
+import type { ReceiptedBookingView, AttributionConfidence } from "@switchboard/schemas";
+import { scoreAttribution, evaluateExceptions, assembleViewExceptions } from "@switchboard/core";
+import type { SerializedExceptionEntry } from "@switchboard/core";
 
 /**
  * Read-projection store for the receipted-booking view (Ledger's data plane, spec slice 4).
@@ -92,9 +93,11 @@ export class PrismaReceiptedBookingStore {
             issuedAt: true,
             expectedValueAtIssue: true,
             currency: true,
+            attributionConfidence: true,
             overriddenBy: true,
             overrideReason: true,
             overriddenAt: true,
+            exceptions: true,
           },
         }),
       ]);
@@ -106,16 +109,29 @@ export class PrismaReceiptedBookingStore {
       sourceType: contact?.sourceType ?? null,
       sourceChannel: conversion?.sourceChannel ?? contact?.firstTouchChannel ?? null,
     };
-    const attributionConfidence = scoreAttribution(sourceEvidence);
-    const exceptions = evaluateExceptions({
+    const liveConfidence = scoreAttribution(sourceEvidence);
+    // A persisted manual override is the human's explicit judgment and wins over the live-derived
+    // rung (the one NON-recomputable attribution signal, spec 2026-06-15 resolution). Absent an
+    // override, attribution stays lazily recomputed.
+    const attributionConfidence: AttributionConfidence = persisted?.overriddenBy
+      ? (persisted.attributionConfidence as AttributionConfidence)
+      : liveConfidence;
+    // Coerce the persisted Json column to the typed array; default [] when no persisted row.
+    const persistedExceptions: SerializedExceptionEntry[] = (persisted?.exceptions ??
+      []) as unknown as SerializedExceptionEntry[];
+    // Feed the real overriddenBy (was hardcoded null) so manual_override raises from the column.
+    // Keep duplicateContactRisk: false here -- the sole source of duplicate_contact_risk on the
+    // read path is the persisted-array carry below; routing it through both evaluateExceptions and
+    // assembleViewExceptions would land the same code twice, breaking one-open-per-code.
+    const recomputable = evaluateExceptions({
       attributionConfidence,
       consentGrantedAt: contact?.consentGrantedAt ?? null,
       consentRevokedAt: contact?.consentRevokedAt ?? null,
-      overriddenBy: null,
-      // No persisted duplicate-contact signal in the lazy read path; the write-path will set it.
+      overriddenBy: persisted?.overriddenBy ?? null,
       duplicateContactRisk: false,
       now,
     });
+    const exceptions = assembleViewExceptions(recomputable, persistedExceptions);
 
     return {
       bookingId: booking.id,
