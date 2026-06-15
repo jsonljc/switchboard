@@ -374,7 +374,10 @@ export async function registerInngest(
         // passing it whole lets the compiler pin the field mapping (a
         // same-typed field swap in a hand re-map would ship silently).
         candidate,
-        readFlag: () => process.env["MIRA_HANDOFF_BRIEF_ENRICHMENT_ENABLED"] === "true",
+        // D6-3: default ON (a fresh deploy with the var unset gets enrichment). Only an
+        // explicit "false" opts out. Safe: resolveHandoffBrief falls back to the synthesized
+        // brief on every brain failure, so enabling it can never block a handoff.
+        readFlag: () => process.env["MIRA_HANDOFF_BRIEF_ENRICHMENT_ENABLED"] !== "false",
         synthesize: async () =>
           synthesizeCreativeBrief(await businessFactsStore.get(candidate.organizationId)),
         submitCompose:

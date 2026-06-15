@@ -17,9 +17,25 @@ export const CreativeConceptDraftValueContext = z.object({
 });
 export type CreativeConceptDraftValueContext = z.infer<typeof CreativeConceptDraftValueContext>;
 
+/**
+ * D6-3: Riley's structured diagnosis, carried into the Mira brief AS DATA (not only as the brief's
+ * free text) so the creative pipeline can route on it. campaignId + actionType are the routable
+ * core; diagnosis (a label) and evidence are optional context.
+ */
+export const RileyDiagnosisContext = z.object({
+  campaignId: z.string().min(1),
+  actionType: z.string().min(1),
+  diagnosis: z.string().optional(),
+  evidence: z.object({ clicks: z.number(), conversions: z.number(), days: z.number() }).optional(),
+});
+export type RileyDiagnosisContext = z.infer<typeof RileyDiagnosisContext>;
+
 export const CreativeConceptDraftInput = z.object({
   productDescription: z.string().min(1),
   targetAudience: z.string().min(1),
   valueContext: CreativeConceptDraftValueContext.optional(),
+  // D6-3: additive + optional (Safe evolution, matches the valueContext precedent) so every
+  // existing producer that omits it still parses; the Riley->Mira handoff threads it through.
+  rileyDiagnosis: RileyDiagnosisContext.optional(),
 });
 export type CreativeConceptDraftInput = z.infer<typeof CreativeConceptDraftInput>;
