@@ -424,4 +424,49 @@ describe("bootstrapSkillMode governance wiring", () => {
     expect((mainArgs[1] as Map<string, unknown>).has("deposit-link")).toBe(false);
     expect((mainArgs[5] as Map<string, unknown>).has("deposit-link")).toBe(false);
   });
+
+  it("warns once when no childWorkSubmitter is supplied so the silent delegate-disable is visible (F18)", async () => {
+    const logger = { info: vi.fn(), error: vi.fn() };
+    await bootstrapSkillMode({
+      prismaClient: buildPrismaClient(),
+      intentRegistry: {} as never,
+      modeRegistry: { register } as never,
+      logger,
+    });
+
+    // delegate is fail-closed without a submitter, but the disable must not be
+    // silent — a misconfigured bootstrap would otherwise lose the capability
+    // with no signal. The logger has no .warn, so the warning rides .error.
+    const disableLogs = logger.error.mock.calls.filter(
+      ([msg]) => typeof msg === "string" && msg.includes("delegate") && msg.includes("disabled"),
+    );
+    expect(disableLogs).toHaveLength(1);
+    expect(disableLogs[0]![0]).toContain("childWorkSubmitter");
+
+    // The capability really is absent in both maps (the warning describes reality).
+    const mainArgs = SkillExecutorImpl.mock.calls[0]!;
+    expect((mainArgs[1] as Map<string, unknown>).has("delegate")).toBe(false);
+    expect((mainArgs[5] as Map<string, unknown>).has("delegate")).toBe(false);
+  });
+
+  it("does NOT warn about a disabled delegate when a childWorkSubmitter is supplied (F18)", async () => {
+    const logger = { info: vi.fn(), error: vi.fn() };
+    await bootstrapSkillMode({
+      prismaClient: buildPrismaClient(),
+      intentRegistry: {} as never,
+      modeRegistry: { register } as never,
+      logger,
+      childWorkSubmitter: vi.fn() as never,
+    });
+
+    const disableLogs = logger.error.mock.calls.filter(
+      ([msg]) => typeof msg === "string" && msg.includes("delegate") && msg.includes("disabled"),
+    );
+    expect(disableLogs).toHaveLength(0);
+
+    // And the delegate tool IS registered in both maps when the submitter exists.
+    const mainArgs = SkillExecutorImpl.mock.calls[0]!;
+    expect((mainArgs[1] as Map<string, unknown>).has("delegate")).toBe(true);
+    expect((mainArgs[5] as Map<string, unknown>).has("delegate")).toBe(true);
+  });
 });
