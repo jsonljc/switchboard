@@ -503,3 +503,99 @@ describe("WhatsApp onboarding ESU chat-registration (Task 8.5)", () => {
     await app.close();
   });
 });
+
+describe("WhatsApp onboarding ESU code->token exchange", () => {
+  it("exchanges an OAuth code, then introspects the WABA with the EXCHANGED token", async () => {
+    const captured: Array<{ url: string }> = [];
+    const graphApiFetch = vi.fn(async (url: string) => {
+      captured.push({ url });
+      if (url.includes("/oauth/access_token")) {
+        return { access_token: "EXCHANGED_TOKEN" };
+      }
+      if (url.includes("/debug_token")) {
+        return {
+          data: {
+            granular_scopes: [{ scope: "whatsapp_business_management", target_ids: ["WABA_CODE"] }],
+          },
+        };
+      }
+      if (url.includes("/phone_numbers")) {
+        return {
+          data: [
+            { id: "PHONE_CODE", verified_name: "Code Biz", display_phone_number: "+15555550111" },
+          ],
+        };
+      }
+      return { success: true };
+    });
+
+    const app = Fastify({ logger: false });
+    app.decorate("authDisabled", true);
+    await app.register(whatsappOnboardingRoutes, {
+      metaSystemUserToken: "SYS_TOKEN",
+      metaSystemUserId: "SYS_USER",
+      appId: "APP_ID_123",
+      appSecret: "APP_SECRET",
+      apiVersion: "v21.0",
+      webhookBaseUrl: "https://chat.example.com",
+      graphApiFetch,
+      createConnection: async () => ({
+        id: "conn_code",
+        webhookPath: "/webhook/managed/conn_code",
+      }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/whatsapp/onboard",
+      payload: { code: "AUTH_CODE_XYZ", organizationId: "org_test" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.success).toBe(true);
+    expect(body.wabaId).toBe("WABA_CODE");
+
+    // The code was exchanged at /oauth/access_token with the app credentials and
+    // NO redirect_uri (ESU JS-SDK code, not a redirect flow).
+    const exchangeCall = captured.find((c) => c.url.includes("/oauth/access_token"));
+    expect(exchangeCall).toBeDefined();
+    expect(exchangeCall!.url).toContain("client_id=APP_ID_123");
+    expect(exchangeCall!.url).toContain("code=AUTH_CODE_XYZ");
+    expect(exchangeCall!.url).not.toContain("redirect_uri");
+
+    // debug_token then introspected the EXCHANGED token, never the raw code.
+    const debugCall = captured.find((c) => c.url.includes("/debug_token"));
+    expect(debugCall).toBeDefined();
+    expect(debugCall!.url).toContain("input_token=EXCHANGED_TOKEN");
+    expect(debugCall!.url).not.toContain("AUTH_CODE_XYZ");
+
+    await app.close();
+  });
+
+  it("returns 400 when neither code nor esToken is provided", async () => {
+    const app = Fastify({ logger: false });
+    app.decorate("authDisabled", true);
+    await app.register(whatsappOnboardingRoutes, {
+      metaSystemUserToken: "SYS_TOKEN",
+      metaSystemUserId: "SYS_USER",
+      appId: "APP_ID_123",
+      appSecret: "APP_SECRET",
+      apiVersion: "v21.0",
+      webhookBaseUrl: "https://chat.example.com",
+      graphApiFetch: vi.fn(async () => ({ success: true })),
+      createConnection: async () => ({ id: "c", webhookPath: "/webhook/managed/c" }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/whatsapp/onboard",
+      payload: { organizationId: "org_test" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+});

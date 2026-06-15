@@ -187,6 +187,7 @@ export async function registerRoutes(
     metaSystemUserToken: process.env.META_SYSTEM_USER_TOKEN ?? "",
     metaSystemUserId: process.env.META_SYSTEM_USER_ID ?? "",
     appSecret: process.env.META_APP_SECRET ?? "",
+    appId: process.env.META_APP_ID,
     apiVersion: "v21.0",
     webhookBaseUrl: process.env.CHAT_PUBLIC_URL ?? "http://localhost:3001",
     chatPublicUrl: process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL,

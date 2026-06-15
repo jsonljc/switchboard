@@ -153,3 +153,59 @@ export async function registerWebhookOverride(args: {
   }
   return { ok: true };
 }
+
+export type ExchangeEsuCodeResult =
+  | { ok: true; accessToken: string }
+  | { ok: false; reason: string };
+
+/**
+ * Exchange a WhatsApp Embedded Signup authorization CODE (returned by the
+ * browser ESU JS SDK under `response_type:"code"`) for a business-integration
+ * access token.
+ *
+ * Calls `GET /<apiVersion>/oauth/access_token?client_id&client_secret&code`
+ * with NO `redirect_uri`: the code came from the JS SDK, not a redirect flow,
+ * so Graph rejects the exchange if a `redirect_uri` is present. That is the key
+ * difference from the Ads redirect-OAuth exchanger in `@switchboard/ad-optimizer`
+ * (`exchangeCodeForToken`, which DOES send `redirect_uri`).
+ *
+ * The resulting token is used transiently to introspect the WABA via
+ * `debug_token`; the long-lived runtime credential is the central system token
+ * (decision D-b), not this exchanged token.
+ *
+ * @param args.apiVersion - Required Graph API version (e.g. `"v21.0"`).
+ */
+export async function exchangeEsuCodeForToken(args: {
+  apiVersion: string;
+  appId: string;
+  appSecret: string;
+  code: string;
+  fetchImpl?: typeof fetch;
+}): Promise<ExchangeEsuCodeResult> {
+  const fetchImpl = args.fetchImpl ?? fetch;
+  const params = new URLSearchParams({
+    client_id: args.appId,
+    client_secret: args.appSecret,
+    code: args.code,
+  });
+  const url = `https://graph.facebook.com/${args.apiVersion}/oauth/access_token?${params.toString()}`;
+  let res: Awaited<ReturnType<typeof fetch>>;
+  try {
+    res = await fetchImpl(url);
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : "fetch error" };
+  }
+  if (!res.ok) {
+    return { ok: false, reason: await readErrorReason(res) };
+  }
+  let body: { access_token?: string };
+  try {
+    body = (await res.json()) as { access_token?: string };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : "invalid json" };
+  }
+  if (!body.access_token) {
+    return { ok: false, reason: "No access_token in exchange response" };
+  }
+  return { ok: true, accessToken: body.access_token };
+}
