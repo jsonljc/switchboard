@@ -120,7 +120,7 @@ export class PrismaReceiptedBookingStore {
     const persistedExceptions: SerializedExceptionEntry[] = (persisted?.exceptions ??
       []) as unknown as SerializedExceptionEntry[];
     // Feed the real overriddenBy (was hardcoded null) so manual_override raises from the column.
-    // Keep duplicateContactRisk: false here -- the sole source of duplicate_contact_risk on the
+    // Keep duplicateContactRisk: false here: the sole source of duplicate_contact_risk on the
     // read path is the persisted-array carry below; routing it through both evaluateExceptions and
     // assembleViewExceptions would land the same code twice, breaking one-open-per-code.
     const recomputable = evaluateExceptions({
