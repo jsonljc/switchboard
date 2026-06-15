@@ -48,6 +48,7 @@ import {
   makeOnFailureHandler,
   NoopOperatorAlerter,
   PrismaDeploymentResolver,
+  safeAlert,
   type AsyncFailureContext,
   type OperatorAlerter,
   type PatternDecayDependencies,
@@ -90,6 +91,10 @@ import type { RileyBudgetSubmitInput } from "../services/workflows/riley-budget-
 import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
 import { buildRileyBudgetSubmitter } from "./riley-budget-submitter.js";
 import { buildRileyCredentialResolver } from "./riley-credential-resolver.js";
+import {
+  buildAdOptimizerFailureHandlers,
+  buildSaveAuditReport,
+} from "./ad-optimizer-failure-handlers.js";
 import { createMetaTokenRefreshCron } from "../services/cron/meta-token-refresh.js";
 import type { MetaTokenRefreshDeps } from "../services/cron/meta-token-refresh.js";
 import {
@@ -433,6 +438,11 @@ export async function registerInngest(
     },
   });
 
+  // Single OperatorAlerter shared by the audit deps (zero-output + per-deployment
+  // isolation alerts), the signal-health deps, and the AsyncFailureContext below,
+  // so every ad-optimizer alert path delivers through the same configured webhook.
+  const operatorAlerter: OperatorAlerter = options.operatorAlerter ?? new NoopOperatorAlerter();
+
   const adOptimizerDeps: CronDependencies = {
     listActiveDeployments: async () => {
       const listing = await listingStore.findBySlug("ad-optimizer");
@@ -460,22 +470,27 @@ export async function registerInngest(
       return new RealCrmDataProvider(funnelStore);
     },
     createInsightsProvider: (adsClient) => new MetaCampaignInsightsProvider(adsClient),
-    saveAuditReport: async (deploymentId, report) => {
-      const deployment = await deploymentStore.findById(deploymentId);
-      if (!deployment) return;
-      const task = await taskStore.create({
+    // PR 1.4b (D2-9): extracted so the zero-output alert is unit-testable. Persists
+    // the report as a completed audit task, then raises ONE warning alert when a
+    // SUCCESSFUL run produced zero recommendations AND zero insights (a genuinely
+    // empty run; an abstention carries >=1 explanatory insight and is not flagged).
+    saveAuditReport: buildSaveAuditReport({ deploymentStore, taskStore, operatorAlerter }),
+    // PR 1.4a (D2-3 isolation half): one org's exhausted audit step no longer aborts
+    // the fleet (the per-deployment try/catch in executeWeeklyAudit). The exhausted
+    // org is surfaced here via a critical alert so a single failure is not silent.
+    onDeploymentFailure: async ({ deploymentId, organizationId }, err) => {
+      await safeAlert(operatorAlerter, {
+        errorType: "async_job_retry_exhausted",
+        severity: "critical",
+        errorMessage: `ad-optimizer weekly audit failed for deployment ${deploymentId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        retryable: false,
+        occurredAt: new Date().toISOString(),
+        source: "inngest_function",
         deploymentId,
-        organizationId: deployment.organizationId,
-        listingId: deployment.listingId,
-        category: "audit",
-        input: {},
+        organizationId,
       });
-      await taskStore.submitOutput(
-        deployment.organizationId,
-        task.id,
-        report as Record<string, unknown>,
-      );
-      await taskStore.updateStatus(deployment.organizationId, task.id, "completed");
     },
     getDeploymentPixelId,
     createSignalHealthChecker,
@@ -522,6 +537,22 @@ export async function registerInngest(
       );
       await taskStore.updateStatus(deployment.organizationId, task.id, "completed");
     },
+    // PR 1.4a (D2-3 isolation half): mirror the weekly audit — one org's exhausted
+    // signal-health step no longer aborts the fleet; surface it via a critical alert.
+    onDeploymentFailure: async ({ deploymentId, organizationId }, err) => {
+      await safeAlert(operatorAlerter, {
+        errorType: "async_job_retry_exhausted",
+        severity: "critical",
+        errorMessage: `ad-optimizer signal-health failed for deployment ${deploymentId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        retryable: false,
+        occurredAt: new Date().toISOString(),
+        source: "inngest_function",
+        deploymentId,
+        organizationId,
+      });
+    },
   };
 
   // Pattern-decay daily cron — pure executor lives in @switchboard/core;
@@ -542,9 +573,16 @@ export async function registerInngest(
   // ---------------------------------------------------------------------------
   const asyncFailure: AsyncFailureContext = {
     auditLedger: app.auditLedger,
-    operatorAlerter: options.operatorAlerter ?? new NoopOperatorAlerter(),
+    // Same alerter the ad-optimizer audit/signal-health deps use (constructed above).
+    operatorAlerter,
     inngest: { send: (e) => inngestClient.send(e) },
   };
+
+  // PR 1.4b (D2-9 / D9-3): the weekly + signal-health ad-optimizer crons now alert
+  // on exhausted retries (alert:true); the daily account-summary check stays
+  // alert:false (low-risk, self-heals next day). Extracted so the flip is driven +
+  // asserted in a unit test rather than only snapshot-checked.
+  const adOptimizerFailureHandlers = buildAdOptimizerFailureHandlers(asyncFailure);
 
   // creative-publish: the dead-lettered Inngest function that runs the rate-limited Meta
   // draft chain off the approval-response path (go-live blocker #3). Deps mirror the
@@ -1226,41 +1264,19 @@ export async function registerInngest(
           arg: unknown,
         ) => Promise<void>,
       ),
+      // PR 1.4b: handlers built by buildAdOptimizerFailureHandlers. weekly +
+      // signalHealth carry alert:true (D2-9 / D9-3 flip); daily stays alert:false.
       createWeeklyAuditCron(
         adOptimizerDeps,
-        makeOnFailureHandler(
-          {
-            functionId: "ad-optimizer-weekly-audit",
-            eventDomain: "ad-optimizer.weekly-audit",
-            riskCategory: "medium",
-            alert: false,
-          },
-          asyncFailure,
-        ) as (arg: unknown) => Promise<void>,
+        adOptimizerFailureHandlers.weekly as (arg: unknown) => Promise<void>,
       ),
       createDailyCheckCron(
         adOptimizerDeps,
-        makeOnFailureHandler(
-          {
-            functionId: "ad-optimizer-daily-check",
-            riskCategory: "low",
-            alert: false,
-            emitEvent: false,
-          },
-          asyncFailure,
-        ) as (arg: unknown) => Promise<void>,
+        adOptimizerFailureHandlers.daily as (arg: unknown) => Promise<void>,
       ),
       createDailySignalHealthCron(
         signalHealthDeps,
-        makeOnFailureHandler(
-          {
-            functionId: "ad-optimizer-daily-signal-health",
-            eventDomain: "ad-optimizer.signal-health",
-            riskCategory: "medium",
-            alert: false,
-          },
-          asyncFailure,
-        ) as (arg: unknown) => Promise<void>,
+        adOptimizerFailureHandlers.signalHealth as (arg: unknown) => Promise<void>,
       ),
       dailyPatternDecayCron,
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
