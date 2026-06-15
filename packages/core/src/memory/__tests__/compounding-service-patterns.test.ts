@@ -137,6 +137,75 @@ describe("ConversationCompoundingService — outcome-pattern writes (PR-3.1 book
     expect(patternCreates).toHaveLength(0);
   });
 
+  it("records evidence against the existing row when create collides on same content under a different canonical key (F13)", async () => {
+    // The DeploymentMemory unique is on CONTENT (org, deployment, category,
+    // content), NOT canonicalKey. A row with the SAME content already exists
+    // under a DIFFERENT canonicalKey, so the new-key create raises P2002. The
+    // bug: that P2002 used to propagate and get swallowed at the
+    // processOutcomePatterns boundary, dropping the booking-attributed
+    // evidence. The fix: re-resolve the existing row and credit it instead.
+    const localDeps = createMockDeps();
+    const evidenceStore = { recordEvidence: vi.fn().mockResolvedValue(undefined) };
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([{ id: "bk-collide", workTraceId: "wt-A" }]),
+      findInWindow: vi.fn(),
+    };
+    const collidingContent = "Customers ask about downtime before booking laser treatment";
+    // Stage-1 same-key bucket is empty (the existing row lives under a
+    // different key), so the merge path is skipped and the create is attempted.
+    localDeps.deploymentMemoryStore.findByCategoryAndCanonicalKey.mockResolvedValue([]);
+    // The broad scan + re-resolve both read findByCategory: the existing row
+    // has identical content but a DIFFERENT canonicalKey.
+    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([
+      {
+        id: "p-existing-other-key",
+        content: collidingContent,
+        sourceCount: 2,
+        confidence: 0.6,
+        canonicalKey: "objection:price_value",
+      },
+    ]);
+    // Simulate the DB unique on content: the create with the new key throws
+    // P2002 because a row with this content already exists.
+    localDeps.deploymentMemoryStore.create.mockRejectedValue(
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
+    );
+    localDeps.deploymentMemoryStore.incrementConfidence.mockResolvedValue({
+      id: "p-existing-other-key",
+      sourceCount: 3,
+    });
+    primeSummarizeAndExtract(
+      localDeps,
+      { summary: "Booked despite a cross-key content collision", outcome: "booked" },
+      {
+        patterns: [{ text: collidingContent, canonicalKey: "objection:downtime_work" }],
+      },
+    );
+    localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+
+    const localService = new ConversationCompoundingService({
+      ...localDeps,
+      bookingStore,
+      evidenceStore,
+    });
+    // The whole call must not swallow-and-drop the evidence.
+    await localService.processConversationEnd({ ...baseEvent, workTraceIds: ["wt-A"] });
+
+    // Evidence is credited to the EXISTING row (the check-leg id is reused).
+    expect(localDeps.deploymentMemoryStore.incrementConfidence).toHaveBeenCalledWith(
+      "org-1",
+      "p-existing-other-key",
+      expect.any(Number),
+    );
+    // Evidence binds to the existing row's id, not a phantom new id.
+    expect(evidenceStore.recordEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deploymentMemoryId: "p-existing-other-key",
+        bookingId: "bk-collide",
+      }),
+    );
+  });
+
   it("does NOT write patterns when summarization.outcome is booked but no Booking exists", async () => {
     const localDeps = createMockDeps();
     const bookingStore: BookingAttributionStore = {

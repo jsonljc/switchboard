@@ -505,16 +505,52 @@ export class ConversationCompoundingService {
     }
 
     const initialConfidence = computeConfidenceScore(1, false);
-    const created = await this.memoryStore.create({
-      organizationId,
-      deploymentId,
-      category: "pattern",
-      content: patternText,
-      canonicalKey,
-      confidence: initialConfidence,
-    });
-    metrics.outcomePatternsCreated.inc({ deploymentId });
-    metrics.outcomePatternConfidence.observe({ deploymentId }, initialConfidence);
-    return created.id;
+    try {
+      const created = await this.memoryStore.create({
+        organizationId,
+        deploymentId,
+        category: "pattern",
+        content: patternText,
+        canonicalKey,
+        confidence: initialConfidence,
+      });
+      metrics.outcomePatternsCreated.inc({ deploymentId });
+      metrics.outcomePatternConfidence.observe({ deploymentId }, initialConfidence);
+      return created.id;
+    } catch (err) {
+      // The DeploymentMemory unique is on CONTENT (org, deployment, category,
+      // content), NOT canonicalKey. When a row with identical content already
+      // exists under a DIFFERENT canonicalKey, this create raises P2002. The
+      // cross-key scan above only flags a metric (fuzzy similarity), so it
+      // cannot reliably pre-empt the EXACT-content collision the unique guards.
+      // Recover by re-resolving that existing row and crediting it, instead of
+      // letting P2002 propagate up to processOutcomePatterns where it would be
+      // swallowed and the booking-attributed evidence lost (F13).
+      if (!isPrismaUniqueConstraintError(err)) throw err;
+      const existing = await this.memoryStore.findByCategory(
+        organizationId,
+        deploymentId,
+        "pattern",
+      );
+      const collidingRow = existing.find((entry) => entry.content === patternText);
+      // If the colliding row cannot be re-resolved, the P2002 was unexpected —
+      // rethrow rather than silently drop the evidence.
+      if (!collidingRow) throw err;
+      const newConfidence = computeConfidenceScore(collidingRow.sourceCount + 1, false);
+      await this.memoryStore.incrementConfidence(organizationId, collidingRow.id, newConfidence);
+      metrics.outcomePatternsMerged.inc({ deploymentId });
+      metrics.outcomePatternConfidence.observe({ deploymentId }, newConfidence);
+      return collidingRow.id;
+    }
   }
+}
+
+/** P2002 (unique-constraint) classifier — matches Prisma's error code, not its message. */
+function isPrismaUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: string }).code === "P2002"
+  );
 }
