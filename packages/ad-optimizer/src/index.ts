@@ -1,4 +1,4 @@
-export { MetaAdsClient } from "./meta-ads-client.js";
+export { MetaAdsClient, RateLimitError } from "./meta-ads-client.js";
 export { MetaCAPIClient } from "./meta-capi-client.js";
 export { analyzeFunnel } from "./funnel-analyzer.js";
 export type { CrmFunnelData, FunnelBenchmarks, FunnelInput } from "./funnel-analyzer.js";

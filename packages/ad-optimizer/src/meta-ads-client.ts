@@ -14,6 +14,28 @@ import type {
 const API_BASE = "https://graph.facebook.com/v21.0";
 const RATE_LIMIT_MS = 60_000;
 
+// PR 1.3 (D2-5) reactive 429/Retry-After backoff. These bound the GET retry loop on top of
+// the proactive RATE_LIMIT_MS limiter (which is unchanged). A persistent throttle exhausts the
+// budget and surfaces the typed RateLimitError to the caller.
+const MAX_RATE_LIMIT_RETRIES = 2;
+const DEFAULT_BACKOFF_MS = 60_000;
+const MAX_BACKOFF_MS = 300_000;
+
+/**
+ * Thrown by handleResponse when Meta signals throttling (HTTP 429, or error.code 17/4/32).
+ * Carries the parsed Retry-After (seconds) when present so the GET retry loop can honor it
+ * (bounded by MAX_BACKOFF_MS). Distinct from the terminal Error so callers can tell a retryable
+ * rate limit from a genuine request failure.
+ */
+export class RateLimitError extends Error {
+  retryAfterSeconds?: number;
+  constructor(message: string, retryAfterSeconds?: number) {
+    super(message);
+    this.name = "RateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 // Spec-1B defense-in-depth tripwire: a daily budget above $1,000,000/day is a bug, not a campaign.
 // The real cap is the blast-radius contract (assertWithinBlastRadius); this only catches a runaway
 // 100x/encoding bug that would otherwise reach Meta. Cents.
@@ -531,16 +553,49 @@ export class MetaAdsClient {
     }
   }
 
+  private sleep(ms: number): Promise<void> {
+    return new Promise<void>((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Reactive 429 backoff, GET ONLY. Each attempt waits the proactive limiter, runs the fetch, and
+   * lets handleResponse classify: a RateLimitError within the retry budget sleeps (Retry-After when
+   * present, else DEFAULT_BACKOFF_MS, capped at MAX_BACKOFF_MS) then retries; anything else throws.
+   *
+   * Scope is GET only because Meta budget/status writes (post()) are NON-idempotent (a blind retry
+   * could double-apply a budget change), and the rate-limited audit read path is all GETs. post()
+   * still throws the typed RateLimitError so its caller can decide; it just never auto-retries.
+   */
+  private async getWithRateLimitRetry(
+    doFetch: () => Promise<Response>,
+  ): Promise<Record<string, unknown>> {
+    for (let attempt = 0; ; attempt++) {
+      await this.rateLimit();
+      const response = await doFetch();
+      try {
+        return await this.handleResponse(response);
+      } catch (e) {
+        if (e instanceof RateLimitError && attempt < MAX_RATE_LIMIT_RETRIES) {
+          const backoffMs =
+            e.retryAfterSeconds !== undefined ? e.retryAfterSeconds * 1000 : DEFAULT_BACKOFF_MS;
+          await this.sleep(Math.min(backoffMs, MAX_BACKOFF_MS));
+          continue;
+        }
+        throw e;
+      }
+    }
+  }
+
   private async get(path: string): Promise<Record<string, unknown>> {
-    await this.rateLimit();
     const url = `${API_BASE}${path}`;
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-      },
-    });
-    return this.handleResponse(response);
+    return this.getWithRateLimitRetry(() =>
+      fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+        },
+      }),
+    );
   }
 
   private async post(
@@ -563,13 +618,27 @@ export class MetaAdsClient {
   private async handleResponse(response: Response): Promise<Record<string, unknown>> {
     if (!response.ok) {
       let message = "Unknown error";
+      let code: number | undefined;
       try {
         const errorBody = (await response.json()) as MetaApiError;
         if (errorBody.error?.message) {
           message = errorBody.error.message;
         }
+        code = errorBody.error?.code;
       } catch {
         // JSON parsing failed, use default message
+      }
+      // Meta throttling signals: HTTP 429, plus error codes 17 (user rate limit), 4 (app rate
+      // limit), 32 (page rate limit). Surface a typed RateLimitError so the GET retry loop can
+      // back off; everything else stays a terminal Error.
+      if (response.status === 429 || code === 17 || code === 4 || code === 32) {
+        const retryAfterRaw = response.headers?.get("retry-after");
+        const retryAfterNum = retryAfterRaw == null ? Number.NaN : Number(retryAfterRaw);
+        const retryAfterSeconds = Number.isFinite(retryAfterNum) ? retryAfterNum : undefined;
+        throw new RateLimitError(
+          `Meta API error (${response.status}): ${message}`,
+          retryAfterSeconds,
+        );
       }
       throw new Error(`Meta API error (${response.status}): ${message}`);
     }
