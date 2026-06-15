@@ -14,6 +14,7 @@ function makeMockPrisma() {
     lifecycleRevenueEvent: { findMany: vi.fn().mockResolvedValue([]) },
     opportunity: { findFirst: vi.fn().mockResolvedValue(null) },
     workTrace: { findFirst: vi.fn().mockResolvedValue(null) },
+    receiptedBooking: { findFirst: vi.fn().mockResolvedValue(null) },
   };
 }
 
@@ -115,6 +116,7 @@ describe("PrismaReceiptedBookingStore.getView", () => {
       prisma.lifecycleRevenueEvent.findMany,
       prisma.opportunity.findFirst,
       prisma.workTrace.findFirst,
+      prisma.receiptedBooking.findFirst,
     ]) {
       expect(call).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -122,6 +124,49 @@ describe("PrismaReceiptedBookingStore.getView", () => {
         }),
       );
     }
+  });
+
+  it("populates the persisted snapshot fields when an issuance row exists", async () => {
+    prisma.booking.findFirst.mockResolvedValueOnce({
+      id: "bk-1",
+      contactId: "ct-1",
+      opportunityId: "opp-1",
+      workTraceId: null,
+      attendance: null,
+    });
+    prisma.opportunity.findFirst.mockResolvedValueOnce({ estimatedValue: 30000 }); // live differs
+    const issuedAt = new Date("2026-06-14T00:00:00Z");
+    prisma.receiptedBooking.findFirst.mockResolvedValueOnce({
+      issuedAt,
+      expectedValueAtIssue: 45000,
+      currency: "SGD",
+      overriddenBy: null,
+      overrideReason: null,
+      overriddenAt: null,
+    });
+
+    const view = await store.getView("org-1", "bk-1", now);
+
+    expect(view?.issuedAt).toEqual(issuedAt);
+    expect(view?.expectedValueAtIssue).toBe(45000); // snapshot, not the live 30000
+    expect(view?.currency).toBe("SGD");
+    expect(view?.expectedValue).toBe(30000); // live still exposed alongside
+  });
+
+  it("leaves snapshot fields null when no issuance row exists (lazy/historical path)", async () => {
+    prisma.booking.findFirst.mockResolvedValueOnce({
+      id: "bk-2",
+      contactId: null,
+      opportunityId: null,
+      workTraceId: null,
+      attendance: null,
+    });
+    // receiptedBooking.findFirst defaults to null (no persisted row)
+    const view = await store.getView("org-1", "bk-2", now);
+
+    expect(view?.issuedAt ?? null).toBeNull();
+    expect(view?.expectedValueAtIssue ?? null).toBeNull();
+    expect(view?.currency ?? null).toBeNull();
   });
 
   it("falls back to Contact.firstTouchChannel when no ConversionRecord (resolves to medium)", async () => {
