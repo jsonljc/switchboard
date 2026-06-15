@@ -53,6 +53,7 @@ export class SwitchboardWhatsAppClient extends SwitchboardBillingClient {
     wabaId?: string;
     phoneNumberId?: string;
     organizationId?: string;
+    pin?: string;
   }) {
     return this.waForward("/api/whatsapp/whatsapp/onboard", {
       method: "POST",

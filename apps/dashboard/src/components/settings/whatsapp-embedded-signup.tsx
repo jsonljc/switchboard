@@ -16,6 +16,8 @@ type Status = "idle" | "connecting" | "processing" | "success" | "error";
 export function WhatsAppEmbeddedSignup({ _metaAppId, metaConfigId, onSuccess }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [pin, setPin] = useState("");
+  const [pinRequired, setPinRequired] = useState(false);
   const [result, setResult] = useState<{
     verifiedName?: string;
     displayPhoneNumber?: string;
@@ -59,6 +61,7 @@ export function WhatsAppEmbeddedSignup({ _metaAppId, metaConfigId, onSuccess }: 
 
     setStatus("connecting");
     setError(null);
+    setPinRequired(false);
     // Clear any session info captured by a prior (cancelled) attempt so stale
     // ids can't ride along with this attempt's code.
     sessionInfoRef.current = {};
@@ -79,7 +82,7 @@ export function WhatsAppEmbeddedSignup({ _metaAppId, metaConfigId, onSuccess }: 
           const res = await fetch("/api/dashboard/connections/whatsapp-embedded", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code, wabaId, phoneNumberId }),
+            body: JSON.stringify({ code, wabaId, phoneNumberId, ...(pin ? { pin } : {}) }),
           });
 
           const data = await res.json();
@@ -96,6 +99,7 @@ export function WhatsAppEmbeddedSignup({ _metaAppId, metaConfigId, onSuccess }: 
               connectionId: data.connectionId,
             });
           } else {
+            setPinRequired(data.code === "whatsapp_registration_pin_required");
             setError(data.error || "Onboarding failed");
             setStatus("error");
           }
@@ -114,7 +118,7 @@ export function WhatsAppEmbeddedSignup({ _metaAppId, metaConfigId, onSuccess }: 
         },
       },
     );
-  }, [metaConfigId, onSuccess]);
+  }, [metaConfigId, onSuccess, pin]);
 
   return (
     <Card>
@@ -141,6 +145,26 @@ export function WhatsAppEmbeddedSignup({ _metaAppId, metaConfigId, onSuccess }: 
                 {error}
               </div>
             )}
+            <div className="space-y-1">
+              <label htmlFor="wa-2sv-pin" className="text-sm font-medium">
+                Two-step verification PIN (optional)
+              </label>
+              <input
+                id="wa-2sv-pin"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={6}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                aria-invalid={pinRequired}
+                placeholder="Only if your number already has one"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                If your WhatsApp number already has two-step verification, enter its existing
+                6-digit PIN. Leave blank otherwise.
+              </p>
+            </div>
             <Button
               onClick={handleConnect}
               disabled={status === "connecting" || status === "processing"}

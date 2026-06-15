@@ -11,6 +11,7 @@ export async function POST(request: Request) {
       esToken?: string;
       wabaId?: string;
       phoneNumberId?: string;
+      pin?: string;
     };
     // getApiClient attaches the operator's Bearer; the onboard route resolves the
     // org from that auth context (it 403s without an org binding), so a raw
