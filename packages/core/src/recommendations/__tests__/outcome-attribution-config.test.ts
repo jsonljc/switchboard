@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   KIND_CONFIG,
+  KIND_CONFIG_PENDING,
   SETTLEMENT_LAG_HOURS,
+  SPEC_1B_PENDING_KINDS,
   V1_ATTRIBUTABLE_KINDS,
   isAttributableKind,
 } from "../outcome-attribution-config.js";
@@ -54,5 +56,30 @@ describe("isAttributableKind", () => {
     expect(isAttributableKind("shift_budget_to_source")).toBe(false);
     expect(isAttributableKind("bogus")).toBe(false);
     expect(isAttributableKind(undefined)).toBe(false);
+  });
+});
+
+describe("SPEC_1B_PENDING_KINDS / KIND_CONFIG_PENDING (D7-5 prep, NOT activation)", () => {
+  it("stages shift_budget_to_source as Spec-1B-pending WITHOUT making it attributable", () => {
+    expect([...SPEC_1B_PENDING_KINDS]).toContain("shift_budget_to_source");
+    // The gate is the whole point: the kind must NOT be live until Spec-1B ships an executor.
+    expect(isAttributableKind("shift_budget_to_source")).toBe(false);
+    expect([...V1_ATTRIBUTABLE_KINDS]).not.toContain("shift_budget_to_source");
+  });
+
+  it("provides a ready attribution-config blueprint for the pending kind", () => {
+    expect(KIND_CONFIG_PENDING.shift_budget_to_source).toMatchObject({
+      windowDays: expect.any(Number),
+      confidence: expect.any(String),
+      primaryMetric: expect.any(String),
+      favorableDirection: expect.any(String),
+      noiseFloorPct: expect.any(Number),
+    });
+  });
+
+  it("keeps pending kinds disjoint from the live attributable kinds (no accidental activation)", () => {
+    for (const kind of SPEC_1B_PENDING_KINDS) {
+      expect((V1_ATTRIBUTABLE_KINDS as readonly string[]).includes(kind)).toBe(false);
+    }
   });
 });
