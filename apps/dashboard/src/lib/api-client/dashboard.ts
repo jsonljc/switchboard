@@ -12,6 +12,7 @@ import type {
   PipelineBoardOpportunity,
   OpportunityStage,
   PaidVisitRow,
+  ReconcileBookingActionBody,
 } from "@switchboard/schemas";
 import { createIdempotencyKey } from "@/lib/idempotency";
 import { SwitchboardAgentsClient } from "./agents";
@@ -75,6 +76,19 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
     idempotencyKey: string,
   ) {
     return this.request(`/api/${orgId}/bookings/${bookingId}/attendance`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async reconcileBooking(
+    orgId: string,
+    bookingId: string,
+    body: ReconcileBookingActionBody,
+    idempotencyKey: string,
+  ) {
+    return this.request(`/api/${orgId}/bookings/${bookingId}/reconcile`, {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey },
       body: JSON.stringify(body),
