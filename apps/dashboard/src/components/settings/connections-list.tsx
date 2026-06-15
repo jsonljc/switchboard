@@ -27,6 +27,7 @@ import {
   useDeleteConnection,
   useTestConnection,
 } from "@/hooks/use-connections";
+import { useOrgDeploymentId } from "@/hooks/use-deployments";
 import { Plus, Trash2, Plug, RefreshCw, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { SERVICE_FIELD_CONFIGS, SERVICE_CONNECTION_CONFIGS } from "@/lib/service-field-configs";
 import { WhatsAppEmbeddedSignup } from "./whatsapp-embedded-signup";
@@ -86,6 +87,11 @@ export function ConnectionsList() {
   const createConnection = useCreateConnection();
   const deleteConnection = useDeleteConnection();
   const testConnection = useTestConnection();
+  // OAuth connections are stored per-deployment, so the authorize leg requires a real
+  // deploymentId (it 400s without one). We bind to the org's first deployment; in a
+  // multi-deployment org this anchors the credential to deployments[0] (a connect-time
+  // deployment chooser is deferred to a later slice).
+  const { deploymentId: oauthDeploymentId, isLoading: deploymentLoading } = useOrgDeploymentId();
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -328,13 +334,21 @@ export function ConnectionsList() {
                 <Button
                   type="button"
                   className="w-full"
+                  disabled={!oauthDeploymentId}
                   onClick={() => {
-                    const url = SERVICE_CONNECTION_CONFIGS[serviceId].oauth!.getUrl();
+                    const url = SERVICE_CONNECTION_CONFIGS[serviceId].oauth!.getUrl(
+                      oauthDeploymentId ?? undefined,
+                    );
                     window.location.href = url;
                   }}
                 >
                   {SERVICE_CONNECTION_CONFIGS[serviceId].oauth!.label}
                 </Button>
+                {!oauthDeploymentId && !deploymentLoading && (
+                  <p className="text-xs text-center text-muted-foreground">
+                    Deploy an agent before connecting this service.
+                  </p>
+                )}
                 {SERVICE_FIELD_CONFIGS[serviceId]?.length > 0 && (
                   <p className="text-xs text-center text-muted-foreground">
                     Or enter credentials manually below
