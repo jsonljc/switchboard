@@ -131,6 +131,13 @@ export interface AuditConfig {
    * narrower `(RecommendationOutput["action"]) => number` by parameter contravariance.
    */
   confidenceModifierByKind?: (action: string) => number;
+  /**
+   * D7-1 / D9-5 (the IMPROVE consumer): a bounded, abstaining per-action-kind multiplier from
+   * last cycle's corroborated outcome ledger (built in the weekly audit from the injected
+   * `outcomeSignalProvider`). Forwarded into each `decideForCampaign` call, where it composes
+   * with confidenceModifierByKind through the engine's one clamp. Absent ⇒ no adjustment.
+   */
+  outcomeMultiplierByKind?: (action: string) => number;
 }
 
 /**
@@ -644,6 +651,11 @@ export class AuditRunner {
         // keep their base confidence (a deliberate v1 boundary, not every kind is learned on yet).
         ...(this.config.confidenceModifierByKind
           ? { confidenceModifierByKind: this.config.confidenceModifierByKind }
+          : {}),
+        // D7-1: forward the per-org outcome multiplier; decideForCampaign composes it with the
+        // approval modifier (absent ⇒ no adjustment). Same per-campaign v1 scope as above.
+        ...(this.config.outcomeMultiplierByKind
+          ? { outcomeMultiplierByKind: this.config.outcomeMultiplierByKind }
           : {}),
       });
       insights.push(...decision.insights);

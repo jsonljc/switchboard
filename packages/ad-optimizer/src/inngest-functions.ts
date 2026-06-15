@@ -15,7 +15,7 @@ import type { CoverageReport } from "./onboarding/coverage-validator.js";
 import type { RecommendationHandoffSubmitter } from "./recommendation-handoff-dispatch.js";
 import type { RileyPauseSubmitter } from "./riley-pause-dispatch.js";
 import type { RileyBudgetSubmitter } from "./riley-budget-dispatch.js";
-import { confidenceModifierForKind } from "./confidence-modifier.js";
+import { resolveLearnedModifiers } from "./learned-modifiers.js";
 
 interface DeploymentInfo {
   id: string;
@@ -91,17 +91,17 @@ export interface CronDependencies {
    * PrismaConversionRecordStore. Absent ⇒ trueROAS reported null (graceful).
    */
   bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
-  /**
-   * Optional (D7-2, the first learning wire). Per-org aggregate of resolved operator
-   * verdicts by action kind ({ approved, rejected }). The weekly audit reads it ONCE per
-   * deployment and turns it into a bounded, abstaining per-kind confidence modifier fed
-   * into the engine. Wired in apps/api/src/bootstrap/inngest.ts with
-   * PrismaRecommendationStore.aggregateApprovalRateByKind; ad-optimizer (Layer 2) never
-   * imports the store. Absent ⇒ no modifier ⇒ the hardcoded base confidences stand.
-   */
+  /** D7-2: per-org operator approve/reject counts by action kind; resolveLearnedModifiers turns it
+   * into a bounded, abstaining confidence modifier (wired in apps/api). Absent ⇒ no modifier. */
   approvalRateProvider?: (
     orgId: string,
   ) => Promise<Map<string, { approved: number; rejected: number }>>;
+  /** D7-1 / D9-5: per-org outcome-ledger counts by action kind; resolveLearnedModifiers turns it
+   * into a bounded, abstaining outcome multiplier composed with the approval modifier (wired in
+   * apps/api). Absent, or empty until the attribution producer flag (Tier 0 PR 0.6), ⇒ abstains. */
+  outcomeSignalProvider?: (
+    orgId: string,
+  ) => Promise<Map<string, { corroboratedUp: number; corroboratedDown: number }>>;
   /**
    * Optional. When provided, each EMITTED creative recommendation that clears the
    * handoff abstention is routed to a governed Mira draft (parking for mandatory
@@ -231,18 +231,13 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         // missing/empty producer value never silently changes the denominator.
         const conversionActionType = deployment.inputConfig.conversionActionType;
         const attributionWindows = deployment.inputConfig.attributionWindows;
-        // D7-2 (first learning wire): resolve the org's operator approval-rate aggregate
-        // ONCE per audit and turn it into a bounded, abstaining per-kind confidence
-        // modifier. The injected provider reads the store in apps/api (Layer 4); absent ⇒
-        // no modifier ⇒ the engine's hardcoded base confidences stand (back-compat). A
-        // kind with no history resolves to neutral {0,0}, which the modifier abstains on.
-        const approvalAgg = deps.approvalRateProvider
-          ? await deps.approvalRateProvider(deployment.organizationId)
-          : undefined;
-        const confidenceModifierByKind = approvalAgg
-          ? (action: string): number =>
-              confidenceModifierForKind(approvalAgg.get(action) ?? { approved: 0, rejected: 0 })
-          : undefined;
+        // D7-2 + D7-1: resolve the org's bounded, abstaining learned modifiers (operator approval
+        // rate + measured-outcome readback) ONCE from the injected providers; absent/empty ⇒ no
+        // adjustment. decideForCampaign composes them through the engine's single clamp.
+        const { confidenceModifierByKind, outcomeMultiplierByKind } = await resolveLearnedModifiers(
+          deps,
+          deployment.organizationId,
+        );
         const config: AuditConfig = {
           accountId: creds.accountId,
           orgId: deployment.organizationId,
@@ -262,6 +257,7 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
           },
           ...(pixelId ? { pixelId } : {}),
           ...(confidenceModifierByKind ? { confidenceModifierByKind } : {}),
+          ...(outcomeMultiplierByKind ? { outcomeMultiplierByKind } : {}),
         };
         const signalHealthChecker =
           pixelId && deps.createSignalHealthChecker

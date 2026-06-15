@@ -20,6 +20,15 @@ export class RecommendationOutcomeAlreadyExistsError extends Error {
   }
 }
 
+/** D7-1: per-action-kind CORROBORATED-direction counts for the readback. Structurally matches
+ * ad-optimizer's OutcomeCountsByKind (db Layer 4 cannot import ad-optimizer Layer 2; the apps/api
+ * wiring bridges the two by structural type). Only corroborated rows are counted: directional
+ * evidence must never move trust. */
+export interface OutcomeSignalCounts {
+  corroboratedUp: number;
+  corroboratedDown: number;
+}
+
 /**
  * Tolerant extractor for the campaign identity carried on a recommendation row.
  * Riley emits campaignId inside targetEntities, but historic shapes have varied
@@ -166,6 +175,31 @@ export class PrismaRecommendationOutcomeStore implements RecommendationOutcomeSt
       },
     });
     return rows.map(projectReadModel);
+  }
+
+  /**
+   * D7-1: aggregate the org's CORROBORATED Riley outcome rows by action kind into the up/down
+   * direction counts the outcome readback (ad-optimizer outcome-readback.ts) consumes. The
+   * IMPROVE-leg read side that pairs with the attribution cron producer (D9-5). Org-scoped,
+   * read-only. ONLY corroborated rows are read (the WHERE filters on causalStrength) so directional
+   * / inconclusive evidence never reaches the count or the direction; a row with no action kind is
+   * skipped (never fabricates a bucket). Grouped in JS (one read per org).
+   */
+  async aggregateOutcomeSignalByKind(orgId: string): Promise<Map<string, OutcomeSignalCounts>> {
+    const rows = await this.prisma.recommendationOutcome.findMany({
+      where: { organizationId: orgId, agentRole: "riley", causalStrength: "corroborated" },
+      select: { actionKind: true, trustDelta: true },
+    });
+    const agg = new Map<string, OutcomeSignalCounts>();
+    for (const row of rows) {
+      const kind = row.actionKind;
+      if (!kind) continue;
+      const c = agg.get(kind) ?? { corroboratedUp: 0, corroboratedDown: 0 };
+      if (row.trustDelta === "up") c.corroboratedUp += 1;
+      else if (row.trustDelta === "down") c.corroboratedDown += 1;
+      agg.set(kind, c);
+    }
+    return agg;
   }
 }
 

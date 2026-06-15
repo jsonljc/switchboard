@@ -1,6 +1,7 @@
 import {
   assembleRevenueState,
   confidenceModifierForKind,
+  outcomeAdjustmentForKind,
   decideForCampaign,
   deriveLearningPhaseActive,
   LearningPhaseGuardV2,
@@ -105,6 +106,7 @@ export type RileyDecisionInputCase = Pick<
   | "measurementTrusted"
   | "hybrid"
   | "approvalHistory"
+  | "outcomeHistory"
 >;
 
 export interface RileyRawDecision {
@@ -156,6 +158,16 @@ export function decideRawForCase(
         confidenceModifierForKind(c.approvalHistory?.[action] ?? { approved: 0, rejected: 0 })
     : undefined;
 
+  // D7-1: when the case carries outcome-ledger history, build the SAME bounded, abstaining outcome
+  // multiplier the live audit builds and feed it alongside the approval modifier; decideForCampaign
+  // composes the two through the engine's one clamp. Absent ⇒ no outcome adjustment.
+  const outcomeMultiplierByKind = c.outcomeHistory
+    ? (action: string): number =>
+        outcomeAdjustmentForKind(
+          c.outcomeHistory?.[action] ?? { corroboratedUp: 0, corroboratedDown: 0 },
+        ).confidenceMultiplier
+    : undefined;
+
   const r = decideForCampaign({
     campaignId,
     campaignName,
@@ -180,6 +192,7 @@ export function decideRawForCase(
     learningPhaseActive: deriveLearningPhaseActive(c.learningState),
     ...(targetSource ? { targetSource } : {}),
     ...(confidenceModifierByKind ? { confidenceModifierByKind } : {}),
+    ...(outcomeMultiplierByKind ? { outcomeMultiplierByKind } : {}),
   });
 
   return {
