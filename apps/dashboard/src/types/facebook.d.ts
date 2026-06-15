@@ -5,7 +5,7 @@ interface Window {
   FB?: {
     init(params: { appId: string; cookie: boolean; xfbml: boolean; version: string }): void;
     login(
-      callback: (response: { authResponse?: { accessToken: string } }) => void,
+      callback: (response: { authResponse?: { accessToken?: string; code?: string } }) => void,
       params: {
         config_id: string;
         response_type: string;

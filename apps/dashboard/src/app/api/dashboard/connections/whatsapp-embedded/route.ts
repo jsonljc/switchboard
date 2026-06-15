@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getApiClient } from "@/lib/get-api-client";
+import { proxyError } from "@/lib/proxy-error";
 
 export async function POST(request: Request) {
-  await requireSession();
-  const body = await request.json();
-
-  const res = await fetch(`${API_BASE}/whatsapp/onboard`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  const data = await res.json();
-  return NextResponse.json(data, { status: res.status });
+  try {
+    await requireSession();
+    const body = (await request.json()) as {
+      code?: string;
+      esToken?: string;
+      wabaId?: string;
+      phoneNumberId?: string;
+    };
+    // getApiClient attaches the operator's Bearer; the onboard route resolves the
+    // org from that auth context (it 403s without an org binding), so a raw
+    // unauthenticated fetch — what this route did before — could never onboard.
+    const client = await getApiClient();
+    const { status, data } = await client.onboardWhatsAppEmbedded(body);
+    return NextResponse.json(data, { status });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message === "Unauthorized") return proxyError({ error: message }, 401);
+    return proxyError({ error: message }, 500);
+  }
 }

@@ -42,4 +42,21 @@ export class SwitchboardWhatsAppClient extends SwitchboardBillingClient {
       body: JSON.stringify(body),
     });
   }
+
+  // Embedded Signup onboard. The route is mounted at prefix `/api/whatsapp` +
+  // route `/whatsapp/onboard` -> `/api/whatsapp/whatsapp/onboard`. waForward
+  // attaches the operator Bearer so the route can resolve the org from the auth
+  // context (it 403s without an org binding).
+  onboardWhatsAppEmbedded(body: {
+    code?: string;
+    esToken?: string;
+    wabaId?: string;
+    phoneNumberId?: string;
+    organizationId?: string;
+  }) {
+    return this.waForward("/api/whatsapp/whatsapp/onboard", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
 }
