@@ -14,7 +14,7 @@ export class WhatsAppApprovalNotifier implements ApprovalNotifier {
   constructor(config: WhatsAppNotifierConfig) {
     this.token = config.token;
     this.phoneNumberId = config.phoneNumberId;
-    this.apiVersion = config.apiVersion ?? "v18.0";
+    this.apiVersion = config.apiVersion ?? "v21.0";
   }
 
   async notify(notification: ApprovalNotification): Promise<void> {

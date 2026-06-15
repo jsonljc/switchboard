@@ -83,7 +83,7 @@ describe("ProactiveSender", () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const [url, options] = mockFetch.mock.calls[0]!;
-      expect(url).toBe("https://graph.facebook.com/v18.0/phone_1/messages");
+      expect(url).toBe("https://graph.facebook.com/v21.0/phone_1/messages");
       expect(options.headers.Authorization).toBe("Bearer wa-token");
       const body = JSON.parse(options.body as string);
       expect(body.to).toBe("+15551234567");
