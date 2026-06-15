@@ -236,6 +236,126 @@ describe("PrismaReceiptedBookingStore.getView", () => {
   });
 });
 
+describe("PrismaReceiptedBookingStore.getView override + duplicate (PR-1 hardcode kill)", () => {
+  let prisma: ReturnType<typeof makeMockPrisma>;
+  let store: PrismaReceiptedBookingStore;
+
+  beforeEach(() => {
+    prisma = makeMockPrisma();
+    store = new PrismaReceiptedBookingStore(prisma as never);
+  });
+
+  const issuedAt = new Date("2026-06-10T00:00:00Z");
+  const dupRaisedAt = "2026-06-12T00:00:00Z";
+
+  function baseBooking(id: string = "bk-1") {
+    return {
+      id,
+      contactId: null,
+      opportunityId: null,
+      workTraceId: null,
+      attendance: null,
+      service: "Botox",
+      startsAt,
+    };
+  }
+
+  it("overridden row: persisted overriddenBy -> attributionConfidence='high', manual_override raised, missing_source absent", async () => {
+    prisma.booking.findFirst.mockResolvedValueOnce(baseBooking());
+    prisma.receiptedBooking.findFirst.mockResolvedValueOnce({
+      issuedAt,
+      expectedValueAtIssue: 5000,
+      currency: "SGD",
+      attributionConfidence: "high",
+      overriddenBy: "user_1",
+      overrideReason: "owner knows source",
+      overriddenAt: new Date("2026-06-12T00:00:00Z"),
+      exceptions: [],
+    });
+
+    const view = await store.getView("org-1", "bk-1", now);
+
+    expect(view).not.toBeNull();
+    expect(view!.attributionConfidence).toBe("high");
+    const codes = view!.exceptions.map((e) => e.code);
+    expect(codes).toContain("manual_override");
+    expect(codes).not.toContain("missing_source");
+    expect(ReceiptedBookingViewSchema.safeParse(view).success).toBe(true);
+  });
+
+  it("persisted OPEN duplicate_contact_risk -> appears in exceptions with raisedAt as Date", async () => {
+    prisma.booking.findFirst.mockResolvedValueOnce(baseBooking());
+    prisma.receiptedBooking.findFirst.mockResolvedValueOnce({
+      issuedAt,
+      expectedValueAtIssue: null,
+      currency: null,
+      attributionConfidence: "high",
+      overriddenBy: null,
+      overrideReason: null,
+      overriddenAt: null,
+      exceptions: [{ code: "duplicate_contact_risk", raisedAt: dupRaisedAt, resolvedAt: null }],
+    });
+
+    const view = await store.getView("org-1", "bk-1", now);
+
+    expect(view).not.toBeNull();
+    const dup = view!.exceptions.find((e) => e.code === "duplicate_contact_risk");
+    expect(dup).toBeDefined();
+    expect(dup!.raisedAt).toBeInstanceOf(Date);
+    expect(dup!.raisedAt).toEqual(new Date(dupRaisedAt));
+    expect(ReceiptedBookingViewSchema.safeParse(view).success).toBe(true);
+  });
+
+  it("persisted RESOLVED duplicate_contact_risk -> excluded from view exceptions", async () => {
+    prisma.booking.findFirst.mockResolvedValueOnce(baseBooking());
+    prisma.receiptedBooking.findFirst.mockResolvedValueOnce({
+      issuedAt,
+      expectedValueAtIssue: null,
+      currency: null,
+      attributionConfidence: "high",
+      overriddenBy: null,
+      overrideReason: null,
+      overriddenAt: null,
+      exceptions: [
+        {
+          code: "duplicate_contact_risk",
+          raisedAt: dupRaisedAt,
+          resolvedAt: "2026-06-14T00:00:00Z",
+        },
+      ],
+    });
+
+    const view = await store.getView("org-1", "bk-1", now);
+
+    expect(view).not.toBeNull();
+    const codes = view!.exceptions.map((e) => e.code);
+    expect(codes).not.toContain("duplicate_contact_risk");
+  });
+
+  it("no persisted row (historical) -> live confidence, no manual_override, no duplicate", async () => {
+    prisma.booking.findFirst.mockResolvedValueOnce({
+      id: "bk-hist",
+      contactId: null,
+      opportunityId: null,
+      workTraceId: null,
+      attendance: null,
+      service: "Facial",
+      startsAt,
+    });
+    // receiptedBooking.findFirst defaults to null (no persisted row)
+
+    const view = await store.getView("org-1", "bk-hist", now);
+
+    expect(view).not.toBeNull();
+    expect(view!.attributionConfidence).toBe("unattributed");
+    const codes = view!.exceptions.map((e) => e.code);
+    expect(codes).not.toContain("manual_override");
+    expect(codes).not.toContain("duplicate_contact_risk");
+    expect(codes).toContain("missing_consent");
+    expect(codes).toContain("missing_source");
+  });
+});
+
 describe("PrismaReceiptedBookingStore.listForCohort", () => {
   let prisma: ReturnType<typeof makeMockPrisma>;
   let store: PrismaReceiptedBookingStore;
