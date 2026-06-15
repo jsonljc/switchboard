@@ -15,7 +15,11 @@ function makeTx(opts: {
   } | null;
   createImpl?: () => Promise<unknown>;
 }) {
-  const create = vi.fn(opts.createImpl ?? (() => Promise.resolve({ id: "rb_1" })));
+  // Typed spy (NOT a bare vi.fn): a zero-arg impl would infer an empty-tuple mock.calls and break
+  // `tsc` at build (TS2493) while vitest greens. Typing the call args keeps mock.calls[0][0] sound.
+  const create = vi.fn<(args: { data: Record<string, unknown> }) => Promise<unknown>>(
+    opts.createImpl ?? (async () => ({ id: "rb_1" })),
+  );
   return {
     tx: {
       receiptedBooking: {
@@ -71,19 +75,17 @@ describe("issueReceiptedBookingInTx", () => {
       expect.objectContaining({ where: { organizationId: "org-1", id: "ct-1" } }),
     );
     expect(create).toHaveBeenCalledTimes(1);
-    const data = create.mock.calls[0]![0] as {
-      data: {
-        attributionConfidence: string;
-        expectedValueAtIssue: number | null;
-        currency: string | null;
-        exceptions: Array<{ code: string; raisedAt: unknown }>;
-      };
+    const data = create.mock.calls[0]![0].data as {
+      attributionConfidence: string;
+      expectedValueAtIssue: number | null;
+      currency: string | null;
+      exceptions: Array<{ code: string; raisedAt: unknown }>;
     };
-    expect(data.data.attributionConfidence).toBe("deterministic");
-    expect(data.data.expectedValueAtIssue).toBe(45000);
-    expect(data.data.currency).toBe("SGD");
-    expect(data.data.exceptions.map((e) => e.code)).toEqual(["missing_consent"]);
-    expect(data.data.exceptions.every((e) => typeof e.raisedAt === "string")).toBe(true);
+    expect(data.attributionConfidence).toBe("deterministic");
+    expect(data.expectedValueAtIssue).toBe(45000);
+    expect(data.currency).toBe("SGD");
+    expect(data.exceptions.map((e) => e.code)).toEqual(["missing_consent"]);
+    expect(data.exceptions.every((e) => typeof e.raisedAt === "string")).toBe(true);
   });
 
   it("is idempotent: skips the create (and the contact read) when a row already exists", async () => {
