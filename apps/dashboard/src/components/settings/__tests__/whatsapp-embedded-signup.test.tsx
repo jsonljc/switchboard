@@ -164,10 +164,16 @@ describe("WhatsAppEmbeddedSignup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect WhatsApp" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(screen.getAllByText(/two-step verification/i).length).toBeGreaterThan(0);
-    expect(screen.getByLabelText(/two-step verification pin/i)).toHaveAttribute(
-      "aria-invalid",
-      "true",
+    // pinRequired (-> aria-invalid="true") only flips after `await res.json()`
+    // resolves and React re-renders, a microtask after fetch is merely called.
+    // Poll for the re-render rather than asserting synchronously, or this races
+    // under CI load.
+    await waitFor(() =>
+      expect(screen.getByLabelText(/two-step verification pin/i)).toHaveAttribute(
+        "aria-invalid",
+        "true",
+      ),
     );
+    expect(screen.getAllByText(/two-step verification/i).length).toBeGreaterThan(0);
   });
 });
