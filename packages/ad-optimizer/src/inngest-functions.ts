@@ -124,6 +124,19 @@ export interface CronDependencies {
    * imports the store. Absent ⇒ freshness stays "unknown" (back-compat).
    */
   getLatestOperationalState?: (organizationId: string) => Promise<{ confirmedAt: Date } | null>;
+  /**
+   * Optional (PR 1.4, D2-3 isolation half). Invoked when a single deployment's
+   * audit step throws AFTER Inngest exhausts the cron's (function-level) retry
+   * budget. The per-deployment try/catch wraps the `await step.run("audit-...")`
+   * call so the exhausted org is recorded + surfaced (apps/api wires this to
+   * safeAlert) while the fleet loop CONTINUES. The isolation is UNCONDITIONAL:
+   * absent this callback the failure is swallowed and the fleet still continues
+   * (wire it to surface the failure; do not rely on it to abort the fleet).
+   */
+  onDeploymentFailure?: (
+    ctx: { deploymentId: string; organizationId: string },
+    err: unknown,
+  ) => void | Promise<void>;
 }
 
 interface StepTools {
@@ -183,120 +196,134 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
       ? await step.run(`pixel-${deployment.id}`, () => deps.getDeploymentPixelId!(deployment.id))
       : null;
 
-    await step.run(`audit-${deployment.id}`, async () => {
-      // D2-4: resolve credentials INSIDE the consuming step so the cleartext access
-      // token lives only in this step's local scope and never becomes memoized step
-      // output (Inngest serializes step return values as JSON). Missing creds → skip.
-      const creds = await deps.getDeploymentCredentials(deployment.id);
-      if (!creds) return;
-      const adsClient = deps.createAdsClient(creds);
-      // NOTE (PR2): read as a strict number. Sibling inputConfig fields (targetCPA/
-      // targetROAS) are stored as strings by the seed/wizard; a future producer that
-      // writes targetCostPerBooked as a string would be silently dropped here (→ Tier 2
-      // CPL, never booked_cac). When a real producer lands (wizard), route it through
-      // resolveAdOptimizerConfig/AdOptimizerConfigSchema to coerce string→number.
-      const cpb = deployment.inputConfig.targetCostPerBooked;
-      // Phase-A Gate 1: optional conversions-denominator config. Default unset =
-      // back-compat (aggregate `conversions`). Guarded like targetCostPerBooked so a
-      // missing/empty producer value never silently changes the denominator.
-      const conversionActionType = deployment.inputConfig.conversionActionType;
-      const attributionWindows = deployment.inputConfig.attributionWindows;
-      const config: AuditConfig = {
-        accountId: creds.accountId,
-        orgId: deployment.organizationId,
-        targetCPA: deployment.inputConfig.targetCPA ?? 100,
-        targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
-        ...(typeof cpb === "number" && cpb > 0 ? { targetCostPerBooked: cpb } : {}),
-        ...(typeof conversionActionType === "string" && conversionActionType
-          ? { conversionActionType }
-          : {}),
-        ...(Array.isArray(attributionWindows) && attributionWindows.length > 0
-          ? { attributionWindows }
-          : {}),
-        mediaBenchmarks: {
-          inlineLinkClickCtr: 2.0,
-          landingPageViewRate: 0.85,
-          clickToLeadRate: 0.05,
-        },
-        ...(pixelId ? { pixelId } : {}),
-      };
-      const signalHealthChecker =
-        pixelId && deps.createSignalHealthChecker
-          ? deps.createSignalHealthChecker(creds)
+    // PR 1.4 (D2-3 isolation half): one org's exhausted audit step must not abort
+    // the fleet. The try/catch wraps the awaited step.run; Inngest still retries the
+    // step under the cron's function-level budget, and only a post-exhaustion throw
+    // lands here, recorded via onDeploymentFailure (apps/api → safeAlert); loop continues.
+    try {
+      await step.run(`audit-${deployment.id}`, async () => {
+        // D2-4: resolve credentials INSIDE the consuming step so the cleartext access
+        // token lives only in this step's local scope and never becomes memoized step
+        // output (Inngest serializes step return values as JSON). Missing creds → skip.
+        const creds = await deps.getDeploymentCredentials(deployment.id);
+        if (!creds) return;
+        const adsClient = deps.createAdsClient(creds);
+        // NOTE (PR2): read as a strict number. Sibling inputConfig fields (targetCPA/
+        // targetROAS) are stored as strings by the seed/wizard; a future producer that
+        // writes targetCostPerBooked as a string would be silently dropped here (→ Tier 2
+        // CPL, never booked_cac). When a real producer lands (wizard), route it through
+        // resolveAdOptimizerConfig/AdOptimizerConfigSchema to coerce string→number.
+        const cpb = deployment.inputConfig.targetCostPerBooked;
+        // Phase-A Gate 1: optional conversions-denominator config. Default unset =
+        // back-compat (aggregate `conversions`). Guarded like targetCostPerBooked so a
+        // missing/empty producer value never silently changes the denominator.
+        const conversionActionType = deployment.inputConfig.conversionActionType;
+        const attributionWindows = deployment.inputConfig.attributionWindows;
+        const config: AuditConfig = {
+          accountId: creds.accountId,
+          orgId: deployment.organizationId,
+          targetCPA: deployment.inputConfig.targetCPA ?? 100,
+          targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
+          ...(typeof cpb === "number" && cpb > 0 ? { targetCostPerBooked: cpb } : {}),
+          ...(typeof conversionActionType === "string" && conversionActionType
+            ? { conversionActionType }
+            : {}),
+          ...(Array.isArray(attributionWindows) && attributionWindows.length > 0
+            ? { attributionWindows }
+            : {}),
+          mediaBenchmarks: {
+            inlineLinkClickCtr: 2.0,
+            landingPageViewRate: 0.85,
+            clickToLeadRate: 0.05,
+          },
+          ...(pixelId ? { pixelId } : {}),
+        };
+        const signalHealthChecker =
+          pixelId && deps.createSignalHealthChecker
+            ? deps.createSignalHealthChecker(creds)
+            : undefined;
+        // Gate 0 (optional, back-compat). Unset ⇒ no coverage gate. A production
+        // validator is a follow-up (needs listCampaigns + intake store).
+        const coverageValidator = deps.createCoverageValidator
+          ? deps.createCoverageValidator(deployment.id, creds)
           : undefined;
-      // Gate 0 (optional, back-compat). Unset ⇒ no coverage gate. A production
-      // validator is a follow-up (needs listCampaigns + intake store).
-      const coverageValidator = deps.createCoverageValidator
-        ? deps.createCoverageValidator(deployment.id, creds)
-        : undefined;
-      const runner = new AuditRunner({
-        adsClient,
-        crmDataProvider: deps.createCrmProvider(deployment.id),
-        insightsProvider: deps.createInsightsProvider(adsClient),
-        config,
-        // Per-source spend attribution: feed real account ad-set destination data so
-        // computeSpendBySource attributes spend (vs the synthetic lead-share fallback).
-        // Resilient: an ad-set fetch failure degrades to null (→ lead-share → honest abstain),
-        // never a crashed weekly run. Read-only; advisory path unchanged.
-        ...(adsClient.getAccountAdSetLearningInputs
-          ? {
-              getAdSetInsights: async ({
-                dateRange,
-              }: {
-                dateRange: { since: string; until: string };
-                fields: string[];
-              }) => {
-                try {
-                  return await adsClient.getAccountAdSetLearningInputs!(dateRange);
-                } catch (err) {
-                  // Error-level: a swallowed fetch failure must be visible to ops/alerting.
-                  // The audit still completes (the per-campaign analysis is independent), and
-                  // the source-reallocation rec degrades to honest abstain (lead-share). A
-                  // report-level "ad-set data unavailable" insight is a deferred enhancement;
-                  // re-throwing instead would re-run every rate-limited Graph call on a blip.
-                  console.error(
-                    `[ad-optimizer] ad-set attribution fetch failed for deployment=${deployment.id}; ` +
-                      `falling back to lead-share (no source reallocation this run): ${String(err)}`,
-                  );
-                  return null;
-                }
-              },
-            }
-          : {}),
-        ...(signalHealthChecker ? { signalHealthChecker } : {}),
-        ...(coverageValidator ? { coverageValidator } : {}),
-        ...(deps.bookedValueByCampaignProvider
-          ? { bookedValueByCampaignProvider: deps.bookedValueByCampaignProvider }
-          : {}),
-        ...(deps.recommendationEmitter
-          ? {
-              recommendationEmitter: deps.recommendationEmitter,
-              recommendationEmissionContext: {
-                cronId: "ad-optimizer-weekly-audit",
-                deploymentId: deployment.id,
-              },
-            }
-          : {}),
-        ...(deps.recommendationHandoffSubmitter
-          ? { recommendationHandoffSubmitter: deps.recommendationHandoffSubmitter }
-          : {}),
-        // Phase-C: capability-passing as enforcement. The pause submitter reaches
-        // a deployment's runner ONLY when its per-org flag is on (and the dep
-        // itself exists only under the env kill switch). Both default OFF.
-        ...(deps.rileyPauseSubmitter && deployment.pauseSelfExecutionEnabled
-          ? { rileyPauseSubmitter: deps.rileyPauseSubmitter }
-          : {}),
-        // Spec-1B 1B-1.6: reallocate self-submission. v1 is env-gated only (the dep exists solely
-        // under RILEY_REALLOCATE_SELF_EXECUTION_ENABLED); no per-deployment flag, so a wired dep
-        // reaches every org's runner. Every proposed move still parks for mandatory approval.
-        ...(deps.rileyBudgetSubmitter ? { rileyBudgetSubmitter: deps.rileyBudgetSubmitter } : {}),
-        ...(deps.getLatestOperationalState
-          ? { operationalStateProvider: { getLatest: deps.getLatestOperationalState } }
-          : {}),
+        const runner = new AuditRunner({
+          adsClient,
+          crmDataProvider: deps.createCrmProvider(deployment.id),
+          insightsProvider: deps.createInsightsProvider(adsClient),
+          config,
+          // Per-source spend attribution: feed real account ad-set destination data so
+          // computeSpendBySource attributes spend (vs the synthetic lead-share fallback).
+          // Resilient: an ad-set fetch failure degrades to null (→ lead-share → honest abstain),
+          // never a crashed weekly run. Read-only; advisory path unchanged.
+          ...(adsClient.getAccountAdSetLearningInputs
+            ? {
+                getAdSetInsights: async ({
+                  dateRange,
+                }: {
+                  dateRange: { since: string; until: string };
+                  fields: string[];
+                }) => {
+                  try {
+                    return await adsClient.getAccountAdSetLearningInputs!(dateRange);
+                  } catch (err) {
+                    // Error-level: a swallowed fetch failure must be visible to ops/alerting.
+                    // The audit still completes (the per-campaign analysis is independent), and
+                    // the source-reallocation rec degrades to honest abstain (lead-share). A
+                    // report-level "ad-set data unavailable" insight is a deferred enhancement;
+                    // re-throwing instead would re-run every rate-limited Graph call on a blip.
+                    console.error(
+                      `[ad-optimizer] ad-set attribution fetch failed for deployment=${deployment.id}; ` +
+                        `falling back to lead-share (no source reallocation this run): ${String(err)}`,
+                    );
+                    return null;
+                  }
+                },
+              }
+            : {}),
+          ...(signalHealthChecker ? { signalHealthChecker } : {}),
+          ...(coverageValidator ? { coverageValidator } : {}),
+          ...(deps.bookedValueByCampaignProvider
+            ? { bookedValueByCampaignProvider: deps.bookedValueByCampaignProvider }
+            : {}),
+          ...(deps.recommendationEmitter
+            ? {
+                recommendationEmitter: deps.recommendationEmitter,
+                recommendationEmissionContext: {
+                  cronId: "ad-optimizer-weekly-audit",
+                  deploymentId: deployment.id,
+                },
+              }
+            : {}),
+          ...(deps.recommendationHandoffSubmitter
+            ? { recommendationHandoffSubmitter: deps.recommendationHandoffSubmitter }
+            : {}),
+          // Phase-C: capability-passing as enforcement. The pause submitter reaches
+          // a deployment's runner ONLY when its per-org flag is on (and the dep
+          // itself exists only under the env kill switch). Both default OFF.
+          ...(deps.rileyPauseSubmitter && deployment.pauseSelfExecutionEnabled
+            ? { rileyPauseSubmitter: deps.rileyPauseSubmitter }
+            : {}),
+          // Spec-1B 1B-1.6: reallocate self-submission. v1 is env-gated only (the dep exists solely
+          // under RILEY_REALLOCATE_SELF_EXECUTION_ENABLED); no per-deployment flag, so a wired dep
+          // reaches every org's runner. Every proposed move still parks for mandatory approval.
+          ...(deps.rileyBudgetSubmitter ? { rileyBudgetSubmitter: deps.rileyBudgetSubmitter } : {}),
+          ...(deps.getLatestOperationalState
+            ? { operationalStateProvider: { getLatest: deps.getLatestOperationalState } }
+            : {}),
+        });
+        const report = await runner.run(dateRanges);
+        await deps.saveAuditReport(deployment.id, report);
       });
-      const report = await runner.run(dateRanges);
-      await deps.saveAuditReport(deployment.id, report);
-    });
+    } catch (err) {
+      // The audit step exhausted its Inngest retries (or threw synchronously).
+      // Record + surface the single org's failure and continue the fleet so a
+      // later deployment is never starved by an earlier one's outage.
+      await deps.onDeploymentFailure?.(
+        { deploymentId: deployment.id, organizationId: deployment.organizationId },
+        err,
+      );
+    }
   }
 }
 
@@ -359,6 +386,18 @@ export interface SignalHealthCronDependencies {
   getDeploymentPixelId: (deploymentId: string) => Promise<string | null>;
   createSignalHealthChecker: (creds: DeploymentCredentials) => SignalHealthCheckerLike;
   saveSignalHealthReport: (deploymentId: string, report: SignalHealthReport) => Promise<void>;
+  /**
+   * Optional (PR 1.4, D2-3 isolation half). Same contract as
+   * CronDependencies.onDeploymentFailure: when one deployment's
+   * `signal-health-...` step throws after the cron's function-level retries are
+   * exhausted, the failure is recorded + surfaced (apps/api → safeAlert) and the
+   * loop continues. The isolation is UNCONDITIONAL: absent this callback the failure
+   * is swallowed and the fleet still continues (wire it to surface the failure).
+   */
+  onDeploymentFailure?: (
+    ctx: { deploymentId: string; organizationId: string },
+    err: unknown,
+  ) => void | Promise<void>;
 }
 
 export async function executeDailySignalHealthCheck(
@@ -374,25 +413,36 @@ export async function executeDailySignalHealthCheck(
     );
     if (!pixelId) continue;
 
-    await step.run(`signal-health-${deployment.id}`, async () => {
-      // D2-4: resolve credentials inside the step (cleartext token stays in local
-      // scope, never memoized as step output). Missing creds → skip this deployment.
-      const creds = await deps.getDeploymentCredentials(deployment.id);
-      if (!creds) return;
-      const checker = deps.createSignalHealthChecker(creds);
-      const report = await checker.getSignalHealthReport(pixelId);
-      if (report.score === "red") {
-        const breachList = report.breaches
-          .filter((b) => b.severity === "critical")
-          .map((b) => b.signal)
-          .join(", ");
-        console.warn(
-          `[ad-optimizer] signal-health RED for deployment=${deployment.id} ` +
-            `pixel=${pixelId}: ${breachList || "critical breach"}`,
-        );
-      }
-      await deps.saveSignalHealthReport(deployment.id, report);
-    });
+    // PR 1.4 (D2-3 isolation half): mirror the weekly audit. One org's exhausted
+    // signal-health step must not abort the rest of the fleet. Inngest still retries
+    // the step under the cron's function-level budget; only a post-exhaustion throw
+    // lands in this catch.
+    try {
+      await step.run(`signal-health-${deployment.id}`, async () => {
+        // D2-4: resolve credentials inside the step (cleartext token stays in local
+        // scope, never memoized as step output). Missing creds → skip this deployment.
+        const creds = await deps.getDeploymentCredentials(deployment.id);
+        if (!creds) return;
+        const checker = deps.createSignalHealthChecker(creds);
+        const report = await checker.getSignalHealthReport(pixelId);
+        if (report.score === "red") {
+          const breachList = report.breaches
+            .filter((b) => b.severity === "critical")
+            .map((b) => b.signal)
+            .join(", ");
+          console.warn(
+            `[ad-optimizer] signal-health RED for deployment=${deployment.id} ` +
+              `pixel=${pixelId}: ${breachList || "critical breach"}`,
+          );
+        }
+        await deps.saveSignalHealthReport(deployment.id, report);
+      });
+    } catch (err) {
+      await deps.onDeploymentFailure?.(
+        { deploymentId: deployment.id, organizationId: deployment.organizationId },
+        err,
+      );
+    }
   }
 }
 
