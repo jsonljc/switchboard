@@ -22,8 +22,25 @@ describe("CoverageValidator", () => {
     expect(result.bySource.ctwa.tracking).toBe("verified");
     expect(result.bySource.instant_form.tracking).toBe("no_recent_traffic");
     expect(result.bySource.web.tracking).toBe("v2_pending");
-    // 200 + 100 / (200+100+300) = 50% covered (excluding web)
-    expect(result.coveragePct).toBeCloseTo(0.5, 2);
+    // Only ctwa is verified (200); instant_form is no_recent_traffic so its 100 is
+    // uncredited; web (300) is never covered. covered 200 / total 600 = 33%.
+    expect(result.coveragePct).toBeCloseTo(0.333, 2);
+  });
+
+  it("uncredits a source with no recent leads, so a zero-lead account abstains", async () => {
+    const adsClient = {
+      listCampaigns: vi
+        .fn()
+        .mockResolvedValue([{ id: "c1", destination_type: "WHATSAPP", spend: 500 }]),
+    };
+    const intakeStore = { hasRecentLead: vi.fn().mockResolvedValue(false) };
+    const validator = new CoverageValidator({ adsClient, intakeStore });
+    const result = await validator.validate({ orgId: "o1", accountId: "a1" });
+
+    expect(result.bySource.ctwa.tracking).toBe("no_recent_traffic");
+    // No verified tracked source -> covered spend is 0 -> the gate abstains.
+    expect(result.coveragePct).toBe(0);
+    expect(isCoverageSufficient(result)).toBe(false);
   });
 });
 

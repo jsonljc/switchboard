@@ -63,8 +63,16 @@ export class CoverageValidator {
       const recent = await this.deps.intakeStore.hasRecentLead(source, 7);
       bySource[source].tracking = recent ? "verified" : "no_recent_traffic";
     }
-    const coveredSpend = bySource.ctwa.spend + bySource.instant_form.spend;
-    const totalSpend = coveredSpend + bySource.web.spend;
+    // Covered = spend on a source whose conversion tracking is VERIFIED (recent
+    // leads present). A source with spend but no recent leads ("no_recent_traffic")
+    // is a blind spot: Riley would optimize against conversions it cannot see, so
+    // its spend is uncredited and the gate abstains. `web` is always uncredited
+    // (v2_pending: no funnel). This is what makes hasRecentLead load-bearing; the
+    // abstention message ("until conversion tracking is verified") already promised it.
+    const coveredSpend =
+      (bySource.ctwa.tracking === "verified" ? bySource.ctwa.spend : 0) +
+      (bySource.instant_form.tracking === "verified" ? bySource.instant_form.spend : 0);
+    const totalSpend = bySource.ctwa.spend + bySource.instant_form.spend + bySource.web.spend;
     return {
       bySource,
       coveragePct: totalSpend > 0 ? coveredSpend / totalSpend : 0,
