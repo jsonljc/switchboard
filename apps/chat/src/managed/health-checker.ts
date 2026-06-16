@@ -172,7 +172,7 @@ async function checkSlack(botToken: string): Promise<boolean> {
 
 async function checkWhatsApp(token: string, phoneNumberId: string): Promise<boolean> {
   try {
-    const res = await fetch(`https://graph.facebook.com/v17.0/${phoneNumberId}`, {
+    const res = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}`, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(10_000),
     });

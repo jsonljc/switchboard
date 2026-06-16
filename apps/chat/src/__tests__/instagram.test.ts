@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { InstagramAdapter } from "../adapters/instagram.js";
 
 describe("InstagramAdapter", () => {
@@ -400,6 +400,31 @@ describe("InstagramAdapter", () => {
       expect(msg!.metadata).not.toHaveProperty("sourceAdId");
       expect(msg!.metadata).not.toHaveProperty("utmSource");
     });
+  });
+});
+
+describe("InstagramAdapter: default API version", () => {
+  const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      text: async () => "",
+    } as Response);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("uses v21.0 in the send URL when no apiVersion is provided", async () => {
+    const a = new InstagramAdapter({ pageAccessToken: "tok", channel: "instagram" });
+    await a.sendTextReply("user_1", "hello");
+    const calledUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
+    expect(calledUrl).toContain("/v21.0/");
   });
 });
 

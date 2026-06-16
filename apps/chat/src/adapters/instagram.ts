@@ -81,7 +81,7 @@ export class InstagramAdapter implements ChannelAdapter {
     this.pageAccessToken = config.pageAccessToken;
     this.appSecret = config.appSecret ?? null;
     this.verifyToken = config.verifyToken ?? null;
-    this.apiVersion = config.apiVersion ?? "v17.0";
+    this.apiVersion = config.apiVersion ?? "v21.0";
     this.rateLimiter = new MetaPlatformRateLimiter();
   }
 
