@@ -173,6 +173,8 @@ export * from "./riley-budget-execution.js";
 
 // Reports v1 view-model (operator deep-dive surface)
 export * from "./reports/v1.js";
+// Weekly owner-report digest (Ledger-lite v1 delivery content model)
+export * from "./reports/weekly-digest.js";
 
 // Claim classifier (Layer 2 classifier output types — Alex medspa governance)
 export * from "./claim-classifier.js";
