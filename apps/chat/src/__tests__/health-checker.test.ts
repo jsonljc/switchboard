@@ -162,4 +162,31 @@ describe("runHealthCheck — transition matrix", () => {
 
     expect(webhookCallCount()).toBe(0);
   });
+
+  it("checkWhatsApp uses v21.0 in the Graph API URL", async () => {
+    vi.doMock("@switchboard/db", () => ({
+      PrismaConnectionStore: vi.fn().mockImplementation(() => ({
+        getById: vi.fn().mockResolvedValue({
+          credentials: { token: "wa-token", phoneNumberId: "pn-123" },
+        }),
+      })),
+    }));
+
+    fetchMock.mockImplementation(async (_url: string) => {
+      return { ok: true, status: 200, statusText: "OK", json: async () => ({ ok: true }) };
+    });
+
+    const prisma = makePrisma([
+      { id: "ch-wa", channel: "whatsapp", status: "active", connectionId: "c-wa" },
+    ]);
+
+    const { runHealthCheck } = await import("../managed/health-checker.js");
+    await runHealthCheck(prisma as never);
+
+    const graphCalls = fetchMock.mock.calls
+      .map((args) => String(args[0] ?? ""))
+      .filter((url) => url.startsWith("https://graph.facebook.com/"));
+    expect(graphCalls.length).toBeGreaterThan(0);
+    expect(graphCalls[0]).toContain("/v21.0/");
+  });
 });
