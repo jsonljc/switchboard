@@ -15,12 +15,19 @@ function makeStore(opts: {
   leadsPerWeeklyBucket?: number[];
   leadsPerDailyBucket?: number[];
   bookingsThisWeek?: number;
+  adAttributedBookings?: number;
 }): MetricsSignalStore {
   return {
     countBookingsCreated: vi.fn(async ({ from, to }) => {
       const week = buildWeekContext(WED_NOW, TZ);
       if (from.getTime() === week.weekStart.getTime() && to.getTime() === week.weekEnd.getTime())
         return opts.bookingsThisWeek ?? 0;
+      return 0;
+    }),
+    countAdAttributedBookings: vi.fn(async ({ from, to }) => {
+      const week = buildWeekContext(WED_NOW, TZ);
+      if (from.getTime() === week.weekStart.getTime() && to.getTime() === week.weekEnd.getTime())
+        return opts.adAttributedBookings ?? 0;
       return 0;
     }),
     countConversionsByType: vi.fn(async ({ from, to }) => {
@@ -269,7 +276,7 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
 
   it("roi rule 1: spendCents === null → 'Connect Meta Ads to see cost per booked'", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
-    const store = makeStore({ leadsThisWeek: 27, bookingsThisWeek: 4 });
+    const store = makeStore({ leadsThisWeek: 27, adAttributedBookings: 4 });
     const vm = await buildRileyMetricsViewModel({
       orgId: "org-1",
       week,
@@ -284,9 +291,9 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
     });
   });
 
-  it("roi rule 2: spend present + zero bookings → 'No bookings attributed yet', comparator '—'", async () => {
+  it("roi rule 2: spend present + zero ad-attributed bookings → 'No bookings attributed yet', comparator '—'", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
-    const store = makeStore({ leadsThisWeek: 27, bookingsThisWeek: 0 });
+    const store = makeStore({ leadsThisWeek: 27, adAttributedBookings: 0 });
     (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(20000);
     const vm = await buildRileyMetricsViewModel({
       orgId: "org-1",
@@ -302,9 +309,9 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
     });
   });
 
-  it("roi rule 3: spend > 0 && bookings > 0 && targetCpbCents === null → '$N per booked', target '—'", async () => {
+  it("roi rule 3: spend > 0 && ad-attributed > 0 && targetCpbCents === null → '$N per booked', target 'target not set'", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
-    const store = makeStore({ leadsThisWeek: 50, bookingsThisWeek: 10 });
+    const store = makeStore({ leadsThisWeek: 50, adAttributedBookings: 10 });
     (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(20000);
     const vm = await buildRileyMetricsViewModel({
       orgId: "org-1",
@@ -316,13 +323,13 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
       degraded: true,
       degradedHint: "",
       label: "cost per booked",
-      comparator: { value: "$20 per booked", target: "—" },
+      comparator: { value: "$20 per booked", target: "target not set" },
     });
   });
 
   it("roi sub-dollar guard: cac rounds to 0 → '<$1 per booked', not '$0 per booked'", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
-    const store = makeStore({ leadsThisWeek: 100, bookingsThisWeek: 100 });
+    const store = makeStore({ leadsThisWeek: 100, adAttributedBookings: 100 });
     (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(99);
     const vm = await buildRileyMetricsViewModel({
       orgId: "org-1",
@@ -338,9 +345,9 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
     });
   });
 
-  it("roi rule 4 + units: spend > 0 && bookings > 0 && targetCpbCents=1000 → '$25 per booked' / 'target $10'", async () => {
+  it("roi rule 4 + units: spend > 0 && ad-attributed > 0 && targetCpbCents=1000 → '$25 per booked' / 'target $10'", async () => {
     const week = buildWeekContext(WED_NOW, TZ);
-    const store = makeStore({ leadsThisWeek: 80, bookingsThisWeek: 5 });
+    const store = makeStore({ leadsThisWeek: 80, adAttributedBookings: 5 });
     (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(12345);
     const vm = await buildRileyMetricsViewModel({
       orgId: "org-1",
@@ -356,6 +363,39 @@ describe("buildRileyMetricsViewModel — tiles + roi (B.2b)", () => {
       label: "cost per booked",
       comparator: { value: "$25 per booked", target: "target $10" },
     });
+  });
+
+  it("CAC denominator is AD-ATTRIBUTED bookings, not all org bookings (D8-3)", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    // 42 total org bookings (Alex's organic dominate), only 2 ad-attributed to Riley.
+    const store = makeStore({ leadsThisWeek: 60, bookingsThisWeek: 42, adAttributedBookings: 2 });
+    (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(40000); // $400
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: { avgValueCents: null, targetCpbCents: 5000 },
+    });
+    // $400 / 2 ad-attributed = $200, NOT $400 / 42 which is about $10.
+    expect(vm.roi).toEqual({
+      degraded: true,
+      degradedHint: "",
+      label: "cost per booked",
+      comparator: { value: "$200 per booked", target: "target $50" },
+    });
+  });
+
+  it("zero ad-attributed bookings reads 'No bookings attributed yet' even if Alex booked organically", async () => {
+    const week = buildWeekContext(WED_NOW, TZ);
+    const store = makeStore({ leadsThisWeek: 60, bookingsThisWeek: 30, adAttributedBookings: 0 }); // Alex booked 30
+    (store.getMetaSpendCents as ReturnType<typeof vi.fn>).mockResolvedValue(40000);
+    const vm = await buildRileyMetricsViewModel({
+      orgId: "org-1",
+      week,
+      store,
+      targets: { avgValueCents: null, targetCpbCents: 5000 },
+    });
+    expect(vm.roi).toMatchObject({ degradedHint: "No bookings attributed yet" });
   });
 
   it("preserves the flat-shape qualifiedPct=0 placeholder for backward compat", async () => {
@@ -384,6 +424,7 @@ describe("voice divergence (Alex vs Riley)", () => {
           if (from.getTime() === week.prevWeekStart.getTime()) return 9;
           return 0;
         }),
+        countAdAttributedBookings: vi.fn(async () => 0),
         countConversionsByType: vi.fn(async () => 0),
         getMetaSpendCents: vi.fn(async () => null),
         countCurrentlyAtStageUpdatedInWindow: vi.fn(async () => 0),
@@ -396,6 +437,7 @@ describe("voice divergence (Alex vs Riley)", () => {
       week,
       store: {
         countBookingsCreated: vi.fn(async () => 0),
+        countAdAttributedBookings: vi.fn(async () => 0),
         countConversionsByType: vi.fn(async ({ from }) => {
           if (from.getTime() === week.weekStart.getTime()) return 14;
           if (from.getTime() === week.prevWeekStart.getTime()) return 9;

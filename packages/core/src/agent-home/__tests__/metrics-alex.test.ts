@@ -33,6 +33,7 @@ function makeStore(overrides?: {
       if (dailyIdx >= 0) return 0;
       throw new Error(`unexpected from=${from.toISOString()} (call #${bookingCalls})`);
     }),
+    countAdAttributedBookings: vi.fn(async () => 0),
     countConversionsByType: vi.fn(async ({ from, to }) => {
       if (overrides?.leadsByRange) {
         return overrides.leadsByRange(from, to);

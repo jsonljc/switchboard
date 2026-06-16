@@ -105,6 +105,10 @@ function buildPrismaMock() {
       count: async () => 0,
       findFirst: async () => null,
     },
+    // Riley's CAC denominator counts ad-attributed booked conversions.
+    conversionRecord: {
+      count: async () => 0,
+    },
   };
 }
 

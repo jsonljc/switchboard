@@ -9,6 +9,7 @@ const DEFAULT_TARGETS = { avgValueCents: null, targetCpbCents: null };
 function makeStore(): MetricsSignalStore {
   return {
     countBookingsCreated: vi.fn(async () => 0),
+    countAdAttributedBookings: vi.fn(async () => 0),
     countConversionsByType: vi.fn(async () => 0),
     getMetaSpendCents: vi.fn(async () => null),
     countCurrentlyAtStageUpdatedInWindow: vi.fn(async () => 0),

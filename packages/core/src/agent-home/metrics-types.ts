@@ -100,6 +100,14 @@ export interface MetricsSignalStore {
     to: Date;
   }): Promise<number>;
 
+  /**
+   * Count of booked conversions in the window that carry ad/source attribution
+   * (Riley's CAC denominator). Distinct from countBookingsCreated, which counts
+   * ALL org bookings (Alex's hero). Only ad-attributed bookings divide Riley's
+   * spend; organic bookings carry no source and must not flatter Riley's CAC.
+   */
+  countAdAttributedBookings(input: { orgId: string; from: Date; to: Date }): Promise<number>;
+
   countConversionsByType(input: {
     orgId: string;
     type: string;

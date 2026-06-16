@@ -160,14 +160,22 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   const missionDataForProof = mission.data;
 
   // Riley's ROI proof = server-computed cost-per-booked comparator (single source of
-  // truth; the read-model owns the CAC math). Show only when a real value AND target
-  // exist — never gate on roi.degraded (Riley marks all ROI degraded), and never render
-  // a blank "— · target" line.
-  const hasRoiProof = !!roi && roi.comparator.value !== "—" && roi.comparator.target !== "—";
+  // truth; the read-model owns the CAC math AND the target state). Never gate on
+  // roi.degraded (Riley marks all ROI degraded), neutral ink only (never green/red).
+  // Three states:
+  //   value "—"                -> no proof line (no CAC value yet; stays hidden)
+  //   target "target not set"  -> show the value alone + an explicit, muted no-target hint
+  //   real value + real target -> show the joined "value · target" line
+  const rileyRoi = agentKey === "riley" && hero.kind === "ad-leads" && roi ? roi : null;
+  const rileyCac = rileyRoi && rileyRoi.comparator.value !== "—" ? rileyRoi.comparator.value : null;
+  const rileyTargetUnset = rileyRoi?.comparator.target === "target not set";
   const rileyRoiLine =
-    agentKey === "riley" && hero.kind === "ad-leads" && hasRoiProof
-      ? `${roi.comparator.value} · ${roi.comparator.target}`
-      : null;
+    rileyCac === null || !rileyRoi
+      ? null
+      : rileyTargetUnset
+        ? rileyCac
+        : `${rileyCac} · ${rileyRoi.comparator.target}`;
+  const showRileyNoTarget = rileyCac !== null && rileyTargetUnset;
 
   // Non-core nudge: shown when core is done (proof) but a secondary step/channel is still off
   const nudge = nonCoreNudge(missionDataForProof, agentKey);
@@ -189,6 +197,12 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
       </div>
       {/* ROI comparator — neutral ink only, never green/red */}
       {rileyRoiLine && <p className={styles.heroComp}>{rileyRoiLine}</p>}
+      {/* No CAC target configured — explicit, muted, actionable; never a blank "value · " line */}
+      {showRileyNoTarget && (
+        <p className={styles.nonCoreNudge} data-testid="riley-no-target">
+          {"No target set. Add a cost-per-booked goal to track Riley's efficiency."}
+        </p>
+      )}
       {/* Non-core nudge — muted inline hint; never amber, never replaces proof hero */}
       {nudge && (
         <p className={styles.nonCoreNudge} data-testid="non-core-nudge">
