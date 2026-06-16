@@ -2,6 +2,7 @@ import type { AgentContext } from "@switchboard/sdk";
 import type { ContextBuilder } from "../memory/context-builder.js";
 import type { MiraCreativeReadModelReader } from "../creative-read-model/types.js";
 import type { FrontlineConversionLedgerReader } from "./builders/frontline-conversion.js";
+import type { PlaybookReader } from "../conversation-lifecycle/qualification/types.js";
 
 /**
  * The DeploymentMemory subset the mira builder reads (slice-4 spec 3.3).
@@ -68,6 +69,14 @@ export interface SkillStores {
   businessFactsStore?: {
     get(organizationId: string): Promise<unknown>;
   };
+  /**
+   * D3-1: OPTIONAL org playbook reader. When provided, alexBuilder renders the
+   * playbook's bookable service NAMES into BOOKABLE_SERVICES so Alex emits a
+   * `service` the booked-value resolver matches. Optional for back-compat: absent
+   * -> BOOKABLE_SERVICES renders "" and Alex falls back to free text (the resolver
+   * abstains, the safe default).
+   */
+  playbookReader?: PlaybookReader;
   /** Slice-4 mira brain: taste + revenue-proven memory read at brief time. */
   deploymentMemoryReader?: DeploymentMemoryHighConfidenceReader;
   /** Slice-4 mira brain: measured performance + pipeline counts at brief time. */

@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { ContextResolverImpl, renderBusinessFacts } from "../context-resolver.js";
-import type { KnowledgeKind, BusinessFacts } from "@switchboard/schemas";
+import {
+  ContextResolverImpl,
+  renderBusinessFacts,
+  renderBookableServices,
+} from "../context-resolver.js";
+import type { KnowledgeKind, BusinessFacts, PlaybookService } from "@switchboard/schemas";
+import { resolveBookedValueCents } from "../tools/booking-value.js";
 import { ContextResolutionError } from "../types.js";
 
 function mockStore(
@@ -469,5 +474,86 @@ describe("renderBusinessFacts — advanceBookingDays", () => {
     const facts = makeFacts();
     facts.bookingPolicies = { cancellationPolicy: "24 hours notice required" };
     expect(renderBusinessFacts(facts)).not.toContain("Advance booking");
+  });
+});
+
+function bookableSvc(o: Partial<PlaybookService> & { id: string; name: string }): PlaybookService {
+  return {
+    id: o.id,
+    name: o.name,
+    price: o.price,
+    duration: o.duration,
+    bookingBehavior: o.bookingBehavior ?? "ask_first",
+    status: o.status ?? "ready",
+    source: o.source ?? "manual",
+  };
+}
+
+describe("renderBookableServices (D3-1)", () => {
+  const services = [
+    bookableSvc({ id: "botox", name: "Botox", price: 300, status: "ready" }),
+    bookableSvc({ id: "filler", name: "Dermal Filler", price: 600, status: "check_this" }),
+    bookableSvc({ id: "consult", name: "Consultation", status: "ready" }), // unpriced bookable
+    bookableSvc({ id: "draft", name: "Unconfirmed Draft", price: 100, status: "missing" }),
+    bookableSvc({ id: "blank", name: "   ", price: 50, status: "ready" }), // blank name
+  ];
+
+  it("renders one bullet per confirmed, named service (trimmed names)", () => {
+    const out = renderBookableServices(services);
+    expect(out).toContain("- Botox");
+    expect(out).toContain("- Dermal Filler");
+    expect(out).toContain("- Consultation");
+  });
+
+  it("excludes status:missing entries and blank/whitespace names", () => {
+    const out = renderBookableServices(services);
+    expect(out).not.toContain("Unconfirmed Draft");
+    const bullets = out.split("\n");
+    expect(bullets).not.toContain("- "); // no blank-name bullet
+    expect(bullets.filter((l) => l.startsWith("- "))).toHaveLength(3);
+  });
+
+  it("dedupes by case-insensitive trimmed name, keeping the first", () => {
+    const dup = [
+      bookableSvc({ id: "a", name: "Botox", price: 300 }),
+      bookableSvc({ id: "b", name: " botox ", price: 999 }),
+    ];
+    expect(renderBookableServices(dup)).toBe("- Botox");
+  });
+
+  it("returns empty string for an empty list or an all-excluded list", () => {
+    expect(renderBookableServices([])).toBe("");
+    expect(renderBookableServices([bookableSvc({ id: "m", name: "X", status: "missing" })])).toBe(
+      "",
+    );
+  });
+
+  it("ALIGNMENT SEAM: every rendered name exists in the resolver's services (priced -> value)", () => {
+    const out = renderBookableServices(services);
+    const renderedNames = out.split("\n").map((l) => l.replace(/^- /, ""));
+    expect(resolveBookedValueCents({ service: "Botox", services })).toBe(30000);
+    expect(resolveBookedValueCents({ service: "Dermal Filler", services })).toBe(60000);
+    // an unpriced bookable still MATCHES the resolver (abstains on price, never "absent").
+    expect(resolveBookedValueCents({ service: "Consultation", services })).toBeNull();
+    // structural guarantee: no name Alex is shown is a resolver non-match.
+    for (const name of renderedNames) {
+      const match = services.find(
+        (s) => s.id === name || s.name.trim().toLowerCase() === name.toLowerCase(),
+      );
+      expect(match, `rendered name "${name}" must exist in the resolver's services`).toBeDefined();
+    }
+  });
+
+  it("ALIGNMENT SEAM: duplicate names — renderer first-wins agrees with resolver first-wins", () => {
+    // 2B hardening: an org with two same-named services at different prices. The
+    // renderer shows ONE "- Botox" (first), and the resolver's `.find` also takes the
+    // FIRST match — so they agree on WHICH real price stamps. Never a fabricated price;
+    // the renderer must never diverge from the resolver's match order.
+    const collide = [
+      bookableSvc({ id: "botox_a", name: "Botox", price: 300 }),
+      bookableSvc({ id: "botox_b", name: "Botox", price: 600 }),
+    ];
+    expect(renderBookableServices(collide)).toBe("- Botox");
+    expect(resolveBookedValueCents({ service: "Botox", services: collide })).toBe(30000);
   });
 });
