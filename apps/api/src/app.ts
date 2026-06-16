@@ -755,7 +755,12 @@ export async function buildServer() {
     intentRegistry,
     modeRegistry,
     governanceGate: platformGovernanceGate,
-    deploymentResolver: resolveAuthoritativeDeployment(deploymentResolver),
+    deploymentResolver: resolveAuthoritativeDeployment(deploymentResolver, {
+      // Non-skill operator_mutation intents (cron/owner) resolve to a platform-direct context
+      // instead of a strict skillSlug lookup that throws deployment_not_found for their intent prefix.
+      isOperatorMutationIntent: (intent) =>
+        intentRegistry.lookup(intent)?.defaultMode === "operator_mutation",
+    }),
     traceStore: workTraceStore,
     lifecycleService: lifecycleService ?? undefined,
     entitlementResolver: billingEntitlementResolver,
