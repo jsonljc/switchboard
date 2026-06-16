@@ -203,12 +203,4 @@ export class SwitchboardAgentsClient extends SwitchboardMarketplaceClient {
       orgConfig: { onboardingComplete: boolean; provisioningStatus: string };
     }>(`/api/agents/go-live/${agentId}`, { method: "PUT" });
   }
-
-  // Operator
-  async sendOperatorCommand(body: { rawInput: string; channel?: string; operatorId?: string }) {
-    return this.request("/api/operator/command", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-  }
 }

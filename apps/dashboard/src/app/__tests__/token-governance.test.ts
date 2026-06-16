@@ -360,15 +360,14 @@ describe("token governance — Tailwind shadow utilities use the ladder (EL1)", 
 
   // Built-in Tailwind elevation utilities default to cool rgb(0 0 0). They are a
   // documented EL1 residual on these out-of-scope surfaces ONLY (marketing
-  // landing, the flag-hidden operator-chat widget #825, settings #826, the
-  // dev-only panel, and small non-overlay primitives). New authed surfaces must
-  // use the ladder via shadow-[var(--shadow-N)].
+  // landing, settings #826, the dev-only panel, and small non-overlay
+  // primitives). New authed surfaces must use the ladder via
+  // shadow-[var(--shadow-N)].
   const BUILTIN_RESIDUALS = [
     "components/landing/",
     "components/onboarding/",
     "components/dev/",
     "app/(auth)/settings/",
-    "components/operator-chat/",
     "components/ui/switch.tsx",
     "components/ui/tabs.tsx",
   ];

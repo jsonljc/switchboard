@@ -108,7 +108,6 @@ All proxy routes enforce NextAuth session via `requireDashboardSession()` and ro
 - `GET /api/dashboard/roi` — proxy to `GET /:orgId/roi/summary`. File: apps/dashboard/src/app/api/dashboard/roi/route.ts
 - `POST /api/dashboard/playbook` — proxy to playbook routes. File: apps/dashboard/src/app/api/dashboard/playbook/route.ts
 - `POST /api/dashboard/simulate` — proxy to simulate route. File: apps/dashboard/src/app/api/dashboard/simulate/route.ts
-- `GET /api/dashboard/operator-chat` — server-sent events for operator chat. File: apps/dashboard/src/app/api/dashboard/operator-chat/route.ts
 - `GET /api/dashboard/health` — proxy to health check. File: apps/dashboard/src/app/api/dashboard/health/route.ts
 
 ### Organizations
@@ -273,9 +272,8 @@ Conversation/decision lists support `limit` and `offset` query parameters.
 
 1. **Unused Playbook Proxy** — `POST /api/dashboard/playbook` proxies upstream but UI integration unclear.
 2. **Simulate Route** — `POST /api/dashboard/simulate` for testing agent flows; minimal documentation.
-3. **Operator Chat** — `GET /api/dashboard/operator-chat` (SSE) is mapped but no dedicated hook.
-4. **Website Scan Hook** — `useWebsiteScan()` exists but no page integration found.
-5. **Ad Optimizer** — `useAdOptimizer()` and `ad-optimizer.ts` route exist but status unknown.
+3. **Website Scan Hook** — `useWebsiteScan()` exists but no page integration found.
+4. **Ad Optimizer** — `useAdOptimizer()` and `ad-optimizer.ts` route exist but status unknown.
 
 ---
 
