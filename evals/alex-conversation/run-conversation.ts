@@ -22,6 +22,8 @@ import {
   createBusinessFactsStore,
   createStubBusinessFacts,
   createStubContextStore,
+  createStubPlaybook,
+  createPlaybookReader,
 } from "./stub-context-store.js";
 import { createTemp0Adapter } from "./temp0-adapter.js";
 
@@ -159,6 +161,12 @@ export async function resolveParameters(
   const config = fixture.businessFacts === "absent" ? null : createStubBusinessFacts();
   const businessFactsStore = createBusinessFactsStore(config);
 
+  // D3-1: drive Alex's BOOKABLE_SERVICES from a (real PrismaPlaybookReader over) stub
+  // playbook when the fixture opts in. "absent" (default) -> no playbook -> "" (free-text
+  // fallback), so every pre-existing fixture is byte-identical.
+  const onboardingPlaybook = fixture.playbook === "operator" ? createStubPlaybook() : null;
+  const playbookReader = createPlaybookReader(onboardingPlaybook);
+
   // Stub the builder's other stores. A pre-existing active opportunity is returned
   // so the builder skips its auto-create branch (which needs a contactStore.create).
   const builderStores = {
@@ -186,6 +194,7 @@ export async function resolveParameters(
       ) => [],
     },
     businessFactsStore,
+    playbookReader,
   };
 
   const ctx = { persona } as unknown as Parameters<typeof alexBuilder>[0];

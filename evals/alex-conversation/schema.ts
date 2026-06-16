@@ -50,6 +50,14 @@ export const ConversationFixtureSchema = z
      * duplicate/slot-taken + governed-close fixtures. See mock-tools.ts createMockTools.
      */
     mockBooking: z.enum(["success", "pending", "slot_taken"]).optional(),
+    /**
+     * D3-1: which onboarding-playbook state to drive Alex's BOOKABLE_SERVICES with.
+     * "absent" (default) = no playbook → BOOKABLE_SERVICES renders "" (free-text
+     * fallback, resolver abstains). "operator" = a priced canonical medspa playbook is
+     * wired so Alex can book using the exact bookable-service name. See
+     * run-conversation.ts resolveParameters + stub-context-store.ts createStubPlaybook.
+     */
+    playbook: z.enum(["operator", "absent"]).default("absent"),
     turns: z.array(z.union([LeadTurnSchema, AlexTurnSchema])).min(2),
     /** Optional funnel/agent stage (matrix coverage). Backward compatible. */
     stage: ConversationStageSchema.optional(),

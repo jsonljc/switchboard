@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, parse } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PrismaBusinessFactsStore } from "@switchboard/db";
-import type { BusinessFacts, KnowledgeKind } from "@switchboard/schemas";
+import { PrismaBusinessFactsStore, PrismaPlaybookReader } from "@switchboard/db";
+import type { BusinessFacts, KnowledgeKind, Playbook } from "@switchboard/schemas";
 
 /**
  * A single active knowledge row, matching the shape `ContextResolverImpl`
@@ -165,4 +165,60 @@ export function createBusinessFactsStore(config: unknown | null): PrismaBusiness
     },
   };
   return new PrismaBusinessFactsStore(prisma as never);
+}
+
+/**
+ * D3-1: a minimal PlaybookSchema-valid onboarding playbook with PRICED canonical
+ * services, used to drive Alex's BOOKABLE_SERVICES in a booking eval. The names are
+ * the org's canonical bookable vocabulary (the same store the booked-value resolver
+ * keys on); a fixture's lead may phrase a request loosely ("anti-wrinkle jabs") and
+ * Alex must map it to one of these exact names.
+ */
+export function createStubPlaybook(): Playbook {
+  const base = { status: "ready" as const, source: "manual" as const };
+  return {
+    businessIdentity: {
+      name: "Acme Medspa",
+      category: "medspa",
+      tagline: "",
+      location: "",
+      ...base,
+    },
+    services: [
+      { id: "botox", name: "Botox", price: 300, bookingBehavior: "ask_first", ...base },
+      { id: "filler", name: "Dermal Filler", price: 600, bookingBehavior: "ask_first", ...base },
+      {
+        id: "hydrafacial",
+        name: "HydraFacial",
+        price: 250,
+        bookingBehavior: "book_directly",
+        ...base,
+      },
+    ],
+    hours: { timezone: "Asia/Singapore", schedule: {}, afterHoursBehavior: "", ...base },
+    bookingRules: { leadVsBooking: "", ...base },
+    approvalMode: { ...base },
+    escalation: { triggers: [], toneBoundaries: "", ...base },
+    channels: { configured: [], ...base },
+  };
+}
+
+/**
+ * Build the REAL `PrismaPlaybookReader` over a hand-built mock Prisma (no DB) so the
+ * eval exercises the production read + `PlaybookSchema.safeParse` path, exactly the
+ * seam the live Alex turn uses (apps/api/src/bootstrap/skill-mode.ts:169 + :862).
+ * Mirrors `createBusinessFactsStore`.
+ *
+ * @param onboardingPlaybook The OrganizationConfig.onboardingPlaybook blob, or `null`
+ *   for "no playbook" → readForOrganization returns null → BOOKABLE_SERVICES = "".
+ */
+export function createPlaybookReader(onboardingPlaybook: unknown | null): PrismaPlaybookReader {
+  const prisma = {
+    organizationConfig: {
+      // PrismaPlaybookReader.readForOrganization selects `onboardingPlaybook` by org id.
+      findUnique: async (_args: { where: { id: string }; select: { onboardingPlaybook: true } }) =>
+        onboardingPlaybook === null ? null : { onboardingPlaybook },
+    },
+  };
+  return new PrismaPlaybookReader(prisma as never);
 }
