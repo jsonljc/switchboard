@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { WorkUnit } from "@switchboard/core/platform";
+import { ExecutionModeRegistry, IntentRegistry } from "@switchboard/core/platform";
 import type { ConsentService, OpportunityStore } from "@switchboard/core";
 import {
   ConsentJurisdictionMismatch,
@@ -10,12 +11,16 @@ import {
 } from "@switchboard/core";
 import { OpportunityNotFoundError, type OpportunityBoardRow } from "@switchboard/core/lifecycle";
 import {
+  bootstrapOperatorIntents,
   buildClearConsentHandler,
   buildGrantConsentHandler,
   buildRevokeConsentHandler,
   buildTransitionOpportunityStageHandler,
+  DELIVER_WEEKLY_REPORT_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
+  type WeeklyReportDeliveryWriter,
 } from "../operator-intents.js";
+import type { DeliveryResult } from "../../services/reports/weekly-report-delivery.js";
 
 function mkBoardRow(overrides: Partial<OpportunityBoardRow> = {}): OpportunityBoardRow {
   return {
@@ -418,5 +423,61 @@ describe("buildClearConsentHandler", () => {
     await expect(
       handler.execute(makeConsentWorkUnit("operator.clear_consent", clearParams)),
     ).rejects.toThrow("system: bus disconnected");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ledger.deliver_weekly_report: schedule-trigger governance registration
+// ---------------------------------------------------------------------------
+// LOAD-BEARING: this is the only operator intent allowed on the "schedule"
+// trigger. The shared registerOperatorIntent helper hardcodes ["api"] by
+// default, which would make the weekly cron's submit (trigger "schedule") fail
+// the trigger_not_allowed gate in PlatformIngress. This test proves the explicit
+// ["schedule", "api"] list reaches the IntentRegistry, that "chat" stays denied,
+// and that the handler is wired into the mode so a submit would actually execute.
+// ---------------------------------------------------------------------------
+describe("bootstrapOperatorIntents: ledger.deliver_weekly_report registration", () => {
+  function makeWeeklyWriter(): WeeklyReportDeliveryWriter {
+    return {
+      deliverReport: vi.fn<(input: { orgId: string; actorId: string }) => Promise<DeliveryResult>>(
+        () => Promise.resolve({ status: "delivered", recipientCount: 1 }),
+      ),
+    };
+  }
+
+  it("registers the schedule + api triggers (and denies chat) when a writer is provided", () => {
+    const intentRegistry = new IntentRegistry();
+    const modeRegistry = new ExecutionModeRegistry();
+
+    bootstrapOperatorIntents({
+      intentRegistry,
+      modeRegistry,
+      weeklyReportDeliveryWriter: makeWeeklyWriter(),
+    });
+
+    // The schedule leg the shared ["api"]-only default would otherwise block.
+    expect(intentRegistry.validateTrigger(DELIVER_WEEKLY_REPORT_INTENT, "schedule")).toBe(true);
+    expect(intentRegistry.validateTrigger(DELIVER_WEEKLY_REPORT_INTENT, "api")).toBe(true);
+    expect(intentRegistry.validateTrigger(DELIVER_WEEKLY_REPORT_INTENT, "chat")).toBe(false);
+
+    // The registration exists and stays system_auto_approved + non-spend-bearing.
+    const registration = intentRegistry.lookup(DELIVER_WEEKLY_REPORT_INTENT);
+    expect(registration).toBeDefined();
+    expect(registration?.approvalMode).toBe("system_auto_approved");
+    expect(registration?.spendBearing ?? false).toBe(false);
+    expect(registration?.executor).toEqual({ mode: "operator_mutation" });
+
+    // The handler is wired into the operator-mutation mode (a submit would dispatch it).
+    expect(modeRegistry.hasMode("operator_mutation")).toBe(true);
+  });
+
+  it("does NOT register the intent when no writer is provided (default-off wiring)", () => {
+    const intentRegistry = new IntentRegistry();
+    const modeRegistry = new ExecutionModeRegistry();
+
+    bootstrapOperatorIntents({ intentRegistry, modeRegistry });
+
+    expect(intentRegistry.lookup(DELIVER_WEEKLY_REPORT_INTENT)).toBeUndefined();
+    expect(intentRegistry.validateTrigger(DELIVER_WEEKLY_REPORT_INTENT, "schedule")).toBe(false);
   });
 });

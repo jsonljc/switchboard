@@ -129,4 +129,58 @@ describe("resolveAuthoritativeDeployment", () => {
     expect(ctx.deploymentId).toBe("dep-creative");
     expect(ctx.skillSlug).toBe("creative");
   });
+
+  it("resolves operator_mutation intents to platform-direct, bypassing the throwing slug lookup", async () => {
+    // Simulate production: the real resolver THROWS for an intent whose prefix has no seeded
+    // deployment (e.g. "ledger" / "receipt" / "booking"). Operator mutations are not skill-bound and
+    // are system_auto_approved (deployment trust is never consulted), so they must resolve to a
+    // platform-direct context instead of failing deployment_not_found and going inert in prod.
+    let lookupCalled = false;
+    const throwingResolver: DeploymentResolver = {
+      resolveByOrgAndSlug: async () => {
+        lookupCalled = true;
+        throw new Error("No active deployment found for org=org-1 slug=ledger");
+      },
+      resolveByDeploymentId: async () => makeResult(),
+      resolveByChannelToken: async () => makeResult(),
+    };
+    const authoritative = resolveAuthoritativeDeployment(throwingResolver, {
+      isOperatorMutationIntent: (intent) => intent === "ledger.deliver_weekly_report",
+    });
+
+    const ctx = await authoritative.resolve({
+      organizationId: "org-1",
+      intent: "ledger.deliver_weekly_report",
+    } as unknown as CanonicalSubmitRequest);
+
+    expect(ctx.deploymentId).toBe("platform-direct");
+    expect(ctx.skillSlug).toBe("ledger");
+    expect(ctx.trustLevel).toBe("supervised");
+    // The strict slug lookup was bypassed entirely (no throw, no deployment_not_found).
+    expect(lookupCalled).toBe(false);
+  });
+
+  it("still resolves skill intents via the deployment lookup when the predicate is false", async () => {
+    let resolvedSlug: string | undefined;
+    const result = makeResult({ skillSlug: "alex", deploymentId: "dep-alex" });
+    const resolver: DeploymentResolver = {
+      resolveByOrgAndSlug: async (_org: string, slug: string) => {
+        resolvedSlug = slug;
+        return result;
+      },
+      resolveByDeploymentId: async () => result,
+      resolveByChannelToken: async () => result,
+    };
+    const authoritative = resolveAuthoritativeDeployment(resolver, {
+      isOperatorMutationIntent: () => false,
+    });
+
+    const ctx = await authoritative.resolve({
+      organizationId: "org-1",
+      intent: "alex.conversation",
+    } as unknown as CanonicalSubmitRequest);
+
+    expect(resolvedSlug).toBe("alex");
+    expect(ctx.deploymentId).toBe("dep-alex");
+  });
 });

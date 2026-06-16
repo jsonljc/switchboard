@@ -755,7 +755,12 @@ export async function buildServer() {
     intentRegistry,
     modeRegistry,
     governanceGate: platformGovernanceGate,
-    deploymentResolver: resolveAuthoritativeDeployment(deploymentResolver),
+    deploymentResolver: resolveAuthoritativeDeployment(deploymentResolver, {
+      // Non-skill operator_mutation intents (cron/owner) resolve to a platform-direct context
+      // instead of a strict skillSlug lookup that throws deployment_not_found for their intent prefix.
+      isOperatorMutationIntent: (intent) =>
+        intentRegistry.lookup(intent)?.defaultMode === "operator_mutation",
+    }),
     traceStore: workTraceStore,
     lifecycleService: lifecycleService ?? undefined,
     entitlementResolver: billingEntitlementResolver,
@@ -900,6 +905,60 @@ export async function buildServer() {
     const bookingAttendanceStore = new PrismaBookingStore(prismaClient);
     // The governed write-side store for receipt.reconcile_booking (override / flag / resolve).
     const reconcileBookingStore = new PrismaReceiptedBookingStore(prismaClient);
+
+    // Ledger-lite slice 2: the weekly owner-report delivery writer. Constructed only
+    // when the report projection stores are present (they are decorated in the same
+    // prismaClient gate above). When undefined, the ledger.deliver_weekly_report intent
+    // is not registered (mirrors the conditional-decoration pattern; the cron stays dark).
+    let weeklyReportDeliveryWriter:
+      | import("./bootstrap/operator-intents.js").WeeklyReportDeliveryWriter
+      | undefined;
+    if (app.reportStores && app.reportCacheStore) {
+      const reportStoresForDelivery = app.reportStores;
+      const reportCacheForDelivery = app.reportCacheStore;
+      const { createWeeklyReportDeliveryService } =
+        await import("./services/reports/weekly-report-delivery.js");
+      const { assembleWeeklyReport } = await import("./services/reports/assemble-weekly-report.js");
+      const { resolveOwnerReportRecipients } =
+        await import("./services/reports/weekly-report-recipients.js");
+      const { createResendEmailSender } = await import("./services/notifications/send-email.js");
+      const { getEscalationConfig } = await import("./services/escalation-config-service.js");
+      const { createInMemoryBaselineStore } = await import("@switchboard/core/reports");
+      const baselineForDelivery = app.baselineStore ?? createInMemoryBaselineStore();
+
+      weeklyReportDeliveryWriter = createWeeklyReportDeliveryService({
+        resolveRecipients: (orgId: string) =>
+          resolveOwnerReportRecipients(
+            {
+              getConfig: (id: string) => getEscalationConfig(prismaClient, id),
+              listVerifiedUserEmails: async (id: string) =>
+                (
+                  await prismaClient.dashboardUser.findMany({
+                    where: { organizationId: id, emailVerified: { not: null } },
+                    select: { email: true },
+                  })
+                ).map((u) => u.email),
+            },
+            orgId,
+          ),
+        assembleReport: (orgId: string, now: Date) =>
+          assembleWeeklyReport(
+            {
+              stores: reportStoresForDelivery,
+              reportCache: reportCacheForDelivery,
+              baselineStore: baselineForDelivery,
+            },
+            orgId,
+            now,
+          ),
+        sendEmail: createResendEmailSender({
+          apiKey: process.env["RESEND_API_KEY"],
+          from: process.env["EMAIL_FROM"] ?? "noreply@switchboard.app",
+        }),
+        dashboardUrl: process.env["DASHBOARD_URL"] ?? "",
+      });
+    }
+
     bootstrapOperatorIntents({
       intentRegistry,
       modeRegistry,
@@ -926,6 +985,7 @@ export async function buildServer() {
       // Same store: an "attended" outcome promotes the booking's calendar receipt booked -> held.
       receiptHeldPromoter: prismaReceipts,
       reconcileBookingWriter: reconcileBookingStore,
+      weeklyReportDeliveryWriter,
       logger: app.log,
     });
   }
