@@ -87,18 +87,23 @@ export function renderBusinessFacts(facts: BusinessFacts): string {
  * must use for the calendar-book `service` argument (D3-1 booked-value activation).
  *
  * This reads the SAME store the booked-value resolver keys on (`resolveBookedValueCents`
- * over `OrganizationConfig.onboardingPlaybook.services`), so any name shown here matches
- * that resolver by name (it normalizes case + trim). Names ONLY: `service` is
- * customer-facing (the booking confirmation text + the calendar event), and prices stay
- * sourced from BUSINESS_FACTS to avoid a second, divergent price source in the prompt.
+ * over `OrganizationConfig.onboardingPlaybook.services`). The resolver matches the booked
+ * string by `id` OR case-insensitive trimmed `name` (id checked first). Rendered lines are
+ * real service NAMES, so a name Alex copies resolves by the name branch and prices the
+ * booking. Names ONLY: `service` is customer-facing (the booking confirmation text + the
+ * calendar event), and prices stay sourced from BUSINESS_FACTS to avoid a second, divergent
+ * price source in the prompt.
  *
  * Dedup + order: entries are kept in playbook order, deduped by case-insensitive trimmed
- * name keeping the FIRST — which MUST agree with the resolver's first-match (`.find`) so a
+ * name keeping the FIRST, which agrees with the resolver's first-match (`.find`) so a
  * same-name collision stamps one real, deterministic playbook price (never a fabricated
- * one). Excludes status:"missing" (incomplete/unconfirmed during onboarding) and blank
- * names. Returns "" when nothing renders, mirroring the empty BUSINESS_FACTS contract: the
- * prompt slot degrades to a blank line and Alex falls back to free text, so the resolver
- * abstains (the safe default).
+ * one). One accepted pathological case: if a DIFFERENT service's `id` exactly equals a
+ * rendered `name`, the resolver's id-first match wins and stamps that other service's
+ * (still real) price; ids are slugs and names are display strings, so this does not arise
+ * in practice and never fabricates a value. Excludes status:"missing" (incomplete or
+ * unconfirmed during onboarding) and blank names. Returns "" when nothing renders,
+ * mirroring the empty BUSINESS_FACTS contract: the prompt slot degrades to a blank line and
+ * Alex falls back to free text, so the resolver abstains (the safe default).
  *
  * Cross-store note: BUSINESS_FACTS (what Alex discusses with the customer) is a SEPARATE
  * store (`BusinessConfig.config.services`) from this playbook catalog. When their service

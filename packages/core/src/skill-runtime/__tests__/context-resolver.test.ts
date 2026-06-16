@@ -528,20 +528,35 @@ describe("renderBookableServices (D3-1)", () => {
     );
   });
 
-  it("ALIGNMENT SEAM: every rendered name exists in the resolver's services (priced -> value)", () => {
-    const out = renderBookableServices(services);
-    const renderedNames = out.split("\n").map((l) => l.replace(/^- /, ""));
-    expect(resolveBookedValueCents({ service: "Botox", services })).toBe(30000);
-    expect(resolveBookedValueCents({ service: "Dermal Filler", services })).toBe(60000);
-    // an unpriced bookable still MATCHES the resolver (abstains on price, never "absent").
-    expect(resolveBookedValueCents({ service: "Consultation", services })).toBeNull();
-    // structural guarantee: no name Alex is shown is a resolver non-match.
+  it("ALIGNMENT SEAM: each rendered priced name prices via the REAL resolver (no transform)", () => {
+    // Drive the production resolver with the EXACT strings the renderer emits. If the
+    // renderer ever transformed a name (a price suffix, a paraphrase), the resolver would
+    // return null instead of the price and this reds. This locks renderer-output is
+    // resolver-matchable for priced services, using the real resolver (not a test copy).
+    const priced = [
+      bookableSvc({ id: "botox", name: "Botox", price: 300, status: "ready" }),
+      bookableSvc({ id: "filler", name: "Dermal Filler", price: 600, status: "check_this" }),
+      bookableSvc({ id: "hydra", name: "HydraFacial", price: 250, status: "ready" }),
+    ];
+    const expected: Record<string, number> = {
+      Botox: 30000,
+      "Dermal Filler": 60000,
+      HydraFacial: 25000,
+    };
+    const renderedNames = renderBookableServices(priced)
+      .split("\n")
+      .map((l) => l.replace(/^- /, ""));
+    expect(renderedNames).toEqual(Object.keys(expected));
     for (const name of renderedNames) {
-      const match = services.find(
-        (s) => s.id === name || s.name.trim().toLowerCase() === name.toLowerCase(),
-      );
-      expect(match, `rendered name "${name}" must exist in the resolver's services`).toBeDefined();
+      expect(resolveBookedValueCents({ service: name, services: priced })).toBe(expected[name]);
     }
+  });
+
+  it("a rendered but UNPRICED service still matches the resolver (abstains on price, not 0)", () => {
+    const svcs = [bookableSvc({ id: "consult", name: "Consultation", status: "ready" })];
+    expect(renderBookableServices(svcs)).toBe("- Consultation");
+    // matched-but-unpriced resolves to null (never a fabricated 0), so booked value abstains.
+    expect(resolveBookedValueCents({ service: "Consultation", services: svcs })).toBeNull();
   });
 
   it("ALIGNMENT SEAM: duplicate names — renderer first-wins agrees with resolver first-wins", () => {
@@ -555,5 +570,21 @@ describe("renderBookableServices (D3-1)", () => {
     ];
     expect(renderBookableServices(collide)).toBe("- Botox");
     expect(resolveBookedValueCents({ service: "Botox", services: collide })).toBe(30000);
+  });
+
+  it("id-first match: a service whose id equals another's name stamps the id-match price (real, never fabricated)", () => {
+    // Accepted pathological shape documented in renderBookableServices: serviceA.id equals
+    // serviceB.name. The resolver checks id BEFORE name, so booking the NAME "deluxe"
+    // resolves to serviceA (id "deluxe", 300), not serviceB (name "deluxe", 600). Still a
+    // REAL playbook price, never fabricated. ids are slugs in practice so this does not
+    // arise; this test pins the behavior as intentional.
+    const collide = [
+      bookableSvc({ id: "deluxe", name: "Deluxe Facial", price: 300 }),
+      bookableSvc({ id: "x", name: "deluxe", price: 600 }),
+    ];
+    const out = renderBookableServices(collide);
+    expect(out).toContain("- Deluxe Facial");
+    expect(out).toContain("- deluxe");
+    expect(resolveBookedValueCents({ service: "deluxe", services: collide })).toBe(30000);
   });
 });
