@@ -21,6 +21,7 @@ export const CLEAR_CONSENT_INTENT = "operator.clear_consent";
 export const RECORD_REVENUE_INTENT = "operator.record_revenue";
 export const RECORD_ATTENDANCE_INTENT = "booking.record_attendance";
 export const RECONCILE_BOOKING_INTENT = "receipt.reconcile_booking";
+export const DELIVER_WEEKLY_REPORT_INTENT = "ledger.deliver_weekly_report";
 
 /**
  * Sentinel deployment ID used for admin-consent verdict context. The admin
@@ -60,4 +61,8 @@ export const OPERATOR_INTENT_ERROR_CODES = {
   // or a resolve_exception targeted a code outside the v1-supported set.
   RECEIPTED_BOOKING_NOT_ISSUED: "RECEIPTED_BOOKING_NOT_ISSUED",
   RECONCILE_UNSUPPORTED_CODE: "RECONCILE_UNSUPPORTED_CODE",
+  // ledger.deliver_weekly_report: no verified owner recipients resolved, so nothing was sent;
+  // or the email send leg failed / was not configured.
+  WEEKLY_REPORT_NO_RECIPIENTS: "WEEKLY_REPORT_NO_RECIPIENTS",
+  WEEKLY_REPORT_DELIVERY_FAILED: "WEEKLY_REPORT_DELIVERY_FAILED",
 } as const;

@@ -152,6 +152,11 @@ import {
   createMiraSelfBriefDispatch,
   createMiraSelfBriefWorker,
 } from "../services/cron/mira-self-brief.js";
+import {
+  createLedgerWeeklyReportDispatch,
+  createLedgerWeeklyReportWorker,
+} from "../services/cron/ledger-weekly-report.js";
+import { buildDeliverWeeklyReportSubmitRequest } from "../services/workflows/ledger-weekly-report-request.js";
 import { isAgentHomeAccessible } from "../lib/agent-home-access.js";
 import { createCreativeTasteSweep } from "../services/cron/creative-taste-sweep.js";
 import { createRevenueProvenPromotion } from "../services/cron/revenue-proven-promotion.js";
@@ -1237,6 +1242,44 @@ export async function registerInngest(
     warn: (msg: string) => app.log.warn(msg),
   });
 
+  // Ledger-lite slice 2: weekly owner-report delivery. Kill-switch:
+  // LEDGER_WEEKLY_REPORT_ENABLED=true to enable; default off so the deploy is dark
+  // until deliberately enabled. Low-risk Class-E failure contract on both halves.
+  // The worker submits the governed ledger.deliver_weekly_report through ingress;
+  // the operator-intents bootstrap only registers that intent when the report
+  // stores were present, so a submit into an unconfigured deploy fails closed.
+  const ledgerWeeklyReportDispatch = createLedgerWeeklyReportDispatch(
+    {
+      listActiveOrganizations: async () => {
+        const rows = await app.prisma!.agentDeployment.findMany({
+          where: { status: "active" },
+          select: { organizationId: true },
+          distinct: ["organizationId"],
+        });
+        return rows.map((r) => r.organizationId);
+      },
+      sendEvent: (event: { name: string; data: Record<string, unknown> }) =>
+        inngestClient.send(event),
+    },
+    makeOnFailureHandler(
+      {
+        functionId: "ledger-weekly-report-dispatch",
+        eventDomain: "ledger.weekly_report.dispatch",
+        riskCategory: "low",
+        alert: false,
+        emitEvent: false,
+      },
+      asyncFailure,
+    ) as (arg: unknown) => Promise<void>,
+  );
+  const ledgerWeeklyReportWorker = createLedgerWeeklyReportWorker({
+    failure: asyncFailure,
+    readEnabledFlag: () => process.env["LEDGER_WEEKLY_REPORT_ENABLED"] === "true",
+    submit: (input: { organizationId: string; idempotencyKey: string }) =>
+      app.platformIngress!.submit(buildDeliverWeeklyReportSubmitRequest(input)),
+    warn: (msg: string) => app.log.warn(msg),
+  });
+
   const creativeTasteSweep = createCreativeTasteSweep({
     failure: asyncFailure,
     jobStore,
@@ -1353,6 +1396,8 @@ export async function registerInngest(
       revenueProvenPromotion,
       miraSelfBriefDispatch,
       miraSelfBriefWorker,
+      ledgerWeeklyReportDispatch,
+      ledgerWeeklyReportWorker,
     ],
   });
 

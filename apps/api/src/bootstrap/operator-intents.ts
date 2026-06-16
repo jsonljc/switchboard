@@ -26,12 +26,14 @@ import {
   type ExecutionModeRegistry,
   type IntentRegistry,
   type OperatorMutationHandler,
+  type Trigger,
 } from "@switchboard/core/platform";
 
 import {
   ACT_ON_RECOMMENDATION_INTENT,
   CLEAR_CONSENT_INTENT,
   CONFIRM_DISQUALIFICATION_INTENT,
+  DELIVER_WEEKLY_REPORT_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,
   GRANT_CONSENT_INTENT,
   RECONCILE_BOOKING_INTENT,
@@ -71,6 +73,10 @@ import {
   buildGrantConsentHandler,
   buildRevokeConsentHandler,
 } from "./operator-intents/consent.js";
+import {
+  buildDeliverWeeklyReportHandler,
+  type WeeklyReportDeliveryWriter,
+} from "./operator-intents/deliver-weekly-report.js";
 
 // Re-export every public symbol the rest of the codebase imports from
 // "../bootstrap/operator-intents.js" so existing import paths stay valid.
@@ -78,6 +84,7 @@ export {
   ACT_ON_RECOMMENDATION_INTENT,
   CLEAR_CONSENT_INTENT,
   CONFIRM_DISQUALIFICATION_INTENT,
+  DELIVER_WEEKLY_REPORT_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,
   GRANT_CONSENT_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
@@ -87,6 +94,8 @@ export {
   REVOKE_CONSENT_INTENT,
   TRANSITION_OPPORTUNITY_STAGE_INTENT,
 } from "./operator-intents/shared.js";
+export { buildDeliverWeeklyReportHandler } from "./operator-intents/deliver-weekly-report.js";
+export type { WeeklyReportDeliveryWriter } from "./operator-intents/deliver-weekly-report.js";
 export { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
 export { buildReconcileBookingHandler } from "./operator-intents/reconcile-booking.js";
 export { buildRecordRevenueHandler } from "./operator-intents/revenue.js";
@@ -130,11 +139,23 @@ interface OperatorIntentsBootstrapDeps {
   receiptHeldPromoter?: ReceiptHeldPromoter;
   /** Optional: registers the receipt.reconcile_booking intent + handler when provided. */
   reconcileBookingWriter?: ReconcileBookingWriter;
+  /** Optional: registers the ledger.deliver_weekly_report intent + handler when provided. */
+  weeklyReportDeliveryWriter?: WeeklyReportDeliveryWriter;
   logger?: { info(msg: string): void };
 }
 
-/** Shared registration shape for every system_auto_approved operator intent. */
-function registerOperatorIntent(intentRegistry: IntentRegistry, intent: string): void {
+/**
+ * Shared registration shape for every system_auto_approved operator intent.
+ * `allowedTriggers` defaults to ["api"] (the operator-direct route surface);
+ * pass an explicit list for an intent that is also driven by a cron, e.g.
+ * ["schedule", "api"] for the weekly report delivery. The hardcoded ["api"]
+ * default keeps every existing caller unchanged.
+ */
+function registerOperatorIntent(
+  intentRegistry: IntentRegistry,
+  intent: string,
+  allowedTriggers: Trigger[] = ["api"],
+): void {
   intentRegistry.register({
     intent,
     defaultMode: "operator_mutation",
@@ -146,7 +167,7 @@ function registerOperatorIntent(intentRegistry: IntentRegistry, intent: string):
     approvalPolicy: "none",
     approvalMode: "system_auto_approved",
     idempotent: true,
-    allowedTriggers: ["api"],
+    allowedTriggers,
     timeoutMs: 30_000,
     retryable: false,
   });
@@ -168,6 +189,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     bookingAttendanceWriter,
     receiptHeldPromoter,
     reconcileBookingWriter,
+    weeklyReportDeliveryWriter,
     logger,
   } = deps;
 
@@ -235,6 +257,13 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     handlers.set(RECONCILE_BOOKING_INTENT, buildReconcileBookingHandler(reconcileBookingWriter));
   }
 
+  if (weeklyReportDeliveryWriter) {
+    handlers.set(
+      DELIVER_WEEKLY_REPORT_INTENT,
+      buildDeliverWeeklyReportHandler(weeklyReportDeliveryWriter),
+    );
+  }
+
   modeRegistry.register(new OperatorMutationMode({ handlers }));
 
   if (opportunityStore) {
@@ -264,6 +293,12 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
   if (reconcileBookingWriter) {
     registerOperatorIntent(intentRegistry, RECONCILE_BOOKING_INTENT);
   }
+  if (weeklyReportDeliveryWriter) {
+    // schedule + api: the weekly cron submits with trigger "schedule"; api kept for an
+    // operator-triggered manual resend. The shared default-["api"] helper would block the
+    // schedule leg, so this is the one intent that passes an explicit trigger list.
+    registerOperatorIntent(intentRegistry, DELIVER_WEEKLY_REPORT_INTENT, ["schedule", "api"]);
+  }
 
   const intentCount =
     (opportunityStore ? 1 : 0) +
@@ -273,7 +308,8 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     (revenueStore && outboxWriter && runInTransaction ? 1 : 0) +
     (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier ? 1 : 0) +
     (bookingAttendanceWriter ? 1 : 0) +
-    (reconcileBookingWriter ? 1 : 0);
+    (reconcileBookingWriter ? 1 : 0) +
+    (weeklyReportDeliveryWriter ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );
