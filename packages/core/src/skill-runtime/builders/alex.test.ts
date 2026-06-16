@@ -512,4 +512,80 @@ describe("alexBuilder", () => {
       expect(spy).not.toHaveBeenCalled();
     });
   });
+
+  describe("BOOKABLE_SERVICES (D3-1)", () => {
+    const READY_PLAYBOOK = {
+      businessIdentity: {
+        name: "Glow",
+        category: "medspa",
+        tagline: "",
+        location: "",
+        status: "ready",
+        source: "manual",
+      },
+      services: [
+        {
+          id: "botox",
+          name: "Botox",
+          price: 300,
+          bookingBehavior: "ask_first",
+          status: "ready",
+          source: "manual",
+        },
+        {
+          id: "draft",
+          name: "Unconfirmed",
+          price: 50,
+          bookingBehavior: "ask_first",
+          status: "missing",
+          source: "scan",
+        },
+      ],
+      hours: {
+        timezone: "",
+        schedule: {},
+        afterHoursBehavior: "",
+        status: "ready",
+        source: "manual",
+      },
+      bookingRules: { leadVsBooking: "", status: "ready", source: "manual" },
+      approvalMode: { status: "ready", source: "manual" },
+      escalation: { triggers: [], toneBoundaries: "", status: "ready", source: "manual" },
+      channels: { configured: [], status: "ready", source: "manual" },
+    };
+
+    it("renders BOOKABLE_SERVICES from a wired playbookReader (excludes status:missing)", async () => {
+      const stores = createMockStores({
+        playbookReader: { readForOrganization: vi.fn().mockResolvedValue(READY_PLAYBOOK) },
+      } as never);
+      const result = await alexBuilder(createMockCtx(), config, stores);
+      expect(result.parameters.BOOKABLE_SERVICES).toBe("- Botox");
+    });
+
+    it("BOOKABLE_SERVICES is '' when no playbookReader is wired (back-compat)", async () => {
+      const result = await alexBuilder(createMockCtx(), config, createMockStores());
+      expect(result.parameters.BOOKABLE_SERVICES).toBe("");
+    });
+
+    it("BOOKABLE_SERVICES is '' when the playbook read returns null", async () => {
+      const stores = createMockStores({
+        playbookReader: { readForOrganization: vi.fn().mockResolvedValue(null) },
+      } as never);
+      const result = await alexBuilder(createMockCtx(), config, stores);
+      expect(result.parameters.BOOKABLE_SERVICES).toBe("");
+    });
+
+    it("fail-open: a playbook read THROW never fails the turn; BOOKABLE_SERVICES is ''", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const stores = createMockStores({
+        playbookReader: {
+          readForOrganization: vi.fn().mockRejectedValue(new Error("db down")),
+        },
+      } as never);
+      const result = await alexBuilder(createMockCtx(), config, stores);
+      expect(result.parameters.BOOKABLE_SERVICES).toBe("");
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+  });
 });

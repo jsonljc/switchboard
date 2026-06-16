@@ -860,6 +860,10 @@ export async function bootstrapSkillMode(
             activityStore.listByDeployment(orgId, deploymentId, opts),
         },
         businessFactsStore,
+        // D3-1: alexBuilder renders BOOKABLE_SERVICES from the SAME playbook the
+        // booked-value resolver keys on (getServicesForOrg above), so Alex emits a
+        // matchable `service`. PrismaPlaybookReader satisfies the core PlaybookReader port.
+        playbookReader,
         // Slice-4 brain readers (spec 3.3): brief-time memory + measured
         // performance, consumed only by the "creative" builder.
         deploymentMemoryReader: new PrismaDeploymentMemoryStore(prismaClient),

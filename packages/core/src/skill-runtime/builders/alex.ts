@@ -2,7 +2,7 @@ import type { AgentContext } from "@switchboard/sdk";
 import type { BusinessFacts } from "@switchboard/schemas";
 import type { SkillServices, SkillStores } from "../parameter-builder.js";
 import { ParameterResolutionError } from "../parameter-builder.js";
-import { renderBusinessFacts } from "../context-resolver.js";
+import { renderBusinessFacts, renderBookableServices } from "../context-resolver.js";
 import { sanitizeContactForPrompt } from "../pii.js";
 import { getMetrics } from "../../telemetry/metrics.js";
 
@@ -112,6 +112,22 @@ export const alexBuilder = async (
     }
   }
 
+  // D3-1: render the playbook's bookable service NAMES (the SAME store the booked-value
+  // resolver keys on) so Alex emits a `service` it matches. Fail-open: a playbook read
+  // must NEVER 500 a live turn — degrade to "" (free-text fallback, resolver abstains).
+  let BOOKABLE_SERVICES = "";
+  if (stores.playbookReader) {
+    try {
+      const playbook = await stores.playbookReader.readForOrganization(orgId);
+      if (playbook) BOOKABLE_SERVICES = renderBookableServices(playbook.services);
+    } catch (err) {
+      console.warn(
+        "[alexBuilder] playbook read for bookable services failed; degrading to empty",
+        err,
+      );
+    }
+  }
+
   const FALLBACK_TZ = "Asia/Singapore";
   const rawTz = facts?.timezone ?? FALLBACK_TZ;
   const now = config.now?.() ?? new Date();
@@ -169,6 +185,7 @@ export const alexBuilder = async (
     OPPORTUNITY_ID: opportunity.id,
     LEAD_PROFILE: sanitizeContactForPrompt(leadProfile),
     BUSINESS_FACTS,
+    BOOKABLE_SERVICES,
     OUTCOME_PATTERNS,
     CURRENT_DATETIME,
     PERSONA_CONFIG: {

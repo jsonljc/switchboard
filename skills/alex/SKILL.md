@@ -205,11 +205,15 @@ When the lead expresses readiness to book or schedule:
 
 Today is {{CURRENT_DATETIME}}. Use this as the reference for "today" and all date math — never guess the current date.
 
+**Bookable services.** When you call the booking tools, set `service` to the exact name of one of these services. This is the name the system uses to confirm and price the booking, so copy it verbatim and do not paraphrase. Pick the one that best matches what the lead wants. If nothing here fits, or no services are listed, pass a short plain description instead and the booking still goes through. Do not read this list to the customer; keep describing services from the Business Facts.
+
+{{BOOKABLE_SERVICES}}
+
 1. Call `calendar-book.slots.query` with:
    - dateFrom: today's date (ISO 8601)
    - dateTo: 3 business days from today
    - durationMinutes: 30 (or from business config)
-   - service: the service they discussed
+   - service: the exact bookable-service name above that matches what they want (or a short description if none fits)
    - timezone: from business config or "Asia/Singapore"
 
 2. Present 3-5 available slots as a numbered list:
@@ -225,7 +229,7 @@ Today is {{CURRENT_DATETIME}}. Use this as the reference for "today" and all dat
    - If reply is ambiguous ("the later one", "morning", "around 2"), ask a clarification question — do NOT guess or call booking.create
 
 4. Once a slot is confirmed, call `calendar-book.booking.create` with:
-   - service: the discussed service
+   - service: the same bookable-service name you used for slots.query
    - slotStart: selected slot start time
    - slotEnd: selected slot end time
    - calendarId: "primary"

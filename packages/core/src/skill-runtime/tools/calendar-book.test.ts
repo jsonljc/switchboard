@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BookingSlotConflictError } from "@switchboard/schemas";
 import { setMetrics, createInMemoryMetrics } from "../../telemetry/metrics.js";
 import { createCalendarBookToolFactory } from "./calendar-book.js";
+import { renderBookableServices } from "../context-resolver.js";
 import { getToolGovernanceDecision } from "../governance.js";
 import type { BookingConsentState, ConsentPrecondition } from "./calendar-book-consent.js";
 import type { GovernanceMode, PlaybookService } from "@switchboard/schemas";
@@ -691,6 +692,31 @@ describe("createCalendarBookToolFactory", () => {
       expect(ob.data.payload.value).toBe(30000);
       expect(updateManySpy).toHaveBeenCalledWith({
         where: { id: "opp_new", organizationId: "org_trusted", stage: STAGE_GUARD },
+        data: { stage: "booked", estimatedValue: 30000 },
+      });
+    });
+
+    it("SEAM: a service NAME taken verbatim from renderBookableServices stamps the playbook value", async () => {
+      // Producer (the renderer Alex is shown) with consumer (calendar-book + resolver)
+      // from real defaults: the EXACT string Alex sees in BOOKABLE_SERVICES is the exact
+      // string that prices the booking. Derive it from the renderer, not a literal — if
+      // the renderer ever drifts (e.g. adds a price suffix), this reds.
+      const serviceFromMenu = renderBookableServices(PRICED_SERVICES)
+        .split("\n")[0]!
+        .replace(/^- /, ""); // "Botox"
+      const { t, outboxCreate, updateManySpy } = buildToolWithValueCapture({
+        getServicesForOrg: async () => PRICED_SERVICES,
+        existingOpp: { id: "opp_1", estimatedValue: 45000 },
+      });
+      const result = await t.operations["booking.create"]!.execute({
+        ...input,
+        service: serviceFromMenu,
+      });
+      expect(result.status).toBe("success");
+      const ob = outboxCreate.mock.calls[0]![0] as { data: { payload: { value: number } } };
+      expect(ob.data.payload.value).toBe(30000);
+      expect(updateManySpy).toHaveBeenCalledWith({
+        where: { id: "opp_1", organizationId: "org_trusted", stage: STAGE_GUARD },
         data: { stage: "booked", estimatedValue: 30000 },
       });
     });
