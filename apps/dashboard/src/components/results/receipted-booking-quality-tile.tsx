@@ -1,6 +1,7 @@
 import type { ResultsModel } from "./results-model";
 import type { AttributionConfidence, ExceptionCode } from "./types";
 import { fmtInt } from "@/app/(auth)/(mercury)/reports/components/format";
+import { ReconcileRowAction } from "./reconcile-row-action";
 import styles from "./results.module.css";
 
 /** Confidence rungs in strongest-to-weakest order. Every rung is shown even at 0: a zero in a
@@ -132,6 +133,7 @@ export function ReceiptedBookingQualityTile({ model }: { model: ResultsModel }) 
                   <span className={styles.proofQualityWorklistCodes}>
                     {item.openExceptionCodes.map(labelFor).join(" · ")}
                   </span>
+                  <ReconcileRowAction row={item} />
                 </li>
               ))}
             </ul>

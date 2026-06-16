@@ -1705,6 +1705,172 @@
   opacity: 0.6;
 }
 
+/* ─── Reconcile row action ─── */
+
+/* Outer wrapper: inline flex, sits inside a worklist row */
+.reconcileRowAction {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+/* Inline form (override or flag mode) */
+.reconcileForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+/* Label wrapping a select: stacks vertically, compact */
+.reconcileLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+
+/* Compact select */
+.reconcileSelect {
+  font-size: 0.75rem;
+  color: var(--ink);
+  background: var(--canvas-2);
+  border: 1px solid var(--canvas-3);
+  border-radius: 4px;
+  padding: 0.1875rem 0.375rem;
+  cursor: pointer;
+}
+
+.reconcileSelect:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Single-line text input */
+.reconcileInput {
+  font-size: 0.75rem;
+  color: var(--ink);
+  background: var(--canvas-2);
+  border: 1px solid var(--canvas-3);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  outline: none;
+}
+
+.reconcileInput:focus {
+  border-color: hsl(var(--action) / 0.5);
+}
+
+.reconcileInput:disabled {
+  opacity: 0.55;
+}
+
+/* Button row inside the form */
+.reconcileActions {
+  display: flex;
+  gap: 0.375rem;
+}
+
+/* Primary confirm button */
+.reconcileSubmit {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--action));
+  background: hsl(var(--action) / 0.1);
+  border: 1px solid hsl(var(--action) / 0.35);
+  border-radius: 4px;
+  padding: 0.25rem 0.625rem;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.reconcileSubmit:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.reconcileSubmit:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Secondary cancel button */
+.reconcileCancel {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: none;
+  border: 1px solid var(--canvas-3);
+  border-radius: 4px;
+  padding: 0.25rem 0.625rem;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+
+.reconcileCancel:hover:not(:disabled) {
+  color: var(--ink-2);
+}
+
+.reconcileCancel:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Button row for idle state: Fix attribution / Flag duplicate / Dismiss */
+.reconcileButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+/* Individual action button (shared by Fix attribution, Flag duplicate, Dismiss) */
+.reconcileAction {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: none;
+  border: 1px solid var(--canvas-3);
+  border-radius: 4px;
+  padding: 0.1875rem 0.5rem;
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.reconcileAction:hover:not(:disabled) {
+  color: var(--ink-2);
+  border-color: var(--ink-4);
+}
+
+.reconcileAction:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Inline note for missing_consent (PDPA: no resolve button, just guidance) */
+.reconcileConsentNote {
+  font-size: 0.6875rem;
+  color: var(--ink-3);
+}
+
+/* Inline error message */
+.reconcileError {
+  font-size: 0.6875rem;
+  color: var(--ink-2);
+  margin: 0;
+}
+
 /* ─── Results desktop layout (additive at lg) ─── */
 @media (min-width: 1024px) {
   /* Lift the 640px cap so the page fills the shell content frame */

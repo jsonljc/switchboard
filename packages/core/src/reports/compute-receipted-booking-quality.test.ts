@@ -173,6 +173,8 @@ describe("computeReceiptedBookingQuality", () => {
       attributionConfidence: "medium",
       // Canonical taxonomy order: missing_consent before duplicate_contact_risk.
       openExceptionCodes: ["missing_consent", "duplicate_contact_risk"],
+      issuedAt: null,
+      overridden: false,
     });
   });
 
@@ -207,5 +209,31 @@ describe("computeReceiptedBookingQuality", () => {
     const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
 
     expect(result.worklist.map((w) => w.bookingId)).toEqual(["bk", "bz", "ba"]);
+  });
+
+  it("populates issuedAt (ISO string) and overridden on each worklist row from the view", async () => {
+    const ISSUED = new Date("2026-06-01T09:00:00.000Z");
+    // View with a persisted row: issuedAt present + overriddenBy set.
+    const overriddenView: ReceiptedBookingView = {
+      ...mkView("high", [{ code: "manual_override", raisedAt: RAISED }], "b-ov"),
+      issuedAt: ISSUED,
+      overriddenBy: "user-123",
+    };
+    // View without a persisted row: issuedAt/overriddenBy absent (pre-hook booking).
+    const unhookedView: ReceiptedBookingView = mkView(
+      "unattributed",
+      [{ code: "missing_source", raisedAt: RAISED }],
+      "b-un",
+    );
+    const receiptedBookings = { listForCohort: vi.fn(async () => [overriddenView, unhookedView]) };
+
+    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+
+    const ovRow = result.worklist.find((w) => w.bookingId === "b-ov");
+    const unRow = result.worklist.find((w) => w.bookingId === "b-un");
+    expect(ovRow?.issuedAt).toBe(ISSUED.toISOString());
+    expect(ovRow?.overridden).toBe(true);
+    expect(unRow?.issuedAt).toBe(null);
+    expect(unRow?.overridden).toBe(false);
   });
 });

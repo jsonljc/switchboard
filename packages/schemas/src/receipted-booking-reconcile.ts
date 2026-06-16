@@ -33,3 +33,10 @@ export const ReconcileBookingParametersSchema = z.discriminatedUnion("action", [
 ]);
 
 export type ReconcileBookingParameters = z.infer<typeof ReconcileBookingParametersSchema>;
+
+/**
+ * The request body for the dashboard-proxy reconcile route: the action union with `bookingId`
+ * stripped (the route path supplies bookingId). Exported from schemas (Layer 1) so the dashboard
+ * can import it without redeclaring the discriminated-union locally (Doctrine 11).
+ */
+export type ReconcileBookingActionBody = Omit<ReconcileBookingParameters, "bookingId">;

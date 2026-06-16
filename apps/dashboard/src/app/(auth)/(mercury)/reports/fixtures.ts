@@ -160,6 +160,8 @@ export const goodFixture: ReportDataV1 = {
         startsAt: "2026-06-16T02:30:00.000Z",
         attributionConfidence: "unattributed",
         openExceptionCodes: ["missing_source"],
+        issuedAt: null,
+        overridden: false,
       },
       {
         bookingId: "bk-good-2",
@@ -167,6 +169,8 @@ export const goodFixture: ReportDataV1 = {
         startsAt: "2026-06-17T01:00:00.000Z",
         attributionConfidence: "low",
         openExceptionCodes: ["missing_consent"],
+        issuedAt: null,
+        overridden: false,
       },
       {
         bookingId: "bk-good-3",
@@ -174,6 +178,8 @@ export const goodFixture: ReportDataV1 = {
         startsAt: "2026-06-18T06:00:00.000Z",
         attributionConfidence: "medium",
         openExceptionCodes: ["missing_consent"],
+        issuedAt: null,
+        overridden: false,
       },
       {
         bookingId: "bk-good-4",
@@ -181,6 +187,8 @@ export const goodFixture: ReportDataV1 = {
         startsAt: "2026-06-19T08:15:00.000Z",
         attributionConfidence: "high",
         openExceptionCodes: ["duplicate_contact_risk"],
+        issuedAt: null,
+        overridden: false,
       },
     ],
   },
@@ -462,6 +470,8 @@ export const problemFixture: ReportDataV1 = {
         startsAt: "2026-04-06T02:00:00.000Z",
         attributionConfidence: "unattributed",
         openExceptionCodes: ["missing_source", "missing_consent"],
+        issuedAt: null,
+        overridden: false,
       },
       {
         bookingId: "bk-q-2",
@@ -469,6 +479,8 @@ export const problemFixture: ReportDataV1 = {
         startsAt: "2026-04-07T03:30:00.000Z",
         attributionConfidence: "unattributed",
         openExceptionCodes: ["missing_source", "missing_consent"],
+        issuedAt: null,
+        overridden: false,
       },
       {
         bookingId: "bk-q-3",
@@ -476,6 +488,8 @@ export const problemFixture: ReportDataV1 = {
         startsAt: "2026-04-08T05:00:00.000Z",
         attributionConfidence: "unattributed",
         openExceptionCodes: ["missing_source"],
+        issuedAt: null,
+        overridden: false,
       },
       {
         bookingId: "bk-q-4",
@@ -483,6 +497,8 @@ export const problemFixture: ReportDataV1 = {
         startsAt: "2026-04-09T01:30:00.000Z",
         attributionConfidence: "low",
         openExceptionCodes: ["missing_consent"],
+        issuedAt: null,
+        overridden: false,
       },
       {
         bookingId: "bk-q-5",
@@ -490,6 +506,8 @@ export const problemFixture: ReportDataV1 = {
         startsAt: "2026-04-10T07:00:00.000Z",
         attributionConfidence: "medium",
         openExceptionCodes: ["missing_consent"],
+        issuedAt: null,
+        overridden: false,
       },
       {
         bookingId: "bk-q-6",
@@ -497,6 +515,8 @@ export const problemFixture: ReportDataV1 = {
         startsAt: "2026-04-11T04:00:00.000Z",
         attributionConfidence: "medium",
         openExceptionCodes: ["duplicate_contact_risk"],
+        issuedAt: null,
+        overridden: false,
       },
     ],
   },

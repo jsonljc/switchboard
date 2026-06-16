@@ -1,8 +1,21 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { goodFixture, quietFixture } from "@/app/(auth)/(mercury)/reports/fixtures";
 import { buildResultsModel } from "./results-model";
 import { ReceiptedBookingQualityTile } from "./receipted-booking-quality-tile";
+
+// ReconcileRowAction uses useQueryClient and useScopedQueryKeys; stub them so this
+// tile test does not require a QueryClientProvider wrapper.
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn<(args: { queryKey: unknown }) => Promise<void>>(() =>
+      Promise.resolve(),
+    ),
+  }),
+}));
+vi.mock("@/hooks/use-query-keys", () => ({
+  useScopedQueryKeys: () => ({ reports: { all: () => ["__test__", "reports"] } }),
+}));
 
 describe("ReceiptedBookingQualityTile", () => {
   it("leads with strongly-attributed, breaks down the confidence rungs, and lists the worklist", () => {
