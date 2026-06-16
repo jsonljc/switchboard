@@ -106,3 +106,37 @@ describe("ConnectionsList - Meta OAuth connect wiring", () => {
     expect(screen.getByText(/deploy an agent/i)).toBeInTheDocument();
   });
 });
+
+describe("ConnectionsList - WhatsApp embedded signup surface", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ connections: [] }) });
+    useOrgDeploymentId.mockReturnValue({ deploymentId: null, isLoading: false, isError: false });
+    vi.stubEnv("NEXT_PUBLIC_META_APP_ID", "test-app");
+    vi.stubEnv("NEXT_PUBLIC_META_CONFIG_ID", "test-cfg");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  function selectWhatsApp() {
+    fireEvent.click(screen.getByRole("button", { name: /new connection/i }));
+    fireEvent.click(screen.getByRole("option", { name: /^whatsapp$/i }));
+  }
+
+  it("replaces the generic credential form with the branded WhatsApp step", () => {
+    wrap(<ConnectionsList />);
+    selectWhatsApp();
+
+    // Branded one-click surface is present...
+    expect(screen.getByRole("heading", { name: /connect whatsapp business/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect WhatsApp" })).toBeInTheDocument();
+
+    // ...and none of the api_key / paste-a-token chrome that muddies App Review.
+    expect(screen.queryByText(/auth type/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/credential key/i)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/accesstoken/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /create connection/i })).not.toBeInTheDocument();
+  });
+});

@@ -19,6 +19,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -131,6 +132,23 @@ export function ConnectionsList() {
       onSuccess: () => setDeleteConfirm(null),
     });
   };
+
+  const resetForm = () => {
+    setServiceId("");
+    setServiceName("");
+    setAuthType("api_key");
+    setCredFields({});
+  };
+  const closeForm = () => {
+    setFormOpen(false);
+    resetForm();
+  };
+
+  // WhatsApp is onboarded via Meta Embedded Signup, not a pasted token. When it is the
+  // selected service (and ESU is configured), the New Connection modal becomes a dedicated,
+  // branded Connect-WhatsApp step. The generic Auth Type / Display Name / manual-credential
+  // chrome is hidden so the surface never implies WhatsApp access comes from a token paste.
+  const isWhatsAppEsu = serviceId === "whatsapp" && !!process.env.NEXT_PUBLIC_META_APP_ID;
 
   // Normalize connections to always be an array
   const rawData = connections as unknown;
@@ -273,173 +291,186 @@ export function ConnectionsList() {
       </Dialog>
 
       {/* New connection form */}
-      <Dialog open={formOpen} onOpenChange={(v) => !v && setFormOpen(false)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>New Connection</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4">
-            <div>
-              <Label>Service</Label>
-              <Select
-                value={serviceId}
-                onValueChange={(v) => {
-                  setServiceId(v);
-                  const svc = serviceOptions.find((s) => s.id === v);
-                  if (svc) setServiceName(svc.name);
-                  setCredFields({});
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {serviceOptions.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="conn-name">Display Name</Label>
-              <Input
-                id="conn-name"
-                value={serviceName}
-                onChange={(e) => setServiceName(e.target.value)}
-                placeholder="e.g. Production Meta Ads"
+      <Dialog
+        open={formOpen}
+        onOpenChange={(v) => {
+          if (!v) closeForm();
+        }}
+      >
+        <DialogContent
+          className={isWhatsAppEsu ? "gap-0 overflow-hidden p-0 sm:max-w-md" : "sm:max-w-lg"}
+        >
+          {isWhatsAppEsu ? (
+            <>
+              {/* Radix needs a title for a11y; the branded crown carries the visible one. */}
+              <DialogTitle className="sr-only">Connect WhatsApp</DialogTitle>
+              <DialogDescription className="sr-only">
+                Connect your WhatsApp Business Account through Meta Embedded Signup.
+              </DialogDescription>
+              <WhatsAppEmbeddedSignup
+                _metaAppId={process.env.NEXT_PUBLIC_META_APP_ID as string}
+                metaConfigId={process.env.NEXT_PUBLIC_META_CONFIG_ID ?? ""}
+                onConnected={() => refetch()}
+                onSuccess={() => closeForm()}
               />
-            </div>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>New Connection</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div>
+                  <Label>Service</Label>
+                  <Select
+                    value={serviceId}
+                    onValueChange={(v) => {
+                      setServiceId(v);
+                      const svc = serviceOptions.find((s) => s.id === v);
+                      if (svc) setServiceName(svc.name);
+                      setCredFields({});
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a service" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {serviceOptions.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div>
-              <Label>Auth Type</Label>
-              <Select value={authType} onValueChange={setAuthType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {authTypes.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div>
+                  <Label htmlFor="conn-name">Display Name</Label>
+                  <Input
+                    id="conn-name"
+                    value={serviceName}
+                    onChange={(e) => setServiceName(e.target.value)}
+                    placeholder="e.g. Production Meta Ads"
+                  />
+                </div>
 
-            {SERVICE_CONNECTION_CONFIGS[serviceId]?.oauth && (
-              <div className="space-y-3">
-                <Button
-                  type="button"
-                  className="w-full"
-                  disabled={!oauthDeploymentId}
-                  onClick={() => {
-                    const url = SERVICE_CONNECTION_CONFIGS[serviceId].oauth!.getUrl(
-                      oauthDeploymentId ?? undefined,
-                    );
-                    window.location.href = url;
-                  }}
-                >
-                  {SERVICE_CONNECTION_CONFIGS[serviceId].oauth!.label}
-                </Button>
-                {!oauthDeploymentId && !deploymentLoading && (
-                  <p className="text-xs text-center text-muted-foreground">
-                    Deploy an agent before connecting this service.
-                  </p>
-                )}
-                {SERVICE_FIELD_CONFIGS[serviceId]?.length > 0 && (
-                  <p className="text-xs text-center text-muted-foreground">
-                    Or enter credentials manually below
-                  </p>
-                )}
-              </div>
-            )}
+                <div>
+                  <Label>Auth Type</Label>
+                  <Select value={authType} onValueChange={setAuthType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {authTypes.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            {serviceId === "whatsapp" && process.env.NEXT_PUBLIC_META_APP_ID && (
-              <div className="space-y-3">
-                <WhatsAppEmbeddedSignup
-                  _metaAppId={process.env.NEXT_PUBLIC_META_APP_ID}
-                  metaConfigId={process.env.NEXT_PUBLIC_META_CONFIG_ID ?? ""}
-                  onSuccess={() => {
-                    setFormOpen(false);
-                    refetch();
-                  }}
-                />
-                <p className="text-xs text-center text-muted-foreground">
-                  Or enter credentials manually below
-                </p>
-              </div>
-            )}
-
-            {SERVICE_FIELD_CONFIGS[serviceId]?.length ? (
-              <div className="space-y-3">
-                {SERVICE_FIELD_CONFIGS[serviceId].map((field) => (
-                  <div key={field.key} className="space-y-1.5">
-                    <Label htmlFor={`cred-${field.key}`}>
-                      {field.label}
-                      {field.required && <span className="text-destructive ml-1">*</span>}
-                    </Label>
-                    <Input
-                      id={`cred-${field.key}`}
-                      type={field.type}
-                      value={credFields[field.key] ?? ""}
-                      onChange={(e) =>
-                        setCredFields((prev) => ({ ...prev, [field.key]: e.target.value }))
-                      }
-                      placeholder={field.placeholder}
-                    />
-                    {field.helpText && (
-                      <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                {SERVICE_CONNECTION_CONFIGS[serviceId]?.oauth && (
+                  <div className="space-y-3">
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={!oauthDeploymentId}
+                      onClick={() => {
+                        const url = SERVICE_CONNECTION_CONFIGS[serviceId].oauth!.getUrl(
+                          oauthDeploymentId ?? undefined,
+                        );
+                        window.location.href = url;
+                      }}
+                    >
+                      {SERVICE_CONNECTION_CONFIGS[serviceId].oauth!.label}
+                    </Button>
+                    {!oauthDeploymentId && !deploymentLoading && (
+                      <p className="text-xs text-center text-muted-foreground">
+                        Deploy an agent before connecting this service.
+                      </p>
+                    )}
+                    {SERVICE_FIELD_CONFIGS[serviceId]?.length > 0 && (
+                      <p className="text-xs text-center text-muted-foreground">
+                        Or enter credentials manually below
+                      </p>
                     )}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="cred-key">Credential Key</Label>
-                  <Input
-                    id="cred-key"
-                    value={credFields["_key"] ?? ""}
-                    onChange={(e) => setCredFields((prev) => ({ ...prev, _key: e.target.value }))}
-                    placeholder="e.g. accessToken"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="cred-value">Credential Value</Label>
-                  <Input
-                    id="cred-value"
-                    type="password"
-                    value={credFields["_value"] ?? ""}
-                    onChange={(e) => setCredFields((prev) => ({ ...prev, _value: e.target.value }))}
-                    placeholder="****"
-                  />
-                </div>
-              </div>
-            )}
+                )}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={
-                  createConnection.isPending ||
-                  !serviceId ||
-                  (SERVICE_FIELD_CONFIGS[serviceId]
-                    ? SERVICE_FIELD_CONFIGS[serviceId]
-                        .filter((f) => f.required)
-                        .some((f) => !credFields[f.key]?.trim())
-                    : false)
-                }
-              >
-                {createConnection.isPending ? "Creating..." : "Create Connection"}
-              </Button>
-            </DialogFooter>
-          </form>
+                {SERVICE_FIELD_CONFIGS[serviceId]?.length ? (
+                  <div className="space-y-3">
+                    {SERVICE_FIELD_CONFIGS[serviceId].map((field) => (
+                      <div key={field.key} className="space-y-1.5">
+                        <Label htmlFor={`cred-${field.key}`}>
+                          {field.label}
+                          {field.required && <span className="text-destructive ml-1">*</span>}
+                        </Label>
+                        <Input
+                          id={`cred-${field.key}`}
+                          type={field.type}
+                          value={credFields[field.key] ?? ""}
+                          onChange={(e) =>
+                            setCredFields((prev) => ({ ...prev, [field.key]: e.target.value }))
+                          }
+                          placeholder={field.placeholder}
+                        />
+                        {field.helpText && (
+                          <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="cred-key">Credential Key</Label>
+                      <Input
+                        id="cred-key"
+                        value={credFields["_key"] ?? ""}
+                        onChange={(e) =>
+                          setCredFields((prev) => ({ ...prev, _key: e.target.value }))
+                        }
+                        placeholder="e.g. accessToken"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="cred-value">Credential Value</Label>
+                      <Input
+                        id="cred-value"
+                        type="password"
+                        value={credFields["_value"] ?? ""}
+                        onChange={(e) =>
+                          setCredFields((prev) => ({ ...prev, _value: e.target.value }))
+                        }
+                        placeholder="****"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={closeForm}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={
+                      createConnection.isPending ||
+                      !serviceId ||
+                      (SERVICE_FIELD_CONFIGS[serviceId]
+                        ? SERVICE_FIELD_CONFIGS[serviceId]
+                            .filter((f) => f.required)
+                            .some((f) => !credFields[f.key]?.trim())
+                        : false)
+                    }
+                  >
+                    {createConnection.isPending ? "Creating..." : "Create Connection"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

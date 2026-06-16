@@ -176,4 +176,137 @@ describe("WhatsAppEmbeddedSignup", () => {
     );
     expect(screen.getAllByText(/two-step verification/i).length).toBeGreaterThan(0);
   });
+
+  it("tucks the 2SV PIN behind a collapsed disclosure, revealed on toggle", () => {
+    vi.stubGlobal("FB", { login: vi.fn() });
+    render(<WhatsAppEmbeddedSignup _metaAppId="app" metaConfigId="cfg" />);
+
+    // The PIN is in the DOM (so its value can still post) but hidden by default,
+    // so the default surface is a single clean Connect button.
+    const pin = screen.getByLabelText(/two-step verification pin/i);
+    expect(pin).not.toBeVisible();
+
+    const toggle = screen.getByRole("button", {
+      name: /already has two-step verification/i,
+    });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(toggle);
+    expect(pin).toBeVisible();
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("auto-opens the PIN disclosure when the server reports pin-required", async () => {
+    fetchMock.mockResolvedValueOnce({
+      json: async () => ({
+        code: "whatsapp_registration_pin_required",
+        error: "Enter the existing 6-digit PIN.",
+      }),
+    });
+    const fbLogin = vi.fn((cb: (r: unknown) => void) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://www.facebook.com",
+          data: JSON.stringify({
+            type: "WA_EMBEDDED_SIGNUP",
+            data: { phone_number_id: "PHONE_X", waba_id: "WABA_X" },
+          }),
+        }),
+      );
+      cb({ authResponse: { code: "AUTH_CODE_123" } });
+    });
+    vi.stubGlobal("FB", { login: fbLogin });
+
+    render(<WhatsAppEmbeddedSignup _metaAppId="app" metaConfigId="cfg" />);
+    // closed before the failed attempt
+    expect(
+      screen.getByRole("button", { name: /already has two-step verification/i }),
+    ).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect WhatsApp" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /already has two-step verification/i }),
+      ).toHaveAttribute("aria-expanded", "true"),
+    );
+    expect(screen.getByLabelText(/two-step verification pin/i)).toBeVisible();
+  });
+
+  it("renders the branded Connect WhatsApp Business step with the what-happens preview", () => {
+    vi.stubGlobal("FB", { login: vi.fn() });
+    render(<WhatsAppEmbeddedSignup _metaAppId="app" metaConfigId="cfg" />);
+
+    expect(screen.getByRole("heading", { name: /connect whatsapp business/i })).toBeInTheDocument();
+    // "Sign in with Meta" appears as both the lede and the step-1 title.
+    expect(screen.getAllByText(/sign in with meta/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Choose your Business Account")).toBeInTheDocument();
+    expect(screen.getByText("Verify your number")).toBeInTheDocument();
+  });
+
+  it("shows the connected card with a Done button that fires onSuccess (deferred, not before)", async () => {
+    const onSuccess = vi.fn();
+    const fbLogin = vi.fn((cb: (r: unknown) => void) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://www.facebook.com",
+          data: JSON.stringify({
+            type: "WA_EMBEDDED_SIGNUP",
+            data: { phone_number_id: "PHONE_X", waba_id: "WABA_X" },
+          }),
+        }),
+      );
+      cb({ authResponse: { code: "AUTH_CODE_123" } });
+    });
+    vi.stubGlobal("FB", { login: fbLogin });
+
+    render(<WhatsAppEmbeddedSignup _metaAppId="app" metaConfigId="cfg" onSuccess={onSuccess} />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect WhatsApp" }));
+
+    // The branded success card renders the verified identity...
+    await waitFor(() => expect(screen.getByText(/whatsapp business connected/i)).toBeVisible());
+    expect(screen.getByText("Acme")).toBeInTheDocument();
+    // ...and onSuccess is held until the operator confirms with Done.
+    expect(onSuccess).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /done/i }));
+    expect(onSuccess).toHaveBeenCalledWith({
+      wabaId: "WABA_X",
+      phoneNumberId: "PHONE_X",
+      connectionId: "conn_X",
+    });
+  });
+
+  it("fires onConnected the moment the onboard succeeds, before the card is dismissed", async () => {
+    const onConnected = vi.fn();
+    const onSuccess = vi.fn();
+    const fbLogin = vi.fn((cb: (r: unknown) => void) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://www.facebook.com",
+          data: JSON.stringify({
+            type: "WA_EMBEDDED_SIGNUP",
+            data: { phone_number_id: "PHONE_X", waba_id: "WABA_X" },
+          }),
+        }),
+      );
+      cb({ authResponse: { code: "AUTH_CODE_123" } });
+    });
+    vi.stubGlobal("FB", { login: fbLogin });
+
+    render(
+      <WhatsAppEmbeddedSignup
+        _metaAppId="app"
+        metaConfigId="cfg"
+        onConnected={onConnected}
+        onSuccess={onSuccess}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Connect WhatsApp" }));
+
+    // The list refresh fires on success (independent of Done / X dismissal)...
+    await waitFor(() => expect(onConnected).toHaveBeenCalledTimes(1));
+    // ...while the close is still gated on the operator confirming with Done.
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
 });
