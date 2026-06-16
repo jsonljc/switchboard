@@ -1862,7 +1862,6 @@
 .reconcileConsentNote {
   font-size: 0.6875rem;
   color: var(--ink-3);
-  font-style: italic;
 }
 
 /* Inline error message */
