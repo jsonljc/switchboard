@@ -254,22 +254,29 @@ describe("KeyResult slot — launch-blocker tests", () => {
     expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
   });
 
-  it("6c. Riley roi real CAC but no target ('—') → renders NO comparator line", () => {
+  it("6c. Riley roi real CAC but no target set → shows the value + an explicit 'no target set' hint, never a blank target", () => {
     allData = makeMetricsVM({
       kind: "ad-leads",
       value: 32,
       roi: {
         degraded: true,
-        degradedHint: "No target set",
+        degradedHint: "",
         label: "cost per booked",
-        comparator: { value: "$44 per booked", target: "—" },
+        comparator: { value: "$44 per booked", target: "target not set" },
       },
     });
     // week settles (errored) so we reach the proof branch (not the skeleton).
     weekIsError = true;
     render(<KeyResult agentKey="riley" />);
-    expect(screen.getByText("32")).toBeInTheDocument();
-    expect(screen.queryByText(/per booked/i)).not.toBeInTheDocument();
+    // The CAC value renders on its own line (not joined to a blank target).
+    expect(screen.getByText("$44 per booked")).toBeInTheDocument();
+    // An explicit, muted no-target affordance is shown (distinguishes "no target
+    // configured" from "no data yet", which stays hidden).
+    expect(screen.getByTestId("riley-no-target")).toBeInTheDocument();
+    expect(screen.getByText(/no target set/i)).toBeInTheDocument();
+    // Never the joined "value · target" line, never a status color.
+    expect(screen.queryByText(/\$44 per booked ·/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/on target|over target/i)).not.toBeInTheDocument();
   });
 
   // Blocker 7: halted + core-setup-incomplete (mission setup has { primary: true, done: false }) + week value 12 → paused composition wins (shows 12 + paused note + a small setup note), and the activation block is NOT rendered.

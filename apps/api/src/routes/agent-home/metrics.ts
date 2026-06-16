@@ -2,7 +2,11 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { projectMetrics, getAgentTargets, type MetricsSignalStore } from "@switchboard/core";
-import { PrismaMiraCreativeReadModelReader, PrismaOpportunityStore } from "@switchboard/db";
+import {
+  PrismaConversionRecordStore,
+  PrismaMiraCreativeReadModelReader,
+  PrismaOpportunityStore,
+} from "@switchboard/db";
 import { AgentKeySchema } from "@switchboard/schemas";
 import { requireOrganizationScope } from "../../utils/require-org.js";
 import { getOrgTimezone } from "../../lib/org-timezone.js";
@@ -79,6 +83,11 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
     const getMetaSpendCents = app.metaSpendProvider ?? (async () => null);
 
     const opportunityStore = prisma ? new PrismaOpportunityStore(prisma) : null;
+    // Riley's CAC denominator reads ad-attributed booked conversions directly off
+    // the conversion-record store (the count sibling of the trueROAS booked-value
+    // query). Constructed here because reportStores.conversions is typed via core's
+    // narrow ReportStores interface (core cannot import db), which has no count method.
+    const conversionRecordStore = prisma ? new PrismaConversionRecordStore(prisma) : null;
 
     const store: MetricsSignalStore = {
       countBookingsCreated: ({ orgId: o, excludeStatuses, from, to }) =>
@@ -88,6 +97,10 @@ export const metricsRoute: FastifyPluginAsync = async (app) => {
           from,
           to,
         }),
+      countAdAttributedBookings: ({ orgId: o, from, to }) =>
+        conversionRecordStore
+          ? conversionRecordStore.countAdAttributedBookings({ orgId: o, from, to })
+          : Promise.resolve(0),
       countConversionsByType: ({ orgId: o, type, from, to }) =>
         reportStores.conversions.countByType(o, type, from, to),
       getMetaSpendCents: ({ orgId: o, from, to }) => getMetaSpendCents({ orgId: o, from, to }),

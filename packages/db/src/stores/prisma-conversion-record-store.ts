@@ -297,6 +297,35 @@ export class PrismaConversionRecordStore {
   }
 
   /**
+   * Count booked conversions in the window that carry ad/source attribution
+   * (a present sourceCampaignId OR sourceChannel). This is Riley's CAC
+   * denominator: only ad-attributed bookings, NEVER Alex's organic bookings,
+   * which carry no source. `origin:"live"` excludes fixtures, matching
+   * queryBookedValueCentsByCampaign. The window is closed [from, to] to match
+   * the read-model's weekStart..weekEnd bounds. Value is deliberately NOT
+   * required > 0: a channel-attributed booking is Riley's even before its
+   * value is stamped (the `value > 0` filter belongs to trueROAS, not to the
+   * booking COUNT).
+   *
+   * INVARIANT: a booked record's `sourceChannel` must denote a PAID/ad channel.
+   * No writer stamps it on booked records today (so this reduces to
+   * sourceCampaignId), but a future writer must NOT set it to an inbound channel
+   * (e.g. "whatsapp") on a booked record, or that organic booking would wrongly
+   * inflate Riley's ad-attributed count.
+   */
+  async countAdAttributedBookings(query: { orgId: string; from: Date; to: Date }): Promise<number> {
+    return this.prisma.conversionRecord.count({
+      where: {
+        organizationId: query.orgId,
+        type: "booked",
+        origin: "live",
+        occurredAt: { gte: query.from, lte: query.to },
+        OR: [{ sourceCampaignId: { not: null } }, { sourceChannel: { not: null } }],
+      },
+    });
+  }
+
+  /**
    * Org-level windowed booked stats for the outcome ledger's corroboration
    * predicate (Riley v3 slice 4d). Sum and count aggregate over the SAME
    * predicate (`type:"booked"` AND `value > 0`), org-wide: campaign

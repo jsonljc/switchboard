@@ -16,11 +16,6 @@ const RILEY_VOICE = {
   flat: () => `Flat vs last week.`,
 };
 
-// Must match metrics-alex.ts EXCLUDE_STATUSES so Riley's CAC denominator stays in
-// lockstep with Alex's booking hero. Alex currently excludes only "cancelled".
-// If that list changes, change it in both files.
-const EXCLUDE_STATUSES = ["cancelled"] as const;
-
 export async function buildRileyMetricsViewModel(
   input: PerAgentBuilderInput,
 ): Promise<MetricsViewModel> {
@@ -29,9 +24,12 @@ export async function buildRileyMetricsViewModel(
   const heroValueP = countLeads(store, orgId, week.weekStart, week.weekEnd);
   const heroPrevP = countLeads(store, orgId, week.prevWeekStart, week.prevWeekEnd);
   const spendCentsP = store.getMetaSpendCents({ orgId, from: week.weekStart, to: week.weekEnd });
-  const bookingsP = store.countBookingsCreated({
+  // Riley's CAC denominator is AD-ATTRIBUTED bookings only (booked conversions
+  // carrying a sourceCampaignId or sourceChannel), NEVER all org bookings.
+  // Dividing Riley's spend by Alex's organic bookings flattered the CAC ~20x;
+  // the count sibling of the trueROAS booked-value query fixes it (D8-3).
+  const bookingsP = store.countAdAttributedBookings({
     orgId,
-    excludeStatuses: EXCLUDE_STATUSES,
     from: week.weekStart,
     to: week.weekEnd,
   });
@@ -113,7 +111,9 @@ export async function buildRileyMetricsViewModel(
   // `targetCostPerBooked` (a different config surface); they are not unified here.
   const targetDollars =
     targets.targetCpbCents !== null ? Math.round(targets.targetCpbCents / 100) : null;
-  const targetLabel = targetDollars !== null ? `target $${targetDollars}` : "—";
+  // Explicit unconfigured sentinel (not a bare "—") so the cockpit can tell
+  // "no target set" (actionable) apart from "no CAC value yet" (hidden). D8-3.
+  const targetLabel = targetDollars !== null ? `target $${targetDollars}` : "target not set";
 
   const tiles: readonly KpiTile[] = [
     {

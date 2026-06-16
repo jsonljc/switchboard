@@ -343,4 +343,33 @@ describe("PrismaConversionRecordStore", () => {
       expect(typeof reader.getBookedStatsForOrgWindow).toBe("function");
     });
   });
+
+  describe("countAdAttributedBookings (riley CAC denominator, D8-3)", () => {
+    it("counts only booked+live records carrying ad attribution, scoped by org + closed window", async () => {
+      const countMock = prisma.conversionRecord.count as ReturnType<typeof vi.fn>;
+      countMock.mockResolvedValue(3);
+      const from = new Date("2026-05-01T00:00:00.000Z");
+      const to = new Date("2026-05-08T00:00:00.000Z");
+
+      const result = await store.countAdAttributedBookings({ orgId: "org_1", from, to });
+
+      expect(result).toBe(3);
+      expect(countMock).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org_1",
+          type: "booked",
+          origin: "live",
+          occurredAt: { gte: from, lte: to },
+          OR: [{ sourceCampaignId: { not: null } }, { sourceChannel: { not: null } }],
+        },
+      });
+    });
+
+    it("returns the raw count (organic/Alex bookings carry no source and cannot satisfy the predicate)", async () => {
+      (prisma.conversionRecord.count as ReturnType<typeof vi.fn>).mockResolvedValue(2);
+      await expect(
+        store.countAdAttributedBookings({ orgId: "org_1", from: new Date(0), to: new Date(1) }),
+      ).resolves.toBe(2);
+    });
+  });
 });

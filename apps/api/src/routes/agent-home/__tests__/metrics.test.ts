@@ -199,6 +199,8 @@ describe("metrics route", () => {
     const mockPrisma = {
       organizationConfig: { findFirst: vi.fn(async () => null) },
       agentRoster: { findUnique },
+      // Riley's CAC denominator counts ad-attributed booked conversions.
+      conversionRecord: { count: vi.fn(async () => 0) },
     } as unknown as import("@switchboard/db").PrismaClient;
 
     const app = await buildApp({ withStores: true, prisma: mockPrisma });
