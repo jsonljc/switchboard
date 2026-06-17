@@ -24,7 +24,7 @@ overrides:
   protobufjs@<=7.6.0: 7.6.1
   protobufjs@>=8.0.0 <=8.4.0: 8.4.1
   '@protobufjs/utf8@<=1.1.0': 1.1.1
-  hono@<4.12.18: 4.12.18
+  hono@<4.12.25: 4.12.25
   postcss@<8.5.10: 8.5.10
   vite@<=6.4.2: 6.4.3
   ws@>=8.0.0 <8.21.0: 8.21.0
@@ -167,7 +167,7 @@ importers:
         version: 171.4.0
       inngest:
         specifier: ^4.2.0
-        version: 4.2.4(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(hono@4.12.18)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76)
+        version: 4.2.4(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76)
       ioredis:
         specifier: ^5.10.1
         version: 5.10.1
@@ -522,7 +522,7 @@ importers:
         version: link:../schemas
       inngest:
         specifier: ^4.2.0
-        version: 4.2.4(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(hono@4.12.18)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76)
+        version: 4.2.4(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76)
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -578,7 +578,7 @@ importers:
         version: 1.2.0
       inngest:
         specifier: ^4.2.0
-        version: 4.2.4(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(hono@4.12.18)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76)
+        version: 4.2.4(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76)
       openai:
         specifier: ^6.34.0
         version: 6.34.0(zod@3.25.76)
@@ -615,7 +615,7 @@ importers:
         version: link:../schemas
       inngest:
         specifier: ^4.2.0
-        version: 4.2.4(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(hono@4.12.18)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76)
+        version: 4.2.4(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76)
       openai:
         specifier: ^6.34.0
         version: 6.34.0(zod@3.25.76)
@@ -4625,10 +4625,6 @@ packages:
   help-me@5.0.0:
     resolution: {integrity: sha512-7xgomUX6ADmcYzFik0HzAxh/73YlKR9bmFzf51CZwR+b6YtzU2m0u49hQCqV6SvlqIqsaxovfwdvbnsw3b/zpg==}
 
-  hono@4.12.18:
-    resolution: {integrity: sha512-RWzP96k/yv0PQfyXnWjs6zot20TqfpfsNXhOnev8d1InAxubW93L11/oNUc3tQqn2G0bSdAOBpX+2uDFHV7kdQ==}
-    engines: {node: '>=16.9.0'}
-
   html-encoding-sniffer@6.0.0:
     resolution: {integrity: sha512-CV9TW3Y3f8/wT0BRFc1/KAVQ3TUHiXmaAb6VW9vtiMFf7SLoMd1PdAc4W3KFOFETBJUb90KatHqlsZMWV+R9Gg==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
@@ -4718,7 +4714,7 @@ packages:
       express: '>=4.19.2'
       fastify: 5.8.5
       h3: '>=1.8.1'
-      hono: 4.12.18
+      hono: 4.12.25
       koa: '>=2.14.2'
       next: 15.5.18
       react: '>=18.0.0'
@@ -11033,9 +11029,6 @@ snapshots:
 
   help-me@5.0.0: {}
 
-  hono@4.12.18:
-    optional: true
-
   html-encoding-sniffer@6.0.0(@noble/hashes@2.2.0):
     dependencies:
       '@exodus/bytes': 1.15.0(@noble/hashes@2.2.0)
@@ -11128,7 +11121,7 @@ snapshots:
 
   ini@6.0.0: {}
 
-  inngest@4.2.4(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(hono@4.12.18)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76):
+  inngest@4.2.4(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76):
     dependencies:
       '@bufbuild/protobuf': 2.12.0
       '@inngest/ai': 0.1.7
@@ -11157,7 +11150,6 @@ snapshots:
     optionalDependencies:
       express: 5.2.1
       fastify: 5.8.5
-      hono: 4.12.18
       react: 19.2.5
       typescript: 6.0.3
     transitivePeerDependencies:
@@ -11165,7 +11157,7 @@ snapshots:
       - encoding
       - supports-color
 
-  inngest@4.2.4(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(hono@4.12.18)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76):
+  inngest@4.2.4(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(express@5.2.1)(fastify@5.8.5)(react@19.2.5)(typescript@6.0.3)(zod@3.25.76):
     dependencies:
       '@bufbuild/protobuf': 2.12.0
       '@inngest/ai': 0.1.7
@@ -11194,7 +11186,6 @@ snapshots:
     optionalDependencies:
       express: 5.2.1
       fastify: 5.8.5
-      hono: 4.12.18
       react: 19.2.5
       typescript: 6.0.3
     transitivePeerDependencies:
