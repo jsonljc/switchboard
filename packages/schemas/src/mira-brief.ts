@@ -33,6 +33,20 @@ export interface MiraBriefResult {
   requestSource: "mira.open_brief";
 }
 
+// The 202 envelope returned when the governance gate PARKS a brief for approval.
+// Mirrors CreativePendingApprovalEnvelope / the execute.ts PENDING_APPROVAL
+// contract: a parked brief is NOT a submitted draft (no jobId, no render), so
+// consumers MUST branch on `outcome` instead of treating any 2xx as success.
+export interface MiraBriefPendingApproval {
+  outcome: "PENDING_APPROVAL";
+  workUnitId: string;
+  traceId: string;
+  approvalRequest?: { id: string; bindingHash?: string };
+}
+
+// Wire union of createCreativeDraftRequest: a submitted draft OR a parked brief.
+export type MiraBriefResponse = MiraBriefResult | MiraBriefPendingApproval;
+
 const GOAL_OBJECTIVE: Record<MiraBriefGoal, string> = {
   more_bookings: "drive bookings",
   fill_slow_days: "fill slower days",
