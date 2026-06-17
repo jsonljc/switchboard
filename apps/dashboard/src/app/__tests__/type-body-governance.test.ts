@@ -44,15 +44,22 @@ describe("token governance: type body (TY4)", () => {
   it("the register hook producer exists (.app-header is load-bearing architecture now)", () => {
     // The body-face rule hangs on the .app-header class. A shell refactor that
     // renames it would leave the rule inert while a globals-only guard stays
-    // green. Pair the consumer (the rule) with both producers: the shell and
-    // its error-boundary fallback.
-    for (const p of [
-      "src/components/layout/editorial-auth-shell.tsx",
-      "src/components/layout/editorial-shell-boundary.tsx",
-    ]) {
-      const src = readFileSync(path.resolve(process.cwd(), p), "utf8");
-      expect(src, p).toMatch(/className="app-header"/);
-    }
+    // green. The shell is the producer — and since the error boundary now scopes
+    // to the CONTENT slot (mounted INSIDE the shell, below the header), the real
+    // .app-header stays mounted even through a page render error, so the register
+    // survives without the fallback re-stamping it.
+    const shell = readFileSync(
+      path.resolve(process.cwd(), "src/components/layout/editorial-auth-shell.tsx"),
+      "utf8",
+    );
+    expect(shell).toMatch(/className="app-header"/);
+    // The boundary fallback is content-scoped: it must NOT render its own header
+    // (that would nest landmarks inside the shell's <main>).
+    const boundary = readFileSync(
+      path.resolve(process.cwd(), "src/components/layout/editorial-shell-boundary.tsx"),
+      "utf8",
+    );
+    expect(boundary).not.toMatch(/className="app-header"/);
   });
 
   it("no governed module CSS pins var(--font-sans) against the register (inheritance or the token)", () => {

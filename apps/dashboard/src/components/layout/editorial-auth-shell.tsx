@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AmbientCream } from "./ambient-cream";
+import { EditorialShellBoundary } from "./editorial-shell-boundary";
 import { EditorialKeys } from "./editorial-keys";
 import { LiveSignalPopover } from "./live-signal-popover";
 import { InboxDrawer } from "./inbox-drawer";
@@ -51,7 +52,12 @@ export function EditorialAuthShellInner({ children }: { children: ReactNode }) {
         <div className="app-body">
           <AppSidebar />
           <main className="app-main">
-            <div className="app-content">{children}</div>
+            {/* The boundary scopes to the CONTENT slot only: a page render error
+                shows an in-place recovery message while the header + nav above
+                stay mounted, so the user is never stranded without navigation. */}
+            <div className="app-content">
+              <EditorialShellBoundary>{children}</EditorialShellBoundary>
+            </div>
           </main>
         </div>
         <TweaksPanelMount />

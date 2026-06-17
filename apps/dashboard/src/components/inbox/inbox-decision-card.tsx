@@ -1,5 +1,6 @@
 "use client";
 
+import type { KeyboardEvent } from "react";
 import { AGENT_REGISTRY, type AgentKey } from "@switchboard/schemas";
 import type { Decision } from "@/lib/decisions/types";
 import "./inbox-decision-card.css";
@@ -73,6 +74,21 @@ export function InboxDecisionCard({
     onOpenDetail();
   };
 
+  // Keyboard activation of the overlay <button> — the real, focusable tap target
+  // (the home swipe-decision-card likewise uses real <button>s). The overlay
+  // carries no onClick (it is pointer-events:none, so a pointer never reaches it;
+  // pointer taps open via the track's handleCardTap), so keydown is the sole
+  // activation path here and cannot double-fire. We open directly, bypassing the
+  // drag-guard since no pointer drag can precede a keypress. preventDefault on
+  // Enter/Space stops the page from scrolling / the native click default.
+  const handleCardKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (exiting) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onOpenDetail();
+    }
+  };
+
   const due = isHandoff ? dueIn(decision.meta.slaDeadlineAt, nowMs) : null;
   const riskLevel = contract?.riskLevel;
 
@@ -98,6 +114,20 @@ export function InboxDecisionCard({
           Tap to review
         </div>
       )}
+
+      {/* Keyboard tap target. The track below is the mouse/touch swipe surface
+          (a bare clickable div, axe-clean), but keyboard/AT users need a real,
+          focusable control to open the detail sheet (WCAG 2.1.1). This button
+          spans the card via CSS and carries `pointer-events: none`, so it is
+          Tab-focusable and Enter/Space-activatable WITHOUT intercepting the
+          pointer drag/tap. It is a sibling of (never an ancestor of) the avatar
+          identity button, so no interactive controls are nested. */}
+      <button
+        type="button"
+        className="decision-keyboard-target"
+        aria-label={`Open details — ${decision.humanSummary}`}
+        onKeyDown={handleCardKeyDown}
+      />
 
       <div
         className="decision-track"
