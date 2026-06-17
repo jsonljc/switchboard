@@ -605,6 +605,12 @@ describe("createCalendarBookToolFactory", () => {
   });
 
   describe("booking.create booked-value (D3-1)", () => {
+    afterEach(() => {
+      // Restore the module-singleton metrics so a spied instance does not leak into
+      // other test files sharing the vitest worker (F15 precedent).
+      setMetrics(createInMemoryMetrics());
+    });
+
     const PRICED_SERVICES: PlaybookService[] = [
       {
         id: "botox",
@@ -768,6 +774,37 @@ describe("createCalendarBookToolFactory", () => {
       expect(ob.data.payload.value).toBe(0);
       expect(warn).toHaveBeenCalled();
       warn.mockRestore();
+    });
+
+    it("SEAM: a matched playbook service emits bookedValueResolution{outcome:resolved} via real booking.create", async () => {
+      // Producer (the real booking.create path -> resolveBookedValueForBooking wrapper)
+      // with consumer (the bookedValueResolution metric): not a hand-mock of the wrapper.
+      const metrics = createInMemoryMetrics();
+      const spy = vi.spyOn(metrics.bookedValueResolution, "inc");
+      setMetrics(metrics);
+      const { t } = buildToolWithValueCapture({
+        getServicesForOrg: async () => PRICED_SERVICES,
+        existingOpp: { id: "opp_1", estimatedValue: 45000 },
+      });
+      const result = await t.operations["booking.create"]!.execute(input); // service "Botox"
+      expect(result.status).toBe("success");
+      expect(spy).toHaveBeenCalledWith({ orgId: "org_trusted", outcome: "resolved" });
+    });
+
+    it("SEAM: a service NOT in the playbook emits bookedValueResolution{outcome:no_match} via real booking.create", async () => {
+      const metrics = createInMemoryMetrics();
+      const spy = vi.spyOn(metrics.bookedValueResolution, "inc");
+      setMetrics(metrics);
+      const { t } = buildToolWithValueCapture({
+        getServicesForOrg: async () => PRICED_SERVICES, // only "Botox"
+        existingOpp: { id: "opp_1", estimatedValue: 45000 },
+      });
+      const result = await t.operations["booking.create"]!.execute({
+        ...input,
+        service: "Dermaplaning", // not in the playbook -> the alignment-miss signal
+      });
+      expect(result.status).toBe("success");
+      expect(spy).toHaveBeenCalledWith({ orgId: "org_trusted", outcome: "no_match" });
     });
   });
 
