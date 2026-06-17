@@ -108,6 +108,50 @@ describe("computeReceiptedBookingQuality", () => {
     expect(result.cohortSize).toBe(1);
   });
 
+  it("excludes a manual_override-only row from the attention count but keeps it on the worklist and per-code breakdown", async () => {
+    // The owner has already asserted attribution (override), so the booking is NOT an open action
+    // item: it must not inflate bookingsNeedingAttention. It STILL appears on the worklist (so the
+    // owner can see/undo the assertion) and STILL counts under exceptions.manual_override.
+    const views: ReceiptedBookingView[] = [
+      mkView("high", [{ code: "manual_override", raisedAt: RAISED }], "b-ov-only"),
+    ];
+    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
+
+    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+
+    // Off the headline attention count.
+    expect(result.bookingsNeedingAttention).toBe(0);
+    // Still in the per-code breakdown.
+    expect(result.exceptions.manual_override).toBe(1);
+    // Still on the worklist, carrying the manual_override code.
+    expect(result.worklist).toHaveLength(1);
+    expect(result.worklist[0]?.bookingId).toBe("b-ov-only");
+    expect(result.worklist[0]?.openExceptionCodes).toEqual(["manual_override"]);
+  });
+
+  it("counts a booking once for attention when it carries manual_override alongside a real open code", async () => {
+    // manual_override does not drive attention, but the co-occurring missing_source does; the
+    // booking is counted once and the breakdown records BOTH codes.
+    const views: ReceiptedBookingView[] = [
+      mkView(
+        "unattributed",
+        [
+          { code: "manual_override", raisedAt: RAISED },
+          { code: "missing_source", raisedAt: RAISED },
+        ],
+        "b-mixed",
+      ),
+    ];
+    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
+
+    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+
+    expect(result.bookingsNeedingAttention).toBe(1);
+    expect(result.exceptions.manual_override).toBe(1);
+    expect(result.exceptions.missing_source).toBe(1);
+    expect(result.worklist[0]?.openExceptionCodes).toEqual(["missing_source", "manual_override"]);
+  });
+
   it("returns an all-zero breakdown with an empty worklist for an empty cohort", async () => {
     const receiptedBookings = { listForCohort: vi.fn(async () => []) };
 
