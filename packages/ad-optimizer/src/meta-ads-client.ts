@@ -138,6 +138,12 @@ interface DraftCampaignParams {
   objective: string;
   budget: { daily: number } | { lifetime: number };
   bidStrategy: string;
+  /**
+   * Meta requires `special_ad_categories` on campaign create (an explicit empty
+   * array means "no regulated category"). Omit to keep the field off the body for
+   * non-CTWA callers; the CTWA publish funnel always passes `[]`.
+   */
+  specialAdCategories?: string[];
 }
 
 interface DraftAdSetParams {
@@ -145,6 +151,15 @@ interface DraftAdSetParams {
   name: string;
   targeting: Record<string, unknown>;
   optimizationGoal: string;
+  /**
+   * CTWA (click-to-WhatsApp) ad-set shape. `destinationType: "WHATSAPP"` +
+   * `promotedObject: { page_id }` route conversations to the WhatsApp funnel, and
+   * `billingEvent` is how the ad set is charged. All optional so non-CTWA callers
+   * keep the prior body; the publish funnel always supplies them.
+   */
+  destinationType?: string;
+  promotedObject?: Record<string, unknown>;
+  billingEvent?: string;
 }
 
 interface UploadCreativeAssetParams {
@@ -157,7 +172,12 @@ interface CreateAdCreativeParams {
   pageId: string;
   videoId: string;
   message: string;
-  linkUrl: string;
+  /**
+   * Destination link for the call to action. Omit for a WhatsApp-message CTA
+   * (CTWA), where the conversation target is the ad set's `promoted_object` page,
+   * not a click-through URL.
+   */
+  linkUrl?: string;
   callToActionType?: string;
   imageHash?: string;
 }
@@ -394,6 +414,7 @@ export class MetaAdsClient {
       objective: params.objective,
       status: "PAUSED",
       bid_strategy: params.bidStrategy,
+      ...(params.specialAdCategories ? { special_ad_categories: params.specialAdCategories } : {}),
     };
 
     if ("daily" in params.budget) {
@@ -407,12 +428,15 @@ export class MetaAdsClient {
   }
 
   async createDraftAdSet(params: DraftAdSetParams): Promise<{ id: string }> {
-    const body = {
+    const body: Record<string, unknown> = {
       campaign_id: params.campaignId,
       name: params.name,
       targeting: params.targeting,
       optimization_goal: params.optimizationGoal,
       status: "PAUSED",
+      ...(params.destinationType ? { destination_type: params.destinationType } : {}),
+      ...(params.promotedObject ? { promoted_object: params.promotedObject } : {}),
+      ...(params.billingEvent ? { billing_event: params.billingEvent } : {}),
     };
 
     const response = await this.post(`/${this.accountId}/adsets`, body);
@@ -446,7 +470,7 @@ export class MetaAdsClient {
           ...(params.imageHash ? { image_hash: params.imageHash } : {}),
           call_to_action: {
             type: params.callToActionType ?? "LEARN_MORE",
-            value: { link: params.linkUrl },
+            ...(params.linkUrl ? { value: { link: params.linkUrl } } : {}),
           },
         },
       },
