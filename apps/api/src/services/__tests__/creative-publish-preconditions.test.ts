@@ -16,39 +16,21 @@ const META_CONNECTION = {
   status: "connected",
 };
 
-const WABA_CONNECTION = {
-  credentials: "enc-waba",
-  externalAccountId: "waba_1",
-  status: "connected",
-};
-
 function deps(
   overrides: {
     job?: unknown;
     connection?: unknown;
-    wabaConnection?: unknown;
     creds?: Record<string, unknown>;
-    wabaCreds?: Record<string, unknown>;
   } = {},
 ) {
-  // assertPublishable reads two connections: the meta-ads connection (status +
-  // credentials) and, for the CTWA destination, the whatsapp connection (WABA
-  // binding). Route on the serviceId passed in the where-clause so a single mock
-  // can serve both reads.
-  const findFirst = vi.fn(async (args: { where?: { serviceId?: string } }) => {
-    if (args?.where?.serviceId === "whatsapp") {
-      return "wabaConnection" in overrides ? overrides.wabaConnection : WABA_CONNECTION;
-    }
-    return "connection" in overrides ? overrides.connection : META_CONNECTION;
-  });
-  // decrypt is called per ciphertext; key off the encrypted blob so meta vs waba
-  // credentials are distinguishable.
-  const decrypt = vi.fn((encrypted: unknown) => {
-    if (encrypted === "enc-waba") {
-      return overrides.wabaCreds ?? { phoneNumberId: "pn_1" };
-    }
-    return overrides.creds ?? { accessToken: "tok", accountId: "act_1", pageId: "page_1" };
-  });
+  const findFirst = vi
+    .fn()
+    .mockResolvedValue("connection" in overrides ? overrides.connection : META_CONNECTION);
+  const decrypt = vi
+    .fn()
+    .mockReturnValue(
+      overrides.creds ?? { accessToken: "tok", accountId: "act_1", pageId: "page_1" },
+    );
   return {
     prisma: {
       creativeJob: {
@@ -69,6 +51,18 @@ describe("assertPublishable", () => {
       expect(r.pageId).toBe("page_1");
       expect(r.accessToken).toBe("tok");
       expect(r.durableAssetUrl).toBe("https://cdn.example/a.mp4");
+    }
+  });
+
+  it("a connected Meta-Ads org with NO WhatsApp/WABA binding can publish (regression: unconditional WABA check blocked non-CTWA orgs)", async () => {
+    // This is the regression test: the publish path is LEARN_MORE / OUTCOME_LEADS,
+    // not a click-to-WhatsApp ad. An org that has Meta Ads but has not completed
+    // WhatsApp onboarding must still be able to publish a normal creative.
+    const r = await assertPublishable(deps(), "org_1", "j1");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.accessToken).toBe("tok");
+      expect(r.pageId).toBe("page_1");
     }
   });
 
@@ -190,7 +184,7 @@ describe("assertPublishable", () => {
 
   it("META_CONNECTION_NOT_CONNECTED when the meta-ads connection is not connected", async () => {
     // An expired/revoked connection must fail pre-flight with a clear, actionable
-    // reason — NOT a raw downstream Meta error after a dead-letter. The reason
+    // reason -- NOT a raw downstream Meta error after a dead-letter. The reason
     // names the actual status so the operator knows to reconnect.
     const r = await assertPublishable(
       deps({ connection: { ...META_CONNECTION, status: "expired" } }),
@@ -214,33 +208,6 @@ describe("assertPublishable", () => {
     );
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("META_CONNECTION_NOT_CONNECTED");
-  });
-
-  it("META_WABA_NOT_BOUND when the org has no whatsapp connection (CTWA destination)", async () => {
-    const r = await assertPublishable(deps({ wabaConnection: null }), "org_1", "j1");
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("META_WABA_NOT_BOUND");
-  });
-
-  it("META_WABA_NOT_BOUND when the whatsapp connection has no phone-number id", async () => {
-    const r = await assertPublishable(deps({ wabaCreds: {} }), "org_1", "j1");
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("META_WABA_NOT_BOUND");
-  });
-
-  it("META_WABA_NOT_BOUND when the whatsapp connection has no waba id", async () => {
-    const r = await assertPublishable(
-      deps({ wabaConnection: { ...WABA_CONNECTION, externalAccountId: null } }),
-      "org_1",
-      "j1",
-    );
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("META_WABA_NOT_BOUND");
-  });
-
-  it("passes pre-flight for a connected, WABA-bound connection", async () => {
-    const r = await assertPublishable(deps(), "org_1", "j1");
-    expect(r.ok).toBe(true);
   });
 
   it("loop-closing: accepts a PR-A storage URL and surfaces the exact value to the handler", async () => {

@@ -7,8 +7,7 @@ export type PublishFailureCode =
   | "CREATIVE_ASSET_NOT_DURABLE"
   | "META_CONNECTION_NOT_FOUND"
   | "META_CONNECTION_NOT_CONNECTED"
-  | "META_PAGE_NOT_CONFIGURED"
-  | "META_WABA_NOT_BOUND";
+  | "META_PAGE_NOT_CONFIGURED";
 
 export interface PublishContext {
   ok: true;
@@ -33,7 +32,6 @@ export interface AssertPublishableDeps {
 }
 
 const META_ADS_SERVICE_ID = "meta-ads";
-const WHATSAPP_SERVICE_ID = "whatsapp";
 const CONNECTED_STATUS = "connected";
 
 function fail(code: PublishFailureCode, message: string): PublishPrecheckFailure {
@@ -41,39 +39,16 @@ function fail(code: PublishFailureCode, message: string): PublishPrecheckFailure
 }
 
 /**
- * CTWA destination presence check: a click-to-WhatsApp draft routes clicks to a
- * WhatsApp business number, so the org must have a WhatsApp connection bound to a
- * WABA (externalAccountId) and a Cloud API phone-number id. Presence only — no
- * Graph call. Without it the draft builds but cannot serve and dead-letters with
- * a raw Meta error. Returns a failure to surface, or null when bound.
- */
-async function assertWabaBound(
-  deps: AssertPublishableDeps,
-  organizationId: string,
-): Promise<PublishPrecheckFailure | null> {
-  const wabaConnection = (await deps.prisma.connection.findFirst({
-    where: { serviceId: WHATSAPP_SERVICE_ID, organizationId },
-    select: { credentials: true, externalAccountId: true },
-  })) as { credentials: unknown; externalAccountId: string | null } | null;
-
-  const wabaId = wabaConnection?.externalAccountId ?? null;
-  const wabaCreds = wabaConnection ? deps.decrypt(wabaConnection.credentials) : null;
-  const phoneNumberId =
-    wabaCreds && typeof wabaCreds["phoneNumberId"] === "string" ? wabaCreds["phoneNumberId"] : null;
-  if (!wabaId || !phoneNumberId) {
-    return fail(
-      "META_WABA_NOT_BOUND",
-      "No WhatsApp Business account is bound for this organization. Complete WhatsApp onboarding before publishing a click-to-WhatsApp ad.",
-    );
-  }
-  return null;
-}
-
-/**
  * Single source of truth for "can this job be published as a paused Meta draft?".
  * Used by the route (pre-flight → immediate 4xx) AND the workflow handler
  * (defensive re-check post-approval). Fails loud with an actionable code; never
  * silently no-ops. Page-id read side only — the operator setter is PR C.
+ *
+ * This publish path builds a LEARN_MORE link-destination paused draft
+ * (objective OUTCOME_LEADS, placeholder link). It is NOT a click-to-WhatsApp ad.
+ * A WABA-binding precondition belongs only on a CTWA-destination flag that does
+ * not exist yet; adding it unconditionally here blocks every creative publish for
+ * orgs onboarded to Meta Ads but not WhatsApp.
  */
 export async function assertPublishable(
   deps: AssertPublishableDeps,
@@ -155,10 +130,6 @@ export async function assertPublishable(
       "No Facebook Page is configured for ads on this connection.",
     );
   }
-
-  // CTWA destination: the org must have a WABA-bound WhatsApp connection.
-  const wabaFailure = await assertWabaBound(deps, organizationId);
-  if (wabaFailure) return wabaFailure;
 
   return { ok: true, job, durableAssetUrl: job.durableAssetUrl, accessToken, accountId, pageId };
 }
