@@ -232,7 +232,12 @@ function buildHarness(policies: Policy[]): Harness {
   modeRegistry.register(
     new WorkflowMode({
       handlers: new Map<string, WorkflowHandler>([
-        ["adoptimizer.recommendation.handoff", buildRecommendationHandoffWorkflow()],
+        [
+          "adoptimizer.recommendation.handoff",
+          buildRecommendationHandoffWorkflow({
+            markRecommendationActed: async () => ({ transitioned: true }),
+          }),
+        ],
         ["creative.concept.draft", creativeDraftHandler],
       ]),
       services: { submitChildWork },
@@ -297,7 +302,9 @@ describe("Riley cron -> agent handoff (live path through real ingress + gate)", 
       trigger: "internal",
       priority: "normal",
     } as WorkUnit;
-    const result = await buildRecommendationHandoffWorkflow().execute(parkedWorkUnit, {
+    const result = await buildRecommendationHandoffWorkflow({
+      markRecommendationActed: async () => ({ transitioned: true }),
+    }).execute(parkedWorkUnit, {
       submitChildWork: h.submitChildWork,
     });
 

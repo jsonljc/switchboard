@@ -326,8 +326,13 @@ export function buildHarness(
     });
   };
 
-  // Failure-injection wrapper around the REAL handoff handler.
-  const realHandoffHandler = buildRecommendationHandoffWorkflow();
+  // Failure-injection wrapper around the REAL handoff handler. The acted-transition
+  // dep is a no-op stub here: this harness exercises the cron->park->approve->draft
+  // lifecycle, not the source-recommendation transition (no recommendation store is
+  // stood up). The transition is unit-tested in recommendation-handoff-workflow.test.ts.
+  const realHandoffHandler = buildRecommendationHandoffWorkflow({
+    markRecommendationActed: async () => ({ transitioned: true }),
+  });
   const sabotage = { failNext: false };
   const wrappedHandoffHandler: WorkflowHandler = {
     async execute(workUnit: WorkUnit, services): Promise<WorkflowHandlerResult> {
