@@ -138,6 +138,30 @@ To turn on Casey's consent enforcement for a clinic, no code ships. The owner/op
 This is the highest-leverage Casey action available today and it is a configuration decision, not
 an engineering slice.
 
+## Independent review findings (2026-06-17)
+
+A fresh-context review of the machinery above (verifying "does it actually work end to end")
+confirmed the determination is sound and surfaced three gaps. None reopens the design; the consent
+leg is still substantially built. Dispositions:
+
+1. FIXED: the canonical `ContactConsentReader.read()` was not org-scoped
+   (`findUnique({ where: { id } })`), so the admin `GET /api/admin/consent/:contactId` route
+   leaked another tenant's consent record (including `consentNotes`) by contactId, and the booking
+   gate plus the outbound hook read through the same un-scoped reader. Fixed in PR #1134 (org-scope
+   the reader plus thread orgId at all three call sites; TDD). **Land #1134 before flipping any org
+   to `consentState.mode=enforce`**, because enforce mode is exactly when bookings start reading
+   consent through that reader.
+2. DECISION NEEDED: `meta.lead.greeting.send` (the first-touch WhatsApp greeting to a new Meta
+   lead) sends a template with no consent-eligibility check, so proactive-send coverage is not
+   total. For CTWA leads the ad click is the opt-in, but the code sends unconditionally. Decide
+   whether the first-touch greeting must pass the eligibility gate or is a deliberate
+   `not_applicable` allow. Touches an external send path, so its own slice.
+3. FOLLOW-UP: the `missing_consent` receipt exception is jurisdiction-blind
+   (`evaluate-exceptions.ts` raises it whenever consent is absent or revoked), while the
+   completeness report scopes "bookable" to `pdpaJurisdiction != null` and the booking gate allows
+   `not_applicable`. A no-jurisdiction contact therefore gets a `missing_consent` flag the matching
+   report and gate would not. Small consistency fix (guard the push on jurisdiction).
+
 ## Open decisions (for the deferred identity-matcher kickoff)
 
 When the identity matcher is picked up as its own product kickoff, these must be answered first
