@@ -247,4 +247,117 @@ describe("buildWeeklyDigest", () => {
     expect(d.attention).toEqual([]);
     expect(d.attentionNote).toBe("6 bookings need attention.");
   });
+
+  it("surfaces Riley ad-economics (attributed revenue, ad spend, blended ROAS) from the report", () => {
+    const d = buildWeeklyDigest(
+      makeReport({
+        attribution: {
+          total: 9000,
+          delta: { kind: "pos", text: "+10 %" },
+          riley: { value: 6000, caption: "2 campaigns · 14 leads" },
+          alex: { value: 3000, caption: "chat · 7 leads" },
+        },
+        campaigns: [
+          {
+            name: "Botox Promo",
+            spend: 1500,
+            impressions: 10000,
+            inlineLinkClicks: 200,
+            costPerInlineLinkClick: 7.5,
+            inlineLinkClickCtr: 0.02,
+            leads: 10,
+            revenue: 4500,
+            cpl: 150,
+            clickToLeadRate: 0.05,
+            roas: 3,
+          },
+          {
+            name: "Filler Launch",
+            spend: 500,
+            impressions: 4000,
+            inlineLinkClicks: 80,
+            costPerInlineLinkClick: 6.25,
+            inlineLinkClickCtr: 0.02,
+            leads: 4,
+            revenue: 1500,
+            cpl: 125,
+            clickToLeadRate: 0.05,
+            roas: 3,
+          },
+        ],
+      }),
+      opts,
+    );
+
+    // Attributed revenue comes from attribution.riley.value (major units), with the campaign/lead caption.
+    expect(metric(d, "riley_attributed_revenue").value).toBe("$6,000.00");
+    expect(metric(d, "riley_attributed_revenue").detail).toBe("2 campaigns · 14 leads");
+
+    // Ad spend is the sum of campaign spend; detail counts the campaigns.
+    expect(metric(d, "ad_spend").value).toBe("$2,000.00");
+    expect(metric(d, "ad_spend").detail).toBe("2 campaigns");
+
+    // Blended ROAS = total campaign revenue / total campaign spend = 6000 / 2000 = 3.0x.
+    expect(metric(d, "roas").value).toBe("3.0x");
+    expect(metric(d, "roas").detail).toBe("$6,000.00 from $2,000.00 spent");
+
+    // The economics lines render in the plain-text body, em-dash-free.
+    const text = renderWeeklyDigestText(d);
+    expect(text).toContain("Riley attributed revenue: $6,000.00");
+    expect(text).toContain("Ad spend: $2,000.00");
+    expect(text).toContain("Return on ad spend: 3.0x");
+    expect(text).not.toMatch(/[–—]/);
+  });
+
+  it("renders honest economics with no campaigns and no Riley revenue (never NaN)", () => {
+    const d = buildWeeklyDigest(makeReport(), opts);
+
+    expect(metric(d, "riley_attributed_revenue").value).toBe("$0.00");
+    expect(metric(d, "ad_spend").value).toBe("$0.00");
+    expect(metric(d, "ad_spend").detail).toBe("no campaigns yet");
+    // No ad spend -> ROAS is undefined; render an honest phrase rather than NaN/Infinity.
+    expect(metric(d, "roas").value).toBe("no ad spend yet");
+    expect(metric(d, "roas").detail).toBeUndefined();
+
+    const text = renderWeeklyDigestText(d);
+    expect(text).not.toContain("NaN");
+    expect(text).not.toContain("Infinity");
+  });
+
+  it("guards non-finite economics figures to safe values, never NaN", () => {
+    const d = buildWeeklyDigest(
+      makeReport({
+        attribution: {
+          total: Number.NaN,
+          delta: { kind: "flat", text: "" },
+          riley: { value: Number.NaN, caption: "1 campaign · 0 leads" },
+          alex: { value: 0, caption: "chat · 0 leads" },
+        },
+        campaigns: [
+          {
+            name: "Broken Feed",
+            spend: Number.NaN,
+            impressions: 0,
+            inlineLinkClicks: 0,
+            costPerInlineLinkClick: 0,
+            inlineLinkClickCtr: 0,
+            leads: 0,
+            revenue: Number.NaN,
+            cpl: null,
+            clickToLeadRate: null,
+            roas: 0,
+          },
+        ],
+      }),
+      opts,
+    );
+
+    expect(metric(d, "riley_attributed_revenue").value).toBe("$0.00");
+    expect(metric(d, "ad_spend").value).toBe("$0.00");
+    // Non-finite spend sums to zero -> ROAS undefined -> honest phrase, never NaN.
+    expect(metric(d, "roas").value).toBe("no ad spend yet");
+
+    const text = renderWeeklyDigestText(d);
+    expect(text).not.toContain("NaN");
+  });
 });
