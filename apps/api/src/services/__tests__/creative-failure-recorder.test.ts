@@ -123,6 +123,103 @@ describe("executeCreativeFailureRecorder", () => {
   });
 });
 
+describe("executeCreativeFailureRecorder AgentTask terminal transition", () => {
+  function makeDepsWithTask(
+    job: Record<string, unknown> | null,
+    updateTaskStatus: ReturnType<typeof vi.fn>,
+  ) {
+    return {
+      jobStore: {
+        findById: vi.fn(async (): Promise<unknown> => job),
+        failPolished: vi.fn(async (): Promise<unknown> => ({})),
+        failUgc: vi.fn(async (): Promise<unknown> => ({})),
+      },
+      updateTaskStatus,
+    };
+  }
+
+  it("marks the spawned AgentTask failed after recording a polished failure", async () => {
+    const updateTaskStatus = vi.fn<
+      (organizationId: string, taskId: string, status: "failed") => Promise<void>
+    >(async () => {});
+    const deps = makeDepsWithTask(
+      {
+        id: "job_1",
+        taskId: "task_1",
+        organizationId: "org_1",
+        mode: "polished",
+        currentStage: "hooks",
+        stageOutputs: {},
+      },
+      updateTaskStatus,
+    );
+    await executeCreativeFailureRecorder(polishedEvent, step, deps as never);
+    expect(updateTaskStatus).toHaveBeenCalledWith("org_1", "task_1", "failed");
+  });
+
+  it("marks the spawned AgentTask failed after recording a ugc failure", async () => {
+    const updateTaskStatus = vi.fn<
+      (organizationId: string, taskId: string, status: "failed") => Promise<void>
+    >(async () => {});
+    const deps = makeDepsWithTask(
+      {
+        id: "job_1",
+        taskId: "task_1",
+        organizationId: "org_1",
+        mode: "ugc",
+        ugcPhase: "scripting",
+      },
+      updateTaskStatus,
+    );
+    await executeCreativeFailureRecorder(
+      { ...polishedEvent, functionId: "ugc-job-runner" },
+      step,
+      deps as never,
+    );
+    expect(updateTaskStatus).toHaveBeenCalledWith("org_1", "task_1", "failed");
+  });
+
+  it("does not touch the AgentTask when the job is already terminal (skipped)", async () => {
+    const updateTaskStatus = vi.fn<
+      (organizationId: string, taskId: string, status: "failed") => Promise<void>
+    >(async () => {});
+    const deps = makeDepsWithTask(
+      {
+        id: "job_1",
+        taskId: "task_1",
+        organizationId: "org_1",
+        mode: "polished",
+        stageFailure: { code: "X" },
+      },
+      updateTaskStatus,
+    );
+    await executeCreativeFailureRecorder(polishedEvent, step, deps as never);
+    expect(updateTaskStatus).not.toHaveBeenCalled();
+  });
+
+  it("never throws when the AgentTask updater rejects (Class-E: no recursion)", async () => {
+    const updateTaskStatus = vi
+      .fn<(organizationId: string, taskId: string, status: "failed") => Promise<void>>()
+      .mockRejectedValue(new Error("task store down"));
+    const deps = makeDepsWithTask(
+      {
+        id: "job_1",
+        taskId: "task_1",
+        organizationId: "org_1",
+        mode: "polished",
+        currentStage: "hooks",
+        stageOutputs: {},
+      },
+      updateTaskStatus,
+    );
+    await expect(
+      executeCreativeFailureRecorder(polishedEvent, step, deps as never),
+    ).resolves.toBeUndefined();
+    expect(deps.jobStore.failPolished).toHaveBeenCalled();
+    expect(updateTaskStatus).toHaveBeenCalledWith("org_1", "task_1", "failed");
+  });
+});
+
 describe("CREATIVE_FAILURE_RECORDER_FAILURE_PARAMS", () => {
   it("is a Class-E contract: audit-only, no event recursion, no alert", () => {
     expect(CREATIVE_FAILURE_RECORDER_FAILURE_PARAMS).toMatchObject({
