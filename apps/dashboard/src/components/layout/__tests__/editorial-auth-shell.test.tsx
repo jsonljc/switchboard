@@ -95,4 +95,27 @@ describe("EditorialAuthShellInner", () => {
     const content = screen.getByText("page-content");
     expect(content.closest("main")).not.toBeNull();
   });
+
+  // The in-shell error boundary must scope to the CONTENT slot only. A render
+  // error in a page must NOT strand the user with no header/nav — the boundary
+  // catches the content, the shell chrome (brand, primary nav) stays mounted.
+  it("keeps the header + nav mounted when page content throws", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    function Boom(): never {
+      throw new Error("content-render-error");
+    }
+    render(
+      <EditorialAuthShellInner>
+        <Boom />
+      </EditorialAuthShellInner>,
+    );
+
+    // Shell chrome survives the content error: the brand link and the primary
+    // nav (exact "Primary" name; AppSidebar uses "Primary sidebar") stay mounted.
+    expect(screen.getByRole("link", { name: /switchboard/i })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
+    // Content slot shows the recovery fallback, not the raw thrown error.
+    expect(screen.getByText(/reload the page to try again/i)).toBeInTheDocument();
+    spy.mockRestore();
+  });
 });

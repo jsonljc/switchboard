@@ -36,10 +36,8 @@ vi.mock("../data-mode-banner", () => ({
 // authed routes). Mock it to a recognizable marker so these tests assert AppShell's
 // branch decision — "does this route get the shell?" — without pulling the real
 // shell's whole client subtree (providers, nav, popovers). The shell's own
-// behavior is covered by editorial-auth-shell.test.tsx.
-vi.mock("../editorial-shell-boundary", () => ({
-  EditorialShellBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
+// behavior — including the content-scoped EditorialShellBoundary it now mounts
+// internally — is covered by editorial-auth-shell.test.tsx.
 vi.mock("../editorial-auth-shell", () => ({
   EditorialAuthShellInner: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="editorial-shell">

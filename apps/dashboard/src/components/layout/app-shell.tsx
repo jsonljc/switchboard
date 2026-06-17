@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { DataModeBanner } from "@/components/layout/data-mode-banner";
-import { EditorialShellBoundary } from "@/components/layout/editorial-shell-boundary";
 import { EditorialAuthShellInner } from "@/components/layout/editorial-auth-shell";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
@@ -92,14 +91,15 @@ export function AppShell({
 
   // Every other authed route shares ONE editorial shell. EditorialAuthShellInner
   // mounts HaltProvider + RightDrawerProvider + AmbientCream + EditorialKeys + the
-  // app-header and wraps children in <main>. DataModeBanner sits above the sticky
-  // header (matching its non-sticky contract); DevPanel mounts after the shell.
+  // app-header and wraps children in <main>. The EditorialShellBoundary now lives
+  // INSIDE the shell, scoped to the content slot, so a page render error keeps the
+  // header + nav mounted instead of stranding the user (a root-layout / chrome
+  // error still falls through to app/error.tsx). DataModeBanner sits above the
+  // sticky header (matching its non-sticky contract); DevPanel mounts after.
   return (
     <>
       <DataModeBanner />
-      <EditorialShellBoundary>
-        <EditorialAuthShellInner>{children}</EditorialAuthShellInner>
-      </EditorialShellBoundary>
+      <EditorialAuthShellInner>{children}</EditorialAuthShellInner>
       <DevPanel dataModeControlsAllowed={dataModeControlsAllowed} />
     </>
   );

@@ -396,6 +396,19 @@
     line-height: 1.65;
   }
 
+  /* Global keyboard-focus baseline (WCAG 2.4.7). Every interactive element that
+     does NOT define its own focus-visible treatment still gets a visible ring.
+     Declared in @layer base so the many component-level :focus-visible rules —
+     which live in @layer components and in unlayered CSS modules, both of which
+     outrank base in the cascade — keep their bespoke styling untouched. Uses the
+     semantic --ring token so it follows light/dark. We target :focus-visible (not
+     :focus) so mouse clicks don't paint a ring while keyboard navigation always
+     does — the modern WCAG 2.4.7 baseline. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;

@@ -327,6 +327,30 @@
   transition: none;
 }
 
+/* Keyboard/AT tap target. Spans the whole card so Tab focus lands on the card
+   as one named control ("Open details — …"). pointer-events:none keeps it out
+   of the mouse/touch path entirely — pointer taps and swipe drags go to the
+   track beneath it, while keyboard focus + Enter/Space still reach this button
+   (keyboard events ignore pointer-events). It sits above the stripe but below
+   the track content so it never visually occludes anything. */
+.decision-keyboard-target {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  pointer-events: none;
+  cursor: pointer;
+}
+.decision-keyboard-target:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+  border-radius: var(--r-lg);
+}
+
 /* Swipe zones (unchanged behaviour) */
 .decision-zone {
   position: absolute;
