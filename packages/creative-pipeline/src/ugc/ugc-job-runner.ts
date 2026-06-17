@@ -21,6 +21,24 @@ interface UgcJobEventData {
   deploymentId: string;
 }
 
+/**
+ * Terminal AgentTask statuses the UGC runner can hand its spawned task. Mirrors
+ * the polished runner's TerminalTaskStatus; both live in Layer-2 creative-pipeline
+ * so neither can import @switchboard/schemas' AgentTaskStatus directly.
+ */
+type TerminalTaskStatus = "completed" | "cancelled";
+
+/**
+ * Best-effort updater for the AgentTask the creative-job-submit workflow spawned.
+ * Injected from apps/api bootstrap (wired to PrismaAgentTaskStore.updateStatus).
+ * Optional so existing call sites that do not care about task lifecycle stay valid.
+ */
+type TaskStatusUpdater = (
+  organizationId: string,
+  taskId: string,
+  status: TerminalTaskStatus,
+) => Promise<void>;
+
 interface UgcStepTools {
   run: <T>(name: string, fn: () => T | Promise<T>) => Promise<T>;
   waitForEvent: (
@@ -68,6 +86,14 @@ interface UgcPipelineDeps {
   assetStore?: unknown;
   /** Durable storage for final assets (slice-3 spec 3.3f); injected from bootstrap. */
   assetStorage?: AssetStorageClient;
+  /**
+   * Best-effort terminal-status write for the AgentTask the creative-job-submit
+   * workflow spawned (its id rides on eventData.taskId). Injected from apps/api
+   * bootstrap (PrismaAgentTaskStore.updateStatus). Optional + caught: a task-store
+   * hiccup must never throw out of the runner (an Inngest retry would re-run every
+   * paid phase). Mirrors the polished runner's TaskStatusUpdater injection.
+   */
+  updateTaskStatus?: TaskStatusUpdater;
 }
 
 // Step-memoized snapshot: JSON-safe DATA ONLY. Live client objects (kling,
@@ -304,6 +330,27 @@ export async function executeUgcPipeline(
     return;
   }
 
+  // Transition the spawned AgentTask to a terminal status so it stops lingering
+  // as "pending" (polluting the open-task work-log + metrics). Best-effort: a
+  // task-store hiccup must never throw out of the runner (an Inngest retry would
+  // re-run every paid phase), and the status flip is wrapped in its own named
+  // step so the write is memoized + not re-issued on replay. Mirrors the polished
+  // runner's settleTask closure; UGC deps-object shape injects the updater via deps.
+  const settleTask = async (status: TerminalTaskStatus): Promise<void> => {
+    if (!deps.updateTaskStatus) return;
+    const updateTaskStatus = deps.updateTaskStatus;
+    try {
+      await step.run(`task-status-${status}`, () =>
+        updateTaskStatus(eventData.organizationId, eventData.taskId, status),
+      );
+    } catch (err) {
+      console.warn(
+        `[ugc-job-runner] failed to mark AgentTask ${eventData.taskId} ${status} ` +
+          `for job ${eventData.jobId}: ${String(err)}`,
+      );
+    }
+  };
+
   const context = await step.run("preload-context", () => preloadContext(job, deps));
 
   let phaseOutputs: Record<string, unknown> = (job.ugcPhaseOutputs ?? {}) as Record<
@@ -406,11 +453,18 @@ export async function executeUgcPipeline(
           name: "creative-pipeline/ugc.stopped",
           data: { jobId: job.id, stoppedAtPhase: phase as string },
         });
+        // Terminal halt (explicit stop OR 24h approval timeout): the AgentTask did
+        // not run to completion, so it is cancelled rather than completed.
+        await settleTask("cancelled");
         return;
       }
     }
 
-    if (nextPhase === "complete") break;
+    if (nextPhase === "complete") {
+      // Terminal "complete" branch: the spawned AgentTask is done.
+      await settleTask("completed");
+      break;
+    }
   }
 
   // Read production results for completion event

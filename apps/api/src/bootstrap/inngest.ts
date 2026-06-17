@@ -1365,6 +1365,10 @@ export async function registerInngest(
           // S3 client the polished runner receives, so kept UGC creatives gain
           // a durableAssetUrl and become publishable.
           assetStorage,
+          // Settle the spawned AgentTask on the runner's in-band terminal branches
+          // (completed on full completion, cancelled on stop/approval-timeout).
+          // Mirrors the polished runner's settleCreativeTaskStatus injection.
+          updateTaskStatus: settleCreativeTaskStatus,
         },
         makeOnFailureHandler(CREATIVE_UGC_RUNNER_FAILURE_PARAMS, asyncFailure) as (
           arg: unknown,
