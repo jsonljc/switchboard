@@ -196,8 +196,11 @@ export async function bootstrapContainedWorkflows(
     PrismaCreativeJobStore,
     PrismaDeploymentStore,
     PrismaOrgAgentEnablementStore,
+    PrismaRecommendationStore,
   } = await import("@switchboard/db");
   const { InstantFormAdapter } = await import("@switchboard/ad-optimizer");
+  const { buildMarkHandoffRecommendationActed } =
+    await import("./recommendation-handoff-executor.js");
 
   // Single source of truth for Contact creation from leads (CTWA + Instant Form).
   // The meta.lead.intake workflow orchestrates the IF webhook (Graph fetch +
@@ -244,9 +247,18 @@ export async function bootstrapContainedWorkflows(
   });
 
   // Riley→agent advisory handoff (Contract 3): on approval, routes a Riley creative
-  // recommendation to a draft-only creative.concept.draft child. Stateless handler
-  // (it submits the child through `services.submitChildWork`).
-  const recommendationHandoffWorkflow = buildRecommendationHandoffWorkflow();
+  // recommendation to a draft-only creative.concept.draft child (via
+  // `services.submitChildWork`), then transitions the SOURCE recommendation to
+  // "acted" so outcome attribution can measure handoff effectiveness. The acted
+  // transition is the same conditional first-writer-wins store call the Phase-C
+  // pause/reallocate executors use, with a handoff-specific resolvedBy sentinel.
+  const recommendationHandoffWorkflow = buildRecommendationHandoffWorkflow({
+    markRecommendationActed: buildMarkHandoffRecommendationActed(
+      new PrismaRecommendationStore(
+        prismaClient as ConstructorParameters<typeof PrismaRecommendationStore>[0],
+      ),
+    ),
+  });
 
   // Phase-C pause executor: on approval, pauses the campaign on Meta with the
   // org's own meta-ads credentials. Wiring (incl. the org-isolation credential

@@ -3,6 +3,41 @@ import { RecommendationHandoffInput, CreativeConceptDraftInput } from "@switchbo
 import { shouldAbstainFromHandoff } from "@switchboard/ad-optimizer";
 
 /**
+ * resolvedBy sentinel for handoff-executed transitions. A distinct machine
+ * identifier (never a human principal id, never the pause/reallocate values): the
+ * approver approved the handoff, the platform created the draft. Distinct from the
+ * pause/reallocate sentinels so the audit row records the right machine
+ * provenance for a creative handoff act.
+ */
+export const HANDOFF_EXECUTION_RESOLVED_BY = "riley_handoff_self_execution";
+
+export interface RecommendationHandoffDeps {
+  /**
+   * Transition the SOURCE recommendation to "acted" AFTER the handoff really
+   * created a draft (a child draft with a jobId is the act). This is what lets
+   * outcome attribution tell an acted-on recommendation from an ignored one, and
+   * lets Riley measure handoff effectiveness. Called from the truthful success
+   * leg ONLY: abstention, the no-draft skip leg (no jobId), and every failure leg
+   * never call it (nothing was acted on). The implementation is conditional
+   * first-writer-wins; benign lost races return transitioned:false with a reason,
+   * infra errors throw and are caught at the call site. REQUIRED, not optional:
+   * an optional dep would let a future bootstrap forget the wiring and silently
+   * recreate the handoffs-invisible-to-attribution hole this closes
+   * (feedback_safety_gate_needs_producer_population).
+   */
+  markRecommendationActed: (args: {
+    organizationId: string;
+    recommendationId: string;
+    executableWorkUnitId: string;
+    executedAt: Date;
+  }) => Promise<
+    { transitioned: true } | { transitioned: false; reason: "not_found" | "not_pending" }
+  >;
+  /** Injectable clock; executedAt anchors the outcome-attribution window. */
+  now?: () => Date;
+}
+
+/**
  * Contract 3 (Riley -> agent advisory->action handoff). This handler runs AFTER
  * the handoff intent has parked for and received mandatory human approval (the
  * seeded require_approval policy gates it). On execution it:
@@ -15,11 +50,19 @@ import { shouldAbstainFromHandoff } from "@switchboard/ad-optimizer";
  *   3. Maps the recommendation to a creative.concept.draft brief and submits it as
  *      a draft-only child through the one front door (services.submitChildWork) -
  *      the child re-runs governance and is draft-only (no spend, no pipeline).
+ *   4. On a real created draft (child with a jobId), transitions the SOURCE
+ *      recommendation to "acted" so outcome attribution can measure handoff
+ *      effectiveness (mirrors the Phase-C pause/reallocate executors). Bookkeeping
+ *      only: a transition failure is recorded in outputs and logged, never a false
+ *      "failed" claim about a draft that really was created.
  *
  * Riley gains no budget authority: the draft is a no-spend CreativeJob row a human
  * later funds. The handoff itself is what a human approved.
  */
-export function buildRecommendationHandoffWorkflow(): WorkflowHandler {
+export function buildRecommendationHandoffWorkflow(
+  deps: RecommendationHandoffDeps,
+): WorkflowHandler {
+  const now = deps.now ?? (() => new Date());
   return {
     async execute(workUnit, services) {
       const parsed = RecommendationHandoffInput.safeParse(workUnit.parameters);
@@ -145,6 +188,41 @@ export function buildRecommendationHandoffWorkflow(): WorkflowHandler {
         };
       }
 
+      // A real draft was created: the recommendation was acted on. Transition the
+      // SOURCE recommendation to "acted" so outcome attribution can measure handoff
+      // effectiveness and tell acted-on from ignored. executableWorkUnitId is THIS
+      // handoff unit (the executable that did the act), executedAt is the draft-
+      // creation clock (the attribution window anchor). Bookkeeping never fails the
+      // unit: the created draft is the execution truth, so a transition failure is
+      // recorded in outputs and logged, never converted into a false "failed".
+      const executedAt = now();
+      let recommendationTransition: "acted" | "not_found" | "not_pending" | "error";
+      try {
+        const transition = await deps.markRecommendationActed({
+          organizationId: workUnit.organizationId,
+          recommendationId: input.recommendationId,
+          executableWorkUnitId: workUnit.id,
+          executedAt,
+        });
+        recommendationTransition = transition.transitioned ? "acted" : transition.reason;
+        if (recommendationTransition === "not_found") {
+          // not_pending is the benign first-writer-won race (operator acted/dismissed
+          // concurrently, or lazy expiry won) and stays silent; not_found after a
+          // SUCCESSFUL draft is suspicious (stale/deleted/cross-org/bad recommendation
+          // id) and deserves a searchable signal without failing the work unit.
+          console.warn(
+            `[handoff] recommendation not found after successful draft org=${workUnit.organizationId} rec=${input.recommendationId} workUnit=${workUnit.id}`,
+          );
+        }
+      } catch (err) {
+        // LOUD: "draft created but attribution linkage failed" must be
+        // discoverable/alertable, never just trace-archaeology.
+        recommendationTransition = "error";
+        console.error(
+          `[handoff] failed to mark recommendation acted org=${workUnit.organizationId} rec=${input.recommendationId} workUnit=${workUnit.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+
       return {
         outcome: "completed",
         summary: "Routed Riley recommendation to a Mira creative draft",
@@ -152,6 +230,7 @@ export function buildRecommendationHandoffWorkflow(): WorkflowHandler {
           recommendationId: input.recommendationId,
           child: child.workUnit?.id,
           jobId: childJobId,
+          recommendationTransition,
         },
       };
     },
