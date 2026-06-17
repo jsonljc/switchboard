@@ -7,7 +7,9 @@
  * raw NaN. This is the trustworthy weekly summary the owner receives by email.
  *
  * Source fields (all from ReportDataV1): receiptedBookings, receiptedBookingRevenue,
- * receiptedBookingQuality (incl. the worklist), heldRate, consentCompleteness.
+ * receiptedBookingQuality (incl. the worklist), heldRate, consentCompleteness, and the Riley
+ * ad-economics (attribution.riley, campaigns) surfaced as the riley_attributed_revenue, ad_spend,
+ * and roas metrics so the weekly artifact reflects the full cross-agent loop.
  */
 
 /** One headline figure in the digest body. `value` and `detail` are display-ready and NaN-safe. */
@@ -42,7 +44,8 @@ export interface WeeklyDigest {
   headline: string;
   /** The period covered, display-ready, e.g. "Jun 9 to Jun 15". */
   periodLabel: string;
-  /** Ordered headline metrics (receipted bookings, revenue, attribution quality, attention, held, consent). */
+  /** Ordered headline metrics (receipted bookings, revenue, attribution quality, attention, held,
+   *  consent, then the Riley ad-economics: riley_attributed_revenue, ad_spend, roas). */
   metrics: WeeklyDigestMetric[];
   /** The bookings-needing-attention drill-down (may be empty). */
   attention: WeeklyDigestAttentionItem[];

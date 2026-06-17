@@ -13,8 +13,9 @@ import type {
  * Turn an assembled ReportDataV1 into the owner-facing WeeklyDigest content model. Pure and
  * deterministic: every figure is formatted here and NaN-safe (rates that are null render an honest
  * phrase, non-finite money guards to zero), so the delivery layer renders display-ready strings and
- * can never leak a raw NaN. Reads only the receipted-bookings, revenue, quality, held-rate, and
- * consent-completeness fields; the ad-insights sections of the report are intentionally not surfaced.
+ * can never leak a raw NaN. Reads the receipted-bookings, revenue, quality, held-rate, and
+ * consent-completeness fields, plus the Riley ad-economics (attribution.riley, campaigns) so the
+ * weekly artifact reflects the full cross-agent loop: Riley feeds paid demand, Alex books it.
  */
 
 export interface BuildWeeklyDigestOptions {
@@ -58,6 +59,36 @@ function formatMoneyFromCents(cents: number, currency: string | null): string {
 function formatPercent(rate: number | null): string | null {
   if (rate === null || !Number.isFinite(rate)) return null;
   return `${Math.round(rate * 100)}%`;
+}
+
+/** Format a MAJOR-unit money figure (the report's ad/attribution numbers are dollars, not cents).
+ *  Non-finite input guards to $0.00 so the digest can never render NaN. Grouped with two decimals to
+ *  match the receipt-revenue style ("$3,450.00"). */
+function formatMoneyMajor(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  return `$${safe.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/** Sum a major-unit numeric field across campaigns, skipping non-finite entries so a single bad
+ *  insights row can never poison the total into NaN. */
+function sumFinite(values: number[]): number {
+  let total = 0;
+  for (const v of values) {
+    if (Number.isFinite(v)) total += v;
+  }
+  return total;
+}
+
+/** Blended return on ad spend = total campaign revenue / total campaign spend, e.g. "3.0x".
+ *  Returns null when there is no finite, positive spend so the consumer renders an honest phrase
+ *  instead of a NaN or Infinity ratio. */
+function formatRoas(revenue: number, spend: number): string | null {
+  if (!Number.isFinite(spend) || spend <= 0) return null;
+  const safeRevenue = Number.isFinite(revenue) ? revenue : 0;
+  return `${(safeRevenue / spend).toFixed(1)}x`;
 }
 
 function formatDayUTC(iso: string): string {
@@ -107,12 +138,22 @@ export function buildWeeklyDigest(
     receiptedBookingQuality,
     heldRate,
     consentCompleteness,
+    attribution,
+    campaigns,
   } = report;
   const count = receiptedBookings.count;
   const money = formatMoneyFromCents(
     receiptedBookingRevenue.revenueCents,
     receiptedBookingRevenue.currency,
   );
+
+  // Riley ad-economics: surfaced from the already-assembled ad-insights fields so the weekly
+  // artifact reflects the cross-agent loop (Riley feeds paid demand; Alex books it). Major-unit
+  // money, NaN-safe. Blended ROAS uses campaign revenue/spend so the ratio is internally consistent.
+  const campaignCount = campaigns.length;
+  const adSpend = sumFinite(campaigns.map((c) => c.spend));
+  const campaignRevenue = sumFinite(campaigns.map((c) => c.revenue));
+  const roas = formatRoas(campaignRevenue, adSpend);
 
   const metrics: WeeklyDigestMetric[] = [
     { key: "receipted_bookings", label: "Receipted bookings", value: String(count) },
@@ -143,6 +184,29 @@ export function buildWeeklyDigest(
       label: "Consent completeness",
       value: formatPercent(consentCompleteness.rate) ?? "no applicable contacts yet",
       detail: `${consentCompleteness.validConsent} of ${consentCompleteness.bookable} with valid consent`,
+    },
+    {
+      key: "riley_attributed_revenue",
+      label: "Riley attributed revenue",
+      value: formatMoneyMajor(attribution.riley.value),
+      detail: attribution.riley.caption,
+    },
+    {
+      key: "ad_spend",
+      label: "Ad spend",
+      value: formatMoneyMajor(adSpend),
+      detail:
+        campaignCount > 0
+          ? `${campaignCount} campaign${campaignCount === 1 ? "" : "s"}`
+          : "no campaigns yet",
+    },
+    {
+      key: "roas",
+      label: "Return on ad spend",
+      value: roas ?? "no ad spend yet",
+      ...(roas
+        ? { detail: `${formatMoneyMajor(campaignRevenue)} from ${formatMoneyMajor(adSpend)} spent` }
+        : {}),
     },
   ];
 
