@@ -101,6 +101,29 @@ describe("adaptParkedApproval", () => {
     expect(d.humanSummary).toContain("needs your approval");
   });
 
+  it("threads the lifecycle parkedAt + expiresAt into the summarizer context", () => {
+    let seen: { parkedAt?: Date; expiresAt?: Date } = {};
+    const summarizer: ParkedApprovalSummarizer = (ctx) => {
+      seen = { parkedAt: ctx.parkedAt, expiresAt: ctx.expiresAt };
+      return { humanSummary: "x" };
+    };
+    adaptParkedApproval(lifecycle, revision, makeTrace(), summarizer);
+    expect(seen.parkedAt).toEqual(lifecycle.createdAt);
+    expect(seen.expiresAt).toEqual(lifecycle.expiresAt);
+  });
+
+  it("maps a summarizer assetHref onto Decision.threadHref (review-in-place link)", () => {
+    const withHref = adaptParkedApproval(lifecycle, revision, makeTrace(), () => ({
+      humanSummary: "x",
+      assetHref: "https://cdn.example.com/c.mp4",
+    }));
+    expect(withHref.threadHref).toBe("https://cdn.example.com/c.mp4");
+    const withoutHref = adaptParkedApproval(lifecycle, revision, makeTrace(), () => ({
+      humanSummary: "x",
+    }));
+    expect(withoutHref.threadHref).toBeNull();
+  });
+
   it("renders a recovery card for recovery_required lifecycles", () => {
     const d = adaptParkedApproval(
       { ...lifecycle, status: "recovery_required" },

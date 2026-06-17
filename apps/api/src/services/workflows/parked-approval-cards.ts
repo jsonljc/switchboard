@@ -26,6 +26,32 @@ function num(params: Record<string, unknown>, key: string): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+const MS_PER_HOUR = 3_600_000;
+
+/**
+ * Human expiry line for a parked card: "Expires <ISO date> (~N hours left)" so operators
+ * see a real countdown instead of discovering a silent park expiry. parkedAt is shown for
+ * provenance. Defensive: a non-Date or NaN expiry is skipped (returns null), never crashes
+ * the feed. The countdown is relative to now; when already past expiry we say so plainly.
+ */
+function expiryLine(parkedAt: Date | undefined, expiresAt: Date | undefined): string | null {
+  const expiryMs = expiresAt instanceof Date ? expiresAt.getTime() : NaN;
+  if (!Number.isFinite(expiryMs)) return null;
+  const day = expiresAt!.toISOString().slice(0, 10);
+  const hoursLeft = (expiryMs - Date.now()) / MS_PER_HOUR;
+  const countdown =
+    hoursLeft <= 0
+      ? "past due"
+      : hoursLeft < 1
+        ? "under 1 hour left"
+        : `~${Math.round(hoursLeft)} hours left`;
+  const submitted =
+    parkedAt instanceof Date && Number.isFinite(parkedAt.getTime())
+      ? `, submitted ${parkedAt.toISOString().slice(0, 10)}`
+      : "";
+  return `Expires ${day} (${countdown})${submitted}`;
+}
+
 const handoffCard: ParkedApprovalSummarizer = ({ parameters }) => {
   const campaignId = str(parameters, "campaignId") ?? "an active campaign";
   const rationale = str(parameters, "rationale");
@@ -65,14 +91,27 @@ const handoffCard: ParkedApprovalSummarizer = ({ parameters }) => {
   };
 };
 
-const publishCard: ParkedApprovalSummarizer = ({ parameters }) => {
+const publishCard: ParkedApprovalSummarizer = ({ parameters, parkedAt, expiresAt }) => {
   const jobId = str(parameters, "jobId") ?? "a kept creative";
+  // durableAssetUrl + accountId are threaded into the work-unit parameters by the
+  // publish route (it already resolves both via assertPublishable pre-flight). They let
+  // the operator review the creative and confirm the target account without opening Mira.
+  const assetUrl = str(parameters, "durableAssetUrl");
+  const accountId = str(parameters, "accountId");
+
+  const dataLines: Array<string | string[]> = [
+    "Publishes a PAUSED draft to the connected Meta ad account",
+    "No spend until you activate it in Meta",
+  ];
+  if (assetUrl) dataLines.push(`Creative: ${assetUrl}`);
+  if (accountId) dataLines.push(`Ad account: ${accountId}`);
+  const expiry = expiryLine(parkedAt, expiresAt);
+  if (expiry) dataLines.push(expiry);
+
   return {
     humanSummary: `Mira wants to publish creative ${jobId} to Meta as a paused draft package. It will not spend until you activate it in Meta.`,
-    dataLines: [
-      "Publishes a PAUSED draft to the connected Meta ad account",
-      "No spend until you activate it in Meta",
-    ],
+    dataLines,
+    ...(assetUrl ? { assetHref: assetUrl } : {}),
     presentation: { primaryLabel: "Approve publish" },
     riskContract: {
       // Creates a Meta-side object (external) but a paused draft cannot spend
