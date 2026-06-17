@@ -349,4 +349,84 @@ describe("provision route — persist status (N1) + idempotent resubmit (N2)", (
     expect(secondBody.channels[0]!.id).toBe(firstBody.channels[0]!.id);
     expect(prisma._tx.managedChannel.create).toHaveBeenCalledTimes(1);
   });
+
+  // ── N2 honest-status: a resubmit of an error-state channel must honestly
+  //    report "error" + reason, not falsely report "active". ──
+  //
+  // Before this fix, the existing_idempotent branch in checkV1ChannelLimit
+  // hardcoded status:"active" / "existing channel returned" regardless of the
+  // row's real persisted status. After a partial failure N1 persists
+  // status:"error" onto the row, but a retry received a falsely-active HTTP
+  // response while the DB row stayed "error" — a lie to the operator.
+  //
+  // This test ensures the fix is effective: with the old hardcoded behavior,
+  // the `expect(secondBody.channels[0]!.status).toBe("error")` assertion below
+  // would FAIL (it would receive "active" instead).
+  it("N2 honest-status: resubmitting an error-state channel returns the real persisted error status, not a false active", async () => {
+    globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const u = typeof url === "string" ? url : url.toString();
+      fetchCalls.push({ url: u, init });
+      return defaultFetchMock(u, init);
+    }) as typeof globalThis.fetch;
+
+    const prisma = buildPrismaMock();
+    const { encryptCredentials } = await import("@switchboard/db");
+    const sameCreds = encryptCredentials({ token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" });
+
+    // The row is already in error state (e.g. from a previous partial failure
+    // where N1 persisted status:"error"). This simulates a row that exists but
+    // failed to fully activate.
+    const errorRow = {
+      id: "mc_1",
+      organizationId: "org_test",
+      channel: "whatsapp",
+      connectionId: "conn_abc12345",
+      botUsername: null,
+      webhookPath: "/webhook/managed/conn_abc12345",
+      webhookRegistered: false,
+      status: "error",
+      statusDetail: "webhook registration failed: upstream rejected",
+      lastHealthCheck: null,
+      createdAt: new Date("2026-04-27T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-27T00:00:00.000Z"),
+    };
+
+    // findFirst immediately returns the error-state row (already exists from a
+    // previous failed provision attempt).
+    prisma.managedChannel.findFirst.mockResolvedValue({ ...errorRow });
+    prisma.connection.findUnique.mockResolvedValue({
+      id: "conn_abc12345",
+      organizationId: "org_test",
+      credentials: sameCreds,
+    });
+    app = await buildApp(prisma);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/organizations/org_test/provision",
+      payload: {
+        channels: [{ channel: "whatsapp", token: CUSTOMER_TOKEN, phoneNumberId: "PHONE_1" }],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      channels: Array<{ id: string; status: string; statusDetail: string | null }>;
+    };
+    const ch = body.channels[0]!;
+
+    // Honest report: the row is "error", the response must reflect that.
+    // With the OLD hardcoded behavior this would have been "active" — a lie.
+    expect(ch.status).toBe("error");
+    expect(ch.statusDetail).toBe("webhook registration failed: upstream rejected");
+    expect(ch.id).toBe("mc_1");
+
+    // The idempotent branch must NOT re-run any provision side effects.
+    expect(prisma._tx.managedChannel.create).not.toHaveBeenCalled();
+    expect(prisma._tx.connection.create).not.toHaveBeenCalled();
+    const metaCalls = fetchCalls.filter(
+      (c) => c.url.includes("debug_token") || c.url.includes("subscribed_apps"),
+    );
+    expect(metaCalls).toHaveLength(0);
+  });
 });

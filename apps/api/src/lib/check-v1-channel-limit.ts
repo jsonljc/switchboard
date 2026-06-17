@@ -29,7 +29,7 @@ export interface ChannelProvisionResponse {
   botUsername: string | null;
   webhookPath: string | null;
   webhookRegistered: boolean;
-  status: "active" | "error";
+  status: string;
   statusDetail: string | null;
   lastHealthCheck: string | null;
   createdAt: string;
@@ -89,7 +89,7 @@ export async function checkV1ChannelLimit(args: {
     if (existingPhoneNumberId !== null && existingPhoneNumberId === incomingPhoneNumberId) {
       return {
         kind: "existing_idempotent",
-        result: buildExistingResponse(existing, "active", "existing channel returned"),
+        result: buildExistingResponse(existing),
       };
     }
     return {
@@ -111,31 +111,29 @@ export async function checkV1ChannelLimit(args: {
   // Non-WhatsApp, or WhatsApp without an incoming phoneNumberId: idempotent.
   return {
     kind: "existing_idempotent",
-    result: buildExistingResponse(existing, "active", "existing channel returned"),
+    result: buildExistingResponse(existing),
   };
 }
 
-function buildExistingResponse(
-  existing: {
-    id: string;
-    channel: string;
-    botUsername: string | null;
-    webhookPath: string;
-    webhookRegistered: boolean;
-    lastHealthCheck: Date | null;
-    createdAt: Date;
-  },
-  status: "active",
-  statusDetail: string,
-): ChannelProvisionResponse {
+function buildExistingResponse(existing: {
+  id: string;
+  channel: string;
+  botUsername: string | null;
+  webhookPath: string;
+  webhookRegistered: boolean;
+  status: string;
+  statusDetail: string | null;
+  lastHealthCheck: Date | null;
+  createdAt: Date;
+}): ChannelProvisionResponse {
   return {
     id: existing.id,
     channel: existing.channel,
     botUsername: existing.botUsername,
     webhookPath: existing.webhookPath,
     webhookRegistered: existing.webhookRegistered,
-    status,
-    statusDetail,
+    status: existing.status,
+    statusDetail: existing.statusDetail,
     lastHealthCheck: existing.lastHealthCheck?.toISOString() ?? null,
     createdAt: existing.createdAt.toISOString(),
   };
