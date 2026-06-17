@@ -80,7 +80,9 @@ describe("InboxPage", () => {
   it("renders loading state", () => {
     mockFeed.mockReturnValue({ data: undefined, isLoading: true, isError: false });
     render(<InboxPage />);
-    expect(screen.getByText(/Loading/)).toBeInTheDocument();
+    // The old bare "Loading…" div was replaced by InboxSkeleton,
+    // which announces itself via role="status" + aria-label.
+    expect(screen.getByRole("status", { name: /loading your inbox/i })).toBeInTheDocument();
   });
 
   it("renders error state and NOT the empty state", () => {
