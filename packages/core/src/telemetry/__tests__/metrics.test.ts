@@ -96,3 +96,21 @@ describe("booking lifecycle counters", () => {
     }
   });
 });
+
+describe("whatsappProactiveSendSkipped", () => {
+  it("accepts {intent, reason} increments", () => {
+    const m = createInMemoryMetrics();
+    const spy = vi.spyOn(m.whatsappProactiveSendSkipped, "inc");
+
+    m.whatsappProactiveSendSkipped.inc({
+      intent: "conversation.reminder.send",
+      reason: "config_missing",
+    });
+
+    expect(spy).toHaveBeenCalledWith({
+      intent: "conversation.reminder.send",
+      reason: "config_missing",
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+});

@@ -1,6 +1,9 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
-import { evaluateProactiveSendEligibility } from "@switchboard/core";
+import { evaluateProactiveSendEligibility, getMetrics } from "@switchboard/core";
 import type { IntentClass, PdpaJurisdiction } from "@switchboard/schemas";
+import { resolveWhatsAppSendToken } from "../../lib/whatsapp-send-token.js";
+
+const FOLLOWUP_INTENT = "conversation.followup.send";
 
 export interface FollowUpSendContext {
   consentGrantedAt: Date | string | null;
@@ -84,9 +87,20 @@ export function buildConversationFollowUpSendWorkflow(
         };
       }
 
-      const accessToken = process.env["WHATSAPP_ACCESS_TOKEN"];
+      const accessToken = resolveWhatsAppSendToken();
       const phoneNumberId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
       if (!accessToken || !phoneNumberId) {
+        // Infra config gap, not a per-contact decision: with no send token/phone id
+        // EVERY follow-up for the deployment silently no-ops. Make it loud + countable
+        // (distinct from the benign per-contact skips above) so the dark funnel is visible.
+        console.warn(
+          "[conversation.followup.send] WhatsApp send token or phone id missing " +
+            "(set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID); follow-up skipped org-wide.",
+        );
+        getMetrics().whatsappProactiveSendSkipped.inc({
+          intent: FOLLOWUP_INTENT,
+          reason: "config_missing",
+        });
         return {
           outcome: "completed",
           summary: "WhatsApp not configured; follow-up skipped",

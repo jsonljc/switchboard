@@ -29,6 +29,7 @@ import { initTelemetry } from "./telemetry/otel-init.js";
 import { installErrorHandler } from "./bootstrap/error-handler.js";
 import { initSentry, wireSentryErrorHandler } from "./bootstrap/sentry.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
+import { resolveWhatsAppSendToken } from "./lib/whatsapp-send-token.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { authRateLimit } from "./middleware/rate-limit.js";
 import apiVersionPlugin from "./versioning.js";
@@ -401,7 +402,9 @@ export async function buildServer() {
   // Wire ProactiveSender if channel credentials are available
   let agentNotifier: AgentNotifier | null = null;
   const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
-  const whatsappToken = process.env.WHATSAPP_TOKEN;
+  // Canonical send-token resolution: WHATSAPP_ACCESS_TOKEN, falling back to the
+  // WHATSAPP_TOKEN alias, so this notifier and the proactive workflows agree on one key.
+  const whatsappToken = resolveWhatsAppSendToken();
   const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const slackBotToken = process.env.SLACK_BOT_TOKEN;
 
@@ -421,7 +424,7 @@ export async function buildServer() {
   } else {
     app.log.warn(
       "No channel credentials found — agentNotifier disabled. " +
-        "Set TELEGRAM_BOT_TOKEN, WHATSAPP_TOKEN+WHATSAPP_PHONE_NUMBER_ID, or SLACK_BOT_TOKEN.",
+        "Set TELEGRAM_BOT_TOKEN, WHATSAPP_ACCESS_TOKEN+WHATSAPP_PHONE_NUMBER_ID, or SLACK_BOT_TOKEN.",
     );
   }
   app.decorate("agentNotifier", agentNotifier);

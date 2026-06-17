@@ -1,4 +1,8 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
+import { getMetrics } from "@switchboard/core";
+import { resolveWhatsAppSendToken } from "../../lib/whatsapp-send-token.js";
+
+const GREETING_INTENT = "meta.lead.greeting.send";
 
 export function buildMetaLeadGreetingWorkflow(): WorkflowHandler {
   return {
@@ -9,9 +13,20 @@ export function buildMetaLeadGreetingWorkflow(): WorkflowHandler {
         templateName: string;
       };
 
-      const accessToken = process.env["WHATSAPP_ACCESS_TOKEN"];
+      const accessToken = resolveWhatsAppSendToken();
       const phoneNumberId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
       if (!accessToken || !phoneNumberId) {
+        // Infra config gap, not a per-contact decision: with no send token/phone id
+        // EVERY lead greeting silently no-ops. Make it loud + countable (distinct from
+        // benign per-contact skips) so the dark funnel is visible.
+        console.warn(
+          "[meta.lead.greeting.send] WhatsApp send token or phone id missing " +
+            "(set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID); greeting skipped org-wide.",
+        );
+        getMetrics().whatsappProactiveSendSkipped.inc({
+          intent: GREETING_INTENT,
+          reason: "config_missing",
+        });
         return {
           outcome: "completed",
           summary: "WhatsApp not configured; greeting skipped",

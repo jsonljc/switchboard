@@ -86,18 +86,19 @@ services:
       # from META_SYSTEM_USER_TOKEN (the Tech-Provider token for client WABAs).
       - key: WHATSAPP_GRAPH_TOKEN
         sync: false
-      # WhatsApp Cloud API send credentials for the api service's PROACTIVE
-      # outbound workflows (appointment reminders, lead greetings, follow-ups)
-      # and the escalation-reply agentNotifier in app.ts. Without these the api
-      # service has no send token and every proactive WhatsApp message silently
-      # no-ops in prod ("WhatsApp not configured; ... skipped").
-      # NOTE on the two token names: app.ts + the chat service read WHATSAPP_TOKEN;
-      # the reminder/greeting/follow-up workflows read WHATSAPP_ACCESS_TOKEN. Set
-      # BOTH to the same Cloud API token value until the code is de-duped to one
-      # canonical name. WHATSAPP_PHONE_NUMBER_ID is read by both paths.
-      - key: WHATSAPP_TOKEN
-        sync: false
+      # WhatsApp Cloud API send token for the api service's PROACTIVE outbound
+      # workflows (appointment reminders, lead greetings, follow-ups) and the
+      # escalation-reply agentNotifier in app.ts. Without it the api service has no
+      # send token and a structured warn + the switchboard_whatsapp_proactive_send_skipped_total
+      # metric (reason="config_missing") fire as every proactive WhatsApp message
+      # no-ops org-wide. WHATSAPP_ACCESS_TOKEN is the canonical key; resolveWhatsAppSendToken()
+      # reads it first and falls back to the WHATSAPP_TOKEN alias, so setting either
+      # one covers all api send paths. WHATSAPP_PHONE_NUMBER_ID is required alongside it.
       - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      # Backward-compatible alias for WHATSAPP_ACCESS_TOKEN; leave unset if the
+      # canonical key above is set.
+      - key: WHATSAPP_TOKEN
         sync: false
       - key: WHATSAPP_PHONE_NUMBER_ID
         sync: false
