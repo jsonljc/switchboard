@@ -35,9 +35,9 @@ function mkDigest(overrides: Partial<WeeklyDigest> = {}): WeeklyDigest {
   };
 }
 
-// A minimal but runtime-valid ReportDataV1 covering exactly the fields slice-1's
-// buildWeeklyDigest reads (receiptedBookings / revenue / quality / heldRate /
-// consentCompleteness). The ad-insights sections it never touches are cast away.
+// A minimal but runtime-valid ReportDataV1 covering all fields buildWeeklyDigest reads:
+// receiptedBookings / revenue / quality / heldRate / consentCompleteness / attribution /
+// campaigns (the last two were added when the digest gained riley economics lines).
 const fakeReport = {
   label: "THIS WEEK",
   receiptedBookings: { count: 12 },
@@ -71,6 +71,27 @@ const fakeReport = {
   },
   heldRate: { attended: 8, matured: 10, rate: 0.8 },
   consentCompleteness: { validConsent: 11, bookable: 12, rate: 0.9167 },
+  attribution: {
+    total: 3450,
+    delta: { kind: "pos", text: "+12%" },
+    riley: { value: 1200, caption: "from paid campaigns" },
+    alex: { value: 2250, caption: "from organic" },
+  },
+  campaigns: [
+    {
+      name: "Summer Promo",
+      spend: 500,
+      impressions: 10000,
+      inlineLinkClicks: 300,
+      costPerInlineLinkClick: 1.67,
+      inlineLinkClickCtr: 0.03,
+      leads: 15,
+      revenue: 1200,
+      cpl: 33.33,
+      clickToLeadRate: 0.05,
+      roas: 2.4,
+    },
+  ],
 } as unknown as ReportDataV1;
 
 describe("weekPeriodLabel", () => {
