@@ -169,12 +169,17 @@ export function buildSegments(
 
   if (variant === "quiet") {
     if (agentKey === "alex") {
-      return [{ kind: "text", text: "All clear for now. I'll ping you when something lands." }];
+      return [
+        { kind: "text", text: "All clear for now. New leads will show up here when they arrive." },
+      ];
     } else if (agentKey === "riley") {
       return [{ kind: "text", text: "Nothing urgent right now. I'll alert you when I see drift." }];
     } else if (agentKey === "mira") {
       return [
-        { kind: "text", text: "No drafts need you right now. I'll ping you when one's ready." },
+        {
+          kind: "text",
+          text: "No drafts need you right now. Check back soon, drafts will be ready for your review.",
+        },
       ];
     }
     // Unreachable at runtime for known AgentHomeKey values; defensive fallthrough
