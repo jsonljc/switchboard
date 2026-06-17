@@ -10,7 +10,10 @@ import styles from "./agent-panel.module.css";
 const MAX_ROWS = 5;
 
 export interface WorkLogProps {
-  agentKey: Exclude<PanelAgentKey, "mira">;
+  // Accepts any PanelAgentKey (mira no longer type-fenced out). The AgentPanel
+  // routes mira to its own desk-fed work-log in MiraPanel; the alex/riley hosts
+  // pass alex/riley here. The activity-cockpit hook is keyed by AgentKey.
+  agentKey: PanelAgentKey;
   /**
    * Called when the user taps "See all in Results →".
    * Host wires navigation to the Results route; the panel itself is read-only.
