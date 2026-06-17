@@ -248,13 +248,22 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
         description:
           "Book a calendar slot for a contact. Persists booking, creates calendar event, emits booked event via outbox.",
         effectCategory: "external_mutation" as const,
-        // Booking a consult is Alex's core, reversible revenue action. At the
-        // default "guided" trust an external_mutation would require approval,
-        // which the in-skill governance hook cannot park (it dead-ends: the
-        // booking never persists and the customer is falsely told it's queued).
-        // Auto-approve at "guided" so Alex can book on a real org; a
-        // deliberately-conservative "supervised" deployment still gates.
-        governanceOverride: { guided: "auto-approve" as const },
+        // Booking a consult is Alex's core, reversible revenue action. A freshly
+        // onboarded real org resolves to "supervised" trust (ensureAlexListingForOrg
+        // seeds trustScore:0, no trustLevelOverride), and the canonical real-org
+        // path becomes "guided" only once trust is earned. At BOTH levels an
+        // external_mutation would otherwise require approval, which the in-skill
+        // governance hook cannot park: it dead-ends (the booking never persists and
+        // the customer is falsely told a team member will confirm). Auto-approve the
+        // BOOKING intent at supervised AND guided so Alex can complete the DEFAULT
+        // real-org booking. This override is scoped to booking.create ONLY — it is
+        // NOT a blanket external_mutation relaxation (reschedule/cancel carry their
+        // own narrower overrides). The alternative posture (operator-park each
+        // booking for a human to confirm) is the deferred F2 work.
+        governanceOverride: {
+          supervised: "auto-approve" as const,
+          guided: "auto-approve" as const,
+        },
         idempotent: true,
         inputSchema: {
           type: "object",
