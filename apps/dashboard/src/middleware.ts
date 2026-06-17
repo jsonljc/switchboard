@@ -38,12 +38,17 @@ interface RateLimitEntry {
 
 const ipMap = new Map<string, RateLimitEntry>();
 
-// Public, unauthenticated auth-mutation endpoints (forgot/reset password) get a
-// much tighter per-IP cap than the general dashboard proxy — they trigger email
-// sends + DB lookups and are a natural abuse target. Separate map so the two
-// budgets don't bleed into each other.
+// Public, unauthenticated mutation endpoints (forgot/reset password, waitlist
+// signup) get a much tighter per-IP cap than the general dashboard proxy — they
+// trigger email sends + DB writes and are a natural abuse target. The waitlist
+// route is an unauthenticated public DB write, so it needs the same throttle.
+// Separate map so the two budgets don't bleed into each other.
 const AUTH_MUTATION_MAX_REQUESTS = 10;
-const AUTH_MUTATION_PATHS = new Set(["/api/auth/forgot-password", "/api/auth/reset-password"]);
+const AUTH_MUTATION_PATHS = new Set([
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+  "/api/waitlist",
+]);
 const authIpMap = new Map<string, RateLimitEntry>();
 
 // Periodic cleanup to prevent memory leaks
@@ -172,5 +177,6 @@ export const config = {
     "/results/:path*",
     "/api/auth/forgot-password",
     "/api/auth/reset-password",
+    "/api/waitlist",
   ],
 };

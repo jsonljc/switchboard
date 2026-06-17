@@ -2476,3 +2476,12 @@ model DataDeletionRequest {
 
   @@index([userId])
 }
+
+// Public launch waitlist signups captured before self-serve registration opens.
+// Written by the unauthenticated dashboard /api/waitlist route; email is unique
+// so repeat signups collapse to a single row (the route treats P2002 as success).
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}

@@ -17,7 +17,6 @@ export async function POST(request: NextRequest) {
       const { getDb } = await import("@switchboard/db");
       const db = getDb();
 
-      // @ts-expect-error — WaitlistEntry model added via migration, may not be in generated types yet
       await db.waitlistEntry.create({ data: { email } });
 
       return NextResponse.json({ ok: true }, { status: 200 });
