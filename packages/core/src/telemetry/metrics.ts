@@ -36,11 +36,13 @@ export interface SwitchboardMetrics {
   /** F15 — booking attempts blocked by the flag-gated consent precondition
    *  (enforce mode only). Labeled by orgId + reason (consent_pending/consent_revoked). */
   bookingConsentBlocked: Counter;
-  /** D3-1 booked-value resolution OUTCOME per booking.create attempt. Makes the
-   *  prod match-vs-abstain rate observable: outcome in {resolved, no_playbook,
-   *  no_match, matched_unpriced, no_lookup, read_error}. Observability-only; the
-   *  resolver still abstains (null value) for every non-resolved outcome. Labeled
-   *  by orgId + outcome. */
+  /** D3-1 booked-value resolution OUTCOME per booking.create attempt that reaches
+   *  value resolution (i.e. after the contact/consent/provider checks pass). Makes
+   *  the prod match-vs-abstain rate observable: outcome in {resolved, no_playbook,
+   *  no_match, matched_unpriced, no_lookup, read_error}. The match-vs-abstain rate
+   *  is the share of `resolved` across the outcomes, self-contained regardless of
+   *  pre-resolution aborts. Observability-only; the resolver still abstains (null
+   *  value) for every non-resolved outcome. Labeled by orgId + outcome. */
   bookedValueResolution: Counter;
   /** F15 — a policy-critical context slot (business-facts, claim-boundaries)
    *  resolved EMPTY for an entitled org running Alex. Observability-only: the
