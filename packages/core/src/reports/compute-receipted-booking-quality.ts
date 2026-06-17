@@ -30,6 +30,12 @@ const EXCEPTION_ORDER: readonly ExceptionCode[] = [
  *  shows "N of {bookingsNeedingAttention}", so the true total is always visible to the owner. */
 const WORKLIST_CAP = 25;
 
+/** Exception codes that do NOT signal an unresolved owner action item, so they must not inflate
+ *  `bookingsNeedingAttention`. `manual_override` means the owner has already asserted attribution;
+ *  it stays in the per-code breakdown and on the worklist row (so the assertion is visible/undoable),
+ *  but a booking whose ONLY open code is `manual_override` is settled, not "needing attention". */
+const NON_ATTENTION_CODES: ReadonlySet<ExceptionCode> = new Set(["manual_override"]);
+
 /** Worst-first comparator: more open codes, then weaker attribution, then oldest appointment
  *  (ISO strings sort chronologically under lexicographic compare), then bookingId for stability. */
 function compareWorklist(a: ReceiptedBookingWorklistItem, b: ReceiptedBookingWorklistItem): number {
@@ -53,9 +59,12 @@ function compareWorklist(a: ReceiptedBookingWorklistItem, b: ReceiptedBookingWor
  *
  * Pure aggregation: `attributionConfidence` and `exceptions` were already derived per booking by the
  * store via the pure `core/receipts` functions, so this never re-implements scoring (no drift). The
- * worklist row and `bookingsNeedingAttention` are computed from the SAME open-code set per view, so
- * they can never disagree. The Record initializers are keyed by the canonical enums, so a new rung
- * or exception code is a compile-time error here rather than a silently dropped bucket.
+ * worklist row and `bookingsNeedingAttention` are computed from the SAME per-view open-code set, with
+ * `bookingsNeedingAttention` additionally filtered through NON_ATTENTION_CODES: a booking whose only
+ * open code is settled (e.g. `manual_override`, already resolved by the owner) stays on the worklist
+ * and in the per-code breakdown but is OFF the headline count, so overriding a booking actually moves
+ * the number. The Record initializers are keyed by the canonical enums, so a new rung or exception
+ * code is a compile-time error here rather than a silently dropped bucket.
  */
 export async function computeReceiptedBookingQuality(
   ctx: RollupContext,
@@ -85,17 +94,22 @@ export async function computeReceiptedBookingQuality(
 
   for (const view of views) {
     confidence[view.attributionConfidence] += 1;
-    // One open-code set per view drives bookingsNeedingAttention, the per-code counts, AND the
-    // worklist row, so the count and the list can never diverge. Resolved entries excluded; a
-    // booking's open exceptions are deduped by code so each code counts the booking once.
+    // One open-code set per view drives the per-code counts, the worklist row, AND (filtered through
+    // NON_ATTENTION_CODES) bookingsNeedingAttention, so a worklist row and its attention contribution
+    // are always derived from the same source. Resolved entries excluded; a booking's open exceptions
+    // are deduped by code so each code counts the booking once.
     const openCodes = new Set(
       view.exceptions.filter((entry) => !entry.resolvedAt).map((entry) => entry.code),
     );
     if (openCodes.size === 0) continue;
-    bookingsNeedingAttention += 1;
+    // Settled codes (e.g. manual_override) stay on the worklist + breakdown but do not signal an
+    // open action item: a booking counts toward attention only if it has a non-settled open code.
+    let needsAttention = false;
     for (const code of openCodes) {
       exceptions[code] += 1;
+      if (!NON_ATTENTION_CODES.has(code)) needsAttention = true;
     }
+    if (needsAttention) bookingsNeedingAttention += 1;
     worklist.push({
       bookingId: view.bookingId,
       service: view.service,
