@@ -1,3 +1,9 @@
+/* eslint-disable max-lines -- test bootstrap harness: accumulates in-memory store wiring,
+   PlatformIngress setup, and operator-direct route registration for every API test. Crossed the
+   600-line guideline as each new operator intent adds an option + bootstrap arg + route register
+   (operator.erase_contact, PR feat/pdpa-operator-erasure). Splitting (e.g. a separate
+   `test-stores-wiring.ts`) is a focused follow-up; tracked as test-infra debt, mirrors the same
+   legacy-debt exemption on app.ts. */
 import Fastify from "fastify";
 import type { FastifyInstance, FastifyError } from "fastify";
 import { actionsRoutes } from "../routes/actions.js";
@@ -11,6 +17,7 @@ import { recommendationsRoutes } from "../routes/recommendations.js";
 import { revenueRoutes } from "../routes/revenue.js";
 import { bookingAttendanceRoutes } from "../routes/booking-attendance.js";
 import { receiptedBookingReconcileRoutes } from "../routes/receipted-booking-reconcile.js";
+import { operatorContactErasureRoutes } from "../routes/operator-contact-erasure.js";
 import { dashboardAgentsRoutes } from "../routes/dashboard-agents.js";
 import { decisionsRoutes } from "../routes/decisions.js";
 import { winsRoute } from "../routes/agent-home/wins.js";
@@ -147,6 +154,8 @@ export interface BuildTestServerOptions {
   bookingAttendanceWriter?: import("../bootstrap/operator-intents/attendance.js").BookingAttendanceWriter;
   /** Mock ReconcileBookingWriter: when provided, receipt.reconcile_booking is registered (else 404s). */
   reconcileBookingWriter?: import("../bootstrap/operator-intents/reconcile-booking.js").ReconcileBookingWriter;
+  /** Mock OperatorContactEraser: when provided, operator.erase_contact is registered (else 404s). */
+  eraseContactWriter?: import("../bootstrap/operator-intents/erase-contact.js").OperatorContactEraser;
   /**
    * Transaction runner for the revenue handler. Defaults to a no-op sentinel
    * `async (fn) => fn(undefined)` so handler unit tests work without a real
@@ -500,6 +509,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     runInTransaction: options.runInTransaction ?? (async (fn) => fn(undefined)),
     bookingAttendanceWriter: options.bookingAttendanceWriter,
     reconcileBookingWriter: options.reconcileBookingWriter,
+    contactEraser: options.eraseContactWriter,
   });
 
   const platformLifecycle = new PlatformLifecycle({
@@ -540,6 +550,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
   await app.register(revenueRoutes, { prefix: "/api" });
   await app.register(bookingAttendanceRoutes, { prefix: "/api" });
   await app.register(receiptedBookingReconcileRoutes, { prefix: "/api" });
+  await app.register(operatorContactErasureRoutes, { prefix: "/api" });
   await app.register(dashboardAgentsRoutes, { prefix: "/api/dashboard/agents" });
   await app.register(decisionsRoutes, { prefix: "/api/dashboard" });
   await app.register(winsRoute, { prefix: "/api/dashboard" });

@@ -22,6 +22,7 @@ export const RECORD_REVENUE_INTENT = "operator.record_revenue";
 export const RECORD_ATTENDANCE_INTENT = "booking.record_attendance";
 export const RECONCILE_BOOKING_INTENT = "receipt.reconcile_booking";
 export const DELIVER_WEEKLY_REPORT_INTENT = "ledger.deliver_weekly_report";
+export const ERASE_CONTACT_INTENT = "operator.erase_contact";
 
 /**
  * Sentinel deployment ID used for admin-consent verdict context. The admin
@@ -65,4 +66,8 @@ export const OPERATOR_INTENT_ERROR_CODES = {
   // or the email send leg failed / was not configured.
   WEEKLY_REPORT_NO_RECIPIENTS: "WEEKLY_REPORT_NO_RECIPIENTS",
   WEEKLY_REPORT_DELIVERY_FAILED: "WEEKLY_REPORT_DELIVERY_FAILED",
+  // operator.erase_contact: no contact with that id exists under the authenticated org. The
+  // org-scoped existence check is the fail-closed cross-tenant guard — a contact in another org
+  // reads as not-found here, so an operator can only erase a contact their org owns.
+  CONTACT_NOT_FOUND: "CONTACT_NOT_FOUND",
 } as const;

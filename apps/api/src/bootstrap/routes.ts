@@ -52,6 +52,7 @@ import { whatsappTemplateCreateRoutes } from "../routes/whatsapp-template-create
 import { revenueRoutes } from "../routes/revenue.js";
 import { bookingAttendanceRoutes } from "../routes/booking-attendance.js";
 import { receiptedBookingReconcileRoutes } from "../routes/receipted-booking-reconcile.js";
+import { operatorContactErasureRoutes } from "../routes/operator-contact-erasure.js";
 import { roiRoutes } from "../routes/roi.js";
 import { ingressRoutes } from "../routes/ingress.js";
 import { playbookRoutes } from "../routes/playbook.js";
@@ -255,6 +256,7 @@ export async function registerRoutes(
   await app.register(revenueRoutes, { prefix: "/api" });
   await app.register(bookingAttendanceRoutes, { prefix: "/api" });
   await app.register(receiptedBookingReconcileRoutes, { prefix: "/api" });
+  await app.register(operatorContactErasureRoutes, { prefix: "/api" });
   await app.register(roiRoutes, { prefix: "/api" });
   await app.register(ingressRoutes, { prefix: "/api" });
   await app.register(dashboardOverviewRoutes, { prefix: "/api" });

@@ -906,6 +906,54 @@ export async function buildServer() {
     // The governed write-side store for receipt.reconcile_booking (override / flag / resolve).
     const reconcileBookingStore = new PrismaReceiptedBookingStore(prismaClient);
 
+    // operator.erase_contact eraser: wraps the SAME full delete cascade as the Meta data-deletion
+    // callback (eraseContactFully) behind the operator-direct intent, plus an org-scoped existence
+    // gate (fail-closed cross-tenant) and a durable DataDeletionRequest audit row.
+    const { PrismaContactStore: PrismaContactStoreForErasure } = await import("@switchboard/db");
+    const { eraseContactFully } = await import("./lib/erase-contact.js");
+    const { createCalendarProviderFactory: createErasureCalendarFactory } =
+      await import("./bootstrap/calendar-provider-factory.js");
+    const erasureContactStore = new PrismaContactStoreForErasure(prismaClient);
+    const erasureCalendarFactory = createErasureCalendarFactory({
+      prismaClient,
+      logger: { info: (m: string) => app.log.info(m), error: (m: string) => app.log.error(m) },
+    });
+    const contactEraser: import("./bootstrap/operator-intents.js").OperatorContactEraser = {
+      findContactForOrg: async (orgId: string, contactId: string) => {
+        const row = await prismaClient.contact.findFirst({
+          where: { id: contactId, organizationId: orgId },
+          select: { id: true },
+        });
+        return row !== null;
+      },
+      erase: (orgId: string, contactId: string) =>
+        eraseContactFully(
+          {
+            prisma: prismaClient,
+            contactStore: erasureContactStore,
+            calendarProviderFactory: erasureCalendarFactory,
+            logger: app.log,
+          },
+          orgId,
+          contactId,
+        ),
+      recordRequest: async ({ orgId, contactId, actorId, status, failureReason }) => {
+        await prismaClient.dataDeletionRequest.create({
+          data: {
+            userId: `operator:${actorId}`,
+            confirmationCode: crypto.randomUUID(),
+            requestType: "operator_erasure",
+            organizationId: orgId,
+            requestedByActorId: actorId,
+            deletedContactIds: status === "completed" ? [contactId] : [],
+            status,
+            failureReason: failureReason ?? null,
+            completedAt: status === "completed" ? new Date() : null,
+          },
+        });
+      },
+    };
+
     // Ledger-lite slice 2: the weekly owner-report delivery writer. Constructed only
     // when the report projection stores are present (they are decorated in the same
     // prismaClient gate above). When undefined, the ledger.deliver_weekly_report intent
@@ -986,6 +1034,7 @@ export async function buildServer() {
       receiptHeldPromoter: prismaReceipts,
       reconcileBookingWriter: reconcileBookingStore,
       weeklyReportDeliveryWriter,
+      contactEraser,
       logger: app.log,
     });
   }
