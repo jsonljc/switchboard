@@ -36,7 +36,15 @@ export interface CtwaAdapterDeps {
   ingress: IngressLike;
   now: () => Date;
   region?: "SG" | "MY";
-  resolveCampaignId?: (adId: string) => Promise<string | null>;
+  /**
+   * Resolves the parent campaign id for a CTWA-sourced ad. The lead's org is
+   * threaded in `ctx` so the app-layer implementation can scope the Meta
+   * credential lookup to that organization — ad-optimizer is Layer 2 and must not
+   * touch the DB or construct a MetaAdsClient itself. Returns `null` when the
+   * campaign can't be resolved; the adapter then submits without
+   * `sourceCampaignId` (non-blocking).
+   */
+  resolveCampaignId?: (adId: string, ctx: { organizationId: string }) => Promise<string | null>;
 }
 
 /**
@@ -94,7 +102,9 @@ export class CtwaAdapter {
       this.deps.resolveCampaignId
     ) {
       try {
-        const campaignId = await this.deps.resolveCampaignId(intake.attribution.sourceAdId);
+        const campaignId = await this.deps.resolveCampaignId(intake.attribution.sourceAdId, {
+          organizationId: intake.organizationId,
+        });
         if (campaignId) {
           intake.attribution.sourceCampaignId = campaignId;
         }

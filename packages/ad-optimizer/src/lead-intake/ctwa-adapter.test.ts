@@ -95,7 +95,9 @@ describe("CtwaAdapter", () => {
 
   it("resolves sourceCampaignId when adSourceType is 'ad' and resolver is provided", async () => {
     const submit = vi.fn().mockResolvedValue({ ok: true, result: {} } as unknown);
-    const resolveCampaignId = vi.fn().mockResolvedValue("campaign_123");
+    const resolveCampaignId = vi
+      .fn<(adId: string, ctx: { organizationId: string }) => Promise<string | null>>()
+      .mockResolvedValue("campaign_123");
     const adapter = new CtwaAdapter({
       ingress: { submit },
       now: () => new Date("2026-04-26T00:00:00Z"),
@@ -104,12 +106,31 @@ describe("CtwaAdapter", () => {
     await adapter.ingest(
       makeMessage({ metadata: { ctwaClid: "ARxx_abc", sourceAdId: "ad_456", adSourceType: "ad" } }),
     );
-    expect(resolveCampaignId).toHaveBeenCalledWith("ad_456");
+    expect(resolveCampaignId).toHaveBeenCalledWith("ad_456", { organizationId: "o1" });
     const payload = (submit.mock.calls[0]![0] as Record<string, unknown>).payload as Record<
       string,
       unknown
     >;
     expect((payload.attribution as Record<string, unknown>).sourceCampaignId).toBe("campaign_123");
+  });
+
+  it("threads the message organizationId into the resolver so credentials are org-scoped", async () => {
+    const submit = vi.fn().mockResolvedValue({ ok: true, result: {} } as unknown);
+    const resolveCampaignId = vi
+      .fn<(adId: string, ctx: { organizationId: string }) => Promise<string | null>>()
+      .mockResolvedValue("campaign_xyz");
+    const adapter = new CtwaAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+      resolveCampaignId,
+    });
+    await adapter.ingest(
+      makeMessage({
+        organizationId: "org_other",
+        metadata: { ctwaClid: "ARxx_abc", sourceAdId: "ad_777", adSourceType: "ad" },
+      }),
+    );
+    expect(resolveCampaignId).toHaveBeenCalledWith("ad_777", { organizationId: "org_other" });
   });
 
   it("skips campaign resolution when adSourceType is not 'ad'", async () => {
