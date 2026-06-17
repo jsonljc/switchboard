@@ -141,6 +141,15 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
   const current = insightToMetrics(input.currentInsight);
   const previous = input.previousInsight ? insightToMetrics(input.previousInsight) : ZERO_METRICS;
   const deltas = comparePeriods(current, previous);
+  // diagnose() here runs on the 7-key MetricSet deltas above, which cannot express the inputs the
+  // booking/chat-aware rules need: cpl and cpa are the SAME number (insightToMetrics sets both to
+  // spend/conversions), and there is no costPerBooked, chatsStarted, or replyRate. So on this
+  // deterministic path lead_quality_issue (needs cpl != cpa), lead_quality_degradation (needs
+  // costPerBooked), and ctwa_drive_by_clickers (needs chatsStarted + replyRate) never match; the
+  // patterns that DO drive recs/watches here are the cost/CTR/frequency ones (creative_fatigue,
+  // audience_saturation, landing_page_drop, etc.). See the reachability notes in
+  // metric-diagnostician.ts. (The ads-analytics.diagnose agent tool runs diagnose() on its own
+  // deltas and is not bound by this collapse.)
   const diagnoses = diagnose(deltas);
 
   if (
