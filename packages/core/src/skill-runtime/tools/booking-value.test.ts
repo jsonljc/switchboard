@@ -1,7 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { PlaybookService } from "@switchboard/schemas";
-import { resolveBookedValueCents, classifyBookedValue } from "./booking-value.js";
+import {
+  resolveBookedValueCents,
+  classifyBookedValue,
+  resolveBookedValueForBooking,
+} from "./booking-value.js";
 import type { ResolveBookedValueInput } from "./booking-value.js";
+import { setMetrics, createInMemoryMetrics } from "../../telemetry/metrics.js";
 
 function svc(overrides: Partial<PlaybookService> & { id: string }): PlaybookService {
   return {
@@ -154,5 +159,76 @@ describe("classifyBookedValue", () => {
       expect(valueCents).toBe(resolveBookedValueCents(c));
       expect(outcome === "resolved").toBe(valueCents !== null);
     }
+  });
+});
+
+describe("resolveBookedValueForBooking (metric emission)", () => {
+  const services = [
+    svc({ id: "botox", name: "Botox", price: 250 }),
+    svc({ id: "consult", name: "Consultation" }), // matched but unpriced
+  ];
+
+  afterEach(() => {
+    // Restore the module-singleton metrics so this block's spy does not leak into
+    // other test files sharing the same vitest worker (mirrors the F15 precedent).
+    setMetrics(createInMemoryMetrics());
+  });
+
+  function spyBookedValueResolution() {
+    const metrics = createInMemoryMetrics();
+    const spy = vi.spyOn(metrics.bookedValueResolution, "inc");
+    setMetrics(metrics);
+    return spy;
+  }
+
+  it("resolved: emits {orgId, outcome:resolved} once and returns the value", async () => {
+    const spy = spyBookedValueResolution();
+    const value = await resolveBookedValueForBooking(async () => services, "Botox", "org_1");
+    expect(value).toBe(25000);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith({ orgId: "org_1", outcome: "resolved" });
+  });
+
+  it("no_match: emits {outcome:no_match}, returns null", async () => {
+    const spy = spyBookedValueResolution();
+    expect(
+      await resolveBookedValueForBooking(async () => services, "Dermaplaning", "org_1"),
+    ).toBeNull();
+    expect(spy).toHaveBeenCalledWith({ orgId: "org_1", outcome: "no_match" });
+  });
+
+  it("no_playbook: emits {outcome:no_playbook} for empty services", async () => {
+    const spy = spyBookedValueResolution();
+    expect(await resolveBookedValueForBooking(async () => [], "x", "org_1")).toBeNull();
+    expect(spy).toHaveBeenCalledWith({ orgId: "org_1", outcome: "no_playbook" });
+  });
+
+  it("matched_unpriced: emits {outcome:matched_unpriced}", async () => {
+    const spy = spyBookedValueResolution();
+    expect(
+      await resolveBookedValueForBooking(async () => services, "Consultation", "org_1"),
+    ).toBeNull();
+    expect(spy).toHaveBeenCalledWith({ orgId: "org_1", outcome: "matched_unpriced" });
+  });
+
+  it("no_lookup: emits {outcome:no_lookup} when no getServicesForOrg dep is wired", async () => {
+    const spy = spyBookedValueResolution();
+    expect(await resolveBookedValueForBooking(undefined, "x", "org_1")).toBeNull();
+    expect(spy).toHaveBeenCalledWith({ orgId: "org_1", outcome: "no_lookup" });
+  });
+
+  it("read_error: emits {outcome:read_error} when the read throws; returns null (booking not blocked)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const spy = spyBookedValueResolution();
+    const value = await resolveBookedValueForBooking(
+      async () => {
+        throw new Error("db down");
+      },
+      "x",
+      "org_1",
+    );
+    expect(value).toBeNull();
+    expect(spy).toHaveBeenCalledWith({ orgId: "org_1", outcome: "read_error" });
+    warn.mockRestore();
   });
 });

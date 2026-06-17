@@ -1,4 +1,5 @@
 import type { PlaybookService } from "@switchboard/schemas";
+import { getMetrics } from "../../telemetry/metrics.js";
 
 export interface ResolveBookedValueInput {
   /**
@@ -101,17 +102,30 @@ export type GetServicesForOrg = (orgId: string) => Promise<readonly PlaybookServ
  * when no lookup is wired, the service is unmatched/unpriced, OR the playbook read
  * throws: valuing a booking must NEVER block it. Co-located with the pure resolver
  * it wraps; the calendar-book tool calls this before persisting a booking.
+ *
+ * Emits the `bookedValueResolution` metric exactly once per call, labeled by the
+ * resolution outcome (resolved / no_playbook / no_match / matched_unpriced /
+ * no_lookup / read_error), so the prod match-vs-abstain rate is observable without
+ * a credentialed walkthrough. Observability-only: the returned value is unchanged.
  */
 export async function resolveBookedValueForBooking(
   getServicesForOrg: GetServicesForOrg | undefined,
   service: string,
   orgId: string,
 ): Promise<number | null> {
-  if (!getServicesForOrg) return null;
-  try {
-    return resolveBookedValueCents({ service, services: await getServicesForOrg(orgId) });
-  } catch (err) {
-    console.warn("[calendar-book] playbook value lookup failed; booked value abstains", err);
+  if (!getServicesForOrg) {
+    getMetrics().bookedValueResolution.inc({ orgId, outcome: "no_lookup" });
     return null;
   }
+  let services: readonly PlaybookService[] | undefined;
+  try {
+    services = await getServicesForOrg(orgId);
+  } catch (err) {
+    console.warn("[calendar-book] playbook value lookup failed; booked value abstains", err);
+    getMetrics().bookedValueResolution.inc({ orgId, outcome: "read_error" });
+    return null;
+  }
+  const { valueCents, outcome } = classifyBookedValue({ service, services });
+  getMetrics().bookedValueResolution.inc({ orgId, outcome });
+  return valueCents;
 }
