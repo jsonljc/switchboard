@@ -22,6 +22,19 @@ export interface ParkedApprovalContext {
   parameters: Record<string, unknown>;
   actorId: string;
   organizationId: string;
+  /**
+   * When the approval was parked (lifecycle.createdAt). Lets cards show a "submitted" stamp.
+   * Optional so a degraded/synthetic context without lifecycle timing still type-checks; the
+   * real adapter path always supplies it.
+   */
+  parkedAt?: Date;
+  /**
+   * When the parked approval auto-expires (lifecycle.expiresAt). Cards can render a real
+   * expiry countdown so silent park expiries become visible; the canonical value lives on
+   * the lifecycle (set from the routing config at park time), not a card-level TTL constant.
+   * Optional for the same reason as parkedAt.
+   */
+  expiresAt?: Date;
 }
 
 export interface ParkedApprovalSummary {
@@ -32,6 +45,12 @@ export interface ParkedApprovalSummary {
   >;
   riskContract?: RiskContract;
   contactName?: string;
+  /**
+   * Optional "open the artifact" link (e.g. a publish card's durable creative URL). The
+   * adapter maps it to Decision.threadHref so the operator can review the asset in place
+   * instead of navigating to the owning agent. Omitted when there is no artifact to show.
+   */
+  assetHref?: string;
 }
 
 /**
@@ -92,6 +111,8 @@ export function adaptParkedApproval(
     parameters: trace.parameters ?? {},
     actorId: trace.actor.id,
     organizationId: trace.organizationId,
+    parkedAt: lifecycle.createdAt,
+    expiresAt: lifecycle.expiresAt,
   };
   const summary = summarizer?.(ctx) ?? null;
 
@@ -130,7 +151,9 @@ export function adaptParkedApproval(
       ? 100
       : scoreParkedApproval({ expiresAt: lifecycle.expiresAt, riskLevel: riskContract.riskLevel }),
     createdAt: lifecycle.createdAt,
-    threadHref: null,
+    // A summarizer may expose an artifact link (e.g. the publish card's durable creative
+    // URL) so the operator can review it in place; otherwise parked approvals have no thread.
+    threadHref: summary?.assetHref ?? null,
     sourceRef: { kind: "workflow_approval", sourceId: lifecycle.id },
     meta: {
       ...(summary?.contactName ? { contactName: summary.contactName } : {}),

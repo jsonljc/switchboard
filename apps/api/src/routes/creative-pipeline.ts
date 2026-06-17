@@ -291,7 +291,11 @@ export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {
 
       const response = await app.platformIngress.submit({
         intent: "creative.job.publish",
-        parameters: { jobId: id },
+        // Carry the pre-flight-resolved durable asset + ad account so the parked
+        // approval card can show the creative and target account (and an expiry
+        // countdown) without the operator navigating to Mira. The handler itself
+        // re-derives these from the job/connection, so they are display-only here.
+        parameters: { jobId: id, durableAssetUrl: pre.durableAssetUrl, accountId: pre.accountId },
         actor: { id: request.actorId, type: "user" },
         organizationId: request.orgId,
         trigger: "api",

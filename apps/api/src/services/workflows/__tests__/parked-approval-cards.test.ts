@@ -91,6 +91,49 @@ describe("summarizeParkedIntent", () => {
     });
   });
 
+  it("enriches the publish card with the asset link, ad account, and an expiry countdown", () => {
+    const parkedAt = new Date("2026-06-17T10:00:00.000Z");
+    const expiresAt = new Date("2026-06-18T10:00:00.000Z"); // 24h after parkedAt
+    const s = summarizeParkedIntent({
+      intent: "creative.job.publish",
+      organizationId: "org_dev",
+      actorId: "user_1",
+      parameters: {
+        jobId: "job_42",
+        durableAssetUrl: "https://cdn.example.com/creatives/job_42.mp4",
+        accountId: "act_998877",
+      },
+      parkedAt,
+      expiresAt,
+    });
+    expect(s).not.toBeNull();
+    const flat = (s!.dataLines ?? []).map((l) => (Array.isArray(l) ? l.join(" ") : l)).join("\n");
+    // Operator can open the creative without navigating to Mira.
+    expect(flat).toContain("https://cdn.example.com/creatives/job_42.mp4");
+    // Operator sees which Meta ad account the draft lands in.
+    expect(flat).toContain("act_998877");
+    // Operator sees a real expiry signal (no more silent park expiries).
+    expect(flat).toMatch(/expire/i);
+    expect(flat).toContain("2026-06-18");
+    // The durable URL is also exposed as a first-class review-in-place link.
+    expect(s!.assetHref).toBe("https://cdn.example.com/creatives/job_42.mp4");
+  });
+
+  it("renders the publish card without asset/account/expiry lines when those are absent", () => {
+    const s = summarizeParkedIntent({
+      intent: "creative.job.publish",
+      organizationId: "org_dev",
+      actorId: "user_1",
+      parameters: { jobId: "job_bare" },
+    });
+    expect(s).not.toBeNull();
+    const flat = (s!.dataLines ?? []).map((l) => (Array.isArray(l) ? l.join(" ") : l)).join("\n");
+    // Still has the static no-spend guidance even with no enrichment fields.
+    expect(flat.toLowerCase()).toContain("paused");
+    expect(flat).not.toMatch(/Creative:/);
+    expect(flat).not.toMatch(/Ad account:/);
+  });
+
   it("returns null for intents without a bespoke card (default card upstream)", () => {
     expect(
       summarizeParkedIntent({
