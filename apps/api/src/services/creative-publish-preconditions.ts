@@ -6,7 +6,9 @@ export type PublishFailureCode =
   | "CREATIVE_NOT_PUBLISHABLE"
   | "CREATIVE_ASSET_NOT_DURABLE"
   | "META_CONNECTION_NOT_FOUND"
-  | "META_PAGE_NOT_CONFIGURED";
+  | "META_CONNECTION_NOT_CONNECTED"
+  | "META_PAGE_NOT_CONFIGURED"
+  | "META_WABA_NOT_BOUND";
 
 export interface PublishContext {
   ok: true;
@@ -31,9 +33,40 @@ export interface AssertPublishableDeps {
 }
 
 const META_ADS_SERVICE_ID = "meta-ads";
+const WHATSAPP_SERVICE_ID = "whatsapp";
+const CONNECTED_STATUS = "connected";
 
 function fail(code: PublishFailureCode, message: string): PublishPrecheckFailure {
   return { ok: false, code, message };
+}
+
+/**
+ * CTWA destination presence check: a click-to-WhatsApp draft routes clicks to a
+ * WhatsApp business number, so the org must have a WhatsApp connection bound to a
+ * WABA (externalAccountId) and a Cloud API phone-number id. Presence only — no
+ * Graph call. Without it the draft builds but cannot serve and dead-letters with
+ * a raw Meta error. Returns a failure to surface, or null when bound.
+ */
+async function assertWabaBound(
+  deps: AssertPublishableDeps,
+  organizationId: string,
+): Promise<PublishPrecheckFailure | null> {
+  const wabaConnection = (await deps.prisma.connection.findFirst({
+    where: { serviceId: WHATSAPP_SERVICE_ID, organizationId },
+    select: { credentials: true, externalAccountId: true },
+  })) as { credentials: unknown; externalAccountId: string | null } | null;
+
+  const wabaId = wabaConnection?.externalAccountId ?? null;
+  const wabaCreds = wabaConnection ? deps.decrypt(wabaConnection.credentials) : null;
+  const phoneNumberId =
+    wabaCreds && typeof wabaCreds["phoneNumberId"] === "string" ? wabaCreds["phoneNumberId"] : null;
+  if (!wabaId || !phoneNumberId) {
+    return fail(
+      "META_WABA_NOT_BOUND",
+      "No WhatsApp Business account is bound for this organization. Complete WhatsApp onboarding before publishing a click-to-WhatsApp ad.",
+    );
+  }
+  return null;
 }
 
 /**
@@ -79,11 +112,26 @@ export async function assertPublishable(
 
   const connection = (await deps.prisma.connection.findFirst({
     where: { serviceId: META_ADS_SERVICE_ID, organizationId },
-    select: { credentials: true, externalAccountId: true },
-  })) as { credentials: unknown; externalAccountId: string | null } | null;
+    select: { credentials: true, externalAccountId: true, status: true },
+  })) as {
+    credentials: unknown;
+    externalAccountId: string | null;
+    status: string | null;
+  } | null;
 
   if (!connection) {
     return fail("META_CONNECTION_NOT_FOUND", "No Meta Ads connection for this organization.");
+  }
+
+  // An expired/revoked connection still has rows + ciphertext, so without this
+  // gate publishing creates a Meta draft that can never serve and dead-letters
+  // with only a raw Meta error. Fail loud with the actual status instead.
+  const connectionStatus = connection.status ?? "unknown";
+  if (connectionStatus !== CONNECTED_STATUS) {
+    return fail(
+      "META_CONNECTION_NOT_CONNECTED",
+      `The Meta Ads connection is "${connectionStatus}", not connected. Reconnect Meta Ads before publishing.`,
+    );
   }
 
   const creds = deps.decrypt(connection.credentials);
@@ -107,6 +155,10 @@ export async function assertPublishable(
       "No Facebook Page is configured for ads on this connection.",
     );
   }
+
+  // CTWA destination: the org must have a WABA-bound WhatsApp connection.
+  const wabaFailure = await assertWabaBound(deps, organizationId);
+  if (wabaFailure) return wabaFailure;
 
   return { ok: true, job, durableAssetUrl: job.durableAssetUrl, accessToken, accountId, pageId };
 }

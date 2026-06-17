@@ -19,6 +19,7 @@ const JOB_ID = "job_loop";
 // Stateful in-memory Prisma double: one meta-ads connection row + a publishable creative job.
 // findFirst / updateMany honor the WHERE filters used by BOTH the gate (serviceId+org) and the
 // store (id+org), so the same in-memory row is shared across the setter and the gate.
+// A separate whatsapp row satisfies the gate's WABA-binding presence check.
 function makeStatefulPrisma(initialCredentials: string) {
   const row = {
     id: CONN_ID,
@@ -26,19 +27,32 @@ function makeStatefulPrisma(initialCredentials: string) {
     organizationId: ORG,
     credentials: initialCredentials,
     externalAccountId: null as string | null,
+    status: "connected",
+  };
+  const wabaRow = {
+    id: "conn_waba",
+    serviceId: "whatsapp",
+    organizationId: ORG,
+    credentials: encryptCredentials({ phoneNumberId: "pn_loop" }),
+    externalAccountId: "waba_loop",
+    status: "connected",
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- in-memory Prisma double for tests
-  const matches = (w: any) =>
-    (w.id === undefined || w.id === row.id) &&
-    (w.organizationId === undefined || w.organizationId === row.organizationId) &&
-    (w.serviceId === undefined || w.serviceId === row.serviceId);
+  const matchesRow = (w: any, r: typeof row | typeof wabaRow) =>
+    (w.id === undefined || w.id === r.id) &&
+    (w.organizationId === undefined || w.organizationId === r.organizationId) &&
+    (w.serviceId === undefined || w.serviceId === r.serviceId);
   return {
     connection: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- in-memory Prisma double
-      findFirst: vi.fn(async ({ where }: any) => (matches(where) ? { ...row } : null)),
+      findFirst: vi.fn(async ({ where }: any) => {
+        if (matchesRow(where, wabaRow)) return { ...wabaRow };
+        if (matchesRow(where, row)) return { ...row };
+        return null;
+      }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- in-memory Prisma double
       updateMany: vi.fn(async ({ where, data }: any) => {
-        if (!matches(where)) return { count: 0 };
+        if (!matchesRow(where, row)) return { count: 0 };
         if (typeof data.credentials === "string") row.credentials = data.credentials;
         return { count: 1 };
       }),

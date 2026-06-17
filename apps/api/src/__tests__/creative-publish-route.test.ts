@@ -83,8 +83,19 @@ describe("POST /creative-jobs/:id/publish", () => {
     connFindFirst.mockReset();
     submit.mockReset();
     decrypt.mockReset();
-    decrypt.mockReturnValue({ accessToken: "tok", accountId: "act_1", pageId: "page_1" });
-    connFindFirst.mockResolvedValue({ credentials: "enc", externalAccountId: "act_1" });
+    // assertPublishable reads two connections (meta-ads + whatsapp/WABA) and
+    // decrypts each. Route both mocks on serviceId / ciphertext so the happy path
+    // is a connected, WABA-bound org.
+    decrypt.mockImplementation((enc: unknown) =>
+      enc === "enc-waba"
+        ? { phoneNumberId: "pn_1" }
+        : { accessToken: "tok", accountId: "act_1", pageId: "page_1" },
+    );
+    connFindFirst.mockImplementation(async ({ where }: { where?: { serviceId?: string } }) =>
+      where?.serviceId === "whatsapp"
+        ? { credentials: "enc-waba", externalAccountId: "waba_1", status: "connected" }
+        : { credentials: "enc", externalAccountId: "act_1", status: "connected" },
+    );
     ctx = await buildApp();
   });
 
@@ -143,12 +154,46 @@ describe("POST /creative-jobs/:id/publish", () => {
 
   it("422 META_PAGE_NOT_CONFIGURED when no Page id resolvable", async () => {
     findUnique.mockResolvedValue(KEPT_JOB);
-    decrypt.mockReturnValue({ accessToken: "tok", accountId: "act_1" }); // no pageId
+    // meta creds lose the pageId; the whatsapp/WABA creds stay intact so the page
+    // check is what blocks (it runs before the WABA check).
+    decrypt.mockImplementation((enc: unknown) =>
+      enc === "enc-waba" ? { phoneNumberId: "pn_1" } : { accessToken: "tok", accountId: "act_1" },
+    );
 
     const res = await ctx.app.inject(publish());
 
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("META_PAGE_NOT_CONFIGURED");
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("422 META_CONNECTION_NOT_CONNECTED when the meta-ads connection is not connected", async () => {
+    findUnique.mockResolvedValue(KEPT_JOB);
+    connFindFirst.mockImplementation(async ({ where }: { where?: { serviceId?: string } }) =>
+      where?.serviceId === "whatsapp"
+        ? { credentials: "enc-waba", externalAccountId: "waba_1", status: "connected" }
+        : { credentials: "enc", externalAccountId: "act_1", status: "revoked" },
+    );
+
+    const res = await ctx.app.inject(publish());
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("META_CONNECTION_NOT_CONNECTED");
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("422 META_WABA_NOT_BOUND when the org has no whatsapp connection", async () => {
+    findUnique.mockResolvedValue(KEPT_JOB);
+    connFindFirst.mockImplementation(async ({ where }: { where?: { serviceId?: string } }) =>
+      where?.serviceId === "whatsapp"
+        ? null
+        : { credentials: "enc", externalAccountId: "act_1", status: "connected" },
+    );
+
+    const res = await ctx.app.inject(publish());
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("META_WABA_NOT_BOUND");
     expect(submit).not.toHaveBeenCalled();
   });
 });
