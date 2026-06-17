@@ -131,7 +131,7 @@ describe("buildSegments", () => {
     expect(segments).toHaveLength(1);
     expect(segments[0]).toEqual({
       kind: "text",
-      text: "All clear for now. I'll ping you when something lands.",
+      text: "All clear for now. New leads will show up here when they arrive.",
     });
   });
 
@@ -291,6 +291,19 @@ describe("greeting — mira", () => {
     );
     expect(seg.map((s) => s.text).join("")).toContain("drafts");
   });
+  it("quiet variant uses honest check-back copy, not a notification promise", () => {
+    const seg = buildSegments(
+      "quiet",
+      { inboxCount: 0, oldestOpenItemAgeHours: null, hoursSinceLastOperatorAction: 12 },
+      cfg,
+      null,
+    );
+    expect(seg).toHaveLength(1);
+    expect(seg[0]).toEqual({
+      kind: "text",
+      text: "No drafts need you right now. Check back soon, drafts will be ready for your review.",
+    });
+  });
   it("named-lead points at the draft title", () => {
     const seg = buildSegments(
       "named-lead",
@@ -367,6 +380,52 @@ describe("voice: greeting prose carries no em-dash", () => {
         );
         const text = segs.map((s) => s.text).join("");
         expect(text, `${config.agentKey}/${variant}`).not.toMatch(/—/);
+      }
+    }
+  });
+});
+
+describe("voice: idle greetings make no unkept notification promise", () => {
+  it("no variant/agent combination promises to ping you", () => {
+    const configs: GreetingAgentConfig[] = [
+      {
+        agentKey: "alex",
+        busyThreshold: 5,
+        busyAgeHoursThreshold: 24,
+        countNoun: "leads",
+        countNounSingular: "lead",
+      },
+      {
+        agentKey: "riley",
+        busyThreshold: 4,
+        busyAgeHoursThreshold: 12,
+        countNoun: "ad sets",
+        countNounSingular: "ad set",
+      },
+      {
+        agentKey: "mira",
+        busyThreshold: 3,
+        busyAgeHoursThreshold: 24,
+        countNoun: "drafts",
+        countNounSingular: "draft",
+      },
+    ];
+    const variants: Array<"welcome" | "quiet" | "busy" | "named-lead"> = [
+      "welcome",
+      "quiet",
+      "busy",
+      "named-lead",
+    ];
+    for (const config of configs) {
+      for (const variant of variants) {
+        const segs = buildSegments(
+          variant,
+          { inboxCount: 0, oldestOpenItemAgeHours: null, hoursSinceLastOperatorAction: 12 },
+          config,
+          null,
+        );
+        const text = segs.map((s) => s.text).join("");
+        expect(text, `${config.agentKey}/${variant}`).not.toMatch(/ping you/i);
       }
     }
   });
