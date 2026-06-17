@@ -49,6 +49,50 @@ export function resolveBookedValueCents(input: ResolveBookedValueInput): number 
   return Math.round(price * 100); // dollars (major units) -> cents
 }
 
+/**
+ * The outcome of a booked-value resolution, for the `bookedValueResolution`
+ * observability metric. `resolved` populated a real positive value; every other
+ * outcome ABSTAINS (valueCents null) for a distinct reason, which is the whole
+ * point of the metric: it separates "org has no playbook" (operational) from
+ * "playbook present but the booked service did not match" (the catalog-alignment
+ * effectiveness signal) from "matched but unpriced". The first four are decided
+ * synchronously by `classifyBookedValue`; `no_lookup` and `read_error` are added
+ * by the async wrapper (no services lookup wired / the playbook read threw).
+ */
+export type BookedValueOutcome =
+  | "resolved"
+  | "no_playbook"
+  | "no_match"
+  | "matched_unpriced"
+  | "no_lookup"
+  | "read_error";
+
+/** The subset of outcomes decided purely from (service, services). */
+export type SyncBookedValueOutcome = Exclude<BookedValueOutcome, "no_lookup" | "read_error">;
+
+/**
+ * Classify a (service, services) pair into the resolved value PLUS the reason it
+ * resolved or abstained. Pure (no metrics import). `valueCents` DELEGATES to
+ * `resolveBookedValueCents`, so the cents are single-sourced and the
+ * never-fabricate contract is inherited verbatim; this function only adds an
+ * explanatory outcome label for observability. The match predicate mirrors the
+ * resolver's exact id-or-name rule (same `normalize`), and the alignment test
+ * pins `outcome === "resolved"` <=> `valueCents !== null` so the label can never
+ * drift in a way that would mislabel a populated value.
+ */
+export function classifyBookedValue(input: ResolveBookedValueInput): {
+  valueCents: number | null;
+  outcome: SyncBookedValueOutcome;
+} {
+  const { service, services } = input;
+  const valueCents = resolveBookedValueCents(input);
+  if (!services || services.length === 0) return { valueCents, outcome: "no_playbook" };
+  const target = normalize(service);
+  const matched = services.some((s) => s.id === service || normalize(s.name) === target);
+  if (!matched) return { valueCents, outcome: "no_match" };
+  return { valueCents, outcome: valueCents === null ? "matched_unpriced" : "resolved" };
+}
+
 /** The org-playbook services lookup the calendar-book tool injects (undefined when no lookup is wired). */
 export type GetServicesForOrg = (orgId: string) => Promise<readonly PlaybookService[] | undefined>;
 

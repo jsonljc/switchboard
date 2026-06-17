@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { PlaybookService } from "@switchboard/schemas";
-import { resolveBookedValueCents } from "./booking-value.js";
+import { resolveBookedValueCents, classifyBookedValue } from "./booking-value.js";
+import type { ResolveBookedValueInput } from "./booking-value.js";
 
 function svc(overrides: Partial<PlaybookService> & { id: string }): PlaybookService {
   return {
@@ -79,5 +80,79 @@ describe("resolveBookedValueCents", () => {
   it("matches the service whose id equals the booked service (not by position)", () => {
     const services = [svc({ id: "a", price: 100 }), svc({ id: "b", price: 200 })];
     expect(resolveBookedValueCents({ service: "b", services })).toBe(20000);
+  });
+});
+
+describe("classifyBookedValue", () => {
+  const services = [
+    svc({ id: "botox", name: "Botox", price: 250 }),
+    svc({ id: "consult", name: "Consultation" }), // matched but unpriced
+  ];
+
+  it("resolved: matched + priced -> value + outcome:resolved", () => {
+    expect(classifyBookedValue({ service: "Botox", services })).toEqual({
+      valueCents: 25000,
+      outcome: "resolved",
+    });
+  });
+
+  it("no_playbook: undefined services", () => {
+    expect(classifyBookedValue({ service: "x", services: undefined })).toEqual({
+      valueCents: null,
+      outcome: "no_playbook",
+    });
+  });
+
+  it("no_playbook: empty services", () => {
+    expect(classifyBookedValue({ service: "x", services: [] })).toEqual({
+      valueCents: null,
+      outcome: "no_playbook",
+    });
+  });
+
+  it("no_match: playbook present, booked service not in it (the alignment-miss signal)", () => {
+    expect(classifyBookedValue({ service: "Dermaplaning", services })).toEqual({
+      valueCents: null,
+      outcome: "no_match",
+    });
+  });
+
+  it("matched_unpriced: matched a service with no usable price", () => {
+    expect(classifyBookedValue({ service: "Consultation", services })).toEqual({
+      valueCents: null,
+      outcome: "matched_unpriced",
+    });
+  });
+
+  it("matched_unpriced: matched but non-finite / non-positive price (never fabricates)", () => {
+    expect(
+      classifyBookedValue({ service: "z", services: [svc({ id: "z", price: Number.NaN })] })
+        .outcome,
+    ).toBe("matched_unpriced");
+    expect(
+      classifyBookedValue({ service: "z", services: [svc({ id: "z", price: 0 })] }).outcome,
+    ).toBe("matched_unpriced");
+  });
+
+  // ALIGNMENT SEAM (divergence guard): the outcome label must never disagree with
+  // the value's nullness, and the value must equal the resolver verbatim (single
+  // source of truth). If the classifier's match predicate ever drifts from the
+  // resolver's, this reds.
+  it("ALIGNMENT: outcome:resolved iff valueCents non-null, and value tracks resolveBookedValueCents", () => {
+    const cases: ResolveBookedValueInput[] = [
+      { service: "Botox", services },
+      { service: "botox", services }, // id match
+      { service: "Consultation", services },
+      { service: "Dermaplaning", services },
+      { service: "x", services: [] },
+      { service: "x", services: undefined },
+      { service: "z", services: [svc({ id: "z", price: 0 })] },
+      { service: "z", services: [svc({ id: "z", price: Number.POSITIVE_INFINITY })] },
+    ];
+    for (const c of cases) {
+      const { valueCents, outcome } = classifyBookedValue(c);
+      expect(valueCents).toBe(resolveBookedValueCents(c));
+      expect(outcome === "resolved").toBe(valueCents !== null);
+    }
   });
 });
