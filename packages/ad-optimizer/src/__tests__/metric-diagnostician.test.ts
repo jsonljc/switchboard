@@ -1,7 +1,12 @@
 // packages/core/src/ad-optimizer/__tests__/metric-diagnostician.test.ts
 import { describe, it, expect } from "vitest";
 import { diagnose } from "../metric-diagnostician.js";
-import type { MetricDeltaSchema as MetricDelta } from "@switchboard/schemas";
+import { insightToMetrics } from "../campaign-decision.js";
+import { comparePeriods } from "../period-comparator.js";
+import type {
+  MetricDeltaSchema as MetricDelta,
+  CampaignInsightSchema as CampaignInsight,
+} from "@switchboard/schemas";
 
 function makeDelta(
   metric: string,
@@ -190,5 +195,70 @@ describe("diagnose", () => {
     ];
     const result = diagnose(deltas);
     expect(result.find((d) => d.pattern === "creative_fatigue")).toBeDefined();
+  });
+});
+
+describe("lead_quality_* reachability through the live audit seam", () => {
+  // TRIPWIRE. These pin WHY the two booking-cost-aware diagnoses (lead_quality_issue,
+  // lead_quality_degradation) do not fire on the DETERMINISTIC per-campaign audit path
+  // (campaign-decision.ts), which feeds diagnose() the deltas built by insightToMetrics +
+  // comparePeriods below. The rules are correct in isolation (the direct-delta cases above prove
+  // they fire on divergent inputs); the gap is purely upstream in this metric pipeline. diagnose()
+  // has a second caller, the ads-analytics.diagnose agent tool, which runs on the agent's own
+  // deltas and is NOT bound by this collapse; this tripwire covers the deterministic path only.
+  //
+  // If any test here FAILS, the deterministic pipeline has gained booking-cost resolution (cpl and
+  // cpa sourced separately, or a costPerBooked metric). That is when a deterministic operator
+  // surface (a WatchOutput, mirroring breach_building) plus an eval fixture become worthwhile.
+  // See the reachability notes in metric-diagnostician.ts.
+  function insightFor(o: { spend: number; conversions: number }): CampaignInsight {
+    return {
+      campaignId: "c1",
+      campaignName: "C1",
+      status: "ACTIVE",
+      effectiveStatus: "ACTIVE",
+      impressions: 10000,
+      inlineLinkClicks: 500,
+      spend: o.spend,
+      conversions: o.conversions,
+      revenue: 0,
+      frequency: 1.5,
+      cpm: 0,
+      inlineLinkClickCtr: 0,
+      costPerInlineLinkClick: 0,
+      dateStart: "2026-05-01",
+      dateStop: "2026-05-07",
+    };
+  }
+
+  it("insightToMetrics collapses cpl and cpa to the same value", () => {
+    // lead_quality_issue needs cpa up-significant while cpl is NOT significant; identical
+    // numbers make that condition unsatisfiable on the live path.
+    const m = insightToMetrics(insightFor({ spend: 5000, conversions: 25 }));
+    expect(m.cpa).toBe(m.cpl);
+  });
+
+  it("comparePeriods emits no costPerBooked metric", () => {
+    // lead_quality_degradation reads map.get("costPerBooked"); the live MetricSet never carries it.
+    const deltas = comparePeriods(
+      insightToMetrics(insightFor({ spend: 5000, conversions: 25 })),
+      insightToMetrics(insightFor({ spend: 4000, conversions: 40 })),
+    );
+    expect(deltas.map((d) => d.metric)).not.toContain("costPerBooked");
+  });
+
+  it("yields no lead_quality_* diagnosis end-to-end even when acquisition cost spikes", () => {
+    // spend up + conversions down => cpa (= cpl) spikes. In a booking-cost-aware world this would
+    // read as lead_quality_issue (booking cost up, lead cost flat); here cpl moves in lockstep with
+    // cpa, so that rule correctly abstains rather than fabricating a split that is not measured.
+    // (The spike is not invisible deterministically: with the stable CTR in this fixture it surfaces
+    // as audience_offer_mismatch; this assertion only pins that the lead_quality_* rules abstain.)
+    const deltas = comparePeriods(
+      insightToMetrics(insightFor({ spend: 6000, conversions: 20 })),
+      insightToMetrics(insightFor({ spend: 4000, conversions: 50 })),
+    );
+    const patterns = diagnose(deltas).map((d) => d.pattern);
+    expect(patterns).not.toContain("lead_quality_issue");
+    expect(patterns).not.toContain("lead_quality_degradation");
   });
 });

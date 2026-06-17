@@ -75,6 +75,15 @@ const RULES: Rule[] = [
     },
   },
   {
+    // Reachability (2026-06-17): diagnose() has two callers. On the DETERMINISTIC per-campaign
+    // audit (campaign-decision.ts) this rule cannot fire: insightToMetrics and aggregateMetrics
+    // both set cpl = cpa = spend/conversions, so cpaUpSignificant always implies cplSignificant
+    // and the "cpl NOT significant" arm is unsatisfiable; recommendation-engine.ts has no branch
+    // for it either, so a deterministic watch would be inert. It IS consumed on the other caller,
+    // the ads-analytics.diagnose agent tool (skills/ad-optimizer.md), which runs on the agent's own
+    // deltas (where cpl and cpa can come from separate sources) and folds the diagnosis into recs.
+    // The deterministic path activates only once its builders resolve lead vs booking cost
+    // separately (the deferred booking-cost / receipt-ledger feed). Pinned by metric-diagnostician.test.ts.
     pattern: "lead_quality_issue",
     description: "Lead quality dropping",
     confidence: "medium",
@@ -112,6 +121,13 @@ const RULES: Rule[] = [
     },
   },
   {
+    // Reachability (2026-06-17): requires a costPerBooked delta. The deterministic 7-key MetricSet
+    // (period-comparator.ts) has none and comparePeriods never emits one, so on the per-campaign
+    // audit path map.get("costPerBooked") is always undefined and the rule returns false. Unlike
+    // lead_quality_issue it is also absent from the ad-optimizer agent skill's diagnosis set
+    // (skills/ad-optimizer.md), so nothing surfaces it today. Forward-looking: it activates when
+    // booking cost enters the metric pipeline (the deferred booking-cost / receipt-ledger feed).
+    // Pinned by metric-diagnostician.test.ts.
     pattern: "lead_quality_degradation",
     description: "CPL improving but downstream booking cost rising — leads are lower quality",
     confidence: "high",
