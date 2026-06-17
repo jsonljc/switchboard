@@ -240,6 +240,11 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
 
       const results = [];
       for (const ch of channels) {
+        // N1: track the created row id outside the try so the catch can persist
+        // status:"error" onto a row that was created before a later step threw.
+        // Without this, a partial failure leaves the row at its default
+        // "provisioning" status with no reason after reload.
+        let createdManagedChannelId: string | null = null;
         try {
           // ── Input validation: WhatsApp requires both token + phoneNumberId ──
           // Without this guard, a WhatsApp request with token-only would let
@@ -350,6 +355,10 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
 
             return { connection, managedChannel };
           });
+
+          // N1: the row now exists; record its id so the catch can persist a
+          // failure status onto it if a later (post-transaction) step throws.
+          createdManagedChannelId = result.managedChannel.id;
 
           // ── Task 6: per-step StepResult tracking, resolved at the end ──
           // Each provision step collapses into a StepResult; resolveProvisionStatus
@@ -521,6 +530,22 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
             channel: ch.channel as "whatsapp" | "telegram" | "slack",
           });
 
+          // N1: persist the resolved status back to the ManagedChannel row so a
+          // later GET /channels reflects the real outcome instead of the schema
+          // default "provisioning". Previously the status only ever reached the
+          // HTTP results[] array below, so any non-active outcome was invisible
+          // after reload. lastHealthCheck is already persisted in the probe
+          // block above (active path only); here we settle status/detail/
+          // webhookRegistered.
+          await app.prisma.managedChannel.update({
+            where: { id: result.managedChannel.id },
+            data: {
+              status: resolved.status,
+              statusDetail: resolved.statusDetail,
+              webhookRegistered,
+            },
+          });
+
           results.push({
             id: result.managedChannel.id,
             channel: result.managedChannel.channel,
@@ -534,8 +559,26 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           });
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : "Unknown error";
+          // N1: if the row was created before the throw, persist status:"error"
+          // + the message onto it so the partial failure is recoverable and not
+          // opaque (the operator can see the reason and delete + re-provision).
+          // Best-effort: a failure here must not mask the original error.
+          if (createdManagedChannelId) {
+            try {
+              await app.prisma.managedChannel.update({
+                where: { id: createdManagedChannelId },
+                data: { status: "error", statusDetail: message },
+              });
+            } catch (persistErr) {
+              console.error(
+                `[organizations] failed to persist error status for managed channel ` +
+                  `${createdManagedChannelId}:`,
+                persistErr,
+              );
+            }
+          }
           results.push({
-            id: null,
+            id: createdManagedChannelId,
             channel: ch.channel,
             botUsername: null,
             webhookPath: null,
