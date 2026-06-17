@@ -16,6 +16,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { InboxFilterRow } from "@/components/inbox/inbox-filter-row";
 import { InboxEmptyState } from "@/components/inbox/inbox-empty-state";
 import { InboxErrorState } from "@/components/inbox/inbox-error-state";
+import { InboxSkeleton } from "@/components/inbox/inbox-skeleton";
 import { InboxDecisionItem } from "@/components/inbox/inbox-decision-item";
 import { InboxWorkflowApprovalItem } from "@/components/inbox/inbox-workflow-approval-item";
 import { ApprovalDetailSheet } from "@/components/inbox/approval-detail-sheet";
@@ -261,7 +262,7 @@ export function InboxScreen() {
   }
 
   if (filtered.isLoading) {
-    return <div className="inbox-loading">Loading…</div>;
+    return <InboxSkeleton />;
   }
 
   const decisions = filtered.data?.decisions ?? [];

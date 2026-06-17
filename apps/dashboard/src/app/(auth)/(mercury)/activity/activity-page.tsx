@@ -288,7 +288,13 @@ export function ActivityPage() {
 
   // ---- Render-state derivations ----
   const showPagination = isActivityLive() && (prevCursorStack.length > 0 || !!nextCursor);
-  const showSkeleton = isLoading && rows.length === 0;
+  // Pending gate: `isLoading` alone misses React Query's enabled:false pending
+  // state (session/org keys unresolved) where isLoading is false but `data` is
+  // still undefined — that previously fell through to the (dishonest) zero
+  // EmptyState before any fetch ran. In live mode, treat "no data, no error,
+  // no cached rows" as pending. See MEMORY feedback_react_query_enabled_false_isloading.
+  const livePending = isActivityLive() && !data && !isError;
+  const showSkeleton = (isLoading || livePending) && rows.length === 0;
   const hasCachedRows = rows.length > 0;
   const showEmpty = !showSkeleton && rows.length === 0 && !isError;
   // First-fetch error: error fires before any successful page existed. The

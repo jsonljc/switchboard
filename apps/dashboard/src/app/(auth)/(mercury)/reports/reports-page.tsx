@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useReportWindow } from "./hooks/use-report-window";
 import { useReportData } from "./hooks/use-report-data";
 import { useConnections } from "@/hooks/use-connections";
+import { useOrgConfig } from "@/hooks/use-org-config";
 import { isMercuryToolLive } from "@/lib/route-availability";
 import { PageHead, type RefreshState } from "./components/page-head";
 import { NoConnectionBanner } from "./components/no-connection-banner";
@@ -20,8 +21,10 @@ import { ReportsSkeleton } from "./components/reports-skeleton";
 import { StaleDataBanner } from "./components/stale-data-banner";
 import styles from "./reports.module.css";
 
-// Org placeholder until session/org context resolution lands (spec §10.7).
-const ORG_PLACEHOLDER = "Aurora Aesthetics";
+// Graceful stand-in for the colophon's `org · <name>` line while the org
+// config query is still resolving (or its keys are pending). Never a fake
+// clinic name — just a neutral label.
+const ORG_NAME_FALLBACK = "Your clinic";
 
 export function ReportsPage() {
   const { window: activeWindow, setWindow } = useReportWindow();
@@ -68,6 +71,12 @@ export function ReportsPage() {
   const metaConn = connectionsData?.connections.find((c) => c.serviceId === "meta-ads");
   const showNoConnBanner = liveMode && (!metaConn || metaConn.status !== "connected");
 
+  // Colophon org name: the signed-in org from useOrgConfig. Falls back to a
+  // neutral label while the query (or its session/org keys) is still pending —
+  // never a hardcoded clinic name.
+  const { data: orgConfigData } = useOrgConfig();
+  const orgName = orgConfigData?.config.name ?? ORG_NAME_FALLBACK;
+
   return (
     <div className={styles.reportsPage}>
       <FixtureModeBanner />
@@ -98,12 +107,7 @@ export function ReportsPage() {
           <Campaigns campaigns={fx.campaigns} />
           <CostVsValue cost={fx.cost} narrative={fx.costNarrative} />
           {fx.managedComparison && <ManagedComparison data={fx.managedComparison} />}
-          <Colophon
-            period={fx.period}
-            org={ORG_PLACEHOLDER}
-            generatedAt={new Date()}
-            liveMode={liveMode}
-          />
+          <Colophon period={fx.period} org={orgName} generatedAt={new Date()} liveMode={liveMode} />
         </>
       )}
     </div>
