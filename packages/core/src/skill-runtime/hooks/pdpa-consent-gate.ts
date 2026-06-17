@@ -118,8 +118,8 @@ export class PdpaConsentGateHook implements SkillHook {
       throw err;
     }
 
-    // 4. Read consent state.
-    const consent = await contactConsentReader.read(contactId);
+    // 4. Read consent state (org-scoped: never read another tenant's contact).
+    const consent = await contactConsentReader.read(ctx.orgId, contactId);
 
     // 5. Evaluate gate (operational class always in 1c; proactive uses separate call site in 1d).
     const decision = evaluateConsentGate({

@@ -8,9 +8,9 @@ interface Deps {
 
 export function createPrismaContactConsentReader(deps: Deps): ContactConsentReader {
   return {
-    async read(contactId: string): Promise<ContactConsentState> {
-      const row = await deps.prisma.contact.findUnique({
-        where: { id: contactId },
+    async read(organizationId: string, contactId: string): Promise<ContactConsentState> {
+      const row = await deps.prisma.contact.findFirst({
+        where: { id: contactId, organizationId },
         select: {
           pdpaJurisdiction: true,
           consentGrantedAt: true,
