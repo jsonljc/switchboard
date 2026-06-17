@@ -3,6 +3,7 @@ import type { PrismaDbClient } from "../prisma-db.js";
 import type {
   ReceiptedBookingView,
   AttributionConfidence,
+  PdpaJurisdiction,
   ReconcileBookingParameters,
 } from "@switchboard/schemas";
 import {
@@ -98,6 +99,7 @@ export class PrismaReceiptedBookingStore {
                 leadgenId: true,
                 sourceType: true,
                 firstTouchChannel: true,
+                pdpaJurisdiction: true,
                 consentGrantedAt: true,
                 consentRevokedAt: true,
               },
@@ -161,6 +163,9 @@ export class PrismaReceiptedBookingStore {
     // assembleViewExceptions would land the same code twice, breaking one-open-per-code.
     const recomputable = evaluateExceptions({
       attributionConfidence,
+      // Null jurisdiction = PDPA not_applicable: no missing_consent (matches the booking gate and
+      // the completeness report which scopes bookable to pdpaJurisdiction != null).
+      pdpaJurisdiction: (contact?.pdpaJurisdiction ?? null) as PdpaJurisdiction | null,
       consentGrantedAt: contact?.consentGrantedAt ?? null,
       consentRevokedAt: contact?.consentRevokedAt ?? null,
       overriddenBy: persisted?.overriddenBy ?? null,

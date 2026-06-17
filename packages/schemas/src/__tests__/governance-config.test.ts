@@ -219,6 +219,27 @@ describe("resolveConsentStateConfig", () => {
     });
     expect(resolveConsentStateConfig(config)).toEqual({ mode: "enforce" });
   });
+
+  it("coerces a corrupt consentState.mode enum to off instead of throwing", () => {
+    // A stored config whose consentState.mode is not a valid GovernanceMode must NOT crash the
+    // booking turn — it falls back to the documented "off" default (fail-safe, no enforcement).
+    const corrupt = {
+      jurisdiction: "SG",
+      clinicType: "medical",
+      consentState: { mode: "audit" },
+    } as unknown as Parameters<typeof resolveConsentStateConfig>[0];
+    expect(() => resolveConsentStateConfig(corrupt)).not.toThrow();
+    expect(resolveConsentStateConfig(corrupt)).toEqual({ mode: "off" });
+  });
+
+  it("coerces a wholly non-object consentState sub-block to off", () => {
+    const corrupt = {
+      jurisdiction: "SG",
+      clinicType: "medical",
+      consentState: "enforce",
+    } as unknown as Parameters<typeof resolveConsentStateConfig>[0];
+    expect(resolveConsentStateConfig(corrupt)).toEqual({ mode: "off" });
+  });
 });
 
 describe("LifecycleTaggingMechanicalConfigSchema", () => {

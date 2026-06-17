@@ -210,20 +210,14 @@ describe("PrismaReceiptedBookingStore.getView", () => {
   });
 
   it("raises missing_source + missing_consent for an unattributed, consent-less booking", async () => {
-    prisma.booking.findFirst.mockResolvedValueOnce({
-      id: "bk-3",
-      contactId: "ct-3",
-      opportunityId: null,
-      workTraceId: null,
-      attendance: null,
-      service: "Facial",
-      startsAt,
-    });
+    // prettier-ignore
+    prisma.booking.findFirst.mockResolvedValueOnce({ id: "bk-3", contactId: "ct-3", opportunityId: null, workTraceId: null, attendance: null, service: "Facial", startsAt });
     prisma.contact.findFirst.mockResolvedValueOnce({
       id: "ct-3",
       leadgenId: null,
       sourceType: null,
       firstTouchChannel: null,
+      pdpaJurisdiction: "SG", // in PDPA scope -> absent consent raises missing_consent
       consentGrantedAt: null,
       consentRevokedAt: null,
     });
@@ -233,6 +227,23 @@ describe("PrismaReceiptedBookingStore.getView", () => {
     expect(view?.attributionConfidence).toBe("unattributed");
     const codes = view?.exceptions.map((e) => e.code).sort();
     expect(codes).toEqual(["missing_consent", "missing_source"]);
+  });
+
+  it("does NOT raise missing_consent for a null-jurisdiction contact (not-applicable)", async () => {
+    // prettier-ignore
+    prisma.booking.findFirst.mockResolvedValueOnce({ id: "bk-4", contactId: "ct-4", opportunityId: null, workTraceId: null, attendance: null, service: "Facial", startsAt });
+    prisma.contact.findFirst.mockResolvedValueOnce({
+      id: "ct-4",
+      leadgenId: "lead_4", // attributed -> no missing_source
+      pdpaJurisdiction: null, // not-applicable -> missing_consent must NOT pollute the worklist
+      consentGrantedAt: null,
+      consentRevokedAt: null,
+    });
+
+    const view = await store.getView("org-1", "bk-4", now);
+
+    // empty set proves missing_consent (and every other code) is absent for a no-jurisdiction contact
+    expect(view?.exceptions.map((e) => e.code)).toEqual([]);
   });
 });
 
@@ -351,7 +362,8 @@ describe("PrismaReceiptedBookingStore.getView override + duplicate (PR-1 hardcod
     const codes = view!.exceptions.map((e) => e.code);
     expect(codes).not.toContain("manual_override");
     expect(codes).not.toContain("duplicate_contact_risk");
-    expect(codes).toContain("missing_consent");
+    // A contactless booking has no PDPA jurisdiction (not_applicable) -> no missing_consent.
+    expect(codes).not.toContain("missing_consent");
     expect(codes).toContain("missing_source");
   });
 });

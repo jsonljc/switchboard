@@ -83,7 +83,11 @@ export type ConsentStateConfig = z.infer<typeof ConsentStateConfigSchema>;
 
 export function resolveConsentStateConfig(config: GovernanceConfig | null): ConsentStateConfig {
   const raw = (config as unknown as Record<string, unknown> | null)?.consentState;
-  return ConsentStateConfigSchema.parse(raw ?? {});
+  // Fail-safe: a corrupt stored sub-block (bad mode enum, non-object) must NOT throw and crash the
+  // booking turn. Coerce to the documented "off" default (no consent-state mutation, no enforcement).
+  // This helper is also the PdpaConsentGateHook read site, so the hook inherits the same coercion.
+  const parsed = ConsentStateConfigSchema.safeParse(raw ?? {});
+  return parsed.success ? parsed.data : { mode: "off" };
 }
 
 /**

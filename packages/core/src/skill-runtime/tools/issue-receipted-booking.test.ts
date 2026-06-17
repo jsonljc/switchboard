@@ -10,6 +10,7 @@ function makeTx(opts: {
     leadgenId?: string | null;
     sourceType?: string | null;
     firstTouchChannel?: string | null;
+    pdpaJurisdiction?: string | null;
     consentGrantedAt?: Date | null;
     consentRevokedAt?: Date | null;
   } | null;
@@ -61,6 +62,7 @@ describe("issueReceiptedBookingInTx", () => {
         leadgenId: "lead_1", // deterministic
         sourceType: "ctwa",
         firstTouchChannel: "instagram",
+        pdpaJurisdiction: "SG", // in PDPA scope -> absent consent raises missing_consent
         consentGrantedAt: null, // raises missing_consent
         consentRevokedAt: null,
       },
@@ -86,6 +88,23 @@ describe("issueReceiptedBookingInTx", () => {
     expect(data.currency).toBe("SGD");
     expect(data.exceptions.map((e) => e.code)).toEqual(["missing_consent"]);
     expect(data.exceptions.every((e) => typeof e.raisedAt === "string")).toBe(true);
+  });
+
+  it("does NOT persist missing_consent for a null-jurisdiction contact (not-applicable)", async () => {
+    const { tx, create } = makeTx({
+      evidenceContact: {
+        leadgenId: "lead_1", // attributed -> no missing_source
+        pdpaJurisdiction: null, // not-applicable -> no missing_consent despite absent consent
+        consentGrantedAt: null,
+        consentRevokedAt: null,
+      },
+    });
+
+    await issueReceiptedBookingInTx(tx, baseArgs);
+
+    const data = create.mock.calls[0]![0].data as { exceptions: Array<{ code: string }> };
+    expect(data.exceptions.map((e) => e.code)).not.toContain("missing_consent");
+    expect(data.exceptions).toEqual([]);
   });
 
   it("is idempotent: skips the create (and the contact read) when a row already exists", async () => {
