@@ -3,6 +3,7 @@ import type { PrismaDbClient } from "../prisma-db.js";
 import type {
   ReceiptedBookingView,
   AttributionConfidence,
+  ExceptionCode,
   PdpaJurisdiction,
   ReconcileBookingParameters,
 } from "@switchboard/schemas";
@@ -29,6 +30,9 @@ export type ApplyReconcileResult =
 
 /** The only exception codes a resolve_exception action may stamp in v1 (spec Decision 2). */
 const RESOLVABLE_CODES: ReadonlySet<string> = new Set(["duplicate_contact_risk"]);
+
+/** Shared empty suppression set for the read path (avoids allocating per getView call). */
+const EMPTY_CODE_SET: ReadonlySet<ExceptionCode> = new Set();
 
 /** Duck-typed Prisma unique-constraint check (mirrors PrismaWorkTraceStore; no Prisma value import). */
 function isUniqueConstraintError(err: unknown): boolean {
@@ -161,18 +165,30 @@ export class PrismaReceiptedBookingStore {
     // Keep duplicateContactRisk: false here: the sole source of duplicate_contact_risk on the
     // read path is the persisted-array carry below; routing it through both evaluateExceptions and
     // assembleViewExceptions would land the same code twice, breaking one-open-per-code.
+    const pdpaJurisdiction = (contact?.pdpaJurisdiction ?? null) as PdpaJurisdiction | null;
     const recomputable = evaluateExceptions({
       attributionConfidence,
       // Null jurisdiction = PDPA not_applicable: no missing_consent (matches the booking gate and
       // the completeness report which scopes bookable to pdpaJurisdiction != null).
-      pdpaJurisdiction: (contact?.pdpaJurisdiction ?? null) as PdpaJurisdiction | null,
+      pdpaJurisdiction,
       consentGrantedAt: contact?.consentGrantedAt ?? null,
       consentRevokedAt: contact?.consentRevokedAt ?? null,
       overriddenBy: persisted?.overriddenBy ?? null,
       duplicateContactRisk: false,
       now,
     });
-    const exceptions = assembleViewExceptions(recomputable, persistedExceptions);
+    // missing_consent is NOT a recomputable code that assembleViewExceptions drops on its own, so a
+    // row issued BEFORE the jurisdiction fix can carry a STALE persisted missing_consent for a
+    // now-null-jurisdiction contact. Suppress it on the read path when the jurisdiction is null
+    // (consent not_applicable). A non-null jurisdiction never enters the suppression set, so a
+    // legitimate missing_consent (live-recomputed OR persisted) still surfaces.
+    const suppressPersistedCodes =
+      pdpaJurisdiction === null ? new Set<ExceptionCode>(["missing_consent"]) : EMPTY_CODE_SET;
+    const exceptions = assembleViewExceptions(
+      recomputable,
+      persistedExceptions,
+      suppressPersistedCodes,
+    );
 
     return {
       bookingId: booking.id,
