@@ -15,6 +15,9 @@ vi.mock("@/hooks/use-connections", () => ({
     isLoading: false,
   }),
 }));
+vi.mock("@/hooks/use-org-config", () => ({
+  useOrgConfig: () => ({ data: undefined }),
+}));
 
 const hookState: { current: UseReportData } = {
   current: {

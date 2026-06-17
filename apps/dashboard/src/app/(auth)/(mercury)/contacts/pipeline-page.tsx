@@ -11,7 +11,7 @@ import { FilterStrip, type FilterState } from "./components/filter-strip";
 import { PipelineHeader } from "./components/header";
 import { DetailDrawer } from "./components/detail-drawer";
 import { Toast, type ToastVariant } from "./components/toast";
-import { WholeBoardEmpty } from "./components/empty-states";
+import { WholeBoardEmpty, BoardSkeleton, WholeBoardError } from "./components/empty-states";
 import { PIPELINE_FIXTURE_NOW } from "./fixtures";
 import styles from "./pipeline.module.css";
 
@@ -150,7 +150,16 @@ export function PipelinePage() {
         onChange={setFilters}
         onClear={() => setFilters({ range: "all", qualifiedOnly: false })}
       />
-      {board.isLoading ? null : rows.length === 0 ? (
+      {/* Render ladder is exhaustive over {data, isError}. The pending gate is
+          `!data && !isError` (NOT board.isLoading): React Query's enabled:false
+          pending state — while session/org keys resolve — reports isLoading
+          false with data still undefined, which previously fell through to the
+          (dishonest) whole-board empty state before any fetch ran. */}
+      {!board.data && !board.isError ? (
+        <BoardSkeleton />
+      ) : board.isError ? (
+        <WholeBoardError onRetry={() => void board.refetch()} />
+      ) : rows.length === 0 ? (
         <WholeBoardEmpty />
       ) : (
         <Board

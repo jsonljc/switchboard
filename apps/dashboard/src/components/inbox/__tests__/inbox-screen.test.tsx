@@ -268,8 +268,8 @@ describe("<InboxScreen>", () => {
   });
 
   // Test 2: isLoading
-  describe("(2) isLoading renders loading affordance", () => {
-    it("renders loading text, not empty or error copy", () => {
+  describe("(2) isLoading renders a list-shaped skeleton", () => {
+    it("renders the skeleton (role=status), not empty or error copy", () => {
       feedByKey = (_agentKey) => ({
         data: undefined,
         isLoading: true,
@@ -277,9 +277,12 @@ describe("<InboxScreen>", () => {
         refetch: refetchMock,
       });
 
-      render(<InboxScreen />);
+      const { container } = render(<InboxScreen />);
 
-      expect(screen.getByText(/loading/i)).toBeInTheDocument();
+      // The skeleton announces itself via role="status" + accessible name,
+      // and renders list-shaped ghost rows (NOT the old bare "Loading…" text).
+      expect(screen.getByRole("status", { name: /loading your inbox/i })).toBeInTheDocument();
+      expect(container.querySelectorAll(".inbox-skeleton-row").length).toBeGreaterThan(1);
       expect(screen.queryByText(/that's everything/i)).toBeNull();
       expect(screen.queryByText(/couldn't load/i)).toBeNull();
     });
