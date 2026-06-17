@@ -84,8 +84,13 @@ export function estimateCost(
   storyboard: StoryboardForEstimate,
   scriptCount: number,
 ): CostEstimates {
+  // The storyboard stage builds ONE storyboard per script (storyboard-builder:
+  // "Create one storyboard per script"), so flattening every storyboard's
+  // scenes ALREADY spans all scripts. The scene-derived sums below must NOT be
+  // multiplied by scriptCount a second time: doing so overstates spend by
+  // scriptCount and parks jobs that should auto-execute under the spend gate.
   const allScenes = storyboard.storyboards.flatMap((sb) => sb.scenes);
-  const totalScenes = allScenes.length * scriptCount;
+  const totalScenes = allScenes.length;
 
   if (totalScenes === 0) {
     return {
@@ -94,17 +99,17 @@ export function estimateCost(
     };
   }
 
-  // Basic: Kling generation only
-  const klingCost =
-    allScenes.reduce((sum, scene) => {
-      return sum + (scene.duration > 5 ? KLING_COST_PER_10S : KLING_COST_PER_5S);
-    }, 0) * scriptCount;
+  // Basic: Kling generation only (allScenes already covers every script).
+  const klingCost = allScenes.reduce((sum, scene) => {
+    return sum + (scene.duration > 5 ? KLING_COST_PER_10S : KLING_COST_PER_5S);
+  }, 0);
 
   const basicCost = klingCost;
 
-  // Pro: Kling + ElevenLabs + Whisper
+  // Pro: Kling + ElevenLabs + Whisper. Voiceover is the one genuinely
+  // per-script cost (one narration track per script), so it keeps scriptCount.
   const voiceoverCost = scriptCount * (AVG_CHARS_PER_SCRIPT / 1000) * ELEVENLABS_COST_PER_1K_CHARS;
-  const totalDuration = allScenes.reduce((sum, s) => sum + s.duration, 0) * scriptCount;
+  const totalDuration = allScenes.reduce((sum, s) => sum + s.duration, 0);
   const whisperCost = (totalDuration / 60) * WHISPER_COST_PER_MINUTE;
   const proCost = klingCost + voiceoverCost + whisperCost;
 

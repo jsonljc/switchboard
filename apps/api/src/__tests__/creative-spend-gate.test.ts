@@ -152,10 +152,16 @@ const SMALL_STORYBOARD_JOB = {
     scripts: { scripts: [{}] },
   },
 };
+// One storyboard per script (the storyboard stage builds it that way): five
+// scripts => five storyboards, each 6 scenes x 10s = 30 clips x $0.70 = $21,
+// over the $15 seeded threshold. The earlier fixture leaned on a now-fixed
+// double-count (one storyboard x scriptCount) to reach the over-threshold cost.
 const LARGE_STORYBOARD_JOB = {
   stageOutputs: {
     storyboard: {
-      storyboards: [{ scenes: Array.from({ length: 6 }, () => ({ duration: 10 })) }],
+      storyboards: Array.from({ length: 5 }, () => ({
+        scenes: Array.from({ length: 6 }, () => ({ duration: 10 })),
+      })),
     },
     scripts: { scripts: Array.from({ length: 5 }, () => ({})) },
   },
