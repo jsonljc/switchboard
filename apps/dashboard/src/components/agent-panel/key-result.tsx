@@ -15,7 +15,12 @@ import type {
 import styles from "./agent-panel.module.css";
 
 export interface KeyResultProps {
-  agentKey: Exclude<PanelAgentKey, "mira">;
+  // Accepts any PanelAgentKey (mira no longer type-fenced out). Mira's key
+  // result is the desk-fed drafts-ready hero rendered by MiraPanel, so the
+  // AgentPanel never routes mira here; the alex/riley mission/metrics path
+  // below is guarded to alex/riley and no-ops for mira (unreachable in
+  // practice, but keeps the alex/riley-only state machine type-sound).
+  agentKey: PanelAgentKey;
   /**
    * Called when the user taps the activation CTA (core setup incomplete).
    * Wired by the host to navigate to /settings/channels. Navigation only.
@@ -36,6 +41,13 @@ export function KeyResult({ agentKey, onActivate }: KeyResultProps) {
   const week = useAgentMetrics(agentKey, "week");
   const mission = useAgentMission(agentKey);
   const { halted } = useHalt();
+
+  // Mira's key result is the desk-fed drafts-ready hero (MiraPanel), not this
+  // mission/metrics machine. The AgentPanel never routes mira here, so this is
+  // unreachable in practice — but it narrows agentKey to "alex" | "riley" for
+  // the alex/riley-only selectors below. Placed AFTER the hooks so the rules of
+  // hooks hold (no conditional hook calls).
+  if (agentKey === "mira") return null;
 
   // Guard: on cold mount the hooks are still fetching. Without this check,
   // selectKeyResult would return { kind: "error" } and flash "Couldn't load

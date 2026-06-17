@@ -7,7 +7,10 @@ import type { Decision } from "@/lib/decisions/types";
 import styles from "./agent-panel.module.css";
 
 export interface OpenDecisionsProps {
-  agentKey: Exclude<PanelAgentKey, "mira">;
+  // Accepts any PanelAgentKey (mira no longer type-fenced out). The AgentPanel
+  // routes mira to its own desk-fed composition in MiraPanel; the alex/riley
+  // hosts pass alex/riley here. The decision-feed hook is keyed by AgentKey.
+  agentKey: PanelAgentKey;
   onOpenDecision: (decision: Decision) => void;
 }
 
