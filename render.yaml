@@ -87,13 +87,16 @@ services:
       - key: WHATSAPP_GRAPH_TOKEN
         sync: false
       # WhatsApp Cloud API send token for the api service's PROACTIVE outbound
-      # workflows (appointment reminders, lead greetings, follow-ups) and the
-      # escalation-reply agentNotifier in app.ts. Without it the api service has no
-      # send token and a structured warn + the switchboard_whatsapp_proactive_send_skipped_total
-      # metric (reason="config_missing") fire as every proactive WhatsApp message
-      # no-ops org-wide. WHATSAPP_ACCESS_TOKEN is the canonical key; resolveWhatsAppSendToken()
+      # workflows (appointment reminders, follow-ups) and the escalation-reply
+      # agentNotifier in app.ts. Without it the api service has no send token and a
+      # structured warn + the switchboard_whatsapp_proactive_send_skipped_total metric
+      # (reason="config_missing") fire as every proactive WhatsApp message no-ops
+      # org-wide. WHATSAPP_ACCESS_TOKEN is the canonical key; resolveWhatsAppSendToken()
       # reads it first and falls back to the WHATSAPP_TOKEN alias, so setting either
-      # one covers all api send paths. WHATSAPP_PHONE_NUMBER_ID is required alongside it.
+      # one covers reminder/follow-up/notifier sends. NOTE: the meta-lead first-touch
+      # greeting send-token is NOT covered here; that path is handled in PR #1156, so a
+      # WHATSAPP_TOKEN-only operator still has a dark funnel on first-touch greetings
+      # until #1156 lands. WHATSAPP_PHONE_NUMBER_ID is required alongside it.
       - key: WHATSAPP_ACCESS_TOKEN
         sync: false
       # Backward-compatible alias for WHATSAPP_ACCESS_TOKEN; leave unset if the
