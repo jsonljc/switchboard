@@ -56,7 +56,7 @@ export default function GlobalError({
             Something went wrong
           </h1>
           <p style={{ margin: "0 0 20px", fontSize: "14px", lineHeight: 1.6, color: "#5c554d" }}>
-            The app hit an unexpected error and could not finish loading. Your data is safe — try
+            The app hit an unexpected error and could not finish loading. Your data is safe. Try
             again, and if it keeps happening, reload the page.
           </p>
           {error.digest && (

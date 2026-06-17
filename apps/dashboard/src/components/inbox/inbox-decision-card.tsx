@@ -125,7 +125,7 @@ export function InboxDecisionCard({
       <button
         type="button"
         className="decision-keyboard-target"
-        aria-label={`Open details — ${decision.humanSummary}`}
+        aria-label={`Open details: ${decision.humanSummary}`}
         onKeyDown={handleCardKeyDown}
       />
 
