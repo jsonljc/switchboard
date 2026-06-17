@@ -157,6 +157,26 @@ describe("conversation.reminder.send handler", () => {
     expect(res.outcome).toBe("failed");
     expect(res.error!.code).toBe("WHATSAPP_TEMPLATE_SEND_FAILED");
   });
+});
+
+// Send-token / config-miss reliability cases live in their OWN describe block,
+// appended at end-of-file rather than threaded into the eligibility describe above,
+// so they never collide with a sibling change that inserts its own cases into that
+// same describe (e.g. the template-approval-overlay work).
+describe("conversation.reminder.send handler — send token + config-miss", () => {
+  beforeEach(() => {
+    process.env["WHATSAPP_ACCESS_TOKEN"] = "tok";
+    process.env["WHATSAPP_PHONE_NUMBER_ID"] = "pn_1";
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
+    delete process.env["WHATSAPP_PHONE_NUMBER_ID"];
+    // Restore the module-singleton metrics so a spy here does not leak across files.
+    setMetrics(createInMemoryMetrics());
+  });
 
   it("resolves the send token under the legacy WHATSAPP_TOKEN name", async () => {
     delete process.env["WHATSAPP_ACCESS_TOKEN"];

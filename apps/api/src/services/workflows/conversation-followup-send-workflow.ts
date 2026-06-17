@@ -1,9 +1,6 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
-import { evaluateProactiveSendEligibility, getMetrics } from "@switchboard/core";
+import { evaluateProactiveSendEligibility } from "@switchboard/core";
 import type { IntentClass, PdpaJurisdiction } from "@switchboard/schemas";
-import { resolveWhatsAppSendToken } from "../../lib/whatsapp-send-token.js";
-
-const FOLLOWUP_INTENT = "conversation.followup.send";
 
 export interface FollowUpSendContext {
   consentGrantedAt: Date | string | null;
@@ -35,6 +32,15 @@ interface FollowUpSendParams {
   reason: string;
   followUpId: string;
 }
+
+// Send-reliability additions are kept off the shared "@switchboard/core" import line
+// at the top of the file (and off its 3-line context window) so they never collide
+// with a sibling change that also widens that same import — e.g. the
+// template-approval-overlay work adds `type TemplateApprovalOverlay` to that line.
+import { getMetrics } from "@switchboard/core";
+import { resolveWhatsAppSendToken } from "../../lib/whatsapp-send-token.js";
+
+const FOLLOWUP_INTENT = "conversation.followup.send";
 
 export function buildConversationFollowUpSendWorkflow(
   deps: ConversationFollowUpSendDeps,

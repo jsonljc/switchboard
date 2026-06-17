@@ -1,13 +1,16 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
-import {
-  evaluateProactiveSendEligibility,
-  formatReminderDateTime,
-  getMetrics,
-} from "@switchboard/core";
+import { evaluateProactiveSendEligibility, formatReminderDateTime } from "@switchboard/core";
 import type { IntentClass, PdpaJurisdiction } from "@switchboard/schemas";
-import { resolveWhatsAppSendToken } from "../../lib/whatsapp-send-token.js";
 
 const REMINDER_INTENT_CLASS: IntentClass = "appointment-reminder";
+
+// Send-reliability additions are kept off the shared "@switchboard/core" import
+// line above (and off its 3-line context window) so they never collide with a
+// sibling change that also widens that import — e.g. the template-approval-overlay
+// work adds `type TemplateApprovalOverlay` to the very same line.
+import { getMetrics } from "@switchboard/core";
+import { resolveWhatsAppSendToken } from "../../lib/whatsapp-send-token.js";
+
 const REMINDER_INTENT = "conversation.reminder.send";
 
 export interface ReminderSendContext {
