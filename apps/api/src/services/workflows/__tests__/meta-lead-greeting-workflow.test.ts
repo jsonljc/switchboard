@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createInMemoryMetrics, setMetrics } from "@switchboard/core";
 import { buildMetaLeadGreetingWorkflow } from "../meta-lead-greeting-workflow.js";
 import type { GreetingSendContext } from "../meta-lead-greeting-workflow.js";
 
@@ -58,7 +59,10 @@ describe("buildMetaLeadGreetingWorkflow", () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
     delete process.env["WHATSAPP_PHONE_NUMBER_ID"];
+    // Restore the module-singleton metrics so a spy here does not leak across files.
+    setMetrics(createInMemoryMetrics());
   });
 
   it("does NOT greet a consent-ineligible lead and records the blocked decision", async () => {
@@ -167,5 +171,42 @@ describe("buildMetaLeadGreetingWorkflow", () => {
 
     expect(result.outcome).toBe("failed");
     expect(result.error?.code).toBe("WHATSAPP_TEMPLATE_SEND_FAILED");
+  });
+
+  it("config-miss after an allow decision: warns + increments whatsappProactiveSendSkipped{reason:config_missing}", async () => {
+    // The consent decision allows (CTWA opt-in), so we reach the send config check.
+    // With no send token/phone id the greeting silently no-ops org-wide: that infra
+    // gap must be loud (warn) + countable on the dark-funnel metric, not a silent skip.
+    delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
+    delete process.env["WHATSAPP_PHONE_NUMBER_ID"];
+    const metrics = createInMemoryMetrics();
+    const skipSpy = vi.spyOn(metrics.whatsappProactiveSendSkipped, "inc");
+    setMetrics(metrics);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const getSendContext = vi.fn<
+      (orgId: string, contactId: string) => Promise<GreetingSendContext>
+    >(async () => ({
+      ...pendingContext,
+      ctwaOptIn: true,
+    }));
+    const workflow = buildMetaLeadGreetingWorkflow({ getSendContext });
+
+    const result = await workflow.execute(baseWorkUnit, services);
+
+    expect(result.outcome).toBe("completed");
+    expect(result.outputs?.["sent"]).toBe(false);
+    expect(result.outputs?.["skipReason"]).toBe("unsupported_channel");
+    // The allow decision still rode in and is recorded alongside the infra skip.
+    expect(result.outputs?.["consentDecision"]).toBe("ctwa_optin");
+    // Fail-closed: no WhatsApp template was sent.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(skipSpy).toHaveBeenCalledTimes(1);
+    expect(skipSpy).toHaveBeenCalledWith({
+      intent: "meta.lead.greeting.send",
+      reason: "config_missing",
+    });
   });
 });

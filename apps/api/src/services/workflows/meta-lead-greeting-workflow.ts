@@ -1,6 +1,22 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
+import { getMetrics } from "@switchboard/core";
 import { deriveConsentStatus, evaluateConsentGate } from "@switchboard/schemas";
 import type { PdpaJurisdiction } from "@switchboard/schemas";
+
+/** Telemetry intent label for the first-touch greeting send path. */
+const GREETING_INTENT = "meta.lead.greeting.send";
+
+/**
+ * Canonical WhatsApp Cloud API **send** token resolver, inlined here so the
+ * greeting honours the same `WHATSAPP_ACCESS_TOKEN ?? WHATSAPP_TOKEN` resolution
+ * order as the sibling reminder/follow-up workflows (a deploy that set only the
+ * legacy `WHATSAPP_TOKEN` name must not leave the greeting dark). Kept local: the
+ * shared `apps/api/src/lib/whatsapp-send-token` helper is introduced on a separate
+ * branch; this inline copy is intentionally the identical resolution order.
+ */
+function resolveWhatsAppSendToken(): string | undefined {
+  return process.env["WHATSAPP_ACCESS_TOKEN"] ?? process.env["WHATSAPP_TOKEN"];
+}
 
 /**
  * Consent inputs for the first-touch Meta-lead greeting, scoped to the org +
@@ -106,9 +122,22 @@ export function buildMetaLeadGreetingWorkflow(deps: MetaLeadGreetingDeps): Workf
         };
       }
 
-      const accessToken = process.env["WHATSAPP_ACCESS_TOKEN"];
+      const accessToken = resolveWhatsAppSendToken();
       const phoneNumberId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
       if (!accessToken || !phoneNumberId) {
+        // Infra config gap, not a per-contact decision: with no send token/phone id
+        // EVERY lead greeting silently no-ops. Make it loud + countable (distinct from
+        // the benign per-contact skips above, which carry only a skipReason) so the
+        // dark funnel is visible. The consent decision still rode in here, so it is
+        // recorded alongside the infra skip.
+        console.warn(
+          "[meta.lead.greeting.send] WhatsApp send token or phone id missing " +
+            "(set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID); greeting skipped org-wide.",
+        );
+        getMetrics().whatsappProactiveSendSkipped.inc({
+          intent: GREETING_INTENT,
+          reason: "config_missing",
+        });
         return {
           outcome: "completed",
           summary: "WhatsApp not configured; greeting skipped",
