@@ -14,11 +14,17 @@ import { ESTIMATED_COST } from "../ugc/provider-router.js";
 
 describe("estimateCost (polished, pre-existing contract)", () => {
   it("prices basic as duration-mapped kling per scene per script", () => {
+    // One storyboard per script (storyboard-builder builds it that way), so a
+    // two-script brief is two storyboards. The scene sums already span both
+    // scripts and must NOT be multiplied by scriptCount again.
     const storyboard = {
-      storyboards: [{ scenes: [{ duration: 4 }, { duration: 8 }] }],
+      storyboards: [
+        { scenes: [{ duration: 4 }, { duration: 8 }] },
+        { scenes: [{ duration: 4 }, { duration: 8 }] },
+      ],
     };
     const est = estimateCost(storyboard, 2);
-    // (0.35 + 0.70) x 2 scripts
+    // (0.35 + 0.70) per script x 2 scripts = 2.1
     expect(est.basic.cost).toBeCloseTo(2.1, 2);
   });
 });
