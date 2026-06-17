@@ -344,7 +344,7 @@ export async function bootstrapSkillMode(
       if (resolution.status !== "resolved") return "off";
       return resolveConsentStateConfig(resolution.config).mode;
     },
-    read: (_orgId: string, contactId: string) => contactConsentReader.read(contactId),
+    read: (orgId: string, contactId: string) => contactConsentReader.read(orgId, contactId),
   };
 
   const calendarBookFactory = createCalendarBookToolFactory({

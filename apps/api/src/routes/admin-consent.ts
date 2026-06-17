@@ -77,8 +77,8 @@ export function registerAdminConsentRoutes(
   // this hook is a no-op; the real auth middleware has already populated the fields.
   app.addHook("preHandler", buildDevAuthFallback(app));
 
-  const respondWithState = async (contactId: string) => {
-    const state = await deps.consentReader.read(contactId);
+  const respondWithState = async (organizationId: string, contactId: string) => {
+    const state = await deps.consentReader.read(organizationId, contactId);
     return {
       ...state,
       status: deriveConsentStatus({
@@ -132,7 +132,7 @@ export function registerAdminConsentRoutes(
       }
 
       try {
-        return reply.send(await respondWithState(parsed.data.contactId));
+        return reply.send(await respondWithState(orgId, parsed.data.contactId));
       } catch (err) {
         return mapReaderError(reply, err);
       }
@@ -181,7 +181,7 @@ export function registerAdminConsentRoutes(
       }
 
       try {
-        return reply.send(await respondWithState(parsed.data.contactId));
+        return reply.send(await respondWithState(orgId, parsed.data.contactId));
       } catch (err) {
         return mapReaderError(reply, err);
       }
@@ -228,7 +228,7 @@ export function registerAdminConsentRoutes(
       }
 
       try {
-        return reply.send(await respondWithState(parsed.data.contactId));
+        return reply.send(await respondWithState(orgId, parsed.data.contactId));
       } catch (err) {
         return mapReaderError(reply, err);
       }
@@ -240,7 +240,7 @@ export function registerAdminConsentRoutes(
     { preHandler: requireOrg },
     async (req, reply) => {
       try {
-        return reply.send(await respondWithState(req.params.contactId));
+        return reply.send(await respondWithState(req.orgId, req.params.contactId));
       } catch (err) {
         return mapReaderError(reply, err);
       }

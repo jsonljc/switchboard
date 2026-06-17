@@ -72,4 +72,18 @@ describe("GET /api/admin/consent/:contactId", () => {
     expect(json).toHaveProperty("status");
     expect(json).toHaveProperty("pdpaJurisdiction");
   });
+
+  it("scopes the read to the authenticated org (no cross-tenant consent read)", async () => {
+    // Regression pin for the org-scoping fix: the route MUST pass the caller's
+    // org to the reader, so an operator cannot read another tenant's consent
+    // record by contactId. The pre-fix route called read(contactId) with no org.
+    const { app, consentReader } = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/consent/c1",
+      headers: { "x-org-id": "org_test" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(consentReader.read).toHaveBeenCalledWith("org_test", "c1");
+  });
 });
