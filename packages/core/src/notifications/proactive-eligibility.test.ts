@@ -81,6 +81,37 @@ describe("evaluateProactiveSendEligibility", () => {
     expect(r).toEqual({ eligible: false, reason: "template_not_approved" });
   });
 
+  it("is eligible when an org-resolvable approval overlay flips the static draft template to approved", () => {
+    // No selectTemplateFn override: this exercises the REAL registry (all draft)
+    // plus the org-resolvable approvalOverlay. The overlay must promote the matched
+    // utility template so a Meta-approved template can actually send.
+    const r = evaluateProactiveSendEligibility({
+      contact: optedInContact,
+      lastWhatsAppInboundAt: outsideWindow,
+      intentClass: "appointment-reminder",
+      jurisdiction: "SG",
+      allowMarketingTemplate: false,
+      approvalOverlay: { alex_appointment_reminder_sg_v1: "approved" },
+    });
+    expect(r.eligible).toBe(true);
+    if (r.eligible) {
+      expect(r.template.metaTemplateName).toBe("alex_appointment_reminder_sg_v1");
+      expect(r.template.approvalStatus).toBe("approved");
+    }
+  });
+
+  it("stays blocked on the real registry when the overlay reports a non-approved status", () => {
+    const r = evaluateProactiveSendEligibility({
+      contact: optedInContact,
+      lastWhatsAppInboundAt: outsideWindow,
+      intentClass: "appointment-reminder",
+      jurisdiction: "SG",
+      allowMarketingTemplate: false,
+      approvalOverlay: { alex_appointment_reminder_sg_v1: "submitted" },
+    });
+    expect(r).toEqual({ eligible: false, reason: "template_not_approved" });
+  });
+
   it("blocks an approved marketing template when marketing substitution is disabled", () => {
     const r = evaluateProactiveSendEligibility({
       contact: optedInContact,

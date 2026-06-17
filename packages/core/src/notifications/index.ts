@@ -32,5 +32,9 @@ export type {
   ProactiveSendEligibility,
   ProactiveEligibilityInput,
 } from "./proactive-eligibility.js";
-export type { WhatsAppTemplate } from "../skill-runtime/templates/whatsapp-registry.js";
+export type {
+  WhatsAppTemplate,
+  TemplateApprovalOverlay,
+} from "../skill-runtime/templates/whatsapp-registry.js";
+export { parseTemplateApprovalOverlay } from "../skill-runtime/templates/whatsapp-registry.js";
 export { formatReminderDateTime } from "./reminder-template-vars.js";

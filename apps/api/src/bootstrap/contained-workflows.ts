@@ -183,6 +183,7 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/conversation-followup-send-workflow.js");
   const { buildConversationReminderSendWorkflow } =
     await import("../services/workflows/conversation-reminder-send-workflow.js");
+  const { parseTemplateApprovalOverlay } = await import("@switchboard/core");
   const { buildMetaLeadRecordInquiryWorkflow } =
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
   const { buildCreativePublishWorkflow } =
@@ -287,6 +288,7 @@ export async function bootstrapContainedWorkflows(
     leadName: string;
     businessName: string;
     phone: string | null;
+    approvalOverlay: ReturnType<typeof parseTemplateApprovalOverlay>;
   };
   const buildWhatsAppSendContext = async (
     prisma: import("@switchboard/db").PrismaClient,
@@ -307,8 +309,14 @@ export async function bootstrapContainedWorkflows(
     });
     const org = await prisma.organizationConfig.findUnique({
       where: { id: orgId },
-      select: { name: true },
+      select: { name: true, runtimeConfig: true },
     });
+    // Org-resolvable template-approval source: an operator/config-driven map persisted
+    // under runtimeConfig.whatsappTemplateApprovals (metaTemplateName -> status). Parsed
+    // defensively; absent/malformed → empty overlay → the static registry default (draft)
+    // keeps proactive sends blocked. No new schema column.
+    const runtimeConfig = (org?.runtimeConfig ?? {}) as { whatsappTemplateApprovals?: unknown };
+    const approvalOverlay = parseTemplateApprovalOverlay(runtimeConfig.whatsappTemplateApprovals);
     return {
       consentGrantedAt: contact?.consentGrantedAt ?? null,
       consentRevokedAt: contact?.consentRevokedAt ?? null,
@@ -319,6 +327,7 @@ export async function bootstrapContainedWorkflows(
       leadName: contact?.name ?? "there",
       businessName: org?.name ?? "our clinic",
       phone: contact?.phone ?? null,
+      approvalOverlay,
     };
   };
 

@@ -6,6 +6,7 @@ import {
   selectTemplate as defaultSelectTemplate,
   type WhatsAppTemplate,
   type Jurisdiction,
+  type TemplateApprovalOverlay,
 } from "../skill-runtime/templates/whatsapp-registry.js";
 
 export type ProactiveSendEligibility =
@@ -28,6 +29,12 @@ export interface ProactiveEligibilityInput {
     intentClass: IntentClass;
     jurisdiction: Jurisdiction;
   }) => WhatsAppTemplate | null;
+  /**
+   * Org-resolvable approval source (metaTemplateName -> status) overlaid onto the
+   * selected template. Lets a Meta-APPROVED template actually send. Omitted/empty →
+   * the static registry default (draft) governs and the send stays blocked.
+   */
+  approvalOverlay?: TemplateApprovalOverlay;
 }
 
 /**
@@ -70,13 +77,20 @@ export function evaluateProactiveSendEligibility(
     return { eligible: false, reason: "no_template" };
   }
   const selectTemplate = input.selectTemplateFn ?? defaultSelectTemplate;
-  const template = selectTemplate({
+  const selected = selectTemplate({
     intentClass: input.intentClass,
     jurisdiction: input.jurisdiction,
   });
-  if (!template) {
+  if (!selected) {
     return { eligible: false, reason: "no_template" };
   }
+  // Overlay the org-resolvable approval status (keyed by metaTemplateName). A missing
+  // entry preserves the static default (draft), so the send stays blocked by default.
+  const overlaidStatus = input.approvalOverlay?.[selected.metaTemplateName];
+  const template: WhatsAppTemplate =
+    overlaidStatus !== undefined && overlaidStatus !== selected.approvalStatus
+      ? { ...selected, approvalStatus: overlaidStatus }
+      : selected;
   if (template.approvalStatus !== "approved") {
     return { eligible: false, reason: "template_not_approved" };
   }

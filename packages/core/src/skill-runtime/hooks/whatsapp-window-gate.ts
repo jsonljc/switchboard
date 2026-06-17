@@ -5,7 +5,11 @@ import type {
   GovernanceVerdictReason,
 } from "@switchboard/schemas";
 import type { SkillExecutionResult, SkillHook, SkillHookContext } from "../types.js";
-import { selectTemplate, type Jurisdiction } from "../templates/whatsapp-registry.js";
+import {
+  resolveTemplate,
+  type Jurisdiction,
+  type TemplateApprovalOverlay,
+} from "../templates/whatsapp-registry.js";
 import type { HandoffStore } from "../../handoff/types.js";
 import { buildHandoffPackage } from "../../handoff/build-handoff-package.js";
 import type { GovernanceVerdictStore } from "../../governance/governance-verdict-store/types.js";
@@ -32,6 +36,19 @@ export interface WhatsAppWindowGatePostureCache {
   remember: (deploymentId: string, posture: WhatsAppWindowGateConfig) => void;
 }
 
+/**
+ * Org-resolvable WhatsApp template-approval source. Returns the approval overlay
+ * (metaTemplateName -> status) for a deployment so a Meta-APPROVED template can
+ * actually substitute/send. Optional: when omitted, the gate uses an empty overlay,
+ * which preserves the static-registry default (every template ships `draft`), so the
+ * gate keeps blocking by default. A throw is treated as "no signal" (empty overlay)
+ * rather than a hard error — approval status is an enrichment, not a safety gate; the
+ * static default already fails closed.
+ */
+export interface WhatsAppTemplateApprovalSource {
+  resolve: (deploymentId: string) => Promise<TemplateApprovalOverlay>;
+}
+
 export interface WhatsAppWindowGateDeps {
   verdictStore: GovernanceVerdictStore;
   handoffStore: HandoffStore;
@@ -40,6 +57,11 @@ export interface WhatsAppWindowGateDeps {
   threadStore: { getLastWhatsAppInboundAt: (threadId: string) => Promise<Date | null> };
   contactStore: { getMessagingOptInForThread: (threadId: string) => Promise<boolean> };
   channelTypeResolver: { resolve: (sessionId: string) => Promise<string> };
+  /**
+   * Optional org-resolvable approval source overlaid onto the static registry.
+   * Omitted → static default (draft) applies and the gate keeps blocking by default.
+   */
+  templateApprovalSource?: WhatsAppTemplateApprovalSource;
   clock: () => Date;
   windowMs?: number;
 }
@@ -173,9 +195,15 @@ export class WhatsAppWindowGateHook implements SkillHook {
         return;
       }
 
-      const template = selectTemplate({
+      // Overlay the org-resolvable approval status onto the static registry. A
+      // missing source, or a throw, yields an empty overlay so the static default
+      // (draft) applies and the gate keeps blocking — approval status is enrichment,
+      // not a safety gate.
+      const approvalOverlay = await this.resolveApprovalOverlay(ctx.deploymentId);
+      const template = resolveTemplate({
         intentClass: result.intentClass,
         jurisdiction: config.jurisdiction,
+        approvalOverlay,
       });
       if (!template) {
         await this.handleBlock(ctx, result, config, {
@@ -314,6 +342,20 @@ export class WhatsAppWindowGateHook implements SkillHook {
     } catch {
       const cached = this.deps.postureCache.lastKnown(deploymentId);
       return cached ? { kind: "config", config: cached } : { kind: "unavailable" };
+    }
+  }
+
+  /**
+   * Resolve the org-resolvable approval overlay for a deployment. Returns an empty
+   * overlay when no source is wired or the source throws — the static-registry
+   * default (draft) then governs, so the gate keeps blocking by default.
+   */
+  private async resolveApprovalOverlay(deploymentId: string): Promise<TemplateApprovalOverlay> {
+    if (!this.deps.templateApprovalSource) return {};
+    try {
+      return await this.deps.templateApprovalSource.resolve(deploymentId);
+    } catch {
+      return {};
     }
   }
 

@@ -80,6 +80,7 @@ export async function bootstrapSkillMode(
     ClaimClassifierHook,
     PdpaConsentGateHook,
     WhatsAppWindowGateHook,
+    parseTemplateApprovalOverlay,
     AnthropicToolAdapter,
     BuilderRegistry,
     ContextResolverImpl,
@@ -624,6 +625,25 @@ export async function bootstrapSkillMode(
         });
         const ctx = (thread?.agentContext ?? {}) as { channel?: string };
         return ctx.channel ?? "unknown";
+      },
+    },
+    // Org-resolvable template-approval source: read the deployment's org runtimeConfig
+    // (whatsappTemplateApprovals: metaTemplateName -> status) so a Meta-APPROVED template
+    // can substitute outside the 24h window. Absent/malformed → empty overlay → static
+    // registry default (draft) keeps the send blocked. No new schema column.
+    templateApprovalSource: {
+      resolve: async (deploymentId) => {
+        const deployment = await prismaClient.agentDeployment.findUnique({
+          where: { id: deploymentId },
+          select: { organizationId: true },
+        });
+        if (!deployment) return {};
+        const org = await prismaClient.organizationConfig.findUnique({
+          where: { id: deployment.organizationId },
+          select: { runtimeConfig: true },
+        });
+        const runtimeConfig = (org?.runtimeConfig ?? {}) as { whatsappTemplateApprovals?: unknown };
+        return parseTemplateApprovalOverlay(runtimeConfig.whatsappTemplateApprovals);
       },
     },
     clock: () => new Date(),

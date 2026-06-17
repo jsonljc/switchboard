@@ -11,7 +11,17 @@ export { WhatsAppWindowGateHook } from "./hooks/whatsapp-window-gate.js";
 export type {
   WhatsAppWindowGateDeps,
   WhatsAppWindowGateConfig,
+  WhatsAppTemplateApprovalSource,
 } from "./hooks/whatsapp-window-gate.js";
+export {
+  resolveTemplate,
+  selectTemplate,
+  parseTemplateApprovalOverlay,
+} from "./templates/whatsapp-registry.js";
+export type {
+  TemplateApprovalOverlay,
+  TemplateApprovalStatus,
+} from "./templates/whatsapp-registry.js";
 // Governance infrastructure re-exported for bootstrap wiring convenience
 export { createAgentDeploymentGovernanceResolver } from "../governance/governance-config-resolver.js";
 export { InMemoryGovernancePostureCache } from "../governance/posture-cache.js";

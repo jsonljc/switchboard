@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { WHATSAPP_TEMPLATES, selectTemplate } from "./whatsapp-registry.js";
+import {
+  WHATSAPP_TEMPLATES,
+  parseTemplateApprovalOverlay,
+  resolveTemplate,
+  selectTemplate,
+} from "./whatsapp-registry.js";
 import { scanForBannedPhrases } from "../../governance/scanner/banned-phrase-scanner.js";
 import { loadBannedPhrases } from "../../governance/banned-phrases/loader.js";
 
@@ -25,6 +30,101 @@ describe("selectTemplate", () => {
         expect(t?.jurisdiction).toBe(jurisdiction);
       }
     }
+  });
+});
+
+describe("resolveTemplate — org-resolvable approval overlay", () => {
+  it("returns null when no template fits (delegates to selectTemplate)", () => {
+    expect(
+      resolveTemplate({
+        intentClass: "appointment-confirm",
+        jurisdiction: "XX" as never,
+      }),
+    ).toBeNull();
+  });
+
+  it("falls back to the static draft default when no overlay entry exists", () => {
+    const t = resolveTemplate({
+      intentClass: "appointment-confirm",
+      jurisdiction: "SG",
+    });
+    // Static registry ships every entry as draft; with no overlay, the resolved
+    // status must stay draft so the send gate keeps blocking by default.
+    expect(t?.approvalStatus).toBe("draft");
+  });
+
+  it("overlays an approved status from the org-resolvable source onto a static draft entry", () => {
+    const target = selectTemplate({ intentClass: "appointment-confirm", jurisdiction: "SG" });
+    if (!target) throw new Error("test setup: SG appointment-confirm template missing");
+    expect(target.approvalStatus).toBe("draft");
+
+    const resolved = resolveTemplate({
+      intentClass: "appointment-confirm",
+      jurisdiction: "SG",
+      approvalOverlay: { [target.metaTemplateName]: "approved" },
+    });
+
+    expect(resolved?.approvalStatus).toBe("approved");
+    // Overlay must NOT mutate the static registry — other readers stay draft.
+    expect(target.approvalStatus).toBe("draft");
+  });
+
+  it("does not promote unrelated templates — overlay is keyed by metaTemplateName", () => {
+    const resolved = resolveTemplate({
+      intentClass: "appointment-confirm",
+      jurisdiction: "SG",
+      approvalOverlay: { alex_some_other_template: "approved" },
+    });
+    expect(resolved?.approvalStatus).toBe("draft");
+  });
+
+  it("can overlay a non-approved status (submitted) without unblocking the gate", () => {
+    const target = selectTemplate({ intentClass: "appointment-confirm", jurisdiction: "MY" });
+    if (!target) throw new Error("test setup: MY appointment-confirm template missing");
+    const resolved = resolveTemplate({
+      intentClass: "appointment-confirm",
+      jurisdiction: "MY",
+      approvalOverlay: { [target.metaTemplateName]: "submitted" },
+    });
+    expect(resolved?.approvalStatus).toBe("submitted");
+  });
+});
+
+describe("parseTemplateApprovalOverlay", () => {
+  it("returns an empty overlay for non-object input (no signal → static default governs)", () => {
+    expect(parseTemplateApprovalOverlay(undefined)).toEqual({});
+    expect(parseTemplateApprovalOverlay(null)).toEqual({});
+    expect(parseTemplateApprovalOverlay("approved")).toEqual({});
+    expect(parseTemplateApprovalOverlay(42)).toEqual({});
+    expect(parseTemplateApprovalOverlay(["alex_x", "approved"])).toEqual({});
+  });
+
+  it("keeps only entries with a known approval status", () => {
+    const overlay = parseTemplateApprovalOverlay({
+      alex_appointment_confirm_sg_v1: "approved",
+      alex_appointment_reminder_sg_v1: "submitted",
+      alex_aftercare_checkin_sg_v1: "draft",
+      alex_bogus: "APPROVED", // wrong case → dropped
+      alex_bad: "yes", // not a status → dropped
+      alex_numeric: 1, // not a string → dropped
+    });
+    expect(overlay).toEqual({
+      alex_appointment_confirm_sg_v1: "approved",
+      alex_appointment_reminder_sg_v1: "submitted",
+      alex_aftercare_checkin_sg_v1: "draft",
+    });
+  });
+
+  it("composes with resolveTemplate so a parsed overlay can unblock a send", () => {
+    const target = selectTemplate({ intentClass: "appointment-confirm", jurisdiction: "SG" });
+    if (!target) throw new Error("test setup: SG appointment-confirm template missing");
+    const overlay = parseTemplateApprovalOverlay({ [target.metaTemplateName]: "approved" });
+    const resolved = resolveTemplate({
+      intentClass: "appointment-confirm",
+      jurisdiction: "SG",
+      approvalOverlay: overlay,
+    });
+    expect(resolved?.approvalStatus).toBe("approved");
   });
 });
 

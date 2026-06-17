@@ -1,5 +1,5 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
-import { evaluateProactiveSendEligibility } from "@switchboard/core";
+import { evaluateProactiveSendEligibility, type TemplateApprovalOverlay } from "@switchboard/core";
 import type { IntentClass, PdpaJurisdiction } from "@switchboard/schemas";
 
 export interface FollowUpSendContext {
@@ -12,6 +12,13 @@ export interface FollowUpSendContext {
   leadName: string;
   businessName: string;
   phone: string | null;
+  /**
+   * Org-resolvable WhatsApp template-approval source (metaTemplateName -> status).
+   * Sourced by the per-org read inside getSendContext; lets a Meta-APPROVED template
+   * actually send. Omitted/empty → the static registry default (draft) keeps the send
+   * blocked.
+   */
+  approvalOverlay?: TemplateApprovalOverlay;
 }
 
 export interface ConversationFollowUpSendDeps {
@@ -66,6 +73,7 @@ export function buildConversationFollowUpSendWorkflow(
         jurisdiction: ctx.jurisdiction,
         allowMarketingTemplate: deps.allowMarketingTemplate,
         selectTemplateFn: deps.selectTemplateFn,
+        approvalOverlay: ctx.approvalOverlay,
       });
 
       if (!eligibility.eligible) {
