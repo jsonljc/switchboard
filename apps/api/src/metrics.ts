@@ -198,6 +198,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "Booking attempts blocked by the flag-gated consent precondition (enforce mode)",
       ["orgId", "reason"],
     ),
+    bookedValueResolution: new PromCounter(
+      "switchboard_booked_value_resolution_total",
+      "Booked-value resolution outcome per booking.create attempt; outcome in {resolved, no_playbook, no_match, matched_unpriced, no_lookup, read_error}",
+      ["orgId", "outcome"],
+    ),
     policyContextSlotEmpty: new PromCounter(
       "switchboard_policy_context_slot_empty_total",
       "A policy-critical Alex context slot resolved empty for an entitled org (fail-open; output unchanged)",
