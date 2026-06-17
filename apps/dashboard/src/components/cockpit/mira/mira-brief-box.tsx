@@ -17,6 +17,7 @@ import {
   VIBE_LABEL,
   intentSummary,
   BRIEF_OFFSCOPE_REDIRECT,
+  BRIEF_PENDING_APPROVAL,
 } from "@/lib/cockpit/mira/desk-copy";
 
 const PROMOTING_FIELD_ID = "mira-brief-promoting";
@@ -24,7 +25,7 @@ const PROMOTING_FIELD_ID = "mira-brief-promoting";
 const GOALS = Object.keys(GOAL_LABEL) as MiraBriefGoal[];
 const VIBES = Object.keys(VIBE_LABEL) as MiraBriefVibe[];
 
-type Phase = "edit" | "preview" | "offscope" | "submitted";
+type Phase = "edit" | "preview" | "offscope" | "submitted" | "pending_approval";
 
 // Hybrid open-brief: one required line + Goal/Vibe chips + example chips, then an
 // Intent-Preview readback that IS the cost-confirm (the mutation never fires
@@ -46,12 +47,15 @@ export function MiraBriefBox() {
   }
 
   async function makeTheDraft() {
+    let result: Awaited<ReturnType<typeof create.mutateAsync>>;
     try {
-      await create.mutateAsync({ promoting: promoting.trim(), goal, vibe, mode });
+      result = await create.mutateAsync({ promoting: promoting.trim(), goal, vibe, mode });
     } catch {
       return; // create.isError is set by the mutation; stay on preview so the user can retry
     }
-    setPhase("submitted");
+    // A governance-parked brief is NOT a started draft: surface the
+    // approval-needed state instead of the "she started a draft" confirmation.
+    setPhase(result.pendingApproval ? "pending_approval" : "submitted");
     setPromoting("");
   }
 
@@ -133,7 +137,7 @@ export function MiraBriefBox() {
             value={promoting}
             onChange={(e) => {
               setPromoting(e.target.value);
-              if (phase === "submitted") setPhase("edit");
+              if (phase === "submitted" || phase === "pending_approval") setPhase("edit");
             }}
             rows={2}
             style={{
@@ -207,6 +211,11 @@ export function MiraBriefBox() {
               <span style={{ fontSize: 13, color: MIRA_ACCENT.deep }}>
                 Mira is on it. She started a draft. You&apos;ll review it before anything goes
                 further.
+              </span>
+            )}
+            {phase === "pending_approval" && (
+              <span style={{ fontSize: 13, color: MIRA_ACCENT.deep }}>
+                {BRIEF_PENDING_APPROVAL}
               </span>
             )}
           </div>

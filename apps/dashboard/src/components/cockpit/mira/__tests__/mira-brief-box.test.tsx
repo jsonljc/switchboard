@@ -15,7 +15,7 @@ function typeLine(value: string) {
 
 describe("MiraBriefBox", () => {
   beforeEach(() => {
-    mutateAsync.mockReset().mockResolvedValue({ jobId: "j" });
+    mutateAsync.mockReset().mockResolvedValue({ pendingApproval: false, jobId: "j" });
     state.isPending = false;
     state.isError = false;
   });
@@ -42,6 +42,20 @@ describe("MiraBriefBox", () => {
       }),
     );
     expect(await screen.findByText(/mira is on it|started a draft/i)).toBeInTheDocument();
+  });
+
+  it("surfaces the approval-needed state (NOT a started draft) when governance parks the brief", async () => {
+    mutateAsync.mockResolvedValueOnce({
+      pendingApproval: true,
+      approvalRequest: { id: "ar1" },
+    });
+    render(<MiraBriefBox />);
+    typeLine("Summer Botox special");
+    fireEvent.click(screen.getByRole("button", { name: /^preview/i }));
+    fireEvent.click(screen.getByRole("button", { name: /make the draft/i }));
+    expect(await screen.findByText(/needs your approval/i)).toBeInTheDocument();
+    // A parked brief is NOT a started draft.
+    expect(screen.queryByText(/started a draft/i)).not.toBeInTheDocument();
   });
 
   it("posts mode ugc when the Real-talk format chip is selected (slice-3 spec 3.4)", async () => {

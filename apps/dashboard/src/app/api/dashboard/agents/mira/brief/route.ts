@@ -21,6 +21,18 @@ export async function POST(request: Request) {
     const idempotencyKey = request.headers.get("idempotency-key") ?? createIdempotencyKey();
     const client = await getApiClient();
     const data = await client.createCreativeDraftRequest(parsed.data, idempotencyKey);
+    // Preserve the governance pending-approval semantics: when the gate PARKS a
+    // brief, the API answers 202 PENDING_APPROVAL instead of a submitted draft.
+    // Forward the 202 + envelope so the hook surfaces a pending state, not a
+    // phantom 201 success. Mirrors the creative-jobs approve proxy.
+    if (
+      data &&
+      typeof data === "object" &&
+      "outcome" in data &&
+      data.outcome === "PENDING_APPROVAL"
+    ) {
+      return NextResponse.json(data, { status: 202 });
+    }
     return NextResponse.json(data, { status: 201 });
   } catch (err: unknown) {
     return errorResponse(err);

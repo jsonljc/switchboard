@@ -3,7 +3,7 @@ import type {
   Policy,
   ActivityRow,
   MiraBriefRequest,
-  MiraBriefResult,
+  MiraBriefResponse,
 } from "@switchboard/schemas";
 import type {
   PendingApproval,
@@ -390,12 +390,17 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     });
   }
 
-  /** createCreativeDraftRequest — draft-only open-brief mutation (Phase 2). */
+  /**
+   * createCreativeDraftRequest — draft-only open-brief mutation (Phase 2).
+   * Resolves to the submitted-draft contract, OR a PENDING_APPROVAL envelope
+   * when the governance gate parks the brief. Both arrive 2xx (201 vs 202), so
+   * callers MUST discriminate on `outcome` rather than assume a submitted draft.
+   */
   async createCreativeDraftRequest(
     brief: MiraBriefRequest,
     idempotencyKey: string,
-  ): Promise<MiraBriefResult> {
-    return this.request<MiraBriefResult>("/api/dashboard/agents/mira/brief", {
+  ): Promise<MiraBriefResponse> {
+    return this.request<MiraBriefResponse>("/api/dashboard/agents/mira/brief", {
       method: "POST",
       body: JSON.stringify(brief),
       headers: { "Idempotency-Key": idempotencyKey },

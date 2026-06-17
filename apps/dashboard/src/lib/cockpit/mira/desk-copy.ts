@@ -90,3 +90,7 @@ export function intentSummary(promoting: string, goalLabel: string, vibeLabel: s
 // Off-scope redirect — NEVER answers the question; points back to ad creative.
 export const BRIEF_OFFSCOPE_REDIRECT =
   "That sounds like a scheduling or results question. Your front desk and reports handle those. Mira makes the ad creative. Want a draft about an offer or treatment instead?";
+
+// Governance parked the brief: it is waiting on your approval before Mira starts.
+export const BRIEF_PENDING_APPROVAL =
+  "This brief needs your approval before Mira starts. Find it in Approvals to give it the go-ahead.";
