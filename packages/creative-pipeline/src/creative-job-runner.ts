@@ -63,6 +63,27 @@ interface JobEventData {
 }
 
 /**
+ * Terminal AgentTask statuses the runner can hand its spawned task. The full
+ * AgentTaskStatus enum lives in @switchboard/schemas, but the runner only ever
+ * reaches these two terminal values, so a narrow union keeps this Layer-2 module
+ * decoupled from the marketplace types and makes the call sites self-documenting.
+ */
+type TerminalTaskStatus = "completed" | "cancelled";
+
+/**
+ * Best-effort updater for the AgentTask the creative-job-submit workflow spawned.
+ * The actual store write lives in @switchboard/db (Layer 4); creative-pipeline is
+ * Layer 2 and must not import it, so the apps/api bootstrap injects this closure
+ * (wired to PrismaAgentTaskStore.updateStatus). Optional so existing positional
+ * call sites (and tests) that do not care about the task lifecycle stay valid.
+ */
+type TaskStatusUpdater = (
+  organizationId: string,
+  taskId: string,
+  status: TerminalTaskStatus,
+) => Promise<void>;
+
+/**
  * Terminal-lifecycle check for replay / duplicate-delivery safety (D5-F2).
  * Mirrors the canonical terminal set in @switchboard/core's status-mapper
  * (mapCreativeJobToMiraStatus: draft_ready / stopped / failed => canContinue
@@ -92,7 +113,28 @@ export async function executeCreativePipeline(
   assetStorage?: AssetStorageClient,
   creativeMemoryProvider?: CreativeMemoryProvider,
   klingClient?: KlingLike,
+  updateTaskStatus?: TaskStatusUpdater,
 ): Promise<void> {
+  // Transition the spawned AgentTask to a terminal status so it stops lingering
+  // as "pending" (polluting the open-task work-log + metrics). Best-effort: a
+  // task-store hiccup must never throw out of the runner (an Inngest retry would
+  // re-run every paid stage), and the status flip is wrapped in its own named
+  // step so the write is memoized + not re-issued on replay. Routed through the
+  // injected updater because the AgentTask store is Layer 4 (apps/api wires it).
+  const settleTask = async (status: TerminalTaskStatus): Promise<void> => {
+    if (!updateTaskStatus) return;
+    try {
+      await step.run(`task-status-${status}`, () =>
+        updateTaskStatus(eventData.organizationId, eventData.taskId, status),
+      );
+    } catch (err) {
+      console.warn(
+        `[creative-job-runner] failed to mark AgentTask ${eventData.taskId} ${status} ` +
+          `for job ${eventData.jobId}: ${String(err)}`,
+      );
+    }
+  };
+
   const job = await step.run("load-job", () => jobStore.findById(eventData.jobId));
 
   if (!job) {
@@ -228,7 +270,11 @@ export async function executeCreativePipeline(
     }
 
     // After the last stage, no approval needed
-    if (nextStage === "complete") break;
+    if (nextStage === "complete") {
+      // Terminal "complete" branch: the spawned AgentTask is done.
+      await settleTask("completed");
+      break;
+    }
 
     // Wait for buyer approval before proceeding
     const approval = await step.waitForEvent(`wait-approval-${stage}`, {
@@ -242,6 +288,9 @@ export async function executeCreativePipeline(
       await step.run(`stop-at-${stage}`, () =>
         jobStore.stop(eventData.organizationId, job.id, stage),
       );
+      // Terminal halt (explicit stop OR 24h approval timeout): the AgentTask did
+      // not run to completion, so it is cancelled rather than completed.
+      await settleTask("cancelled");
       return;
     }
   }
@@ -259,6 +308,7 @@ export function createCreativeJobRunner(
   onFailure?: (arg: unknown) => Promise<void>,
   creativeMemoryProvider?: CreativeMemoryProvider,
   klingClient?: KlingLike,
+  updateTaskStatus?: TaskStatusUpdater,
 ) {
   return inngestClient.createFunction(
     {
@@ -284,6 +334,7 @@ export function createCreativeJobRunner(
         assetStorage,
         creativeMemoryProvider,
         klingClient,
+        updateTaskStatus,
       );
     },
   );

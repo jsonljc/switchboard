@@ -291,6 +291,22 @@ export async function registerInngest(
   const connectionStore = new PrismaDeploymentConnectionStore(app.prisma);
   const taskStore = new PrismaAgentTaskStore(app.prisma);
 
+  // The creative-job-submit workflow spawns an AgentTask but never settled it, so
+  // every creative job left a "pending" task polluting the open-task work-log +
+  // metrics. The creative runner (in-band complete/stop) and the failure recorder
+  // (out-of-band retries-exhausted) settle it through this injected closure. The
+  // AgentTask store is Layer 4, so the Layer-2 runner cannot reach it directly.
+  // Returns void (the callers only need the side effect). updateStatus throws
+  // StaleVersionError on a no-match; both callers wrap the call best-effort so a
+  // vanished/double-settled task never throws out of the Inngest function.
+  const settleCreativeTaskStatus = async (
+    organizationId: string,
+    taskId: string,
+    status: "completed" | "cancelled" | "failed",
+  ): Promise<void> => {
+    await taskStore.updateStatus(organizationId, taskId, status);
+  };
+
   // Pixel id can be captured in two operator-facing places:
   //   1. Meta-ads connection credentials (apps/dashboard/src/lib/
   //      service-field-configs.ts) — the OAuth-time field.
@@ -1322,6 +1338,9 @@ export async function registerInngest(
         ) => Promise<void>,
         creativeTasteProvider,
         klingClient,
+        // Settle the spawned AgentTask on the runner's in-band terminal branches
+        // (completed on full completion, cancelled on stop/approval-timeout).
+        settleCreativeTaskStatus,
       ),
       createUgcJobRunner(
         {
@@ -1346,6 +1365,10 @@ export async function registerInngest(
           // S3 client the polished runner receives, so kept UGC creatives gain
           // a durableAssetUrl and become publishable.
           assetStorage,
+          // Settle the spawned AgentTask on the runner's in-band terminal branches
+          // (completed on full completion, cancelled on stop/approval-timeout).
+          // Mirrors the polished runner's settleCreativeTaskStatus injection.
+          updateTaskStatus: settleCreativeTaskStatus,
         },
         makeOnFailureHandler(CREATIVE_UGC_RUNNER_FAILURE_PARAMS, asyncFailure) as (
           arg: unknown,
@@ -1369,7 +1392,14 @@ export async function registerInngest(
       createMetaTokenRefreshCron(metaTokenRefreshDeps),
       createDlqRetentionPurgeCron(dlqRetentionPurgeDeps),
       createCreativePublishFunction(creativePublishFunctionDeps),
-      createCreativeFailureRecorder({ jobStore, failure: asyncFailure }),
+      createCreativeFailureRecorder({
+        jobStore,
+        failure: asyncFailure,
+        // Out-of-band terminal branch: a retries-exhausted creative job dead-letters
+        // here, so flip its AgentTask to "failed" (the runner's in-band branches
+        // settle completed/cancelled themselves).
+        updateTaskStatus: settleCreativeTaskStatus,
+      }),
       createCreativePublishFailureRecorder({
         jobStore,
         traceStore: app.workTraceStore,

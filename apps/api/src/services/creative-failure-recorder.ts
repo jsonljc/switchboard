@@ -25,6 +25,16 @@ const FailureEventSchema = z.object({
 export interface CreativeFailureRecorderDeps {
   jobStore: Pick<PrismaCreativeJobStore, "findById" | "failPolished" | "failUgc">;
   failure: AsyncFailureContext;
+  /**
+   * Best-effort terminal-status write for the AgentTask the creative-job-submit
+   * workflow spawned (its id rides on the loaded CreativeJob row). This is the
+   * out-of-band failure terminal branch of the runner: a retries-exhausted job
+   * dead-letters here, so this is where the task flips to "failed" (the runner's
+   * in-band complete/stop branches settle the task themselves). Optional + caught:
+   * a task-store hiccup must never recurse the recorder into another `.failed`.
+   * Injected (PrismaAgentTaskStore.updateStatus) at the apps/api bootstrap seam.
+   */
+  updateTaskStatus?: (organizationId: string, taskId: string, status: "failed") => Promise<void>;
 }
 
 /**
@@ -55,7 +65,7 @@ function isTerminal(job: CreativeJob): boolean {
 export async function executeCreativeFailureRecorder(
   eventData: unknown,
   step: StepTools,
-  deps: Pick<CreativeFailureRecorderDeps, "jobStore">,
+  deps: Pick<CreativeFailureRecorderDeps, "jobStore" | "updateTaskStatus">,
 ): Promise<void> {
   const parsed = FailureEventSchema.safeParse(eventData);
   const jobId = parsed.success ? parsed.data.trigger?.jobId : undefined;
@@ -87,6 +97,24 @@ export async function executeCreativeFailureRecorder(
     await step.run("fail-polished", () =>
       deps.jobStore.failPolished(job.organizationId, jobId, failure),
     );
+  }
+
+  // Flip the spawned AgentTask to "failed" so it does not linger as "pending"
+  // (polluting the open-task work-log + metrics) for a job that exhausted retries.
+  // The task id rides on the loaded row. Best-effort + its own named step: a
+  // task-store hiccup must never recurse this Class-E recorder into a new failure.
+  if (deps.updateTaskStatus) {
+    const updateTaskStatus = deps.updateTaskStatus;
+    try {
+      await step.run("task-status-failed", () =>
+        updateTaskStatus(job.organizationId, job.taskId, "failed"),
+      );
+    } catch (err) {
+      console.warn(
+        `[creative-failure-recorder] failed to mark AgentTask ${job.taskId} failed ` +
+          `for job ${jobId}: ${String(err)}`,
+      );
+    }
   }
 }
 
