@@ -407,7 +407,25 @@ export async function buildServer() {
 
   const hasAnyCreds = telegramBotToken || whatsappToken || slackBotToken;
   if (hasAnyCreds) {
-    const { ProactiveSender } = await import("@switchboard/core/notifications");
+    const { ProactiveSender, isWithinWhatsAppWindow } =
+      await import("@switchboard/core/notifications");
+    // WhatsApp 24h customer-care window gate. ProactiveSender invokes this only on
+    // the WhatsApp path, where `recipient` is the destination phone (the
+    // ConversationState.principalId carried as destinationPrincipalId). Derive the
+    // last-inbound timestamp from the conversation state keyed by that phone; a
+    // missing row (no inbound on record) is treated as OUTSIDE the window
+    // (isWithinWhatsAppWindow(null) === false → fail closed). Without a DB there is
+    // no inbound history to consult, so we also fail closed. The send then throws
+    // WhatsAppWindowClosedError instead of silently dropping the message.
+    const isWithinWindow = async (recipient: string): Promise<boolean> => {
+      if (!prismaClient) return false;
+      const row = await prismaClient.conversationState.findFirst({
+        where: { principalId: recipient, channel: "whatsapp" },
+        orderBy: { lastInboundAt: "desc" },
+        select: { lastInboundAt: true },
+      });
+      return isWithinWhatsAppWindow(row?.lastInboundAt ?? null);
+    };
     agentNotifier = new ProactiveSender({
       credentials: {
         telegram: telegramBotToken ? { botToken: telegramBotToken } : undefined,
@@ -417,6 +435,7 @@ export async function buildServer() {
             : undefined,
         slack: slackBotToken ? { botToken: slackBotToken } : undefined,
       },
+      isWithinWindow,
     });
   } else {
     app.log.warn(
