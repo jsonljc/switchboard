@@ -11,6 +11,10 @@ import type { SignalHealthReport, Breach } from "./signal-health-checker.js";
 import { resetsLearningFor, learningPhaseImpactText } from "./action-reset-classification.js";
 import { meetsEvidenceFloor, ZERO_CONVERSION_DAY_CLICK_FLOOR } from "./evidence-floor.js";
 import { applyConfidenceModifierToRecs } from "./confidence-modifier.js";
+import {
+  insufficientEvidenceWatch,
+  audienceOfferMismatchIfSilent,
+} from "./recommendation-watches.js";
 
 // ── Re-export types ──
 
@@ -166,30 +170,6 @@ function addReviewBudgetRecommendation(
       ],
     ),
   );
-}
-
-// ── Evidence-floor abstention ──
-
-/**
- * Build an abstention watch for a recommendation whose action family lacks the
- * evidence to act (Phase-A spec Gate 2). Riley re-checks next cycle rather than
- * acting on noise. `checkBackDate` is left blank here — the caller
- * (campaign-decision.ts) fills it from `input.nextCycleDate` since the engine
- * has no access to that value.
- */
-function insufficientEvidenceWatch(
-  base: Pick<RecommendationInput, "campaignId" | "campaignName">,
-  action: RecommendationOutput["action"],
-  e: { clicks: number; conversions: number },
-): WatchOutput {
-  return {
-    type: "watch",
-    campaignId: base.campaignId,
-    campaignName: base.campaignName,
-    pattern: "insufficient_evidence",
-    message: `Not enough evidence to ${action}: ${e.clicks} clicks / ${e.conversions} conversions in window — re-checking next cycle.`,
-    checkBackDate: "",
-  };
 }
 
 /**
@@ -498,7 +478,12 @@ export function generateRecommendations(
   // and breach_building are mutually exclusive: a burn reads cpa=0, which fails the >2x
   // gate, but both are handled so neither can ever be dropped.)
   const withBurn = burn ? [burn, ...floored] : floored;
-  return breachBuilding ? [...withBurn, breachBuilding] : withBurn;
+  const withBreach = breachBuilding ? [...withBurn, breachBuilding] : withBurn;
+  // audience_offer_mismatch (D1-3): append the advisory watch only when this campaign would otherwise
+  // be pure silence (see audienceOfferMismatchIfSilent). Purely additive — when it fires, withBreach
+  // is empty, so it never changes an existing rec/watch/insight outcome.
+  const audienceOfferMismatch = audienceOfferMismatchIfSilent(diagnoses, base, withBreach);
+  return audienceOfferMismatch ? [...withBreach, audienceOfferMismatch] : withBreach;
 }
 
 // ── Signal Health Recommendations ──

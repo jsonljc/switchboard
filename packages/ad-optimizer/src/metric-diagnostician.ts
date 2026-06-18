@@ -51,6 +51,13 @@ const RULES: Rule[] = [
     },
   },
   {
+    // Surfacing decision (2026-06-18): this fires on the deterministic audit seam (cpm/ctr are both
+    // in the 7-key MetricSet), but it is deliberately NOT surfaced as an operator watch, unlike its
+    // sibling audience_offer_mismatch (recommendation-watches.ts, audienceOfferMismatchIfSilent). It
+    // is informational, not actionable — a CPM rise with holding CTR means auction/seasonal pressure
+    // the operator cannot act on, and CPM is noisy week to week, so a watch here would be noise. It
+    // remains available to the ads-analytics.diagnose agent tool (skills/ad-optimizer.md), which folds
+    // it into a human-readable audit on demand. Pinned by recommendation-audience-mismatch.test.ts.
     pattern: "competition_increase",
     description: "Competition or seasonal demand increase",
     confidence: "medium",
@@ -154,6 +161,14 @@ const RULES: Rule[] = [
     },
   },
   {
+    // Surfacing decision (2026-06-18): this fires on the deterministic audit seam but is deliberately
+    // NOT surfaced as an operator watch (unlike audience_offer_mismatch). Two reasons: it is the
+    // producer's own lowest-confidence rule ("low"), and on the deterministic path insightToMetrics
+    // sets cpl === cpa (both spend/conversions), so a single cost-per-conversion rise contributes TWO
+    // degrading metrics toward the ">= 3" gate — "all metrics degrading" overstates a plain cost rise.
+    // De-duping that count would change a fired diagnosis that the ads-analytics.diagnose agent tool
+    // also consumes, which is out of scope here. It stays available to that agent path
+    // (skills/ad-optimizer.md). Pinned by recommendation-audience-mismatch.test.ts.
     pattern: "account_level_issue",
     description: "All metrics degrading",
     confidence: "low",

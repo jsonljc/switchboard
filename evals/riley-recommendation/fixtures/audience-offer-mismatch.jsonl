@@ -1,0 +1,11 @@
+# D1-3 audience_offer_mismatch visibility. "Strong clicks but low conversions": CTR rises 2.0 -> 3.0
+# (up, significant) while CPA rises 80 -> 160 (up, significant, = 1.6x the 100 target) because
+# conversions halve (50 -> 25) on flat spend. CPM holds at 200 (stable), so this is NOT competition
+# pressure, and only cpl+cpa degrade (= 2 < 3), so account_level_issue does NOT fire either — the lone
+# diagnosis is audience_offer_mismatch. The cost is sub-2x and the breach is not durable, so no rec /
+# burn / breach_building fires: PRE-FIX the campaign got pure silence even though the diagnostician
+# flagged the funnel leak. POST-FIX an informational audience_offer_mismatch watch surfaces it. It is
+# suppressed the moment any stronger signal exists (see recommendation-audience-mismatch.test.ts), so
+# this is additive visibility, never a new action path. expectedWatchPatterns pins the new surface so
+# the drift guard fails loudly if this fixture is ever deleted. measurementTrusted omitted (true).
+{"id":"audience-offer-mismatch-pure-silence","current":{"impressions":20000,"inlineLinkClicks":600,"spend":4000,"conversions":25,"revenue":0,"frequency":1.5},"previous":{"impressions":20000,"inlineLinkClicks":400,"spend":4000,"conversions":50,"revenue":0,"frequency":1.5},"targetBreach":{"periodsAboveTarget":3,"granularity":"daily"},"learningState":"success","economicTier":"booked_cac","effectiveTarget":100,"targetROAS":3,"expectedOutcome":"watch","expectedWatchPatterns":["audience_offer_mismatch"],"notes":"D1-3: CTR up + CPA up-significant (1.6x, sub-2x) with flat CPM and only 2 degrading metrics -> the lone diagnosis is audience_offer_mismatch and no rec/burn/breach fires, so the engine must SHOW the funnel leak (audience_offer_mismatch watch) rather than stay silent. The watch is suppressed whenever a stronger signal (add_creative/pause/breach_building/landing_page_drop hold/burn) is present: additive visibility, not a new action path."}
