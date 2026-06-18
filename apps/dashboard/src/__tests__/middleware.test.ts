@@ -284,4 +284,29 @@ describe("auth-mutation rate limiting", () => {
     for (let i = 0; i < 10; i++) expect(reset().status).toBe(200);
     expect(reset().status).toBe(429);
   });
+
+  const waitlist = (ip: string) =>
+    new NextRequest("http://localhost/api/waitlist", {
+      method: "POST",
+      headers: { "x-forwarded-for": ip },
+    });
+
+  it("keeps /api/waitlist public (no login redirect)", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(waitlist("9.9.9.10"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("429s after the per-IP limit on /api/waitlist", async () => {
+    const { middleware } = await import("../middleware");
+
+    for (let i = 0; i < 10; i++) {
+      expect(middleware(waitlist("5.5.5.6")).status).toBe(200);
+    }
+    expect(middleware(waitlist("5.5.5.6")).status).toBe(429);
+  });
 });
