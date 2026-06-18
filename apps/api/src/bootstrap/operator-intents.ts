@@ -35,6 +35,7 @@ import {
   CONFIRM_DISQUALIFICATION_INTENT,
   DELIVER_WEEKLY_REPORT_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,
+  ERASE_CONTACT_INTENT,
   GRANT_CONSENT_INTENT,
   RECONCILE_BOOKING_INTENT,
   RECORD_ATTENDANCE_INTENT,
@@ -77,6 +78,10 @@ import {
   buildDeliverWeeklyReportHandler,
   type WeeklyReportDeliveryWriter,
 } from "./operator-intents/deliver-weekly-report.js";
+import {
+  buildEraseContactHandler,
+  type OperatorContactEraser,
+} from "./operator-intents/erase-contact.js";
 
 // Re-export every public symbol the rest of the codebase imports from
 // "../bootstrap/operator-intents.js" so existing import paths stay valid.
@@ -86,6 +91,7 @@ export {
   CONFIRM_DISQUALIFICATION_INTENT,
   DELIVER_WEEKLY_REPORT_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,
+  ERASE_CONTACT_INTENT,
   GRANT_CONSENT_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
   RECONCILE_BOOKING_INTENT,
@@ -94,6 +100,8 @@ export {
   REVOKE_CONSENT_INTENT,
   TRANSITION_OPPORTUNITY_STAGE_INTENT,
 } from "./operator-intents/shared.js";
+export { buildEraseContactHandler } from "./operator-intents/erase-contact.js";
+export type { OperatorContactEraser } from "./operator-intents/erase-contact.js";
 export { buildDeliverWeeklyReportHandler } from "./operator-intents/deliver-weekly-report.js";
 export type { WeeklyReportDeliveryWriter } from "./operator-intents/deliver-weekly-report.js";
 export { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
@@ -141,6 +149,9 @@ interface OperatorIntentsBootstrapDeps {
   reconcileBookingWriter?: ReconcileBookingWriter;
   /** Optional: registers the ledger.deliver_weekly_report intent + handler when provided. */
   weeklyReportDeliveryWriter?: WeeklyReportDeliveryWriter;
+  /** Optional: registers the operator.erase_contact intent + handler when provided. Runs the full
+   *  PDPA delete cascade (eraseContactFully), org-scoped + fail-closed cross-tenant. */
+  contactEraser?: OperatorContactEraser;
   logger?: { info(msg: string): void };
 }
 
@@ -190,6 +201,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     receiptHeldPromoter,
     reconcileBookingWriter,
     weeklyReportDeliveryWriter,
+    contactEraser,
     logger,
   } = deps;
 
@@ -264,6 +276,10 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     );
   }
 
+  if (contactEraser) {
+    handlers.set(ERASE_CONTACT_INTENT, buildEraseContactHandler(contactEraser));
+  }
+
   modeRegistry.register(new OperatorMutationMode({ handlers }));
 
   if (opportunityStore) {
@@ -299,6 +315,9 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     // schedule leg, so this is the one intent that passes an explicit trigger list.
     registerOperatorIntent(intentRegistry, DELIVER_WEEKLY_REPORT_INTENT, ["schedule", "api"]);
   }
+  if (contactEraser) {
+    registerOperatorIntent(intentRegistry, ERASE_CONTACT_INTENT);
+  }
 
   const intentCount =
     (opportunityStore ? 1 : 0) +
@@ -309,7 +328,8 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier ? 1 : 0) +
     (bookingAttendanceWriter ? 1 : 0) +
     (reconcileBookingWriter ? 1 : 0) +
-    (weeklyReportDeliveryWriter ? 1 : 0);
+    (weeklyReportDeliveryWriter ? 1 : 0) +
+    (contactEraser ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );

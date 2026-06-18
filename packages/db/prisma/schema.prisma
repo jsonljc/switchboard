@@ -2460,21 +2460,36 @@ model PreSwitchboardBaseline {
   @@index([organizationId, dimension, metric])
 }
 
-// Meta Data Deletion Callback request log. Persisted so the user-facing
-// `confirmation_code` can be verified at the public status URL the callback
-// returns. Deletion runs synchronously, so `status` is "completed" on success;
-// "failed" rows are kept for ops triage.
+// Data-erasure request log. Persisted so a deletion can be audited / verified
+// after the fact. Two producers write this row, distinguished by `requestType`:
+//   - "meta_data_deletion" (default): the Meta Data Deletion Callback. The
+//     user-facing `confirmation_code` is verified at the public status URL the
+//     callback returns; the match is cross-org (by phone), so organizationId
+//     and requestedByActorId stay null.
+//   - "operator_erasure": an operator fulfilling a PDPA right-to-erasure /
+//     stop-contacting request for ONE contact in their own org. Carries the
+//     organizationId and the authenticated operator in requestedByActorId.
+// Deletion runs synchronously, so `status` is "completed" on success; "failed"
+// rows are kept for ops triage.
 model DataDeletionRequest {
-  id                String    @id @default(uuid())
-  userId            String // Meta app-scoped user_id from signed_request
-  confirmationCode  String    @unique
-  deletedContactIds String[]  @default([])
-  status            String    @default("completed") // "completed" | "failed"
-  failureReason     String?
-  completedAt       DateTime?
-  createdAt         DateTime  @default(now())
+  id                 String    @id @default(uuid())
+  userId             String // Meta app-scoped user_id, or "operator:<actorId>" for operator erasures
+  confirmationCode   String    @unique
+  deletedContactIds  String[]  @default([])
+  status             String    @default("completed") // "completed" | "failed"
+  failureReason      String?
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  // Producer discriminator: "meta_data_deletion" (default, preserves existing
+  // Meta rows) | "operator_erasure".
+  requestType        String    @default("meta_data_deletion")
+  // Org-scope + operator provenance for operator-initiated erasures; null for
+  // the cross-org Meta callback.
+  organizationId     String?
+  requestedByActorId String?
 
   @@index([userId])
+  @@index([organizationId])
 }
 
 // Public launch waitlist signups captured before self-serve registration opens.
