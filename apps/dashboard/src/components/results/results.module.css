@@ -291,7 +291,7 @@
 
 /* ─── Recovery-candidates tile ─── */
 
-/* Outer wrapper — single count stack, matches the held-rate tile rhythm */
+/* Outer wrapper: single count stack, matches the held-rate tile rhythm */
 .recoveryCandidates {
   display: flex;
   flex-direction: column;
@@ -309,7 +309,7 @@
   margin: 0;
 }
 
-/* Count — large mono tabular (matches heldRateNum scale) */
+/* Count: large mono tabular (matches heldRateNum scale) */
 .recoveryCandidatesNum {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
