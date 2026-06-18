@@ -58,7 +58,9 @@ const PUBLISH_FAILURE_STATUS: Record<string, number> = {
   CREATIVE_NOT_PUBLISHABLE: 409,
   CREATIVE_ASSET_NOT_DURABLE: 422,
   META_CONNECTION_NOT_FOUND: 422,
+  META_CONNECTION_NOT_CONNECTED: 422,
   META_PAGE_NOT_CONFIGURED: 422,
+  META_WABA_NOT_BOUND: 422,
 };
 
 export const creativePipelineRoutes: FastifyPluginAsync = async (app) => {

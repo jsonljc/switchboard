@@ -10,6 +10,12 @@ const KEPT_JOB = {
   durableAssetUrl: "https://cdn.example/a.mp4",
 };
 
+const META_CONNECTION = {
+  credentials: "enc-meta",
+  externalAccountId: "act_1",
+  status: "connected",
+};
+
 function deps(
   overrides: {
     job?: unknown;
@@ -17,26 +23,22 @@ function deps(
     creds?: Record<string, unknown>;
   } = {},
 ) {
+  const findFirst = vi
+    .fn()
+    .mockResolvedValue("connection" in overrides ? overrides.connection : META_CONNECTION);
+  const decrypt = vi
+    .fn()
+    .mockReturnValue(
+      overrides.creds ?? { accessToken: "tok", accountId: "act_1", pageId: "page_1" },
+    );
   return {
     prisma: {
       creativeJob: {
         findUnique: vi.fn().mockResolvedValue("job" in overrides ? overrides.job : KEPT_JOB),
       },
-      connection: {
-        findFirst: vi
-          .fn()
-          .mockResolvedValue(
-            "connection" in overrides
-              ? overrides.connection
-              : { credentials: "enc", externalAccountId: "act_1" },
-          ),
-      },
+      connection: { findFirst },
     },
-    decrypt: vi
-      .fn()
-      .mockReturnValue(
-        overrides.creds ?? { accessToken: "tok", accountId: "act_1", pageId: "page_1" },
-      ),
+    decrypt,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
@@ -49,6 +51,18 @@ describe("assertPublishable", () => {
       expect(r.pageId).toBe("page_1");
       expect(r.accessToken).toBe("tok");
       expect(r.durableAssetUrl).toBe("https://cdn.example/a.mp4");
+    }
+  });
+
+  it("a connected Meta-Ads org with NO WhatsApp/WABA binding can publish (regression: unconditional WABA check blocked non-CTWA orgs)", async () => {
+    // This is the regression test: the publish path is LEARN_MORE / OUTCOME_LEADS,
+    // not a click-to-WhatsApp ad. An org that has Meta Ads but has not completed
+    // WhatsApp onboarding must still be able to publish a normal creative.
+    const r = await assertPublishable(deps(), "org_1", "j1");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.accessToken).toBe("tok");
+      expect(r.pageId).toBe("page_1");
     }
   });
 
@@ -166,6 +180,34 @@ describe("assertPublishable", () => {
       "j1",
     );
     expect(r).toMatchObject({ ok: false, code: "META_PAGE_NOT_CONFIGURED" });
+  });
+
+  it("META_CONNECTION_NOT_CONNECTED when the meta-ads connection is not connected", async () => {
+    // An expired/revoked connection must fail pre-flight with a clear, actionable
+    // reason -- NOT a raw downstream Meta error after a dead-letter. The reason
+    // names the actual status so the operator knows to reconnect.
+    const r = await assertPublishable(
+      deps({ connection: { ...META_CONNECTION, status: "expired" } }),
+      "org_1",
+      "j1",
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.code).toBe("META_CONNECTION_NOT_CONNECTED");
+      expect(r.message).toContain("expired");
+      // It must be our own actionable copy, never a raw Meta API error string.
+      expect(r.message).not.toMatch(/OAuthException|graph\.facebook\.com|#\d{2,}/);
+    }
+  });
+
+  it("META_CONNECTION_NOT_CONNECTED defaults its status word when status is missing", async () => {
+    const r = await assertPublishable(
+      deps({ connection: { credentials: "enc-meta", externalAccountId: "act_1" } }),
+      "org_1",
+      "j1",
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("META_CONNECTION_NOT_CONNECTED");
   });
 
   it("loop-closing: accepts a PR-A storage URL and surfaces the exact value to the handler", async () => {

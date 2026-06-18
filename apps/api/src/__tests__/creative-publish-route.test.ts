@@ -83,8 +83,19 @@ describe("POST /creative-jobs/:id/publish", () => {
     connFindFirst.mockReset();
     submit.mockReset();
     decrypt.mockReset();
-    decrypt.mockReturnValue({ accessToken: "tok", accountId: "act_1", pageId: "page_1" });
-    connFindFirst.mockResolvedValue({ credentials: "enc", externalAccountId: "act_1" });
+    // assertPublishable reads only the meta-ads connection (WABA/whatsapp is not
+    // a publish precondition for paused LEARN_MORE drafts). Decrypt returns the
+    // meta-ads creds for any ciphertext.
+    decrypt.mockImplementation(() => ({
+      accessToken: "tok",
+      accountId: "act_1",
+      pageId: "page_1",
+    }));
+    connFindFirst.mockImplementation(async ({ where }: { where?: { serviceId?: string } }) =>
+      where?.serviceId === "whatsapp"
+        ? null
+        : { credentials: "enc", externalAccountId: "act_1", status: "connected" },
+    );
     ctx = await buildApp();
   });
 
@@ -143,12 +154,51 @@ describe("POST /creative-jobs/:id/publish", () => {
 
   it("422 META_PAGE_NOT_CONFIGURED when no Page id resolvable", async () => {
     findUnique.mockResolvedValue(KEPT_JOB);
-    decrypt.mockReturnValue({ accessToken: "tok", accountId: "act_1" }); // no pageId
+    // meta-ads creds lose the pageId — page check blocks publish before submit.
+    decrypt.mockImplementation(() => ({ accessToken: "tok", accountId: "act_1" }));
 
     const res = await ctx.app.inject(publish());
 
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("META_PAGE_NOT_CONFIGURED");
     expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("422 META_CONNECTION_NOT_CONNECTED when the meta-ads connection is not connected", async () => {
+    findUnique.mockResolvedValue(KEPT_JOB);
+    connFindFirst.mockImplementation(async ({ where }: { where?: { serviceId?: string } }) =>
+      where?.serviceId === "whatsapp"
+        ? { credentials: "enc-waba", externalAccountId: "waba_1", status: "connected" }
+        : { credentials: "enc", externalAccountId: "act_1", status: "revoked" },
+    );
+
+    const res = await ctx.app.inject(publish());
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("META_CONNECTION_NOT_CONNECTED");
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("parks → 202 PENDING_APPROVAL when the org has no whatsapp connection (WABA is not a publish blocker)", async () => {
+    // The beforeEach default already returns null for whatsapp — this test uses
+    // that default to prove a no-WABA org can still publish a paused Meta draft.
+    findUnique.mockResolvedValue(KEPT_JOB);
+    submit.mockResolvedValue({
+      ok: true,
+      approvalRequired: true,
+      lifecycleId: "lc-2",
+      bindingHash: "bh-2",
+      workUnit: { id: "wu-2", traceId: "tr-2" },
+      result: { outcome: "pending_approval", outputs: {} },
+    });
+
+    const res = await ctx.app.inject(publish());
+
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({
+      outcome: "PENDING_APPROVAL",
+      approvalRequest: { id: "lc-2", bindingHash: "bh-2" },
+    });
+    expect(submit).toHaveBeenCalledOnce();
   });
 });

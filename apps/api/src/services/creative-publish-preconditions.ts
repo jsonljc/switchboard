@@ -6,6 +6,7 @@ export type PublishFailureCode =
   | "CREATIVE_NOT_PUBLISHABLE"
   | "CREATIVE_ASSET_NOT_DURABLE"
   | "META_CONNECTION_NOT_FOUND"
+  | "META_CONNECTION_NOT_CONNECTED"
   | "META_PAGE_NOT_CONFIGURED";
 
 export interface PublishContext {
@@ -31,6 +32,7 @@ export interface AssertPublishableDeps {
 }
 
 const META_ADS_SERVICE_ID = "meta-ads";
+const CONNECTED_STATUS = "connected";
 
 function fail(code: PublishFailureCode, message: string): PublishPrecheckFailure {
   return { ok: false, code, message };
@@ -41,6 +43,12 @@ function fail(code: PublishFailureCode, message: string): PublishPrecheckFailure
  * Used by the route (pre-flight → immediate 4xx) AND the workflow handler
  * (defensive re-check post-approval). Fails loud with an actionable code; never
  * silently no-ops. Page-id read side only — the operator setter is PR C.
+ *
+ * This publish path builds a LEARN_MORE link-destination paused draft
+ * (objective OUTCOME_LEADS, placeholder link). It is NOT a click-to-WhatsApp ad.
+ * A WABA-binding precondition belongs only on a CTWA-destination flag that does
+ * not exist yet; adding it unconditionally here blocks every creative publish for
+ * orgs onboarded to Meta Ads but not WhatsApp.
  */
 export async function assertPublishable(
   deps: AssertPublishableDeps,
@@ -79,11 +87,26 @@ export async function assertPublishable(
 
   const connection = (await deps.prisma.connection.findFirst({
     where: { serviceId: META_ADS_SERVICE_ID, organizationId },
-    select: { credentials: true, externalAccountId: true },
-  })) as { credentials: unknown; externalAccountId: string | null } | null;
+    select: { credentials: true, externalAccountId: true, status: true },
+  })) as {
+    credentials: unknown;
+    externalAccountId: string | null;
+    status: string | null;
+  } | null;
 
   if (!connection) {
     return fail("META_CONNECTION_NOT_FOUND", "No Meta Ads connection for this organization.");
+  }
+
+  // An expired/revoked connection still has rows + ciphertext, so without this
+  // gate publishing creates a Meta draft that can never serve and dead-letters
+  // with only a raw Meta error. Fail loud with the actual status instead.
+  const connectionStatus = connection.status ?? "unknown";
+  if (connectionStatus !== CONNECTED_STATUS) {
+    return fail(
+      "META_CONNECTION_NOT_CONNECTED",
+      `The Meta Ads connection is "${connectionStatus}", not connected. Reconnect Meta Ads before publishing.`,
+    );
   }
 
   const creds = deps.decrypt(connection.credentials);
