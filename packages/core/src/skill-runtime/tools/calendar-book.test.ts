@@ -9,6 +9,7 @@ import { setMetrics, createInMemoryMetrics } from "../../telemetry/metrics.js";
 import { createCalendarBookToolFactory } from "./calendar-book.js";
 import { renderBookableServices } from "../context-resolver.js";
 import { getToolGovernanceDecision } from "../governance.js";
+import { GovernanceHook } from "../hooks/governance-hook.js";
 import type { BookingConsentState, ConsentPrecondition } from "./calendar-book-consent.js";
 import type { GovernanceMode, PlaybookService } from "@switchboard/schemas";
 import type { SkillRequestContext } from "../types.js";
@@ -149,21 +150,83 @@ describe("createCalendarBookToolFactory", () => {
     expect(tool.operations["booking.create"]!.effectCategory).toBe("external_mutation");
   });
 
-  // Booking is Alex's core revenue action. A real onboarded org resolves to the
-  // default "guided" trust (no trustLevelOverride), where external_mutation would
-  // otherwise require approval, and the in-skill approval hook dead-ends (the
-  // booking never persists). A scoped governanceOverride lets Alex book at guided
-  // while a deliberately-conservative "supervised" deployment still gates.
-  it("booking.create auto-approves at the default 'guided' trust so Alex can book on a real org", () => {
+  // Booking is Alex's core revenue action. A freshly onboarded org resolves to
+  // "supervised" trust (trustScore:0 from ensureAlexListingForOrg, no override),
+  // and the canonical real-org path is "guided" only once trust is earned. At
+  // BOTH levels external_mutation would otherwise require approval, and the
+  // in-skill approval hook dead-ends (the booking never persists, the customer is
+  // falsely told a team member will confirm). A scoped governanceOverride
+  // auto-approves the BOOKING intent at supervised AND guided so Alex can complete
+  // a real booking; the relaxation is scoped to this operation, NOT a blanket
+  // external_mutation downgrade (reschedule/cancel keep their own overrides).
+  it("booking.create auto-approves at the default-onboarding 'supervised' trust so Alex can book on a real org", () => {
+    expect(getToolGovernanceDecision(tool.operations["booking.create"]!, "supervised")).toBe(
+      "auto-approve",
+    );
+  });
+
+  it("booking.create auto-approves at 'guided' trust so Alex can book on a real org", () => {
     expect(getToolGovernanceDecision(tool.operations["booking.create"]!, "guided")).toBe(
       "auto-approve",
     );
   });
 
-  it("booking.create still requires approval at the conservative 'supervised' trust", () => {
-    expect(getToolGovernanceDecision(tool.operations["booking.create"]!, "supervised")).toBe(
-      "require-approval",
-    );
+  // P0 NORTH-STAR REGRESSION: the DEFAULT real-org path. A fresh signup org gets an
+  // Alex deployment at "supervised" trust (trustScore:0). Before this fix, the
+  // in-skill GovernanceHook returned proceed:false / pending_approval for the
+  // booking — a dead-end no consumer parks, so the booking never persisted while
+  // Alex falsely promised a confirmation. This test drives the REAL GovernanceHook
+  // (the same gate the executor runs) at supervised trust and proves the booking
+  // is allowed to PROCEED (no orphaned pending_approval) and then COMPLETES.
+  describe("supervised-trust booking completes (no orphaned pending_approval)", () => {
+    const validInput = {
+      service: "consultation",
+      slotStart: "2026-04-20T10:00:00+08:00",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    };
+
+    it("the GovernanceHook lets booking.create PROCEED at supervised trust (no pending_approval dead-end)", async () => {
+      const hook = new GovernanceHook(new Map([[tool.id, tool]]));
+      const result = await hook.beforeToolCall({
+        toolId: "calendar-book",
+        operation: "booking.create",
+        params: validInput,
+        effectCategory: "external_mutation",
+        trustLevel: "supervised",
+      });
+      // The booking must NOT dead-end at the in-skill approval hook.
+      expect(result.proceed).toBe(true);
+      expect(result.decision).not.toBe("pending_approval");
+      // The decision is logged as an explicit override (not a blanket policy change).
+      const log = hook.getGovernanceLogs().at(-1)!;
+      expect(log.decision).toBe("auto-approve");
+      expect(log.overridden).toBe(true);
+    });
+
+    it("a supervised-trust booking executes to a confirmed result (the customer is not falsely promised)", async () => {
+      bookingStore.create.mockResolvedValue({ id: "bk_1" });
+      opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+      calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_sup" });
+
+      // Gate first through the REAL hook at supervised trust, then execute exactly
+      // as the skill executor would once the hook proceeds.
+      const hook = new GovernanceHook(new Map([[tool.id, tool]]));
+      const gate = await hook.beforeToolCall({
+        toolId: "calendar-book",
+        operation: "booking.create",
+        params: validInput,
+        effectCategory: "external_mutation",
+        trustLevel: "supervised",
+      });
+      expect(gate.proceed).toBe(true);
+
+      const result = await tool.operations["booking.create"]!.execute(validInput);
+
+      expect(result.status).toBe("success");
+      expect(result.data?.status).toBe("confirmed");
+      expect(bookingStore.create).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("slots.query is idempotent", () => {
