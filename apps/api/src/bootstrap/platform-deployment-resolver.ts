@@ -8,15 +8,18 @@ import type {
 /** Options for the authoritative deployment resolver wired into PlatformIngress. */
 export interface ResolveAuthoritativeDeploymentOptions {
   /**
-   * Predicate identifying non-skill operator_mutation intents. When true, the request resolves to a
-   * platform-direct DeploymentContext instead of the strict skillSlug deployment lookup. Operator
-   * mutations (cron- or owner-initiated) carry no skill deployment and are system_auto_approved, so
-   * deployment trust is never consulted; resolving them to platform-direct is the honest result AND
-   * avoids the deployment_not_found throw that otherwise leaves every operator mutation inert in
-   * prod (their intent prefix, e.g. "ledger" / "receipt" / "booking", has no seeded deployment slug).
+   * Predicate identifying non-skill, platform-initiated intents that resolve to a platform-direct
+   * DeploymentContext instead of the strict skillSlug deployment lookup. Two classes qualify:
+   *  - operator_mutation intents (cron- or owner-initiated, e.g. "ledger" / "receipt" / "booking"),
+   *    which are system_auto_approved so deployment trust is never consulted; and
+   *  - Robin's no-show recovery campaign (robin.recovery_campaign.send), a cron-initiated no-agent
+   *    capability that PARKS via a seeded mandatory require_approval policy. platform-direct
+   *    (supervised / trustScore 0) cannot relax that mandatory gate, so resolving it here is the
+   *    honest result AND avoids the deployment_not_found throw that would otherwise leave the gate
+   *    inert in prod (slug "robin" has no seeded deployment).
    * Skill intents still resolve their real deployment (and still throw if it is missing).
    */
-  isOperatorMutationIntent?: (intent: string) => boolean;
+  isPlatformDirectIntent?: (intent: string) => boolean;
 }
 
 export function resolveAuthoritativeDeployment(
@@ -32,9 +35,10 @@ export function resolveAuthoritativeDeployment(
         trustLevel: "supervised" as const,
         trustScore: 0,
       });
-      // operator_mutation intents are not skill-bound: resolve them to platform-direct rather than a
-      // strict slug lookup that throws deployment_not_found for their non-skill intent prefix.
-      if (options?.isOperatorMutationIntent?.(request.intent)) return platformDirect();
+      // Non-skill, platform-initiated intents (operator_mutation crons + Robin's recovery campaign)
+      // resolve to platform-direct rather than a strict slug lookup that throws deployment_not_found
+      // for their non-skill intent prefix.
+      if (options?.isPlatformDirectIntent?.(request.intent)) return platformDirect();
       if (!resolver) return platformDirect();
       const result = await resolver.resolveByOrgAndSlug(request.organizationId, skillSlug);
       return {
