@@ -33,6 +33,8 @@ describe("Organizations API — Config", () => {
       // first-time-provision tests.
       findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn(),
+      // N1: the provision route persists the resolved status back to the row.
+      update: vi.fn().mockResolvedValue({}),
       delete: vi.fn(),
     },
     connection: {

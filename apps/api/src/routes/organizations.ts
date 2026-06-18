@@ -3,7 +3,6 @@ import type { FastifyPluginAsync } from "fastify";
 import { createHash } from "node:crypto";
 import {
   encryptCredentials,
-  decryptCredentials,
   seedOrgDayOneAgents,
   seedAlexSkillPack,
   provisionOrgAgentDeployments,
@@ -11,9 +10,8 @@ import {
 import { requireOrganizationScope } from "../utils/require-org.js";
 import { LAZY_ORG_CONFIG_CREATE_DEFAULTS } from "../lib/org-config-defaults.js";
 import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
-import { fetchWabaIdFromToken, registerWebhookOverride } from "../lib/whatsapp-meta.js";
-import { probeWhatsAppHealth } from "../lib/whatsapp-health-probe.js";
 import { resolveProvisionStatus, type StepResult } from "../lib/resolve-provision-status.js";
+import { provisionWhatsAppSteps } from "../lib/provision-whatsapp-steps.js";
 import { ensureAlexListingForOrg } from "../lib/ensure-alex-listing.js";
 import { notifyChatProvisionedChannel } from "../lib/notify-chat-provisioned-channel.js";
 import { checkV1ChannelLimit } from "../lib/check-v1-channel-limit.js";
@@ -240,6 +238,11 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
 
       const results = [];
       for (const ch of channels) {
+        // N1: track the created row id outside the try so the catch can persist
+        // status:"error" onto a row that was created before a later step threw.
+        // Without this, a partial failure leaves the row at its default
+        // "provisioning" status with no reason after reload.
+        let createdManagedChannelId: string | null = null;
         try {
           // ── Input validation: WhatsApp requires both token + phoneNumberId ──
           // Without this guard, a WhatsApp request with token-only would let
@@ -351,21 +354,16 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
             return { connection, managedChannel };
           });
 
+          // N1: the row now exists; record its id so the catch can persist a
+          // failure status onto it if a later (post-transaction) step throws.
+          createdManagedChannelId = result.managedChannel.id;
+
           // ── Task 6: per-step StepResult tracking, resolved at the end ──
           // Each provision step collapses into a StepResult; resolveProvisionStatus
           // applies the precedence (config_error > pending_chat_register >
           // health_check_failed > pending_meta_register > active).
-          let metaConfig: StepResult = { kind: "ok", reason: null };
           let chatConfig: StepResult = { kind: "ok", reason: null };
-          let metaRegister: StepResult = { kind: "ok", reason: null };
-          let healthProbe: StepResult = { kind: "ok", reason: null };
           let chatNotify: StepResult = { kind: "ok", reason: null };
-          let webhookRegistered = false;
-          let lastHealthCheckIso: string | null = null;
-
-          // Lifted so the health probe block can reuse decrypted credentials.
-          let customerToken: string | undefined;
-          let customerPhoneNumberId: string | undefined;
 
           // Chat config: helper detects env gaps; we read env here only because
           // the meta /subscribed_apps registration also needs `chatUrl` to build
@@ -374,123 +372,31 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           const chatUrl = process.env.CHAT_PUBLIC_URL ?? process.env.SWITCHBOARD_CHAT_URL;
           const internalSecret = process.env.INTERNAL_API_SECRET;
 
-          // ── Meta webhook auto-registration (best-effort, WhatsApp only) ──
+          // ── WhatsApp-specific steps: meta registration + health probe ──
+          // Extracted to lib/provision-whatsapp-steps.ts (pure move, no behavior
+          // change). Non-whatsapp channels skip this block; all StepResults stay
+          // at their ok defaults.
+          let metaConfig: StepResult = { kind: "ok", reason: null };
+          let metaRegister: StepResult = { kind: "ok", reason: null };
+          let healthProbe: StepResult = { kind: "ok", reason: null };
+          let webhookRegistered = false;
+          let lastHealthCheckIso: string | null = null;
+
           if (ch.channel === "whatsapp") {
-            const appToken = process.env.WHATSAPP_GRAPH_TOKEN;
-            const verifyToken = process.env.WHATSAPP_APP_SECRET;
-
-            if (!appToken || !verifyToken) {
-              const missing: string[] = [];
-              if (!appToken) missing.push("WHATSAPP_GRAPH_TOKEN");
-              if (!verifyToken) missing.push("WHATSAPP_APP_SECRET");
-              metaConfig = {
-                kind: "fail",
-                reason: `config_error_meta: missing ${missing.join(" / ")}`,
-              };
-            }
-
-            // Always attempt to decrypt so the health probe can run even if
-            // meta env is missing (probe only needs customer token).
-            try {
-              const decrypted = decryptCredentials(encrypted) as {
-                token?: unknown;
-                phoneNumberId?: unknown;
-              };
-              if (typeof decrypted.token === "string" && decrypted.token.length > 0) {
-                customerToken = decrypted.token;
-              }
-              if (
-                typeof decrypted.phoneNumberId === "string" &&
-                decrypted.phoneNumberId.length > 0
-              ) {
-                customerPhoneNumberId = decrypted.phoneNumberId;
-              }
-            } catch (decryptErr) {
-              metaConfig = {
-                kind: "fail",
-                reason: `Failed to decrypt customer credentials: ${
-                  decryptErr instanceof Error ? decryptErr.message : "unknown error"
-                }`,
-              };
-            }
-
-            // Run Meta registration only when we have meta env, chat url (for
-            // building the webhook URL), and a customer token.
-            if (metaConfig.kind === "ok" && appToken && verifyToken) {
-              if (!chatUrl) {
-                // chatConfig already failed above; skip meta call (no URL to register).
-                metaRegister = {
-                  kind: "fail",
-                  reason: "Meta registration skipped: chat config missing webhook base URL",
-                };
-              } else if (!customerToken) {
-                metaRegister = {
-                  kind: "fail",
-                  reason: "Meta registration skipped: customer credentials missing 'token' field",
-                };
-              } else {
-                const wabaResult = await fetchWabaIdFromToken({
-                  apiVersion,
-                  appToken,
-                  userToken: customerToken,
-                });
-                if (!wabaResult.ok) {
-                  metaRegister = {
-                    kind: "fail",
-                    reason: `Meta WABA lookup (/debug_token) failed: ${wabaResult.reason}`,
-                  };
-                } else {
-                  const reg = await registerWebhookOverride({
-                    apiVersion,
-                    userToken: customerToken,
-                    wabaId: wabaResult.wabaId,
-                    webhookUrl: `${chatUrl}${result.managedChannel.webhookPath}`,
-                    verifyToken,
-                  });
-                  if (reg.ok) {
-                    metaRegister = { kind: "ok", reason: null };
-                    webhookRegistered = true;
-                  } else {
-                    metaRegister = {
-                      kind: "fail",
-                      reason: `Meta /subscribed_apps failed: ${reg.reason}`,
-                    };
-                  }
-                }
-              }
-            } else if (metaConfig.kind === "fail") {
-              // Meta env missing — register can't run. Mark failed; resolver
-              // will pick config_error (precedes pending_meta_register).
-              metaRegister = {
-                kind: "fail",
-                reason: "Meta registration skipped: meta config missing",
-              };
-            }
-
-            // ── Synchronous WhatsApp health probe (best-effort) ──
-            if (customerToken && customerPhoneNumberId) {
-              const probe = await probeWhatsAppHealth({
-                apiVersion,
-                userToken: customerToken,
-                phoneNumberId: customerPhoneNumberId,
-              });
-              if (probe.ok) {
-                lastHealthCheckIso = probe.checkedAt.toISOString();
-                await app.prisma.connection.update({
-                  where: { id: result.connection.id },
-                  data: { lastHealthCheck: probe.checkedAt },
-                });
-                await app.prisma.managedChannel.update({
-                  where: { id: result.managedChannel.id },
-                  data: { lastHealthCheck: probe.checkedAt },
-                });
-              } else {
-                healthProbe = {
-                  kind: "fail",
-                  reason: `Health probe failed: ${probe.reason}`,
-                };
-              }
-            }
+            const waSteps = await provisionWhatsAppSteps({
+              apiVersion,
+              chatUrl,
+              encrypted,
+              connectionId: result.connection.id,
+              managedChannelId: result.managedChannel.id,
+              webhookPath: result.managedChannel.webhookPath,
+              prisma: app.prisma,
+            });
+            metaConfig = waSteps.metaConfig;
+            metaRegister = waSteps.metaRegister;
+            healthProbe = waSteps.healthProbe;
+            webhookRegistered = waSteps.webhookRegistered;
+            lastHealthCheckIso = waSteps.lastHealthCheckIso;
           }
 
           // ── Provision-notify (outside transaction, hardened with one retry) ──
@@ -521,6 +427,22 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
             channel: ch.channel as "whatsapp" | "telegram" | "slack",
           });
 
+          // N1: persist the resolved status back to the ManagedChannel row so a
+          // later GET /channels reflects the real outcome instead of the schema
+          // default "provisioning". Previously the status only ever reached the
+          // HTTP results[] array below, so any non-active outcome was invisible
+          // after reload. lastHealthCheck is already persisted in the probe
+          // block above (active path only); here we settle status/detail/
+          // webhookRegistered.
+          await app.prisma.managedChannel.update({
+            where: { id: result.managedChannel.id },
+            data: {
+              status: resolved.status,
+              statusDetail: resolved.statusDetail,
+              webhookRegistered,
+            },
+          });
+
           results.push({
             id: result.managedChannel.id,
             channel: result.managedChannel.channel,
@@ -534,8 +456,26 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
           });
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : "Unknown error";
+          // N1: if the row was created before the throw, persist status:"error"
+          // + the message onto it so the partial failure is recoverable and not
+          // opaque (the operator can see the reason and delete + re-provision).
+          // Best-effort: a failure here must not mask the original error.
+          if (createdManagedChannelId) {
+            try {
+              await app.prisma.managedChannel.update({
+                where: { id: createdManagedChannelId },
+                data: { status: "error", statusDetail: message },
+              });
+            } catch (persistErr) {
+              console.error(
+                `[organizations] failed to persist error status for managed channel ` +
+                  `${createdManagedChannelId}:`,
+                persistErr,
+              );
+            }
+          }
           results.push({
-            id: null,
+            id: createdManagedChannelId,
             channel: ch.channel,
             botUsername: null,
             webhookPath: null,

@@ -105,7 +105,13 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
     // create runs, and afterwards returns the row with the encrypted creds
     // that the route persisted (so the precheck can decrypt and compare
     // phoneNumberId for the WhatsApp same-vs-different number distinction).
+    //
+    // N2 honest-status: findFirst also tracks the status/statusDetail written
+    // back by N1 (managedChannel.update), so the second request's precheck
+    // returns the REAL persisted status rather than the "provisioning" default.
     let storedCredentials: string | null = null;
+    let persistedStatus: string = managedChannel.status;
+    let persistedStatusDetail: string | null = managedChannel.statusDetail;
     const tx = {
       connection: {
         create: vi.fn(async (args: { data: { credentials: string } }) => {
@@ -134,12 +140,26 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
         }),
       },
       managedChannel: {
-        update: vi.fn().mockResolvedValue({ ...managedChannel }),
+        // Capture the status/statusDetail written by N1 so findFirst can
+        // surface the REAL persisted status on the second request.
+        update: vi.fn(
+          async (args: { data?: { status?: string; statusDetail?: string | null } }) => {
+            if (args.data?.status !== undefined) {
+              persistedStatus = args.data.status;
+              persistedStatusDetail = args.data.statusDetail ?? null;
+            }
+            return { ...managedChannel };
+          },
+        ),
         // findFirst returns null until tx.connection.create has run, then
-        // returns the persisted ManagedChannel row.
+        // returns the persisted ManagedChannel row with the status N1 wrote.
         findFirst: vi.fn(async () => {
           if (storedCredentials === null) return null;
-          return { ...managedChannel };
+          return {
+            ...managedChannel,
+            status: persistedStatus,
+            statusDetail: persistedStatusDetail,
+          };
         }),
       },
       organizationConfig: {
@@ -362,9 +382,14 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
       expect(prisma._tx.managedChannel.create).toHaveBeenCalledTimes(1);
       expect(prisma._tx.connection.create).toHaveBeenCalledTimes(1);
 
-      // Explicit precheck signal.
-      expect(secondBody.channels[0]!.status).toBe("active");
-      expect(secondBody.channels[0]!.statusDetail).toBe("existing channel returned");
+      // N2 honest-status: the second request must mirror the status that N1
+      // persisted on the first provision. A successful first provision writes
+      // "active", so the retry must honestly report "active" — not a hardcoded
+      // string that would mask a real "error" row.
+      expect(secondBody.channels[0]!.status).toBe(firstBody.channels[0]!.status);
+      expect(["active", "pending_meta_register", "provisioning"]).toContain(
+        secondBody.channels[0]!.status,
+      );
 
       // Side effects are NOT re-run for the second request: exactly one of
       // each Meta call (debug_token + subscribed_apps), one provision-notify,
