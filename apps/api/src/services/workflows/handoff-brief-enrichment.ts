@@ -14,7 +14,10 @@ export interface HandoffBriefCandidate {
 
 export interface ResolveHandoffBriefDeps {
   candidate: HandoffBriefCandidate;
-  /** MIRA_HANDOFF_BRIEF_ENRICHMENT_ENABLED === "true", read per call. */
+  /** Whether Mira-brief enrichment is on, read per call from
+   * MIRA_HANDOFF_BRIEF_ENRICHMENT_ENABLED. That env var is default-ON (`!== "false"`),
+   * an INVERTED default vs every other Riley flag (which default OFF on `=== "true"`);
+   * safe because resolveHandoffBrief falls back to synthesis on any failure. */
   readFlag: () => boolean;
   /** The shipped BusinessFacts synthesis (the fallback on EVERY degrade path). */
   synthesize: () => Promise<SynthesizedCreativeBrief>;
