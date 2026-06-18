@@ -1,4 +1,4 @@
-import type { AttributionConfidence, ExceptionCode } from "@switchboard/schemas";
+import type { AttributionConfidence, ExceptionCode, PdpaJurisdiction } from "@switchboard/schemas";
 import { scoreAttribution, type AttributionEvidence } from "./score-attribution.js";
 import { evaluateExceptions } from "./evaluate-exceptions.js";
 
@@ -32,6 +32,8 @@ export interface BuildReceiptedBookingArgs {
   organizationId: string;
   bookingId: string;
   evidence: AttributionEvidence;
+  /** Contact.pdpaJurisdiction. Null = PDPA not_applicable -> missing_consent is not raised. */
+  pdpaJurisdiction?: PdpaJurisdiction | null;
   consentGrantedAt?: Date | null;
   consentRevokedAt?: Date | null;
   /** Snapshot of Opportunity.estimatedValue in CENTS at issuance; null when no opportunity/estimate. */
@@ -63,6 +65,7 @@ export function buildReceiptedBookingData(
   const attributionConfidence = scoreAttribution(args.evidence);
   const exceptions: SerializedExceptionEntry[] = evaluateExceptions({
     attributionConfidence,
+    pdpaJurisdiction: args.pdpaJurisdiction ?? null,
     consentGrantedAt: args.consentGrantedAt ?? null,
     consentRevokedAt: args.consentRevokedAt ?? null,
     overriddenBy: null,

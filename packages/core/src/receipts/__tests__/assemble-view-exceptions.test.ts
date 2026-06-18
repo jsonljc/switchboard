@@ -80,4 +80,36 @@ describe("assembleViewExceptions", () => {
     expect(result).toHaveLength(1);
     expect("detail" in result[0]!).toBe(false);
   });
+
+  it("suppresses a persisted code listed in suppressPersistedCodes (stale missing_consent drop)", () => {
+    // missing_consent is not recomputable here (the live recompute omits it when consent is
+    // not_applicable), so without suppression it would carry forward stale. The set drops it.
+    const recomputable: ExceptionEntry[] = [];
+    const persisted: SerializedExceptionEntry[] = [
+      { code: "missing_consent", raisedAt: isoEarlier, resolvedAt: null },
+    ];
+    const result = assembleViewExceptions(recomputable, persisted, new Set(["missing_consent"]));
+    expect(result).toHaveLength(0);
+  });
+
+  it("carries a persisted missing_consent when it is NOT in the suppression set (legit signal kept)", () => {
+    const recomputable: ExceptionEntry[] = [];
+    const persisted: SerializedExceptionEntry[] = [
+      { code: "missing_consent", raisedAt: isoEarlier, resolvedAt: null },
+    ];
+    // Empty suppression set (the non-null-jurisdiction caller) -> the persisted entry survives.
+    const result = assembleViewExceptions(recomputable, persisted, new Set());
+    expect(result).toHaveLength(1);
+    expect(result[0]!.code).toBe("missing_consent");
+  });
+
+  it("suppression does not touch a different persisted code", () => {
+    const recomputable: ExceptionEntry[] = [];
+    const persisted: SerializedExceptionEntry[] = [
+      { code: "missing_consent", raisedAt: isoEarlier, resolvedAt: null },
+      { code: "duplicate_contact_risk", raisedAt: isoEarlier, resolvedAt: null },
+    ];
+    const result = assembleViewExceptions(recomputable, persisted, new Set(["missing_consent"]));
+    expect(result.map((e) => e.code)).toEqual(["duplicate_contact_risk"]);
+  });
 });

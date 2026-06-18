@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   GovernanceConfigSchema,
   GovernanceModeSchema,
@@ -218,6 +218,69 @@ describe("resolveConsentStateConfig", () => {
       consentState: { mode: "enforce" },
     });
     expect(resolveConsentStateConfig(config)).toEqual({ mode: "enforce" });
+  });
+
+  it("coerces a corrupt consentState.mode enum to off instead of throwing", () => {
+    // A stored config whose consentState.mode is not a valid GovernanceMode must NOT crash the
+    // booking turn — it falls back to the documented "off" default (fail-safe, no enforcement).
+    const corrupt = {
+      jurisdiction: "SG",
+      clinicType: "medical",
+      consentState: { mode: "audit" },
+    } as unknown as Parameters<typeof resolveConsentStateConfig>[0];
+    expect(() => resolveConsentStateConfig(corrupt)).not.toThrow();
+    expect(resolveConsentStateConfig(corrupt)).toEqual({ mode: "off" });
+  });
+
+  it("coerces a wholly non-object consentState sub-block to off", () => {
+    const corrupt = {
+      jurisdiction: "SG",
+      clinicType: "medical",
+      consentState: "enforce",
+    } as unknown as Parameters<typeof resolveConsentStateConfig>[0];
+    expect(resolveConsentStateConfig(corrupt)).toEqual({ mode: "off" });
+  });
+
+  describe("corrupt-config telemetry", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("logs a console.error when the stored config is corrupt, then still falls back to off", () => {
+      // The fail-open coercion silently disables PDPA enforcement org-wide across the three consent
+      // gates; the helper MUST emit telemetry before returning off so a corrupt config is not invisible.
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const corrupt = {
+        jurisdiction: "SG",
+        clinicType: "medical",
+        consentState: { mode: "audit" },
+      } as unknown as Parameters<typeof resolveConsentStateConfig>[0];
+
+      const result = resolveConsentStateConfig(corrupt);
+
+      expect(result).toEqual({ mode: "off" });
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const [message, context] = errorSpy.mock.calls[0]!;
+      expect(String(message)).toContain("consentState");
+      // The logged context carries only Zod issue path+code (field name + validation kind), never
+      // the raw value/message — assert the offending field is named and no value is leaked.
+      const serialized = JSON.stringify(context);
+      expect(serialized).toContain("mode");
+      // The invalid stored value ("audit") must NOT appear in the telemetry payload.
+      expect(serialized).not.toContain("audit");
+    });
+
+    it("does NOT log when the stored config parses cleanly", () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const ok = {
+        jurisdiction: "SG",
+        clinicType: "medical",
+        consentState: { mode: "enforce" },
+      } as unknown as Parameters<typeof resolveConsentStateConfig>[0];
+
+      expect(resolveConsentStateConfig(ok)).toEqual({ mode: "enforce" });
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
   });
 });
 

@@ -1,3 +1,4 @@
+import type { PdpaJurisdiction } from "@switchboard/schemas";
 import { buildReceiptedBookingData } from "../../receipts/build-receipted-booking-data.js";
 
 /** Shared P2002 (unique-constraint) classifier for the booking transaction. */
@@ -24,6 +25,7 @@ export interface ReceiptedBookingIssuanceTx {
       leadgenId?: string | null;
       sourceType?: string | null;
       firstTouchChannel?: string | null;
+      pdpaJurisdiction?: string | null;
       consentGrantedAt?: Date | null;
       consentRevokedAt?: Date | null;
     } | null>;
@@ -81,6 +83,7 @@ export async function issueReceiptedBookingInTx(
       leadgenId: true,
       sourceType: true,
       firstTouchChannel: true,
+      pdpaJurisdiction: true,
       consentGrantedAt: true,
       consentRevokedAt: true,
     },
@@ -95,6 +98,7 @@ export async function issueReceiptedBookingInTx(
       sourceType: evidenceContact?.sourceType ?? null,
       sourceChannel: evidenceContact?.firstTouchChannel ?? null,
     },
+    pdpaJurisdiction: (evidenceContact?.pdpaJurisdiction ?? null) as PdpaJurisdiction | null,
     consentGrantedAt: evidenceContact?.consentGrantedAt ?? null,
     consentRevokedAt: evidenceContact?.consentRevokedAt ?? null,
     estimatedValueCents: args.estimatedValueCents,

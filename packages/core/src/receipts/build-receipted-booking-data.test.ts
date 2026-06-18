@@ -26,6 +26,7 @@ describe("buildReceiptedBookingData", () => {
     const data = buildReceiptedBookingData({
       ...base,
       evidence: {}, // no source -> unattributed
+      pdpaJurisdiction: "SG", // in scope -> absent consent raises missing_consent
       consentGrantedAt: null, // -> missing_consent
       consentRevokedAt: null,
       estimatedValueCents: null,
@@ -46,6 +47,19 @@ describe("buildReceiptedBookingData", () => {
       attributionUpdatedAt: now.toISOString(),
       lastEvaluatedAt: now.toISOString(),
     });
+  });
+
+  it("does NOT raise missing_consent at issuance for a null-jurisdiction contact", () => {
+    const data = buildReceiptedBookingData({
+      ...base,
+      evidence: { sourceAdId: "ad-9" }, // attributed -> no missing_source
+      pdpaJurisdiction: null, // not-applicable -> no missing_consent even with absent consent
+      consentGrantedAt: null,
+      consentRevokedAt: null,
+      estimatedValueCents: null,
+    });
+    expect(data.exceptions.map((e) => e.code)).not.toContain("missing_consent");
+    expect(data.exceptions).toEqual([]);
   });
 
   it("nulls the snapshot for absent/NaN/negative/non-finite estimates (NaN-safe)", () => {

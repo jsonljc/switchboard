@@ -83,7 +83,23 @@ export type ConsentStateConfig = z.infer<typeof ConsentStateConfigSchema>;
 
 export function resolveConsentStateConfig(config: GovernanceConfig | null): ConsentStateConfig {
   const raw = (config as unknown as Record<string, unknown> | null)?.consentState;
-  return ConsentStateConfigSchema.parse(raw ?? {});
+  // Fail-safe: a corrupt stored sub-block (bad mode enum, non-object) must NOT throw and crash the
+  // booking turn. Coerce to the documented "off" default (no consent-state mutation, no enforcement).
+  // This helper is also the PdpaConsentGateHook read site, so the hook inherits the same coercion.
+  const parsed = ConsentStateConfigSchema.safeParse(raw ?? {});
+  if (!parsed.success) {
+    // The fail-open coercion to "off" silently disables PDPA enforcement for this org across the
+    // three consent gates (enforcement / revocation / pdpa). Emit telemetry so a corrupt config is
+    // not invisible. Log ONLY the Zod issue path+code (field name + validation kind) — never the
+    // raw value or Zod message, which can echo stored input; the consentState sub-block carries no
+    // PII/PHI (no phone/email/name), but path+code keeps it airtight by construction.
+    console.error(
+      "[governance-config] corrupt consentState sub-block; failing open to mode=off (PDPA enforcement disabled for this org)",
+      { issues: parsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+    );
+    return { mode: "off" };
+  }
+  return parsed.data;
 }
 
 /**
