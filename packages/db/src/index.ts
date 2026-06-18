@@ -221,6 +221,13 @@ export {
   buildRileyReallocateApprovalPolicyInput,
   seedRileyReallocatePolicies,
 } from "./seed/riley-budget-governance.js";
+export {
+  buildRobinRecoveryAllowPolicyInput,
+  buildRobinRecoveryApprovalPolicyInput,
+  robinRecoveryAllowPolicyId,
+  robinRecoveryApprovalPolicyId,
+  seedRobinRecoveryPolicies,
+} from "./seed/robin-recovery-governance.js";
 export { setRileyPauseSelfExecution } from "./seed/riley-pause-flag-toggle.js";
 export type { CapabilityAuditRecorder } from "./seed/riley-pause-flag-toggle.js";
 export {

@@ -12,6 +12,7 @@ import { seedMiraPilotOrgs } from "../src/seed/seed-mira-pilot-orgs.js";
 import { seedMiraDemoCreatives } from "../src/seed/seed-mira-demo-creatives.js";
 import { seedMiraCreativeDeployment } from "../src/seed/seed-mira-creative-deployment.js";
 import { seedRileyAdOptimizerDeployment } from "../src/seed/seed-riley-ad-optimizer-deployment.js";
+import { seedRobinRecoveryPolicies } from "../src/seed/robin-recovery-governance.js";
 
 const prisma = new PrismaClient();
 
@@ -603,7 +604,12 @@ async function main() {
   // policies (seedRileyPausePolicies) land atomically: a mid-seed crash can never
   // leave the allow policy alone (which self-executes). Mirrors the production
   // provisionOrgAgentDeployments path, which also runs this inside $transaction.
-  await prisma.$transaction((tx) => seedRileyAdOptimizerDeployment(tx, "org_dev"));
+  await prisma.$transaction(async (tx) => {
+    await seedRileyAdOptimizerDeployment(tx, "org_dev");
+    // Robin v1 recovery gate for the dev org, mirroring the prod provision path so org_dev can
+    // exercise the governed campaign locally.
+    await seedRobinRecoveryPolicies(tx, "org_dev");
+  });
   console.warn("Seeded Riley ad-optimizer deployment for org_dev");
 
   // ── Marketplace Demo Data ──
