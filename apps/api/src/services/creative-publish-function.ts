@@ -19,16 +19,30 @@ export const PARKED_PAUSED = CREATIVE_META_PUBLISH_STATUS.parkedPaused;
 export const PAUSED_DRAFT_SUMMARY =
   "Created paused Meta draft package (review & activate in Ads Manager)";
 
-// Placeholder ad content the operator finalizes in Ads Manager (the locked "parked
-// draft" framing). The campaign is PAUSED so the budget never spends. A currency-aware
-// minimum budget is a documented go-live refinement (publish spec sections 6.6 / 11).
+// The campaign is PAUSED so the budget never spends; the operator finalizes targeting +
+// budget in Ads Manager (the locked "parked draft" framing). A currency-aware minimum
+// budget is a documented go-live refinement (publish spec sections 6.6 / 11).
 const MIN_VALID_PAUSED_DAILY_BUDGET_MINOR_UNITS = 500; // ~5 units of account currency
-const DRAFT_OBJECTIVE = "OUTCOME_LEADS";
+
+// Click-to-WhatsApp (CTWA) funnel shape. Meta objectives are IMMUTABLE after create, so a
+// CTWA-intended ad MUST be born in this shape or it can never serve the WhatsApp funnel:
+// OUTCOME_ENGAGEMENT objective, a WHATSAPP ad-set destination, a WHATSAPP_MESSAGE CTA, and a
+// promoted_object{ page_id } threaded from the connection/org config (see pre.pageId below).
+const DRAFT_OBJECTIVE = "OUTCOME_ENGAGEMENT";
 const DRAFT_BID_STRATEGY = "LOWEST_COST_WITHOUT_CAP";
-const DRAFT_OPTIMIZATION_GOAL = "LEAD_GENERATION";
-const DRAFT_TARGETING: Record<string, unknown> = { geo_locations: { countries: ["SG"] } };
-const DRAFT_CTA = "LEARN_MORE";
-const DRAFT_LINK_PLACEHOLDER = "https://switchboard.example/finalize-in-ads-manager";
+// Conversation-optimized delivery for the click-to-message funnel.
+const DRAFT_OPTIMIZATION_GOAL = "CONVERSATIONS";
+const DRAFT_DESTINATION_TYPE = "WHATSAPP";
+// How the ad set is charged. IMPRESSIONS is the broadly-valid default for OUTCOME_ENGAGEMENT.
+const DRAFT_BILLING_EVENT = "IMPRESSIONS";
+// Explicit "no regulated category". Meta requires special_ad_categories on campaign create.
+const DRAFT_SPECIAL_AD_CATEGORIES: string[] = [];
+// age_min:18 is required for WhatsApp-destination ad sets.
+const DRAFT_TARGETING: Record<string, unknown> = {
+  geo_locations: { countries: ["SG"] },
+  age_min: 18,
+};
+const DRAFT_CTA = "WHATSAPP_MESSAGE";
 
 /** Minimal Inngest step surface used here (mirrors meta-token-refresh.ts). */
 export interface StepTools {
@@ -278,6 +292,7 @@ export async function executeCreativePublish(
       objective: DRAFT_OBJECTIVE,
       budget: { daily: MIN_VALID_PAUSED_DAILY_BUDGET_MINOR_UNITS },
       bidStrategy: DRAFT_BID_STRATEGY,
+      specialAdCategories: DRAFT_SPECIAL_AD_CATEGORIES,
     });
     await deps.jobStore.updatePublishFields(organizationId, jobId, { metaCampaignId: c.id });
     return c.id;
@@ -291,6 +306,11 @@ export async function executeCreativePublish(
       name: draftName(pre.job),
       targeting: DRAFT_TARGETING,
       optimizationGoal: DRAFT_OPTIMIZATION_GOAL,
+      destinationType: DRAFT_DESTINATION_TYPE,
+      // page_id is threaded from the resolved publish context (connection/org config),
+      // never hardcoded — it routes the CTWA conversation to this org's WhatsApp funnel.
+      promotedObject: { page_id: pre.pageId },
+      billingEvent: DRAFT_BILLING_EVENT,
     });
     await deps.jobStore.updatePublishFields(organizationId, jobId, { metaAdSetId: s.id });
     return s.id;
@@ -304,7 +324,8 @@ export async function executeCreativePublish(
       pageId: pre.pageId,
       videoId: metaVideoId,
       message: pre.job.productDescription,
-      linkUrl: DRAFT_LINK_PLACEHOLDER,
+      // No linkUrl: a WHATSAPP_MESSAGE CTA targets the ad set's promoted_object page,
+      // not a click-through URL.
       callToActionType: DRAFT_CTA,
     });
     await deps.jobStore.updatePublishFields(organizationId, jobId, { metaCreativeId: cr.id });

@@ -143,6 +143,31 @@ describe("executeCreativePublish", () => {
     expect(store._row().metaPublishStatus).toBe(PARKED_PAUSED);
   });
 
+  it("shapes the draft package for the CTWA WhatsApp funnel (objective immutable post-create)", async () => {
+    // Meta objectives are IMMUTABLE after create, so the published package MUST be born
+    // in CTWA shape or it can never serve the WhatsApp click-to-message funnel:
+    //  - campaign: OUTCOME_ENGAGEMENT + special_ad_categories present (Meta requires it).
+    //  - ad set: destination_type WHATSAPP + promoted_object{ page_id } (threaded from the
+    //    connection/org config, never hardcoded) + a billing_event + age_min:18 targeting.
+    //  - creative: a WHATSAPP_MESSAGE call to action.
+    const { d, ads } = deps();
+    await executeCreativePublish({ jobId: JOB, organizationId: ORG }, step, d);
+
+    const campaign = ads.createDraftCampaign.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(campaign.objective).toBe("OUTCOME_ENGAGEMENT");
+    expect(campaign.specialAdCategories).toEqual([]);
+
+    const adSet = ads.createDraftAdSet.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(adSet.destinationType).toBe("WHATSAPP");
+    // pageId is threaded from the resolved publish context (config), not a literal.
+    expect(adSet.promotedObject).toEqual({ page_id: "page_1" });
+    expect(adSet.billingEvent).toBeDefined();
+    expect((adSet.targeting as Record<string, unknown>).age_min).toBe(18);
+
+    const creative = ads.createAdCreative.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(creative.callToActionType).toBe("WHATSAPP_MESSAGE");
+  });
+
   it("resumes a partial job: reuses video + campaign, no duplicate creates", async () => {
     const store = makeStore({ ...JOB_BASE, metaVideoId: "vid_1", metaCampaignId: "camp_1" });
     const { d, ads } = deps({ store });
