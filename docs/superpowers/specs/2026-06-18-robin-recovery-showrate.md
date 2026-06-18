@@ -109,10 +109,18 @@ Robin. Ground truth on the gate mechanism:
   recipient count without re-architecting the post-processor.
 
 **v1 gate (chosen, leanest correct):** register a `robin.recovery_campaign.send` intent that is **not**
-`system_auto_approved`, and seed an anchored `require_approval` policy for it (org-scoped, mandatory),
-mirroring `riley-budget-governance`. Every recovery campaign therefore parks for manager sign-off
-through the existing lifecycle (park -> notify -> approve -> dispatch). This is the mass-outbound gate
-in its simplest correct form: nothing in a campaign sends without a human approving the campaign.
+`system_auto_approved` (so it does not short-circuit the approval lookup), and seed an anchored
+governance policy unit for it that yields `require_approval`, mirroring `riley-budget-governance`. The
+implementation follows the Riley pattern exactly, not a lone policy: an anchored **allow** policy
+paired with a mandatory **require_approval** policy for the same intent (the seed's own doctrine is
+"never seed one without the other", because the engine default-denies an unmatched intent), plus a
+**real-gate seed test** asserting that a submitted campaign actually parks, so the allow/approval
+coupling cannot silently drift. (A lone require_approval policy does happen to work, the engine flips a
+null decision to allow while setting the approval override at `policy-engine.ts:329-331`, but matching
+the precedent and its test is the safer choice.) Every recovery campaign therefore parks for manager
+sign-off through the existing lifecycle (park -> notify -> approve -> dispatch). This is the
+mass-outbound gate in its simplest correct form: nothing in a campaign sends without a human approving
+the campaign.
 
 **Deferred to v2 (recipient-count auto-approve-below-N):** relaxing small campaigns to auto-execute
 needs either a policy rule conditioned on a `recipientCount` payload field (a policy-condition
@@ -160,7 +168,7 @@ worth building), but every layer is fail-safe and default-off:
 - The flag ships with its producer (the resolver + the cron's read of it) in the **same PR**, tested
   from real defaults so an unconfigured org is provably inert.
 
-Nothing reaches a patient until an operator flips the org to `active` **and** approves the campaign
+Nothing reaches a patient until an operator flips the org to `enforce` **and** approves the campaign
 **and** the recipient passes the consent gate. The compliance question "must every recovery send be
 manager-approved?" is therefore answered **yes, by construction** in v1. This is why v1 needs no
 compliance ruling to build; see "Go-live levers" for the operational decisions the owner owns.
