@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ProactiveSender } from "../proactive-sender.js";
+import { ProactiveSender, WhatsAppWindowClosedError } from "../proactive-sender.js";
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -99,6 +99,49 @@ describe("ProactiveSender", () => {
 
       expect(mockFetch).not.toHaveBeenCalled();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("No WhatsApp credentials"));
+    });
+
+    it("throws WhatsAppWindowClosedError when the 24h window is expired (no template)", async () => {
+      const sender = new ProactiveSender({
+        credentials: { whatsapp: { token: "wa-token", phoneNumberId: "phone_1" } },
+        isWithinWindow: async () => false,
+      });
+
+      await expect(
+        sender.sendProactive("+15551234567", "whatsapp", "We can fit you in at 3pm."),
+      ).rejects.toBeInstanceOf(WhatsAppWindowClosedError);
+      // The window is closed, so we must NOT silently hit the Graph API and report success.
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("masks the recipient phone in the WhatsAppWindowClosedError message", async () => {
+      const sender = new ProactiveSender({
+        credentials: { whatsapp: { token: "wa-token", phoneNumberId: "phone_1" } },
+        isWithinWindow: async () => false,
+      });
+
+      const err = await sender
+        .sendProactive("+6591234567", "whatsapp", "hi")
+        .then(() => null)
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(WhatsAppWindowClosedError);
+      const message = (err as Error).message;
+      expect(message).toContain("…4567");
+      expect(message).not.toContain("6591234567");
+    });
+
+    it("sends normally when the window is open (isWithinWindow true)", async () => {
+      const sender = new ProactiveSender({
+        credentials: { whatsapp: { token: "wa-token", phoneNumberId: "phone_1" } },
+        isWithinWindow: async () => true,
+      });
+
+      await sender.sendProactive("+15551234567", "whatsapp", "in-window msg");
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url] = mockFetch.mock.calls[0]!;
+      expect(url).toBe("https://graph.facebook.com/v21.0/phone_1/messages");
     });
   });
 

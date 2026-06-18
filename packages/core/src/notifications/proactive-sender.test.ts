@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { ProactiveSender } from "./proactive-sender.js";
+import { ProactiveSender, WhatsAppWindowClosedError } from "./proactive-sender.js";
 
 const WA_CREDS = { whatsapp: { token: "t", phoneNumberId: "pn" } };
 
@@ -9,28 +9,38 @@ describe("ProactiveSender — phone masking in logs (F10/PDPA)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("masks the recipient phone in the 24h-window-expired warning", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("masks the recipient phone in the 24h-window-closed error", async () => {
     const sender = new ProactiveSender({
       credentials: WA_CREDS,
       isWithinWindow: async () => false,
     });
 
-    await sender.sendProactive("+6591234567", "whatsapp", "hello");
+    // The window is closed with no approved template: the send must THROW (so the
+    // caller can roll back and surface an honest failure) rather than report
+    // success. The thrown error masks the recipient phone (F10/PDPA).
+    const err = await sender
+      .sendProactive("+6591234567", "whatsapp", "hello")
+      .then(() => null)
+      .catch((e: unknown) => e);
 
-    const logged = warn.mock.calls.map((c) => String(c[0])).join("\n");
-    expect(logged).toContain("…4567");
-    expect(logged).not.toContain("6591234567");
-    expect(logged).not.toContain("+6591234567");
+    expect(err).toBeInstanceOf(WhatsAppWindowClosedError);
+    const message = (err as Error).message;
+    expect(message).toContain("…4567");
+    expect(message).not.toContain("6591234567");
+    expect(message).not.toContain("+6591234567");
   });
 
   it("masks the phone in the rate-limit warning on the whatsapp channel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, status: 200, statusText: "OK" })),
+    );
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    // isWithinWindow=false makes each send return before any fetch, so 20 sends
-    // just consume the daily budget; the 21st trips the rate limiter.
+    // The window is open, so 20 sends deliver and consume the daily budget; the
+    // 21st trips the rate limiter, whose warning masks the WhatsApp phone.
     const sender = new ProactiveSender({
       credentials: WA_CREDS,
-      isWithinWindow: async () => false,
+      isWithinWindow: async () => true,
     });
 
     for (let i = 0; i < 21; i++) await sender.sendProactive("+6591234567", "whatsapp", "hello");

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { ConversationStateNotFoundError, ContactNotFoundError } from "@switchboard/core/platform";
+import { WhatsAppWindowClosedError } from "@switchboard/core";
 import type { AgentNotifier } from "@switchboard/core";
 import { buildConversationTestApp } from "./build-conversation-test-app.js";
 
@@ -394,6 +395,54 @@ describe("POST /api/escalations/:id/reply", () => {
     expect(datas).toContainEqual(
       expect.objectContaining({ status: "pending", acknowledgedAt: null }),
     );
+  });
+
+  it("rolls back the release and returns 502 when the WhatsApp 24h window is closed", async () => {
+    // The send fails because the recipient is outside the 24h window with no
+    // approved template (ProactiveSender throws WhatsAppWindowClosedError). The
+    // route must NOT report success: it rolls the release back to pending and
+    // returns an honest 502 so the owner is not told "Handed back" while the
+    // customer got silence.
+    const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
+    const sendProactive = vi.fn().mockRejectedValue(new WhatsAppWindowClosedError("…4567"));
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const workTraceStore = makeWorkTraceStore();
+    const app = await buildConversationTestApp({
+      conversationStateStore: {
+        setOverride: vi.fn(),
+        sendOperatorMessage: vi.fn(),
+        releaseEscalationToAi,
+      },
+      workTraceStore,
+      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      prisma: makePrisma({ handoffUpdateMany: updateMany }),
+      organizationId: "org_1",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/escalations/esc-1/reply",
+      payload: { message: "We can fit you in at 3pm tomorrow." },
+    });
+
+    expect(res.statusCode).toBe(502);
+    const body = JSON.parse(res.body) as { replySent: boolean };
+    expect(body.replySent).toBe(false);
+    // The optimistic release is rolled back to pending so the handoff reopens.
+    const datas = updateMany.mock.calls.map(
+      (c) => (c[0] as { data: Record<string, unknown> }).data,
+    );
+    expect(datas).toContainEqual(expect.objectContaining({ status: "released" }));
+    expect(datas).toContainEqual(
+      expect.objectContaining({ status: "pending", acknowledgedAt: null }),
+    );
+    // The non-delivery is recorded on the work trace (failed, not delivered).
+    expect(workTraceStore.update.mock.calls[0]![1]).toMatchObject({
+      parameters: {
+        message: { deliveryAttempted: true, deliveryResult: expect.stringContaining("window") },
+      },
+      outcome: "completed",
+    });
   });
 
   it("releases the handoff org-scoped and does not roll back when delivery succeeds", async () => {

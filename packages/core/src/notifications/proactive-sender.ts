@@ -8,6 +8,26 @@
 
 import { maskPhone } from "../audit/mask-phone.js";
 
+/**
+ * Thrown when a free-form WhatsApp message cannot be sent because the recipient
+ * is outside the 24h customer-care window and no approved template was supplied.
+ *
+ * Free-form sends outside the window are silently dropped by Meta, so returning
+ * (no throw) would let callers report a delivery that never happened. Callers
+ * (e.g. the escalation reply route) catch this to roll back any state they
+ * mutated optimistically and surface an honest failure instead of phantom
+ * success. The recipient phone is masked in the message (F10/PDPA).
+ */
+export class WhatsAppWindowClosedError extends Error {
+  readonly kind = "whatsapp_window_closed" as const;
+  constructor(maskedRecipient: string) {
+    super(
+      `WhatsApp 24h window closed for ${maskedRecipient} and no approved template supplied: free-form message not delivered.`,
+    );
+    this.name = "WhatsAppWindowClosedError";
+  }
+}
+
 /** Interface for sending proactive messages to business owners. */
 export interface AgentNotifier {
   sendProactive(chatId: string, channelType: string, message: string): Promise<void>;
@@ -133,14 +153,18 @@ export class ProactiveSender implements AgentNotifier {
       return;
     }
 
-    // Check 24h window if callback is configured
+    // Check 24h window if callback is configured. Outside the window, a free-form
+    // message is silently dropped by Meta; with no approved template to substitute
+    // (template fallback is a separate workstream), THROW so the caller does not
+    // mistake a non-delivery for success. The recipient phone is masked (F10/PDPA).
     if (this.isWithinWindow) {
       const withinWindow = await this.isWithinWindow(to);
       if (!withinWindow) {
+        const masked = maskPhone(to);
         console.warn(
-          `[ProactiveSender] WhatsApp 24h window expired for ${maskPhone(to)} — skipping freeform message`,
+          `[ProactiveSender] WhatsApp 24h window expired for ${masked}: freeform message not delivered`,
         );
-        return;
+        throw new WhatsAppWindowClosedError(masked);
       }
     }
 
