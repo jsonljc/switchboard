@@ -18,6 +18,7 @@ import { registerSlackFormEncodedParser } from "./routes/slack-form-parser.js";
 import { TelegramAdapter } from "./adapters/telegram.js";
 import { HttpPlatformIngressAdapter } from "./gateway/http-platform-ingress-adapter.js";
 import { buildCtwaIngressSubmitRequest } from "./gateway/ctwa-ingress-request.js";
+import { buildCtwaCampaignResolver } from "./gateway/ctwa-campaign-resolver.js";
 import { StaticDeploymentResolver } from "./single-tenant/static-deployment-resolver.js";
 import { InMemoryGatewayConversationStore } from "./single-tenant/memory-conversation-store.js";
 import { FailedMessageStore } from "./dlq/failed-message-store.js";
@@ -25,7 +26,7 @@ import { registerManagedWebhookRoutes } from "./routes/managed-webhook.js";
 import { chatHealthRoutes } from "./routes/health.js";
 import { buildWhatsAppStatusBridge } from "./bridges/whatsapp-test-send-status-bridge.js";
 import { makeWhatsAppStatusHandler } from "./bridges/whatsapp-status-persistence.js";
-import { CtwaAdapter } from "@switchboard/ad-optimizer";
+import { CtwaAdapter, MetaAdsClient } from "@switchboard/ad-optimizer";
 
 async function main() {
   // Initialize Sentry before anything else
@@ -175,6 +176,35 @@ async function main() {
     return reply.code(statusCode).send({ error: message, statusCode });
   });
 
+  // CTWA campaign-id resolver — org-scoped. The adapter writes `sourceCampaignId`
+  // onto the lead.intake attribution so the creative -> booked-booking join (the
+  // headline receipted-bookings-per-creative metric) is populated. Without this
+  // dep the metric is structurally zero for every CTWA lead. Resolution needs the
+  // org's Meta credentials (DB + decrypt + MetaAdsClient), which ad-optimizer
+  // (Layer 2) cannot do, so it is injected here. Only available when DATABASE_URL
+  // is set (managed channels); the dev/no-DB path leaves it unwired and the
+  // adapter submits without sourceCampaignId. Credentials are scoped to the lead's
+  // org via the canonical Meta Ads connection lookup (serviceId "meta-ads",
+  // status "connected"), matching apps/api dashboard-reports resolution.
+  let resolveCtwaCampaignId:
+    | ((adId: string, ctx: { organizationId: string }) => Promise<string | null>)
+    | undefined;
+  if (healthPrisma) {
+    const prisma = healthPrisma;
+    const { decryptCredentials } = await import("@switchboard/db");
+    resolveCtwaCampaignId = buildCtwaCampaignResolver({
+      lookupConnection: (organizationId) =>
+        prisma.connection.findFirst({
+          where: { organizationId, serviceId: "meta-ads", status: "connected" },
+          select: { credentials: true, externalAccountId: true },
+        }),
+      // The `credentials` column is typed JsonValue but always stores the base64
+      // string produced by encryptCredentials, so forward it as-is.
+      decryptCredentials: (credentials) => decryptCredentials(credentials as string),
+      createAdsClient: (config) => new MetaAdsClient(config),
+    });
+  }
+
   // CTWA lead intake adapter — singleton. Inbound WhatsApp messages tagged with
   // `ctwa_clid` are forwarded through PlatformIngress.submit(intent="lead.intake")
   // so a Contact gets created with sourceType="ctwa". The shim below adapts the
@@ -195,6 +225,7 @@ async function main() {
       },
     },
     now: () => new Date(),
+    ...(resolveCtwaCampaignId ? { resolveCampaignId: resolveCtwaCampaignId } : {}),
   });
 
   // --- Managed runtime registry (multi-tenant) + widget endpoints ---
