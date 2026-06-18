@@ -236,3 +236,6 @@ export * from "./mira-compose.js";
 
 // Scheduled follow-up types
 export * from "./scheduled-follow-up.js";
+
+// Robin v1 no-show recovery campaign params (the frozen cohort the manager approves)
+export * from "./robin-recovery.js";

@@ -314,6 +314,9 @@ export * from "./consent/index.js";
 // Scheduled Follow-Up (durable queue interface for Alex re-engagement nudges)
 export * from "./scheduled-follow-up/index.js";
 
+// Robin v1 no-show recovery cohort selection (pure)
+export * from "./recovery/index.js";
+
 // Scheduled Reminder (idempotent booking-driven appointment reminder queue)
 export * from "./scheduled-reminder/index.js";
 

@@ -745,6 +745,8 @@ export async function buildServer() {
 
   const { resolveAuthoritativeDeployment } =
     await import("./bootstrap/platform-deployment-resolver.js");
+  const { ROBIN_RECOVERY_SEND_INTENT } =
+    await import("./services/workflows/robin-recovery-request.js");
 
   const { PrismaBillingEntitlementResolver } =
     await import("./services/billing-entitlement-resolver.js");
@@ -778,10 +780,14 @@ export async function buildServer() {
     modeRegistry,
     governanceGate: platformGovernanceGate,
     deploymentResolver: resolveAuthoritativeDeployment(deploymentResolver, {
-      // Non-skill operator_mutation intents (cron/owner) resolve to a platform-direct context
-      // instead of a strict skillSlug lookup that throws deployment_not_found for their intent prefix.
-      isOperatorMutationIntent: (intent) =>
-        intentRegistry.lookup(intent)?.defaultMode === "operator_mutation",
+      // Non-skill, platform-initiated intents resolve to a platform-direct context instead of a
+      // strict skillSlug lookup that throws deployment_not_found for their intent prefix:
+      //  - operator_mutation crons (Ledger/receipt/booking), system_auto_approved; and
+      //  - Robin's no-show recovery campaign, which PARKS via a seeded mandatory require_approval
+      //    policy (platform-direct supervised/0 cannot relax mandatory, so this is safe).
+      isPlatformDirectIntent: (intent) =>
+        intentRegistry.lookup(intent)?.defaultMode === "operator_mutation" ||
+        intent === ROBIN_RECOVERY_SEND_INTENT,
     }),
     traceStore: workTraceStore,
     lifecycleService: lifecycleService ?? undefined,

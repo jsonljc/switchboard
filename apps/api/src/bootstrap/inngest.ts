@@ -396,8 +396,10 @@ export async function registerInngest(
         // same-typed field swap in a hand re-map would ship silently).
         candidate,
         // D6-3: default ON (a fresh deploy with the var unset gets enrichment). Only an
-        // explicit "false" opts out. Safe: resolveHandoffBrief falls back to the synthesized
-        // brief on every brain failure, so enabling it can never block a handoff.
+        // explicit "false" opts out. This `!== "false"` default-ON is INVERTED vs every other
+        // Riley flag (which default OFF on `=== "true"`); intentional, and safe because
+        // resolveHandoffBrief falls back to the synthesized brief on every brain failure, so
+        // enabling it can never block a handoff.
         readFlag: () => process.env["MIRA_HANDOFF_BRIEF_ENRICHMENT_ENABLED"] !== "false",
         synthesize: async () =>
           synthesizeCreativeBrief(await businessFactsStore.get(candidate.organizationId)),

@@ -481,4 +481,46 @@ describe("PrismaBookingStore reschedule/cancel/find", () => {
       });
     });
   });
+
+  describe("findNoShowRecoveryCandidates", () => {
+    it("queries org-scoped no_show bookings in the window, bounded, and maps rows", async () => {
+      const findMany = vi.fn().mockResolvedValue([
+        {
+          id: "bk_1",
+          contactId: "ct_1",
+          service: "Botox",
+          startsAt: new Date("2026-06-03T09:00:00Z"),
+          attendeeName: "Jamie",
+        },
+      ]);
+      const store = new PrismaBookingStore({ booking: { findMany } } as never);
+
+      const rows = await store.findNoShowRecoveryCandidates({
+        orgId: "org_1",
+        from: new Date("2026-06-01T00:00:00Z"),
+        to: new Date("2026-06-08T00:00:00Z"),
+      });
+
+      expect(findMany).toHaveBeenCalledTimes(1);
+      const arg = (findMany.mock.calls[0] as unknown[])[0] as {
+        where: Record<string, unknown>;
+        take: number;
+      };
+      expect(arg.where).toMatchObject({
+        organizationId: "org_1",
+        attendance: "no_show",
+        startsAt: { gte: new Date("2026-06-01T00:00:00Z"), lt: new Date("2026-06-08T00:00:00Z") },
+      });
+      expect(arg.take).toBe(1000);
+      expect(rows).toEqual([
+        {
+          bookingId: "bk_1",
+          contactId: "ct_1",
+          service: "Botox",
+          startsAt: new Date("2026-06-03T09:00:00Z"),
+          attendeeName: "Jamie",
+        },
+      ]);
+    });
+  });
 });

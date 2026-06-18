@@ -42,7 +42,11 @@ export interface SwitchboardMetrics {
    *  no_match, matched_unpriced, no_lookup, read_error}. The match-vs-abstain rate
    *  is the share of `resolved` across the outcomes, self-contained regardless of
    *  pre-resolution aborts. Observability-only; the resolver still abstains (null
-   *  value) for every non-resolved outcome. Labeled by orgId + outcome. */
+   *  value) for every non-resolved outcome. NOTE: `resolved` measures CATALOG
+   *  ALIGNMENT (the booked service matched a priced playbook entry), which is
+   *  narrower than end-to-end booked-value coverage (that also needs the org to have
+   *  a priced playbook and Alex to emit the matching service name). Labeled by orgId
+   *  + outcome. */
   bookedValueResolution: Counter;
   /** F15 — a policy-critical context slot (business-facts, claim-boundaries)
    *  resolved EMPTY for an entitled org running Alex. Observability-only: the

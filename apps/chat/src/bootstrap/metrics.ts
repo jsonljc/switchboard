@@ -200,7 +200,7 @@ export function createPromMetrics(): SwitchboardMetrics {
     ),
     bookedValueResolution: new PromCounter(
       "switchboard_booked_value_resolution_total",
-      "Booked-value resolution outcome per booking.create attempt; outcome in {resolved, no_playbook, no_match, matched_unpriced, no_lookup, read_error}",
+      "Booked-value resolution outcome per booking.create attempt; outcome in {resolved, no_playbook, no_match, matched_unpriced, no_lookup, read_error}. `resolved` measures catalog alignment (the booked service matched a priced playbook entry), narrower than end-to-end booked-value coverage",
       ["orgId", "outcome"],
     ),
     policyContextSlotEmpty: new PromCounter(
