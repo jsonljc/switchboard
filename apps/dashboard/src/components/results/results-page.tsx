@@ -15,6 +15,7 @@ import { VerdictLine } from "./verdict-line";
 import { HeroOutcomes } from "./hero-outcomes";
 import { WhatsWorking } from "./whats-working";
 import { HeldRateTile } from "./held-rate-tile";
+import { RecoveryCandidatesTile } from "./recovery-candidates-tile";
 import { ConsentCompletenessTile } from "./consent-completeness-tile";
 import { ReceiptedBookingsTile } from "./receipted-bookings-tile";
 import { ReceiptedBookingQualityTile } from "./receipted-booking-quality-tile";
@@ -116,6 +117,7 @@ export function ResultsPage() {
                   {!showNoMeta && <ReceiptedBookingsTile model={model} />}
                   {!showNoMeta && <ReceiptedBookingRevenueTile model={model} />}
                   {!showNoMeta && <HeldRateTile model={model} />}
+                  {!showNoMeta && <RecoveryCandidatesTile model={model} />}
                   {!showNoMeta && <ConsentCompletenessTile model={model} />}
                   {!showNoMeta && <ReceiptedBookingQualityTile model={model} />}
                   {!showNoMeta && (

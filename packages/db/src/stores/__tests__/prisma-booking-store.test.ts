@@ -462,4 +462,23 @@ describe("PrismaBookingStore reschedule/cancel/find", () => {
       expect(count).toHaveBeenNthCalledWith(2, { where: { ...base, attendance: "attended" } });
     });
   });
+
+  describe("countNoShowsInWindow", () => {
+    it("counts no_show bookings in [from, to) org-scoped and returns the count", async () => {
+      const prisma = makePrisma();
+      const count = vi.fn().mockResolvedValueOnce(7);
+      prisma.booking.count = count;
+      const from = new Date("2026-06-01T00:00:00Z");
+      const to = new Date("2026-06-15T00:00:00Z");
+      const res = await new PrismaBookingStore(prisma as never).countNoShowsInWindow({
+        orgId: "o1",
+        from,
+        to,
+      });
+      expect(res).toBe(7);
+      expect(count).toHaveBeenCalledWith({
+        where: { organizationId: "o1", attendance: "no_show", startsAt: { gte: from, lt: to } },
+      });
+    });
+  });
 });

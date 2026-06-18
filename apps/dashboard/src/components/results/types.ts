@@ -13,6 +13,7 @@ export type {
   CostBreakdown,
   HeldRateData,
   ConsentCompletenessData,
+  RecoveryCandidatesData,
   ReceiptedBookingsData,
   ReceiptedBookingQualityData,
   ReceiptedBookingWorklistItem,

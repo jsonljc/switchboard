@@ -393,6 +393,7 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     bookings: {
       countExcludingStatuses: async () => 10,
       countMaturedAttendance: async () => ({ matured: 10, attended: 8 }),
+      countNoShowsInWindow: async () => 0,
     },
     opportunities: { countClosedWon: async () => 3 },
     conversions: {

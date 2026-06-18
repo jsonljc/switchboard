@@ -299,4 +299,14 @@ export class PrismaBookingStore {
     ]);
     return { matured, attended };
   }
+
+  async countNoShowsInWindow(input: { orgId: string; from: Date; to: Date }): Promise<number> {
+    return this.prisma.booking.count({
+      where: {
+        organizationId: input.orgId,
+        attendance: "no_show",
+        startsAt: { gte: input.from, lt: input.to },
+      },
+    });
+  }
 }
