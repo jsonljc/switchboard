@@ -473,7 +473,9 @@ describe("createCalendarBookToolFactory", () => {
           leadgenId: "lead_1", // hard lead id => deterministic
           sourceType: "ctwa",
           firstTouchChannel: "instagram",
-          consentGrantedAt: null, // => raises missing_consent even at deterministic attribution
+          // No pdpaJurisdiction => PDPA not_applicable, so an absent consent does NOT
+          // raise missing_consent (evaluateExceptions gates the code on a non-null jurisdiction).
+          consentGrantedAt: null,
           consentRevokedAt: null,
         },
       });
@@ -506,9 +508,13 @@ describe("createCalendarBookToolFactory", () => {
         expectedValueAtIssue: 45000,
         currency: "SGD",
       });
-      expect(data.data.exceptions.map((e) => e.code)).toEqual(["missing_consent"]);
-      // INFALLIBILITY LOCK (same-tx safety): the exceptions Json payload carries no Date objects, so
-      // the in-tx create cannot raise a Prisma Json-validation error and roll back the booking.
+      // Null-jurisdiction contact is not_applicable for consent, so no missing_consent is raised
+      // (and the deterministic attribution raises no missing_source) => the exception set is empty.
+      expect(data.data.exceptions.map((e) => e.code)).toEqual([]);
+      // INFALLIBILITY LOCK (same-tx safety): every exception entry's raisedAt is an ISO string (no Date
+      // objects), so the in-tx create cannot raise a Prisma Json-validation error and roll back the
+      // booking. Vacuously true for the empty set here; the populated-payload serialization proof lives
+      // in build-receipted-booking-data.test.ts / evaluate-exceptions.test.ts.
       expect(data.data.exceptions.every((e) => typeof e.raisedAt === "string")).toBe(true);
     });
 
