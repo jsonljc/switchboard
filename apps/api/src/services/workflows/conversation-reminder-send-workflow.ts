@@ -4,6 +4,15 @@ import type { IntentClass, PdpaJurisdiction } from "@switchboard/schemas";
 
 const REMINDER_INTENT_CLASS: IntentClass = "appointment-reminder";
 
+// Send-reliability additions are kept off the shared "@switchboard/core" import
+// line above (and off its 3-line context window) so they never collide with a
+// sibling change that also widens that import — e.g. the template-approval-overlay
+// work adds `type TemplateApprovalOverlay` to the very same line.
+import { getMetrics } from "@switchboard/core";
+import { resolveWhatsAppSendToken } from "../../lib/whatsapp-send-token.js";
+
+const REMINDER_INTENT = "conversation.reminder.send";
+
 export interface ReminderSendContext {
   consentGrantedAt: Date | string | null;
   consentRevokedAt: Date | string | null;
@@ -79,9 +88,20 @@ export function buildConversationReminderSendWorkflow(
         };
       }
 
-      const accessToken = process.env["WHATSAPP_ACCESS_TOKEN"];
+      const accessToken = resolveWhatsAppSendToken();
       const phoneNumberId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
       if (!accessToken || !phoneNumberId) {
+        // Infra config gap, not a per-contact decision: with no send token/phone id
+        // EVERY reminder for the deployment silently no-ops. Make it loud + countable
+        // (distinct from the benign per-contact skips above) so the dark funnel is visible.
+        console.warn(
+          "[conversation.reminder.send] WhatsApp send token or phone id missing " +
+            "(set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID); reminder skipped org-wide.",
+        );
+        getMetrics().whatsappProactiveSendSkipped.inc({
+          intent: REMINDER_INTENT,
+          reason: "config_missing",
+        });
         return {
           outcome: "completed",
           summary: "WhatsApp not configured; reminder skipped",

@@ -223,6 +223,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "Governance gate verdicts persisted, by deployment, source guard, action, and audit level",
       ["deployment_id", "source_guard", "action", "audit_level"],
     ),
+    whatsappProactiveSendSkipped: new PromCounter(
+      "switchboard_whatsapp_proactive_send_skipped_total",
+      "Proactive WhatsApp send skipped for an infra reason (reason=config_missing => no send token/phone id, the whole deployment dark-funnels); distinct from benign per-contact skips",
+      ["intent", "reason"],
+    ),
   };
 }
 

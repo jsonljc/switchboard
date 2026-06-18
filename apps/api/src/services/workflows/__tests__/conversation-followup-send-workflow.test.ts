@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { buildConversationFollowUpSendWorkflow } from "../conversation-followup-send-workflow.js";
 import type { WhatsAppTemplate } from "@switchboard/core";
+import { setMetrics, createInMemoryMetrics } from "@switchboard/core";
 
 const baseWorkUnit = {
   id: "wu_1",
@@ -67,8 +68,11 @@ describe("conversation.followup.send handler", () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
     delete process.env["WHATSAPP_PHONE_NUMBER_ID"];
+    setMetrics(createInMemoryMetrics());
   });
 
   it("skips (completed, sent:false) for an unsupported channel", async () => {
@@ -134,5 +138,65 @@ describe("conversation.followup.send handler", () => {
     const r = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
     expect(r.outcome).toBe("failed");
     expect(r.error!.code).toBe("WHATSAPP_TEMPLATE_SEND_FAILED");
+  });
+});
+
+// Send-token / config-miss reliability cases live in their OWN describe block,
+// appended at end-of-file rather than threaded into the eligibility describe above,
+// so they never collide with a sibling change that inserts its own cases into that
+// same describe (e.g. the template-approval-overlay work).
+describe("conversation.followup.send handler — send token + config-miss", () => {
+  beforeEach(() => {
+    process.env["WHATSAPP_ACCESS_TOKEN"] = "tok";
+    process.env["WHATSAPP_PHONE_NUMBER_ID"] = "pnid";
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
+    delete process.env["WHATSAPP_PHONE_NUMBER_ID"];
+    setMetrics(createInMemoryMetrics());
+  });
+
+  it("resolves the send token under the legacy WHATSAPP_TOKEN name", async () => {
+    delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    process.env["WHATSAPP_TOKEN"] = "legacy_tok";
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: "wamid_1" }] }) });
+    vi.stubGlobal("fetch", fetchSpy);
+    const wf = buildConversationFollowUpSendWorkflow(makeDeps());
+    const r = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
+    expect(r.outcome).toBe("completed");
+    expect(r.outputs!.sent).toBe(true);
+    const [, init] = fetchSpy.mock.calls[0]!;
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBe(
+      "Bearer legacy_tok",
+    );
+  });
+
+  it("config-miss: warns + increments whatsappProactiveSendSkipped{reason:config_missing}", async () => {
+    delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
+    const metrics = createInMemoryMetrics();
+    const skipSpy = vi.spyOn(metrics.whatsappProactiveSendSkipped, "inc");
+    setMetrics(metrics);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const wf = buildConversationFollowUpSendWorkflow(makeDeps());
+    const r = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
+
+    expect(r.outcome).toBe("completed");
+    expect(r.outputs).toEqual({ sent: false, skipReason: "unsupported_channel" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(skipSpy).toHaveBeenCalledTimes(1);
+    expect(skipSpy).toHaveBeenCalledWith({
+      intent: "conversation.followup.send",
+      reason: "config_missing",
+    });
   });
 });

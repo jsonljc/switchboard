@@ -52,6 +52,16 @@ export interface SwitchboardMetrics {
   skillLlmTokensTotal: Counter;
   skillLlmCostUsdTotal: Counter;
   governanceVerdictsRecorded: Counter;
+  /** A proactive WhatsApp send (reminder/greeting/follow-up) was skipped for an
+   *  INFRASTRUCTURE reason rather than a per-contact eligibility decision. The
+   *  dark-funnel signal: reason="config_missing" means the api service has no
+   *  WhatsApp send token (neither WHATSAPP_ACCESS_TOKEN nor WHATSAPP_TOKEN) or
+   *  no WHATSAPP_PHONE_NUMBER_ID, so EVERY reminder + greeting + follow-up for
+   *  the whole deployment silently no-ops. Distinct from the benign per-contact
+   *  skips (unsupported_channel, consent_pending, missing_contact_phone …) which
+   *  are recorded only as the work outcome's skipReason, never on this counter.
+   *  Labeled by intent + reason. */
+  whatsappProactiveSendSkipped: Counter;
 }
 
 export interface Counter {
@@ -131,5 +141,6 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     skillLlmTokensTotal: new InMemoryCounter(),
     skillLlmCostUsdTotal: new InMemoryCounter(),
     governanceVerdictsRecorded: new InMemoryCounter(),
+    whatsappProactiveSendSkipped: new InMemoryCounter(),
   };
 }

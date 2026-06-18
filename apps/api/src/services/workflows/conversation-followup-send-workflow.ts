@@ -33,6 +33,15 @@ interface FollowUpSendParams {
   followUpId: string;
 }
 
+// Send-reliability additions are kept off the shared "@switchboard/core" import line
+// at the top of the file (and off its 3-line context window) so they never collide
+// with a sibling change that also widens that same import — e.g. the
+// template-approval-overlay work adds `type TemplateApprovalOverlay` to that line.
+import { getMetrics } from "@switchboard/core";
+import { resolveWhatsAppSendToken } from "../../lib/whatsapp-send-token.js";
+
+const FOLLOWUP_INTENT = "conversation.followup.send";
+
 export function buildConversationFollowUpSendWorkflow(
   deps: ConversationFollowUpSendDeps,
 ): WorkflowHandler {
@@ -84,9 +93,20 @@ export function buildConversationFollowUpSendWorkflow(
         };
       }
 
-      const accessToken = process.env["WHATSAPP_ACCESS_TOKEN"];
+      const accessToken = resolveWhatsAppSendToken();
       const phoneNumberId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
       if (!accessToken || !phoneNumberId) {
+        // Infra config gap, not a per-contact decision: with no send token/phone id
+        // EVERY follow-up for the deployment silently no-ops. Make it loud + countable
+        // (distinct from the benign per-contact skips above) so the dark funnel is visible.
+        console.warn(
+          "[conversation.followup.send] WhatsApp send token or phone id missing " +
+            "(set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID); follow-up skipped org-wide.",
+        );
+        getMetrics().whatsappProactiveSendSkipped.inc({
+          intent: FOLLOWUP_INTENT,
+          reason: "config_missing",
+        });
         return {
           outcome: "completed",
           summary: "WhatsApp not configured; follow-up skipped",

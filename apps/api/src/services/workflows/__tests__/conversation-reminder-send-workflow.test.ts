@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { buildConversationReminderSendWorkflow } from "../conversation-reminder-send-workflow.js";
 import type { WhatsAppTemplate } from "@switchboard/core";
+import { setMetrics, createInMemoryMetrics } from "@switchboard/core";
 
 const baseWorkUnit = {
   id: "wu_1",
@@ -69,8 +70,12 @@ describe("conversation.reminder.send handler", () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
     delete process.env["WHATSAPP_PHONE_NUMBER_ID"];
+    // Restore the module-singleton metrics so a spy here does not leak across files.
+    setMetrics(createInMemoryMetrics());
   });
 
   it("skips unsupported channel", async () => {
@@ -151,5 +156,90 @@ describe("conversation.reminder.send handler", () => {
     const res = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
     expect(res.outcome).toBe("failed");
     expect(res.error!.code).toBe("WHATSAPP_TEMPLATE_SEND_FAILED");
+  });
+});
+
+// Send-token / config-miss reliability cases live in their OWN describe block,
+// appended at end-of-file rather than threaded into the eligibility describe above,
+// so they never collide with a sibling change that inserts its own cases into that
+// same describe (e.g. the template-approval-overlay work).
+describe("conversation.reminder.send handler — send token + config-miss", () => {
+  beforeEach(() => {
+    process.env["WHATSAPP_ACCESS_TOKEN"] = "tok";
+    process.env["WHATSAPP_PHONE_NUMBER_ID"] = "pn_1";
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
+    delete process.env["WHATSAPP_PHONE_NUMBER_ID"];
+    // Restore the module-singleton metrics so a spy here does not leak across files.
+    setMetrics(createInMemoryMetrics());
+  });
+
+  it("resolves the send token under the legacy WHATSAPP_TOKEN name", async () => {
+    delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    process.env["WHATSAPP_TOKEN"] = "legacy_tok";
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: "wamid.X" }] }) });
+    vi.stubGlobal("fetch", fetchSpy);
+    const wf = buildConversationReminderSendWorkflow(makeDeps());
+    const res = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
+    expect(res.outcome).toBe("completed");
+    expect(res.outputs).toEqual({ sent: true, messageId: "wamid.X" });
+    const [, init] = fetchSpy.mock.calls[0]!;
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBe(
+      "Bearer legacy_tok",
+    );
+  });
+
+  it("config-miss: warns + increments whatsappProactiveSendSkipped{reason:config_missing}", async () => {
+    delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
+    const metrics = createInMemoryMetrics();
+    const skipSpy = vi.spyOn(metrics.whatsappProactiveSendSkipped, "inc");
+    setMetrics(metrics);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const wf = buildConversationReminderSendWorkflow(makeDeps());
+    const res = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
+
+    expect(res.outcome).toBe("completed");
+    expect(res.outputs).toEqual({ sent: false, skipReason: "unsupported_channel" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(skipSpy).toHaveBeenCalledTimes(1);
+    expect(skipSpy).toHaveBeenCalledWith({
+      intent: "conversation.reminder.send",
+      reason: "config_missing",
+    });
+  });
+
+  it("benign per-contact skip (missing phone) does NOT touch the config-miss metric", async () => {
+    const metrics = createInMemoryMetrics();
+    const skipSpy = vi.spyOn(metrics.whatsappProactiveSendSkipped, "inc");
+    setMetrics(metrics);
+    const wf = buildConversationReminderSendWorkflow(
+      makeDeps({
+        getSendContext: vi.fn().mockResolvedValue({
+          consentGrantedAt: "2026-05-01T00:00:00.000Z",
+          consentRevokedAt: null,
+          pdpaJurisdiction: "SG",
+          messagingOptIn: true,
+          lastWhatsAppInboundAt: new Date("2026-05-12T12:00:00Z"),
+          jurisdiction: "SG",
+          leadName: "Mei",
+          businessName: "Glow Clinic",
+          phone: null,
+        }),
+      }),
+    );
+    const res = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
+    expect(res.outputs).toEqual({ sent: false, skipReason: "missing_contact_phone" });
+    expect(skipSpy).not.toHaveBeenCalled();
   });
 });
