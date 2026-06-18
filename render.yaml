@@ -159,6 +159,15 @@ services:
         sync: false
       - key: CREATIVE_ASSET_PUBLIC_BASE_URL
         sync: false
+      # Creative-pipeline video-production provider keys (Stage 5). Absent => the
+      # pipeline falls back to no-op provider clients in prod (Kling video, HeyGen
+      # avatar UGC, ElevenLabs voice all dormant). Mirrors .env.example.
+      - key: KLING_API_KEY
+        sync: false
+      - key: HEYGEN_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
       # Comma-separated allowed CORS origins; MUST include the Vercel dashboard URL
       # or all dashboard->API calls are rejected in prod (origin:false fail-closed).
       - key: CORS_ORIGIN
