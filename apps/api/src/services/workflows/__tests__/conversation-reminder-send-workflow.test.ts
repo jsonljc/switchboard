@@ -147,6 +147,65 @@ describe("conversation.reminder.send handler", () => {
     ]);
   });
 
+  it("real registry stays blocked when the context carries no approval overlay", async () => {
+    // No selectTemplateFn: exercise the REAL registry (every template draft). Without an
+    // org-resolvable overlay the send must stay blocked — proves the gate is not all-approved.
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const wf = buildConversationReminderSendWorkflow(
+      makeDeps({
+        selectTemplateFn: undefined,
+        getSendContext: vi.fn().mockResolvedValue({
+          consentGrantedAt: "2026-05-01T00:00:00.000Z",
+          consentRevokedAt: null,
+          pdpaJurisdiction: "SG",
+          messagingOptIn: true,
+          lastWhatsAppInboundAt: new Date("2026-05-12T12:00:00Z"),
+          jurisdiction: "SG",
+          leadName: "Mei",
+          businessName: "Glow Clinic",
+          phone: "+6591234567",
+          // approvalOverlay omitted
+        }),
+      }),
+    );
+    const res = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
+    expect(res.outputs).toEqual({ sent: false, skipReason: "template_not_approved" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("org-resolvable approval overlay on the context unblocks the real draft registry template", async () => {
+    // No selectTemplateFn: the REAL SG appointment-reminder template is draft. The
+    // approvalOverlay (sourced per-org by getSendContext) flips it to approved → sends.
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: "wamid.OVL" }] }) });
+    vi.stubGlobal("fetch", fetchSpy);
+    const wf = buildConversationReminderSendWorkflow(
+      makeDeps({
+        selectTemplateFn: undefined,
+        getSendContext: vi.fn().mockResolvedValue({
+          consentGrantedAt: "2026-05-01T00:00:00.000Z",
+          consentRevokedAt: null,
+          pdpaJurisdiction: "SG",
+          messagingOptIn: true,
+          lastWhatsAppInboundAt: new Date("2026-05-12T12:00:00Z"),
+          jurisdiction: "SG",
+          leadName: "Mei",
+          businessName: "Glow Clinic",
+          phone: "+6591234567",
+          approvalOverlay: { alex_appointment_reminder_sg_v1: "approved" },
+        }),
+      }),
+    );
+    const res = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
+    expect(res.outcome).toBe("completed");
+    expect(res.outputs).toEqual({ sent: true, messageId: "wamid.OVL" });
+    const [, init] = fetchSpy.mock.calls[0]!;
+    const body = JSON.parse((init as { body: string }).body);
+    expect(body.template.name).toBe("alex_appointment_reminder_sg_v1");
+  });
+
   it("returns failed when the Graph API call errors", async () => {
     vi.stubGlobal(
       "fetch",

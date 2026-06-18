@@ -1,5 +1,9 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
-import { evaluateProactiveSendEligibility, formatReminderDateTime } from "@switchboard/core";
+import {
+  evaluateProactiveSendEligibility,
+  formatReminderDateTime,
+  type TemplateApprovalOverlay,
+} from "@switchboard/core";
 import type { IntentClass, PdpaJurisdiction } from "@switchboard/schemas";
 
 const REMINDER_INTENT_CLASS: IntentClass = "appointment-reminder";
@@ -23,6 +27,13 @@ export interface ReminderSendContext {
   leadName: string;
   businessName: string;
   phone: string | null;
+  /**
+   * Org-resolvable WhatsApp template-approval source (metaTemplateName -> status).
+   * Sourced by the per-org read inside getSendContext; lets a Meta-APPROVED template
+   * actually send. Omitted/empty → the static registry default (draft) keeps the send
+   * blocked.
+   */
+  approvalOverlay?: TemplateApprovalOverlay;
 }
 
 export interface ConversationReminderSendDeps {
@@ -69,6 +80,7 @@ export function buildConversationReminderSendWorkflow(
         jurisdiction: ctx.jurisdiction,
         allowMarketingTemplate: deps.allowMarketingTemplate,
         selectTemplateFn: deps.selectTemplateFn,
+        approvalOverlay: ctx.approvalOverlay,
       });
 
       if (!eligibility.eligible) {

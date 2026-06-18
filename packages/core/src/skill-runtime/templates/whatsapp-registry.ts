@@ -227,3 +227,77 @@ export function selectTemplate(args: {
     ) ?? null
   );
 }
+
+/**
+ * An org-resolvable WhatsApp template-approval source. Maps a `metaTemplateName`
+ * to the approval status Meta currently reports for THAT org's submission of the
+ * template. Populated operator-/config-side (e.g. written when the template-create
+ * route receives a Meta status, or driven by per-org config) and overlaid onto the
+ * static registry at resolve time.
+ *
+ * Keyed by `metaTemplateName` (not internal `name`) because that is the identifier
+ * Meta approves under and the identifier the gate substitutes/sends with. A missing
+ * key means "no org-specific signal" — the static registry default applies, which
+ * ships as `draft`, so the send gate keeps blocking by default. This is deliberately
+ * NOT an all-approved default.
+ */
+export type TemplateApprovalOverlay = Readonly<Record<string, TemplateApprovalStatus>>;
+
+const APPROVAL_STATUSES: ReadonlySet<TemplateApprovalStatus> = new Set([
+  "draft",
+  "submitted",
+  "approved",
+]);
+
+function isApprovalStatus(value: unknown): value is TemplateApprovalStatus {
+  return typeof value === "string" && APPROVAL_STATUSES.has(value as TemplateApprovalStatus);
+}
+
+/**
+ * Parse a persisted/config-driven approval source (e.g. an org's
+ * `runtimeConfig.whatsappTemplateApprovals` JSON bag) into a typed
+ * {@link TemplateApprovalOverlay}. Defensive by construction:
+ *
+ *  - Non-object / null / array input → `{}` (no signal; static default governs).
+ *  - Entries whose value is not a known approval status are dropped, so a corrupt
+ *    or partially-written record can never silently unblock a send.
+ *
+ * Keys are `metaTemplateName` strings (matched by {@link resolveTemplate}); unknown
+ * keys are harmless because they never match a registry template.
+ */
+export function parseTemplateApprovalOverlay(raw: unknown): TemplateApprovalOverlay {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
+  const out: Record<string, TemplateApprovalStatus> = {};
+  for (const [metaTemplateName, status] of Object.entries(raw)) {
+    if (isApprovalStatus(status)) out[metaTemplateName] = status;
+  }
+  return out;
+}
+
+/**
+ * Resolve a template for `(intentClass, jurisdiction)` and overlay the org-resolvable
+ * approval status when the source reports one for the template's `metaTemplateName`.
+ *
+ * - No fit → null (delegates to {@link selectTemplate}).
+ * - No overlay entry → the static registry default (`draft`) is preserved, so the
+ *   send-time gate and proactive-eligibility check keep blocking by default.
+ * - Overlay entry present → a shallow copy with the resolved `approvalStatus`. The
+ *   shared static registry object is never mutated, so concurrent readers are
+ *   unaffected.
+ */
+export function resolveTemplate(args: {
+  intentClass: IntentClass;
+  jurisdiction: Jurisdiction;
+  approvalOverlay?: TemplateApprovalOverlay;
+}): WhatsAppTemplate | null {
+  const template = selectTemplate({
+    intentClass: args.intentClass,
+    jurisdiction: args.jurisdiction,
+  });
+  if (!template) return null;
+  const resolvedStatus = args.approvalOverlay?.[template.metaTemplateName];
+  if (resolvedStatus === undefined || resolvedStatus === template.approvalStatus) {
+    return template;
+  }
+  return { ...template, approvalStatus: resolvedStatus };
+}
