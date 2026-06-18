@@ -12,6 +12,7 @@ import type {
 } from "@switchboard/core/platform";
 import { WorkflowMode } from "@switchboard/core/platform";
 import type { IntentRegistry } from "@switchboard/core/platform";
+import { buildRobinRecoverySendExecutor } from "./robin-recovery-executor.js";
 import type { PlatformIngress, SubmitWorkResponse } from "@switchboard/core/platform";
 import type { ChildWorkRequest } from "@switchboard/core/platform";
 import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
@@ -274,6 +275,12 @@ export async function bootstrapContainedWorkflows(
   // flag-gated and unwired until 1B-1.6, so this executes only operator-approved reallocations.
   const rileyBudgetExecutor = await buildRileyBudgetExecutorHandler(prismaClient, workTraceStore);
 
+  // Robin v1 no-show recovery campaign placeholder executor. The governed path is ARMED (intent +
+  // seeded require_approval policy + platform-direct resolution) and proven to PARK; the live
+  // consent-gated send + the cron initiator land in a later slice, so this fails closed if ever
+  // dispatched (no prod path submits the intent yet).
+  const robinRecoverySendExecutor = buildRobinRecoverySendExecutor();
+
   // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
   // difference between callers is how the WhatsApp 24h-window timestamp is resolved
   // (follow-up: by threadId; reminder: by the contactId+org compound key), so each caller
@@ -420,6 +427,7 @@ export async function bootstrapContainedWorkflows(
     ["meta.lead.inquiry.record", buildMetaLeadRecordInquiryWorkflow(prismaClient)],
     ["conversation.followup.send", followUpSendHandler],
     ["conversation.reminder.send", reminderSendHandler],
+    [robinRecoverySendExecutor.intent, robinRecoverySendExecutor.handler],
   ]);
 
   modeRegistry.register(new WorkflowMode({ handlers, services }));
@@ -570,6 +578,20 @@ export async function bootstrapContainedWorkflows(
       workflowId: "conversation.reminder.send",
       budgetClass: "standard",
       approvalPolicy: "none",
+      allowedTriggers: ["schedule"],
+    },
+    {
+      // Robin v1 no-show recovery campaign (the mass-outbound approval gate). A platform-initiated
+      // (cron/system) batch proactive send: deliberately NOT system_auto_approved, so the seeded
+      // require_approval(mandatory) policy (db seed robin-recovery-governance.ts) parks every
+      // campaign for a human. approvalPolicy here is decorative (the policy engine reads
+      // policyApprovalOverride). Non-financial (no outbound spend; not on the financial denylist).
+      // The executor is a fail-closed placeholder until the consent-gated send slice; the cron
+      // initiator lands then too. Schedule-trigger-only (cron), not reachable from the public API.
+      intent: robinRecoverySendExecutor.intent,
+      workflowId: robinRecoverySendExecutor.intent,
+      budgetClass: "cheap",
+      approvalPolicy: "always",
       allowedTriggers: ["schedule"],
     },
   ];

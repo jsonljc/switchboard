@@ -3,6 +3,7 @@ import type { PrismaDbClient } from "../prisma-db.js";
 import { seedRileyAdOptimizerDeployment } from "./seed-riley-ad-optimizer-deployment.js";
 import { seedMiraCreativeDeployment } from "./seed-mira-creative-deployment.js";
 import { seedMiraPilotOrgs } from "./seed-mira-pilot-orgs.js";
+import { seedRobinRecoveryPolicies } from "./robin-recovery-governance.js";
 
 export interface ProvisionOrgAgentsResult {
   riley: { deploymentId: string };
@@ -154,6 +155,13 @@ export async function provisionOrgAgentDeployments(
     const riley =
       (await findExistingDeployment(tx, orgId, rileyListingId)) ??
       (await seedRileyAdOptimizerDeployment(tx, orgId));
+    // Robin v1: arm the governed no-show recovery campaign gate for every org (day-one, like
+    // Riley). Seeds the allow + mandatory-approval pair so a submitted recovery campaign PARKS for
+    // a human instead of hard-denying. Idempotent. The recovery.mode flag (default off) + the cron
+    // initiator land in a later slice, so this gate is dormant until then (nothing submits the
+    // intent yet). Producer-population in the same PR: the gate is never seeded inert. Runs in the
+    // always-run branch (before the opts.mira early-return) so existing + new orgs both get it.
+    await seedRobinRecoveryPolicies(tx, orgId);
     if (!opts.mira) return { riley };
 
     const miraListingId = await ensureCreativeListing(tx);

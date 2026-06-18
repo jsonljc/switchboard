@@ -12,6 +12,7 @@ import type {
   DeploymentResolverResult,
 } from "@switchboard/core/platform";
 import { resolveAuthoritativeDeployment } from "../bootstrap/platform-deployment-resolver.js";
+import { ROBIN_RECOVERY_SEND_INTENT } from "../services/workflows/robin-recovery-request.js";
 
 function makeResult(overrides: Partial<DeploymentResolverResult> = {}): DeploymentResolverResult {
   return {
@@ -145,7 +146,7 @@ describe("resolveAuthoritativeDeployment", () => {
       resolveByChannelToken: async () => makeResult(),
     };
     const authoritative = resolveAuthoritativeDeployment(throwingResolver, {
-      isOperatorMutationIntent: (intent) => intent === "ledger.deliver_weekly_report",
+      isPlatformDirectIntent: (intent) => intent === "ledger.deliver_weekly_report",
     });
 
     const ctx = await authoritative.resolve({
@@ -157,6 +158,32 @@ describe("resolveAuthoritativeDeployment", () => {
     expect(ctx.skillSlug).toBe("ledger");
     expect(ctx.trustLevel).toBe("supervised");
     // The strict slug lookup was bypassed entirely (no throw, no deployment_not_found).
+    expect(lookupCalled).toBe(false);
+  });
+
+  it("resolves robin.recovery_campaign.send to platform-direct (the parking-campaign carve-out)", async () => {
+    // Robin has NO seeded deployment by design (it is a capability, not an agent). Without the
+    // carve-out the slug "robin" would throw deployment_not_found and ship the gate prod-inert.
+    let lookupCalled = false;
+    const throwingResolver: DeploymentResolver = {
+      resolveByOrgAndSlug: async () => {
+        lookupCalled = true;
+        throw new Error("No active deployment found for org=org-1 slug=robin");
+      },
+      resolveByDeploymentId: async () => makeResult(),
+      resolveByChannelToken: async () => makeResult(),
+    };
+    const authoritative = resolveAuthoritativeDeployment(throwingResolver, {
+      isPlatformDirectIntent: (intent) => intent === ROBIN_RECOVERY_SEND_INTENT,
+    });
+
+    const ctx = await authoritative.resolve({
+      organizationId: "org-1",
+      intent: ROBIN_RECOVERY_SEND_INTENT,
+    } as unknown as CanonicalSubmitRequest);
+
+    expect(ctx.deploymentId).toBe("platform-direct");
+    expect(ctx.trustLevel).toBe("supervised");
     expect(lookupCalled).toBe(false);
   });
 
@@ -172,7 +199,7 @@ describe("resolveAuthoritativeDeployment", () => {
       resolveByChannelToken: async () => result,
     };
     const authoritative = resolveAuthoritativeDeployment(resolver, {
-      isOperatorMutationIntent: () => false,
+      isPlatformDirectIntent: () => false,
     });
 
     const ctx = await authoritative.resolve({

@@ -299,4 +299,38 @@ export class PrismaBookingStore {
     ]);
     return { matured, attended };
   }
+
+  // Org-scoped list of no-show bookings in a window, the cohort Robin's recovery campaign targets.
+  // Runs on the @@index([organizationId, attendance]) (purpose-built for this query) and is bounded
+  // like findUpcomingConfirmed so a backlog cannot blow up the cohort. attendeeName is denormalized
+  // on Booking (display only); the recipient phone is resolved at send time from contactId, never
+  // here. Org-scoped (organizationId in the where) per the F12 / IDOR rule.
+  async findNoShowRecoveryCandidates(input: { orgId: string; from: Date; to: Date }): Promise<
+    Array<{
+      bookingId: string;
+      contactId: string;
+      service: string;
+      startsAt: Date;
+      attendeeName: string | null;
+    }>
+  > {
+    const SCAN_LIMIT = 1000;
+    const rows = await this.prisma.booking.findMany({
+      where: {
+        organizationId: input.orgId,
+        attendance: "no_show",
+        startsAt: { gte: input.from, lt: input.to },
+      },
+      orderBy: { startsAt: "asc" },
+      take: SCAN_LIMIT,
+      select: { id: true, contactId: true, service: true, startsAt: true, attendeeName: true },
+    });
+    return rows.map((r) => ({
+      bookingId: r.id,
+      contactId: r.contactId,
+      service: r.service,
+      startsAt: r.startsAt,
+      attendeeName: r.attendeeName,
+    }));
+  }
 }
