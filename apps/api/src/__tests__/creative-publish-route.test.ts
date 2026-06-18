@@ -83,17 +83,17 @@ describe("POST /creative-jobs/:id/publish", () => {
     connFindFirst.mockReset();
     submit.mockReset();
     decrypt.mockReset();
-    // assertPublishable reads two connections (meta-ads + whatsapp/WABA) and
-    // decrypts each. Route both mocks on serviceId / ciphertext so the happy path
-    // is a connected, WABA-bound org.
-    decrypt.mockImplementation((enc: unknown) =>
-      enc === "enc-waba"
-        ? { phoneNumberId: "pn_1" }
-        : { accessToken: "tok", accountId: "act_1", pageId: "page_1" },
-    );
+    // assertPublishable reads only the meta-ads connection (WABA/whatsapp is not
+    // a publish precondition for paused LEARN_MORE drafts). Decrypt returns the
+    // meta-ads creds for any ciphertext.
+    decrypt.mockImplementation(() => ({
+      accessToken: "tok",
+      accountId: "act_1",
+      pageId: "page_1",
+    }));
     connFindFirst.mockImplementation(async ({ where }: { where?: { serviceId?: string } }) =>
       where?.serviceId === "whatsapp"
-        ? { credentials: "enc-waba", externalAccountId: "waba_1", status: "connected" }
+        ? null
         : { credentials: "enc", externalAccountId: "act_1", status: "connected" },
     );
     ctx = await buildApp();
@@ -154,11 +154,8 @@ describe("POST /creative-jobs/:id/publish", () => {
 
   it("422 META_PAGE_NOT_CONFIGURED when no Page id resolvable", async () => {
     findUnique.mockResolvedValue(KEPT_JOB);
-    // meta creds lose the pageId; the whatsapp/WABA creds stay intact so the page
-    // check is what blocks (it runs before the WABA check).
-    decrypt.mockImplementation((enc: unknown) =>
-      enc === "enc-waba" ? { phoneNumberId: "pn_1" } : { accessToken: "tok", accountId: "act_1" },
-    );
+    // meta-ads creds lose the pageId — page check blocks publish before submit.
+    decrypt.mockImplementation(() => ({ accessToken: "tok", accountId: "act_1" }));
 
     const res = await ctx.app.inject(publish());
 
@@ -182,18 +179,26 @@ describe("POST /creative-jobs/:id/publish", () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
-  it("422 META_WABA_NOT_BOUND when the org has no whatsapp connection", async () => {
+  it("parks → 202 PENDING_APPROVAL when the org has no whatsapp connection (WABA is not a publish blocker)", async () => {
+    // The beforeEach default already returns null for whatsapp — this test uses
+    // that default to prove a no-WABA org can still publish a paused Meta draft.
     findUnique.mockResolvedValue(KEPT_JOB);
-    connFindFirst.mockImplementation(async ({ where }: { where?: { serviceId?: string } }) =>
-      where?.serviceId === "whatsapp"
-        ? null
-        : { credentials: "enc", externalAccountId: "act_1", status: "connected" },
-    );
+    submit.mockResolvedValue({
+      ok: true,
+      approvalRequired: true,
+      lifecycleId: "lc-2",
+      bindingHash: "bh-2",
+      workUnit: { id: "wu-2", traceId: "tr-2" },
+      result: { outcome: "pending_approval", outputs: {} },
+    });
 
     const res = await ctx.app.inject(publish());
 
-    expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe("META_WABA_NOT_BOUND");
-    expect(submit).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({
+      outcome: "PENDING_APPROVAL",
+      approvalRequest: { id: "lc-2", bindingHash: "bh-2" },
+    });
+    expect(submit).toHaveBeenCalledOnce();
   });
 });
