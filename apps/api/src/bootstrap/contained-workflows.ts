@@ -359,6 +359,33 @@ export async function bootstrapContainedWorkflows(
     allowMarketingTemplate: false,
   });
 
+  // meta.lead.greeting.send: the first-touch greeting is a PROACTIVE WhatsApp template,
+  // so it is gated on the PDPA proactive consent bar (NOT sent unconditionally). The CTWA
+  // ad-click is a legitimate first-touch opt-in basis, so a brand-new CTWA lead with no
+  // captured grant is greeted with a recorded `ctwa_optin` decision; a consent revocation
+  // always wins. `ctwaOptIn` is read from the Contact's messagingOptInSource (set to "ctwa"
+  // only for CTWA leads — an Instant Form lead has no WhatsApp opt-in from the form alone).
+  const greetingSendHandler = buildMetaLeadGreetingWorkflow({
+    getSendContext: async (orgId, contactId) => {
+      const prisma = prismaClient as import("@switchboard/db").PrismaClient;
+      const contact = await prisma.contact.findFirst({
+        where: { id: contactId, organizationId: orgId },
+        select: {
+          pdpaJurisdiction: true,
+          consentGrantedAt: true,
+          consentRevokedAt: true,
+          messagingOptInSource: true,
+        },
+      });
+      return {
+        consentGrantedAt: contact?.consentGrantedAt ?? null,
+        consentRevokedAt: contact?.consentRevokedAt ?? null,
+        pdpaJurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
+        ctwaOptIn: contact?.messagingOptInSource === "ctwa",
+      };
+    },
+  });
+
   // creative.job.publish: a thin dispatcher. It validates ownership, short-circuits an
   // already-parked job, then hands the rate-limited Meta chain to the dead-lettered
   // `creative-publish` Inngest function (deps wired in bootstrap/inngest.ts). The handler
@@ -380,7 +407,7 @@ export async function bootstrapContainedWorkflows(
     ["creative.job.publish", creativePublishWorkflow],
     ["lead.intake", buildLeadIntakeWorkflow(leadIntakeHandler)],
     ["meta.lead.intake", buildMetaLeadIntakeWorkflow({ prisma: prismaClient, instantFormAdapter })],
-    ["meta.lead.greeting.send", buildMetaLeadGreetingWorkflow()],
+    ["meta.lead.greeting.send", greetingSendHandler],
     ["meta.lead.inquiry.record", buildMetaLeadRecordInquiryWorkflow(prismaClient)],
     ["conversation.followup.send", followUpSendHandler],
     ["conversation.reminder.send", reminderSendHandler],
