@@ -206,6 +206,7 @@ export async function bootstrapContainedWorkflows(
     PrismaDeploymentStore,
     PrismaOrgAgentEnablementStore,
     PrismaRecommendationStore,
+    PrismaRobinRecoverySendStore,
   } = await import("@switchboard/db");
   const { InstantFormAdapter } = await import("@switchboard/ad-optimizer");
   const { buildMarkHandoffRecommendationActed } =
@@ -281,12 +282,6 @@ export async function bootstrapContainedWorkflows(
   // write, post-write re-read, ExecutionReceipt). The sink that initiates a reallocation stays
   // flag-gated and unwired until 1B-1.6, so this executes only operator-approved reallocations.
   const rileyBudgetExecutor = await buildRileyBudgetExecutorHandler(prismaClient, workTraceStore);
-
-  // Robin v1 no-show recovery campaign placeholder executor. The governed path is ARMED (intent +
-  // seeded require_approval policy + platform-direct resolution) and proven to PARK; the live
-  // consent-gated send + the cron initiator land in a later slice, so this fails closed if ever
-  // dispatched (no prod path submits the intent yet).
-  const robinRecoverySendExecutor = buildRobinRecoverySendExecutor();
 
   // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
   // difference between callers is how the WhatsApp 24h-window timestamp is resolved
@@ -380,6 +375,30 @@ export async function bootstrapContainedWorkflows(
       );
     },
     allowMarketingTemplate: false,
+  });
+
+  // Robin v1 no-show recovery campaign executor: on dispatch of an APPROVED campaign it iterates the
+  // frozen cohort and consent-gates each send via evaluateProactiveSendEligibility (reusing the
+  // reminder's org-scoped phone + consent + approval-overlay resolution), recording a durable per-
+  // recipient dedup row. Fail-closed. The cron + recovery.mode flag (#1175) are the only submitters.
+  const robinRecoverySendStore = new PrismaRobinRecoverySendStore(
+    prismaClient as ConstructorParameters<typeof PrismaRobinRecoverySendStore>[0],
+  );
+  const robinRecoverySendExecutor = buildRobinRecoverySendExecutor({
+    store: robinRecoverySendStore,
+    getSendContext: async (orgId, contactId) => {
+      const prisma = prismaClient as import("@switchboard/db").PrismaClient;
+      const thread = await prisma.conversationThread.findUnique({
+        where: { contactId_organizationId: { contactId, organizationId: orgId } },
+        select: { lastWhatsAppInboundAt: true },
+      });
+      return buildWhatsAppSendContext(
+        prisma,
+        orgId,
+        contactId,
+        thread?.lastWhatsAppInboundAt ?? null,
+      );
+    },
   });
 
   // meta.lead.greeting.send: the first-touch greeting is a PROACTIVE WhatsApp template,
