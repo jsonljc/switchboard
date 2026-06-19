@@ -2294,6 +2294,35 @@ model ScheduledReminder {
 }
 
 // ---------------------------------------------------------------------------
+// RobinRecoverySend: Robin v1 no-show recovery send log (claim-first dedup).
+// One row per no-show booking we attempt to re-engage. Delivery state +
+// skip/fail reason live here, mirroring ScheduledReminder. Written by the
+// robin.recovery_campaign.send executor on campaign approval.
+// ---------------------------------------------------------------------------
+
+/// Idempotent per-(org, booking, campaign-kind) log of a Robin no-show recovery send. One row per
+/// no-show booking we attempt to re-engage (claim-first, P2002-deduped) = v1's single conservative
+/// attempt. Delivery state + skip/fail reason live here, mirroring ScheduledReminder.
+model RobinRecoverySend {
+  id                 String    @id @default(uuid())
+  organizationId     String
+  contactId          String
+  bookingId          String
+  campaignKind       String    @default("no_show")
+  campaignWorkUnitId String?
+  status             String    @default("pending")
+  skipReason         String?
+  lastError          String?
+  messageId          String?
+  sentAt             DateTime?
+  dedupeKey          String    @unique
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([organizationId, bookingId])
+}
+
+// ---------------------------------------------------------------------------
 // PCD Identity Registry (SP1)
 // ---------------------------------------------------------------------------
 
