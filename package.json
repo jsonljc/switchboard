@@ -83,12 +83,14 @@
       "fastify@>=5.3.2 <5.8.5": "5.8.5",
       "fast-uri@<3.1.2": "3.1.2",
       "lodash@>=4.0.0 <4.18.0": "4.18.0",
-      "defu@<6.1.5": "6.1.5"
+      "defu@<6.1.5": "6.1.5",
+      "undici@>=7.23.0 <7.28.0": "7.28.0"
     },
     "auditConfig": {
       "ignoreGhsas": [
         "GHSA-5xrq-8626-4rwp",
-        "GHSA-gv7w-rqvm-qjhr"
+        "GHSA-gv7w-rqvm-qjhr",
+        "GHSA-p6gq-j5cr-w38f"
       ]
     }
   },
