@@ -32,6 +32,13 @@ vi.mock("../data-mode-banner", () => ({
   DataModeBanner: () => <div data-testid="data-mode-banner" />,
 }));
 
+// VerifyEmailBanner calls useSession(); stub it to a marker so these AppShell
+// branch tests do not need a SessionProvider. Its behavior is covered by
+// verify-email-banner.test.tsx.
+vi.mock("../verify-email-banner", () => ({
+  VerifyEmailBanner: () => <div data-testid="verify-email-banner" />,
+}));
+
 // The editorial shell is mounted by AppShell itself now (one shared shell for all
 // authed routes). Mock it to a recognizable marker so these tests assert AppShell's
 // branch decision — "does this route get the shell?" — without pulling the real

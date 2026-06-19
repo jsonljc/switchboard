@@ -11,6 +11,10 @@ declare module "next-auth" {
     organizationId: string;
     principalId: string;
     onboardingComplete: boolean;
+    // ISO timestamp when the email was verified, or null if not yet verified.
+    // Refreshed from the DB on each token refresh (see lib/auth.ts). Optional so
+    // the narrower DashboardSession (lib/session.ts) stays assignable to Session.
+    emailVerified?: string | null;
   }
 
   interface User {
