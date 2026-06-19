@@ -233,7 +233,7 @@ export function BusinessFactsStep({
             <Button variant="ghost" className="text-muted-foreground" onClick={onSkip}>
               Skip for now
             </Button>
-            <Button variant="action" onClick={handleSave}>
+            <Button onClick={handleSave}>
               Save &amp; Continue
               <ChevronRight className="ml-1 h-4 w-4" />
             </Button>

@@ -259,7 +259,6 @@ export function WhatsAppEmbeddedSignup({
         )}
 
         <Button
-          variant="action"
           type="button"
           onClick={handleConnect}
           disabled={busy}
