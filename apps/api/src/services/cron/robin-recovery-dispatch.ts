@@ -6,7 +6,11 @@ import {
   type RecoveryCandidateInput,
 } from "@switchboard/core";
 import type { SubmitWorkResponse } from "@switchboard/core/platform";
-import { resolveRecoveryConfig, type GovernanceMode } from "@switchboard/schemas";
+import {
+  resolveRecoveryConfig,
+  type GovernanceConfig,
+  type GovernanceMode,
+} from "@switchboard/schemas";
 import type { RecoveryCampaignSubmitInput } from "../workflows/robin-recovery-request.js";
 
 const inngestClient = new Inngest({ id: "switchboard" });
@@ -64,7 +68,7 @@ export async function executeRobinRecoveryDispatch(
 
   const orgMode = new Map<string, GovernanceMode>();
   for (const d of deployments) {
-    const mode = resolveRecoveryConfig(d.governanceConfig as never).mode;
+    const mode = resolveRecoveryConfig(d.governanceConfig as GovernanceConfig | null).mode;
     if (mode === "off") continue;
     const prev = orgMode.get(d.organizationId);
     if (!prev || RANK[mode] > RANK[prev]) orgMode.set(d.organizationId, mode);

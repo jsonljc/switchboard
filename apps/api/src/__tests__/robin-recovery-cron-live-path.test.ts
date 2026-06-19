@@ -265,10 +265,12 @@ describe("robin recovery producer (live path through real ingress + carve-out re
     expect(parked).toHaveLength(1);
   });
 
-  it("un-seeded org default-DENIES (fail safe, no phantom park)", async () => {
+  it("un-seeded org default-DENIES (fail safe: no phantom park, no execution)", async () => {
     const { ingress } = buildIngress([], true); // no policies seeded
     const res = await ingress.submit(campaignReq(new Date("2026-06-08T08:00:00Z")));
     const parked = res.ok && "approvalRequired" in res && res.approvalRequired === true;
+    const executed = res.ok && res.result.outcome === "completed";
     expect(parked).toBe(false);
+    expect(executed).toBe(false); // default-deny neither parks nor runs the placeholder
   });
 });
