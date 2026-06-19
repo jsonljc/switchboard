@@ -138,8 +138,9 @@ export function middleware(request: NextRequest) {
 
   // Root "/" requires an exact match — adding it as a prefix would gate every
   // path including public /welcome, /privacy, /terms, /login.
+  const isRoot = pathname === "/";
   const isAuthPage =
-    pathname === "/" ||
+    isRoot ||
     AUTH_PAGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
   if (isAuthPage) {
@@ -152,7 +153,10 @@ export function middleware(request: NextRequest) {
       request.cookies.get("authjs.session-token")?.value;
 
     if (!sessionToken) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      // Unauthenticated visitors to the root land on the public marketing page
+      // (the acquisition funnel's front door); protected app routes still bounce
+      // to the login wall. /welcome sits outside the matcher, so this never loops.
+      return NextResponse.redirect(new URL(isRoot ? "/welcome" : "/login", request.url));
     }
   }
 

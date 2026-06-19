@@ -124,8 +124,12 @@ describe("dashboard middleware auth", () => {
     expect(response.headers.get("location")).toBe("http://localhost/login");
   });
 
-  // P0-A: Home, Inbox, Results, Alex, Riley are now auth-gated.
-  it("redirects unauthenticated / (Home) to /login (exact match, not prefix)", async () => {
+  // Inbox, Results, Alex, Riley remain auth-gated -> /login (tests below). The
+  // root "/" is special: an unauthenticated visitor sees the public marketing
+  // page (/welcome), not the login wall, so the acquisition funnel has a front
+  // door. Authenticated visitors still fall through to the app home. Root stays
+  // an exact match, never a prefix (it must not bleed into /welcome, /privacy...).
+  it("redirects unauthenticated / (Home) to /welcome (exact match, not prefix)", async () => {
     (process.env as Record<string, string | undefined>).NODE_ENV = "development";
 
     const { middleware } = await import("../middleware");
@@ -133,7 +137,49 @@ describe("dashboard middleware auth", () => {
     const response = middleware(new NextRequest("http://localhost/"));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost/login");
+    expect(response.headers.get("location")).toBe("http://localhost/welcome");
+  });
+
+  it("does not redirect an authenticated / (session falls through to the app)", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(
+      new NextRequest("http://localhost/", {
+        headers: { cookie: "authjs.session-token=valid-session" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("does not redirect / when the production __Secure session cookie is present", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(
+      new NextRequest("http://localhost/", {
+        headers: { cookie: "__Secure-authjs.session-token=valid-session" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("does not redirect / to /welcome when the dev bypass is enabled", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+    process.env.DEV_BYPASS_AUTH = "true";
+
+    const { middleware } = await import("../middleware");
+
+    const response = middleware(new NextRequest("http://localhost/"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
   });
 
   it("redirects unauthenticated /inbox to /login", async () => {
