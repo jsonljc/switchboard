@@ -19,6 +19,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle } from "lucide-react";
+import { PageTitle } from "@/components/layout/page-title";
 import { useState } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
@@ -97,7 +98,7 @@ export default function SettingsAccountPage() {
   if (isError) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Account</h1>
+        <PageTitle eyebrow="Settings">Account</PageTitle>
         <div className="rounded-lg border border-border bg-surface p-6">
           <div className="flex items-center gap-2 text-destructive mb-2">
             <AlertTriangle className="h-4 w-4" />
@@ -123,12 +124,12 @@ export default function SettingsAccountPage() {
 
   return (
     <div className="space-y-10">
-      <section>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Account</h1>
-        <p className="text-[15px] text-muted-foreground mt-1">
-          Your business, your assistant, and how they work together.
-        </p>
-      </section>
+      <PageTitle
+        eyebrow="Settings"
+        sub="Your business, your assistant, and how they work together."
+      >
+        Account
+      </PageTitle>
 
       <Tabs defaultValue="general">
         <TabsList>

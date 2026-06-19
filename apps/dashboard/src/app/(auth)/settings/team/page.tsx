@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AGENT_ICONS, AGENT_ROLE_LABELS } from "@/components/team/agent-icons";
 import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageTitle } from "@/components/layout/page-title";
 import type { AgentRosterEntry } from "@/lib/api-client-types";
 
 const STATUS_STYLES: Record<string, { dot: string; label: string }> = {
@@ -169,12 +170,9 @@ export default function SettingsTeamPage() {
 
   return (
     <div className="space-y-12">
-      <section>
-        <h1 className="text-[22px] font-semibold tracking-tight text-foreground">Your team</h1>
-        <p className="text-[14px] text-muted-foreground mt-1">
-          The specialists working for your business.
-        </p>
-      </section>
+      <PageTitle eyebrow="Settings" sub="The specialists working for your business.">
+        Your team
+      </PageTitle>
 
       {/* Primary operator */}
       {primaryOperator && (

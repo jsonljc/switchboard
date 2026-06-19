@@ -15,6 +15,7 @@ import {
   BusinessFactsValidationError,
 } from "@/hooks/use-business-facts";
 import type { BusinessFacts } from "@switchboard/schemas";
+import { PageTitle } from "@/components/layout/page-title";
 
 export default function BusinessFactsPage() {
   const { deploymentId, isLoading: depLoading } = useOrgDeploymentId();
@@ -43,12 +44,12 @@ export default function BusinessFactsPage() {
   if (!depLoading && deploymentId === null) {
     return (
       <div className="space-y-6">
-        <section>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Business facts</h1>
-          <p className="text-[15px] text-muted-foreground mt-1">
-            Tell your agent about your business so it can answer customers accurately.
-          </p>
-        </section>
+        <PageTitle
+          eyebrow="Settings"
+          sub="Tell your agent about your business so it can answer customers accurately."
+        >
+          Business facts
+        </PageTitle>
         <div className="rounded-lg border border-border bg-surface p-6 text-center space-y-2">
           <p className="font-medium text-foreground">Deploy an agent first</p>
           <p className="text-[14px] text-muted-foreground">
@@ -63,12 +64,12 @@ export default function BusinessFactsPage() {
   if (facts.error) {
     return (
       <div className="space-y-6">
-        <section>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Business facts</h1>
-          <p className="text-[15px] text-muted-foreground mt-1">
-            Tell your agent about your business so it can answer customers accurately.
-          </p>
-        </section>
+        <PageTitle
+          eyebrow="Settings"
+          sub="Tell your agent about your business so it can answer customers accurately."
+        >
+          Business facts
+        </PageTitle>
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           Failed to load business facts. Please refresh and try again.
         </div>
@@ -107,12 +108,12 @@ export default function BusinessFactsPage() {
 
   return (
     <div className="space-y-6">
-      <section>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Business facts</h1>
-        <p className="text-[15px] text-muted-foreground mt-1">
-          Tell your agent about your business so it can answer customers accurately.
-        </p>
-      </section>
+      <PageTitle
+        eyebrow="Settings"
+        sub="Tell your agent about your business so it can answer customers accurately."
+      >
+        Business facts
+      </PageTitle>
 
       <BusinessFactsForm
         defaultValues={defaultValues}

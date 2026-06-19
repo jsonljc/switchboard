@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useBillingStatus, useCheckout, usePortal } from "@/hooks/use-billing";
 import { cn } from "@/lib/utils";
+import { PageTitle } from "@/components/layout/page-title";
 
 interface Plan {
   name: string;
@@ -120,7 +121,7 @@ export default function BillingPage() {
   if (!stripeConfigured || isError) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Billing</h1>
+        <PageTitle eyebrow="Settings">Billing</PageTitle>
         <div className="rounded-lg border border-border bg-surface p-8 text-center">
           <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
           <h2 className="text-lg font-medium text-foreground mb-1">
@@ -153,12 +154,9 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-10">
-      <section>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Billing</h1>
-        <p className="text-[15px] text-muted-foreground mt-1">
-          Manage your subscription and payment details.
-        </p>
-      </section>
+      <PageTitle eyebrow="Settings" sub="Manage your subscription and payment details.">
+        Billing
+      </PageTitle>
 
       {/* Current subscription summary */}
       {hasSubscription && billing && (
