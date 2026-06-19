@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageTitle } from "@/components/layout/page-title";
 
 const SETTINGS_SHORTCUTS = [
   {
@@ -21,15 +22,12 @@ const SETTINGS_SHORTCUTS = [
 export default function SettingsPage() {
   return (
     <section className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-[28px] font-semibold tracking-tight text-foreground">
-          Choose what you want to tune
-        </h1>
-        <p className="max-w-2xl text-[15px] leading-6 text-muted-foreground">
-          Open a settings area to tighten Alex&apos;s playbook, connect channels, or review operator
-          controls before launch.
-        </p>
-      </div>
+      <PageTitle
+        eyebrow="Settings"
+        sub="Open a settings area to tighten Alex's playbook, connect channels, or review operator controls before launch."
+      >
+        Choose what you want to tune
+      </PageTitle>
 
       <div className="grid gap-3 md:grid-cols-3">
         {SETTINGS_SHORTCUTS.map((shortcut) => (
