@@ -1,0 +1,32 @@
+/* The shared editorial page header, codifying the /reports high-water voice.
+   Mirrors reports.module.css (.eyebrow / .pageTitle / .pageSub). Consumes the
+   global editorial tokens: --ink and --ink-3 are already hsl()-wrapped complete
+   colors (used bare as var(--ink)), --serif/--mono are full font stacks. */
+
+.eyebrow {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  /* 600 (not reports' 700): JetBrains is loaded at 400/500/600, and this governed
+     authed surface must use a loaded cut (TY3 token-governance). */
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.title {
+  font-family: var(--serif);
+  font-size: clamp(30px, 3.4vw, 42px);
+  font-weight: 500;
+  line-height: 1.04;
+  letter-spacing: -0.014em;
+  color: var(--ink);
+}
+
+.sub {
+  max-width: 42rem;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}

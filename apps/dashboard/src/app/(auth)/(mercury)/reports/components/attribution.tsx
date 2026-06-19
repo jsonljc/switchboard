@@ -4,7 +4,6 @@ import { fmtSGD } from "./format";
 import { DeltaBadge } from "./delta-badge";
 
 export function Attribution({ data }: { data: AttributionData }) {
-  const dollars = Math.round(data.total).toLocaleString("en-SG");
   const rileyShare = data.riley.value / Math.max(1, data.total);
   const alexShare = data.alex.value / Math.max(1, data.total);
 
@@ -18,8 +17,7 @@ export function Attribution({ data }: { data: AttributionData }) {
       <div className={styles.attrBlock}>
         <div className={styles.attrHero}>
           <div className={`${styles.attrNum} ${styles.fadeIn}`} key={data.total}>
-            <span className={styles.sgd}>S$</span>
-            {dollars}
+            {fmtSGD(data.total, { withCents: "never" })}
           </div>
           <div className={styles.attrAside}>
             <span className={styles.label}>vs. previous period</span>
