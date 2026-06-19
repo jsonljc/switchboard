@@ -189,55 +189,65 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
             throw err;
           }
 
-          // Resolve phone + consent org-scoped AT DISPATCH so consent is re-validated at send time
-          // (the recipient phone is deliberately not frozen in the cohort).
-          const ctx = await deps.getSendContext(orgId, candidate.contactId);
+          // Everything after the claim is wrapped so a transient error (a DB read blip, a network
+          // reject, etc.) is ISOLATED to this recipient: it never throws the whole batch and never
+          // strands the already-claimed row as pending (which a retry would P2002-skip = silent
+          // under-delivery). On a throw the row is marked failed (terminal, single-attempt) and the
+          // loop moves on. Note: consent is still strictly checked BEFORE any send below.
+          try {
+            // Resolve phone + consent org-scoped AT DISPATCH so consent is re-validated at send time
+            // (the recipient phone is deliberately not frozen in the cohort).
+            const ctx = await deps.getSendContext(orgId, candidate.contactId);
 
-          const eligibility = evaluateProactiveSendEligibility({
-            contact: {
-              pdpaJurisdiction: ctx.pdpaJurisdiction,
-              consentGrantedAt: ctx.consentGrantedAt,
-              consentRevokedAt: ctx.consentRevokedAt,
-              messagingOptIn: ctx.messagingOptIn,
-            },
-            lastWhatsAppInboundAt: ctx.lastWhatsAppInboundAt,
-            intentClass: RECOVERY_INTENT_CLASS,
-            jurisdiction: ctx.jurisdiction,
-            // A no-show re-engagement is inherently a MARKETING-class message (the only
-            // re-engagement-offer template is marketing). The real controls are the per-campaign
-            // manager approval + the per-recipient PDPA proactive consent gate, not this flag; with
-            // it false the only available template is unreachable and the executor would be inert.
-            allowMarketingTemplate: true,
-            selectTemplateFn: deps.selectTemplateFn,
-            approvalOverlay: ctx.approvalOverlay,
-          });
+            const eligibility = evaluateProactiveSendEligibility({
+              contact: {
+                pdpaJurisdiction: ctx.pdpaJurisdiction,
+                consentGrantedAt: ctx.consentGrantedAt,
+                consentRevokedAt: ctx.consentRevokedAt,
+                messagingOptIn: ctx.messagingOptIn,
+              },
+              lastWhatsAppInboundAt: ctx.lastWhatsAppInboundAt,
+              intentClass: RECOVERY_INTENT_CLASS,
+              jurisdiction: ctx.jurisdiction,
+              // A no-show re-engagement is inherently a MARKETING-class message (the only
+              // re-engagement-offer template is marketing). The real controls are the per-campaign
+              // manager approval + the per-recipient PDPA proactive consent gate, not this flag;
+              // with it false the only available template is unreachable and the executor is inert.
+              allowMarketingTemplate: true,
+              selectTemplateFn: deps.selectTemplateFn,
+              approvalOverlay: ctx.approvalOverlay,
+            });
 
-          if (!eligibility.eligible) {
-            await deps.store.markSkipped(rowId, eligibility.reason);
-            skipped++;
-            continue;
-          }
-          if (!ctx.phone) {
-            await deps.store.markSkipped(rowId, "missing_contact_phone");
-            skipped++;
-            continue;
-          }
+            if (!eligibility.eligible) {
+              await deps.store.markSkipped(rowId, eligibility.reason);
+              skipped++;
+              continue;
+            }
+            if (!ctx.phone) {
+              await deps.store.markSkipped(rowId, "missing_contact_phone");
+              skipped++;
+              continue;
+            }
 
-          const result = await sendTemplate({
-            accessToken,
-            phoneNumberId,
-            to: ctx.phone,
-            metaTemplateName: eligibility.template.metaTemplateName,
-            leadName: ctx.leadName,
-            businessName: ctx.businessName,
-          });
-          if (!result.ok) {
-            await deps.store.markFailed(rowId, result.error ?? "whatsapp_send_failed");
+            const result = await sendTemplate({
+              accessToken,
+              phoneNumberId,
+              to: ctx.phone,
+              metaTemplateName: eligibility.template.metaTemplateName,
+              leadName: ctx.leadName,
+              businessName: ctx.businessName,
+            });
+            if (!result.ok) {
+              await deps.store.markFailed(rowId, result.error ?? "whatsapp_send_failed");
+              failed++;
+              continue;
+            }
+            await deps.store.markSent(rowId, result.messageId ?? null);
+            sent++;
+          } catch (err) {
+            await deps.store.markFailed(rowId, err instanceof Error ? err.message : String(err));
             failed++;
-            continue;
           }
-          await deps.store.markSent(rowId, result.messageId ?? null);
-          sent++;
         }
 
         return {

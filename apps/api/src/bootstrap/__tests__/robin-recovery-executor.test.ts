@@ -69,6 +69,7 @@ const C1 = {
   attendeeName: "Mei",
 };
 const C2 = { ...C1, bookingId: "bk_2", contactId: "c_2", attendeeName: "Sam" };
+const C3 = { ...C1, bookingId: "bk_3", contactId: "c_3", attendeeName: "Lee" };
 
 function makeDeps(over: Record<string, unknown> = {}) {
   return {
@@ -240,6 +241,38 @@ describe("buildRobinRecoverySendExecutor", () => {
     const res2 = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
     expect(deps.sendTemplate).not.toHaveBeenCalled();
     expect(res2.outputs).toEqual({ sent: 0, skipped: 1, failed: 0, total: 1 });
+  });
+
+  it("isolates a mid-batch transient error (getSendContext throws): that recipient -> failed, others still send, batch completes", async () => {
+    const deps = makeDeps();
+    deps.store.create
+      .mockResolvedValueOnce({ id: "rs_1" })
+      .mockResolvedValueOnce({ id: "rs_2" })
+      .mockResolvedValueOnce({ id: "rs_3" });
+    deps.getSendContext
+      .mockResolvedValueOnce(eligibleCtx({ phone: "+6591111111" }))
+      .mockRejectedValueOnce(new Error("db blip"))
+      .mockResolvedValueOnce(eligibleCtx({ phone: "+6593333333" }));
+    const { handler } = buildRobinRecoverySendExecutor(deps as never);
+    const res = await handler.execute(makeWorkUnit([C1, C2, C3]) as never, {} as never);
+    // The whole batch must NOT throw; the one error is isolated to its recipient.
+    expect(res.outcome).toBe("completed");
+    expect(res.outputs).toEqual({ sent: 2, skipped: 0, failed: 1, total: 3 });
+    // The claimed row for the failed recipient is marked failed (never left orphaned pending).
+    expect(deps.store.markFailed).toHaveBeenCalledWith("rs_2", "db blip");
+    // Recipients 1 and 3 still sent.
+    expect(deps.sendTemplate).toHaveBeenCalledTimes(2);
+    expect(deps.store.markSent).toHaveBeenCalledWith("rs_1", "wamid.1");
+    expect(deps.store.markSent).toHaveBeenCalledWith("rs_3", "wamid.1");
+  });
+
+  it("isolates a sendTemplate network rejection (not just !ok) -> markFailed, no batch throw", async () => {
+    const deps = makeDeps({ sendTemplate: vi.fn().mockRejectedValue(new Error("ECONNRESET")) });
+    const { handler } = buildRobinRecoverySendExecutor(deps as never);
+    const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
+    expect(res.outcome).toBe("completed");
+    expect(res.outputs).toEqual({ sent: 0, skipped: 0, failed: 1, total: 1 });
+    expect(deps.store.markFailed).toHaveBeenCalledWith("rs_1", "ECONNRESET");
   });
 
   it("real registry stays blocked without an approval overlay (fail-closed default)", async () => {
