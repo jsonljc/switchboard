@@ -44,8 +44,10 @@ describe("StatePanel", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("never renders the body element when body is omitted", () => {
-    const { container } = render(<StatePanel title="only-title" />);
-    expect(container.querySelectorAll("p").length).toBe(0);
+  it("renders the body only when provided", () => {
+    const { rerender } = render(<StatePanel title="t" />);
+    expect(screen.queryByText("the-body")).toBeNull();
+    rerender(<StatePanel title="t" body="the-body" />);
+    expect(screen.getByText("the-body")).toBeInTheDocument();
   });
 });

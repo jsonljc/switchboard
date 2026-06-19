@@ -42,8 +42,15 @@ vi.mock("@/components/ui/select", async () => {
   };
 });
 
+// Mutable session holder so individual tests can simulate the keys-pending
+// window (no orgId yet ⇒ useScopedQueryKeys returns null ⇒ query disabled).
+const { sessionHolder } = vi.hoisted(() => ({
+  sessionHolder: {
+    current: { data: { organizationId: "org-1" }, status: "authenticated" } as unknown,
+  },
+}));
 vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: { organizationId: "org-1" }, status: "authenticated" }),
+  useSession: () => sessionHolder.current,
 }));
 
 const useOrgDeploymentId = vi.fn();
@@ -149,6 +156,9 @@ describe("ConnectionsList - load failure", () => {
     // reach the screen (audit: channels "Failed to load / Retry" finding).
     mockFetch.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) });
   });
+  afterEach(() => {
+    sessionHolder.current = { data: { organizationId: "org-1" }, status: "authenticated" };
+  });
 
   it("shows a calm alert (never the raw error) with a retry when the list fails to load", async () => {
     wrap(<ConnectionsList />);
@@ -158,5 +168,16 @@ describe("ConnectionsList - load failure", () => {
     expect(screen.getByText("We couldn't reach your connections.")).toBeInTheDocument();
     expect(screen.queryByText(/failed to fetch connections/i)).toBeNull();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("shows the skeleton (not the empty state) while keys are pending", () => {
+    // No orgId yet ⇒ useScopedQueryKeys is null ⇒ useConnections is disabled
+    // (pending+idle: isLoading false, data undefined). Must NOT flash the empty
+    // state — that was the #472 false-empty regression class.
+    sessionHolder.current = { data: null, status: "loading" };
+    wrap(<ConnectionsList />);
+
+    expect(screen.queryByText("No connections yet.")).toBeNull();
+    expect(screen.queryByText("We couldn't reach your connections.")).toBeNull();
   });
 });

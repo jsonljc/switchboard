@@ -84,7 +84,7 @@ export function ConnectionsList() {
   const [authType, setAuthType] = useState("api_key");
   const [credFields, setCredFields] = useState<Record<string, string>>({});
 
-  const { data: connections, isLoading, isError, refetch } = useConnections();
+  const { data: connections, isError, refetch } = useConnections();
   const createConnection = useCreateConnection();
   const deleteConnection = useDeleteConnection();
   const testConnection = useTestConnection();
@@ -174,7 +174,11 @@ export function ConnectionsList() {
           body="This is usually momentary. Try again in a moment."
           onRetry={() => refetch()}
         />
-      ) : isLoading ? (
+      ) : connections === undefined ? (
+        // Gate the skeleton on absent data (not isLoading): a keys-pending query
+        // (enabled:false until orgId resolves) is pending+idle, so isLoading is
+        // false — keying on it would flash the empty state before the first load
+        // (the #472 false-empty class). Absent data ⇒ loading.
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-48" />
