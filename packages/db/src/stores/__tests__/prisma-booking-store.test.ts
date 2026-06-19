@@ -523,4 +523,37 @@ describe("PrismaBookingStore reschedule/cancel/find", () => {
       ]);
     });
   });
+
+  describe("findFutureBookingContactIds", () => {
+    it("returns an empty set without querying when contactIds is empty", async () => {
+      const findMany = vi.fn();
+      const store = new PrismaBookingStore({ booking: { findMany } } as never);
+      const out = await store.findFutureBookingContactIds(
+        "org_1",
+        [],
+        new Date("2026-06-10T00:00:00Z"),
+      );
+      expect(out.size).toBe(0);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it("maps active upcoming bookings to an org-scoped, distinct contactId set", async () => {
+      const findMany = vi.fn().mockResolvedValue([{ contactId: "c1" }, { contactId: "c3" }]);
+      const store = new PrismaBookingStore({ booking: { findMany } } as never);
+      const now = new Date("2026-06-10T00:00:00Z");
+      const out = await store.findFutureBookingContactIds("org_1", ["c1", "c2", "c3"], now);
+      expect(out).toEqual(new Set(["c1", "c3"]));
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            organizationId: "org_1",
+            contactId: { in: ["c1", "c2", "c3"] },
+            status: { notIn: ["cancelled", "failed"] },
+            startsAt: { gte: now },
+          },
+          distinct: ["contactId"],
+        }),
+      );
+    });
+  });
 });
