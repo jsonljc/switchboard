@@ -98,6 +98,8 @@ export interface ReportStores {
       to: Date;
       now: Date;
     }): Promise<{ matured: number; attended: number }>;
+
+    countNoShowsInWindow(input: { orgId: string; from: Date; to: Date }): Promise<number>;
   };
 
   opportunities: {

@@ -10,6 +10,7 @@ import type {
   CostBreakdown,
   HeldRateData,
   ConsentCompletenessData,
+  RecoveryCandidatesData,
   ReceiptedBookingsData,
   ReceiptedBookingQualityData,
   ReceiptedBookingRevenueData,
@@ -34,6 +35,7 @@ export interface ResultsModel {
   costNarrative: string;
   heldRate: HeldRateData; // attended / matured, rate null when no matured bookings
   consentCompleteness: ConsentCompletenessData; // validConsent / bookable, point-in-time snapshot
+  recoveryCandidates: RecoveryCandidatesData; // no-show count in the period (recovery opportunity size)
   receiptedBookings: ReceiptedBookingsData; // count of non-void calendar receipts in the window
   receiptedBookingQuality: ReceiptedBookingQualityData; // confidence breakdown + exceptions worklist
   receiptedBookingRevenue: ReceiptedBookingRevenueData; // Σ expectedValueAtIssue (cents), snapshot-else-live
@@ -74,6 +76,7 @@ export function buildResultsModel(data: ReportData): ResultsModel {
     costNarrative: data.costNarrative,
     heldRate: data.heldRate ?? { attended: 0, matured: 0, rate: null },
     consentCompleteness: data.consentCompleteness ?? { validConsent: 0, bookable: 0, rate: null },
+    recoveryCandidates: data.recoveryCandidates ?? { noShows: 0 },
     receiptedBookings: data.receiptedBookings ?? { count: 0 },
     // Normalize the nested worklist too: a payload cached after the quality block shipped but before
     // the worklist field has the block present (so the whole-object fallback won't fire) yet no

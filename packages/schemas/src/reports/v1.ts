@@ -159,6 +159,13 @@ export interface ConsentCompletenessData {
   rate: number | null;
 }
 
+/** No-show appointments in the report period: the recovery opportunity size.
+ *  NaN-safe by construction (a count, no division). v1 is the simple matured-no-show count.
+ *  The "exclude already-rebooked" refinement is deferred to the campaign-assembly slice (S3/S4). */
+export interface RecoveryCandidatesData {
+  noShows: number;
+}
+
 export interface ReceiptedBookingsData {
   /** Count of non-void calendar Receipts (status booked|held) created in the window, org-scoped.
    *  A "receipted booking" is a booking that produced a proof receipt at booking time. */
@@ -234,6 +241,7 @@ export interface ReportDataV1 {
   managedComparison: ManagedComparisonData | null;
   heldRate: HeldRateData;
   consentCompleteness: ConsentCompletenessData;
+  recoveryCandidates: RecoveryCandidatesData;
   receiptedBookings: ReceiptedBookingsData;
   receiptedBookingQuality: ReceiptedBookingQualityData;
   receiptedBookingRevenue: ReceiptedBookingRevenueData;

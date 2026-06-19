@@ -95,6 +95,13 @@ describe("buildResultsModel", () => {
     // The rest of the (present) block is preserved, not zeroed.
     expect(m.receiptedBookingQuality.cohortSize).toBe(41);
   });
+
+  it("defaults recoveryCandidates to { noShows: 0 } when absent from a stale cached payload", () => {
+    const stale = { ...goodFixture } as unknown as import("./types").ReportData;
+    delete (stale as unknown as Record<string, unknown>)["recoveryCandidates"];
+    const m = buildResultsModel(stale);
+    expect(m.recoveryCandidates).toEqual({ noShows: 0 });
+  });
 });
 
 describe("fmtRatio", () => {

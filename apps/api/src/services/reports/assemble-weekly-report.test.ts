@@ -66,6 +66,7 @@ function stubStores(): ReportStores {
     bookings: {
       countExcludingStatuses: async () => 0,
       countMaturedAttendance: async () => ({ matured: 12, attended: 9 }),
+      countNoShowsInWindow: async () => 0,
     },
     opportunities: { countClosedWon: async () => 0 },
     conversions: { countByType: async () => 0, leadsBySource: async () => [] },

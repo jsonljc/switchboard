@@ -289,6 +289,44 @@
   margin: 0.0625rem 0 0;
 }
 
+/* ─── Recovery-candidates tile ─── */
+
+/* Outer wrapper: single count stack, matches the held-rate tile rhythm */
+.recoveryCandidates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Eyebrow label */
+.recoveryCandidatesEyebrow {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin: 0;
+}
+
+/* Count: large mono tabular (matches heldRateNum scale) */
+.recoveryCandidatesNum {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-1);
+  margin: 0;
+}
+
+/* Supporting note */
+.recoveryCandidatesNote {
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  margin: 0.0625rem 0 0;
+}
+
 /* ─── Receipted-bookings tile ─── */
 
 /* Outer wrapper — single metric stack, matches the held-rate tile rhythm */

@@ -62,6 +62,7 @@ function makeStores(opts: {
         return isCurrent ? (opts.currentBookings ?? 0) : (opts.priorBookings ?? 0);
       },
       countMaturedAttendance: async () => ({ matured: 0, attended: 0 }),
+      countNoShowsInWindow: async () => 0,
     },
     opportunities: {
       countClosedWon: async ({ from }) => {

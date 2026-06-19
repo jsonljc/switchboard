@@ -15,6 +15,7 @@ import { computeCampaignRollup } from "./campaign-rollup.js";
 import { computeManagedComparison } from "./managed-comparison-rollup.js";
 import { computeHeldRate } from "./compute-held-rate.js";
 import { computeConsentCompleteness } from "./compute-consent-completeness.js";
+import { computeRecoveryCandidates } from "./compute-recovery-candidates.js";
 import { computeReceiptedBookings } from "./compute-receipted-bookings.js";
 import { computeReceiptedBookingQuality } from "./compute-receipted-booking-quality.js";
 import { computeReceiptedBookingRevenue } from "./compute-receipted-booking-revenue.js";
@@ -44,6 +45,7 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
       managedComparison,
       heldRate,
       consentCompleteness,
+      recoveryCandidates,
       receiptedBookings,
       receiptedBookingQuality,
       receiptedBookingRevenue,
@@ -55,6 +57,7 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
       computeManagedComparison(ctx, deps.insightsProvider, deps.baselineStore, deps.stores),
       computeHeldRate(ctx, deps.stores.bookings),
       computeConsentCompleteness(ctx, deps.stores.contacts),
+      computeRecoveryCandidates(ctx, deps.stores.bookings),
       computeReceiptedBookings(ctx, deps.stores.receipts),
       computeReceiptedBookingQuality(ctx, deps.stores.receiptedBookings),
       computeReceiptedBookingRevenue(ctx, deps.stores.receiptedBookings),
@@ -81,6 +84,7 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
       managedComparison,
       heldRate,
       consentCompleteness,
+      recoveryCandidates,
       receiptedBookings,
       receiptedBookingQuality,
       receiptedBookingRevenue,

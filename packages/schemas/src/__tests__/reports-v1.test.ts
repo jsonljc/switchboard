@@ -71,6 +71,7 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
       managedComparison: null,
       heldRate: { attended: 38, matured: 45, rate: 38 / 45 },
       consentCompleteness: { validConsent: 42, bookable: 45, rate: 42 / 45 },
+      recoveryCandidates: { noShows: 3 },
       receiptedBookings: { count: 41 },
       receiptedBookingQuality: {
         cohortSize: 41,
