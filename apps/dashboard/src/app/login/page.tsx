@@ -6,6 +6,7 @@ import { signIn, useSession, SessionProvider } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AgentMark } from "@/components/character/agent-mark";
 import { defaultCallback } from "./redirect-logic";
+import { isSelfServeSignupOpen } from "@/lib/register";
 
 const smtpConfigured = process.env.NEXT_PUBLIC_SMTP_CONFIGURED === "true";
 const googleConfigured = process.env.NEXT_PUBLIC_GOOGLE_AUTH_CONFIGURED === "true";
@@ -22,6 +23,7 @@ function LoginForm() {
   const isVerified = searchParams.get("verified") === "true";
   const verifyError = searchParams.get("error");
   const explicitCallback = searchParams.get("callbackUrl");
+  const signupOpen = isSelfServeSignupOpen();
 
   const { data: session, status } = useSession();
 
@@ -491,6 +493,34 @@ function LoginForm() {
                   </button>
                 </div>
               )}
+            </>
+          )}
+        </div>
+
+        {/* Account prompt: self-serve signup when open, waitlist when closed. */}
+        <div
+          className="mt-6 text-center"
+          style={{ fontSize: "14px", color: "var(--sw-text-muted)" }}
+        >
+          {signupOpen ? (
+            <>
+              New to Switchboard?{" "}
+              <Link
+                href="/register"
+                style={{ color: "var(--sw-text-secondary)", textDecoration: "none" }}
+              >
+                Create one
+              </Link>
+            </>
+          ) : (
+            <>
+              Not open yet?{" "}
+              <Link
+                href="/welcome"
+                style={{ color: "var(--sw-text-secondary)", textDecoration: "none" }}
+              >
+                Join the waitlist
+              </Link>
             </>
           )}
         </div>
