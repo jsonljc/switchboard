@@ -279,6 +279,7 @@ export function TestCenter({
               Test first
             </button>
             <Button
+              variant="action"
               onClick={onAdvance}
               className="h-[40px] rounded-lg px-4 text-[14px]"
               style={{ backgroundColor: "var(--sw-text-muted)", color: "white" }}
@@ -295,6 +296,7 @@ export function TestCenter({
               }
               onAdvance();
             }}
+            variant="action"
             className="h-[48px] rounded-lg px-6 text-[16px] font-medium"
             style={{ backgroundColor: "var(--sw-text-primary)", color: "white" }}
           >

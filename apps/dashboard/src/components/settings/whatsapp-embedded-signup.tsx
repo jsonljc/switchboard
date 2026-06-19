@@ -189,6 +189,7 @@ export function WhatsAppEmbeddedSignup({
           </span>
         </div>
         <Button
+          variant="action"
           type="button"
           className="mt-5 w-full"
           onClick={() =>
@@ -258,6 +259,7 @@ export function WhatsAppEmbeddedSignup({
         )}
 
         <Button
+          variant="action"
           type="button"
           onClick={handleConnect}
           disabled={busy}

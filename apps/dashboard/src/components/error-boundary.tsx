@@ -96,6 +96,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 </pre>
               )}
               <Button
+                variant="action"
                 onClick={() => {
                   this.setState({ hasError: false, error: null });
                   window.location.reload();

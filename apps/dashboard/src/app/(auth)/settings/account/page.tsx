@@ -199,7 +199,7 @@ export default function SettingsAccountPage() {
                 </div>
               </div>
 
-              <Button onClick={handleSaveGeneral} size="sm">
+              <Button variant="action" onClick={handleSaveGeneral} size="sm">
                 Save Changes
               </Button>
             </CardContent>

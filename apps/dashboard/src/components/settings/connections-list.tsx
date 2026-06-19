@@ -372,6 +372,7 @@ export function ConnectionsList() {
                 {SERVICE_CONNECTION_CONFIGS[serviceId]?.oauth && (
                   <div className="space-y-3">
                     <Button
+                      variant="action"
                       type="button"
                       className="w-full"
                       disabled={!oauthDeploymentId}
@@ -453,6 +454,7 @@ export function ConnectionsList() {
                     Cancel
                   </Button>
                   <Button
+                    variant="action"
                     type="submit"
                     disabled={
                       createConnection.isPending ||

@@ -323,6 +323,7 @@ export function TrainingShell({
               Playbook ready.
             </span>
             <Button
+              variant="action"
               onClick={onAdvance}
               className="h-[48px] rounded-lg px-6 text-[16px] font-medium"
               style={{ backgroundColor: "var(--sw-text-primary)", color: "white" }}

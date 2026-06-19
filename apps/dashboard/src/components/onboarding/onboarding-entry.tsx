@@ -96,6 +96,7 @@ export function OnboardingEntry({ onScan, onSkip }: OnboardingEntryProps) {
           </p>
 
           <Button
+            variant="action"
             onClick={handleScan}
             disabled={!isValidUrl || isScanning}
             className="h-[48px] rounded-lg px-8 text-[16px] font-medium transition-all duration-200"

@@ -178,7 +178,7 @@ export function OperationalStateForm({
       </div>
 
       <div className="flex justify-end">
-        <Button type="submit" disabled={serialized === null || isSaving}>
+        <Button variant="action" type="submit" disabled={serialized === null || isSaving}>
           Confirm operational state
         </Button>
       </div>

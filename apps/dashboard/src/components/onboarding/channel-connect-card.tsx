@@ -271,6 +271,7 @@ export function ChannelConnectCard({
                 </Button>
               )}
               <Button
+                variant="action"
                 onClick={() => {
                   onConnect(fields);
                   setExpanded(false);

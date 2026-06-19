@@ -149,7 +149,7 @@ export function WhatsAppSendTest({ phoneNumbers, templates, allowedRecipients }:
         )}
 
         <div>
-          <Button onClick={onSubmit} disabled={disabled}>
+          <Button variant="action" onClick={onSubmit} disabled={disabled}>
             {send.isPending ? "Sending…" : "Send test"}
           </Button>
         </div>

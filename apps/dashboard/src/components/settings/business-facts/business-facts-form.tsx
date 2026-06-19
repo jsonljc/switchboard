@@ -89,7 +89,7 @@ export function BusinessFactsForm({
         <FaqsSection />
 
         <div className="sticky bottom-0 flex justify-end bg-background/80 backdrop-blur py-3">
-          <Button type="submit" disabled={isSaving}>
+          <Button variant="action" type="submit" disabled={isSaving}>
             Save business facts
           </Button>
         </div>
