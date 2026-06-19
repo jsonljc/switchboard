@@ -103,6 +103,41 @@ export function resolveConsentStateConfig(config: GovernanceConfig | null): Cons
 }
 
 /**
+ * Per-deployment configuration for Robin's no-show recovery campaign cron (v1).
+ * Lives under `governanceConfig.recovery` as a passthrough sub-block - no Prisma
+ * migration (the parent schema's `.passthrough()` already accepts arbitrary sub-blocks).
+ *
+ * Defaults: mode="off" (the cron is fully inert: no candidate scan, no campaigns, no sends).
+ * Promote to "observe" to count recovery candidates in the cron (telemetry only, no submit),
+ * then "enforce" to submit campaigns that PARK for manager approval before any send.
+ */
+export const RecoveryConfigSchema = z
+  .object({
+    mode: GovernanceModeSchema.default("off"),
+  })
+  .default({});
+
+export type RecoveryConfig = z.infer<typeof RecoveryConfigSchema>;
+
+export function resolveRecoveryConfig(config: GovernanceConfig | null): RecoveryConfig {
+  const raw = (config as unknown as Record<string, unknown> | null)?.recovery;
+  // Fail-CLOSED: a corrupt stored sub-block (bad mode enum, non-object) must NOT throw and crash the
+  // cron tick. Coerce to the documented "off" default (no campaigns, no sends - the safe direction for
+  // a mass-outbound capability). Log ONLY the Zod issue path+code (no raw value; the sub-block carries
+  // no PII) so a corrupt config is not silently inert. Mirrors resolveConsentStateConfig above, which
+  // is why logging from this L1 layer is consistent with the established pattern.
+  const parsed = RecoveryConfigSchema.safeParse(raw ?? {});
+  if (!parsed.success) {
+    console.error(
+      "[governance-config] corrupt recovery sub-block; failing closed to mode=off (no recovery campaigns for this org)",
+      { issues: parsed.error.issues.map((i) => ({ path: i.path, code: i.code })) },
+    );
+    return { mode: "off" };
+  }
+  return parsed.data;
+}
+
+/**
  * Per-deployment configuration for the Phase 3a mechanical lifecycle tagging
  * layer. Lives under `governanceConfig.lifecycleTagging.mechanical` as a
  * passthrough sub-block — the parent schema uses `.passthrough()`, no Prisma
