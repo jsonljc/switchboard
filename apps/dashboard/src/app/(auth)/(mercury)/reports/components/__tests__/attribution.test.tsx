@@ -10,10 +10,9 @@ const data = {
 };
 
 describe("Attribution", () => {
-  it("renders the hero number with S$ superscript", () => {
+  it("renders the hero number as one clean S$ amount via fmtSGD", () => {
     const { container } = render(<Attribution data={data} />);
-    expect(container.textContent).toContain("14,720");
-    expect(container.textContent).toContain("S$");
+    expect(container.textContent).toContain("S$14,720");
   });
 
   it("renders 'Revenue we drove' eyebrow (not 'Attributed pipeline')", () => {

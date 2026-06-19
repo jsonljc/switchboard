@@ -3,8 +3,6 @@ import styles from "../reports.module.css";
 import { fmtSGD } from "./format";
 
 export function CostVsValue({ cost, narrative }: { cost: CostBreakdown; narrative: string }) {
-  const savingDollars = Math.round(cost.saving).toLocaleString("en-SG");
-
   return (
     <section className={styles.section}>
       <div className={styles.sectionHead}>
@@ -26,10 +24,7 @@ export function CostVsValue({ cost, narrative }: { cost: CostBreakdown; narrativ
           </div>
           <div className={`${styles.costCell} ${styles.saving}`}>
             <span className={styles.label}>Monthly saving</span>
-            <span className={styles.v}>
-              <span className={styles.sgd}>S$</span>
-              {savingDollars}
-            </span>
+            <span className={styles.v}>{fmtSGD(cost.saving, { withCents: "never" })}</span>
             <span className={styles.sub}>net to your P&amp;L</span>
           </div>
         </div>

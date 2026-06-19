@@ -45,7 +45,7 @@
     /* warm-neutral ink ramp — ONE canonical text/neutral scale (T5, by role) */
     --palette-ink-900: 20 10% 12%; /* primary text */
     --palette-ink-700: 20 8% 28%; /* secondary */
-    --palette-ink-500: 20 6% 46%; /* tertiary */
+    --palette-ink-500: 20 6% 40%; /* tertiary — darkened to clear WCAG AA (>=4.5:1) on cream */
     --palette-ink-400: 20 6% 62%; /* faint */
     --palette-ink-300: 38 22% 73%; /* quinary — disabled fills / off pills */
 
