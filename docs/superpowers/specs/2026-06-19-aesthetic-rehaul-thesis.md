@@ -6,7 +6,7 @@ Scope: apps/dashboard (authed app). Public marketing (`/welcome`, `/privacy`, `/
 
 ## North star
 
-Commit fully to ONE warm-editorial register and let `/reports` be the literal style guide for the entire app, not an outlier. The product should read like a confident, hand-set editorial broadsheet printed on warm riso paper: Fraunces serif display with a mono eyebrow on every page header, Geist body, a single editorial type scale, one signature card (sharp ~2px corners, layered shadow, hairline ring on cream), amber as the ONLY action color with agent hues reserved strictly for identity, and flatness as the calm default with elevation spent rarely on the one decisional moment that matters.
+Commit fully to ONE warm-editorial register and let `/reports` be the literal style guide for the entire app, not an outlier. The product should read like a confident, hand-set editorial broadsheet printed on warm riso paper: Source Serif display with a mono eyebrow on every page header, Geist body, a single editorial type scale, one signature card (crisp corners and a hairline ring on warm paper), amber as the ONLY action color with agent hues reserved strictly for identity, and flatness as the calm default with elevation spent rarely on the one decisional moment that matters.
 
 This beats generic-AI-dashboard defaults through restraint plus a distinctive paper-and-ink voice that signals "a real team thought about your day" — precisely the trust a revenue/governance pilot is buying.
 
@@ -15,9 +15,9 @@ Direction derived by audit (the user delegated: "let the audit decide"). It elev
 ## Canonical register decisions
 
 - Canvas: warm cream + riso paper grain (light only; dark stays hidden until Wave 3).
-- Type: Fraunces serif display (`--font-display-app`) + JetBrains mono eyebrow on every authed page header; Geist body (`--font-body-app`). ONE editorial type scale exposed via `tailwind.config.ts` `fontSize` (currently undefined) replacing 280+ ad-hoc `text-[NNpx]` brackets.
+- Type: Source Serif display (`--serif`, the face `/reports` and the shared `PageTitle` use) + JetBrains mono eyebrow on every authed page header; Geist body (`--font-body-app`). Fraunces (`--font-display-app`) is wired but is not the canonical reports voice; reconcile to a single display face in the type-scale work. ONE editorial type scale exposed via `tailwind.config.ts` `fontSize` (currently undefined) replacing 280+ ad-hoc `text-[NNpx]` brackets.
 - Color: amber (`--action`) is the ONLY action color. Agent hues (coral=Alex, teal=Riley, violet=Mira) are identity-only, never on action buttons. Resolve the two near-identical warm oranges (action amber vs editorial accent) so the action signal is unambiguous.
-- Surface: ONE signature card primitive (warm surface + hairline inset ring + layered shadow on the elevation ladder + single editorial radius). Migrate the four uncoordinated card radii (2/6/8/16px) to it.
+- Surface: ONE signature card primitive (warm surface + hairline ring, flat by default). The shared `Card` now uses a crisp 6px (`rounded-sm`) radius for content cards; `/reports` keeps its sharper 2px for bespoke editorial cards. Migrate the four uncoordinated card radii (2/6/8/16px) toward one scale.
 - Accessibility: all text meets WCAG AA on cream. Fix `--ink-3` (~4.11:1) and `--sw-text-muted` (~2.85:1). Keyboard focus is never stripped without replacement.
 
 ## Audit ledger (59 findings: 4 blocker / 22 high / 26 medium / 7 low)

@@ -54,7 +54,6 @@ const REQUIRED_CLASSES = [
   "attrBlock",
   "attrHero",
   "attrNum",
-  "sgd",
   "attrAside",
   "label",
   "desc",

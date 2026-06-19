@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import styles from "./page-title.module.css";
 
 export interface PageTitleProps {
   /** Mono uppercase kicker above the title (the /reports "Statement" eyebrow). */
@@ -14,47 +15,16 @@ export interface PageTitleProps {
 /**
  * The ONE editorial page header, codifying the /reports high-water-mark voice so
  * every authed surface speaks in one hand: a JetBrains-mono uppercase eyebrow over
- * a Source Serif display title, with an optional supporting line. Uses global
- * tokens (--mono, --serif, --ink, --ink-3) so it renders correctly on any authed
- * surface. Server-component safe (no client hooks).
+ * a Source Serif (--serif) display title, with an optional supporting line. The
+ * type and ink live in page-title.module.css using the global editorial tokens
+ * (--mono, --serif, --ink, --ink-3), matching reports.module.css. Server-safe.
  */
 export function PageTitle({ eyebrow, children, sub, className }: PageTitleProps) {
   return (
     <div className={cn("space-y-2", className)}>
-      {eyebrow ? (
-        <span
-          className="block uppercase"
-          style={{
-            fontFamily: "var(--mono)",
-            fontSize: "11px",
-            fontWeight: 700,
-            letterSpacing: "0.14em",
-            color: "hsl(var(--ink-3))",
-          }}
-        >
-          {eyebrow}
-        </span>
-      ) : null}
-      <h1
-        style={{
-          fontFamily: "var(--serif)",
-          fontSize: "clamp(30px, 3.4vw, 42px)",
-          fontWeight: 500,
-          lineHeight: 1.04,
-          letterSpacing: "-0.014em",
-          color: "hsl(var(--ink))",
-        }}
-      >
-        {children}
-      </h1>
-      {sub ? (
-        <p
-          className="max-w-2xl"
-          style={{ fontSize: "15px", lineHeight: 1.6, color: "hsl(var(--ink-3))" }}
-        >
-          {sub}
-        </p>
-      ) : null}
+      {eyebrow ? <span className={styles.eyebrow}>{eyebrow}</span> : null}
+      <h1 className={styles.title}>{children}</h1>
+      {sub ? <p className={styles.sub}>{sub}</p> : null}
     </div>
   );
 }

@@ -22,7 +22,9 @@ describe("PageTitle", () => {
 
   it("omits the eyebrow and sub when not provided", () => {
     const { container } = render(<PageTitle>Only title</PageTitle>);
-    expect(container.querySelectorAll("span")).toHaveLength(0);
-    expect(container.querySelectorAll("p")).toHaveLength(0);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Only title");
+    // No eyebrow span and no supporting paragraph when those props are absent.
+    expect(container.querySelector("span")).toBeNull();
+    expect(container.querySelector("p")).toBeNull();
   });
 });

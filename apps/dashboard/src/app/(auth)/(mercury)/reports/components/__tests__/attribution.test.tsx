@@ -10,9 +10,13 @@ const data = {
 };
 
 describe("Attribution", () => {
-  it("renders the hero number as one clean S$ amount via fmtSGD", () => {
+  it("renders the hero number as one clean S$ string via fmtSGD (no superscript span)", () => {
     const { container } = render(<Attribution data={data} />);
-    expect(container.textContent).toContain("S$14,720");
+    const hero = container.querySelector('[class*="attrNum"]');
+    // The whole figure is one fmtSGD string in a single node, not "S$" split into
+    // a separate superscript span (the old `.sgd` markup that garbled to "$$").
+    expect(hero?.textContent).toBe("S$14,720");
+    expect(container.querySelector('[class*="sgd"]')).toBeNull();
   });
 
   it("renders 'Revenue we drove' eyebrow (not 'Attributed pipeline')", () => {

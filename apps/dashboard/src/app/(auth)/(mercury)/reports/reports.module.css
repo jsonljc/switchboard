@@ -457,16 +457,6 @@
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
-.attrNum .sgd,
-.sgd {
-  font-family: var(--mono);
-  font-size: 0.34em;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ink-3);
-  vertical-align: 0.7em;
-  margin-right: 0.16em;
-}
 .attrAside {
   display: flex;
   flex-direction: column;
@@ -1131,16 +1121,6 @@
   color: var(--accent-deep);
   letter-spacing: -0.018em;
   line-height: 0.96;
-}
-.costCell.saving .v .sgd {
-  font-family: var(--mono);
-  font-size: 0.32em;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--accent-deep);
-  opacity: 0.8;
-  vertical-align: 0.6em;
-  margin-right: 0.16em;
 }
 .costCell .sub {
   font-family: var(--mono);
