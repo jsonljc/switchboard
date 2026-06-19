@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createAnthropicAdapter } from "../anthropic-adapter.js";
 import type { ConversationPrompt } from "../../llm-adapter.js";
+import { createInMemoryMetrics, setMetrics } from "../../telemetry/metrics.js";
 
 const createMock = vi.fn().mockResolvedValue({
   content: [{ type: "text", text: "Hello! How can I help you?" }],
+  // usage included so the adapter's per-call cache-effectiveness recording reads
+  // cleanly and emits a non-miss outcome (no zero-read warn) in these fixtures.
+  usage: {
+    input_tokens: 10,
+    output_tokens: 5,
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 20,
+  },
 });
 
 // Mock the Anthropic SDK
@@ -115,6 +124,37 @@ describe("createAnthropicAdapter", () => {
     expect(callArgs.model).toBe("claude-opus-4-6");
     expect(callArgs.max_tokens).toBe(2048);
     expect(callArgs.temperature).toBe(0.5);
+  });
+
+  it("omits temperature for a 4.7+ model id (forward-compat; avoids the hard-400)", async () => {
+    const adapter = createAnthropicAdapter("test-key");
+    await adapter.generateReply(makePrompt(), {
+      slot: "critical",
+      modelId: "claude-opus-4-8",
+      maxTokens: 2048,
+      temperature: 0.5,
+      timeoutMs: 10000,
+    });
+
+    const callArgs = createMock.mock.calls[0]![0];
+    expect("temperature" in callArgs).toBe(false);
+  });
+
+  it("records per-call prompt-cache effectiveness from the response usage", async () => {
+    const metrics = createInMemoryMetrics();
+    setMetrics(metrics);
+    const inc = vi.spyOn(metrics.llmCacheCallsTotal, "inc");
+    const adapter = createAnthropicAdapter("test-key");
+    await adapter.generateReply(makePrompt(), {
+      slot: "premium",
+      modelId: "claude-opus-4-6",
+      maxTokens: 2048,
+      temperature: 0.5,
+      timeoutMs: 10000,
+    });
+
+    // mock usage has cache_read 0, cache_creation 20 -> "populate"
+    expect(inc).toHaveBeenCalledWith({ model: "claude-opus-4-6", outcome: "populate" });
   });
 });
 

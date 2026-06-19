@@ -9,6 +9,8 @@ import {
   type LLMStopReason,
   type LLMToolResultBlock,
 } from "../llm-types.js";
+import { modelSupportsSamplingParams } from "../../model-router.js";
+import { recordLlmCacheEffectiveness } from "../../telemetry/metrics.js";
 
 // encodeToolName / decodeToolName are the sole "." ↔ "__" boundary for both
 // tool definitions and outgoing message history (tool_use blocks).
@@ -110,6 +112,20 @@ function encodeOutgoingContent(content: LLMMessage["content"]): Anthropic.Messag
   }) as Anthropic.MessageParam["content"];
 }
 
+/**
+ * Order tools deterministically by ENCODED wire name so the cached tool-defs
+ * prefix is byte-stable across boots: prompt caching is a strict byte-prefix
+ * match, and a varying tool order silently busts it (zero cache reads). Sorts a
+ * COPY so the caller's array is untouched. Exported for direct unit testing.
+ */
+export function orderToolsForCache(tools: LLMToolDefinition[]): LLMToolDefinition[] {
+  return [...tools].sort((a, b) => {
+    const ea = encodeToolName(a.name);
+    const eb = encodeToolName(b.name);
+    return ea < eb ? -1 : ea > eb ? 1 : 0;
+  });
+}
+
 export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
   constructor(private client: Anthropic) {}
 
@@ -122,6 +138,7 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
     /** Abort signal threaded to the SDK request so a deadline can cancel the call. */
     signal?: AbortSignal;
   }): Promise<LLMResponse> {
+    const model = params.profile?.model ?? DEFAULT_MODEL;
     const anthropicMessages: Anthropic.MessageParam[] = params.messages.map((m) => ({
       role: m.role,
       content: encodeOutgoingContent(m.content),
@@ -132,15 +149,18 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
     // breakpoint at the end of the tools block prefix-caches every tool before it;
     // the system breakpoint below then caches tools+system together. Mirrors the
     // claim-classifier's caching shape. The dynamic message tail stays unmarked.
+    // Deterministic tool order (by encoded wire name) so the cached tool-defs
+    // prefix is byte-stable across boots; a varying order silently busts the cache.
+    const orderedTools = orderToolsForCache(params.tools);
     const anthropicTools: Anthropic.Tool[] | undefined =
-      params.tools.length > 0
-        ? params.tools.map((t, i) => {
+      orderedTools.length > 0
+        ? orderedTools.map((t, i) => {
             const tool: Anthropic.Tool = {
               name: encodeToolName(t.name), // encode "." → "__" so the name satisfies ^[a-zA-Z0-9_-]{1,128}$
               description: t.description,
               input_schema: t.input_schema as Anthropic.Tool.InputSchema,
             };
-            if (i === params.tools.length - 1) {
+            if (i === orderedTools.length - 1) {
               tool.cache_control = { type: "ephemeral" };
             }
             return tool;
@@ -155,14 +175,19 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
     // claim-classifier's two-arg `messages.create(body, { signal })`.
     const response = await this.client.messages.create(
       {
-        model: params.profile?.model ?? DEFAULT_MODEL,
+        model,
         max_tokens: params.profile?.maxTokens ?? params.maxTokens ?? DEFAULT_MAX_TOKENS,
         // Cache the system prompt; combined with the last-tool breakpoint above this
         // caches the full tools+system static prefix (see anthropicTools comment).
         system: [{ type: "text", text: params.system, cache_control: { type: "ephemeral" } }],
         messages: anthropicMessages,
         tools: anthropicTools,
-        temperature: params.profile?.temperature ?? DEFAULT_TEMPERATURE,
+        // Generation-aware sampling: 4.7+ ids reject temperature/top_p/top_k with
+        // a hard 400, so send temperature only on generations that accept it (4.6
+        // and earlier). A no-op on today's routes; removes a latent bump-time 400.
+        ...(modelSupportsSamplingParams(model)
+          ? { temperature: params.profile?.temperature ?? DEFAULT_TEMPERATURE }
+          : {}),
       },
       {
         ...(params.signal ? { signal: params.signal } : {}),
@@ -170,6 +195,14 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
         maxRetries: 1,
       },
     );
+
+    // Per-call prompt-cache effectiveness (hit/populate/miss + zero-read warn),
+    // recorded per call so a mid-conversation cache bust is caught, not blurred.
+    recordLlmCacheEffectiveness({
+      model,
+      cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+    });
 
     // Translate content blocks. Unknown block types MUST surface as a typed
     // adapter error — silent coercion to empty text hides provider mismatches.
@@ -198,7 +231,7 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
     return {
       content,
       stopReason: response.stop_reason as LLMStopReason,
-      model: params.profile?.model ?? DEFAULT_MODEL,
+      model,
       usage: {
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,

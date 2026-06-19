@@ -4,6 +4,7 @@ import {
   effortToSlotAndOptions,
   TASK_TYPE_EFFORT_MAP,
   effortForTaskType,
+  modelSupportsSamplingParams,
 } from "../model-router.js";
 
 describe("ModelRouter", () => {
@@ -133,5 +134,39 @@ describe("effortForTaskType", () => {
 
   it("returns medium for an unknown task type (fallback)", () => {
     expect(effortForTaskType("unknown.task.type")).toBe("medium");
+  });
+});
+
+describe("modelSupportsSamplingParams", () => {
+  it("returns true for the current 4.5/4.6 generation (sampling params accepted)", () => {
+    expect(modelSupportsSamplingParams("claude-haiku-4-5-20251001")).toBe(true);
+    expect(modelSupportsSamplingParams("claude-sonnet-4-6")).toBe(true);
+    expect(modelSupportsSamplingParams("claude-opus-4-6")).toBe(true);
+  });
+
+  it("returns false for 4.7+ generations that hard-400 on temperature/top_p/top_k", () => {
+    expect(modelSupportsSamplingParams("claude-opus-4-7")).toBe(false);
+    expect(modelSupportsSamplingParams("claude-opus-4-8")).toBe(false);
+    expect(modelSupportsSamplingParams("claude-sonnet-4-8")).toBe(false);
+  });
+
+  it("returns false for Fable 5 (rejects sampling params)", () => {
+    expect(modelSupportsSamplingParams("claude-fable-5")).toBe(false);
+    expect(modelSupportsSamplingParams("claude-fable-5-20260101")).toBe(false);
+  });
+
+  it("handles a provider-prefixed (bedrock-style) 4.8 id", () => {
+    expect(modelSupportsSamplingParams("us.anthropic.claude-opus-4-8-v1:0")).toBe(false);
+  });
+
+  it("ignores a trailing date suffix when reading the minor version", () => {
+    expect(modelSupportsSamplingParams("claude-opus-4-6-20260201")).toBe(true);
+    expect(modelSupportsSamplingParams("claude-opus-4-7-20260201")).toBe(false);
+  });
+
+  it("returns true for an unrecognized id (preserve current behavior; no silent temp drop)", () => {
+    expect(modelSupportsSamplingParams("voyage-3-large")).toBe(true);
+    expect(modelSupportsSamplingParams("claude-3-5-sonnet-20241022")).toBe(true);
+    expect(modelSupportsSamplingParams("some-future-model")).toBe(true);
   });
 });

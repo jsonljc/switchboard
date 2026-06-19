@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { LLMAdapter, ConversationPrompt, LLMReply, RetrievedChunk } from "../llm-adapter.js";
-import type { ModelConfig } from "../model-router.js";
+import { modelSupportsSamplingParams, type ModelConfig } from "../model-router.js";
+import { recordLlmCacheEffectiveness } from "../telemetry/metrics.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_TOKENS = 1024;
@@ -41,12 +42,25 @@ export function createAnthropicAdapter(apiKey?: string): LLMAdapter {
         content: m.content,
       }));
 
+      const model = modelConfig?.modelId ?? DEFAULT_MODEL;
       const response = await client.messages.create({
-        model: modelConfig?.modelId ?? DEFAULT_MODEL,
+        model,
         max_tokens: modelConfig?.maxTokens ?? DEFAULT_MAX_TOKENS,
-        temperature: modelConfig?.temperature,
+        // Generation-aware sampling: 4.7+ ids reject temperature/top_p/top_k with a
+        // hard 400, so send temperature only when explicitly set AND the target
+        // model accepts it. A no-op on today's 4.6 routes; removes a latent 400.
+        ...(modelConfig?.temperature !== undefined && modelSupportsSamplingParams(model)
+          ? { temperature: modelConfig.temperature }
+          : {}),
         system: buildSystemContent(prompt),
         messages,
+      });
+
+      // Per-call prompt-cache effectiveness (hit/populate/miss + zero-read warn).
+      recordLlmCacheEffectiveness({
+        model,
+        cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+        cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
       });
 
       const text = response.content[0]?.type === "text" ? response.content[0].text : "";

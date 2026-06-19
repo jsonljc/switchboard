@@ -201,3 +201,53 @@ export const TASK_TYPE_EFFORT_MAP: Record<string, Effort> = {
 export function effortForTaskType(taskType: string): Effort {
   return TASK_TYPE_EFFORT_MAP[taskType] ?? "medium";
 }
+
+interface ClaudeGeneration {
+  family: "haiku" | "sonnet" | "opus" | "fable";
+  major: number;
+  minor: number;
+}
+
+// Parse the family + major.minor generation out of a Claude model id. Handles
+// the current "claude-<family>-<major>-<minor>[-<date>]" shape (e.g.
+// "claude-opus-4-6", "claude-haiku-4-5-20251001", "claude-fable-5") and a
+// provider-prefixed form ("us.anthropic.claude-opus-4-8-v1:0"). The family is
+// anchored immediately after "claude-" so the legacy "claude-3-5-sonnet" order
+// (version-before-family) does not false-match. A trailing date suffix is left
+// unmatched (minor reads the first numeric segment). Returns null when the id is
+// not a recognizable Claude generation; the caller then preserves current
+// behavior rather than guessing.
+function parseClaudeGeneration(modelId: string): ClaudeGeneration | null {
+  const match = /(?:^|[./])claude-(haiku|sonnet|opus|fable)-(\d+)(?:-(\d+))?/.exec(modelId);
+  if (!match) return null;
+  const family = match[1] as ClaudeGeneration["family"];
+  const major = Number(match[2]);
+  const minor = match[3] !== undefined ? Number(match[3]) : 0;
+  return { family, major, minor };
+}
+
+/**
+ * Whether a Claude model accepts the sampling params `temperature`/`top_p`/`top_k`.
+ *
+ * Claude generations 4.7 and newer (Opus 4.7/4.8, Fable 5, ...) reject those
+ * params with a hard 400; 4.6 and earlier accept them. Adapters call this to
+ * include `temperature` only when the target model supports it, which makes a
+ * future model-id bump (e.g. router slots -> 4.8) a no-op instead of a latent
+ * 400. Today's 4.5/4.6 routes return true, so this is behavior-preserving now.
+ *
+ * Unrecognized ids return true to preserve current behavior: a parser gap must
+ * never silently drop `temperature` on a live route. A genuinely new id that the
+ * parser cannot read will surface loudly (a 400 on first call) rather than
+ * quietly change sampling — at which point the parser, not this default, is the
+ * fix. Range/length constraints stay in Zod, not here (strict-schema sibling
+ * gotcha: see feedback_anthropic_strict_tool_schema_no_minmax).
+ */
+export function modelSupportsSamplingParams(modelId: string): boolean {
+  const gen = parseClaudeGeneration(modelId);
+  if (!gen) return true;
+  // Fable 5 is the first Fable generation and already rejects sampling params.
+  if (gen.family === "fable") return false;
+  if (gen.major > 4) return false;
+  if (gen.major === 4 && gen.minor >= 7) return false;
+  return true;
+}

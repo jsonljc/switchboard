@@ -6,6 +6,7 @@ import type { RollupContext } from "./types.js";
 import { formatCurrencySGD } from "./period-helpers.js";
 import { PULL_QUOTE_SYSTEM_PROMPT, buildUserPrompt } from "./prompts/pull-quote-prompt.js";
 import type { PullQuoteFacts } from "./prompts/pull-quote-prompt.js";
+import { modelSupportsSamplingParams } from "../model-router.js";
 
 const LLMOutputSchema = z.object({
   pre: z.string().min(1).max(80),
@@ -141,7 +142,7 @@ type AnthropicLikeCtor = new (args: { apiKey: string }) => {
     create(args: {
       model: string;
       max_tokens: number;
-      temperature: number;
+      temperature?: number;
       system: string;
       messages: Array<{ role: "user" | "assistant"; content: string }>;
     }): Promise<{ content: Array<{ type: string; text: string }> }>;
@@ -160,7 +161,12 @@ export function createAnthropicReportLLMClient(
       const response = await client.messages.create({
         model: REPORT_LLM_MODEL,
         max_tokens: REPORT_LLM_MAX_TOKENS,
-        temperature: REPORT_LLM_TEMPERATURE,
+        // Generation-aware sampling via the shared predicate: a no-op today (Haiku
+        // 4.5 accepts temperature) but omits it automatically if this model const is
+        // ever bumped to a 4.7+ id that hard-400s on sampling params.
+        ...(modelSupportsSamplingParams(REPORT_LLM_MODEL)
+          ? { temperature: REPORT_LLM_TEMPERATURE }
+          : {}),
         system: systemPrompt,
         messages: [
           { role: "user", content: userPrompt },
