@@ -343,4 +343,27 @@ export class PrismaBookingStore {
       attendeeName: r.attendeeName,
     }));
   }
+
+  // Org-scoped batched read: which of `contactIds` hold an ACTIVE upcoming booking as of `now`?
+  // Robin's recovery cron uses this to exclude patients who already self-rebooked (no recovery
+  // needed). Mirrors findUpcomingByContact's active-upcoming predicate (status not cancelled/failed,
+  // startsAt >= now). Org-scoped per the F12 / IDOR rule; `distinct` keeps the result a contact set.
+  async findFutureBookingContactIds(
+    orgId: string,
+    contactIds: string[],
+    now: Date,
+  ): Promise<Set<string>> {
+    if (contactIds.length === 0) return new Set();
+    const rows = await this.prisma.booking.findMany({
+      where: {
+        organizationId: orgId,
+        contactId: { in: contactIds },
+        status: { notIn: ["cancelled", "failed"] },
+        startsAt: { gte: now },
+      },
+      select: { contactId: true },
+      distinct: ["contactId"],
+    });
+    return new Set(rows.map((r) => r.contactId));
+  }
 }

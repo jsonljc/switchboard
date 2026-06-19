@@ -134,6 +134,11 @@ import type {
 } from "../services/cron/scheduled-follow-up-dispatch.js";
 import { createAppointmentReminderDispatchCron } from "../services/cron/appointment-reminder-dispatch.js";
 import type { AppointmentReminderDispatchDeps } from "../services/cron/appointment-reminder-dispatch.js";
+import {
+  createRobinRecoveryDispatchCron,
+  type RobinRecoveryDispatchDeps,
+} from "../services/cron/robin-recovery-dispatch.js";
+import type { RecoveryCampaignSubmitInput } from "../services/workflows/robin-recovery-request.js";
 import type { ReminderSendSubmitInput } from "../services/workflows/reminder-send-request.js";
 import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
@@ -199,6 +204,14 @@ export interface RegisterInngestOptions {
    * governed work. No parentWorkUnitId — cron work units are trace roots.
    */
   submitScheduledReminder?: (input: ReminderSendSubmitInput) => Promise<SubmitWorkResponse>;
+  /**
+   * Top-level submit closure for the Robin no-show recovery dispatch cron. Built in
+   * bootstrapContainedWorkflows and threaded here so the campaign submits through the same
+   * PlatformIngress front door. Returns null on an empty cohort. No parentWorkUnitId (trace root).
+   */
+  submitRecoveryCampaign?: (
+    input: RecoveryCampaignSubmitInput,
+  ) => Promise<SubmitWorkResponse | null>;
   /**
    * Top-level submit closure for the Riley weekly-audit cron's agent handoff
    * (Contract 3). Built in bootstrapContainedWorkflows and threaded here so the cron
@@ -972,6 +985,39 @@ export async function registerInngest(
     markFailed: (id, error) => scheduledReminderStore.markFailed(id, error),
   };
 
+  // Robin no-show recovery dispatch cron dependencies. Enumerates active deployments (bounded) and
+  // reads each governanceConfig.recovery.mode; the no-show + rebooked-exclusion reads reuse bookingStore.
+  const RECOVERY_DEPLOYMENT_SCAN_LIMIT = 500;
+  const robinRecoveryDispatchDeps: RobinRecoveryDispatchDeps = {
+    failure: asyncFailure,
+    listRecoveryDeployments: async () => {
+      const rows = await app.prisma!.agentDeployment.findMany({
+        where: { status: "active" },
+        select: { organizationId: true, governanceConfig: true },
+        take: RECOVERY_DEPLOYMENT_SCAN_LIMIT,
+      });
+      if (rows.length === RECOVERY_DEPLOYMENT_SCAN_LIMIT) {
+        console.warn(
+          `[robin-recovery] deployment scan hit the ${RECOVERY_DEPLOYMENT_SCAN_LIMIT} cap; some orgs may be skipped this run`,
+        );
+      }
+      return rows.map((r) => ({
+        organizationId: r.organizationId,
+        governanceConfig: r.governanceConfig,
+      }));
+    },
+    findNoShowCandidates: (orgId, from, to) =>
+      bookingStore.findNoShowRecoveryCandidates({ orgId, from, to }),
+    findFutureBookingContactIds: (orgId, contactIds, now) =>
+      bookingStore.findFutureBookingContactIds(orgId, contactIds, now),
+    submitRecoveryCampaign: (input) => {
+      if (!options.submitRecoveryCampaign) {
+        throw new Error("submitRecoveryCampaign not wired");
+      }
+      return options.submitRecoveryCampaign(input);
+    },
+  };
+
   // PCD Registry backfill cron dependencies
   const productIdentityStore = new PrismaProductIdentityStore(app.prisma);
 
@@ -1412,6 +1458,7 @@ export async function registerInngest(
       createLeadRetryCron(leadRetryDeps),
       createScheduledFollowUpDispatchCron(scheduledFollowUpDispatchDeps),
       createAppointmentReminderDispatchCron(appointmentReminderDispatchDeps),
+      createRobinRecoveryDispatchCron(robinRecoveryDispatchDeps),
       createPcdRegistryBackfillCron(pcdRegistryBackfillDeps),
       createLifecycleStalledSweepCron({
         failure: asyncFailure,

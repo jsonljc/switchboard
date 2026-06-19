@@ -19,7 +19,8 @@ describe("buildRecoveryCampaignSubmitRequest", () => {
       buildRecoveryCampaignSubmitRequest({
         organizationId: "org_1",
         windowFrom: new Date("2026-06-01T00:00:00Z"),
-        windowTo: new Date("2026-06-08T00:00:00Z"),
+        windowTo: new Date("2026-06-15T00:00:00Z"),
+        asOf: new Date("2026-06-15T08:00:00Z"),
         candidates: [],
       }),
     ).toBeNull();
@@ -29,7 +30,8 @@ describe("buildRecoveryCampaignSubmitRequest", () => {
     const req = buildRecoveryCampaignSubmitRequest({
       organizationId: "org_1",
       windowFrom: new Date("2026-06-01T00:00:00Z"),
-      windowTo: new Date("2026-06-08T00:00:00Z"),
+      windowTo: new Date("2026-06-15T00:00:00Z"),
+      asOf: new Date("2026-06-15T08:00:00Z"), // Mon; the idempotency cadence anchor
       candidates: [candidate],
     });
     expect(req).not.toBeNull();
@@ -43,6 +45,31 @@ describe("buildRecoveryCampaignSubmitRequest", () => {
     };
     expect(params.recipientCount).toBe(1);
     expect(params.candidates[0]!.startsAt).toBe("2026-06-03T09:00:00.000Z"); // serialized to ISO
-    expect(req!.idempotencyKey).toBe("mutate:robin:org_1:2026-06-01:recovery");
+    // Keyed by the ISO-week of asOf (not the scan window), so re-runs within a week dedup.
+    expect(req!.idempotencyKey).toBe("mutate:robin:org_1:2026-06-15:recovery");
+  });
+
+  it("buckets the idempotency key by ISO-week+org (same week same key; next week new key)", () => {
+    const base = {
+      organizationId: "org_1",
+      windowFrom: new Date("2026-06-01T00:00:00Z"),
+      windowTo: new Date("2026-06-30T00:00:00Z"),
+      candidates: [candidate],
+    };
+    const mon = buildRecoveryCampaignSubmitRequest({
+      ...base,
+      asOf: new Date("2026-06-15T00:00:00Z"),
+    });
+    const sun = buildRecoveryCampaignSubmitRequest({
+      ...base,
+      asOf: new Date("2026-06-21T23:59:00Z"),
+    });
+    const nextMon = buildRecoveryCampaignSubmitRequest({
+      ...base,
+      asOf: new Date("2026-06-22T00:00:00Z"),
+    });
+    expect(mon!.idempotencyKey).toBe("mutate:robin:org_1:2026-06-15:recovery");
+    expect(sun!.idempotencyKey).toBe(mon!.idempotencyKey); // Mon..Sun fall in the same bucket
+    expect(nextMon!.idempotencyKey).toBe("mutate:robin:org_1:2026-06-22:recovery"); // next week differs
   });
 });

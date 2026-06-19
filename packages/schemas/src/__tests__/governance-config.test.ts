@@ -7,6 +7,8 @@ import {
   resolveClaimClassifierConfig,
   ConsentStateConfigSchema,
   resolveConsentStateConfig,
+  RecoveryConfigSchema,
+  resolveRecoveryConfig,
   LifecycleTaggingMechanicalConfigSchema,
   resolveLifecycleTaggingMechanicalConfig,
 } from "../governance-config.js";
@@ -312,5 +314,105 @@ describe("resolveLifecycleTaggingMechanicalConfig", () => {
       lifecycleTagging: { mechanical: { mode: "on" } },
     });
     expect(resolveLifecycleTaggingMechanicalConfig(cfg).mode).toBe("on");
+  });
+});
+
+describe("RecoveryConfigSchema", () => {
+  it("applies the off default for an empty sub-block", () => {
+    expect(RecoveryConfigSchema.parse({})).toEqual({ mode: "off" });
+  });
+
+  it("accepts an explicit mode", () => {
+    expect(RecoveryConfigSchema.parse({ mode: "enforce" })).toEqual({ mode: "enforce" });
+  });
+});
+
+describe("resolveRecoveryConfig", () => {
+  it("returns default off when config is null", () => {
+    expect(resolveRecoveryConfig(null)).toEqual({ mode: "off" });
+  });
+
+  it("returns default off when the recovery sub-block is absent", () => {
+    const config = GovernanceConfigSchema.parse({ jurisdiction: "SG", clinicType: "medical" });
+    expect(resolveRecoveryConfig(config)).toEqual({ mode: "off" });
+  });
+
+  it("reads an explicit enforce mode via passthrough", () => {
+    const config = GovernanceConfigSchema.parse({
+      jurisdiction: "MY",
+      clinicType: "nonMedical",
+      recovery: { mode: "enforce" },
+    });
+    expect(resolveRecoveryConfig(config)).toEqual({ mode: "enforce" });
+  });
+
+  it("reads an explicit observe mode via passthrough", () => {
+    const config = GovernanceConfigSchema.parse({
+      jurisdiction: "SG",
+      clinicType: "medical",
+      recovery: { mode: "observe" },
+    });
+    expect(resolveRecoveryConfig(config)).toEqual({ mode: "observe" });
+  });
+
+  it("coerces a corrupt recovery.mode enum to off (fail CLOSED, no throw)", () => {
+    // A stored config whose recovery.mode is not a valid GovernanceMode must NOT crash the cron tick.
+    // It falls back to the documented "off" default: no campaigns, no sends (the safe direction for a
+    // mass-outbound capability).
+    const corrupt = {
+      jurisdiction: "SG",
+      clinicType: "medical",
+      recovery: { mode: "blast" },
+    } as unknown as Parameters<typeof resolveRecoveryConfig>[0];
+    expect(() => resolveRecoveryConfig(corrupt)).not.toThrow();
+    expect(resolveRecoveryConfig(corrupt)).toEqual({ mode: "off" });
+  });
+
+  it("coerces a wholly non-object recovery sub-block to off", () => {
+    const corrupt = {
+      jurisdiction: "SG",
+      clinicType: "medical",
+      recovery: "enforce",
+    } as unknown as Parameters<typeof resolveRecoveryConfig>[0];
+    expect(resolveRecoveryConfig(corrupt)).toEqual({ mode: "off" });
+  });
+
+  describe("corrupt-config telemetry", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("logs a console.error on a corrupt config, then still falls back to off", () => {
+      // The fail-closed coercion silently disables recovery for the org; the helper MUST emit telemetry
+      // (path+code only, no raw value) so a corrupt config is not invisible. Mirrors the consent gate.
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const corrupt = {
+        jurisdiction: "SG",
+        clinicType: "medical",
+        recovery: { mode: "blast" },
+      } as unknown as Parameters<typeof resolveRecoveryConfig>[0];
+
+      const result = resolveRecoveryConfig(corrupt);
+
+      expect(result).toEqual({ mode: "off" });
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const [message, context] = errorSpy.mock.calls[0]!;
+      expect(String(message)).toContain("recovery");
+      const serialized = JSON.stringify(context);
+      expect(serialized).toContain("mode");
+      // The invalid stored value ("blast") must NOT appear in the telemetry payload.
+      expect(serialized).not.toContain("blast");
+    });
+
+    it("does NOT log when the stored recovery config parses cleanly", () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const config = GovernanceConfigSchema.parse({
+        jurisdiction: "SG",
+        clinicType: "medical",
+        recovery: { mode: "observe" },
+      });
+      resolveRecoveryConfig(config);
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
   });
 });

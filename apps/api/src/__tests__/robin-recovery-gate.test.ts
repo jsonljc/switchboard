@@ -90,6 +90,7 @@ function recoveryParameters(): Record<string, unknown> {
     organizationId: ORG,
     windowFrom: new Date("2026-06-01T00:00:00Z"),
     windowTo: new Date("2026-06-08T00:00:00Z"),
+    asOf: new Date("2026-06-08T00:00:00Z"),
     candidates: cohort,
   });
   if (!req) throw new Error("expected a non-null recovery campaign submit request");
