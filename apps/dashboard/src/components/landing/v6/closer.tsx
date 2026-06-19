@@ -3,10 +3,12 @@
 import { ArrowSig } from "./glyphs";
 import { AGENTS, useAgent } from "./agent-context";
 import { AgentToggle } from "./agent-toggle";
+import { isSelfServeSignupOpen } from "@/lib/register";
 
 export function V6Closer() {
   const { agent } = useAgent();
   const meta = AGENTS[agent];
+  const signupOpen = isSelfServeSignupOpen();
 
   return (
     <section
@@ -45,10 +47,16 @@ export function V6Closer() {
 
           <div className="mt-9 flex flex-wrap items-center justify-center gap-6">
             <a
-              href={meta.anchor}
+              href={signupOpen ? "/register" : "#waitlist"}
               className="inline-flex items-center gap-[0.65rem] whitespace-nowrap rounded-full bg-v6-graphite px-7 py-[1.05rem] pl-[1.85rem] text-[0.95rem] font-medium tracking-[-0.005em] text-v6-cream shadow-[0_1px_0_hsl(20_12%_4%_/_0.15)] transition-[transform,background-color,box-shadow] duration-[250ms] hover:-translate-y-px hover:bg-black hover:shadow-[0_8px_24px_hsl(20_12%_4%_/_0.18)]"
             >
-              Start with <span className="font-medium">{meta.name}</span>
+              {signupOpen ? (
+                <>
+                  Start with <span className="font-medium">{meta.name}</span>
+                </>
+              ) : (
+                "Join the waitlist"
+              )}
               <ArrowSig className="!h-[0.7rem] !w-[1.05rem]" />
             </a>
             <a

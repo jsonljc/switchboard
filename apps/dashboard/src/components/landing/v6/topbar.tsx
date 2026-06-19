@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ArrowSig } from "./glyphs";
+import { isSelfServeSignupOpen } from "@/lib/register";
 
 export function V6Topbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -12,6 +13,8 @@ export function V6Topbar() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  const signupOpen = isSelfServeSignupOpen();
 
   return (
     <header
@@ -55,10 +58,10 @@ export function V6Topbar() {
             Sign in
           </a>
           <a
-            href="#pricing"
+            href={signupOpen ? "/register" : "#waitlist"}
             className="inline-flex items-center gap-[0.45rem] whitespace-nowrap rounded-full bg-v6-graphite px-4 py-[0.55rem] text-[0.8125rem] font-medium text-v6-cream transition-[transform,background-color] duration-200 hover:-translate-y-px hover:bg-black"
           >
-            Get started
+            {signupOpen ? "Get started" : "Join the waitlist"}
             <ArrowSig />
           </a>
         </nav>
