@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createInMemoryMetrics } from "../metrics.js";
+import { createInMemoryMetrics, setMetrics, recordLlmCacheEffectiveness } from "../metrics.js";
 
 describe("outcomePattern metrics", () => {
   it("outcomePatternsExtracted accepts labeled increments", () => {
@@ -112,5 +112,62 @@ describe("whatsappProactiveSendSkipped", () => {
       reason: "config_missing",
     });
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("recordLlmCacheEffectiveness", () => {
+  it("classifies a cache read as a hit and records {model, outcome:hit} with no warn", () => {
+    const m = createInMemoryMetrics();
+    setMetrics(m);
+    const inc = vi.spyOn(m.llmCacheCallsTotal, "inc");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const outcome = recordLlmCacheEffectiveness({
+      model: "claude-opus-4-6",
+      cacheReadTokens: 800,
+      cacheCreationTokens: 0,
+    });
+
+    expect(outcome).toBe("hit");
+    expect(inc).toHaveBeenCalledWith({ model: "claude-opus-4-6", outcome: "hit" });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("classifies a first-touch (creation only, zero read) as populate with no warn", () => {
+    const m = createInMemoryMetrics();
+    setMetrics(m);
+    const inc = vi.spyOn(m.llmCacheCallsTotal, "inc");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const outcome = recordLlmCacheEffectiveness({
+      model: "claude-sonnet-4-6",
+      cacheReadTokens: 0,
+      cacheCreationTokens: 1200,
+    });
+
+    expect(outcome).toBe("populate");
+    expect(inc).toHaveBeenCalledWith({ model: "claude-sonnet-4-6", outcome: "populate" });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("classifies zero read AND zero creation as a miss and warns (silent-invalidation signal)", () => {
+    const m = createInMemoryMetrics();
+    setMetrics(m);
+    const inc = vi.spyOn(m.llmCacheCallsTotal, "inc");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const outcome = recordLlmCacheEffectiveness({
+      model: "claude-haiku-4-5-20251001",
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+    });
+
+    expect(outcome).toBe("miss");
+    expect(inc).toHaveBeenCalledWith({ model: "claude-haiku-4-5-20251001", outcome: "miss" });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain("zero-read");
+    warn.mockRestore();
   });
 });

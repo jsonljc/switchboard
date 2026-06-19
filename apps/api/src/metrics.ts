@@ -228,6 +228,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "Proactive WhatsApp send skipped for an infra reason (reason=config_missing => no send token/phone id, the whole deployment dark-funnels); distinct from benign per-contact skips",
       ["intent", "reason"],
     ),
+    llmCacheCallsTotal: new PromCounter(
+      "switchboard_llm_cache_calls_total",
+      "Per-LLM-call prompt-cache effectiveness by model and outcome (hit/populate/miss); a sustained miss rate is the silent cache-invalidation signal",
+      ["model", "outcome"],
+    ),
   };
 }
 

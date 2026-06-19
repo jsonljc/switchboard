@@ -1,10 +1,21 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   AnthropicToolAdapter,
   encodeToolName,
   decodeToolName,
+  orderToolsForCache,
 } from "../adapters/anthropic-tool-adapter.js";
 import type { LLMResponse } from "../llm-types.js";
+import { createInMemoryMetrics, setMetrics } from "../../telemetry/metrics.js";
+
+// The adapter now records prompt-cache effectiveness per call and warns on a
+// zero-read "miss"; many fixtures here return usage without cache fields (a miss),
+// so stub console.warn to keep test output clean. recordLlmCacheEffectiveness's own
+// warn behavior is asserted directly in telemetry/metrics.test.ts.
+beforeEach(() => {
+  vi.restoreAllMocks();
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+});
 
 // ---------------------------------------------------------------------------
 // encodeToolName / decodeToolName — pure unit tests, no network
@@ -539,5 +550,125 @@ describe("AnthropicToolAdapter prompt caching", () => {
     for (const message of sent.messages) {
       expect(message.cache_control).toBeUndefined();
     }
+  });
+});
+
+describe("AnthropicToolAdapter — deterministic tool ordering", () => {
+  const okResp = () => ({
+    content: [{ type: "text", text: "ok" }],
+    stop_reason: "end_turn",
+    usage: {
+      input_tokens: 10,
+      output_tokens: 5,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 50,
+    },
+  });
+
+  it("orderToolsForCache sorts a copy by encoded wire name without mutating the input", () => {
+    const tools = [
+      { name: "crm-query.contact.get", description: "", input_schema: {} },
+      { name: "calendar.search", description: "", input_schema: {} },
+      { name: "escalate", description: "", input_schema: {} },
+    ];
+    const ordered = orderToolsForCache(tools);
+    expect(ordered.map((t) => t.name)).toEqual([
+      "calendar.search", // calendar__search
+      "crm-query.contact.get", // crm-query__contact__get
+      "escalate", // escalate
+    ]);
+    // input array is untouched (sort operates on a copy)
+    expect(tools.map((t) => t.name)).toEqual([
+      "crm-query.contact.get",
+      "calendar.search",
+      "escalate",
+    ]);
+  });
+
+  it("sends tools to the API in deterministic sorted order regardless of input order", async () => {
+    const create = vi.fn().mockResolvedValue(okResp());
+    const adapter = new AnthropicToolAdapter({ messages: { create } } as never);
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [{ role: "user", content: "x" }],
+      tools: [
+        { name: "zebra.do", description: "z", input_schema: { type: "object", properties: {} } },
+        { name: "alpha.do", description: "a", input_schema: { type: "object", properties: {} } },
+        { name: "mango.do", description: "m", input_schema: { type: "object", properties: {} } },
+      ],
+    });
+    const body = create.mock.calls[0]![0] as {
+      tools: Array<{ name: string; cache_control?: { type: string } }>;
+    };
+    expect(body.tools.map((t) => t.name)).toEqual(["alpha__do", "mango__do", "zebra__do"]);
+    // the single cache breakpoint sits on the LAST (now deterministic) tool only
+    expect(body.tools[0]!.cache_control).toBeUndefined();
+    expect(body.tools[1]!.cache_control).toBeUndefined();
+    expect(body.tools[2]!.cache_control).toEqual({ type: "ephemeral" });
+  });
+});
+
+describe("AnthropicToolAdapter — model-generation-aware sampling params", () => {
+  const okResp = () => ({
+    content: [{ type: "text", text: "ok" }],
+    stop_reason: "end_turn",
+    usage: {
+      input_tokens: 10,
+      output_tokens: 5,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 50,
+    },
+  });
+
+  it("omits temperature for a 4.7+ model id (forward-compat; avoids the hard-400)", async () => {
+    const create = vi.fn().mockResolvedValue(okResp());
+    const adapter = new AnthropicToolAdapter({ messages: { create } } as never);
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [{ role: "user", content: "x" }],
+      tools: [],
+      profile: { model: "claude-opus-4-8", maxTokens: 1024, temperature: 0.3, timeoutMs: 30000 },
+    });
+    const body = create.mock.calls[0]![0] as Record<string, unknown>;
+    expect("temperature" in body).toBe(false);
+  });
+
+  it("keeps temperature for the current 4.6 generation (no-op today)", async () => {
+    const create = vi.fn().mockResolvedValue(okResp());
+    const adapter = new AnthropicToolAdapter({ messages: { create } } as never);
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [{ role: "user", content: "x" }],
+      tools: [],
+      profile: { model: "claude-opus-4-6", maxTokens: 1024, temperature: 0.3, timeoutMs: 30000 },
+    });
+    const body = create.mock.calls[0]![0] as Record<string, unknown>;
+    expect(body["temperature"]).toBe(0.3);
+  });
+});
+
+describe("AnthropicToolAdapter — per-call cache-effectiveness recording", () => {
+  it("records {model, outcome} from the response usage cache tokens", async () => {
+    const m = createInMemoryMetrics();
+    setMetrics(m);
+    const inc = vi.spyOn(m.llmCacheCallsTotal, "inc");
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+      stop_reason: "end_turn",
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_read_input_tokens: 500,
+        cache_creation_input_tokens: 0,
+      },
+    });
+    const adapter = new AnthropicToolAdapter({ messages: { create } } as never);
+    await adapter.chatWithTools({
+      system: "s",
+      messages: [{ role: "user", content: "x" }],
+      tools: [],
+      profile: { model: "claude-opus-4-6", maxTokens: 1024, temperature: 0.3, timeoutMs: 30000 },
+    });
+    expect(inc).toHaveBeenCalledWith({ model: "claude-opus-4-6", outcome: "hit" });
   });
 });

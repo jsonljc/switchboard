@@ -66,6 +66,13 @@ export interface SwitchboardMetrics {
    *  are recorded only as the work outcome's skipReason, never on this counter.
    *  Labeled by intent + reason. */
   whatsappProactiveSendSkipped: Counter;
+  /** Per-LLM-call prompt-cache effectiveness, labeled by model + outcome:
+   *  hit (cache_read>0), populate (read=0, creation>0 — benign first-touch of a
+   *  prefix), miss (read=0 AND creation=0 — a cacheable static prefix that neither
+   *  hit nor populated the cache: below the per-tier min-cacheable size, or a
+   *  silently busted / non-deterministic prefix). A sustained outcome=miss rate is
+   *  the silent cache-invalidation alert. Emitted per call by recordLlmCacheEffectiveness. */
+  llmCacheCallsTotal: Counter;
 }
 
 export interface Counter {
@@ -146,5 +153,36 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     skillLlmCostUsdTotal: new InMemoryCounter(),
     governanceVerdictsRecorded: new InMemoryCounter(),
     whatsappProactiveSendSkipped: new InMemoryCounter(),
+    llmCacheCallsTotal: new InMemoryCounter(),
   };
+}
+
+export type LlmCacheOutcome = "hit" | "populate" | "miss";
+
+/**
+ * Classify and record a single LLM call's prompt-cache effectiveness, returning
+ * the outcome. `miss` (the static cacheable prefix neither read from nor wrote to
+ * the cache) is the silent-invalidation signal — it also emits a console.warn so a
+ * zero-read regression (a non-deterministic tool/prefix order, or a prefix below
+ * the per-tier min-cacheable size) is visible in logs, not just metrics. Recorded
+ * PER CALL (not summed per execution) so a mid-conversation cache bust is caught,
+ * not blurred. Pass finite token counts (callers coerce the SDK's optional
+ * cache_*_input_tokens with `?? 0`).
+ */
+export function recordLlmCacheEffectiveness(input: {
+  model: string;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+}): LlmCacheOutcome {
+  const outcome: LlmCacheOutcome =
+    input.cacheReadTokens > 0 ? "hit" : input.cacheCreationTokens > 0 ? "populate" : "miss";
+  getMetrics().llmCacheCallsTotal.inc({ model: input.model, outcome });
+  if (outcome === "miss") {
+    console.warn(
+      `[llm-cache] zero-read miss for model=${input.model}: a cacheable static ` +
+        `prefix neither read from nor populated the prompt cache (below the ` +
+        `per-tier min-cacheable size, or a busted / non-deterministic prefix).`,
+    );
+  }
+  return outcome;
 }
