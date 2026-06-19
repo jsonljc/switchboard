@@ -23,6 +23,10 @@ import type { FollowUpSendSubmitInput } from "../services/cron/scheduled-follow-
 import { buildReminderSendSubmitRequest } from "../services/workflows/reminder-send-request.js";
 import type { ReminderSendSubmitInput } from "../services/workflows/reminder-send-request.js";
 import {
+  buildRecoveryCampaignSubmitRequest,
+  type RecoveryCampaignSubmitInput,
+} from "../services/workflows/robin-recovery-request.js";
+import {
   buildRecommendationHandoffSubmitRequest,
   type RecommendationHandoffSubmitInput,
 } from "../services/workflows/recommendation-handoff-request.js";
@@ -74,6 +78,9 @@ export interface ContainedWorkflowBootstrapResult {
    * PlatformIngress with trigger:"schedule".
    */
   submitScheduledReminder: (input: ReminderSendSubmitInput) => Promise<SubmitWorkResponse>;
+  submitRecoveryCampaign: (
+    input: RecoveryCampaignSubmitInput,
+  ) => Promise<SubmitWorkResponse | null>;
   /**
    * Top-level submit closure for the Riley weekly-audit cron's agent handoff
    * (Contract 3). Builds the canonical request (or returns null when Riley abstains)
@@ -638,6 +645,18 @@ export async function bootstrapContainedWorkflows(
     return platformIngress.submit(buildReminderSendSubmitRequest(input, deployment));
   };
 
+  // Robin v1 no-show recovery campaign initiator (the recovery cron's submit MECHANISM). The builder
+  // omits targetHint (Robin has no deployment); the app.ts isPlatformDirectIntent carve-out resolves
+  // slug "robin" to platform-direct, so this never throws deployment_not_found. A null return means an
+  // empty cohort (the builder refuses to park an empty campaign), so the cron records no submit.
+  const submitRecoveryCampaign = async (
+    input: RecoveryCampaignSubmitInput,
+  ): Promise<SubmitWorkResponse | null> => {
+    const req = buildRecoveryCampaignSubmitRequest(input);
+    if (!req) return null;
+    return platformIngress.submit(req);
+  };
+
   // Riley → agent recommendation handoff (Contract 3). The deployment is resolved by
   // the cron itself (it iterates the org's active ad-optimizer deployments and passes
   // {deploymentId, skillSlug:"ad-optimizer"}), so the top-level resolver's intent-prefix
@@ -712,6 +731,7 @@ export async function bootstrapContainedWorkflows(
     instantFormAdapter,
     submitScheduledFollowUp,
     submitScheduledReminder,
+    submitRecoveryCampaign,
     submitRecommendationHandoff,
     submitRileyPause,
     submitRileyBudget,

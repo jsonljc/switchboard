@@ -816,6 +816,11 @@ export async function buildServer() {
         input: import("./services/workflows/reminder-send-request.js").ReminderSendSubmitInput,
       ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
     | undefined;
+  let submitRecoveryCampaign:
+    | ((
+        input: import("./services/workflows/robin-recovery-request.js").RecoveryCampaignSubmitInput,
+      ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse | null>)
+    | undefined;
   let submitRecommendationHandoff:
     | ((
         input: import("./services/workflows/recommendation-handoff-request.js").RecommendationHandoffSubmitInput,
@@ -868,6 +873,7 @@ export async function buildServer() {
     instantFormAdapter = result.instantFormAdapter;
     submitScheduledFollowUp = result.submitScheduledFollowUp;
     submitScheduledReminder = result.submitScheduledReminder;
+    submitRecoveryCampaign = result.submitRecoveryCampaign;
     submitRecommendationHandoff = result.submitRecommendationHandoff;
     submitRileyPause = result.submitRileyPause;
     submitRileyBudget = result.submitRileyBudget;
@@ -1189,6 +1195,7 @@ export async function buildServer() {
     operatorAlerter,
     submitScheduledFollowUp,
     submitScheduledReminder,
+    submitRecoveryCampaign,
     submitRecommendationHandoff,
     submitRileyPause,
     submitRileyBudget,
