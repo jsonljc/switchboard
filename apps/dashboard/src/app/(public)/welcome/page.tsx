@@ -13,6 +13,7 @@ import { V6Pricing } from "@/components/landing/v6/pricing";
 import { V6Closer } from "@/components/landing/v6/closer";
 import { V6Footer } from "@/components/landing/v6/footer";
 import { V6Dock } from "@/components/landing/v6/dock";
+import { V6Waitlist } from "@/components/landing/v6/waitlist";
 
 export const metadata: Metadata = {
   title: "Switchboard — Hire your revenue desk. One agent at a time.",
@@ -34,6 +35,7 @@ export default function HomePage() {
         <V6Control />
         <V6Pricing />
         <V6Closer />
+        <V6Waitlist />
         <V6Footer />
         <V6Dock />
       </AgentProvider>
