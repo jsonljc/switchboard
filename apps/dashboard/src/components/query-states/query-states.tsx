@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { resolveQueryState, type QueryLike } from "./resolve-query-state";
 import { ConnectionTrouble, AllClear } from "./states";
+import { Skeleton } from "./skeleton";
 
 export interface QueryStatesProps<T> {
   query: QueryLike<T>;
@@ -16,9 +17,9 @@ export interface QueryStatesProps<T> {
 function DefaultLoading() {
   return (
     <div role="status" aria-label="Loading" className="flex flex-col gap-3 px-6 py-8">
-      <div className="h-5 w-2/5 animate-pulse rounded-md bg-muted" />
-      <div className="h-16 w-full animate-pulse rounded-md bg-muted" />
-      <div className="h-16 w-full animate-pulse rounded-md bg-muted" />
+      <Skeleton className="h-5 w-2/5" />
+      <Skeleton className="h-16 w-full" />
+      <Skeleton className="h-16 w-full" />
     </div>
   );
 }

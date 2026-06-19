@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, StatePanel } from "@/components/query-states";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,7 +29,7 @@ import {
   useTestConnection,
 } from "@/hooks/use-connections";
 import { useOrgDeploymentId } from "@/hooks/use-deployments";
-import { Plus, Trash2, Plug, RefreshCw, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Plug, RefreshCw, CheckCircle, XCircle } from "lucide-react";
 import { SERVICE_FIELD_CONFIGS, SERVICE_CONNECTION_CONFIGS } from "@/lib/service-field-configs";
 import { WhatsAppEmbeddedSignup } from "./whatsapp-embedded-signup";
 import { SetMetaPageIdDialog } from "./set-meta-page-id-dialog";
@@ -84,7 +84,7 @@ export function ConnectionsList() {
   const [authType, setAuthType] = useState("api_key");
   const [credFields, setCredFields] = useState<Record<string, string>>({});
 
-  const { data: connections, isLoading, isError, error, refetch } = useConnections();
+  const { data: connections, isError, refetch } = useConnections();
   const createConnection = useCreateConnection();
   const deleteConnection = useDeleteConnection();
   const testConnection = useTestConnection();
@@ -167,30 +167,29 @@ export function ConnectionsList() {
       </div>
 
       {isError ? (
-        <Card className="border-destructive">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 text-destructive mb-2">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="font-medium">Failed to load connections</span>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">{(error as Error)?.message}</p>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      ) : isLoading ? (
+        <StatePanel
+          role="alert"
+          eyebrow="Couldn't load"
+          title="We couldn't reach your connections."
+          body="This is usually momentary. Try again in a moment."
+          onRetry={() => refetch()}
+        />
+      ) : connections === undefined ? (
+        // Gate the skeleton on absent data (not isLoading): a keys-pending query
+        // (enabled:false until orgId resolves) is pending+idle, so isLoading is
+        // false — keying on it would flash the empty state before the first load
+        // (the #472 false-empty class). Absent data ⇒ loading.
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-48" />
           ))}
         </div>
       ) : connectionList.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <Plug className="h-12 w-12 mx-auto mb-4 opacity-30" />
-          <p>No connections configured.</p>
-          <p className="text-sm">Add a connection to integrate with external services.</p>
-        </div>
+        <StatePanel
+          icon={<Plug />}
+          title="No connections yet."
+          body="Add a connection to integrate with external services."
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {connectionList.map((conn) => (

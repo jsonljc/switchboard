@@ -1,0 +1,80 @@
+/* The ONE editorial empty/error panel. Token rules (see slice gotchas):
+   --ink / --ink-3 are already hsl()-wrapped → bare var(); --action* are RAW
+   triplets → hsl(var(--x)); --serif / --mono are font stacks. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2.75rem 1.5rem;
+  text-align: center;
+}
+
+.icon {
+  display: inline-flex;
+  margin-bottom: 0.25rem;
+  color: var(--ink-3);
+}
+.icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  stroke-width: 1.6;
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  /* JetBrains is loaded at 400/500/600 — this governed authed surface uses 600. */
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.1875rem;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+
+.body {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+.actions {
+  margin-top: 0.75rem;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 0.5rem 1.05rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--action-foreground));
+  background-color: hsl(var(--action));
+  transition: background-color 120ms ease;
+}
+.action:hover {
+  background-color: hsl(var(--action-hover));
+}
+.action:focus-visible {
+  outline: 2px solid hsl(var(--action));
+  outline-offset: 2px;
+}
+
+.footer {
+  margin-top: 0.5rem;
+  font-size: 12px;
+  color: var(--ink-3);
+}

@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { CloudOff, WifiOff, Check } from "lucide-react";
+import { StatePanel } from "./state-panel";
 
 export interface StateProps {
   /** The agent (or "your team") the surface speaks for. */
@@ -21,33 +23,6 @@ function useIsOffline(): boolean {
   return offline;
 }
 
-function StatePanel({
-  title,
-  body,
-  role = "status",
-  label,
-  children,
-}: {
-  title: string;
-  body: string;
-  /** "alert" for genuine failures (assertive), "status" for calm empty/all-clear. */
-  role?: "status" | "alert";
-  label?: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div
-      role={role}
-      aria-label={label}
-      className="flex flex-col items-center justify-center gap-1 px-6 py-10 text-center"
-    >
-      <p className="text-foreground text-[0.95rem] font-medium">{title}</p>
-      <p className="text-muted-foreground text-sm">{body}</p>
-      {children}
-    </div>
-  );
-}
-
 /** §5: network offline + API/agent backend down — one offline-aware component. */
 export function ConnectionTrouble({
   agentName = "your team",
@@ -59,6 +34,7 @@ export function ConnectionTrouble({
       <StatePanel
         role="alert"
         label="Connection problem"
+        icon={<WifiOff />}
         title="You're offline."
         body="I'll hold your decisions here until you're back."
       />
@@ -68,23 +44,21 @@ export function ConnectionTrouble({
     <StatePanel
       role="alert"
       label="Connection problem"
+      icon={<CloudOff />}
       title={`I can't reach ${agentName} right now.`}
       body="Nothing you've approved is lost. I'll keep trying."
-    >
-      {onRetry ? (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-2 text-action text-sm font-medium underline underline-offset-2"
-        >
-          Try again
-        </button>
-      ) : null}
-    </StatePanel>
+      onRetry={onRetry}
+    />
   );
 }
 
 /** §5: designed empty / all-clear. Completion as reward, never a dead-account blank. */
 export function AllClear({ sub }: { sub?: string }) {
-  return <StatePanel title="You're all caught up." body={sub ?? "Your team is on top of it."} />;
+  return (
+    <StatePanel
+      icon={<Check />}
+      title="You're all caught up."
+      body={sub ?? "Your team is on top of it."}
+    />
+  );
 }

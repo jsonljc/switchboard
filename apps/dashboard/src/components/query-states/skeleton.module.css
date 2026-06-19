@@ -1,0 +1,24 @@
+/* Editorial loading shimmer. --hairline is already hsl()-wrapped → bare var().
+   A calm opacity pulse (not a sliding gradient) keeps the warm-paper register
+   quiet. Honors prefers-reduced-motion. */
+.skeleton {
+  border-radius: 6px;
+  background-color: var(--hairline);
+  animation: sw-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes sw-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

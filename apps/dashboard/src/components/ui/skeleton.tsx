@@ -1,19 +1,5 @@
-"use client"
-
-import * as React from "react"
-
-import { cn } from "@/lib/utils"
-
-function Skeleton({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn("animate-pulse rounded-md bg-muted", className)}
-      {...props}
-    />
-  )
-}
-
-export { Skeleton }
+// Re-exported from the editorial query-states primitive so every existing
+// `@/components/ui/skeleton` importer gets the token-correct version (audit B1:
+// the old impl used the shadcn `bg-muted`). New code should import from
+// `@/components/query-states`.
+export { Skeleton } from "@/components/query-states/skeleton";
