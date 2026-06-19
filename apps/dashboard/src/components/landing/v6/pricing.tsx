@@ -1,5 +1,6 @@
 import { ArrowSig } from "./glyphs";
 import { Reveal } from "./reveal";
+import { isSelfServeSignupOpen } from "@/lib/register";
 
 interface Card {
   agent: "alex" | "riley" | "mira";
@@ -10,8 +11,6 @@ interface Card {
   /** One-line description of what the operator does. */
   subtitle: string;
   cta: string;
-  /** mailto: target — pilot inbound goes through email until a real onboarding flow exists. */
-  ctaHref: string;
   featured: boolean;
   hint?: string;
 }
@@ -24,7 +23,6 @@ const CARDS: Card[] = [
     price: "$249",
     subtitle: "Lead response and booking operator.",
     cta: "Start with Alex",
-    ctaHref: "mailto:hello@switchboard.ai?subject=Start%20with%20Alex",
     featured: true,
     hint: "Recommended starting point",
   },
@@ -35,7 +33,6 @@ const CARDS: Card[] = [
     price: "$249",
     subtitle: "Ad planning and optimization operator.",
     cta: "Start with Riley",
-    ctaHref: "mailto:hello@switchboard.ai?subject=Start%20with%20Riley",
     featured: false,
   },
   {
@@ -45,12 +42,15 @@ const CARDS: Card[] = [
     price: "$399",
     subtitle: "Creative direction and production operator.",
     cta: "Start with Mira",
-    ctaHref: "mailto:hello@switchboard.ai?subject=Start%20with%20Mira",
     featured: false,
   },
 ];
 
 export function V6Pricing() {
+  // Mode-aware conversion target: the register page when signup is open, the
+  // on-page waitlist (#waitlist anchor) when closed.
+  const signupOpen = isSelfServeSignupOpen();
+  const ctaHref = signupOpen ? "/register" : "#waitlist";
   return (
     <section
       id="pricing"
@@ -128,14 +128,14 @@ export function V6Pricing() {
                 <p className="text-[0.95rem] leading-[1.4] text-v6-graphite">{c.subtitle}</p>
 
                 <a
-                  href={c.ctaHref}
+                  href={ctaHref}
                   className={`mt-auto inline-flex w-full items-center justify-center gap-[0.65rem] whitespace-nowrap rounded-full px-6 py-[0.85rem] text-sm font-medium tracking-[-0.005em] transition-[transform,background-color,box-shadow] duration-[250ms] hover:-translate-y-px ${
                     c.featured
                       ? "bg-v6-graphite text-v6-cream shadow-[0_1px_0_hsl(20_12%_4%_/_0.15)] hover:bg-black hover:text-v6-cream hover:shadow-[0_8px_24px_hsl(20_12%_4%_/_0.18)]"
                       : "border border-[hsl(20_8%_14%_/_0.12)] bg-v6-cream-2 text-v6-graphite hover:bg-v6-cream"
                   }`}
                 >
-                  {c.cta}
+                  {signupOpen ? c.cta : "Join the waitlist"}
                   <ArrowSig className="!h-[0.7rem] !w-[1.05rem]" />
                 </a>
 
