@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/query-states";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -87,7 +88,7 @@ export function ChannelManagement() {
           <CardTitle className="text-base">Channels</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-16 bg-muted animate-pulse rounded" />
+          <Skeleton className="h-16 w-full" />
         </CardContent>
       </Card>
     );

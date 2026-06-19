@@ -139,4 +139,44 @@ describe("ProposedDisqualificationsPanel", () => {
       expect.objectContaining({ method: "POST" }),
     );
   });
+
+  it("shows a calm alert and NEVER the raw status when the fetch fails", async () => {
+    // The hook throws `Failed to load pending disqualifications: 500` — that raw
+    // status must never reach the screen (audit: operator raw-500 finding).
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500, json: () => Promise.resolve({}) });
+
+    const { ProposedDisqualificationsPanel } = await import(
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore dynamic import with .js
+      "../_components/proposed-disqualifications-panel.js"
+    );
+
+    render(createElement(ProposedDisqualificationsPanel), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByText("Couldn't load")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't reach this list.")).toBeInTheDocument();
+    expect(screen.queryByText(/failed to load pending disqualifications/i)).toBeNull();
+    expect(screen.queryByText(/\b500\b/)).toBeNull();
+  });
+
+  it("retries the fetch when Try again is clicked", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500, json: () => Promise.resolve({}) });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ items: [] }) });
+
+    const { ProposedDisqualificationsPanel } = await import(
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore dynamic import with .js
+      "../_components/proposed-disqualifications-panel.js"
+    );
+
+    render(createElement(ProposedDisqualificationsPanel), { wrapper: createWrapper() });
+
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    await userEvent.click(retry);
+
+    await waitFor(() =>
+      expect(screen.getByText(/no proposed disqualifications/i)).toBeInTheDocument(),
+    );
+  });
 });

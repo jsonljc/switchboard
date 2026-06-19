@@ -140,3 +140,23 @@ describe("ConnectionsList - WhatsApp embedded signup surface", () => {
     expect(screen.queryByRole("button", { name: /create connection/i })).not.toBeInTheDocument();
   });
 });
+
+describe("ConnectionsList - load failure", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useOrgDeploymentId.mockReturnValue({ deploymentId: null, isLoading: false, isError: false });
+    // The hook throws `Failed to fetch connections` — that raw string must never
+    // reach the screen (audit: channels "Failed to load / Retry" finding).
+    mockFetch.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) });
+  });
+
+  it("shows a calm alert (never the raw error) with a retry when the list fails to load", async () => {
+    wrap(<ConnectionsList />);
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't reach your connections.")).toBeInTheDocument();
+    expect(screen.queryByText(/failed to fetch connections/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+});

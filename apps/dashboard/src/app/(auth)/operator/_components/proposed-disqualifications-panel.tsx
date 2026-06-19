@@ -1,21 +1,26 @@
 "use client";
 
 import { usePendingDisqualifications } from "@/hooks/use-pending-disqualifications";
+import { StatePanel, Skeleton } from "@/components/query-states";
 import { DisqualificationRow } from "./disqualification-row";
 
 export function ProposedDisqualificationsPanel() {
-  const { data, isLoading, isError, error } = usePendingDisqualifications();
+  const { data, isLoading, isError, refetch } = usePendingDisqualifications();
 
   return (
     <section className="border-t border-border pt-6 mt-6">
       <p className="section-label mb-4">Proposed Disqualifications</p>
 
-      {isLoading && <p className="text-[13px] text-muted-foreground">Loading…</p>}
+      {isLoading && <Skeleton className="h-20 w-full" />}
 
       {isError && (
-        <p className="text-[13px] text-destructive">
-          {(error as Error)?.message ?? "Failed to load proposed disqualifications."}
-        </p>
+        <StatePanel
+          role="alert"
+          eyebrow="Couldn't load"
+          title="We couldn't reach this list."
+          body="This is usually momentary. Try again in a moment."
+          onRetry={() => void refetch()}
+        />
       )}
 
       {!isLoading && !isError && data?.items.length === 0 && (

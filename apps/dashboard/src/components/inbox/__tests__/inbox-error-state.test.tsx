@@ -12,9 +12,7 @@ describe("<InboxErrorState>", () => {
   it("renders the error body copy", () => {
     render(<InboxErrorState onRetry={() => {}} />);
     expect(
-      screen.getByText(
-        "Looks like the connection dropped. Try again — your team is still working in the background.",
-      ),
+      screen.getByText("Your team is still working in the background. Try again in a moment."),
     ).toBeInTheDocument();
   });
 
