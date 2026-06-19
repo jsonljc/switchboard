@@ -650,6 +650,7 @@ describe("token governance: type scale + display consolidation (TY3)", () => {
       "src/app/layout.tsx",
       "src/app/globals.css",
       "app/login/",
+      "app/register/",
       "app/forgot-password/",
       "app/reset-password/",
       "components/onboarding/",
