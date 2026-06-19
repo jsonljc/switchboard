@@ -239,3 +239,6 @@ export * from "./scheduled-follow-up.js";
 
 // Robin v1 no-show recovery campaign params (the frozen cohort the manager approves)
 export * from "./robin-recovery.js";
+
+// Robin v1 recovery-send dedup key + status (the per-recipient send log)
+export * from "./robin-recovery-send.js";
