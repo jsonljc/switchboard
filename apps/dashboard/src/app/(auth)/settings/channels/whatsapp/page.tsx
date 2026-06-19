@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { WhatsAppManagement } from "@/components/settings/whatsapp-management";
+import { PageTitle } from "@/components/layout/page-title";
 import { ChevronRight } from "lucide-react";
 
 export default function WhatsAppChannelPage() {
@@ -24,10 +25,12 @@ export default function WhatsAppChannelPage() {
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="text-foreground">WhatsApp</span>
         </nav>
-        <h1 className="text-[22px] font-semibold tracking-tight text-foreground">WhatsApp</h1>
-        <p className="text-[14px] text-muted-foreground mt-1">
-          Manage your WhatsApp Business connection, phone numbers, and message templates.
-        </p>
+        <PageTitle
+          eyebrow="Settings"
+          sub="Manage your WhatsApp Business connection, phone numbers, and message templates."
+        >
+          WhatsApp
+        </PageTitle>
       </section>
       <WhatsAppManagement />
     </div>
