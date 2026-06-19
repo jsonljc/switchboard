@@ -612,8 +612,9 @@ export async function bootstrapContainedWorkflows(
       // require_approval(mandatory) policy (db seed robin-recovery-governance.ts) parks every
       // campaign for a human. approvalPolicy here is decorative (the policy engine reads
       // policyApprovalOverride). Non-financial (no outbound spend; not on the financial denylist).
-      // The executor is a fail-closed placeholder until the consent-gated send slice; the cron
-      // initiator lands then too. Schedule-trigger-only (cron), not reachable from the public API.
+      // On approval the executor runs the consent-gated WhatsApp send over the approved cohort
+      // (fail-closed per recipient); the recovery cron (#1175) is the only submitter.
+      // Schedule-trigger-only (cron), not reachable from the public API.
       intent: robinRecoverySendExecutor.intent,
       workflowId: robinRecoverySendExecutor.intent,
       budgetClass: "cheap",

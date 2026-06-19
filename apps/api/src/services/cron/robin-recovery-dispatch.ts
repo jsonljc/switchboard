@@ -129,8 +129,9 @@ export async function executeRobinRecoveryDispatch(
         result.failed++; // governance deny / upstream error: fail-safe, nothing sent
         return;
       }
-      // res.ok and NOT parked: a correctly-seeded org always parks (require_approval). A non-park
-      // execute is anomalous (the placeholder executor returns failed anyway). Record as failed.
+      // res.ok and NOT parked: a correctly-seeded org always parks (require_approval), and the
+      // executor never runs synchronously at submit (it dispatches only post-approval). A non-park
+      // ok response is therefore anomalous (e.g. a missing approval policy). Record as failed.
       result.failed++;
     });
   }
