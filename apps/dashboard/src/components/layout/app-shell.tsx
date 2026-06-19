@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { DataModeBanner } from "@/components/layout/data-mode-banner";
+import { VerifyEmailBanner } from "@/components/layout/verify-email-banner";
 import { EditorialAuthShellInner } from "@/components/layout/editorial-auth-shell";
 import { useOrgConfig } from "@/hooks/use-org-config";
 
@@ -83,6 +84,7 @@ export function AppShell({
     return (
       <>
         <DataModeBanner />
+        <VerifyEmailBanner />
         {children}
         <DevPanel dataModeControlsAllowed={dataModeControlsAllowed} />
       </>
@@ -99,6 +101,7 @@ export function AppShell({
   return (
     <>
       <DataModeBanner />
+      <VerifyEmailBanner />
       <EditorialAuthShellInner>{children}</EditorialAuthShellInner>
       <DevPanel dataModeControlsAllowed={dataModeControlsAllowed} />
     </>
