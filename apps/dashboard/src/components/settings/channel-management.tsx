@@ -38,9 +38,9 @@ const channelInstructions: Record<string, string> = {
 function statusBadge(status: string) {
   switch (status) {
     case "active":
-      return <Badge className="bg-green-600 text-white border-green-600">active</Badge>;
+      return <Badge variant="positive">active</Badge>;
     case "provisioning":
-      return <Badge className="bg-yellow-500 text-white border-yellow-500">provisioning</Badge>;
+      return <Badge variant="caution">provisioning</Badge>;
     default:
       return <Badge variant="destructive">error</Badge>;
   }
