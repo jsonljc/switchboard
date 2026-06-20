@@ -599,3 +599,62 @@ jobs:
       - name: Run riley-recommendation eval
         if: steps.filter.outputs.riley == 'true' || github.ref == 'refs/heads/main'
         run: pnpm eval:riley
+
+  eval-trajectory-grading:
+    name: Eval — Trajectory Grading
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Filter trajectory-grading-relevant paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # Empty token forces a local `git diff` against the base instead of the
+          # GitHub REST API (the default token's API access returns 401 in CI here).
+          token: ""
+          # The grader oracles each recorded governanceDecision against the REAL gate
+          # (getToolGovernanceDecision + mapDecisionToOutcome), so a change to the gate or
+          # its types must re-run this eval.
+          filters: |
+            trajectory:
+              - '.github/workflows/ci.yml'
+              - 'evals/trajectory-grading/**'
+              - 'evals/vitest.config.ts'
+              - 'packages/core/src/skill-runtime/governance.ts'
+              - 'packages/core/src/skill-runtime/governance-types.ts'
+
+      - name: Skip notice (no trajectory-grading-relevant changes)
+        if: steps.filter.outputs.trajectory != 'true' && github.ref != 'refs/heads/main'
+        run: 'echo "Eval — Trajectory Grading skipped: no trajectory-grading-relevant paths changed."'
+
+      - uses: pnpm/action-setup@v5
+        if: steps.filter.outputs.trajectory == 'true' || github.ref == 'refs/heads/main'
+
+      - uses: actions/setup-node@v6
+        if: steps.filter.outputs.trajectory == 'true' || github.ref == 'refs/heads/main'
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.trajectory == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages required by the harness
+        if: steps.filter.outputs.trajectory == 'true' || github.ref == 'refs/heads/main'
+        # The shared evals/vitest.config.ts runs ALL eval suites' unit tests — incl.
+        # riley-recommendation (imports @switchboard/ad-optimizer) and alex-conversation
+        # (imports @switchboard/db) from dist — so every job running that config must
+        # build both (each depends only on already-built @switchboard/schemas/core).
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
+
+      - name: Run eval unit tests
+        if: steps.filter.outputs.trajectory == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm exec vitest run --config evals/vitest.config.ts
+
+      # Deterministic, model-free, DB-free — no ANTHROPIC_API_KEY needed. Blocking.
+      - name: Run trajectory-grading eval
+        if: steps.filter.outputs.trajectory == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm eval:trajectory
