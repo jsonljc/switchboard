@@ -305,6 +305,7 @@ export function ChannelManagement() {
 
             <div className="flex gap-2">
               <Button
+                variant="action"
                 className="flex-1"
                 disabled={
                   !selectedChannel ||

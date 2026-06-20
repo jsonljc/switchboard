@@ -116,6 +116,7 @@ export function ForbiddenList({ currentForbidden, onSave, isLoading }: Forbidden
         </div>
 
         <Button
+          variant="action"
           className="w-full min-h-[44px]"
           disabled={isLoading}
           onClick={() => onSave(Array.from(selected))}

@@ -65,7 +65,7 @@ export function ConnectionCallback() {
               connections.
             </p>
           )}
-          <Button asChild className="w-full">
+          <Button variant="action" asChild className="w-full">
             <Link href="/settings/channels">Return to connections</Link>
           </Button>
         </CardContent>

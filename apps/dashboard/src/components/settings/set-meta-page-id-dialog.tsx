@@ -88,7 +88,7 @@ export function SetMetaPageIdDialog({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!isValid || setMetaPageId.isPending}>
+            <Button variant="action" type="submit" disabled={!isValid || setMetaPageId.isPending}>
               {setMetaPageId.isPending ? "Saving..." : "Save Page"}
             </Button>
           </DialogFooter>

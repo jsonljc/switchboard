@@ -61,7 +61,12 @@ export function SpendLimitsForm({ defaultValues, onSubmit, isLoading }: SpendLim
               )}
             </div>
           ))}
-          <Button type="submit" disabled={isLoading} className="w-full min-h-[44px]">
+          <Button
+            variant="action"
+            type="submit"
+            disabled={isLoading}
+            className="w-full min-h-[44px]"
+          >
             {isLoading ? "Saving..." : "Save"}
           </Button>
         </form>

@@ -56,7 +56,7 @@ export function DisqualificationRow({ item }: DisqualificationRowProps) {
         <div className="flex items-center gap-2">
           <Button
             size="sm"
-            variant="default"
+            variant="action"
             disabled={isPending}
             onClick={() => handleAction(confirmMutation)}
           >
