@@ -59,7 +59,6 @@
     /* ─── Text ─── */
     --muted: 40 12% 93%;
     --muted-foreground: 30 6% 40%;
-    --tertiary-foreground: 30 5% 58%;
 
     /* ─── Interactive ─── */
     --primary: 30 8% 10%;
@@ -325,7 +324,6 @@
     /* Text */
     --muted: 30 5% 20%;
     --muted-foreground: 30 6% 55%;
-    --tertiary-foreground: 30 5% 48%;
 
     /* Interactive */
     --primary: 40 15% 90%;
@@ -506,7 +504,7 @@
     font-weight: 500;
     letter-spacing: 0.07em;
     text-transform: uppercase;
-    color: hsl(var(--tertiary-foreground));
+    color: var(--ink-3);
   }
 
   /* LEGACY display utility: DM Sans via --font-display (layout.tsx binding).
@@ -845,7 +843,7 @@
     font-size: 11px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: hsl(20 10% 12% / 0.55);
+    color: var(--ink-3);
     padding-bottom: 14px;
     margin-bottom: 32px;
     border-bottom: 1px solid var(--hair);
@@ -994,7 +992,7 @@
     font-size: 10.5px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: hsl(20 10% 12% / 0.55);
+    color: var(--ink-3);
   }
   .win-prose {
     font-family: var(--serif);
@@ -1120,7 +1118,7 @@
     font-size: 10px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: hsl(20 10% 12% / 0.55);
+    color: var(--ink-3);
   }
   .stat-num {
     font-family: var(--serif);
