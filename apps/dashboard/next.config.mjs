@@ -38,6 +38,13 @@ const nextConfig = {
   output: "standalone",
   poweredByHeader: false,
 
+  // Strip Next's dev-tools indicator (the build/Turbopack spinner + the route
+  // "DEV" pill) from the dev server. Production (`next start`) never renders it,
+  // so this targets the dev + demo + audit-screenshot surfaces the aesthetic
+  // audit flagged as leaking build chrome. Per Next 16, `devIndicators: false`
+  // disables the indicator project-wide.
+  devIndicators: false,
+
   // Tree-shake these large packages at the module level so only the icons/
   // components actually used get bundled. Cuts JS payload significantly for
   // lucide-react (500+ icons) and the Radix UI family.
