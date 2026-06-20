@@ -1,5 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createAnthropicClaimClassifier } from "../anthropic-classifier.js";
+import { createInMemoryMetrics, setMetrics } from "../../../telemetry/metrics.js";
+
+// The classifier now records prompt-cache effectiveness per call and warns on a
+// zero-read "miss". Stub console.warn so any miss in these fixtures stays out of
+// test output; recordLlmCacheEffectiveness's own warn is asserted directly in
+// telemetry/metrics.test.ts.
+beforeEach(() => {
+  vi.restoreAllMocks();
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+});
 
 function mockClient(response: unknown) {
   return {
@@ -9,6 +19,8 @@ function mockClient(response: unknown) {
   } as const;
 }
 
+// Real Message responses always carry `usage`; include it so the per-call
+// cache-effectiveness recording reads a realistic shape (a cached-prefix hit).
 const SUCCESS_RESPONSE = {
   content: [
     {
@@ -17,6 +29,12 @@ const SUCCESS_RESPONSE = {
       input: { claimType: "efficacy", confidence: 0.92 },
     },
   ],
+  usage: {
+    input_tokens: 40,
+    output_tokens: 8,
+    cache_read_input_tokens: 1024,
+    cache_creation_input_tokens: 0,
+  },
 };
 
 describe("AnthropicClaimClassifier", () => {
@@ -57,7 +75,15 @@ describe("AnthropicClaimClassifier", () => {
   });
 
   it("throws when the response has no classify_claim tool use", async () => {
-    const client = mockClient({ content: [{ type: "text", text: "ignored" }] });
+    const client = mockClient({
+      content: [{ type: "text", text: "ignored" }],
+      usage: {
+        input_tokens: 40,
+        output_tokens: 8,
+        cache_read_input_tokens: 1024,
+        cache_creation_input_tokens: 0,
+      },
+    });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const classifier = createAnthropicClaimClassifier(client as any);
     await expect(
@@ -92,5 +118,58 @@ describe("AnthropicClaimClassifier", () => {
     });
     ctrl.abort();
     await expect(promise).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("records per-call prompt-cache effectiveness from the response usage", async () => {
+    const m = createInMemoryMetrics();
+    setMetrics(m);
+    const inc = vi.spyOn(m.llmCacheCallsTotal, "inc");
+    const client = mockClient({
+      content: [
+        {
+          type: "tool_use",
+          name: "classify_claim",
+          input: { claimType: "none", confidence: 0.1 },
+        },
+      ],
+      usage: {
+        input_tokens: 40,
+        output_tokens: 8,
+        cache_read_input_tokens: 2048,
+        cache_creation_input_tokens: 0,
+      },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const classifier = createAnthropicClaimClassifier(client as any);
+    await classifier.classify({
+      sentence: "x",
+      model: "claude-haiku-4-5-20251001",
+      signal: new AbortController().signal,
+    });
+    expect(inc).toHaveBeenCalledWith({
+      model: "claude-haiku-4-5-20251001",
+      outcome: "hit",
+    });
+  });
+
+  it("sends no sampling params, so the call is already forward-compatible with 4.7+ ids", async () => {
+    // The classifier sends neither temperature, top_p, nor top_k, so a future
+    // model-id bump to a 4.7+ generation (which hard-400s on sampling params)
+    // needs no per-id guard here. This regression-guards against a change that
+    // reintroduces one without the modelSupportsSamplingParams gate the other
+    // non-governance call sites use.
+    const client = mockClient(SUCCESS_RESPONSE);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const classifier = createAnthropicClaimClassifier(client as any);
+    await classifier.classify({
+      sentence: "x",
+      model: "claude-haiku-4-5-20251001",
+      signal: new AbortController().signal,
+    });
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const call = client.messages.create.mock.calls[0]![0];
+    expect("temperature" in call).toBe(false);
+    expect("top_p" in call).toBe(false);
+    expect("top_k" in call).toBe(false);
   });
 });
