@@ -615,8 +615,10 @@ jobs:
           # GitHub REST API (the default token's API access returns 401 in CI here).
           token: ""
           # The grader oracles each recorded governanceDecision against the REAL gate
-          # (getToolGovernanceDecision + mapDecisionToOutcome), so a change to the gate or
-          # its types must re-run this eval.
+          # (getToolGovernanceDecision + mapDecisionToOutcome), pins the ToolCallRecord shape via a
+          # compile-time drift guard (types.ts), and special-cases the executor's recorded-outcome
+          # vocabulary incl. the "simulated" side-channel (skill-executor.ts) — so a change to any of
+          # these must re-run this eval.
           filters: |
             trajectory:
               - '.github/workflows/ci.yml'
@@ -624,6 +626,8 @@ jobs:
               - 'evals/vitest.config.ts'
               - 'packages/core/src/skill-runtime/governance.ts'
               - 'packages/core/src/skill-runtime/governance-types.ts'
+              - 'packages/core/src/skill-runtime/types.ts'
+              - 'packages/core/src/skill-runtime/skill-executor.ts'
 
       - name: Skip notice (no trajectory-grading-relevant changes)
         if: steps.filter.outputs.trajectory != 'true' && github.ref != 'refs/heads/main'

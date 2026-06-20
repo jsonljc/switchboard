@@ -5,9 +5,10 @@ import type { ToolCallRecord } from "@switchboard/core/skill-runtime";
  * Trajectory-grading eval fixture schema.
  *
  * A fixture is one work-unit case: the GOLDEN/ALLOWED ordered tool spec (`expected`) plus a
- * RECORDED ordered tool-call sequence (`trajectory`, shaped like a real `ToolCallRecord[]` from
- * `PrismaExecutionTraceStore.findByWorkUnitId`). The grader (`grade.ts`) compares them. The
- * harness is model-free, key-free and DB-free — like `evals/governance-decision`.
+ * RECORDED ordered tool-call sequence (`trajectory`, shaped like a real `ToolCallRecord`; the
+ * `PrismaExecutionTraceStore.findByWorkUnitId` rows expose `toolCalls` as `unknown[]`, which a
+ * real-data adapter would parse via `RecordedCallSchema`). The grader (`grade.ts`) compares them.
+ * The harness is model-free, key-free and DB-free — like `evals/governance-decision`.
  *
  * The `expected` side is STRICTLY enumerated (it drives the real governance gate, so each
  * effectCategory / override must be a valid runtime value). The `trajectory` side is PERMISSIVE on
