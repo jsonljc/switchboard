@@ -85,6 +85,8 @@ function CountTile({ metric, label }: { metric: HomeSummaryCountMetric; label: s
           <span className={styles.figure}>{metric.value}</span>
           <DeltaBadge delta={toDelta(metric.value, metric.comparator?.value)} />
         </>
+      ) : metric.state === "unavailable" ? (
+        <span className={styles.empty}>Not available right now.</span>
       ) : (
         <span className={styles.empty}>None yet this week.</span>
       )}

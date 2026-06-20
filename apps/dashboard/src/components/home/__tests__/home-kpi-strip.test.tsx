@@ -65,4 +65,33 @@ describe("HomeKpiStrip", () => {
     expect(screen.getByText(/No attributed bookings yet this week/)).toBeInTheDocument();
     expect(screen.queryByText(/S\$0/)).toBeNull();
   });
+
+  it("renders the honest unavailable state for bookings tile when store is down", () => {
+    summary.mockReturnValue({
+      data: {
+        attributedValueCents: {
+          state: "ready",
+          value: 100000,
+          comparator: { window: "week", value: 50000 },
+          freshness,
+        },
+        bookings: { state: "unavailable", reason: "store_unavailable" },
+        currency: "SGD",
+        generatedAt: freshness.generatedAt,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    decisions.mockReturnValue({
+      data: { counts: { approval: 0 } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+
+    render(<HomeKpiStrip />);
+    expect(screen.getByText("Not available right now.")).toBeInTheDocument();
+    expect(screen.queryByText("None yet this week.")).toBeNull();
+  });
 });
