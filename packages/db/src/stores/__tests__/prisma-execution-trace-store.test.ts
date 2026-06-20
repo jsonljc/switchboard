@@ -141,8 +141,11 @@ describe("PrismaExecutionTraceStore", () => {
       });
       expect(result).toHaveLength(2);
       expect(result[0]!.id).toBe("t-a");
-      // each row exposes its ordered tool-call sequence
+      // each row exposes its ordered tool-call sequence AND its governance decisions —
+      // the 6b trajectory gate joins BOTH per work unit ("right action but bypassed an
+      // approval gate"), so pin that the read returns the full shape, not a projection.
       expect(Array.isArray(result[0]!.toolCalls)).toBe(true);
+      expect(Array.isArray(result[0]!.governanceDecisions)).toBe(true);
     });
 
     it("returns an empty array when no traces match", async () => {
