@@ -68,10 +68,10 @@ function TemplateBadge({
 }) {
   const lower = status.toLowerCase();
   if (lower === "approved" || lower === "active") {
-    return <Badge className="bg-green-600 text-white border-green-600">approved</Badge>;
+    return <Badge variant="positive">approved</Badge>;
   }
   if (lower === "pending") {
-    return <Badge className="bg-yellow-500 text-white border-yellow-500">pending</Badge>;
+    return <Badge variant="caution">pending</Badge>;
   }
   if (lower === "rejected") {
     return (
@@ -217,13 +217,7 @@ function SetupSection({ data }: { data: WhatsAppAccountData }) {
           <div className="space-y-3 text-sm">
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">Status:</span>
-              <Badge
-                className={
-                  connection.status === "connected"
-                    ? "bg-green-600 text-white border-green-600"
-                    : "bg-yellow-500 text-white border-yellow-500"
-                }
-              >
+              <Badge variant={connection.status === "connected" ? "positive" : "caution"}>
                 {connection.status}
               </Badge>
             </div>

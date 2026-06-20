@@ -50,11 +50,11 @@ const authTypes = ["api_key", "oauth2", "bot_token"];
 function StatusBadge({ status }: { status: string }) {
   switch (status) {
     case "connected":
-      return <Badge className="bg-green-100 text-green-700">Connected</Badge>;
+      return <Badge variant="positive">Connected</Badge>;
     case "error":
       return <Badge variant="destructive">Error</Badge>;
     case "token_expired":
-      return <Badge className="bg-yellow-100 text-yellow-700">Token Expired</Badge>;
+      return <Badge variant="caution">Token Expired</Badge>;
     default:
       return <Badge variant="secondary">{status}</Badge>;
   }
