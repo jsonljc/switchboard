@@ -126,6 +126,76 @@ export function orderToolsForCache(tools: LLMToolDefinition[]): LLMToolDefinitio
   });
 }
 
+// Anthropic strict tool schemas (`strict:true`) make the model emit schema-valid
+// tool input by construction, removing a class of malformed-call retries before
+// GovernanceGate. The strict JSON-schema subset is narrow, though: every object
+// needs additionalProperties:false, EVERY declared property must be required, and
+// numeric/length/format keywords are rejected with a hard 400 (see
+// feedback_anthropic_strict_tool_schema_no_minmax). Range/length checks therefore
+// stay in the post-call boundary (input-schema-validator / Zod), never in the
+// strict tool schema.
+const STRICT_FORBIDDEN_KEYWORDS = [
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
+  "minLength",
+  "maxLength",
+  "pattern",
+  "format",
+  "minItems",
+  "maxItems",
+] as const;
+
+const STRICT_SCALAR_TYPES = new Set(["string", "number", "integer", "boolean"]);
+
+function hasForbiddenStrictKeyword(obj: Record<string, unknown>): boolean {
+  return STRICT_FORBIDDEN_KEYWORDS.some((k) => k in obj);
+}
+
+function isStrictEligibleProperty(prop: unknown): boolean {
+  if (typeof prop !== "object" || prop === null) return false;
+  const p = prop as Record<string, unknown>;
+  if (hasForbiddenStrictKeyword(p)) return false;
+  // Conservative: only scalar/enum leaf properties. Nested objects and arrays are
+  // left for a follow-up (each would need recursive additionalProperties:false +
+  // all-required handling), so they keep loose behavior rather than risk a live 400.
+  return typeof p.type === "string" && STRICT_SCALAR_TYPES.has(p.type);
+}
+
+/**
+ * Decide whether a tool input_schema is inside Anthropic's strict subset and, if
+ * so, return it augmented with additionalProperties:false + strict=true. Anything
+ * outside the subset is returned UNCHANGED with strict=false (today's loose
+ * behavior). Conservative by construction: a false positive would 400 the live
+ * call, and this path is hard to exercise without a live API key, so only
+ * provably-safe schemas (a flat object whose properties are all required scalars
+ * or enums, with no forbidden keywords) are marked strict — the same shape the
+ * claim-classifier already runs strict against in production. Exported for tests.
+ */
+export function strictenToolSchema(inputSchema: Record<string, unknown>): {
+  inputSchema: Record<string, unknown>;
+  strict: boolean;
+} {
+  if (inputSchema.type !== "object") return { inputSchema, strict: false };
+  if (hasForbiddenStrictKeyword(inputSchema)) return { inputSchema, strict: false };
+  const properties = inputSchema.properties;
+  if (typeof properties !== "object" || properties === null) {
+    return { inputSchema, strict: false };
+  }
+  const props = properties as Record<string, unknown>;
+  const propNames = Object.keys(props);
+  const required = Array.isArray(inputSchema.required) ? (inputSchema.required as unknown[]) : [];
+  // strict requires EVERY declared property to be present in `required`.
+  if (propNames.length !== required.length) return { inputSchema, strict: false };
+  for (const name of propNames) {
+    if (!required.includes(name)) return { inputSchema, strict: false };
+    if (!isStrictEligibleProperty(props[name])) return { inputSchema, strict: false };
+  }
+  return { inputSchema: { ...inputSchema, additionalProperties: false }, strict: true };
+}
+
 export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
   constructor(private client: Anthropic) {}
 
@@ -155,10 +225,14 @@ export class AnthropicToolAdapter implements ToolCallingLLMAdapter {
     const anthropicTools: Anthropic.Tool[] | undefined =
       orderedTools.length > 0
         ? orderedTools.map((t, i) => {
+            // strict:true only for schemas provably inside the strict subset
+            // (see strictenToolSchema); everything else keeps loose behavior.
+            const { inputSchema, strict } = strictenToolSchema(t.input_schema);
             const tool: Anthropic.Tool = {
               name: encodeToolName(t.name), // encode "." → "__" so the name satisfies ^[a-zA-Z0-9_-]{1,128}$
               description: t.description,
-              input_schema: t.input_schema as Anthropic.Tool.InputSchema,
+              input_schema: inputSchema as Anthropic.Tool.InputSchema,
+              ...(strict ? { strict: true } : {}),
             };
             if (i === orderedTools.length - 1) {
               tool.cache_control = { type: "ephemeral" };
