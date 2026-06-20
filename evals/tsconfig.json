@@ -8,6 +8,7 @@
     "claim-classifier/**/*.ts",
     "alex-conversation/**/*.ts",
     "governance-decision/**/*.ts",
-    "riley-recommendation/**/*.ts"
+    "riley-recommendation/**/*.ts",
+    "trajectory-grading/**/*.ts"
   ]
 }

@@ -12,6 +12,7 @@ export default defineConfig({
       "alex-conversation/__tests__/**/*.test.ts",
       "governance-decision/__tests__/**/*.test.ts",
       "riley-recommendation/__tests__/**/*.test.ts",
+      "trajectory-grading/__tests__/**/*.test.ts",
     ],
     environment: "node",
   },
