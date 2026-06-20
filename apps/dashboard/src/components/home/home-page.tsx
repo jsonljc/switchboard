@@ -23,7 +23,7 @@ import { NeedsYouCard } from "./needs-you-card";
 import { TeamBand } from "./team-band";
 import { ThisWeek } from "./this-week";
 import { WhileYouSlept } from "./while-you-slept";
-import { WorkInProgress } from "./work-in-progress";
+import { HomeKpiStrip } from "./home-kpi-strip";
 import { Permissions } from "./permissions";
 import type {
   PermissionsModel,
@@ -31,7 +31,6 @@ import type {
   ThisWeekModel,
   VerdictSignals,
   WhileYouSleptRow,
-  WorkInProgressItem,
 } from "./types";
 import type { AgentActivity } from "@/components/agent-avatar/agent-status-visual";
 import type { DerivedAgentStateEntry } from "@/lib/api-client-types";
@@ -203,10 +202,6 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
         }))
       : [];
 
-  // ── Work in Progress: no real typed-handoff trace source in P1-A, so chain is
-  // never synthesized. We have no honest WIP source yet → empty list. ─────────
-  const workInProgressItems: WorkInProgressItem[] = [];
-
   // ── Permissions (Alex mission rules/role → conservative plain English) ─────
   let permissions: PermissionsModel | undefined;
   if (!alexMission.isError && alexMission.data) {
@@ -259,38 +254,18 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
       <WhileYouSlept rows={whileYouSleptRows} />
     </HomeModuleBoundary>
   );
-  const workInProgressNode = (
-    <HomeModuleBoundary key="work-in-progress">
-      <WorkInProgress items={workInProgressItems} />
-    </HomeModuleBoundary>
-  );
   const permissionsNode = (
     <HomeModuleBoundary key="permissions">
       <Permissions model={permissions} />
     </HomeModuleBoundary>
   );
 
-  // ACTIVE: Verdict → NeedsYou → TeamBand → ThisWeek → WhileYouSlept → WIP → Permissions
-  // CALM:   Verdict → ThisWeek (promoted) → TeamBand → WhileYouSlept → WIP → Permissions
+  // ACTIVE: Verdict → NeedsYou → TeamBand → ThisWeek → WhileYouSlept → Permissions
+  // CALM:   Verdict → ThisWeek (promoted) → TeamBand → WhileYouSlept → Permissions
   //         (NeedsYou is not rendered when empty)
   const modules = isCalm
-    ? [
-        verdictNode,
-        thisWeekNode,
-        teamBandNode,
-        whileYouSleptNode,
-        workInProgressNode,
-        permissionsNode,
-      ]
-    : [
-        verdictNode,
-        needsYouNode,
-        teamBandNode,
-        thisWeekNode,
-        whileYouSleptNode,
-        workInProgressNode,
-        permissionsNode,
-      ];
+    ? [verdictNode, thisWeekNode, teamBandNode, whileYouSleptNode, permissionsNode]
+    : [verdictNode, needsYouNode, teamBandNode, thisWeekNode, whileYouSleptNode, permissionsNode];
 
   // Bento split (desktop only — display:contents below lg keeps the flat mobile order):
   // hero = verdict (modules[0]); main = next N "active" modules; rail = the quiet remainder.
@@ -302,6 +277,7 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
   return (
     <>
       <div className={styles.column}>
+        <HomeKpiStrip />
         {heroNode}
         <div className={styles.bento}>
           <div className={styles.bentoMain}>{mainNodes}</div>

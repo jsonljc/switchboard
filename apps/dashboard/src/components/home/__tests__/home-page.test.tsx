@@ -124,6 +124,22 @@ vi.mock("@/components/ui/use-toast", () => ({
 vi.mock("next-auth/react", () => ({
   useSession: () => sessionState,
 }));
+// Minimal valid HomeSummary so HomeKpiStrip renders its <section aria-label="This week">
+// rather than the error panel (which triggers when data is undefined + isLoading is false).
+const HOME_SUMMARY_DATA = {
+  attributedValueCents: { state: "empty" as const, reason: "no_current_week_bookings" as const },
+  bookings: { state: "empty" as const, reason: "no_current_week_bookings" as const },
+  currency: "SGD" as const,
+  generatedAt: new Date().toISOString(),
+};
+vi.mock("@/hooks/use-home-summary", () => ({
+  useHomeSummary: () => ({
+    data: HOME_SUMMARY_DATA,
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
+}));
 
 // AgentPanel is a self-contained sheet tested independently in agent-panel.test.tsx.
 // Mock it here so the Home wiring test focuses on the open-state toggle, not
@@ -232,13 +248,8 @@ const METRICS: MetricsViewModelWire = {
 };
 
 // Stable list of the Home module aria-labels in their canonical DOM presence.
-const MODULE_LABELS = [
-  "verdict",
-  "Needs you",
-  "This week note",
-  "While you slept",
-  "Work in progress",
-];
+// WorkInProgress was removed from the home layout (replaced by HomeKpiStrip as hero).
+const MODULE_LABELS = ["verdict", "Needs you", "This week note", "While you slept"];
 
 /** Returns the module aria-labels present, in document order. */
 function modulesInOrder(container: HTMLElement): string[] {
@@ -290,13 +301,13 @@ describe("HomePage", () => {
 
     const { container } = render(<HomePage />);
 
-    // ACTIVE order: Verdict, Needs You, (Team Band), This Week, While You Slept, Work in Progress
+    // ACTIVE order: Verdict, Needs You, (Team Band), This Week, While You Slept
+    // WorkInProgress was removed from the layout.
     expect(modulesInOrder(container)).toEqual([
       "verdict",
       "Needs you",
       "This week note",
       "While you slept",
-      "Work in progress",
     ]);
 
     // Team Band sits between Needs You and This Week: assert via an agent tile's
@@ -328,12 +339,8 @@ describe("HomePage", () => {
     expect(screen.queryByLabelText("Needs you")).not.toBeInTheDocument();
 
     // CALM order: Verdict, This Week (promoted), then Team Band below.
-    expect(modulesInOrder(container)).toEqual([
-      "verdict",
-      "This week note",
-      "While you slept",
-      "Work in progress",
-    ]);
+    // WorkInProgress was removed from the layout.
+    expect(modulesInOrder(container)).toEqual(["verdict", "This week note", "While you slept"]);
 
     // This Week appears BEFORE Team Band (promoted).
     const thisWeek = screen.getByLabelText("This week note");
@@ -542,5 +549,11 @@ describe("HomePage", () => {
     // alex/riley day-one → set up via fallback; mira day-thirty → not set up.
     expect(screen.getByTestId("team-mate-alex")).toHaveAttribute("data-disabled", "false");
     expect(screen.getByTestId("team-mate-mira")).toHaveAttribute("data-disabled", "true");
+  });
+
+  it("mounts the hero KPI strip and no longer renders WorkInProgress", () => {
+    render(<HomePage />);
+    expect(screen.getByLabelText("This week")).toBeInTheDocument(); // the strip section
+    expect(screen.queryByText(/Work in progress/i)).toBeNull();
   });
 });

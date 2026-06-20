@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import Link from "next/link";
 import type { HomeSummaryCentsMetric, HomeSummaryCountMetric } from "@switchboard/schemas";
 import { useHomeSummary } from "@/hooks/use-home-summary";
@@ -23,7 +24,7 @@ function toDelta(current: number, prev?: number): Delta | null {
   };
 }
 
-export function HomeKpiStrip(): JSX.Element {
+export function HomeKpiStrip(): React.JSX.Element {
   const summary = useHomeSummary();
   const decisions = useDecisionFeed(null);
 
