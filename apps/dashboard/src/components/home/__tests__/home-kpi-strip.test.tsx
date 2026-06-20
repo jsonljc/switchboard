@@ -38,6 +38,8 @@ describe("HomeKpiStrip", () => {
     expect(screen.getByText("S$4,800")).toBeInTheDocument(); // 480000 cents
     expect(screen.getByText("Attributed booking value")).toBeInTheDocument();
     expect(screen.getByText(/Booked this week, not yet collected/)).toBeInTheDocument();
+    // Value-tile delta: 480000c - 300000c = 180000c = S$1,800 delta, money-formatted
+    expect(screen.getByText("+S$1,800")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument(); // awaiting approval count
   });

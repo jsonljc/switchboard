@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { HomeSummaryCentsMetric, HomeSummaryCountMetric } from "@switchboard/schemas";
 import { useHomeSummary } from "@/hooks/use-home-summary";
 import { useDecisionFeed } from "@/hooks/use-decision-feed";
-import { Money } from "@/lib/money";
+import { Money, formatMoney } from "@/lib/money";
 import { DeltaBadge } from "@/components/results/delta-badge";
 import type { Delta } from "@/components/results/types";
 import { StatePanel, Skeleton } from "@/components/query-states";
@@ -21,6 +21,22 @@ function toDelta(current: number, prev?: number): Delta | null {
   return {
     kind: diff > 0 ? "pos" : "neg",
     text: `${diff > 0 ? "+" : ""}${diff}`,
+  };
+}
+
+/**
+ * Money-formatted delta for the value tile. Inputs are in CENTS.
+ * Returns null when prevCents is undefined (no comparator period).
+ * text is formatted as S$-prefixed whole dollars, e.g. "+S$1,800".
+ */
+function toMoneyDelta(currentCents: number, prevCents?: number): Delta | null {
+  if (prevCents === undefined) return null;
+  const diffCents = currentCents - prevCents;
+  if (diffCents === 0) return { kind: "flat", text: formatMoney(0) };
+  const sign = diffCents > 0 ? "+" : "-";
+  return {
+    kind: diffCents > 0 ? "pos" : "neg",
+    text: `${sign}${formatMoney(Math.abs(diffCents) / 100)}`,
   };
 }
 
@@ -60,9 +76,7 @@ function ValueTile({ metric }: { metric: HomeSummaryCentsMetric }) {
           <span className={styles.figure}>
             <Money value={metric.value / 100} />
           </span>
-          <DeltaBadge
-            delta={toDelta(metric.value / 100, metric.comparator && metric.comparator.value / 100)}
-          />
+          <DeltaBadge delta={toMoneyDelta(metric.value, metric.comparator?.value)} />
           <span className={styles.sub}>Booked this week, not yet collected</span>
         </>
       ) : metric.state === "empty" ? (
