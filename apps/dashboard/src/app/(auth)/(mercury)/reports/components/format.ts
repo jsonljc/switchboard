@@ -1,40 +1,9 @@
-// Money / int / percent formatters for /reports.
-// Currency is SGD; backend emits whole dollars (with optional decimals), NOT cents.
-// Threshold rule matches packages/core/src/reports/period-helpers.ts formatCurrencySGD:
-//   abs >= 1000          → whole rounded
-//   abs < 1000 + integer → integer
-//   abs < 1000 + frac.   → two decimals
+// Int / percent formatters for /reports. Money formatting now lives in the
+// shared canonical `@/lib/money` (formatMoney); `fmtSGD` / `FmtSGDOptions` are
+// re-exported here as aliases so existing reports + results call sites keep
+// working unchanged (byte-identical output).
 
-export interface FmtSGDOptions {
-  withCents?: "auto" | "always" | "never";
-  compact?: boolean;
-}
-
-export function fmtSGD(value: number | null | undefined, opts: FmtSGDOptions = {}): string {
-  if (value == null) return "—";
-  const { withCents = "auto", compact = false } = opts;
-  const sign = value < 0 ? "-" : "";
-  const abs = Math.abs(value);
-
-  if (compact && abs >= 1_000_000) {
-    const m = abs / 1_000_000;
-    return `${sign}S$${m.toFixed(1).replace(/\.0$/, "")}m`;
-  }
-  if (compact && abs >= 10_000) {
-    return `${sign}S$${Math.round(abs / 1_000)}k`;
-  }
-
-  let showCents: boolean;
-  if (withCents === "always") showCents = true;
-  else if (withCents === "never") showCents = false;
-  else if (abs >= 1000) showCents = false;
-  else showCents = !Number.isInteger(abs);
-
-  return `${sign}S$${abs.toLocaleString("en-SG", {
-    minimumFractionDigits: showCents ? 2 : 0,
-    maximumFractionDigits: showCents ? 2 : 0,
-  })}`;
-}
+export { formatMoney as fmtSGD, type MoneyOptions as FmtSGDOptions } from "@/lib/money";
 
 export function fmtInt(value: number | null | undefined): string {
   if (value == null) return "—";
