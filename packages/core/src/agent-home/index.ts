@@ -64,6 +64,11 @@ export type {
 } from "./metrics-types.js";
 export { buildWeekContext, type WeekContext } from "./metrics-buckets.js";
 export { getAgentTargets, type AgentTargets } from "./targets.js";
+export {
+  buildHomeSummary,
+  type HomeSummarySignals,
+  type BuildHomeSummaryInput,
+} from "./home-summary.js";
 export type { ActivityPreviewReader, ThreadMessageRecord } from "./activity-preview-reader.js";
 export { extractContactRef } from "./contact-snapshot-extractors.js";
 export type { ContactRef } from "./contact-snapshot-extractors.js";

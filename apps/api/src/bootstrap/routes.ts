@@ -78,6 +78,7 @@ import { creativesRoute } from "../routes/agent-home/creatives.js";
 import { miraBriefRoute } from "../routes/agent-home/mira-brief.js";
 import { miraDecisionRoute } from "../routes/agent-home/mira-decision.js";
 import { metricsRoute } from "../routes/agent-home/metrics.js";
+import { homeSummaryRoute } from "../routes/agent-home/home-summary.js";
 import { missionRoute } from "../routes/agent-home/mission.js";
 import { cockpitActivityRoutes } from "../routes/agent-home/activity.js";
 import { buildCockpitActivityDeps } from "../lib/cockpit-activity-deps.js";
@@ -148,6 +149,8 @@ export async function registerRoutes(
   await app.register(miraDecisionRoute, { prefix: "/api/dashboard" });
   // metricsRoute: GET /api/dashboard/agents/:agentId/metrics — agent-home metrics feed
   await app.register(metricsRoute, { prefix: "/api/dashboard" });
+  // homeSummaryRoute: GET /api/dashboard/home/summary — home KPI strip read model
+  await app.register(homeSummaryRoute, { prefix: "/api/dashboard" });
   // missionRoute: GET /api/dashboard/agents/:agentId/mission — agent-home mission aggregator
   await app.register(missionRoute, { prefix: "/api/dashboard" });
   // cockpitActivityRoutes: GET /api/dashboard/agents/:agentId/activity — A.4 cockpit feed.
