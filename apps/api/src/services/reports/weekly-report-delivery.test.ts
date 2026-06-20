@@ -46,6 +46,8 @@ const fakeReport = {
     currency: "USD",
     bookingsWithValue: 9,
     cohortSize: 12,
+    paidRevenueCents: 180000,
+    paidBookings: 5,
   },
   receiptedBookingQuality: {
     cohortSize: 12,

@@ -8,7 +8,9 @@ import type { Receipt, PaidVisitVerdict } from "@switchboard/schemas";
  * - noop/degraded payment -> degraded, NOT production-countable
  * - void -> neither
  */
-export function isPaidVisit(receipt: Receipt): PaidVisitVerdict {
+export function isPaidVisit(
+  receipt: Pick<Receipt, "kind" | "status" | "provider" | "tier">,
+): PaidVisitVerdict {
   const { kind, status, provider, tier } = receipt;
 
   if (status === "void") {

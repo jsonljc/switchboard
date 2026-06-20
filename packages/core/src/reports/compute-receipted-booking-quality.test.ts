@@ -41,6 +41,8 @@ function mkView(
     startsAt: opts.startsAt ?? STARTS,
     paymentEventIds: [],
     expectedValue: null,
+    paid: false,
+    paidValueCents: null,
   };
 }
 

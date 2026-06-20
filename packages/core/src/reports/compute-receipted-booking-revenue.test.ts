@@ -28,6 +28,8 @@ function view(p: Partial<ReceiptedBookingView>): ReceiptedBookingView {
     startsAt: new Date("2026-06-16T02:00:00Z"),
     paymentEventIds: [],
     expectedValue: null,
+    paid: false,
+    paidValueCents: null,
     ...p,
   };
 }
@@ -87,6 +89,57 @@ describe("computeReceiptedBookingRevenue", () => {
 
   it("empty cohort -> zero revenue, null currency", async () => {
     const r = await computeReceiptedBookingRevenue(ctx, stores([]));
-    expect(r).toEqual({ revenueCents: 0, currency: null, bookingsWithValue: 0, cohortSize: 0 });
+    expect(r).toEqual({
+      revenueCents: 0,
+      currency: null,
+      bookingsWithValue: 0,
+      cohortSize: 0,
+      paidRevenueCents: 0,
+      paidBookings: 0,
+    });
+  });
+
+  it("sums proven-paid value and counts paid bookings, independent of the expected dimension", async () => {
+    const r = await computeReceiptedBookingRevenue(
+      ctx,
+      stores([
+        // issued + attended + paid: contributes to BOTH expected (snapshot) and paid
+        view({
+          issuedAt: new Date("2026-06-09"),
+          expectedValueAtIssue: 45000,
+          paid: true,
+          paidValueCents: 30000,
+        }),
+        // booked, not yet paid: contributes to expected only
+        view({ issuedAt: null, expectedValue: 30000, paid: false, paidValueCents: null }),
+        // historical + paid
+        view({ issuedAt: null, expectedValue: 20000, paid: true, paidValueCents: 20000 }),
+      ]),
+    );
+    expect(r.paidRevenueCents).toBe(50000); // 30000 + 20000
+    expect(r.paidBookings).toBe(2);
+    // the expected dimension is unchanged by the paid additions
+    expect(r.revenueCents).toBe(95000); // 45000 + 30000 + 20000
+    expect(r.bookingsWithValue).toBe(3);
+    expect(r.cohortSize).toBe(3);
+  });
+
+  it("is NaN-safe on the paid dimension: a paid booking with null/NaN paidValueCents counts but adds 0", async () => {
+    const r = await computeReceiptedBookingRevenue(
+      ctx,
+      stores([
+        view({ issuedAt: null, expectedValue: 0, paid: true, paidValueCents: null }),
+        view({
+          issuedAt: null,
+          expectedValue: 0,
+          paid: true,
+          paidValueCents: NaN as unknown as number,
+        }),
+        view({ issuedAt: null, expectedValue: 0, paid: true, paidValueCents: 1500 }),
+      ]),
+    );
+    expect(Number.isFinite(r.paidRevenueCents)).toBe(true);
+    expect(r.paidRevenueCents).toBe(1500);
+    expect(r.paidBookings).toBe(3);
   });
 });

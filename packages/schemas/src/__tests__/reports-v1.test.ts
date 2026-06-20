@@ -90,6 +90,8 @@ describe("ReportDataV1 (PR-R1 locked shape)", () => {
         currency: "SGD",
         bookingsWithValue: 38,
         cohortSize: 41,
+        paidRevenueCents: 2870000,
+        paidBookings: 19,
       },
     };
     expect(sample.managedComparison).toBeNull();

@@ -432,13 +432,22 @@
   margin: 0.125rem 0 0;
 }
 
-/* Coverage sub-line: quiet mono caption (how much of the cohort carried a value) */
+/* Coverage sub-line: quiet mono caption (how many of the cohort are paid) */
 .proofRevenueCoverage {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
   font-size: 0.75rem;
   color: var(--ink-4);
   margin: 0;
+}
+
+/* Secondary line: the expected/booked dimension, quieter still than the paid coverage caption */
+.proofRevenueSecondary {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: var(--ink-5);
+  margin: 0.25rem 0 0;
 }
 
 /* Confidence rungs: label, amber proportion bar, count (mirrors the funnel row grid) */

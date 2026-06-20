@@ -46,6 +46,8 @@ function makeReport(over: Partial<ReportDataV1> = {}): ReportDataV1 {
       currency: null,
       bookingsWithValue: 0,
       cohortSize: 0,
+      paidRevenueCents: 0,
+      paidBookings: 0,
     },
     ...over,
   };
@@ -68,6 +70,8 @@ describe("buildWeeklyDigest", () => {
         currency: "USD",
         bookingsWithValue: 9,
         cohortSize: 12,
+        paidRevenueCents: 180000,
+        paidBookings: 5,
       },
       receiptedBookingQuality: {
         cohortSize: 12,
@@ -101,6 +105,10 @@ describe("buildWeeklyDigest", () => {
     expect(d.headline).toContain("Jun 9 to Jun 15");
 
     expect(metric(d, "receipted_bookings").value).toBe("12");
+    // Proven-paid is surfaced as its own prominent metric (the north-star headline).
+    expect(metric(d, "paid_revenue").value).toBe("$1,800.00");
+    expect(metric(d, "paid_revenue").detail).toBe("5 of 12 bookings paid");
+    // Expected stays as the secondary "booked" dimension (relabeled, same key).
     expect(metric(d, "receipted_revenue").value).toBe("$3,450.00");
     expect(metric(d, "receipted_revenue").detail).toBe("9 of 12 carried a value");
     expect(metric(d, "attribution_quality").value).toBe(
@@ -129,6 +137,8 @@ describe("buildWeeklyDigest", () => {
     expect(d.subject).toBe("Your week: no receipted bookings yet");
 
     expect(metric(d, "receipted_bookings").value).toBe("0");
+    expect(metric(d, "paid_revenue").value).toBe("$0.00");
+    expect(metric(d, "paid_revenue").detail).toBe("0 of 0 bookings paid");
     expect(metric(d, "receipted_revenue").value).toBe("$0.00");
     expect(metric(d, "attribution_quality").value).toBe("no data yet");
     expect(metric(d, "held_rate").value).toBe("no matured bookings yet");
@@ -154,6 +164,8 @@ describe("buildWeeklyDigest", () => {
           currency: null,
           bookingsWithValue: 0,
           cohortSize: 1,
+          paidRevenueCents: 0,
+          paidBookings: 0,
         },
       }),
       opts,
@@ -170,11 +182,15 @@ describe("buildWeeklyDigest", () => {
           currency: "USD",
           bookingsWithValue: 0,
           cohortSize: 3,
+          paidRevenueCents: Number.NaN,
+          paidBookings: 0,
         },
       }),
       opts,
     );
     expect(metric(d, "receipted_revenue").value).toBe("$0.00");
+    // The paid figure is NaN-guarded to $0.00 the same way as the expected figure.
+    expect(metric(d, "paid_revenue").value).toBe("$0.00");
   });
 
   it("formats a non-USD currency and caps the worklist with an honest note", () => {
@@ -195,6 +211,8 @@ describe("buildWeeklyDigest", () => {
           currency: "SGD",
           bookingsWithValue: 20,
           cohortSize: 20,
+          paidRevenueCents: 250000,
+          paidBookings: 10,
         },
         receiptedBookingQuality: {
           cohortSize: 20,

@@ -76,6 +76,8 @@ const baseView = {
   startsAt: new Date("2026-06-16T02:00:00Z"),
   paymentEventIds: ["pe-1"],
   expectedValue: 45000,
+  paid: true,
+  paidValueCents: 45000,
 };
 
 describe("ReceiptedBookingViewSchema", () => {
@@ -102,6 +104,8 @@ describe("ReceiptedBookingViewSchema", () => {
       startsAt: new Date("2026-06-17T03:00:00Z"),
       paymentEventIds: [],
       expectedValue: null,
+      paid: false,
+      paidValueCents: null,
     });
     expect(r.success).toBe(true);
   });
@@ -129,6 +133,35 @@ describe("ReceiptedBookingViewSchema", () => {
       ReceiptedBookingViewSchema.safeParse({ ...baseView, attributionConfidence: "guessed" })
         .success,
     ).toBe(false);
+  });
+
+  it("requires the paid + paidValueCents proof fields", () => {
+    const withoutPaid = { ...baseView } as Record<string, unknown>;
+    delete withoutPaid.paid;
+    delete withoutPaid.paidValueCents;
+    expect(ReceiptedBookingViewSchema.safeParse(withoutPaid).success).toBe(false);
+  });
+
+  it("carries gross verified-paid value: paid flag + nullable paidValueCents", () => {
+    const r = ReceiptedBookingViewSchema.parse(baseView);
+    expect(r.paid).toBe(true);
+    expect(r.paidValueCents).toBe(45000);
+    const unpaid = ReceiptedBookingViewSchema.parse({
+      ...baseView,
+      paid: false,
+      paidValueCents: null,
+    });
+    expect(unpaid.paid).toBe(false);
+    expect(unpaid.paidValueCents).toBeNull();
+  });
+
+  it("rejects a non-integer / negative paidValueCents", () => {
+    expect(
+      ReceiptedBookingViewSchema.safeParse({ ...baseView, paidValueCents: 12.5 }).success,
+    ).toBe(false);
+    expect(ReceiptedBookingViewSchema.safeParse({ ...baseView, paidValueCents: -1 }).success).toBe(
+      false,
+    );
   });
 
   it("requires the service and startsAt booking handles", () => {

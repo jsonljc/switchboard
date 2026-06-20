@@ -40,7 +40,14 @@ const samplePayload: ReportDataV1 = {
     bookingsNeedingAttention: 0,
     worklist: [],
   },
-  receiptedBookingRevenue: { revenueCents: 0, currency: null, bookingsWithValue: 0, cohortSize: 0 },
+  receiptedBookingRevenue: {
+    revenueCents: 0,
+    currency: null,
+    bookingsWithValue: 0,
+    cohortSize: 0,
+    paidRevenueCents: 0,
+    paidBookings: 0,
+  },
 };
 
 describe("createInMemoryReportCacheStore", () => {
