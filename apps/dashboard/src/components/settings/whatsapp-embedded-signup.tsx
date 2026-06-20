@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { CheckCircle, XCircle, Loader2, ShieldCheck, Lock, ChevronRight } from "lucide-react";
 
 interface Props {
@@ -184,9 +185,9 @@ export function WhatsAppEmbeddedSignup({
               </div>
             )}
           </div>
-          <span className="ml-auto rounded-full bg-[#e9f9f0] px-2.5 py-1 text-xs font-semibold text-[#0b7a4b]">
+          <Badge variant="positive" className="ml-auto">
             Verified
-          </span>
+          </Badge>
         </div>
         <Button
           variant="action"
