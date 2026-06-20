@@ -1,10 +1,19 @@
 import { describe, it, expect, vi } from "vitest";
-import { createGoogleCalendarProvider } from "../google-calendar-factory.js";
+import { google } from "googleapis";
+import { GoogleCalendarAdapter } from "@switchboard/core/calendar";
+import {
+  createGoogleCalendarProvider,
+  createGoogleCalendarProviderFromOAuth,
+} from "../google-calendar-factory.js";
+
+// Stable spy so the OAuth2 client's setCredentials can be asserted across the (hoisted) module mock.
+const { oauth2SetCredentials } = vi.hoisted(() => ({ oauth2SetCredentials: vi.fn() }));
 
 vi.mock("googleapis", () => ({
   google: {
     auth: {
       JWT: vi.fn().mockImplementation(() => ({})),
+      OAuth2: vi.fn().mockImplementation(() => ({ setCredentials: oauth2SetCredentials })),
     },
     calendar: vi.fn().mockReturnValue({
       freebusy: { query: vi.fn() },
@@ -71,5 +80,33 @@ describe("createGoogleCalendarProvider", () => {
         calendarId: "primary",
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("createGoogleCalendarProviderFromOAuth", () => {
+  it("returns a GoogleCalendarAdapter wired from the connection's OAuth creds", async () => {
+    const provider = await createGoogleCalendarProviderFromOAuth({
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      refreshToken: "refresh-token",
+      calendarId: "clinic@group.calendar.google.com",
+    });
+
+    expect(provider).toBeInstanceOf(GoogleCalendarAdapter);
+  });
+
+  it("builds an OAuth2 client with the client creds and sets the refresh token", async () => {
+    vi.mocked(google.auth.OAuth2).mockClear();
+    oauth2SetCredentials.mockClear();
+
+    await createGoogleCalendarProviderFromOAuth({
+      clientId: "cid-123",
+      clientSecret: "secret-123",
+      refreshToken: "rt-xyz",
+      calendarId: "primary",
+    });
+
+    expect(google.auth.OAuth2).toHaveBeenCalledWith("cid-123", "secret-123");
+    expect(oauth2SetCredentials).toHaveBeenCalledWith({ refresh_token: "rt-xyz" });
   });
 });
