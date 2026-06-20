@@ -11,7 +11,11 @@ import type {
   DeploymentResolver,
   DeploymentResolverResult,
 } from "@switchboard/core/platform";
-import { resolveAuthoritativeDeployment } from "../bootstrap/platform-deployment-resolver.js";
+import {
+  resolveAuthoritativeDeployment,
+  buildPlatformDirectIntentPredicate,
+  PLATFORM_DIRECT_WORKFLOW_INTENTS,
+} from "../bootstrap/platform-deployment-resolver.js";
 import { ROBIN_RECOVERY_SEND_INTENT } from "../services/workflows/robin-recovery-request.js";
 
 function makeResult(overrides: Partial<DeploymentResolverResult> = {}): DeploymentResolverResult {
@@ -209,5 +213,62 @@ describe("resolveAuthoritativeDeployment", () => {
 
     expect(resolvedSlug).toBe("alex");
     expect(ctx.deploymentId).toBe("dep-alex");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The REAL production carve-out predicate (app.ts wires buildPlatformDirectIntentPredicate
+// into resolveAuthoritativeDeployment). Pinning it here so the app.ts predicate is no longer
+// only exercised by the per-intent live-path tests with their own inline predicates.
+// These are platform-initiated, non-skill workflow intents whose slug (conversation/meta/lead)
+// has no seeded deployment — without the carve-out they throw deployment_not_found in prod.
+// meta.lead.intake is deliberately EXCLUDED: it threads its resolved deploymentId into the lead
+// it ingests, so it must resolve the real Alex deployment (skillSlug "alex"), not platform-direct.
+// ---------------------------------------------------------------------------
+describe("buildPlatformDirectIntentPredicate", () => {
+  const registry = {
+    lookup: (intent: string) =>
+      intent === "ledger.deliver_weekly_report"
+        ? { defaultMode: "operator_mutation" as const }
+        : intent === "alex.conversation" || intent === "meta.lead.intake"
+          ? { defaultMode: "workflow" as const }
+          : undefined,
+  };
+  const predicate = buildPlatformDirectIntentPredicate(registry);
+
+  it.each([
+    "conversation.reminder.send",
+    "conversation.followup.send",
+    "meta.lead.greeting.send",
+    "meta.lead.inquiry.record",
+    "lead.intake",
+    ROBIN_RECOVERY_SEND_INTENT,
+  ])("treats platform-initiated workflow intent %s as platform-direct", (intent) => {
+    expect(predicate(intent)).toBe(true);
+  });
+
+  it("treats operator_mutation intents as platform-direct via the registry defaultMode", () => {
+    expect(predicate("ledger.deliver_weekly_report")).toBe(true);
+  });
+
+  it("does NOT carve out meta.lead.intake — it resolves the real Alex deployment for lead attribution", () => {
+    expect(predicate("meta.lead.intake")).toBe(false);
+  });
+
+  it("does NOT carve out a skill intent — alex.* resolves its real deployment", () => {
+    expect(predicate("alex.conversation")).toBe(false);
+  });
+
+  it("the carve-out set is exactly the 6 platform-initiated intents (drift guard)", () => {
+    expect([...PLATFORM_DIRECT_WORKFLOW_INTENTS].sort()).toEqual(
+      [
+        "conversation.followup.send",
+        "conversation.reminder.send",
+        "lead.intake",
+        "meta.lead.greeting.send",
+        "meta.lead.inquiry.record",
+        ROBIN_RECOVERY_SEND_INTENT,
+      ].sort(),
+    );
   });
 });
