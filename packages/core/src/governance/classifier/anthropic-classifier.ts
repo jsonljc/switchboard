@@ -11,6 +11,7 @@ import {
   CLASSIFIER_PROMPT_VERSION,
   CLASSIFIER_PROMPT_HASH,
 } from "./prompt.js";
+import { recordLlmCacheEffectiveness } from "../../telemetry/metrics.js";
 
 export interface ClassifierCallResult {
   result: ClassifierSentenceResult;
@@ -87,6 +88,19 @@ export function createAnthropicClaimClassifier(client: Anthropic): AnthropicClai
         },
         { signal },
       );
+
+      // Per-call prompt-cache effectiveness (hit/populate/miss + zero-read warn).
+      // The classifier caches its system prompt + tool definition; recording per
+      // call surfaces a silent cache bust (e.g. a prompt-version change) the same
+      // way the non-governance call sites do (S1). Side-effect only: it changes
+      // neither the request nor the classification result. Sampling params stay
+      // omitted, so this call is already forward-compatible with 4.7+ ids and
+      // needs no per-id guard (unlike the other non-governance call sites).
+      recordLlmCacheEffectiveness({
+        model,
+        cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
+        cacheCreationTokens: response.usage.cache_creation_input_tokens ?? 0,
+      });
 
       const blocks = (response as { content?: ReadonlyArray<unknown> }).content ?? [];
       const toolUse = blocks.find(
