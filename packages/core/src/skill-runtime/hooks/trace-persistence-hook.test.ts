@@ -213,6 +213,39 @@ describe("TracePersistenceHook", () => {
     expect(created[0]!.turnCount).toBe(1);
   });
 
+  it("persists the work unit id from the hook context (afterSkill and onError)", async () => {
+    const created: SkillExecutionTrace[] = [];
+    const hook = new TracePersistenceHook(
+      {
+        create: async (t: SkillExecutionTrace) => {
+          created.push(t);
+        },
+      },
+      { trigger: "chat_message" },
+    );
+    await hook.afterSkill(
+      baseCtx({ workUnitId: "wu_success" }),
+      resultWith({ input: 1, output: 1 }),
+    );
+    await hook.onError(baseCtx({ workUnitId: "wu_error" }), new Error("boom"));
+    expect(created[0]!.workUnitId).toBe("wu_success");
+    expect(created[1]!.workUnitId).toBe("wu_error");
+  });
+
+  it("leaves the trace workUnitId undefined when the context carries none", async () => {
+    const created: SkillExecutionTrace[] = [];
+    const hook = new TracePersistenceHook(
+      {
+        create: async (t: SkillExecutionTrace) => {
+          created.push(t);
+        },
+      },
+      { trigger: "chat_message" },
+    );
+    await hook.afterSkill(baseCtx({}), resultWith({ input: 1, output: 1 }));
+    expect(created[0]!.workUnitId).toBeUndefined();
+  });
+
   it("never throws when the store fails", async () => {
     const hook = new TracePersistenceHook(
       {

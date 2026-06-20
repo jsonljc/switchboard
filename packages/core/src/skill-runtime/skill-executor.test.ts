@@ -680,6 +680,29 @@ describe("SkillExecutorImpl", () => {
     expect(calls[0]!.tokenUsage.input).toBe(10);
   });
 
+  it("threads params.workUnitId into the trace hook context (executor->recorder seam)", async () => {
+    const seenCtx: SkillHookContext[] = [];
+    const traceHook = {
+      afterSkill: async (c: SkillHookContext, _r: SkillExecutionResult) => {
+        seenCtx.push(c);
+      },
+      onError: async () => {},
+    };
+    const exec = new SkillExecutorImpl(
+      okTraceAdapter(),
+      new Map(),
+      undefined,
+      [],
+      undefined,
+      new Map(),
+      undefined,
+      traceHook,
+    );
+    await exec.execute({ ...traceBaseParams(), workUnitId: "wu_exec" });
+    expect(seenCtx).toHaveLength(1);
+    expect(seenCtx[0]!.workUnitId).toBe("wu_exec");
+  });
+
   it("a throwing trace hook does NOT break the response", async () => {
     const traceHook = {
       afterSkill: async () => {

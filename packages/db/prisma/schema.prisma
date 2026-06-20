@@ -847,6 +847,10 @@ model ExecutionTrace {
 
   trigger             String @default("chat_message")
   sessionId           String
+  // Lineage link to the canonical WorkTrace this execution ran inside (S6a). Nullable:
+  // legacy rows stay NULL (honest absence). Makes the ordered toolCalls queryable per
+  // work unit (findByWorkUnitId) so trajectory grading (6b) + OTel spans (E4) can join.
+  workUnitId          String?
   inputParametersHash String
 
   toolCalls           Json @default("[]")
@@ -871,6 +875,7 @@ model ExecutionTrace {
   @@index([organizationId, createdAt])
   @@index([status])
   @@index([sessionId])
+  @@index([organizationId, workUnitId])
 }
 
 // ---------------------------------------------------------------------------

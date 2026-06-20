@@ -173,6 +173,9 @@ export interface SkillExecutionTrace {
   skillVersion: string;
   trigger: "chat_message" | "batch_job" | "brief_compose";
   sessionId: string;
+  /** The canonical WorkTrace this execution ran inside (S6a lineage). Null/absent for
+   *  legacy or standalone executions; makes the ordered toolCalls queryable per work unit. */
+  workUnitId?: string;
   inputParametersHash: string;
   toolCalls: ToolCallRecord[];
   governanceDecisions: GovernanceLogEntry[];
@@ -243,6 +246,13 @@ export interface SkillHookContext {
   skillSlug: string;
   skillVersion: string;
   sessionId: string;
+  /**
+   * The canonical WorkTrace this skill executes inside (S6a lineage). Threaded from
+   * SkillExecutionParams/SkillRequestContext and persisted on the execution trace so the
+   * ordered toolCalls are queryable per work unit. Optional: absent for legacy/standalone
+   * executions, in which case the trace row carries a null workUnitId.
+   */
+  workUnitId?: string;
   trustLevel: "supervised" | "guided" | "autonomous";
   trustScore: number;
   /**

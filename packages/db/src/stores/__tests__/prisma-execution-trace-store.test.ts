@@ -75,6 +75,14 @@ describe("PrismaExecutionTraceStore", () => {
         }),
       });
     });
+
+    it("persists the workUnitId lineage link when present", async () => {
+      const trace = makeTrace({ workUnitId: "wu_42" });
+      await store.create(trace);
+      expect(prisma.executionTrace.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ workUnitId: "wu_42" }),
+      });
+    });
   });
 
   describe("listByDeployment", () => {
@@ -116,6 +124,34 @@ describe("PrismaExecutionTraceStore", () => {
     it("returns null when not found", async () => {
       const result = await store.findById("org1", "nonexistent");
       expect(result).toBeNull();
+    });
+  });
+
+  describe("findByWorkUnitId", () => {
+    it("returns the work unit's traces ordered chronologically, tenant-scoped", async () => {
+      const traces = [
+        makeTrace({ id: "t-a", workUnitId: "wu_9", createdAt: new Date(2026, 0, 1) }),
+        makeTrace({ id: "t-b", workUnitId: "wu_9", createdAt: new Date(2026, 0, 2) }),
+      ];
+      prisma.executionTrace.findMany.mockResolvedValue(traces);
+      const result = await store.findByWorkUnitId("org1", "wu_9");
+      expect(prisma.executionTrace.findMany).toHaveBeenCalledWith({
+        where: { organizationId: "org1", workUnitId: "wu_9" },
+        orderBy: { createdAt: "asc" },
+      });
+      expect(result).toHaveLength(2);
+      expect(result[0]!.id).toBe("t-a");
+      // each row exposes its ordered tool-call sequence AND its governance decisions —
+      // the 6b trajectory gate joins BOTH per work unit ("right action but bypassed an
+      // approval gate"), so pin that the read returns the full shape, not a projection.
+      expect(Array.isArray(result[0]!.toolCalls)).toBe(true);
+      expect(Array.isArray(result[0]!.governanceDecisions)).toBe(true);
+    });
+
+    it("returns an empty array when no traces match", async () => {
+      prisma.executionTrace.findMany.mockResolvedValue([]);
+      const result = await store.findByWorkUnitId("org1", "wu_none");
+      expect(result).toEqual([]);
     });
   });
 
