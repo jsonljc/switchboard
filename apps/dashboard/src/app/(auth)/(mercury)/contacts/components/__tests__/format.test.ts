@@ -12,6 +12,11 @@ describe("formatSGD", () => {
     expect(formatSGD(150)).toBe("S$2"); // 1.50 → 2
   });
 
+  it("never shows cents at the S$1,000 boundary (whole dollars only)", () => {
+    expect(formatSGD(99900)).toBe("S$999"); // 999.00 → S$999, no cents
+    expect(formatSGD(99950)).toBe("S$1,000"); // 999.50 → rounds to 1,000
+  });
+
   it("renders em-dash for null", () => {
     expect(formatSGD(null)).toBe("—");
   });
