@@ -358,7 +358,7 @@ jobs:
 
       - name: Filter classifier-relevant paths
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           # Empty token forces a local `git diff` against the base instead of the
           # GitHub REST API (the default token's API access returns 401 in CI here).
@@ -420,7 +420,7 @@ jobs:
 
       - name: Filter alex-conversation-relevant paths
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           # Empty token forces a local `git diff` against the base instead of the
           # GitHub REST API (the default token's API access returns 401 in CI here).
@@ -486,7 +486,7 @@ jobs:
 
       - name: Filter governance-relevant paths
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           # Empty token forces a local `git diff` against the base instead of the
           # GitHub REST API (the default token's API access returns 401 in CI here).
@@ -542,7 +542,7 @@ jobs:
 
       - name: Filter riley-relevant paths
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           # Empty token forces a local `git diff` against the base instead of the
           # GitHub REST API (the default token's API access returns 401 in CI here).
@@ -609,7 +609,7 @@ jobs:
 
       - name: Filter trajectory-grading-relevant paths
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           # Empty token forces a local `git diff` against the base instead of the
           # GitHub REST API (the default token's API access returns 401 in CI here).
