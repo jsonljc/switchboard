@@ -146,6 +146,9 @@ export * from "./website-scan.js";
 // Dashboard aggregate (operator dashboard overview)
 export * from "./dashboard.js";
 
+// Home summary tile-state contract (home kpi strip)
+export * from "./home-summary.js";
+
 // Approval Lifecycle (approval lifecycle authority objects)
 export * from "./approval-lifecycle.js";
 
