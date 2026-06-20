@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { createInMemoryMetrics, setMetrics, recordLlmCacheEffectiveness } from "../metrics.js";
+import {
+  createInMemoryMetrics,
+  setMetrics,
+  recordLlmCacheEffectiveness,
+  recordSkillContextFill,
+} from "../metrics.js";
 
 describe("outcomePattern metrics", () => {
   it("outcomePatternsExtracted accepts labeled increments", () => {
@@ -169,5 +174,31 @@ describe("recordLlmCacheEffectiveness", () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]?.[0])).toContain("zero-read");
     warn.mockRestore();
+  });
+});
+
+describe("recordSkillContextFill", () => {
+  it("observes the fill ratio (billable/max) on the histogram and returns it", () => {
+    const m = createInMemoryMetrics();
+    setMetrics(m);
+    const obs = vi.spyOn(m.skillContextFillRatio, "observe");
+    const ratio = recordSkillContextFill({
+      model: "claude-haiku-4-5-20251001",
+      billableTokens: 32_000,
+      maxTokens: 64_000,
+    });
+    expect(ratio).toBeCloseTo(0.5);
+    expect(obs).toHaveBeenCalledWith({ model: "claude-haiku-4-5-20251001" }, 0.5);
+  });
+
+  it("returns 0 and does not observe on a non-positive or non-finite maxTokens (NaN-safe)", () => {
+    const m = createInMemoryMetrics();
+    setMetrics(m);
+    const obs = vi.spyOn(m.skillContextFillRatio, "observe");
+    expect(recordSkillContextFill({ model: "x", billableTokens: 100, maxTokens: 0 })).toBe(0);
+    expect(recordSkillContextFill({ model: "x", billableTokens: 100, maxTokens: Number.NaN })).toBe(
+      0,
+    );
+    expect(obs).not.toHaveBeenCalled();
   });
 });

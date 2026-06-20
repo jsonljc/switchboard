@@ -49,6 +49,7 @@ export function createPromMetrics(): SwitchboardMetrics {
   // outcome-pattern label sets to match.
   const OUTCOME_PATTERN_DECAYED_LABELS = ["deploymentTier", "canonicalCategory"];
   const CONFIDENCE_BUCKETS = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
+  const FILL_RATIO_BUCKETS = [0.25, 0.5, 0.75, 0.9, 1.0];
   return {
     proposalsTotal: new PromCounter(
       "switchboard_proposals_total",
@@ -232,6 +233,12 @@ export function createPromMetrics(): SwitchboardMetrics {
       "switchboard_llm_cache_calls_total",
       "Per-LLM-call prompt-cache effectiveness by model and outcome (hit/populate/miss); a sustained miss rate is the silent cache-invalidation signal",
       ["model", "outcome"],
+    ),
+    skillContextFillRatio: new PromHistogram(
+      "switchboard_skill_context_fill_ratio",
+      "Per-skill-loop-turn context-fill ratio (billable tokens / maxTotalTokens) by model",
+      ["model"],
+      FILL_RATIO_BUCKETS,
     ),
   };
 }

@@ -23,7 +23,8 @@ import type {
 import { SkillExecutionBudgetError, DEFAULT_SKILL_RUNTIME_POLICY } from "./types.js";
 import type { GovernanceLogEntry } from "./governance.js";
 import { interpolate } from "./template-engine.js";
-import { getGovernanceConstraints } from "./governance-injector.js";
+import { getGovernanceConstraints, getSafetyRecencyReminder } from "./governance-injector.js";
+import { recordSkillContextFill } from "../telemetry/metrics.js";
 import { composeSkillRequestContext } from "./skill-request-context.js";
 import { denied, pendingApproval, fail, ok } from "./tool-result.js";
 import type { ToolResult } from "./tool-result.js";
@@ -385,6 +386,15 @@ export class SkillExecutorImpl implements SkillExecutor {
           );
         }
 
+        // Instrument context fill (f9/f10): how full this turn drove the token
+        // budget. Observability-only (recorded only for turns within budget — the
+        // gate above throws when exceeded). lastModel is set from the response above.
+        recordSkillContextFill({
+          model: lastModel ?? profile?.model ?? "unknown",
+          billableTokens,
+          maxTokens: this.policy.maxTotalTokens,
+        });
+
         await runAfterLlmCallHooks(this.hooks, resolvedCtx, {
           content: response.content,
           stopReason: response.stopReason,
@@ -627,7 +637,18 @@ export class SkillExecutorImpl implements SkillExecutor {
           });
         }
 
-        messages.push({ role: "user", content: toolResults });
+        // Recency safety reminder (f9/f10): re-state the hardest governance rules
+        // at the very end of context on each continuation. After many turns the
+        // system block (which carries getGovernanceConstraints()) drifts far from
+        // the end, where attention degrades ("context rot"); a short tail reminder
+        // keeps the rules in the high-recency window. Appended to the tool-results
+        // turn (text alongside tool_result is a valid user turn) so the tool_use/
+        // tool_result pairing is untouched. Additive only: it changes neither the
+        // tool results nor the model's tool selection.
+        messages.push({
+          role: "user",
+          content: [...toolResults, { type: "text" as const, text: getSafetyRecencyReminder() }],
+        });
       }
 
       throw new SkillExecutionBudgetError(

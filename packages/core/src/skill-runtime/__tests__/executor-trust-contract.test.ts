@@ -387,3 +387,83 @@ describe("Executor tool-output sentinels (AI-3 defense in depth)", () => {
     expect(opens).toBe(1);
   });
 });
+
+describe("Executor recency safety reminder (S9 / f9-f10)", () => {
+  it("appends the safety recency reminder to the tool-results turn on a continuation", async () => {
+    const tool = {
+      id: "test-tool",
+      operations: {
+        do: {
+          description: "do",
+          inputSchema: { type: "object" as const, properties: {} },
+          effectCategory: "read" as const,
+          execute: async () => ({ status: "success" as const, data: { ok: true } }),
+        },
+      },
+    };
+    let captured: unknown = undefined;
+    let callCount = 0;
+    const adapter: ToolCallingLLMAdapter = {
+      chatWithTools: vi.fn().mockImplementation((args: { messages: unknown[] }) => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({
+            content: [{ type: "tool_use", id: "t1", name: "test-tool.do", input: {} }],
+            stopReason: "tool_use",
+            usage: { inputTokens: 1, outputTokens: 1 },
+          });
+        }
+        captured = args.messages[args.messages.length - 1];
+        return Promise.resolve({
+          content: [{ type: "text", text: "done" }],
+          stopReason: "end_turn",
+          usage: { inputTokens: 1, outputTokens: 1 },
+        });
+      }),
+    };
+
+    const executor = new SkillExecutorImpl(adapter, new Map([["test-tool", tool]]));
+    await executor.execute({
+      skill: { ...SKILL, tools: ["test-tool"] },
+      parameters: {},
+      messages: [{ role: "user", content: "go" }],
+      deploymentId: "dep",
+      orgId: "org",
+      trustScore: 50,
+      trustLevel: "guided",
+    });
+
+    const msg = captured as {
+      role: string;
+      content: Array<{ type: string; text?: string; content?: string }>;
+    };
+    expect(msg.role).toBe("user");
+    // The tool_result stays first (tool_use/tool_result pairing intact); the
+    // safety reminder is appended as the LAST block (true end of context).
+    expect(msg.content[0]!.type).toBe("tool_result");
+    const last = msg.content[msg.content.length - 1]!;
+    expect(last.type).toBe("text");
+    expect(last.text!.toLowerCase()).toContain("human");
+    expect(last.text!.toLowerCase()).toContain("opt-out");
+  });
+
+  it("does not inject a reminder when the model ends on the first turn (no continuation)", async () => {
+    const adapter = makeAdapter([
+      { content: [{ type: "text", text: "hi" }], stop_reason: "end_turn" },
+    ]);
+    const spy = adapter.chatWithTools as ReturnType<typeof vi.fn>;
+    const executor = new SkillExecutorImpl(adapter, new Map());
+    await executor.execute({
+      skill: { ...SKILL, tools: [] },
+      parameters: {},
+      messages: [{ role: "user", content: "hi" }],
+      deploymentId: "dep",
+      orgId: "org",
+      trustScore: 50,
+      trustLevel: "guided",
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    const sent = JSON.stringify(spy.mock.calls[0]![0].messages).toLowerCase();
+    expect(sent).not.toContain("these rules still apply");
+  });
+});
