@@ -309,4 +309,28 @@ describe("WhatsAppEmbeddedSignup", () => {
     // ...while the close is still gated on the operator confirming with Done.
     expect(onSuccess).not.toHaveBeenCalled();
   });
+
+  it("renders the Verified status as the editorial positive Badge, not a raw-hex chip", async () => {
+    const fbLogin = vi.fn((cb: (r: unknown) => void) => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          origin: "https://www.facebook.com",
+          data: JSON.stringify({
+            type: "WA_EMBEDDED_SIGNUP",
+            data: { phone_number_id: "PHONE_X", waba_id: "WABA_X" },
+          }),
+        }),
+      );
+      cb({ authResponse: { code: "AUTH_CODE_123" } });
+    });
+    vi.stubGlobal("FB", { login: fbLogin });
+
+    render(<WhatsAppEmbeddedSignup _metaAppId="app" metaConfigId="cfg" />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect WhatsApp" }));
+    await waitFor(() => expect(screen.getByText(/whatsapp business connected/i)).toBeVisible());
+
+    const verified = screen.getByText("Verified");
+    expect(verified.className).toContain("bg-positive");
+    expect(verified.className).not.toContain("bg-[#e9f9f0]");
+  });
 });
