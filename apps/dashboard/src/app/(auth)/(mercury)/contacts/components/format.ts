@@ -3,18 +3,27 @@
 // (which divides by 100 to format as dollars) and packages/db/prisma/schema.prisma:1630-1631
 // (Int columns; magnitude of mockup fixtures like 28000=S$280 confirms cents).
 
-/** Formats an integer SGD value as `S$1,234`. Em-dash for null. By default,
- *  also em-dash for zero (typical pipeline display rule). Pass `forceZero`
- *  to render `S$0` explicitly (used by terminal columns). */
+import { formatMoney } from "@/lib/money";
+
+/** Formats an integer SGD value (CENTS) as `S$1,234`. Em-dash for null. By
+ *  default, also em-dash for zero (typical pipeline display rule). Pass
+ *  `forceZero` to render `S$0` explicitly (used by terminal columns).
+ *  The whole-dollar rounding and S$ rendering delegate to the canonical money
+ *  formatter (#6b); only the cents-to-dollars conversion and the zero rule
+ *  live here. Output is unchanged for the non-negative values these revenue and
+ *  estimate fields carry. (A negative, which the data never holds, would place
+ *  the sign before S$ per the canonical convention.) */
 export function formatSGD(value: number | null, opts: { forceZero?: boolean } = {}): string {
   if (value == null) return "—";
   if (value === 0 && !opts.forceZero) return "—";
-  const dollars = Math.round(value / 100);
-  return `S$${dollars.toLocaleString()}`;
+  return formatMoney(Math.round(value / 100), { withCents: "never" });
 }
 
 /** Compact SGD: `S$1.2k` at >= S$10k, full digits otherwise. Returns `null`
- *  for null input so callers can decide between rendering em-dash or hiding. */
+ *  for null input so callers can decide between rendering em-dash or hiding.
+ *  Kept bespoke (not on the canonical `compact`): the canonical k-form rounds
+ *  to whole thousands (S$16.8k would become S$17k), but the pipeline KPI header
+ *  wants one-decimal precision, so the compact algorithm stays here. */
 export function formatSGDCompact(value: number | null): string | null {
   if (value == null) return null;
   const dollars = value / 100;
