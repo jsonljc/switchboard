@@ -73,7 +73,7 @@ describe("AlexWins", () => {
   it("renders a win with service, formatted revenue and a trace reference", () => {
     data = { wins: [win()], hasMore: false, freshness: { generatedAt: "x", dataSource: "live" } };
     const { container } = render(<AlexWins />);
-    expect(screen.getByText(/Booked botox · \$450/)).toBeInTheDocument();
+    expect(screen.getByText(/Booked botox · S\$450/)).toBeInTheDocument();
     // trace provenance surfaced (full id on the row, short id visible)
     expect(container.querySelector('[data-trace-id="trace_abcdef12"]')).not.toBeNull();
     expect(screen.getByText(/#trace_ab/)).toBeInTheDocument();
