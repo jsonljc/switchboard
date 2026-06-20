@@ -63,14 +63,6 @@ export interface WhileYouSleptRow {
   text: string;
 }
 
-/** One in-flight task. `chain` is non-null ONLY when backed by a real typed-handoff trace. */
-export interface WorkInProgressItem {
-  id: string;
-  primaryAgent: AgentKey;
-  chain: AgentKey[] | null;
-  text: string;
-}
-
 /** The single quiet permissions line and its link to the adjust surface. */
 export interface PermissionsModel {
   summary: string;
