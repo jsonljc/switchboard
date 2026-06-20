@@ -362,6 +362,46 @@ export class PrismaConversionRecordStore {
       bookedCount: result._count._all,
     };
   }
+
+  /**
+   * Cents sum of attributed booking value in the half-open window [from, to).
+   * Booked-stage, live-origin, non-negative value, org-scoped. Returns 0 when
+   * the window is empty (Prisma yields _sum.value === null). Anchored on
+   * occurredAt (the producer-set event time). Money stays in cents.
+   */
+  async sumAttributedBookedValueCentsForWindow(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<number> {
+    const agg = await this.prisma.conversionRecord.aggregate({
+      where: {
+        organizationId: input.orgId,
+        type: "booked",
+        origin: "live",
+        value: { gte: 0 },
+        occurredAt: { gte: input.from, lt: input.to },
+      },
+      _sum: { value: true },
+    });
+    return agg._sum.value ?? 0;
+  }
+
+  /** Count of the SAME booked+live rows the value sum covers (aligned anchor). */
+  async countBookedConversionsForWindow(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<number> {
+    return this.prisma.conversionRecord.count({
+      where: {
+        organizationId: input.orgId,
+        type: "booked",
+        origin: "live",
+        occurredAt: { gte: input.from, lt: input.to },
+      },
+    });
+  }
 }
 
 function emptyFunnel(dateRange: DateRange): FunnelCounts {

@@ -372,4 +372,58 @@ describe("PrismaConversionRecordStore", () => {
       ).resolves.toBe(2);
     });
   });
+
+  describe("home-summary aggregations", () => {
+    const from = new Date("2026-06-15T00:00:00.000Z");
+    const to = new Date("2026-06-22T00:00:00.000Z"); // half-open upper bound
+
+    it("sumAttributedBookedValueCentsForWindow sums booked+live value in cents, org-scoped, half-open", async () => {
+      const aggMock = prisma.conversionRecord.aggregate as ReturnType<typeof vi.fn>;
+      aggMock.mockResolvedValue({ _sum: { value: 480000 } });
+
+      const result = await store.sumAttributedBookedValueCentsForWindow({
+        orgId: "org_1",
+        from,
+        to,
+      });
+
+      expect(result).toBe(480000);
+      expect(aggMock).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org_1",
+          type: "booked",
+          origin: "live",
+          value: { gte: 0 },
+          occurredAt: { gte: from, lt: to },
+        },
+        _sum: { value: true },
+      });
+    });
+
+    it("returns 0 when the window has no booked rows (null _sum)", async () => {
+      (prisma.conversionRecord.aggregate as ReturnType<typeof vi.fn>).mockResolvedValue({
+        _sum: { value: null },
+      });
+      expect(await store.sumAttributedBookedValueCentsForWindow({ orgId: "org_1", from, to })).toBe(
+        0,
+      );
+    });
+
+    it("countBookedConversionsForWindow counts the same booked+live rows, org-scoped, half-open", async () => {
+      const countMock = prisma.conversionRecord.count as ReturnType<typeof vi.fn>;
+      countMock.mockResolvedValue(5);
+
+      const result = await store.countBookedConversionsForWindow({ orgId: "org_1", from, to });
+
+      expect(result).toBe(5);
+      expect(countMock).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org_1",
+          type: "booked",
+          origin: "live",
+          occurredAt: { gte: from, lt: to },
+        },
+      });
+    });
+  });
 });
