@@ -1,10 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { GOVERNANCE_POLICY, mapDecisionToOutcome } from "@switchboard/core/skill-runtime";
-import type { GovernanceDecision } from "@switchboard/core/skill-runtime";
 import { gradeTrajectory } from "../grade.js";
 import {
   EffectCategoryEnum,
-  GovernanceDecisionEnum,
   type ExpectedStep,
   type RecordedCall,
   type TrustLevelLabel,
@@ -275,11 +273,14 @@ describe("gradeTrajectory — drift guards (cross-slice seam protection)", () =>
   });
 
   it("the recognized recorded-outcome vocabulary matches the live mapDecisionToOutcome image", () => {
-    const liveOutcomes = [
-      ...new Set(
-        GovernanceDecisionEnum.options.map((d) => mapDecisionToOutcome(d as GovernanceDecision)),
-      ),
-    ].sort();
+    // Derive the decisions from the REAL GOVERNANCE_POLICY (not the eval's own enum) so this stays
+    // non-circular: a new core decision/outcome would surface here. The compile-time backstop is
+    // grade.ts's OUTCOME_RANK (keyed by core's GovernanceOutcome); an unknown recorded outcome is
+    // flagged malformed-record (fail-closed).
+    const liveDecisions = [
+      ...new Set(Object.values(GOVERNANCE_POLICY).flatMap((perTrust) => Object.values(perTrust))),
+    ];
+    const liveOutcomes = [...new Set(liveDecisions.map((d) => mapDecisionToOutcome(d)))].sort();
     // The grader recognizes exactly these three outcomes (plus the side-channel "simulated").
     expect(liveOutcomes).toEqual(["auto-approved", "denied", "require-approval"]);
   });

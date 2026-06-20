@@ -94,7 +94,8 @@ export type TrajectoryCase = z.infer<typeof TrajectoryCaseSchema>;
  * governance-relevant fields must stay assignable to `RecordedCall`, so the grader can consume real
  * `findByWorkUnitId` rows unchanged. If core renames/removes `governanceDecision` (or narrows a
  * field to something not assignable here), `pnpm typecheck` fails rather than the eval silently
- * grading a stale shape.
+ * grading a stale shape. (The `ToolCallRecord` type resolves via core's built `dist`, so rebuild core
+ * when iterating locally; the CI typecheck + eval jobs always build core first.)
  */
 type _CoreRecordIsGradeable =
   Pick<ToolCallRecord, "toolId" | "operation" | "params" | "governanceDecision"> extends Pick<
