@@ -54,6 +54,17 @@ export interface RobinRecoverySendExecutorDeps {
   selectTemplateFn?: Parameters<typeof evaluateProactiveSendEligibility>[0]["selectTemplateFn"];
   resolveSendToken?: () => string | undefined;
   resolvePhoneNumberId?: () => string | undefined;
+  /**
+   * Multi-tenant: resolve the campaign org's own WhatsApp {token, phoneNumberId}.
+   * Returns null when the org has no whatsapp connection; the campaign then falls
+   * back PER-FIELD to the global token (resolveSendToken) + env phone id
+   * (resolvePhoneNumberId). Resolved ONCE per campaign (all candidates share one
+   * org). Defaults to a null-returning resolver so existing wiring/tests keep the
+   * global path.
+   */
+  resolveOrgSendCreds?: (
+    organizationId: string,
+  ) => Promise<{ token: string | null; phoneNumberId: string | null } | null>;
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
@@ -111,6 +122,7 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
   const resolveToken = deps.resolveSendToken ?? resolveWhatsAppSendToken;
   const resolvePhoneId =
     deps.resolvePhoneNumberId ?? (() => process.env["WHATSAPP_PHONE_NUMBER_ID"]);
+  const resolveOrgSendCreds = deps.resolveOrgSendCreds ?? (async () => null);
 
   return {
     intent: ROBIN_RECOVERY_SEND_INTENT,
@@ -127,12 +139,16 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
         const orgId = workUnit.organizationId;
         const { candidates } = parsed.data;
 
-        // Service-level WhatsApp send creds (single-tenant pilot; per-org creds are the known
-        // multi-tenant follow-up). Missing creds are an org-wide config gap, NOT a per-recipient
-        // decision: skip the whole campaign WITHOUT claiming any dedup rows, so a later run (once
-        // creds are set) can still re-engage this cohort. Loud + countable (the dark-funnel metric).
-        const accessToken = resolveToken();
-        const phoneNumberId = resolvePhoneId();
+        // WhatsApp send creds, resolved ONCE per campaign (all candidates share the org).
+        // Multi-tenant: prefer the campaign org's own send creds, PER-FIELD falling back to the
+        // global token + env phone id (single-tenant pilot) so a partial per-org row never
+        // dark-holes the deployment-wide config. Missing creds are an org-wide config gap, NOT a
+        // per-recipient decision: skip the whole campaign WITHOUT claiming any dedup rows, so a
+        // later run (once creds are set) can still re-engage this cohort. Loud + countable (the
+        // dark-funnel metric).
+        const perOrg = await resolveOrgSendCreds(orgId);
+        const accessToken = perOrg?.token ?? resolveToken();
+        const phoneNumberId = perOrg?.phoneNumberId ?? resolvePhoneId();
         if (!accessToken || !phoneNumberId) {
           console.warn(
             "[robin.recovery_campaign.send] WhatsApp send token or phone id missing " +

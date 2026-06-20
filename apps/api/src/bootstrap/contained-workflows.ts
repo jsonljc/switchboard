@@ -13,6 +13,7 @@ import type {
 import { WorkflowMode } from "@switchboard/core/platform";
 import type { IntentRegistry } from "@switchboard/core/platform";
 import { buildRobinRecoverySendExecutor } from "./robin-recovery-executor.js";
+import { resolveOrgWhatsAppSendCreds } from "../lib/whatsapp-send-creds.js";
 import type { PlatformIngress, SubmitWorkResponse } from "@switchboard/core/platform";
 import type { ChildWorkRequest } from "@switchboard/core/platform";
 import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
@@ -207,6 +208,7 @@ export async function bootstrapContainedWorkflows(
     PrismaOrgAgentEnablementStore,
     PrismaRecommendationStore,
     PrismaRobinRecoverySendStore,
+    PrismaConnectionStore,
   } = await import("@switchboard/db");
   const { InstantFormAdapter } = await import("@switchboard/ad-optimizer");
   const { buildMarkHandoffRecommendationActed } =
@@ -340,6 +342,18 @@ export async function bootstrapContainedWorkflows(
     };
   };
 
+  // Multi-tenant WhatsApp send credentials: resolve the sending org's own
+  // {token, phoneNumberId} from its canonical "whatsapp" Connection, shared by all
+  // four proactive send sites. Each site PER-FIELD falls back to the global env
+  // values when an org has no connection (single-tenant pilot). One store instance;
+  // the resolver reads per-request (no caching) so a rotation / new tenant takes
+  // effect on the next send and creds never bleed across orgs.
+  const whatsAppConnectionStore = new PrismaConnectionStore(
+    prismaClient as ConstructorParameters<typeof PrismaConnectionStore>[0],
+  );
+  const resolveOrgWhatsAppSend = (orgId: string) =>
+    resolveOrgWhatsAppSendCreds(whatsAppConnectionStore, orgId);
+
   const followUpSendHandler = buildConversationFollowUpSendWorkflow({
     getSendContext: async (orgId, contactId, threadId) => {
       const prisma = prismaClient as import("@switchboard/db").PrismaClient;
@@ -358,6 +372,7 @@ export async function bootstrapContainedWorkflows(
       );
     },
     allowMarketingTemplate: process.env["FOLLOWUP_ALLOW_MARKETING_TEMPLATE"] === "true",
+    resolveOrgSendCreds: resolveOrgWhatsAppSend,
   });
 
   const reminderSendHandler = buildConversationReminderSendWorkflow({
@@ -375,6 +390,7 @@ export async function bootstrapContainedWorkflows(
       );
     },
     allowMarketingTemplate: false,
+    resolveOrgSendCreds: resolveOrgWhatsAppSend,
   });
 
   // Robin v1 no-show recovery campaign executor: on dispatch of an APPROVED campaign it iterates the
@@ -399,6 +415,7 @@ export async function bootstrapContainedWorkflows(
         thread?.lastWhatsAppInboundAt ?? null,
       );
     },
+    resolveOrgSendCreds: resolveOrgWhatsAppSend,
   });
 
   // meta.lead.greeting.send: the first-touch greeting is a PROACTIVE WhatsApp template,
@@ -426,6 +443,7 @@ export async function bootstrapContainedWorkflows(
         ctwaOptIn: contact?.messagingOptInSource === "ctwa",
       };
     },
+    resolveOrgSendCreds: resolveOrgWhatsAppSend,
   });
 
   // creative.job.publish: a thin dispatcher. It validates ownership, short-circuits an

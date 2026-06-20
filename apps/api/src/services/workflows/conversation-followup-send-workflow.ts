@@ -29,6 +29,15 @@ export interface ConversationFollowUpSendDeps {
   ) => Promise<FollowUpSendContext>;
   allowMarketingTemplate: boolean;
   selectTemplateFn?: Parameters<typeof evaluateProactiveSendEligibility>[0]["selectTemplateFn"];
+  /**
+   * Multi-tenant: resolve the sending org's own WhatsApp {token, phoneNumberId}.
+   * Returns null when the org has no whatsapp connection; the call site then
+   * falls back PER-FIELD to the global env values (single-tenant pilot). Defaults
+   * to a null-returning resolver so existing wiring/tests keep the env-only path.
+   */
+  resolveOrgSendCreds?: (
+    organizationId: string,
+  ) => Promise<{ token: string | null; phoneNumberId: string | null } | null>;
 }
 
 interface FollowUpSendParams {
@@ -52,6 +61,7 @@ const FOLLOWUP_INTENT = "conversation.followup.send";
 export function buildConversationFollowUpSendWorkflow(
   deps: ConversationFollowUpSendDeps,
 ): WorkflowHandler {
+  const resolveOrgSendCreds = deps.resolveOrgSendCreds ?? (async () => null);
   return {
     async execute(workUnit) {
       const params = workUnit.parameters as unknown as FollowUpSendParams;
@@ -101,8 +111,12 @@ export function buildConversationFollowUpSendWorkflow(
         };
       }
 
-      const accessToken = resolveWhatsAppSendToken();
-      const phoneNumberId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
+      // Multi-tenant: prefer the sending org's own send creds; PER-FIELD fall back
+      // to the global env values (single-tenant pilot) so a partial per-org row
+      // never dark-holes the deployment-wide config.
+      const perOrg = await resolveOrgSendCreds(workUnit.organizationId);
+      const accessToken = perOrg?.token ?? resolveWhatsAppSendToken();
+      const phoneNumberId = perOrg?.phoneNumberId ?? process.env["WHATSAPP_PHONE_NUMBER_ID"];
       if (!accessToken || !phoneNumberId) {
         // Infra config gap, not a per-contact decision: with no send token/phone id
         // EVERY follow-up for the deployment silently no-ops. Make it loud + countable
