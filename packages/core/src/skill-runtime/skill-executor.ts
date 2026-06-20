@@ -376,24 +376,27 @@ export class SkillExecutorImpl implements SkillExecutor {
         totalCacheCreationTokens += response.usage.cacheCreationTokens ?? 0;
         if (response.model) lastModel = response.model;
 
-        // Hard budget gates on full-price (uncached) tokens only. Anthropic reports
+        // Hard budget gate on full-price (uncached) tokens only. Anthropic reports
         // cache reads/creations separately from input_tokens, so a large cached prefix
         // re-read every turn is near-free and must NOT exhaust the token budget.
         const billableTokens = totalInputTokens + totalOutputTokens;
-        if (billableTokens > this.policy.maxTotalTokens) {
-          throw new SkillExecutionBudgetError(
-            `Exceeded token budget (${billableTokens} > ${this.policy.maxTotalTokens})`,
-          );
-        }
 
-        // Instrument context fill (f9/f10): how full this turn drove the token
-        // budget. Observability-only (recorded only for turns within budget — the
-        // gate above throws when exceeded). lastModel is set from the response above.
+        // Instrument context fill (f9/f10): how full this turn drove the token budget.
+        // Recorded BEFORE the budget gate below, so an over-budget turn (the most
+        // context-filled, highest context-rot risk) is still observed (ratio > 1.0 ->
+        // the histogram's +Inf bucket) instead of being lost when the gate throws.
+        // Observability-only; lastModel is set from the response above.
         recordSkillContextFill({
           model: lastModel ?? profile?.model ?? "unknown",
           billableTokens,
           maxTokens: this.policy.maxTotalTokens,
         });
+
+        if (billableTokens > this.policy.maxTotalTokens) {
+          throw new SkillExecutionBudgetError(
+            `Exceeded token budget (${billableTokens} > ${this.policy.maxTotalTokens})`,
+          );
+        }
 
         await runAfterLlmCallHooks(this.hooks, resolvedCtx, {
           content: response.content,
