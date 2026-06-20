@@ -1,6 +1,7 @@
 import { type PrismaClient } from "@switchboard/db";
 import type { CalendarProvider, BusinessHoursConfig } from "@switchboard/schemas";
 import { NoopCalendarProvider } from "./noop-calendar-provider.js";
+import { resolveOrgGoogleCalendarCreds } from "./deployment-calendar-creds.js";
 
 export type CalendarProviderFactory = (orgId: string) => Promise<CalendarProvider>;
 
@@ -12,6 +13,8 @@ export interface CalendarProviderFactoryDeps {
   env?: {
     GOOGLE_CALENDAR_CREDENTIALS?: string;
     GOOGLE_CALENDAR_ID?: string;
+    GOOGLE_CALENDAR_CLIENT_ID?: string;
+    GOOGLE_CALENDAR_CLIENT_SECRET?: string;
     RESEND_API_KEY?: string;
     EMAIL_FROM?: string;
   };
@@ -22,7 +25,9 @@ export function createCalendarProviderFactory(
 ): CalendarProviderFactory {
   // No eviction in beta (~10 orgs, process-lifetime cache mirrors today's
   // singleton lifetime per orgId). Production should add TTL or explicit
-  // invalidation if calendar credentials/business hours can rotate at runtime.
+  // invalidation if calendar credentials/business hours can rotate at runtime
+  // (including a clinic connecting its own Google Calendar via OAuth AFTER this
+  // provider was first resolved; that org keeps its prior provider until restart).
   const cache = new Map<string, Promise<CalendarProvider>>();
 
   const factory: CalendarProviderFactory = (orgId: string) => {
@@ -52,6 +57,8 @@ async function resolveForOrg(
   const env = deps.env ?? {
     GOOGLE_CALENDAR_CREDENTIALS: process.env["GOOGLE_CALENDAR_CREDENTIALS"],
     GOOGLE_CALENDAR_ID: process.env["GOOGLE_CALENDAR_ID"],
+    GOOGLE_CALENDAR_CLIENT_ID: process.env["GOOGLE_CALENDAR_CLIENT_ID"],
+    GOOGLE_CALENDAR_CLIENT_SECRET: process.env["GOOGLE_CALENDAR_CLIENT_SECRET"],
     RESEND_API_KEY: process.env["RESEND_API_KEY"],
     EMAIL_FROM: process.env["EMAIL_FROM"],
   };
@@ -72,7 +79,41 @@ async function resolveForOrg(
     businessHours = orgConfig.businessHours as BusinessHoursConfig;
   }
 
-  // Option 1: Google Calendar (global env today; per-org credentials is future work).
+  // Option 1: the clinic's OWN Google Calendar, from the per-deployment OAuth creds the
+  // google-calendar-oauth callback stores (DeploymentConnection type "google_calendar").
+  // Preferred over the shared global service account so each org's bookings land on its own
+  // calendar. Needs the platform OAuth client creds to refresh access tokens; without them a
+  // built provider could not refresh, so we skip straight to the fallbacks.
+  if (env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET) {
+    const oauthCreds = await resolveOrgGoogleCalendarCreds(deps.prismaClient, orgId);
+    if (oauthCreds) {
+      try {
+        const { createGoogleCalendarProviderFromOAuth } =
+          await import("./google-calendar-factory.js");
+        const provider = await createGoogleCalendarProviderFromOAuth({
+          clientId: env.GOOGLE_CALENDAR_CLIENT_ID,
+          clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET,
+          refreshToken: oauthCreds.refreshToken,
+          calendarId: oauthCreds.calendarId,
+          businessHours,
+        });
+        const health = await provider.healthCheck();
+        deps.logger.info(
+          `Calendar[${orgId}]: connected org-owned Google Calendar via OAuth (${health.status}, ${health.latencyMs}ms)`,
+        );
+        return provider;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        deps.logger.error(
+          `Calendar[${orgId}]: failed to initialize org-owned Google Calendar: ${msg}`,
+        );
+        // Fall through to the global service account / Local.
+      }
+    }
+  }
+
+  // Option 2: shared Google Calendar service account (global env), used when the org has not
+  // connected its own calendar.
   if (env.GOOGLE_CALENDAR_CREDENTIALS && env.GOOGLE_CALENDAR_ID) {
     try {
       const { createGoogleCalendarProvider } = await import("./google-calendar-factory.js");
@@ -93,7 +134,7 @@ async function resolveForOrg(
     }
   }
 
-  // Option 2: Local provider (per-org businessHours).
+  // Option 3: Local provider (per-org businessHours).
   if (businessHours) {
     const { LocalCalendarProvider } = await import("@switchboard/core/calendar");
     const localStore = buildLocalStore(deps.prismaClient, orgId);
@@ -136,7 +177,7 @@ async function resolveForOrg(
     return provider;
   }
 
-  // Option 3: Noop.
+  // Option 4: Noop.
   deps.logger.info(
     `Calendar[${orgId}]: using NoopCalendarProvider (no calendar configured, bookings disabled)`,
   );
