@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { SkillExecutorImpl } from "../skill-executor.js";
+import { createInMemoryMetrics, setMetrics } from "../../telemetry/metrics.js";
 import type { ToolCallingLLMAdapter } from "../llm-types.js";
 import type { SkillDefinition, SkillToolFactory } from "../types.js";
 import { createCrmWriteToolFactory } from "../tools/crm-write.js";
@@ -465,5 +466,41 @@ describe("Executor recency safety reminder (S9 / f9-f10)", () => {
     expect(spy).toHaveBeenCalledTimes(1);
     const sent = JSON.stringify(spy.mock.calls[0]![0].messages).toLowerCase();
     expect(sent).not.toContain("these rules still apply");
+  });
+});
+
+describe("Executor context-fill instrumentation (S9 follow-up)", () => {
+  it("observes the context-fill ratio on an over-budget turn, before throwing the budget error", async () => {
+    const m = createInMemoryMetrics();
+    setMetrics(m);
+    const observe = vi.spyOn(m.skillContextFillRatio, "observe");
+
+    // One turn whose billable usage blows the default 64k token budget.
+    const adapter: ToolCallingLLMAdapter = {
+      chatWithTools: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: "x" }],
+        stopReason: "end_turn",
+        usage: { inputTokens: 70_000, outputTokens: 10 },
+      }),
+    };
+
+    const executor = new SkillExecutorImpl(adapter, new Map());
+    // The over-budget turn throws SkillExecutionBudgetError; we only care that the
+    // fill metric was still observed for that turn (it is the most context-filled).
+    await executor
+      .execute({
+        skill: { ...SKILL, tools: [] },
+        parameters: {},
+        messages: [{ role: "user", content: "go" }],
+        deploymentId: "dep",
+        orgId: "org",
+        trustScore: 50,
+        trustLevel: "guided",
+      })
+      .catch(() => undefined);
+
+    expect(observe).toHaveBeenCalledTimes(1);
+    // billable 70_010 / 64_000 budget > 1.0 (lands in the histogram's +Inf bucket).
+    expect(observe.mock.calls[0]![1]).toBeGreaterThan(1);
   });
 });
