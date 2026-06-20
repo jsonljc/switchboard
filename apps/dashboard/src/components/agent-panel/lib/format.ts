@@ -1,11 +1,20 @@
+import { formatMoney } from "@/lib/money";
+
+/**
+ * Booking revenue (cents, SGD) for the agent panel. Routes number rendering
+ * through the canonical money formatter (#6b consolidation) and corrects the
+ * symbol to S$. The prior `$` mislabelled SGD booking value as USD.
+ *
+ * Keeps the legacy precision rule (cents shown iff the amount is not a whole
+ * dollar, at every magnitude) so the wins ledger is byte-identical to its
+ * pre-#6b output apart from the corrected symbol; the canonical default would
+ * round a >= S$1,000 value. Returns null for null so the caller can fall back
+ * to "revenue pending" rather than the canonical em-dash.
+ */
 export function formatCents(cents: number | null): string | null {
   if (cents == null) return null;
   const dollars = cents / 100;
-  const whole = Number.isInteger(dollars);
-  return `$${dollars.toLocaleString("en-US", {
-    minimumFractionDigits: whole ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return formatMoney(dollars, { withCents: Number.isInteger(dollars) ? "never" : "always" });
 }
 
 export function relativeTime(iso: string | null, nowMs: number): string | null {

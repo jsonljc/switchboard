@@ -484,7 +484,7 @@ describe("AgentPanel state matrix", () => {
     expect(screen.getByTestId("alex-pipeline")).toBeInTheDocument();
     expect(screen.getByTestId("alex-wins")).toBeInTheDocument();
     expect(screen.getByText("1 person in pipeline")).toBeInTheDocument();
-    expect(screen.getByText(/Booked botox · \$450/)).toBeInTheDocument();
+    expect(screen.getByText(/Booked botox · S\$450/)).toBeInTheDocument();
   });
 
   // ── Row 3: Metrics window=all 400 → falls back to week ───────────────────────
