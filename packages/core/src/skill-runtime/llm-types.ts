@@ -25,7 +25,13 @@ export type LLMMessageRole = "user" | "assistant";
 
 export interface LLMMessage {
   role: LLMMessageRole;
-  content: string | LLMContentBlock[] | LLMToolResultBlock[];
+  // Plain text, content blocks, tool results, OR a mix of tool results + a
+  // trailing text block: the executor appends a recency safety reminder (text)
+  // to the tool-results user turn, which the Anthropic API accepts alongside
+  // tool_result. The encoder dispatches on each block's `type`, so a mixed array
+  // is handled. The prior `LLMContentBlock[] | LLMToolResultBlock[]` members are
+  // both assignable to this union-array, so existing call sites are unaffected.
+  content: string | Array<LLMContentBlock | LLMToolResultBlock>;
 }
 
 export interface LLMToolDefinition {

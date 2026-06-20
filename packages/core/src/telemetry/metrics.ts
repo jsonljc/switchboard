@@ -73,6 +73,11 @@ export interface SwitchboardMetrics {
    *  silently busted / non-deterministic prefix). A sustained outcome=miss rate is
    *  the silent cache-invalidation alert. Emitted per call by recordLlmCacheEffectiveness. */
   llmCacheCallsTotal: Counter;
+  /** Per-skill-loop-turn context-fill ratio: billable (uncached input+output)
+   *  tokens / the skill runtime's maxTotalTokens budget. A rising distribution is
+   *  the "long loops are filling the window" signal (context-rot risk, f9/f10).
+   *  Labeled by model. Emitted per turn by recordSkillContextFill. */
+  skillContextFillRatio: Histogram;
 }
 
 export interface Counter {
@@ -154,6 +159,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     governanceVerdictsRecorded: new InMemoryCounter(),
     whatsappProactiveSendSkipped: new InMemoryCounter(),
     llmCacheCallsTotal: new InMemoryCounter(),
+    skillContextFillRatio: new InMemoryHistogram(),
   };
 }
 
@@ -185,4 +191,30 @@ export function recordLlmCacheEffectiveness(input: {
     );
   }
   return outcome;
+}
+
+/**
+ * Record a single skill-loop turn's context-fill ratio (billable tokens / the
+ * runtime's maxTotalTokens budget) on the skillContextFillRatio histogram and
+ * return the ratio. Instruments how full long multi-turn loops drive the context
+ * window (findings f9/f10). NaN-safe and fail-quiet: a non-finite or non-positive
+ * maxTokens (or a non-finite billable count) yields ratio 0 and observes nothing,
+ * so a missing budget never produces a misleading observation
+ * (feedback_nan_blind_comparison_gates). Observability-only; never gates.
+ */
+export function recordSkillContextFill(input: {
+  model: string;
+  billableTokens: number;
+  maxTokens: number;
+}): number {
+  if (
+    !Number.isFinite(input.maxTokens) ||
+    input.maxTokens <= 0 ||
+    !Number.isFinite(input.billableTokens)
+  ) {
+    return 0;
+  }
+  const ratio = input.billableTokens / input.maxTokens;
+  getMetrics().skillContextFillRatio.observe({ model: input.model }, ratio);
+  return ratio;
 }
