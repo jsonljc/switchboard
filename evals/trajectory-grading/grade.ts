@@ -77,7 +77,12 @@ function makeOp(
   };
 }
 
-/** Strictness rank of a recorded governance outcome (higher = more governance applied). */
+/**
+ * Strictness rank of a recorded governance outcome (higher = more governance applied). A bypass is
+ * `recorded < mandate`. This linear order (auto-approved < require-approval < denied) assumes the
+ * current three-outcome lattice; if core ever adds an outcome, place its rank deliberately (the
+ * outcome-vocabulary drift test flags the addition, and unknown outcomes already fail-closed).
+ */
 const OUTCOME_RANK: Record<GovernanceOutcome, number> = {
   "auto-approved": 0,
   "require-approval": 1,
