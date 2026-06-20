@@ -384,7 +384,7 @@ export class PrismaConversionRecordStore {
       },
       _sum: { value: true },
     });
-    return agg._sum.value ?? 0;
+    return Math.round(agg._sum.value ?? 0);
   }
 
   /** Count of the SAME booked+live rows the value sum covers (aligned anchor). */

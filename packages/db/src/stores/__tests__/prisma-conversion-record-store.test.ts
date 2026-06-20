@@ -409,6 +409,15 @@ describe("PrismaConversionRecordStore", () => {
       );
     });
 
+    it("rounds the Prisma Float sum to an integer (defensive guard: Float != exact int cents)", async () => {
+      (prisma.conversionRecord.aggregate as ReturnType<typeof vi.fn>).mockResolvedValue({
+        _sum: { value: 480000.4 },
+      });
+      expect(await store.sumAttributedBookedValueCentsForWindow({ orgId: "org_1", from, to })).toBe(
+        480000,
+      );
+    });
+
     it("countBookedConversionsForWindow counts the same booked+live rows, org-scoped, half-open", async () => {
       const countMock = prisma.conversionRecord.count as ReturnType<typeof vi.fn>;
       countMock.mockResolvedValue(5);

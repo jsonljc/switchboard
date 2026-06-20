@@ -130,7 +130,7 @@ const HOME_SUMMARY_DATA = {
   attributedValueCents: { state: "empty" as const, reason: "no_current_week_bookings" as const },
   bookings: { state: "empty" as const, reason: "no_current_week_bookings" as const },
   currency: "SGD" as const,
-  generatedAt: new Date().toISOString(),
+  generatedAt: "2026-06-20T00:00:00.000Z",
 };
 vi.mock("@/hooks/use-home-summary", () => ({
   useHomeSummary: () => ({
