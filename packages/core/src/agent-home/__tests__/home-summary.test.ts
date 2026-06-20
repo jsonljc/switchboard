@@ -50,6 +50,8 @@ describe("buildHomeSummary", () => {
       signals: signals({ valueThis: 0, countThis: 0 }),
     });
     expect(s.attributedValueCents.state).toBe("empty");
+    if (s.attributedValueCents.state === "empty")
+      expect(s.attributedValueCents.reason).toBe("no_current_week_bookings");
     expect(s.bookings.state).toBe("empty");
     if (s.bookings.state === "empty") expect(s.bookings.reason).toBe("no_current_week_bookings");
   });
@@ -61,6 +63,7 @@ describe("buildHomeSummary", () => {
       timezone: TZ,
       signals: signals({ valuePrev: 0, countPrev: 0 }),
     });
+    expect(s.attributedValueCents.state).toBe("ready");
     if (s.attributedValueCents.state === "ready")
       expect(s.attributedValueCents.comparator).toBeUndefined();
   });
