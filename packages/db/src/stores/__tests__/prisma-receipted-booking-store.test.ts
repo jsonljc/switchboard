@@ -98,7 +98,88 @@ describe("PrismaReceiptedBookingStore.getView", () => {
       startsAt,
       paymentEventIds: ["pe-1"],
       expectedValue: 45000,
+      // A calendar-only booking (no verified payment receipt) is not paid.
+      paid: false,
+      paidValueCents: null,
     });
+  });
+
+  it("derives paid + paidValueCents from the booking's verified T1 payment receipts (producer population)", async () => {
+    prisma.booking.findFirst.mockResolvedValueOnce({
+      id: "bk-1",
+      contactId: null,
+      opportunityId: null,
+      workTraceId: null,
+      attendance: "attended",
+      service: "Botox consult",
+      startsAt,
+    });
+    // Real Receipt row shapes: the calendar proof + a verified Stripe deposit + final payment.
+    prisma.receipt.findMany.mockResolvedValueOnce([
+      {
+        id: "cal-1",
+        kind: "calendar",
+        status: "held",
+        provider: null,
+        tier: "T1_FETCH_BACK",
+        amount: null,
+      },
+      {
+        id: "pay-1",
+        kind: "payment",
+        status: "paid",
+        provider: "stripe",
+        tier: "T1_FETCH_BACK",
+        amount: 20000,
+      },
+      {
+        id: "pay-2",
+        kind: "payment",
+        status: "paid",
+        provider: "stripe",
+        tier: "T1_FETCH_BACK",
+        amount: 10000,
+      },
+    ]);
+
+    const view = await store.getView("org-1", "bk-1", now);
+
+    expect(ReceiptedBookingViewSchema.safeParse(view).success).toBe(true);
+    expect(view?.paid).toBe(true);
+    expect(view?.paidValueCents).toBe(30000); // 20000 deposit + 10000 final
+    // The receipts[] projection is unchanged ({id,kind,status} only).
+    expect(view?.receipts).toEqual([
+      { id: "cal-1", kind: "calendar", status: "held" },
+      { id: "pay-1", kind: "payment", status: "paid" },
+      { id: "pay-2", kind: "payment", status: "paid" },
+    ]);
+  });
+
+  it("excludes a noop/degraded payment receipt from the paid signal", async () => {
+    prisma.booking.findFirst.mockResolvedValueOnce({
+      id: "bk-2",
+      contactId: null,
+      opportunityId: null,
+      workTraceId: null,
+      attendance: null,
+      service: "Filler",
+      startsAt,
+    });
+    prisma.receipt.findMany.mockResolvedValueOnce([
+      {
+        id: "pay-3",
+        kind: "payment",
+        status: "paid",
+        provider: "noop",
+        tier: "T3_ADMIN_AUDIT",
+        amount: 9999,
+      },
+    ]);
+
+    const view = await store.getView("org-1", "bk-2", now);
+
+    expect(view?.paid).toBe(false);
+    expect(view?.paidValueCents).toBeNull();
   });
 
   it("org-scopes EVERY join leg (F12 read-side IDOR)", async () => {

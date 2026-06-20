@@ -211,20 +211,27 @@ export interface ReceiptedBookingQualityData {
   worklist: ReceiptedBookingWorklistItem[];
 }
 
-/** Weekly receipted-booking REVENUE: the sum of per-booking expected value over the cohort, in CENTS.
- *  Uses the stable snapshot (expectedValueAtIssue) when a persisted issuance row exists; falls back to
- *  the live Opportunity value for pre-hook bookings so historical bookings are not silently zero.
- *  NaN-safe: only finite, nonnegative terms sum, so revenueCents never renders NaN. Advances the
- *  north star from count to proven booked revenue. */
+/** Weekly receipted-booking REVENUE for the owner report, in CENTS. Two dimensions over the same
+ *  cohort: the EXPECTED estimate (revenueCents, the booked pipeline) and the PROVEN-PAID amount
+ *  (paidRevenueCents, the north star's final link). Expected uses the stable snapshot
+ *  (expectedValueAtIssue) when a persisted issuance row exists, else the live Opportunity value.
+ *  Paid sums verified payment receipts (real provider + T1 fetch-back) per booking. Both NaN-safe:
+ *  only finite, nonnegative terms sum, so neither figure renders NaN. */
 export interface ReceiptedBookingRevenueData {
-  /** Sum of expected value over the cohort, CENTS. Only finite, nonnegative terms sum (never NaN). */
+  /** Sum of EXPECTED value over the cohort, CENTS. Only finite, nonnegative terms sum (never NaN). */
   revenueCents: number;
   /** ISO-4217 currency of the snapshotted values (org default); null when none carried a currency. */
   currency: string | null;
-  /** Cohort members that contributed a finite value (others had no opportunity / null snapshot). */
+  /** Cohort members that contributed a finite expected value (others had no opportunity / null snapshot). */
   bookingsWithValue: number;
   /** Total receipted-booking cohort this window (matches receiptedBookings.count, modulo orphans). */
   cohortSize: number;
+  /** Sum of GROSS verified-paid amount over the cohort, CENTS (NaN-safe). The proven north-star
+   *  link: only production-countable verified payment receipts contribute. GROSS, not net of
+   *  refunds/chargebacks (no refund/void receipt path today; reconciliation deferred). */
+  paidRevenueCents: number;
+  /** Cohort members with at least one production-countable verified-paid receipt (the paid count). */
+  paidBookings: number;
 }
 
 export interface ReportDataV1 {

@@ -198,6 +198,8 @@ export const goodFixture: ReportDataV1 = {
     currency: "SGD",
     bookingsWithValue: 38,
     cohortSize: 41,
+    paidRevenueCents: 2870000,
+    paidBookings: 19,
   },
   costNarrative:
     "vs. an SDR at ~S$5,000/month plus a small ad-agency retainer at ~S$3,000. Your team replaces both, and they're on duty after hours.",
@@ -321,6 +323,8 @@ export const quietFixture: ReportDataV1 = {
     currency: null,
     bookingsWithValue: 0,
     cohortSize: 0,
+    paidRevenueCents: 0,
+    paidBookings: 0,
   },
   costNarrative:
     "vs. an SDR + agency retainer pro-rated weekly. Even at low volume the base cost is a small fraction.",
@@ -528,6 +532,8 @@ export const problemFixture: ReportDataV1 = {
     currency: "SGD",
     bookingsWithValue: 74,
     cohortSize: 112,
+    paidRevenueCents: 4410000,
+    paidBookings: 53,
   },
   costNarrative:
     "vs. SDR + agency retainer across three months. Even in a soft quarter the price gap is roughly one-eighteenth.",

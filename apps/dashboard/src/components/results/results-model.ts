@@ -98,11 +98,17 @@ export function buildResultsModel(data: ReportData): ResultsModel {
           bookingsNeedingAttention: 0,
           worklist: [],
         },
-    receiptedBookingRevenue: data.receiptedBookingRevenue ?? {
-      revenueCents: 0,
-      currency: null,
-      bookingsWithValue: 0,
-      cohortSize: 0,
+    // Per-FIELD default, not a whole-object `??`: a report payload cached BEFORE the paid dimension
+    // shipped carries the old 4-field object (truthy), so a whole-object fallback would not fire and
+    // the new paid fields would read undefined -> NaN in the tile. Default each field so a stale
+    // cache renders paid as 0, never NaN.
+    receiptedBookingRevenue: {
+      revenueCents: data.receiptedBookingRevenue?.revenueCents ?? 0,
+      currency: data.receiptedBookingRevenue?.currency ?? null,
+      bookingsWithValue: data.receiptedBookingRevenue?.bookingsWithValue ?? 0,
+      cohortSize: data.receiptedBookingRevenue?.cohortSize ?? 0,
+      paidRevenueCents: data.receiptedBookingRevenue?.paidRevenueCents ?? 0,
+      paidBookings: data.receiptedBookingRevenue?.paidBookings ?? 0,
     },
     managedComparison: data.managedComparison,
   };

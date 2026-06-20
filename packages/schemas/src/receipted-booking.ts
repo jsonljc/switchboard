@@ -105,6 +105,13 @@ export const ReceiptedBookingViewSchema = z.object({
   startsAt: z.date(),
   paymentEventIds: z.array(z.string()),
   expectedValue: z.number().int().nullable(),
+  // GROSS verified-paid proof of this booking, derived live from its payment receipts via the pure
+  // isPaidVisit verdict (real provider + T1 fetch-back + status paid; noop/degraded excluded).
+  // `paid` is true when at least one such receipt exists; `paidValueCents` sums their amount (CENTS,
+  // NaN-safe), null when not paid, 0 when paid but amount unknown. GROSS, not net of refunds: there
+  // is no refund/void receipt-write path today (refund/payout reconciliation deferred).
+  paid: z.boolean(),
+  paidValueCents: z.number().int().nonnegative().nullable(),
   issuedAt: z.date().nullable().optional(),
   expectedValueAtIssue: z.number().int().nonnegative().nullable().optional(),
   currency: z.string().nullable().optional(),

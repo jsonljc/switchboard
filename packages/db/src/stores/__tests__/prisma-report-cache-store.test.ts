@@ -41,6 +41,8 @@ const sample: ReportDataV1 = {
     currency: "SGD",
     bookingsWithValue: 41,
     cohortSize: 41,
+    paidRevenueCents: 2870000,
+    paidBookings: 22,
   },
 };
 

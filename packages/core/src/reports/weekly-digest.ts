@@ -146,6 +146,13 @@ export function buildWeeklyDigest(
     receiptedBookingRevenue.revenueCents,
     receiptedBookingRevenue.currency,
   );
+  // Proven-paid revenue: the north star's final, highest-value link. GROSS verified-paid (no refund
+  // path today), NaN-safe via the shared formatter. Surfaced as its own headline metric; the
+  // expected figure stays as the secondary "booked" dimension.
+  const paidMoney = formatMoneyFromCents(
+    receiptedBookingRevenue.paidRevenueCents,
+    receiptedBookingRevenue.currency,
+  );
 
   // Riley ad-economics: surfaced from the already-assembled ad-insights fields so the weekly
   // artifact reflects the cross-agent loop (Riley feeds paid demand; Alex books it). Major-unit
@@ -158,8 +165,14 @@ export function buildWeeklyDigest(
   const metrics: WeeklyDigestMetric[] = [
     { key: "receipted_bookings", label: "Receipted bookings", value: String(count) },
     {
+      key: "paid_revenue",
+      label: "Receipted revenue (paid)",
+      value: paidMoney,
+      detail: `${receiptedBookingRevenue.paidBookings} of ${receiptedBookingRevenue.cohortSize} bookings paid`,
+    },
+    {
       key: "receipted_revenue",
-      label: "Receipted revenue",
+      label: "Booked value (expected)",
       value: money,
       detail: `${receiptedBookingRevenue.bookingsWithValue} of ${receiptedBookingRevenue.cohortSize} carried a value`,
     },

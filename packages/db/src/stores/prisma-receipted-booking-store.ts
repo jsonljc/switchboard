@@ -6,6 +6,9 @@ import type {
   ExceptionCode,
   PdpaJurisdiction,
   ReconcileBookingParameters,
+  ReceiptKind,
+  ReceiptStatus,
+  ReceiptTier,
 } from "@switchboard/schemas";
 import {
   scoreAttribution,
@@ -13,6 +16,7 @@ import {
   assembleViewExceptions,
   mergeExceptions,
   snapshotCents,
+  computeBookingPaidValue,
 } from "@switchboard/core";
 import type { SerializedExceptionEntry } from "@switchboard/core";
 
@@ -89,7 +93,16 @@ export class PrismaReceiptedBookingStore {
       await Promise.all([
         this.prisma.receipt.findMany({
           where: { organizationId: orgId, bookingId },
-          select: { id: true, kind: true, status: true },
+          // provider/tier/amount feed the paid-value derivation (isPaidVisit); receipts[] still
+          // surfaces only {id,kind,status}.
+          select: {
+            id: true,
+            kind: true,
+            status: true,
+            provider: true,
+            tier: true,
+            amount: true,
+          },
         }),
         this.prisma.conversionRecord.findFirst({
           where: { organizationId: orgId, bookingId },
@@ -190,6 +203,19 @@ export class PrismaReceiptedBookingStore {
       suppressPersistedCodes,
     );
 
+    // GROSS verified-paid value for the proof chain's final link, derived via the pure isPaidVisit
+    // verdict (real provider + T1 fetch-back; noop/degraded and calendar receipts return paid=false).
+    // The Prisma kind/status/tier columns are free strings, coerced to the typed projection.
+    const paidValue = computeBookingPaidValue(
+      receipts.map((r) => ({
+        kind: r.kind as ReceiptKind,
+        status: r.status as ReceiptStatus,
+        provider: r.provider,
+        tier: r.tier as ReceiptTier,
+        amount: r.amount,
+      })),
+    );
+
     return {
       bookingId: booking.id,
       organizationId: orgId,
@@ -209,6 +235,9 @@ export class PrismaReceiptedBookingStore {
       startsAt: booking.startsAt,
       paymentEventIds: revenueEvents.map((e) => e.id),
       expectedValue: opportunity?.estimatedValue ?? null,
+      // GROSS verified-paid proof: paid flag + summed paid amount (cents), derived above.
+      paid: paidValue.paid,
+      paidValueCents: paidValue.paidValueCents,
       // Persisted issuance snapshot (null on the lazy/historical path). issuedAt presence is the
       // discriminator the revenue rollup uses to choose snapshot-vs-live, so it is set ONLY from a
       // real persisted row (never defaulted to now).
