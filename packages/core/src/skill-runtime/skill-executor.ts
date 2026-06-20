@@ -298,6 +298,7 @@ export class SkillExecutorImpl implements SkillExecutor {
       skillSlug: params.skill.slug,
       skillVersion: params.skill.version,
       sessionId: requestCtx.sessionId,
+      workUnitId: requestCtx.workUnitId,
       trustLevel: params.trustLevel,
       trustScore: params.trustScore,
       inputParametersHash: stableParamsHash(params.parameters),

@@ -11,6 +11,7 @@ interface ExecutionTraceInput {
   skillVersion: string;
   trigger: string;
   sessionId: string;
+  workUnitId?: string;
   inputParametersHash: string;
   toolCalls: unknown[];
   governanceDecisions: unknown[];
@@ -47,6 +48,7 @@ export class PrismaExecutionTraceStore {
         skillVersion: trace.skillVersion,
         trigger: trace.trigger,
         sessionId: trace.sessionId,
+        workUnitId: trace.workUnitId,
         inputParametersHash: trace.inputParametersHash,
         toolCalls: trace.toolCalls as never,
         governanceDecisions: trace.governanceDecisions as never,
@@ -89,6 +91,21 @@ export class PrismaExecutionTraceStore {
       where: { id: traceId, organizationId: orgId },
     });
     return row as unknown as ExecutionTraceInput | null;
+  }
+
+  /**
+   * The execution traces for one work unit, ordered chronologically (S6a query surface).
+   * Each row's `toolCalls` is the ordered ToolCallRecord[] sequence (LLM turn order),
+   * so a consumer (trajectory grading / OTel spans) can join the tool-call trajectory
+   * to its WorkTrace. Tenant-scoped by organizationId. Empty array when none match
+   * (e.g. legacy rows persisted before the workUnitId column, which carry NULL).
+   */
+  async findByWorkUnitId(orgId: string, workUnitId: string): Promise<ExecutionTraceInput[]> {
+    const rows = await this.prisma.executionTrace.findMany({
+      where: { organizationId: orgId, workUnitId },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows as unknown as ExecutionTraceInput[];
   }
 
   async linkOutcome(
