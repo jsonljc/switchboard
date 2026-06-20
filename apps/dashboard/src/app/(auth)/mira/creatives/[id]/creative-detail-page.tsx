@@ -8,6 +8,7 @@ import { PrintedPortraitAvatar } from "@/components/agent-avatar/printed-portrai
 import { MIRA_ACCENT } from "@/lib/cockpit/mira/mira-config";
 import { STAGE_COPY, UGC_PHASE_COPY } from "@/lib/cockpit/mira/desk-copy";
 import { T } from "@/components/cockpit/tokens";
+import { formatMoney } from "@/lib/money";
 
 export function MiraCreativeDetailPage({ id }: { id: string }) {
   const jobQ = useMiraCreative(id);
@@ -171,11 +172,13 @@ export function MiraCreativeDetailPage({ id }: { id: string }) {
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
-                {`$${job.performance.spend.toFixed(2)} spent`}
+                {`${formatMoney(job.performance.spend, { withCents: "always" })} spent`}
                 {job.performance.trueRoas !== null
                   ? ` · ${job.performance.trueRoas.toFixed(1)}x trueROAS`
                   : ""}
-                {` · $${(job.performance.bookedValueCents / 100).toFixed(2)} booked (${job.performance.bookedCount})`}
+                {` · ${formatMoney(job.performance.bookedValueCents / 100, {
+                  withCents: "always",
+                })} booked (${job.performance.bookedCount})`}
               </span>
               {/* Meta's generic `conversions` field is often empty without an
                   actions breakdown; a literal "0" would mislead, so the line

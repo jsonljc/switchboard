@@ -353,9 +353,9 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
       });
       render(<MiraCreativeDetailPage id="j" />);
       expect(screen.getByText("Performance")).toBeInTheDocument();
-      expect(screen.getByText(/\$50\.00 spent/)).toBeInTheDocument();
+      expect(screen.getByText(/S\$50\.00 spent/)).toBeInTheDocument();
       expect(screen.getByText(/5\.0x trueROAS/)).toBeInTheDocument();
-      expect(screen.getByText(/\$250\.00 booked \(2\)/)).toBeInTheDocument();
+      expect(screen.getByText(/S\$250\.00 booked \(2\)/)).toBeInTheDocument();
       expect(screen.getByText(/3 Meta-reported conversions/)).toBeInTheDocument();
       expect(screen.getByText(/as of Jun 4, 2026/)).toBeInTheDocument();
     });
@@ -378,11 +378,35 @@ describe("MiraCreativeDetailPage (seam-backed)", () => {
         isError: false,
       });
       render(<MiraCreativeDetailPage id="j" />);
-      expect(screen.getByText(/\$12\.50 spent/)).toBeInTheDocument();
+      expect(screen.getByText(/S\$12\.50 spent/)).toBeInTheDocument();
       expect(screen.getByText(/no booked revenue attributed yet/i)).toBeInTheDocument();
       expect(screen.getByText(/1 Meta-reported conversion/)).toBeInTheDocument();
       expect(screen.queryByText(/0\.0x trueROAS/)).toBeNull();
       expect(screen.getByText(/as of Jun 4, 2026/)).toBeInTheDocument();
+    });
+
+    it("renders amounts at/above S$1,000 with locale grouping (canonical formatter)", () => {
+      // The canonical money formatter adds the en-SG thousands separator that the
+      // prior hand-rolled `.toFixed(2)` lacked (it would have shown "$1500.50").
+      mockCreative.mockReturnValue({
+        data: summary({
+          draft: { videoUrl: "https://x/p.mp4" },
+          performance: {
+            asOf: "2026-06-04T06:30:00.000Z",
+            delivery: "measured",
+            spend: 1500.5,
+            trueRoas: null,
+            bookedValueCents: 123456,
+            bookedCount: 3,
+            metaConversions: 0,
+          },
+        }),
+        isLoading: false,
+        isError: false,
+      });
+      render(<MiraCreativeDetailPage id="j" />);
+      expect(screen.getByText(/S\$1,500\.50 spent/)).toBeInTheDocument();
+      expect(screen.getByText(/S\$1,234\.56 booked \(3\)/)).toBeInTheDocument();
     });
 
     it("suppresses the Meta-conversions line at zero (generic field is often empty) but keeps the booked-revenue hint", () => {
