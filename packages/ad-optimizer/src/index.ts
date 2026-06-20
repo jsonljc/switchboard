@@ -181,6 +181,17 @@ export type { BudgetDriftVerdict } from "./budget-reallocation-plan.js";
 // apps/api submit-request builder + sink consume (the L2->L5->L3 governed path).
 export { buildRileyBudgetCandidate } from "./riley-budget-dispatch.js";
 export type { RileyBudgetCandidate, RileyBudgetSubmitter } from "./riley-budget-dispatch.js";
+// Shadow-mode harness (research f8): predict-only reallocation report (planner +
+// blast-radius + injected judge), no money move. Consumed by the future apps/api
+// operational runner; runnable before the real-money flip.
+export { buildShadowReallocationReport } from "./shadow-reallocation.js";
+export type {
+  ShadowReallocationInput,
+  ShadowReallocationEntry,
+  ShadowReallocationReport,
+  ShadowJudge,
+  ShadowJudgeVerdict,
+} from "./shadow-reallocation.js";
 // Phase-C wiring: raised execution floor for the self-submitted pause.
 export {
   RILEY_PAUSE_EXECUTION_EVIDENCE_FLOOR,
