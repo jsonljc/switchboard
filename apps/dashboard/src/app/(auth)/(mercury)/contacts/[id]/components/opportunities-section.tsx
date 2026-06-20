@@ -1,6 +1,7 @@
 import type { ContactDetailOpportunity } from "@switchboard/schemas";
 import styles from "../contact-detail.module.css";
-import { formatMoney, relativeAge, stageLabel } from "./format";
+import { formatMoney } from "@/lib/money";
+import { relativeAge, stageLabel } from "./format";
 
 export function OpportunitiesSection({ items }: { items: ContactDetailOpportunity[] }) {
   return (
@@ -26,7 +27,12 @@ export function OpportunitiesSection({ items }: { items: ContactDetailOpportunit
               <tr key={opp.id}>
                 <td>{opp.serviceName}</td>
                 <td>{stageLabel(opp.stage)}</td>
-                <td className={styles.numCell}>{formatMoney(opp.estimatedValue)}</td>
+                {/* estimatedValue is stored in cents; the canonical formatter takes whole dollars. */}
+                <td className={styles.numCell}>
+                  {formatMoney(opp.estimatedValue == null ? null : opp.estimatedValue / 100, {
+                    withCents: "never",
+                  })}
+                </td>
                 <td>{relativeAge(opp.openedAt)}</td>
                 <td>{opp.closedAt ? relativeAge(opp.closedAt) : "—"}</td>
               </tr>

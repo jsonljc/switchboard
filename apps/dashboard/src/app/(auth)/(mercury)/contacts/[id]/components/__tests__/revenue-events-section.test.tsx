@@ -14,7 +14,7 @@ describe("RevenueEventsSection", () => {
     const items: ContactDetailRevenueEvent[] = [
       {
         id: "rev-1",
-        amount: 800,
+        amount: 80000, // CENTS = S$800 (the field is stored in cents)
         currency: "SGD",
         type: "deposit",
         status: "confirmed",
@@ -26,5 +26,7 @@ describe("RevenueEventsSection", () => {
     expect(headers).toEqual(["Type", "Amount", "Status", "Recorded"]);
     expect(screen.getByText("Deposit")).toBeInTheDocument();
     expect(screen.getByText("Confirmed")).toBeInTheDocument();
+    // amount is CENTS, so 80000 must render as S$800 (not S$80,000).
+    expect(screen.getByText("S$800")).toBeInTheDocument();
   });
 });

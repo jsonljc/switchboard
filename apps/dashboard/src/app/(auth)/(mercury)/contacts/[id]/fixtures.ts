@@ -34,7 +34,7 @@ export const CONTACT_DETAIL_FIXTURES: Record<string, ContactDetailResponse> = {
         id: "fx-opp-lisa-1",
         serviceName: "Wedding day",
         stage: "interested",
-        estimatedValue: 4800,
+        estimatedValue: 480000, // cents = S$4,800
         openedAt: daysAgo(5),
         closedAt: null,
       },
@@ -59,7 +59,7 @@ export const CONTACT_DETAIL_FIXTURES: Record<string, ContactDetailResponse> = {
     revenueEvents: [
       {
         id: "fx-rev-lisa-1",
-        amount: 800,
+        amount: 80000, // cents = S$800
         currency: "SGD",
         type: "deposit",
         status: "confirmed",
@@ -100,7 +100,7 @@ export const CONTACT_DETAIL_FIXTURES: Record<string, ContactDetailResponse> = {
     revenueEvents: [
       {
         id: "fx-rev-maya-1",
-        amount: 1200,
+        amount: 120000, // cents = S$1,200
         currency: "SGD",
         type: "payment",
         status: "confirmed",
@@ -108,7 +108,7 @@ export const CONTACT_DETAIL_FIXTURES: Record<string, ContactDetailResponse> = {
       },
       {
         id: "fx-rev-maya-2",
-        amount: 800,
+        amount: 80000, // cents = S$800
         currency: "SGD",
         type: "payment",
         status: "confirmed",
@@ -141,7 +141,7 @@ export const CONTACT_DETAIL_FIXTURES: Record<string, ContactDetailResponse> = {
         id: "fx-opp-priya-1",
         serviceName: "Engagement shoot",
         stage: "lost",
-        estimatedValue: 1200,
+        estimatedValue: 120000, // cents = S$1,200
         openedAt: daysAgo(110),
         closedAt: daysAgo(70),
       },
