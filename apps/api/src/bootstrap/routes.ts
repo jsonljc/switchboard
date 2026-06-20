@@ -149,7 +149,7 @@ export async function registerRoutes(
   await app.register(miraDecisionRoute, { prefix: "/api/dashboard" });
   // metricsRoute: GET /api/dashboard/agents/:agentId/metrics — agent-home metrics feed
   await app.register(metricsRoute, { prefix: "/api/dashboard" });
-  // homeSummaryRoute: GET /api/dashboard/home/summary — home KPI strip read model
+  // homeSummaryRoute: GET /api/dashboard/home/summary - home KPI strip read model
   await app.register(homeSummaryRoute, { prefix: "/api/dashboard" });
   // missionRoute: GET /api/dashboard/agents/:agentId/mission — agent-home mission aggregator
   await app.register(missionRoute, { prefix: "/api/dashboard" });

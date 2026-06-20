@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
+import { HomeSummarySchema } from "@switchboard/schemas";
 import { homeSummaryRoute } from "../home-summary.js";
 
 async function buildApp(opts: { prisma?: import("@switchboard/db").PrismaClient | null }) {
@@ -31,6 +32,7 @@ describe("GET /home/summary", () => {
     };
     expect(body.summary.currency).toBe("SGD");
     expect(body.summary.attributedValueCents.state).toBe("unavailable");
+    expect(() => HomeSummarySchema.parse(body.summary)).not.toThrow();
   });
 
   it("200 with a schema-valid summary scoped to the session org", async () => {
@@ -56,6 +58,7 @@ describe("GET /home/summary", () => {
     };
     expect(body.summary.currency).toBe("SGD");
     expect(["ready", "empty"]).toContain(body.summary.attributedValueCents.state);
+    expect(() => HomeSummarySchema.parse(body.summary)).not.toThrow();
   });
 
   it("403 when x-org-id header is absent and authDisabled is false", async () => {
