@@ -16,7 +16,7 @@ describe("OpportunitiesSection", () => {
         id: "opp-1",
         serviceName: "Wedding day",
         stage: "interested",
-        estimatedValue: 4800,
+        estimatedValue: 480000, // CENTS = S$4,800 (the field is stored in cents)
         openedAt: "2026-05-01T12:00:00.000Z",
         closedAt: null,
       },
@@ -26,6 +26,8 @@ describe("OpportunitiesSection", () => {
     expect(headers).toEqual(["Service", "Stage", "Value", "Opened", "Closed"]);
     expect(screen.getByText("Wedding day")).toBeInTheDocument();
     expect(screen.getByText("Interested")).toBeInTheDocument();
+    // estimatedValue is CENTS, so 480000 must render as S$4,800 (not S$480,000).
+    expect(screen.getByText("S$4,800")).toBeInTheDocument();
     // Em-dash for null closedAt.
     expect(screen.getByText("—")).toBeInTheDocument();
   });

@@ -1,6 +1,7 @@
 import type { ContactDetailRevenueEvent } from "@switchboard/schemas";
 import styles from "../contact-detail.module.css";
-import { formatMoney, relativeAge, stageLabel } from "./format";
+import { formatMoney } from "@/lib/money";
+import { relativeAge, stageLabel } from "./format";
 
 export function RevenueEventsSection({ items }: { items: ContactDetailRevenueEvent[] }) {
   return (
@@ -24,7 +25,10 @@ export function RevenueEventsSection({ items }: { items: ContactDetailRevenueEve
             {items.map((ev) => (
               <tr key={ev.id}>
                 <td>{stageLabel(ev.type)}</td>
-                <td className={styles.numCell}>{formatMoney(ev.amount, ev.currency)}</td>
+                {/* amount is stored in cents; the canonical formatter takes whole dollars (SGD). */}
+                <td className={styles.numCell}>
+                  {formatMoney(ev.amount / 100, { withCents: "never" })}
+                </td>
                 <td>{stageLabel(ev.status)}</td>
                 <td>{relativeAge(ev.recordedAt)}</td>
               </tr>

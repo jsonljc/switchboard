@@ -24,15 +24,6 @@ export function stageLabel(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function formatMoney(amount: number | null, currency = "SGD"): string {
-  if (amount == null) return "—";
-  return new Intl.NumberFormat("en-SG", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 export function formatConsent(c: {
   optedIn: boolean;
   optedInAt: string | null;
