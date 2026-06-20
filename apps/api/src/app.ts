@@ -743,10 +743,8 @@ export async function buildServer() {
     app.decorate("triggerStore", new PrismaTriggerStore(prismaClient));
   }
 
-  const { resolveAuthoritativeDeployment } =
+  const { resolveAuthoritativeDeployment, buildPlatformDirectIntentPredicate } =
     await import("./bootstrap/platform-deployment-resolver.js");
-  const { ROBIN_RECOVERY_SEND_INTENT } =
-    await import("./services/workflows/robin-recovery-request.js");
 
   const { PrismaBillingEntitlementResolver } =
     await import("./services/billing-entitlement-resolver.js");
@@ -781,13 +779,11 @@ export async function buildServer() {
     governanceGate: platformGovernanceGate,
     deploymentResolver: resolveAuthoritativeDeployment(deploymentResolver, {
       // Non-skill, platform-initiated intents resolve to a platform-direct context instead of a
-      // strict skillSlug lookup that throws deployment_not_found for their intent prefix:
-      //  - operator_mutation crons (Ledger/receipt/booking), system_auto_approved; and
-      //  - Robin's no-show recovery campaign, which PARKS via a seeded mandatory require_approval
-      //    policy (platform-direct supervised/0 cannot relax mandatory, so this is safe).
-      isPlatformDirectIntent: (intent) =>
-        intentRegistry.lookup(intent)?.defaultMode === "operator_mutation" ||
-        intent === ROBIN_RECOVERY_SEND_INTENT,
+      // strict skillSlug lookup that throws deployment_not_found for their intent prefix. Covers
+      // operator_mutation crons (system_auto_approved) + the PLATFORM_DIRECT_WORKFLOW_INTENTS set
+      // (proactive sends, lead intake-records, Robin). They still need a seeded allow policy to
+      // clear the gate default-deny; this only avoids the resolver throw. See the predicate module.
+      isPlatformDirectIntent: buildPlatformDirectIntentPredicate(intentRegistry),
     }),
     traceStore: workTraceStore,
     lifecycleService: lifecycleService ?? undefined,

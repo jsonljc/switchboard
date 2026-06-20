@@ -13,6 +13,7 @@ import { seedMiraDemoCreatives } from "../src/seed/seed-mira-demo-creatives.js";
 import { seedMiraCreativeDeployment } from "../src/seed/seed-mira-creative-deployment.js";
 import { seedRileyAdOptimizerDeployment } from "../src/seed/seed-riley-ad-optimizer-deployment.js";
 import { seedRobinRecoveryPolicies } from "../src/seed/robin-recovery-governance.js";
+import { seedProactiveIntakePolicies } from "../src/seed/proactive-intake-governance.js";
 
 const prisma = new PrismaClient();
 
@@ -609,6 +610,12 @@ async function main() {
     // Robin v1 recovery gate for the dev org, mirroring the prod provision path so org_dev can
     // exercise the governed campaign locally.
     await seedRobinRecoveryPolicies(tx, "org_dev");
+    // Allow the proactive + lead-intake intent family for the dev org (mirrors the prod provision
+    // path) so the gate governs rather than default-denies them. The 5 platform-direct intents
+    // (reminder / follow-up / greeting / inquiry record / lead.intake) run end-to-end locally;
+    // meta.lead.intake additionally needs a seeded Alex deployment (skillSlug "alex"), which prod
+    // provisioning ensures before any Meta lead arrives but org_dev resolves lazily via GET /config.
+    await seedProactiveIntakePolicies(tx, "org_dev");
   });
   console.warn("Seeded Riley ad-optimizer deployment for org_dev");
 

@@ -119,7 +119,12 @@ export const adOptimizerRoutes: FastifyPluginAsync = async (app) => {
       organizationId,
       trigger: "api",
       surface: { surface: "api" },
-      targetHint: { skillSlug: "meta-lead" },
+      // Resolve the org's real Alex deployment (the lead-conversion agent). "meta-lead" is not a
+      // seeded deployment slug, so it threw deployment_not_found and shipped the inbound paid-lead
+      // funnel prod-inert. meta.lead.intake threads its RESOLVED deploymentId into the lead it
+      // ingests (meta-lead-intake-workflow.ts), so it must resolve a real deployment for correct
+      // lead attribution — NOT platform-direct. The seeded allow policy then clears the gate.
+      targetHint: { skillSlug: "alex" },
       idempotencyKey,
     });
 

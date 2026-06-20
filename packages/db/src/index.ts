@@ -229,6 +229,12 @@ export {
   robinRecoveryApprovalPolicyId,
   seedRobinRecoveryPolicies,
 } from "./seed/robin-recovery-governance.js";
+export {
+  PROACTIVE_INTAKE_POLICY_RULE,
+  buildProactiveIntakeAllowPolicyInput,
+  proactiveIntakeAllowPolicyId,
+  seedProactiveIntakePolicies,
+} from "./seed/proactive-intake-governance.js";
 export { setRileyPauseSelfExecution } from "./seed/riley-pause-flag-toggle.js";
 export type { CapabilityAuditRecorder } from "./seed/riley-pause-flag-toggle.js";
 export {

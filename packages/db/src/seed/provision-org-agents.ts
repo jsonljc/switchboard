@@ -4,6 +4,7 @@ import { seedRileyAdOptimizerDeployment } from "./seed-riley-ad-optimizer-deploy
 import { seedMiraCreativeDeployment } from "./seed-mira-creative-deployment.js";
 import { seedMiraPilotOrgs } from "./seed-mira-pilot-orgs.js";
 import { seedRobinRecoveryPolicies } from "./robin-recovery-governance.js";
+import { seedProactiveIntakePolicies } from "./proactive-intake-governance.js";
 
 export interface ProvisionOrgAgentsResult {
   riley: { deploymentId: string };
@@ -162,6 +163,12 @@ export async function provisionOrgAgentDeployments(
     // intent yet). Producer-population in the same PR: the gate is never seeded inert. Runs in the
     // always-run branch (before the opts.mira early-return) so existing + new orgs both get it.
     await seedRobinRecoveryPolicies(tx, orgId);
+    // Allow the platform-initiated proactive + lead-intake intent family (reminder/follow-up/
+    // greeting sends, inquiry record, lead.intake, meta.lead.intake). A workflow intent matches no
+    // other policy and the engine default-denies it, so these ship prod-inert by DENY without this
+    // allow. Allow-only (gated downstream by consent/window/template). Runs in the always-run branch
+    // (before the opts.mira early-return) so existing + new orgs both get it. Idempotent.
+    await seedProactiveIntakePolicies(tx, orgId);
     if (!opts.mira) return { riley };
 
     const miraListingId = await ensureCreativeListing(tx);
