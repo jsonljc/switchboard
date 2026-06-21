@@ -53,7 +53,8 @@ export function Colophon({ period, org, label, isLive = false, generatedAt }: Co
       <p className={styles.colophonCaveat}>
         Attributed pipeline reflects bookings whose lead source resolved to a Switchboard-managed
         channel within the 30-day attribution window. Revenue is recognised at the time a consult is
-        booked, not collected; actual collections may differ.
+        booked, not collected; actual collections may differ. Cost comparisons are illustrative,
+        based on Singapore-market median salary plus typical retainer.
       </p>
     </footer>
   );

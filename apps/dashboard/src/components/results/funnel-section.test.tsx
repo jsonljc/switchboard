@@ -10,6 +10,22 @@ describe("FunnelSection", () => {
     );
     for (const row of goodFixture.funnel) expect(container.textContent).toContain(row.stage);
   });
+
+  it("renders the section eyebrow 'Funnel'", () => {
+    const { container } = render(
+      <FunnelSection funnel={goodFixture.funnel} narrative={goodFixture.funnelNarrative} />,
+    );
+    expect(container.textContent).toContain("Funnel");
+  });
+
+  it("renders the caption 'five stages · proportional'", () => {
+    const { container } = render(
+      <FunnelSection funnel={goodFixture.funnel} narrative={goodFixture.funnelNarrative} />,
+    );
+    expect(container.textContent).toContain("five stages");
+    expect(container.textContent).toContain("proportional");
+  });
+
   it("renders the funnel narrative byline (marker)", () => {
     const { container } = render(
       <FunnelSection funnel={goodFixture.funnel} narrative={goodFixture.funnelNarrative} />,

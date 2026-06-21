@@ -13,6 +13,17 @@ const rows = [
 const narrative = { marker: "Riley · Apr 22", text: "CTR sitting above benchmark." };
 
 describe("Funnel", () => {
+  it("renders the section eyebrow 'Funnel'", () => {
+    const { container } = render(<Funnel rows={rows} narrative={narrative} />);
+    expect(container.textContent).toContain("Funnel");
+  });
+
+  it("renders the caption 'five stages · proportional'", () => {
+    const { container } = render(<Funnel rows={rows} narrative={narrative} />);
+    expect(container.textContent).toContain("five stages");
+    expect(container.textContent).toContain("proportional");
+  });
+
   it("renders five rows in order with their stages", () => {
     render(<Funnel rows={rows} narrative={narrative} />);
     expect(screen.getByText("Impressions")).toBeInTheDocument();

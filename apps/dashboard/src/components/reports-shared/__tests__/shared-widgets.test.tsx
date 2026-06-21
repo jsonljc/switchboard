@@ -32,6 +32,17 @@ describe("shared Funnel", () => {
     }
   });
 
+  it("renders the section eyebrow 'Funnel'", () => {
+    const { container } = render(<Funnel rows={funnelRows} narrative={funnelNarrative} />);
+    expect(container.textContent).toContain("Funnel");
+  });
+
+  it("renders the caption 'five stages · proportional'", () => {
+    const { container } = render(<Funnel rows={funnelRows} narrative={funnelNarrative} />);
+    expect(container.textContent).toContain("five stages");
+    expect(container.textContent).toContain("proportional");
+  });
+
   it("renders the narrative marker from the byline", () => {
     const { container } = render(<Funnel rows={funnelRows} narrative={funnelNarrative} />);
     expect(container.textContent).toContain(funnelNarrative.marker);
@@ -113,11 +124,13 @@ describe("shared Colophon", () => {
     expect(container.textContent).toMatch(/Live data/i);
   });
 
-  it("renders caveat covering attribution window and booked-not-collected", () => {
+  it("renders caveat covering attribution window, booked-not-collected, and cost methodology", () => {
     const { container } = render(<Colophon {...colophonBase} />);
     const text = container.textContent?.toLowerCase() ?? "";
     expect(text).toMatch(/attribution|30.day/);
-    expect(text).toMatch(/booked|not collected|at the point/);
+    expect(text).toMatch(/booked|not collected/);
+    expect(text).toMatch(/cost comparisons are illustrative/);
+    expect(text).toMatch(/singapore.market median salary/);
   });
 
   it("renders the org name when provided", () => {

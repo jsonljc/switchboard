@@ -2,6 +2,7 @@ import type { FunnelRowData, FunnelNarrative } from "@switchboard/schemas";
 import { fmtInt } from "./format";
 import { DeltaBadge } from "./delta-badge";
 import styles from "./funnel.module.css";
+import voiceStyles from "./mercury-voice.module.css";
 
 /**
  * Shared Funnel widget — consumed by both /reports and /results.
@@ -13,6 +14,11 @@ export function Funnel({ rows, narrative }: { rows: FunnelRowData[]; narrative: 
 
   return (
     <section className={styles.funnelSection}>
+      <div className={styles.funnelHead}>
+        <span className={voiceStyles.eyebrow}>Funnel</span>
+        <span className={styles.funnelCaption}>five stages · proportional</span>
+      </div>
+
       <ol className={styles.funnelRows}>
         {rows.map((row) => {
           const pct = row.n / max;

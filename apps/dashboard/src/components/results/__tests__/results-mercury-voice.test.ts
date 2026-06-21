@@ -194,11 +194,8 @@ describe("Detail surfaces — serif swaps (Task C)", () => {
     expect(block).not.toMatch(/var\(--font-home-serif\)/);
   });
 
-  it(".mcEmpty uses var(--serif) not --font-home-serif", () => {
-    const block = classBlock(resultsCss, "mcEmpty");
-    expect(block).toMatch(/font-family:\s*var\(--serif\)/);
-    expect(block).not.toMatch(/var\(--font-home-serif\)/);
-  });
+  // .mcEmpty has been removed from results.module.css — it is now owned by
+  // reports-shared/managed-comparison.module.css (the shared widget).
 });
 
 describe("Detail surfaces — canvas->paper border/bg swaps (Task C)", () => {
