@@ -156,7 +156,8 @@ describe("projectWorkUnitSpans — GenAI attributes, status, guards, privacy", (
 
     const root = tracer.spans.find((s) => s.parentId === null)!;
     expect(root.attributes["gen_ai.operation.name"]).toBe("invoke_agent");
-    expect(root.attributes["gen_ai.system"]).toBe("switchboard");
+    expect("gen_ai.system" in root.attributes).toBe(false);
+    expect(root.attributes["gen_ai.provider.name"]).toBe("anthropic");
     expect(root.attributes["switchboard.intent"]).toBe("book_appointment");
     expect(root.attributes["switchboard.governance.outcome"]).toBe("require_approval");
     expect(root.attributes["switchboard.work.outcome"]).toBe("succeeded");

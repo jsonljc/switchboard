@@ -77,6 +77,20 @@ function providerForModel(model: unknown): string | undefined {
     : undefined;
 }
 
+/**
+ * The work unit's model provider for the root invoke_agent span, derived from its executions
+ * (Claude-only -> "anthropic"). Undefined when no execution ran a resolvable model — degrade,
+ * never fabricate (consistent with the projection's honest-timing posture).
+ */
+function deriveWorkUnitProvider(executions: ReadonlyArray<unknown>): string | undefined {
+  for (const execRaw of executions) {
+    if (execRaw === null || typeof execRaw !== "object") continue;
+    const provider = providerForModel((execRaw as WorkUnitExecution).model);
+    if (provider !== undefined) return provider;
+  }
+  return undefined;
+}
+
 function workUnitStatus(wu: WorkUnitSpanParent): "OK" | "ERROR" {
   if (wu.governanceOutcome === "deny") return "ERROR";
   if (typeof wu.outcome === "string" && /fail|error|denied/i.test(wu.outcome)) return "ERROR";
@@ -97,6 +111,8 @@ function toolStatus(resultStatus: unknown, governance: unknown): "OK" | "ERROR" 
 
 export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): void {
   const wu = input.workUnit;
+  // Guard against non-array executions (Prisma Json column can hold a non-array at runtime)
+  const executions: unknown[] = Array.isArray(input.executions) ? input.executions : [];
 
   const rootStartRaw = finiteOrUndef(wu.requestedAtMs);
   const wuDuration = finiteOrUndef(wu.durationMs);
@@ -113,8 +129,12 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
     startTime: rootStartMs,
     kind: SPAN_KIND.INTERNAL,
   });
-  root.setAttribute("gen_ai.system", "switchboard");
   root.setAttribute("gen_ai.operation.name", "invoke_agent");
+  // gen_ai.provider.name (OTel GenAI semconv: Required on agent spans) = the real model provider,
+  // derived from this work unit's executions (Claude-only -> "anthropic"); omitted when no model
+  // ran. "Switchboard orchestrated this" lives in the switchboard.* namespace below — not on
+  // gen_ai.system (deprecated alias of gen_ai.provider.name; "switchboard" is not a GenAI provider).
+  setIfString(root, "gen_ai.provider.name", deriveWorkUnitProvider(executions));
   setIfString(root, "switchboard.work_unit.id", wu.workUnitId);
   setIfString(root, "switchboard.organization.id", wu.organizationId);
   setIfString(root, "switchboard.deployment.id", wu.deploymentId);
@@ -125,8 +145,6 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
   setIfFinite(root, "switchboard.duration_ms", wu.durationMs);
   root.setStatus(workUnitStatus(wu));
 
-  // Guard against non-array executions (Prisma Json column can hold a non-array at runtime)
-  const executions: unknown[] = Array.isArray(input.executions) ? input.executions : [];
   for (const execRaw of executions) {
     // Narrow: null or non-object element -> skip (never throw)
     if (execRaw === null || typeof execRaw !== "object") continue;
@@ -150,7 +168,6 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
       startTime: execStartMs,
       kind: SPAN_KIND.CLIENT,
     });
-    execSpan.setAttribute("gen_ai.system", "switchboard");
     execSpan.setAttribute("gen_ai.operation.name", "chat");
     setIfString(execSpan, "gen_ai.request.model", execution.model);
     setIfString(execSpan, "gen_ai.provider.name", providerForModel(execution.model));
