@@ -118,6 +118,12 @@ export const ContactSchema = z.object({
   messagingOptInAt: z.coerce.date().nullable().optional(),
   messagingOptInSource: MessagingOptInSourceSchema.nullable().optional(),
   messagingOptOutAt: z.coerce.date().nullable().optional(),
+  /**
+   * Set at lead intake when this contact matched an existing one but could not be corroborated as the
+   * same person (ambiguous or conflicting identity). Read at booking issuance and ORed into the
+   * duplicate_contact_risk exception (see issue-receipted-booking). Monotonic: never cleared post-intake.
+   */
+  duplicateContactRisk: z.boolean().default(false),
   firstContactAt: z.coerce.date(),
   lastActivityAt: z.coerce.date(),
   createdAt: z.coerce.date(),
