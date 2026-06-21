@@ -100,7 +100,9 @@ export function computeRecoveryNextRetry(
  * decision worth burning a dedup row on. The cohort executor calls this PRE-CLAIM to skip without
  * claiming, so a later run re-engages once the template is approved (or the jurisdiction is set).
  */
-export function isOrgConfigSkip(eligibility: ProactiveSendEligibility): boolean {
+export function isOrgConfigSkip(
+  eligibility: ProactiveSendEligibility,
+): eligibility is Extract<ProactiveSendEligibility, { eligible: false }> {
   return (
     !eligibility.eligible &&
     (eligibility.reason === "template_not_approved" || eligibility.reason === "no_template")

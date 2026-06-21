@@ -4,13 +4,21 @@ import {
   getMetrics,
   type RobinRecoverySendStore,
 } from "@switchboard/core";
-import { RobinRecoveryCampaignParamsSchema, buildRecoveryDedupeKey } from "@switchboard/schemas";
-import { ROBIN_RECOVERY_SEND_INTENT } from "../services/workflows/robin-recovery-request.js";
+import {
+  RobinRecoveryCampaignParamsSchema,
+  RobinRecoveryRetryParamsSchema,
+  buildRecoveryDedupeKey,
+} from "@switchboard/schemas";
+import {
+  ROBIN_RECOVERY_SEND_INTENT,
+  ROBIN_RECOVERY_RETRY_INTENT,
+} from "../services/workflows/robin-recovery-request.js";
 import { resolveWhatsAppSendToken } from "../lib/whatsapp-send-token.js";
 import {
   dispatchRecoveryRow,
   evaluateRecoveryEligibility,
   isOrgConfigSkip,
+  computeRecoveryNextRetry,
   defaultSendTemplate,
   type RecoverySendContext,
   type RecoveryTemplateSendArgs,
@@ -228,6 +236,152 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
           outcome: "completed",
           summary: `Recovery campaign dispatched: ${sent} sent, ${skipped} skipped, ${failed} failed`,
           outputs: { sent, skipped, failed, total: candidates.length },
+        };
+      },
+    },
+  };
+}
+
+export interface RobinRecoverySendRetryExecutorDeps {
+  /** Org-scoped per-recipient phone + consent + org-name + template-approval-overlay resolution. */
+  getSendContext: (orgId: string, contactId: string) => Promise<RecoverySendContext>;
+  store: RobinRecoverySendStore;
+  /** Injectable for tests; defaults to the real Graph send. */
+  sendTemplate?: (args: RecoveryTemplateSendArgs) => Promise<RecoveryTemplateSendResult>;
+  selectTemplateFn?: Parameters<typeof evaluateProactiveSendEligibility>[0]["selectTemplateFn"];
+  resolveSendToken?: () => string | undefined;
+  resolvePhoneNumberId?: () => string | undefined;
+  /** Multi-tenant: resolve the row org's own WhatsApp creds (PER-FIELD fallback to global). */
+  resolveOrgSendCreds?: (
+    organizationId: string,
+  ) => Promise<{ token: string | null; phoneNumberId: string | null } | null>;
+  /** Re-check future bookings at RETRY time so a contact who rebooked is not re-engaged. */
+  findFutureBookingContactIds?: (
+    orgId: string,
+    contactIds: string[],
+    now: Date,
+  ) => Promise<Set<string>>;
+  /** Injectable clock; defaults to wall-clock. */
+  now?: () => Date;
+  /** Injectable RNG for the retry backoff full-jitter; defaults to Math.random. */
+  random?: () => number;
+}
+
+/**
+ * The auto-executing single-recipient recovery retry. The retry cron submits one of these per due
+ * RobinRecoverySend row through PlatformIngress (seeded system principal). It RECLAIMS the existing
+ * row by id (never `store.create` -> no new dedup row) and RE-VALIDATES consent + template + rebooked
+ * AT RETRY TIME (stale state is never trusted): a contact who revoked consent, or rebooked, or whose
+ * template lost approval since the cohort dispatch is skipped, not sent. A send failure routes through
+ * the shared `dispatchRecoveryRow`, which re-queues below the cap or dead-letters at it; the terminal
+ * dead-letter fires `robinRecoverySendFailed`. A transient pre-send gap (missing creds / a context
+ * resolve throw) also re-queues via `computeRecoveryNextRetry` and only emits the metric when terminal.
+ */
+export function buildRobinRecoverySendRetryExecutor(deps: RobinRecoverySendRetryExecutorDeps): {
+  intent: string;
+  handler: WorkflowHandler;
+} {
+  const sendTemplate = deps.sendTemplate ?? defaultSendTemplate;
+  const resolveToken = deps.resolveSendToken ?? resolveWhatsAppSendToken;
+  const resolvePhoneId =
+    deps.resolvePhoneNumberId ?? (() => process.env["WHATSAPP_PHONE_NUMBER_ID"]);
+  const resolveOrgSendCreds = deps.resolveOrgSendCreds ?? (async () => null);
+  const random = deps.random ?? Math.random;
+
+  return {
+    intent: ROBIN_RECOVERY_RETRY_INTENT,
+    handler: {
+      async execute(workUnit) {
+        const parsed = RobinRecoveryRetryParamsSchema.safeParse(workUnit.parameters);
+        if (!parsed.success) {
+          return {
+            outcome: "failed",
+            summary: "Recovery retry rejected: malformed params",
+            error: { code: "ROBIN_RECOVERY_RETRY_INVALID", message: parsed.error.message },
+          };
+        }
+        const orgId = workUnit.organizationId;
+        const { rowId, contactId, attempts } = parsed.data;
+        const now = (deps.now ?? (() => new Date()))();
+
+        // A transient pre-send gap re-queues the SAME row below the cap (or dead-letters at it); the
+        // dead-letter emits the per-recipient failure metric. Mirrors dispatchRecoveryRow's finishFailed.
+        const failTransient = async (
+          reason: string,
+        ): Promise<{ outcome: "failed"; deadLettered: boolean }> => {
+          const nextRetryAt = computeRecoveryNextRetry(attempts, now, random);
+          await deps.store.markFailed(rowId, reason, nextRetryAt);
+          if (nextRetryAt === null) {
+            getMetrics().robinRecoverySendFailed.inc({
+              intent: ROBIN_RECOVERY_RETRY_INTENT,
+              reason,
+            });
+          }
+          return { outcome: "failed", deadLettered: nextRetryAt === null };
+        };
+
+        // Resolve the row org's send creds (PER-FIELD fallback to global). Missing creds are a
+        // transient config gap: re-queue rather than dead-letter on the first miss.
+        const perOrg = await resolveOrgSendCreds(orgId);
+        const accessToken = perOrg?.token ?? resolveToken();
+        const phoneNumberId = perOrg?.phoneNumberId ?? resolvePhoneId();
+        if (!accessToken || !phoneNumberId) {
+          const r = await failTransient("config_missing");
+          return {
+            outcome: "completed",
+            summary: `Recovery retry: failed${r.deadLettered ? " (dead-lettered)" : ""}`,
+            outputs: { outcome: "failed", deadLettered: r.deadLettered },
+          };
+        }
+
+        // Re-resolve consent / phone / template-approval AT RETRY TIME (never trust stale state). A
+        // resolve throw is transient -> re-queue (or dead-letter at the cap).
+        let ctx: RecoverySendContext;
+        try {
+          ctx = await deps.getSendContext(orgId, contactId);
+        } catch {
+          const r = await failTransient("context_resolve_failed");
+          return {
+            outcome: "completed",
+            summary: `Recovery retry: failed${r.deadLettered ? " (dead-lettered)" : ""}`,
+            outputs: { outcome: "failed", deadLettered: r.deadLettered },
+          };
+        }
+
+        const eligibility = evaluateRecoveryEligibility(ctx, deps.selectTemplateFn);
+        // An org-config gap (unapproved/absent template) is terminal for THIS row at retry: record a
+        // skip (the cohort cron re-engages the cohort once the template is approved).
+        if (isOrgConfigSkip(eligibility)) {
+          await deps.store.markSkipped(rowId, eligibility.reason);
+          return {
+            outcome: "completed",
+            summary: `Recovery retry: skipped (${eligibility.reason})`,
+            outputs: { outcome: "skipped", deadLettered: false },
+          };
+        }
+
+        const rebooked = deps.findFutureBookingContactIds
+          ? (await deps.findFutureBookingContactIds(orgId, [contactId], now)).has(contactId)
+          : false;
+
+        const r = await dispatchRecoveryRow(
+          { rowId, attempts, ctx, eligibility, rebooked, accessToken, phoneNumberId },
+          {
+            store: deps.store,
+            sendTemplate,
+            now: () => now,
+            random,
+            onDeadLetter: (reason) =>
+              getMetrics().robinRecoverySendFailed.inc({
+                intent: ROBIN_RECOVERY_RETRY_INTENT,
+                reason,
+              }),
+          },
+        );
+        return {
+          outcome: "completed",
+          summary: `Recovery retry: ${r.outcome}${r.deadLettered ? " (dead-lettered)" : ""}`,
+          outputs: { outcome: r.outcome, deadLettered: r.deadLettered },
         };
       },
     },
