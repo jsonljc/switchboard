@@ -115,3 +115,19 @@ describe("Tracer timing + kind extension (E4c)", () => {
     expect(() => child.end(2)).not.toThrow();
   });
 });
+
+describe("epochMsToHrTime — defensive hardening (E4c-hardening)", () => {
+  it("clamps a negative epoch to [0,0] and never emits negative nanos", () => {
+    const started: Array<{ options: unknown }> = [];
+    const fakeOtelTracer = {
+      startSpan: vi.fn((_name: string, options?: unknown) => {
+        started.push({ options });
+        return { setAttribute: vi.fn(), setStatus: vi.fn(), end: vi.fn() };
+      }),
+    };
+    const tracer = createOTelTracer(fakeOtelTracer);
+    tracer.startSpan("x", undefined, undefined, { startTime: -500 });
+    // With the fix, epochMsToHrTime(-500) -> clamp to ms=0 -> [0, 0]
+    expect(started[0]!.options).toEqual({ startTime: [0, 0] });
+  });
+});

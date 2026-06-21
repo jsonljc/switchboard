@@ -53,6 +53,24 @@ function finiteOrUndef(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+/**
+ * Derive an honest [start, end] for a span: both set iff both anchors exist, the optional
+ * parent-start clamp keeps the child from starting before its parent, AND the result is not
+ * inverted. Any inconsistency (missing anchor, clock skew, clamp-induced inversion) degrades
+ * to flat timing rather than emit a misleading/inverted span.
+ */
+function deriveSpanTiming(
+  startRaw: number | undefined,
+  endRaw: number | undefined,
+  parentStartMs?: number,
+): { startMs?: number; endMs?: number } {
+  if (startRaw === undefined || endRaw === undefined) return {};
+  let start = startRaw;
+  if (parentStartMs !== undefined && start < parentStartMs) start = parentStartMs;
+  if (start > endRaw) return {};
+  return { startMs: start, endMs: endRaw };
+}
+
 function providerForModel(model: unknown): string | undefined {
   return typeof model === "string" && model.toLowerCase().includes("claude")
     ? "anthropic"
@@ -80,11 +98,15 @@ function toolStatus(resultStatus: unknown, governance: unknown): "OK" | "ERROR" 
 export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): void {
   const wu = input.workUnit;
 
-  const rootStartMs = finiteOrUndef(wu.requestedAtMs);
+  const rootStartRaw = finiteOrUndef(wu.requestedAtMs);
   const wuDuration = finiteOrUndef(wu.durationMs);
-  const rootEndMs =
+  const rootEndRaw =
     finiteOrUndef(wu.completedAtMs) ??
-    (rootStartMs !== undefined && wuDuration !== undefined ? rootStartMs + wuDuration : undefined);
+    (rootStartRaw !== undefined && wuDuration !== undefined
+      ? rootStartRaw + wuDuration
+      : undefined);
+  // deriveSpanTiming: both or neither; clock-skew (completedAt < requestedAt) degrades to flat
+  const { startMs: rootStartMs, endMs: rootEndMs } = deriveSpanTiming(rootStartRaw, rootEndRaw);
 
   // Work-unit (root) span — REAL requestedAt/completedAt timing (not marked synthetic)
   const root = tracer.startSpan("invoke_agent", undefined, undefined, {
@@ -103,12 +125,26 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
   setIfFinite(root, "switchboard.duration_ms", wu.durationMs);
   root.setStatus(workUnitStatus(wu));
 
-  for (const execution of input.executions) {
+  // Guard against non-array executions (Prisma Json column can hold a non-array at runtime)
+  const executions: unknown[] = Array.isArray(input.executions) ? input.executions : [];
+  for (const execRaw of executions) {
+    // Narrow: null or non-object element -> skip (never throw)
+    if (execRaw === null || typeof execRaw !== "object") continue;
+    const execution = execRaw as WorkUnitExecution;
+
     // Execution span — end = REAL createdAt, start = createdAt - durationMs (derived, synthetic)
-    const execEndMs = finiteOrUndef(execution.createdAtMs);
+    const execEndRaw = finiteOrUndef(execution.createdAtMs);
     const execDuration = finiteOrUndef(execution.durationMs);
-    const execStartMs =
-      execEndMs !== undefined && execDuration !== undefined ? execEndMs - execDuration : undefined;
+    const execStartRaw =
+      execEndRaw !== undefined && execDuration !== undefined
+        ? execEndRaw - execDuration
+        : undefined;
+    // deriveSpanTiming: clamps to rootStart and degrades to flat if start > end (inversion guard)
+    const { startMs: execStartMs, endMs: execEndMs } = deriveSpanTiming(
+      execStartRaw,
+      execEndRaw,
+      rootStartMs,
+    );
 
     const execSpan = tracer.startSpan(`chat ${execution.skillSlug ?? "skill"}`, undefined, root, {
       startTime: execStartMs,
@@ -136,10 +172,12 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
     if (execStartMs !== undefined) execSpan.setAttribute("switchboard.timing.synthetic", true);
     execSpan.setStatus(executionStatus(execution.status));
 
+    // Guard against non-array toolCalls (Prisma Json column can hold a non-array at runtime)
+    const toolCalls: unknown[] = Array.isArray(execution.toolCalls) ? execution.toolCalls : [];
     // Tools packed sequentially within the exec window (synthetic)
     let cursorMs = execStartMs;
-    for (const call of execution.toolCalls) {
-      cursorMs = emitToolSpan(call, execSpan, tracer, cursorMs);
+    for (const call of toolCalls) {
+      cursorMs = emitToolSpan(call, execSpan, tracer, cursorMs, execEndMs);
     }
 
     execSpan.end(execEndMs);
@@ -153,37 +191,39 @@ function emitToolSpan(
   execSpan: Span,
   tracer: Tracer,
   cursorMs: number | undefined,
+  execEndMs: number | undefined,
 ): number | undefined {
-  // Defensive narrowing: non-object or null -> malformed
-  if (call === null || typeof call !== "object") {
+  const timed = cursorMs !== undefined && execEndMs !== undefined;
+  const clampStart = timed ? Math.min(cursorMs!, execEndMs!) : undefined;
+
+  // DRY: emit a zero-width malformed span and leave the cursor unchanged
+  const emitMalformed = (): number | undefined => {
     const s = tracer.startSpan("execute_tool <malformed>", undefined, execSpan, {
-      startTime: cursorMs,
+      startTime: clampStart,
       kind: SPAN_KIND.INTERNAL,
     });
     s.setAttribute("switchboard.tool.malformed", true);
-    s.end(cursorMs);
+    s.end(clampStart);
     return cursorMs;
-  }
+  };
+
+  // Defensive narrowing: non-object or null -> malformed
+  if (call === null || typeof call !== "object") return emitMalformed();
 
   const rec = call as Record<string, unknown>;
   const toolId = rec["toolId"];
 
   // Non-string toolId -> malformed
-  if (typeof toolId !== "string") {
-    const s = tracer.startSpan("execute_tool <malformed>", undefined, execSpan, {
-      startTime: cursorMs,
-      kind: SPAN_KIND.INTERNAL,
-    });
-    s.setAttribute("switchboard.tool.malformed", true);
-    s.end(cursorMs);
-    return cursorMs;
-  }
+  if (typeof toolId !== "string") return emitMalformed();
 
-  const dur = finiteOrUndef(rec["durationMs"]) ?? 0;
-  const toolEndMs = cursorMs !== undefined ? cursorMs + dur : undefined;
+  // Floor dur at 0: negative durationMs would invert toolStart+dur < toolStart
+  const dur = Math.max(0, finiteOrUndef(rec["durationMs"]) ?? 0);
+  // Clamp tool start+end into [..., execEndMs] — no child exceeds parent; dur>=0 so start<=end always
+  const toolStartMs = clampStart;
+  const toolEndMs = timed ? Math.min(cursorMs! + dur, execEndMs!) : undefined;
 
   const toolSpan = tracer.startSpan(`execute_tool ${toolId}`, undefined, execSpan, {
-    startTime: cursorMs,
+    startTime: toolStartMs,
     kind: SPAN_KIND.INTERNAL,
   });
   toolSpan.setAttribute("gen_ai.operation.name", "execute_tool");
@@ -218,8 +258,9 @@ function emitToolSpan(
   const params = rec["params"];
   toolSpan.setAttribute("switchboard.tool.params_present", params !== undefined && params !== null);
 
-  if (cursorMs !== undefined) toolSpan.setAttribute("switchboard.timing.synthetic", true);
+  if (toolStartMs !== undefined) toolSpan.setAttribute("switchboard.timing.synthetic", true);
   toolSpan.setStatus(toolStatus(resultStatus, rec["governanceDecision"]));
   toolSpan.end(toolEndMs);
-  return toolEndMs;
+  // advance cursor by REAL dur (ordering), not the clamped end
+  return timed ? cursorMs! + dur : cursorMs;
 }

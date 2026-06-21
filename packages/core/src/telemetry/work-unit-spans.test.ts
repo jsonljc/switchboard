@@ -468,3 +468,120 @@ describe("telemetry barrel (E4c)", () => {
     expect(opts.kind).toBe(0);
   });
 });
+
+describe("projectWorkUnitSpans — E4c-hardening (throw-safety + symmetric timing + geometry clamps)", () => {
+  const T0 = 1_700_000_000_000;
+
+  it("does not throw when executions is not an array", () => {
+    const tracer = new RecordingTracer();
+    const input = { workUnit: { workUnitId: "wu" }, executions: null } as any;
+    expect(() => projectWorkUnitSpans(input, tracer)).not.toThrow();
+    // exactly 1 span = the root (no executions iterated)
+    expect(tracer.spans).toHaveLength(1);
+  });
+
+  it("does not throw when toolCalls is a non-array", () => {
+    const tracer = new RecordingTracer();
+    const input = {
+      workUnit: { workUnitId: "wu" },
+      executions: [{ toolCalls: { not: "an array" } }],
+    } as any;
+    expect(() => projectWorkUnitSpans(input, tracer)).not.toThrow();
+    // exec span present
+    expect(tracer.spans.some((s) => s.name.startsWith("chat"))).toBe(true);
+    // 0 tool spans (toolCalls was not iterated)
+    expect(tracer.spans.filter((s) => s.name.startsWith("execute_tool"))).toHaveLength(0);
+  });
+
+  it("root degrades FULLY flat when end is underivable (symmetric)", () => {
+    const tracer = new RecordingTracer();
+    // requestedAtMs present but no completedAtMs / durationMs -> end underivable
+    projectWorkUnitSpans(
+      { workUnit: { workUnitId: "wu", requestedAtMs: T0 }, executions: [] },
+      tracer,
+    );
+    const root = tracer.spans.find((s) => s.parentId === null)!;
+    // symmetric: BOTH must be undefined (not start-only)
+    expect(root.startTimeMs).toBeUndefined();
+    expect(root.endTimeMs).toBeUndefined();
+  });
+
+  it("execution degrades FULLY flat when durationMs absent (symmetric)", () => {
+    const tracer = new RecordingTracer();
+    projectWorkUnitSpans(
+      {
+        workUnit: { workUnitId: "wu" },
+        executions: [{ createdAtMs: T0 + 100, toolCalls: [] }],
+      },
+      tracer,
+    );
+    const exec = tracer.spans.find((s) => s.name.startsWith("chat"))!;
+    expect(exec.startTimeMs).toBeUndefined();
+    expect(exec.endTimeMs).toBeUndefined();
+  });
+
+  it("tool end is clamped to execution end (no child-exceeds-parent)", () => {
+    const tracer = new RecordingTracer();
+    // execStart = T0+70, execEnd = T0+100 (window = 30ms)
+    // tool(25) + tool(25) = 50ms total > 30ms window -> second tool must be clamped
+    projectWorkUnitSpans(
+      {
+        workUnit: { workUnitId: "wu" },
+        executions: [
+          {
+            createdAtMs: T0 + 100,
+            durationMs: 30,
+            toolCalls: [
+              {
+                toolId: "t1",
+                operation: "o",
+                params: {},
+                result: { status: "success" },
+                durationMs: 25,
+                governanceDecision: "auto-approved",
+              },
+              {
+                toolId: "t2",
+                operation: "o",
+                params: {},
+                result: { status: "success" },
+                durationMs: 25,
+                governanceDecision: "auto-approved",
+              },
+            ],
+          },
+        ],
+      },
+      tracer,
+    );
+    const execEnd = T0 + 100;
+    const tools = tracer.spans.filter((s) => s.name.startsWith("execute_tool"));
+    expect(tools).toHaveLength(2);
+    // every tool's endTimeMs must be <= execEnd
+    for (const t of tools) {
+      expect(t.endTimeMs!).toBeLessThanOrEqual(execEnd);
+    }
+    // every tool's startTimeMs must be >= execStart (T0+70) and <= execEnd
+    const execStart = T0 + 70;
+    for (const t of tools) {
+      expect(t.startTimeMs!).toBeGreaterThanOrEqual(execStart);
+      expect(t.startTimeMs!).toBeLessThanOrEqual(execEnd);
+    }
+  });
+
+  it("execution start is clamped to >= root start when exec derived start < root start", () => {
+    const tracer = new RecordingTracer();
+    // rootStart = T0+90, rootEnd = T0+190
+    // execution: createdAtMs = T0+100, durationMs = 80 -> derived execStart = T0+20 < rootStart T0+90
+    // After fix: execStartMs should be clamped to T0+90
+    projectWorkUnitSpans(
+      {
+        workUnit: { workUnitId: "wu", requestedAtMs: T0 + 90, durationMs: 100 },
+        executions: [{ createdAtMs: T0 + 100, durationMs: 80, toolCalls: [] }],
+      },
+      tracer,
+    );
+    const exec = tracer.spans.find((s) => s.name.startsWith("chat"))!;
+    expect(exec.startTimeMs).toBe(T0 + 90);
+  });
+});
