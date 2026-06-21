@@ -122,6 +122,12 @@ describe("HomeKpiStrip", () => {
   });
 
   it("does not render 'Attributed this week' sub-label on bookings tile when metric is empty or unavailable", () => {
+    decisions.mockReturnValue({
+      data: { counts: { approval: 0 } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
     summary.mockReturnValue({
       data: {
         attributedValueCents: { state: "empty", reason: "no_current_week_bookings" },
@@ -133,14 +139,21 @@ describe("HomeKpiStrip", () => {
       isError: false,
       error: null,
     });
-    decisions.mockReturnValue({
-      data: { counts: { approval: 0 } },
+    const { rerender } = render(<HomeKpiStrip />);
+    expect(screen.queryByText("Attributed this week")).toBeNull();
+
+    summary.mockReturnValue({
+      data: {
+        attributedValueCents: { state: "unavailable", reason: "store_unavailable" },
+        bookings: { state: "unavailable", reason: "store_unavailable" },
+        currency: "SGD",
+        generatedAt: freshness.generatedAt,
+      },
       isLoading: false,
       isError: false,
       error: null,
     });
-
-    render(<HomeKpiStrip />);
+    rerender(<HomeKpiStrip />);
     expect(screen.queryByText("Attributed this week")).toBeNull();
   });
 
