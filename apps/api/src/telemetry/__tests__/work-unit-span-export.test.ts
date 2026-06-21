@@ -10,6 +10,7 @@ import {
   mapExecutionTracesToSpanInput,
   exportWorkUnitSpans,
   isWorkUnitTracingEnabled,
+  buildWorkUnitSpanExportHook,
 } from "../work-unit-span-export.js";
 
 // minimal recording tracer (mirrors the core test double)
@@ -252,5 +253,76 @@ describe("mapExecutionTracesToSpanInput — numeric epoch createdAt (E4c-hardeni
     const numericEpoch = 1_700_000_000_100;
     const input = mapExecutionTracesToSpanInput("wu", [row({ createdAt: numericEpoch })]);
     expect(input.executions[0]!.createdAtMs).toBe(numericEpoch);
+  });
+});
+
+describe("buildWorkUnitSpanExportHook — fire-and-forget, error-swallowing hook (E4c slice C)", () => {
+  const OLD = process.env["OTEL_EXPORTER_OTLP_ENDPOINT"];
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    if (OLD === undefined) delete process.env["OTEL_EXPORTER_OTLP_ENDPOINT"];
+    else process.env["OTEL_EXPORTER_OTLP_ENDPOINT"] = OLD;
+  });
+
+  it("returns a function that invokes the export path so the store is read with (orgId, workUnitId)", async () => {
+    vi.stubEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318");
+    const findByWorkUnitId = vi.fn().mockResolvedValue([]);
+    const getByWorkUnitId = vi.fn().mockResolvedValue(null);
+    const hook = buildWorkUnitSpanExportHook({
+      executionTraceStore: { findByWorkUnitId },
+      workTraceStore: { getByWorkUnitId },
+    });
+    expect(typeof hook).toBe("function");
+
+    hook({ organizationId: "org_1", workUnitId: "wu_1" });
+
+    await vi.waitFor(() => {
+      expect(findByWorkUnitId).toHaveBeenCalledWith("org_1", "wu_1");
+    });
+  });
+
+  it("does NOT read the store when tracing is gated OFF (endpoint unset)", async () => {
+    delete process.env["OTEL_EXPORTER_OTLP_ENDPOINT"];
+    expect(isWorkUnitTracingEnabled()).toBe(false);
+    const findByWorkUnitId = vi.fn().mockResolvedValue([]);
+    const hook = buildWorkUnitSpanExportHook({
+      executionTraceStore: { findByWorkUnitId },
+    });
+
+    hook({ organizationId: "org_1", workUnitId: "wu_1" });
+
+    // Give any (incorrectly) un-gated async leg a tick to fire, then assert it didn't.
+    await Promise.resolve();
+    expect(findByWorkUnitId).not.toHaveBeenCalled();
+  });
+
+  it("swallows a rejecting exporter: the hook returns void synchronously, never throws", async () => {
+    vi.stubEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const findByWorkUnitId = vi.fn().mockRejectedValue(new Error("store down"));
+    const hook = buildWorkUnitSpanExportHook({
+      executionTraceStore: { findByWorkUnitId },
+    });
+
+    // Calling the hook must not throw despite the rejecting store.
+    expect(() => hook({ organizationId: "org_1", workUnitId: "wu_1" })).not.toThrow();
+
+    // The rejection is swallowed by the hook's .catch (logged, no unhandled rejection).
+    await vi.waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[work-unit-span-export] span export failed for work unit",
+        "wu_1",
+        expect.anything(),
+      );
+    });
+    warnSpy.mockRestore();
+  });
+
+  it("compile-time seam: the hook return type is assignable to the PlatformIngressConfig hook shape", () => {
+    const _pin: (info: { organizationId: string; workUnitId: string }) => void =
+      buildWorkUnitSpanExportHook({
+        executionTraceStore: { findByWorkUnitId: vi.fn().mockResolvedValue([]) },
+      });
+    expect(typeof _pin).toBe("function");
   });
 });
