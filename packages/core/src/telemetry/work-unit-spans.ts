@@ -80,11 +80,17 @@ function toolStatus(resultStatus: unknown, governance: unknown): "OK" | "ERROR" 
 export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): void {
   const wu = input.workUnit;
 
-  const rootStartMs = finiteOrUndef(wu.requestedAtMs);
+  const rootStartRaw = finiteOrUndef(wu.requestedAtMs);
   const wuDuration = finiteOrUndef(wu.durationMs);
-  const rootEndMs =
+  const rootEndRaw =
     finiteOrUndef(wu.completedAtMs) ??
-    (rootStartMs !== undefined && wuDuration !== undefined ? rootStartMs + wuDuration : undefined);
+    (rootStartRaw !== undefined && wuDuration !== undefined
+      ? rootStartRaw + wuDuration
+      : undefined);
+  // symmetric: both or neither (prevents start-without-end -> OTel substitutes Date.now())
+  const rootTimed = rootStartRaw !== undefined && rootEndRaw !== undefined;
+  const rootStartMs = rootTimed ? rootStartRaw : undefined;
+  const rootEndMs = rootTimed ? rootEndRaw : undefined;
 
   // Work-unit (root) span — REAL requestedAt/completedAt timing (not marked synthetic)
   const root = tracer.startSpan("invoke_agent", undefined, undefined, {
@@ -103,12 +109,24 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
   setIfFinite(root, "switchboard.duration_ms", wu.durationMs);
   root.setStatus(workUnitStatus(wu));
 
-  for (const execution of input.executions) {
+  // Fix A: guard against non-array executions (Prisma Json column can hold a non-array at runtime)
+  const executions = Array.isArray(input.executions) ? input.executions : [];
+  for (const execution of executions) {
     // Execution span — end = REAL createdAt, start = createdAt - durationMs (derived, synthetic)
-    const execEndMs = finiteOrUndef(execution.createdAtMs);
+    const execEndRaw = finiteOrUndef(execution.createdAtMs);
     const execDuration = finiteOrUndef(execution.durationMs);
-    const execStartMs =
-      execEndMs !== undefined && execDuration !== undefined ? execEndMs - execDuration : undefined;
+    const execStartRaw =
+      execEndRaw !== undefined && execDuration !== undefined
+        ? execEndRaw - execDuration
+        : undefined;
+    // symmetric: both or neither
+    const execTimed = execStartRaw !== undefined && execEndRaw !== undefined;
+    let execStartMs = execTimed ? execStartRaw : undefined;
+    const execEndMs = execTimed ? execEndRaw : undefined;
+    // Fix B: a child cannot start before its parent
+    if (execStartMs !== undefined && rootStartMs !== undefined && execStartMs < rootStartMs) {
+      execStartMs = rootStartMs;
+    }
 
     const execSpan = tracer.startSpan(`chat ${execution.skillSlug ?? "skill"}`, undefined, root, {
       startTime: execStartMs,
@@ -136,10 +154,12 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
     if (execStartMs !== undefined) execSpan.setAttribute("switchboard.timing.synthetic", true);
     execSpan.setStatus(executionStatus(execution.status));
 
+    // Fix A: guard against non-array toolCalls (Prisma Json column can hold a non-array at runtime)
+    const toolCalls = Array.isArray(execution.toolCalls) ? execution.toolCalls : [];
     // Tools packed sequentially within the exec window (synthetic)
     let cursorMs = execStartMs;
-    for (const call of execution.toolCalls) {
-      cursorMs = emitToolSpan(call, execSpan, tracer, cursorMs);
+    for (const call of toolCalls) {
+      cursorMs = emitToolSpan(call, execSpan, tracer, cursorMs, execEndMs);
     }
 
     execSpan.end(execEndMs);
@@ -153,15 +173,19 @@ function emitToolSpan(
   execSpan: Span,
   tracer: Tracer,
   cursorMs: number | undefined,
+  execEndMs: number | undefined,
 ): number | undefined {
+  const timed = cursorMs !== undefined && execEndMs !== undefined;
+  const clampStart = timed ? Math.min(cursorMs!, execEndMs!) : undefined;
+
   // Defensive narrowing: non-object or null -> malformed
   if (call === null || typeof call !== "object") {
     const s = tracer.startSpan("execute_tool <malformed>", undefined, execSpan, {
-      startTime: cursorMs,
+      startTime: clampStart,
       kind: SPAN_KIND.INTERNAL,
     });
     s.setAttribute("switchboard.tool.malformed", true);
-    s.end(cursorMs);
+    s.end(clampStart);
     return cursorMs;
   }
 
@@ -171,19 +195,21 @@ function emitToolSpan(
   // Non-string toolId -> malformed
   if (typeof toolId !== "string") {
     const s = tracer.startSpan("execute_tool <malformed>", undefined, execSpan, {
-      startTime: cursorMs,
+      startTime: clampStart,
       kind: SPAN_KIND.INTERNAL,
     });
     s.setAttribute("switchboard.tool.malformed", true);
-    s.end(cursorMs);
+    s.end(clampStart);
     return cursorMs;
   }
 
   const dur = finiteOrUndef(rec["durationMs"]) ?? 0;
-  const toolEndMs = cursorMs !== undefined ? cursorMs + dur : undefined;
+  // Fix B: clamp tool start+end into [..., execEndMs] — no child exceeds parent
+  const toolStartMs = clampStart;
+  const toolEndMs = timed ? Math.min(cursorMs! + dur, execEndMs!) : undefined;
 
   const toolSpan = tracer.startSpan(`execute_tool ${toolId}`, undefined, execSpan, {
-    startTime: cursorMs,
+    startTime: toolStartMs,
     kind: SPAN_KIND.INTERNAL,
   });
   toolSpan.setAttribute("gen_ai.operation.name", "execute_tool");
@@ -218,8 +244,9 @@ function emitToolSpan(
   const params = rec["params"];
   toolSpan.setAttribute("switchboard.tool.params_present", params !== undefined && params !== null);
 
-  if (cursorMs !== undefined) toolSpan.setAttribute("switchboard.timing.synthetic", true);
+  if (toolStartMs !== undefined) toolSpan.setAttribute("switchboard.timing.synthetic", true);
   toolSpan.setStatus(toolStatus(resultStatus, rec["governanceDecision"]));
   toolSpan.end(toolEndMs);
-  return toolEndMs;
+  // advance cursor by REAL dur (ordering), not the clamped end
+  return timed ? cursorMs! + dur : cursorMs;
 }

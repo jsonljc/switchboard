@@ -246,3 +246,11 @@ describe("seam: realistic store rows -> mapper -> projection carry REAL timing (
     });
   });
 });
+
+describe("mapExecutionTracesToSpanInput — numeric epoch createdAt (E4c-hardening)", () => {
+  it("mapper accepts a numeric epoch createdAt", () => {
+    const numericEpoch = 1_700_000_000_100;
+    const input = mapExecutionTracesToSpanInput("wu", [row({ createdAt: numericEpoch })]);
+    expect(input.executions[0]!.createdAtMs).toBe(numericEpoch);
+  });
+});

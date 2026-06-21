@@ -15,7 +15,7 @@ export interface ExecutionTraceRow {
   status?: string;
   durationMs?: number;
   turnCount?: number;
-  createdAt?: Date | string;
+  createdAt?: Date | string | number;
   tokenUsage?: {
     input?: number;
     output?: number;
@@ -68,8 +68,9 @@ export interface WorkUnitSpanExportDeps {
   };
 }
 
-/** ISO string or Date -> epoch milliseconds; undefined when unparseable. */
-function toEpochMs(value: Date | string | undefined): number | undefined {
+/** ISO string, Date, or numeric epoch -> epoch milliseconds; undefined when unparseable. */
+function toEpochMs(value: Date | string | number | undefined): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
   if (value instanceof Date) {
     const t = value.getTime();
     return Number.isFinite(t) ? t : undefined;

@@ -72,13 +72,16 @@ interface RawOtelSpan {
 
 /**
  * Convert epoch milliseconds to an OTel HrTime tuple [seconds, nanoseconds] (unambiguous across
- * OTel versions vs a bare number). Assumes a non-negative epoch — always true for persisted
- * `requestedAt`/`createdAt` anchors and `createdAt - durationMs` (durationMs << createdAt).
+ * OTel versions vs a bare number). Clamps negative epochs to zero — a negative epoch is never
+ * valid for persisted `requestedAt`/`createdAt` anchors, but guards against arithmetic underflow
+ * in derived timestamps (e.g. createdAt - durationMs when durationMs is unexpectedly large).
  */
 function epochMsToHrTime(epochMs: number): [number, number] {
-  const seconds = Math.trunc(epochMs / 1000);
-  const nanos = Math.round((epochMs - seconds * 1000) * 1e6);
-  return [seconds, nanos];
+  const ms = epochMs > 0 ? epochMs : 0; // a negative epoch is never valid
+  const seconds = Math.trunc(ms / 1000);
+  const nanos = Math.round((ms - seconds * 1000) * 1e6);
+  // a fractional ms can round nanos up to 1e9 -> carry into seconds
+  return nanos >= 1_000_000_000 ? [seconds + 1, nanos - 1_000_000_000] : [seconds, nanos];
 }
 
 /**
