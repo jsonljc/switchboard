@@ -83,6 +83,19 @@ describe("BusinessFactsPage", () => {
     expect(screen.getByTestId("operational-state-section").dataset.timezone).toBe("Asia/Singapore");
   });
 
+  it("renders a StatePanel error state when business facts query fails", () => {
+    useOrgDeploymentId.mockReturnValue({ deploymentId: "dep_1", isLoading: false, isError: false });
+    useBusinessFacts.mockReturnValue({ data: undefined, error: new Error("Network error") });
+    render(<BusinessFactsPage />);
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    // eyebrow "Couldn't load" and title both contain "couldn't load" — use getAllByText
+    expect(screen.getAllByText(/couldn't load/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/we couldn't load your business facts/i)).toBeInTheDocument();
+    // Old raw error text must NOT appear
+    expect(screen.queryByText(/failed to load business facts/i)).not.toBeInTheDocument();
+  });
+
   it("passes the saved org timezone to the operational-state section", () => {
     useOrgDeploymentId.mockReturnValue({ deploymentId: "dep_1", isLoading: false, isError: false });
     useBusinessFacts.mockReturnValue({

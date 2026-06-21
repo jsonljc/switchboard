@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
+import { StatePanel } from "@/components/query-states";
 import {
   OperationalStateValidationError,
   useOperationalState,
@@ -69,9 +70,13 @@ export function OperationalStateSection({ deploymentId, timezone }: OperationalS
           <CardTitle className="text-base">Operational state</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-destructive">
-            Failed to load operational state. Please refresh and try again.
-          </p>
+          <StatePanel
+            role="alert"
+            eyebrow="Couldn't load"
+            title="We couldn't load your operational state."
+            body="This is usually momentary. Try again in a moment."
+            onRetry={() => latest.refetch()}
+          />
         </CardContent>
       </Card>
     );

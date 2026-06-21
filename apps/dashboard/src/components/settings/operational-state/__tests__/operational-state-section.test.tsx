@@ -52,7 +52,12 @@ describe("OperationalStateSection", () => {
   it("renders a load failure honestly instead of an empty form", () => {
     useOperationalState.mockReturnValue({ data: undefined, error: new Error("boom") });
     mount();
-    expect(screen.getByText(/failed to load operational state/i)).toBeInTheDocument();
+    // StatePanel error: eyebrow + calm title; no raw destructive text
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    // eyebrow "Couldn't load" and title both contain "couldn't load" — use getAllByText
+    expect(screen.getAllByText(/couldn't load/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/we couldn't load your operational state/i)).toBeInTheDocument();
+    expect(screen.queryByText(/failed to load operational state/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /confirm operational state/i })).toBeNull();
   });
 

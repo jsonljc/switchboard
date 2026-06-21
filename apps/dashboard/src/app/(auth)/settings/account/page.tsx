@@ -18,14 +18,14 @@ import { signOut } from "@/lib/sign-out";
 import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle } from "lucide-react";
 import { PageTitle } from "@/components/layout/page-title";
+import { StatePanel } from "@/components/query-states";
 import { useState } from "react";
 
 export default function SettingsAccountPage() {
   const { status } = useSession();
   const queryClient = useQueryClient();
-  const { data, isLoading, isError, error, refetch } = useIdentity();
+  const { data, isLoading, isError, refetch } = useIdentity();
   const updateIdentity = useUpdateIdentity();
   const { data: orgData } = useOrgConfig();
   const updateOrgConfig = useUpdateOrgConfig();
@@ -96,16 +96,13 @@ export default function SettingsAccountPage() {
     return (
       <div className="space-y-6">
         <PageTitle eyebrow="Settings">Account</PageTitle>
-        <div className="rounded-lg border border-border bg-surface p-6">
-          <div className="flex items-center gap-2 text-destructive mb-2">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="font-medium">Failed to load settings</span>
-          </div>
-          <p className="text-[15px] text-muted-foreground mb-4">{(error as Error)?.message}</p>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            Retry
-          </Button>
-        </div>
+        <StatePanel
+          role="alert"
+          eyebrow="Couldn't load"
+          title="We couldn't load your account."
+          body="This is usually momentary. Try again in a moment."
+          onRetry={() => refetch()}
+        />
       </div>
     );
   }

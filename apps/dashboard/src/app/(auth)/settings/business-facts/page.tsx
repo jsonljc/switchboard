@@ -16,6 +16,7 @@ import {
 } from "@/hooks/use-business-facts";
 import type { BusinessFacts } from "@switchboard/schemas";
 import { PageTitle } from "@/components/layout/page-title";
+import { StatePanel } from "@/components/query-states";
 
 export default function BusinessFactsPage() {
   const { deploymentId, isLoading: depLoading } = useOrgDeploymentId();
@@ -70,9 +71,13 @@ export default function BusinessFactsPage() {
         >
           Business facts
         </PageTitle>
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Failed to load business facts. Please refresh and try again.
-        </div>
+        <StatePanel
+          role="alert"
+          eyebrow="Couldn't load"
+          title="We couldn't load your business facts."
+          body="This is usually momentary. Try again in a moment."
+          onRetry={() => facts.refetch()}
+        />
       </div>
     );
   }
