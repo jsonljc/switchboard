@@ -175,9 +175,12 @@ export class PrismaReceiptedBookingStore {
     const persistedExceptions: SerializedExceptionEntry[] = (persisted?.exceptions ??
       []) as unknown as SerializedExceptionEntry[];
     // Feed the real overriddenBy (was hardcoded null) so manual_override raises from the column.
-    // Keep duplicateContactRisk: false here: the sole source of duplicate_contact_risk on the
-    // read path is the persisted-array carry below; routing it through both evaluateExceptions and
-    // assembleViewExceptions would land the same code twice, breaking one-open-per-code.
+    // Keep duplicateContactRisk: false on the READ path. duplicate_contact_risk is array-sourced here
+    // (the persisted carry below, populated by write-side detection at issuance in
+    // issueReceiptedBookingInTx + operator flag_duplicate). Do NOT recompute it on read: a recomputable
+    // code wins in assembleViewExceptions and drops the persisted same-code entry, so a live re-detect
+    // would re-open an operator-RESOLVED duplicate on every read (resolve_exception would never stick)
+    // and add an N+1 probe across listForCohort.
     const pdpaJurisdiction = (contact?.pdpaJurisdiction ?? null) as PdpaJurisdiction | null;
     const recomputable = evaluateExceptions({
       attributionConfidence,

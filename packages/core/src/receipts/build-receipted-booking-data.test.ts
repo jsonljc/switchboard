@@ -97,4 +97,32 @@ describe("buildReceiptedBookingData", () => {
         .attributionConfidence,
     ).toBe("low");
   });
+
+  it("threads duplicateContactRisk into the exception set (NOT hardcoded false)", () => {
+    const data = buildReceiptedBookingData({
+      ...base,
+      evidence: { sourceAdId: "ad-9" }, // attributed -> no missing_source
+      consentGrantedAt: now,
+      consentRevokedAt: null,
+      estimatedValueCents: null,
+      duplicateContactRisk: true,
+    });
+    expect(data.exceptions.map((e) => e.code)).toContain("duplicate_contact_risk");
+  });
+
+  it("omits duplicate_contact_risk when the flag is false or absent (default)", () => {
+    const dataFalse = buildReceiptedBookingData({
+      ...base,
+      evidence: { sourceAdId: "ad-9" },
+      consentGrantedAt: now,
+      duplicateContactRisk: false,
+    });
+    const dataAbsent = buildReceiptedBookingData({
+      ...base,
+      evidence: { sourceAdId: "ad-9" },
+      consentGrantedAt: now,
+    });
+    expect(dataFalse.exceptions.map((e) => e.code)).not.toContain("duplicate_contact_risk");
+    expect(dataAbsent.exceptions.map((e) => e.code)).not.toContain("duplicate_contact_risk");
+  });
 });

@@ -39,6 +39,12 @@ export interface BuildReceiptedBookingArgs {
   /** Snapshot of Opportunity.estimatedValue in CENTS at issuance; null when no opportunity/estimate. */
   estimatedValueCents?: number | null;
   currency?: string | null;
+  /**
+   * True when another contact in the org shares this contact's non-null phoneE164 (identity ambiguity).
+   * The issuance caller computes it from a real org-scoped probe; the read path keeps it false and
+   * sources duplicate_contact_risk from the persisted carry, so an operator resolve stays durable.
+   */
+  duplicateContactRisk?: boolean;
   now: Date;
 }
 
@@ -69,7 +75,7 @@ export function buildReceiptedBookingData(
     consentGrantedAt: args.consentGrantedAt ?? null,
     consentRevokedAt: args.consentRevokedAt ?? null,
     overriddenBy: null,
-    duplicateContactRisk: false,
+    duplicateContactRisk: args.duplicateContactRisk ?? false,
     now: args.now,
   }).map((e) => ({
     code: e.code,

@@ -22,12 +22,14 @@ export interface ReceiptedBookingIssuanceTx {
   };
   contact: {
     findFirst(args: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<{
+      id?: string | null;
       leadgenId?: string | null;
       sourceType?: string | null;
       firstTouchChannel?: string | null;
       pdpaJurisdiction?: string | null;
       consentGrantedAt?: Date | null;
       consentRevokedAt?: Date | null;
+      phoneE164?: string | null;
     } | null>;
   };
 }
@@ -86,8 +88,31 @@ export async function issueReceiptedBookingInTx(
       pdpaJurisdiction: true,
       consentGrantedAt: true,
       consentRevokedAt: true,
+      phoneE164: true,
     },
   });
+
+  // Write-side duplicate-contact detection (issuance-time, once per booking). The flag is persisted
+  // into the issuance row's exceptions array, carried forward on the read path (assembleViewExceptions),
+  // and durably resolvable via resolve_exception. It MUST be detected here, not recomputed in getView:
+  // a read-side recompute would re-open an operator-RESOLVED duplicate on every read (a recomputable
+  // code wins and drops the persisted resolved entry) and add an N+1 probe across listForCohort.
+  // Match key = the canonical phoneE164 column (exact equality), org-scoped, excluding self; a
+  // null/empty/whitespace key carries no dedup identity, so the probe is skipped and risk stays false.
+  const rawPhoneE164 = evidenceContact?.phoneE164 ?? null;
+  let duplicateContactRisk = false;
+  if (rawPhoneE164 && rawPhoneE164.trim().length > 0) {
+    const otherWithSamePhone = await tx.contact.findFirst({
+      where: {
+        organizationId: args.organizationId,
+        phoneE164: rawPhoneE164,
+        id: { not: args.contactId },
+      },
+      select: { id: true },
+    });
+    duplicateContactRisk = otherWithSamePhone !== null;
+  }
+
   const data = buildReceiptedBookingData({
     organizationId: args.organizationId,
     bookingId: args.bookingId,
@@ -103,6 +128,7 @@ export async function issueReceiptedBookingInTx(
     consentRevokedAt: evidenceContact?.consentRevokedAt ?? null,
     estimatedValueCents: args.estimatedValueCents,
     currency: args.currency,
+    duplicateContactRisk,
     now: args.now,
   });
   try {
