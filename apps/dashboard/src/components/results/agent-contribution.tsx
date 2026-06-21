@@ -1,4 +1,4 @@
-import { fmtSGD } from "@/app/(auth)/(mercury)/reports/components/format";
+import { fmtSGD } from "@/components/reports-shared/format";
 import type { AgentKey } from "@switchboard/schemas";
 import type { AttributionData } from "./types";
 import css from "./results.module.css";

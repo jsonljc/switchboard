@@ -5,7 +5,7 @@ import type {
   ManagedComparisonSource,
 } from "@switchboard/schemas";
 import styles from "../reports.module.css";
-import { fmtSGD, fmtInt, fmtPct } from "./format";
+import { fmtSGD, fmtInt, fmtPct } from "@/components/reports-shared/format";
 
 function sourceCaption(s: ManagedComparisonSource): string {
   return s === "in-period-cohort"

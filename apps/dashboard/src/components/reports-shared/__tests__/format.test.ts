@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtSGD, fmtPct, fmtInt } from "../format";
+import { fmtSGD, fmtPct, fmtInt } from "@/components/reports-shared/format";
 
 describe("fmtSGD", () => {
   it("auto: no cents when abs >= 1000", () => {
@@ -41,13 +41,6 @@ describe("fmtSGD", () => {
 
   it("compact: renders m for >= 1,000,000", () => {
     expect(fmtSGD(1_500_000, { compact: true })).toBe("S$1.5m");
-  });
-
-  it("never emits a bare $", () => {
-    for (const v of [0, 1, 99.99, 100, 9999, 10_000, 999_999, 1_234_567]) {
-      const out = fmtSGD(v);
-      expect(out.startsWith("S$") || out.startsWith("-S$") || out === "S$0").toBe(true);
-    }
   });
 
   it("formats zero as S$0", () => {

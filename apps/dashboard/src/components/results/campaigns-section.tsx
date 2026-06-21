@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { fmtSGD, fmtInt, fmtPct } from "@/app/(auth)/(mercury)/reports/components/format";
+import { fmtSGD, fmtInt, fmtPct } from "@/components/reports-shared/format";
 import { fmtRatio } from "./results-model";
 import type { CampaignRow } from "./types";
 import styles from "./results.module.css";

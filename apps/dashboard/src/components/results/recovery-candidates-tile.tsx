@@ -1,5 +1,5 @@
 import type { ResultsModel } from "./results-model";
-import { fmtInt } from "@/app/(auth)/(mercury)/reports/components/format";
+import { fmtInt } from "@/components/reports-shared/format";
 import styles from "./results.module.css";
 
 /** No-show recovery candidates: count of appointments recorded as no-show in this window.

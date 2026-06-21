@@ -1,6 +1,6 @@
 import type { ResultsModel } from "./results-model";
 import type { AttributionConfidence, ExceptionCode } from "./types";
-import { fmtInt } from "@/app/(auth)/(mercury)/reports/components/format";
+import { fmtInt } from "@/components/reports-shared/format";
 import { ReconcileRowAction } from "./reconcile-row-action";
 import styles from "./results.module.css";
 

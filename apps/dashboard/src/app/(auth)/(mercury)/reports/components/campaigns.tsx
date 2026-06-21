@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import type { CampaignRow } from "@switchboard/schemas";
 import styles from "../reports.module.css";
-import { fmtSGD, fmtPct, fmtInt } from "./format";
+import { fmtSGD, fmtPct, fmtInt } from "@/components/reports-shared/format";
 
 type SortDir = "asc" | "desc";
 

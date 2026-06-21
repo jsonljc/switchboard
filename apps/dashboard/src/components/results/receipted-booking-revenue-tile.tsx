@@ -1,5 +1,5 @@
 import type { ResultsModel } from "./results-model";
-import { fmtSGD, fmtInt } from "@/app/(auth)/(mercury)/reports/components/format";
+import { fmtSGD, fmtInt } from "@/components/reports-shared/format";
 import styles from "./results.module.css";
 
 /** Weekly receipted-booking REVENUE. Two dimensions over one cohort: the headline is PROVEN PAID
