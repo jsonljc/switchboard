@@ -11,4 +11,10 @@ describe("confidenceChip", () => {
     expect(confidenceChip(undefined)).toBeNull();
     expect(confidenceChip(Number.NaN)).toBeNull();
   });
+  it("respects exact band boundaries", () => {
+    expect(confidenceChip(0.8)).toMatchObject({ label: "High confidence" });
+    expect(confidenceChip(0.79)).toMatchObject({ label: "Medium confidence" });
+    expect(confidenceChip(0.5)).toMatchObject({ label: "Medium confidence" });
+    expect(confidenceChip(0.49)).toMatchObject({ label: "Low confidence" });
+  });
 });
