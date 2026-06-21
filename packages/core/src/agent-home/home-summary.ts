@@ -51,7 +51,10 @@ export async function buildHomeSummary(input: BuildHomeSummaryInput): Promise<Ho
             ...(valuePrev > 0 ? { comparator: { window: "week" as const, value: valuePrev } } : {}),
             freshness,
           }
-        : { state: "empty", reason: "no_current_week_bookings" },
+        : {
+            state: "empty",
+            reason: countThis > 0 ? "booked_value_pending" : "no_current_week_bookings",
+          },
     bookings:
       countThis > 0
         ? {

@@ -34,6 +34,15 @@ describe("HomeSummarySchema", () => {
     ).toBe(true);
   });
 
+  it("parses empty value tile with reason booked_value_pending (bookings exist, value unsettled)", () => {
+    expect(
+      HomeSummarySchema.safeParse({
+        ...ready,
+        attributedValueCents: { state: "empty", reason: "booked_value_pending" },
+      }).success,
+    ).toBe(true);
+  });
+
   it("rejects a fractional (dollar-valued) cents field (cents-guard)", () => {
     expect(
       HomeSummarySchema.safeParse({

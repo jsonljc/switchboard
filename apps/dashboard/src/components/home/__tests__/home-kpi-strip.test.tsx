@@ -68,6 +68,31 @@ describe("HomeKpiStrip", () => {
     expect(screen.queryByText(/S\$0/)).toBeNull();
   });
 
+  it("renders booked-value-pending copy when bookings exist but value has not settled", () => {
+    summary.mockReturnValue({
+      data: {
+        attributedValueCents: { state: "empty", reason: "booked_value_pending" },
+        bookings: { state: "ready", value: 5, freshness },
+        currency: "SGD",
+        generatedAt: freshness.generatedAt,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    decisions.mockReturnValue({
+      data: { counts: { approval: 0 } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+
+    render(<HomeKpiStrip />);
+    expect(screen.getByText(/Booked value still settling/)).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.queryByText(/No attributed bookings yet/)).toBeNull();
+  });
+
   it("renders the honest unavailable state for bookings tile when store is down", () => {
     summary.mockReturnValue({
       data: {

@@ -81,8 +81,9 @@ function ValueTile({ metric }: { metric: HomeSummaryCentsMetric }) {
         </>
       ) : metric.state === "empty" ? (
         <span className={styles.empty}>
-          No attributed bookings yet this week. When an agent creates one, its booked value will
-          appear here.
+          {metric.reason === "booked_value_pending"
+            ? "Booked value still settling. It appears here once your bookings confirm."
+            : "No attributed bookings yet this week. When an agent creates one, its booked value will appear here."}
         </span>
       ) : (
         <span className={styles.empty}>Not available right now.</span>

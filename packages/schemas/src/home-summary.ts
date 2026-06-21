@@ -20,7 +20,7 @@ function homeSummaryMetric<T extends z.ZodTypeAny>(value: T) {
     }),
     z.object({
       state: z.literal("empty"),
-      reason: z.enum(["no_current_week_bookings", "no_prior_week_baseline"]),
+      reason: z.enum(["no_current_week_bookings", "booked_value_pending"]),
     }),
     z.object({ state: z.literal("unavailable"), reason: z.string() }),
   ]);

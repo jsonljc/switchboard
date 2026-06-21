@@ -56,6 +56,20 @@ describe("buildHomeSummary", () => {
     if (s.bookings.state === "empty") expect(s.bookings.reason).toBe("no_current_week_bookings");
   });
 
+  it("reports booked_value_pending when bookings exist but value is zero (async settling)", async () => {
+    const s = await buildHomeSummary({
+      orgId: "org_1",
+      now: NOW,
+      timezone: TZ,
+      signals: signals({ valueThis: 0, countThis: 5 }),
+    });
+    expect(s.attributedValueCents.state).toBe("empty");
+    if (s.attributedValueCents.state === "empty")
+      expect(s.attributedValueCents.reason).toBe("booked_value_pending");
+    expect(s.bookings.state).toBe("ready");
+    if (s.bookings.state === "ready") expect(s.bookings.value).toBe(5);
+  });
+
   it("omits the comparator (no +inf) when there is no prior-week baseline", async () => {
     const s = await buildHomeSummary({
       orgId: "org_1",
