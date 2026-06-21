@@ -33,10 +33,10 @@ import { CreateTemplateDialog } from "./whatsapp-template-create";
 
 function QualityDot({ badge }: { badge: WhatsAppPhoneNumber["qualityBadge"] }) {
   const color: Record<string, string> = {
-    good: "bg-green-500",
-    warning: "bg-yellow-500",
-    bad: "bg-red-500",
-    unknown: "bg-gray-400",
+    good: "bg-positive",
+    warning: "bg-caution",
+    bad: "bg-negative",
+    unknown: "bg-muted-foreground",
   };
   return (
     <span
@@ -50,7 +50,7 @@ function CategoryBadge({ category }: { category: string }) {
   const colors: Record<string, string> = {
     MARKETING: "bg-purple-100 text-purple-800 border-purple-200",
     UTILITY: "bg-blue-100 text-blue-800 border-blue-200",
-    AUTHENTICATION: "bg-amber-100 text-amber-800 border-amber-200",
+    AUTHENTICATION: "bg-caution-subtle text-foreground border-caution/30",
   };
   return (
     <Badge variant="outline" className={colors[category] ?? "bg-gray-100 text-gray-800"}>
@@ -122,8 +122,8 @@ function ReadinessBanner({ readiness }: { readiness: WhatsAppAccountData["readin
 
   if (readiness.status === "ready") {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-        <CheckCircle2 className="h-4 w-4 shrink-0" />
+      <div className="flex items-center gap-2 rounded-lg border border-positive/20 bg-positive-subtle px-4 py-3 text-sm text-foreground">
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-positive" />
         <span className="font-medium">Ready to send</span>
       </div>
     );
@@ -131,9 +131,9 @@ function ReadinessBanner({ readiness }: { readiness: WhatsAppAccountData["readin
 
   if (readiness.status === "needs_attention") {
     return (
-      <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+      <div className="rounded-lg border border-caution/20 bg-caution-subtle px-4 py-3 text-sm text-foreground">
         <div className="flex items-center gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
+          <AlertCircle className="h-4 w-4 shrink-0 text-caution" />
           <span className="font-medium">
             Needs attention &mdash; {readiness.reasons[0] ?? "Review required"}
           </span>
@@ -168,8 +168,8 @@ function ReadinessBanner({ readiness }: { readiness: WhatsAppAccountData["readin
 
   if (readiness.status === "incomplete") {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
-        <AlertCircle className="h-4 w-4 shrink-0" />
+      <div className="flex items-center gap-2 rounded-lg border border-caution/20 bg-caution-subtle px-4 py-3 text-sm text-foreground">
+        <AlertCircle className="h-4 w-4 shrink-0 text-caution" />
         <span className="font-medium">
           Setup incomplete &mdash; {readiness.reasons[0] ?? "Configuration missing"}. Reconnect via
           Embedded Signup.
@@ -311,7 +311,7 @@ function PhoneNumbersSection({
                     </td>
                     <td className="py-2">
                       {p.isPrimaryForSwitchboard && (
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <CheckCircle2 className="h-4 w-4 text-positive" />
                       )}
                     </td>
                   </tr>

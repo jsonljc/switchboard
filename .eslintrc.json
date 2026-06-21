@@ -276,6 +276,10 @@
           {
             "selector": "MemberExpression[computed=true][object.object.name='process'][object.property.name='env']",
             "message": "Do not read process.env with a dynamic/computed key in the dashboard. Next.js only inlines NEXT_PUBLIC_* via static literal access (process.env.NEXT_PUBLIC_X), so a bracket read is permanently undefined in the browser (F9 / F-20). Use a static switch over literal process.env.NEXT_PUBLIC_* reads."
+          },
+          {
+            "selector": "Literal[value=/-(?:amber|yellow)-[0-9]/]",
+            "message": "Use the semantic status tokens (caution / agent-attention / positive, e.g. bg-caution, text-caution, bg-caution-subtle) instead of raw Tailwind amber/yellow in the authed dashboard (audit M2). CI-enforced by scripts/check-no-raw-status-colors.ts; the dev-only DevPanel and landing/v6 keep their own palettes."
           }
         ]
       }

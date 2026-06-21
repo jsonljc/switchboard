@@ -220,13 +220,13 @@ export function ConnectionsList() {
                     <div className="flex items-center gap-1 text-xs">
                       {testResult[conn.id]!.healthy ? (
                         <>
-                          <CheckCircle className="h-3 w-3 text-green-500" />
-                          <span className="text-green-600">Healthy</span>
+                          <CheckCircle className="h-3 w-3 text-positive" />
+                          <span className="text-positive">Healthy</span>
                         </>
                       ) : (
                         <>
-                          <XCircle className="h-3 w-3 text-red-500" />
-                          <span className="text-red-600">
+                          <XCircle className="h-3 w-3 text-destructive" />
+                          <span className="text-destructive">
                             {testResult[conn.id]!.detail || "Unhealthy"}
                           </span>
                         </>

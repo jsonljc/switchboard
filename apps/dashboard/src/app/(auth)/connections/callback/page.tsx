@@ -41,12 +41,12 @@ export function ConnectionCallback() {
           <CardTitle className="flex items-center gap-2">
             {connected ? (
               <>
-                <CheckCircle className="h-5 w-5 text-green-600" />
+                <CheckCircle className="h-5 w-5 text-positive" />
                 Connected
               </>
             ) : (
               <>
-                <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                <AlertTriangle className="h-5 w-5 text-caution" />
                 Connection not confirmed
               </>
             )}

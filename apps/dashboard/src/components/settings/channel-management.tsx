@@ -190,10 +190,10 @@ export function ChannelManagement() {
                     <span
                       className={`inline-block h-2 w-2 rounded-full ${
                         {
-                          good: "bg-green-500",
-                          warning: "bg-yellow-500",
-                          bad: "bg-red-500",
-                          unknown: "bg-gray-400",
+                          good: "bg-positive",
+                          warning: "bg-caution",
+                          bad: "bg-negative",
+                          unknown: "bg-muted-foreground",
                         }[primaryQuality]
                       }`}
                       title={`Quality: ${primaryQuality}`}

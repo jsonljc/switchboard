@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable no-restricted-syntax -- DevPanel is dev-only chrome (gated to the dev-user) and intentionally uses raw yellow so it reads unmistakably as a dev tool; the authed status-color token rule (audit M2) does not apply here. It performs no dynamic process.env reads, so disabling the rule file-wide is safe. */
+
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
