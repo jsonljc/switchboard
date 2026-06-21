@@ -92,7 +92,7 @@ export function AgentPanel({
       <SheetContent side={isDesktop ? "right" : "bottom"} className={styles.panel}>
         <SheetHeader>
           <SheetTitle className={styles.idRow}>
-            <InboxAgentAvatar agentKey={agentKey} size={44} />
+            <InboxAgentAvatar agentKey={agentKey} size={56} />
             <span className={styles.agentName}>{display.name}</span>
             <span className={styles.role}>{display.role}</span>
           </SheetTitle>

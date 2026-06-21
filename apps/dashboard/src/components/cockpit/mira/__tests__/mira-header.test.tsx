@@ -14,6 +14,12 @@ describe("MiraHeader", () => {
     expect(screen.getByText("Mira")).toBeInTheDocument();
   });
 
+  it("sizes the identity avatar to a clean 2x chip (56px)", () => {
+    const { container } = render(<MiraHeader halted={false} subtitle="sub" line={null} />);
+    const avatar = container.querySelector('[data-agent="mira"]') as HTMLElement;
+    expect(avatar.style.width).toBe("56px");
+  });
+
   it("drives the draft sprite state from working status", () => {
     const { container } = render(
       <MiraHeader status="working" halted={false} subtitle="sub" line={null} />,

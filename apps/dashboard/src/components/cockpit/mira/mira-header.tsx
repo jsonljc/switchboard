@@ -42,7 +42,7 @@ export function MiraHeader({
 
   return (
     <div className={styles.header}>
-      <PrintedPortraitAvatar agentKey="mira" size={44} status={status} halted={halted} />
+      <PrintedPortraitAvatar agentKey="mira" size={56} status={status} halted={halted} />
       <div className={styles.text}>
         <h1 className={styles.name}>Mira</h1>
         <div className={styles.subtitle}>
