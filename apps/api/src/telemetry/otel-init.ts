@@ -62,7 +62,11 @@ export async function initTelemetry(): Promise<void> {
 
     // Wire OTel tracer into Switchboard's tracing abstraction
     const otelTracer = otelApi.trace.getTracer("switchboard-api");
-    setTracer(createOTelTracer(otelTracer));
+    const contextBridge = {
+      active: () => otelApi.context.active(),
+      with: (ctx: unknown, span: unknown) => otelApi.trace.setSpan(ctx, span),
+    };
+    setTracer(createOTelTracer(otelTracer, contextBridge));
 
     // Graceful shutdown
     process.on("SIGTERM", () => {
