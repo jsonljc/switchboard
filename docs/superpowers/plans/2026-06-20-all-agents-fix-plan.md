@@ -105,7 +105,7 @@ constraints by its own judgment. Workstream tag selects the memory hub + the CI 
 Maps. "Brainstorm" = whether FRAME needs a focused `superpowers:brainstorming` pass (most slices
 design against named existing files and skip it).
 
-### A1 - Multi-tenant WhatsApp send identity (P1, rank 1) [ ]
+### A1 - Multi-tenant WhatsApp send identity (P1, rank 1) [x] (merged 2026-06-21, PR #1208)
 - Workstream: launch. Merge-stop: external send + credentials. Brainstorm: light (cred storage +
   cache strategy). Model: opus (multi-tenant isolation).
 - Findings: all four proactive send sites read a single global env phone-number-id + token. Current:
@@ -124,7 +124,7 @@ design against named existing files and skip it).
   all four sends resolve per-org creds; single-tenant pilot unaffected via global fallback;
   `--filter api test` green.
 
-### A2 - CTWA lead attribution to the Alex AgentDeployment id (P1, rank 4) [ ]
+### A2 - CTWA lead attribution to the Alex AgentDeployment id (P1, rank 4) [x] (merged 2026-06-21, PR #1210)
 - Workstream: launch/alex. Merge-stop: lead-intake (review). Brainstorm: no. Model: opus.
 - Finding (narrowed to ActivityLog): `managed-webhook.ts:161` passes
   `deploymentId: gatewayEntry.deploymentConnectionId` into the CTWA lead.intake -> `ctwa-adapter.ts:71`
