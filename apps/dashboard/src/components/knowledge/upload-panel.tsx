@@ -9,6 +9,8 @@ import {
   useUploadKnowledge,
   useDeleteDocument,
 } from "@/hooks/use-knowledge";
+import { Skeleton } from "@/components/query-states/skeleton";
+import { StatePanel } from "@/components/query-states/state-panel";
 
 interface UploadPanelProps {
   agentId?: string;
@@ -127,7 +129,18 @@ export function UploadPanel({ agentId }: UploadPanelProps) {
         </div>
       </div>
 
-      {isLoading && <div className="text-[14px] text-muted-foreground">Loading documents...</div>}
+      {isLoading && (
+        <div
+          data-testid="upload-panel-loading"
+          className="space-y-3"
+          role="status"
+          aria-label="Loading documents"
+        >
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-14 rounded-lg" />
+          <Skeleton className="h-14 rounded-lg" />
+        </div>
+      )}
 
       {!isLoading && documents.length > 0 && (
         <div className="space-y-3">
@@ -161,9 +174,11 @@ export function UploadPanel({ agentId }: UploadPanelProps) {
       )}
 
       {!isLoading && documents.length === 0 && (
-        <div className="text-[14px] text-muted-foreground text-center py-8">
-          No documents uploaded yet
-        </div>
+        <StatePanel
+          role="status"
+          title="No documents yet"
+          body="Upload a text or markdown file to give your agents contextual knowledge to draw from."
+        />
       )}
     </div>
   );
