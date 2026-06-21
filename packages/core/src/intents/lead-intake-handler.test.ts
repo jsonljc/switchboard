@@ -21,6 +21,7 @@ describe("LeadIntakeHandler", () => {
     upsertContact: ReturnType<typeof vi.fn>;
     createActivity: ReturnType<typeof vi.fn>;
     findContactByIdempotency: ReturnType<typeof vi.fn>;
+    findByPhoneOrEmail: ReturnType<typeof vi.fn>;
   };
   let handler: LeadIntakeHandler;
 
@@ -29,6 +30,8 @@ describe("LeadIntakeHandler", () => {
       upsertContact: vi.fn().mockResolvedValue({ id: "contact_1" }),
       createActivity: vi.fn().mockResolvedValue({ id: "act_1" }),
       findContactByIdempotency: vi.fn().mockResolvedValue(null),
+      // Default: no identity match -> create path (existing tests unchanged). Matcher cases set this per-test.
+      findByPhoneOrEmail: vi.fn().mockResolvedValue([]),
     };
     handler = new LeadIntakeHandler({ store });
   });

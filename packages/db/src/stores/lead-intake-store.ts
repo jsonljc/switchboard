@@ -7,6 +7,7 @@ interface UpsertContactInput {
   deploymentId: string;
   phone?: string;
   email?: string;
+  name?: string | null;
   channel?: string;
   sourceType: string;
   sourceAdId?: string;
@@ -16,6 +17,7 @@ interface UpsertContactInput {
   idempotencyKey: string;
   messagingOptIn?: boolean;
   messagingOptInSource?: "ctwa" | "organic_inbound" | "web_form" | "manual";
+  duplicateContactRisk?: boolean;
 }
 
 interface CreateActivityInput {
@@ -67,6 +69,31 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
     return row ? { id: row.id } : null;
   }
 
+  async findByPhoneOrEmail(input: {
+    organizationId: string;
+    phoneE164: string | null;
+    email: string | null;
+  }): Promise<
+    Array<{ id: string; name: string | null; phoneE164: string | null; email: string | null }>
+  > {
+    const or: Array<Record<string, unknown>> = [];
+    if (input.phoneE164) or.push({ phoneE164: input.phoneE164 });
+    if (input.email) or.push({ email: input.email });
+    // No identifier to match on (e.g. an un-normalizable phone with no email): create-path only.
+    if (or.length === 0) return [];
+    const rows = await this.prisma.contact.findMany({
+      where: { organizationId: input.organizationId, OR: or },
+      select: { id: true, name: true, phoneE164: true, email: true },
+      take: 2,
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name ?? null,
+      phoneE164: r.phoneE164 ?? null,
+      email: r.email ?? null,
+    }));
+  }
+
   async upsertContact(input: UpsertContactInput): Promise<{ id: string }> {
     const primaryChannel = input.channel ?? "whatsapp";
     const now = new Date();
@@ -85,6 +112,7 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
         phone: input.phone ?? null,
         phoneE164,
         email: input.email ?? null,
+        name: input.name ?? null,
         primaryChannel,
         firstTouchChannel: primaryChannel,
         sourceType: input.sourceType,
@@ -94,6 +122,7 @@ export class PrismaLeadIntakeStore implements LeadIntakeStore {
         messagingOptIn,
         messagingOptInAt: messagingOptIn ? now : null,
         messagingOptInSource: input.messagingOptInSource ?? null,
+        duplicateContactRisk: input.duplicateContactRisk ?? false,
         firstContactAt: now,
         lastActivityAt: now,
       },

@@ -3,6 +3,19 @@ import type { LeadIntake } from "@switchboard/schemas";
 export interface LeadIntakeStore {
   findContactByIdempotency(organizationId: string, key: string): Promise<{ id: string } | null>;
   /**
+   * Candidate lookup for the intake identity matcher (A4). Org-scoped; matches contacts whose
+   * normalized phoneE164 equals `phoneE164` OR whose email equals `email`. Caller passes normalized
+   * values (E.164 phone, lowercased email); a null branch is skipped; both null -> []. Returns up to
+   * 2 rows — the matcher only branches on 0 / exactly-1 / >1, so 2 is sufficient to flag ambiguity.
+   */
+  findByPhoneOrEmail(input: {
+    organizationId: string;
+    phoneE164: string | null;
+    email: string | null;
+  }): Promise<
+    Array<{ id: string; name: string | null; phoneE164: string | null; email: string | null }>
+  >;
+  /**
    * MUST be atomic/upsert on `idempotencyKey` to close the TOCTOU window between
    * `findContactByIdempotency` and this call. Implementations should back this
    * with a unique constraint on `(organizationId, idempotencyKey)` at the DB layer.
@@ -12,6 +25,7 @@ export interface LeadIntakeStore {
     deploymentId: string;
     phone?: string;
     email?: string;
+    name?: string | null;
     channel?: string;
     sourceType: string;
     sourceAdId?: string;
@@ -21,6 +35,7 @@ export interface LeadIntakeStore {
     idempotencyKey: string;
     messagingOptIn?: boolean;
     messagingOptInSource?: "ctwa" | "organic_inbound" | "web_form" | "manual";
+    duplicateContactRisk?: boolean;
   }): Promise<{ id: string }>;
   createActivity(input: {
     contactId: string;
