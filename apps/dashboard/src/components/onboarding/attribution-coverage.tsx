@@ -33,10 +33,10 @@ const TRACKING_COPY: Record<AttributionTracking, string> = {
 };
 
 const TRACKING_PILL: Record<AttributionTracking, string> = {
-  verified: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  no_recent_traffic: "bg-amber-100 text-amber-800 border-amber-200",
+  verified: "bg-positive-subtle text-foreground border-positive/30",
+  no_recent_traffic: "bg-caution-subtle text-foreground border-caution/30",
   v2_pending: "bg-muted text-muted-foreground border-border",
-  missing_webhook: "bg-red-100 text-red-800 border-red-200",
+  missing_webhook: "bg-destructive/10 text-foreground border-destructive/30",
 };
 
 const SOURCE_ORDER: AttributionSourceKey[] = ["ctwa", "instant_form", "web"];

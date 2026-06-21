@@ -64,7 +64,7 @@ function AdvisoryCheckRow({ check }: { check: ReadinessCheck }) {
         {check.status === "pass" ? (
           <CheckCircle2 className="h-4 w-4 text-green-500" />
         ) : (
-          <AlertCircle className="h-4 w-4 text-amber-500" />
+          <AlertCircle className="h-4 w-4 text-caution" />
         )}
         <span>{check.label}</span>
       </div>

@@ -6,10 +6,11 @@
  *   1. env-completeness         (scripts/check-env-completeness.ts)
  *   2. live-flag manifest       (scripts/check-live-flag-manifest.ts)
  *   3. no-dynamic-public-env    (scripts/check-no-dynamic-public-env.ts)
- *   4. arch:check               (pnpm arch:check)
- *   5. route-ingress check      (.agent/tools/check-routes)
- *   6. seed-count check         (scripts/check-seed-counts.ts — fails if no DB; --strict-db locally)
- *   7. dashboard typecheck      (local-only; CI's typecheck job already covers it)
+ *   4. no-raw-status-colors     (scripts/check-no-raw-status-colors.ts)
+ *   5. arch:check               (pnpm arch:check)
+ *   6. route-ingress check      (.agent/tools/check-routes)
+ *   7. seed-count check         (scripts/check-seed-counts.ts, fails if no DB; --strict-db locally)
+ *   8. dashboard typecheck      (local-only; CI's typecheck job already covers it)
  *
  * Locally requires DATABASE_URL + reachable Postgres for step 6; step 7
  * requires `packages/{schemas,db,core}/dist` to exist (run `pnpm build` once
@@ -45,6 +46,11 @@ const STEPS: Step[] = [
     name: "no-dynamic-public-env",
     cmd: "pnpm",
     args: ["exec", "tsx", "scripts/check-no-dynamic-public-env.ts"],
+  },
+  {
+    name: "no-raw-status-colors",
+    cmd: "pnpm",
+    args: ["exec", "tsx", "scripts/check-no-raw-status-colors.ts"],
   },
   { name: "arch:check", cmd: "pnpm", args: ["arch:check"] },
   { name: "route-ingress", cmd: "bash", args: [".agent/tools/check-routes"] },

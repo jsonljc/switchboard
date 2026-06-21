@@ -14,11 +14,11 @@ const iconMap = {
 };
 
 const iconColorMap = {
-  success: "text-green-500",
+  success: "text-positive",
   denied: "text-destructive",
-  pending: "text-yellow-500",
+  pending: "text-caution",
   info: "text-blue-500",
-  warning: "text-orange-500",
+  warning: "text-caution",
 };
 
 interface ActivityItemProps {
@@ -57,7 +57,11 @@ export function ActivityItem({ entry, onClick }: ActivityItemProps) {
           </span>
           {entry.riskCategory !== "none" && entry.riskCategory !== "low" && (
             <Badge
-              variant={entry.riskCategory === "critical" || entry.riskCategory === "high" ? "destructive" : "secondary"}
+              variant={
+                entry.riskCategory === "critical" || entry.riskCategory === "high"
+                  ? "destructive"
+                  : "secondary"
+              }
               className="text-[10px] px-1.5 py-0"
             >
               {entry.riskCategory}

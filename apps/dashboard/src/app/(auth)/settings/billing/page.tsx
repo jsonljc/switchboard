@@ -183,7 +183,7 @@ export default function BillingPage() {
                     </p>
                   )}
                   {billing.cancelAtPeriodEnd && (
-                    <p className="text-amber-500">
+                    <p className="inline-block rounded bg-caution-subtle px-2 py-1 text-foreground">
                       Subscription will cancel at end of billing period
                     </p>
                   )}

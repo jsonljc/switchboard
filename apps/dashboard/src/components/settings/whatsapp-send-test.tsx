@@ -135,8 +135,8 @@ export function WhatsAppSendTest({ phoneNumbers, templates, allowedRecipients }:
         </div>
 
         {allowedRecipients.length === 0 && (
-          <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            <AlertCircle className="h-4 w-4" />
+          <div className="flex items-center gap-2 rounded-md border border-caution/20 bg-caution-subtle px-3 py-2 text-sm text-foreground">
+            <AlertCircle className="h-4 w-4 text-caution" />
             Add a test recipient to this channel before send-test can be used.
           </div>
         )}
@@ -155,14 +155,14 @@ export function WhatsAppSendTest({ phoneNumbers, templates, allowedRecipients }:
         </div>
 
         {send.data && (
-          <div className="flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
-            <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-600" />
+          <div className="flex items-start gap-2 rounded-md border border-positive/20 bg-positive-subtle px-3 py-2 text-sm text-foreground">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 text-positive" />
             <div className="space-y-0.5">
               <div>Accepted by WhatsApp.</div>
-              <div className="font-mono text-xs text-green-800">
+              <div className="font-mono text-xs text-foreground">
                 messageId: {send.data.messageId}
               </div>
-              <div className="text-xs text-green-700">
+              <div className="text-xs text-muted-foreground">
                 Sent at {new Date(send.data.sentAt).toLocaleString()}
               </div>
             </div>
