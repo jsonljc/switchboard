@@ -34,4 +34,12 @@ describe("agent panel hero-stat hierarchy (PL-9)", () => {
   it("gives the hero a stat-zone header rule so the figure never floats alone", () => {
     expect(block("heroEyebrow")).toMatch(/border-bottom:\s*1px solid var\(--hair-soft\)/);
   });
+
+  it("flattens the empty-state lines too, so an empty slot never out-elevates a full one", () => {
+    // existence guard first (block() returns "" for a vanished selector)
+    expect(block("decisionEmptyLine")).toMatch(/border:\s*1px solid var\(--hair-soft\)/);
+    expect(block("logEmptyLine")).toMatch(/border:\s*1px solid var\(--hair-soft\)/);
+    expect(block("decisionEmptyLine")).not.toMatch(/box-shadow:\s*var\(--shadow-card\)/);
+    expect(block("logEmptyLine")).not.toMatch(/box-shadow:\s*var\(--shadow-card\)/);
+  });
 });

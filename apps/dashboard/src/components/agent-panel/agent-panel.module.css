@@ -589,7 +589,8 @@
   height: 12px;
 }
 
-/* Empty / error state: serif line */
+/* Empty / error state: serif line. Flat (no shadow) to match the flattened
+   populated list, so an empty slot never reads as more elevated than a full one. */
 .decisionEmptyLine {
   font-family: var(--font-home-serif);
   font-variation-settings: "opsz" 18;
@@ -599,7 +600,6 @@
   background: var(--surface);
   border: 1px solid var(--hair-soft);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
   margin: 0;
 }
 
@@ -730,7 +730,7 @@
   border-radius: 2px;
 }
 
-/* Empty / error state: serif line (mirrors .decisionEmptyLine) */
+/* Empty / error state: serif line (mirrors .decisionEmptyLine) — flat, no shadow. */
 .logEmptyLine {
   font-family: var(--font-home-serif);
   font-variation-settings: "opsz" 18;
@@ -740,7 +740,6 @@
   background: var(--surface);
   border: 1px solid var(--hair-soft);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
   margin: 0;
 }
 
