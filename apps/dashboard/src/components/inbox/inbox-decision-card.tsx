@@ -3,6 +3,7 @@
 import type { KeyboardEvent } from "react";
 import { AGENT_REGISTRY, type AgentKey } from "@switchboard/schemas";
 import type { Decision } from "@/lib/decisions/types";
+import { formatMoney } from "@/lib/money";
 import "./inbox-decision-card.css";
 import { canSwipeApprove } from "@/lib/decisions/swipe-policy";
 import { dueIn, relativeTime } from "@/lib/decisions/time";
@@ -192,6 +193,10 @@ export function InboxDecisionCard({
           {decision.meta.contactName && (
             <span className="decision-contact-quiet">{decision.meta.contactName}</span>
           )}
+          {Number.isFinite(decision.meta.dollarsAtRisk) &&
+            (decision.meta.dollarsAtRisk ?? 0) > 0 && (
+              <span className="decision-stake">{formatMoney(decision.meta.dollarsAtRisk!)}</span>
+            )}
           <span className="decision-foot-spacer" />
           {swipeApproves ? (
             <span className="decision-foot-affordance">Swipe →</span>

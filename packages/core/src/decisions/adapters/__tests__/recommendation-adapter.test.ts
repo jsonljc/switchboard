@@ -133,4 +133,11 @@ describe("adaptRecommendation", () => {
       expect(decision.meta.riskContract?.riskLevel).toBe(decision.meta.riskLevel);
     });
   });
+
+  it("threads dollarsAtRisk and confidence from the row onto meta", () => {
+    const row = makeRec({ dollarsAtRisk: 450, confidence: 0.82 });
+    const decision = adaptRecommendation(row, deps);
+    expect(decision.meta.dollarsAtRisk).toBe(450);
+    expect(decision.meta.confidence).toBe(0.82);
+  });
 });

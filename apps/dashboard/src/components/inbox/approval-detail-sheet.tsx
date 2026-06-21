@@ -3,7 +3,8 @@
 import { useState, useEffect, useId } from "react";
 import { AGENT_REGISTRY } from "@switchboard/schemas";
 import { relativeTime, undoableFor } from "@/lib/decisions/time";
-import { riskChips } from "@/lib/decisions/risk-chips";
+import { riskChips, confidenceChip } from "@/lib/decisions/risk-chips";
+import { formatMoney } from "@/lib/money";
 import { needsConfirm } from "@/lib/decisions/swipe-policy";
 import { InboxAgentAvatar } from "./inbox-agent-avatar";
 import type { Decision, RiskContract } from "@/lib/decisions/types";
@@ -74,6 +75,39 @@ function ConfirmInline({
   );
 }
 
+interface DeclineInlineProps {
+  note: string;
+  onNote: (v: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+function DeclineInline({ note, onNote, onCancel, onConfirm }: DeclineInlineProps) {
+  return (
+    <div className="ds-confirm">
+      <div className="ds-confirm-head">
+        <span aria-hidden="true" />
+        <span>Optional: add a reason for the audit log.</span>
+      </div>
+      <textarea
+        className="ds-confirm-note"
+        rows={2}
+        placeholder="Why are you declining? (optional)"
+        value={note}
+        onChange={(e) => onNote(e.target.value)}
+      />
+      <div className="ds-confirm-actions">
+        <button type="button" className="ds-action ds-action-secondary" onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="button" className="ds-action ds-action-dismiss" onClick={onConfirm}>
+          Confirm decline
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export interface AlreadyHandledState {
   kind: string;
   label: string;
@@ -97,7 +131,7 @@ export interface ApprovalDetailSheetProps {
   onClose: () => void;
   onCommit: (note?: string) => void;
   onSecondary: () => void;
-  onDismiss: () => void;
+  onDismiss: (note?: string) => void;
 }
 
 export function ApprovalDetailSheet({
@@ -121,10 +155,14 @@ export function ApprovalDetailSheet({
 
   const [confirming, setConfirming] = useState(false);
   const [note, setNote] = useState("");
+  const [declining, setDeclining] = useState(false);
+  const [declineNote, setDeclineNote] = useState("");
 
   useEffect(() => {
     setConfirming(false);
     setNote("");
+    setDeclining(false);
+    setDeclineNote("");
   }, [decision.id]);
 
   const handlePrimary = () => {
@@ -184,21 +222,6 @@ export function ApprovalDetailSheet({
         <section className="ds-section ds-proposal">
           <div className="ds-eyebrow">The proposal</div>
           <p className="ds-summary">{decision.humanSummary}</p>
-          {dataLines.length > 0 && (
-            <ul className="ds-datalines">
-              {dataLines.map((line, i) => (
-                <li key={i}>
-                  {/* The lone no-data glyph as a string-literal expression: the
-                      voice-corpus exemption matches the exact glyph, and prettier
-                      cannot pad a string literal with JSX whitespace. */}
-                  <span className="ds-datalines-bullet" aria-hidden="true">
-                    {"—"}
-                  </span>{" "}
-                  {Array.isArray(line) ? line.join(" · ") : String(line)}
-                </li>
-              ))}
-            </ul>
-          )}
           {decision.meta.contactName && (
             <div className="ds-contact-strip">
               <span className="ds-eyebrow-inline">For</span>
@@ -207,41 +230,29 @@ export function ApprovalDetailSheet({
           )}
         </section>
 
-        <section className="ds-section ds-pending">
-          <div className="ds-eyebrow ds-eyebrow-pending">
-            <span>What this changes</span>
-            <span className="ds-pending-tag">preview not yet wired</span>
-          </div>
-          <div className="ds-pending-grid">
-            <div className="ds-pending-cell">
-              <span className="ds-pending-label">Before</span>
-              <span className="ds-pending-value">—</span>
-            </div>
-            <div className="ds-pending-arrow" aria-hidden="true">
-              →
-            </div>
-            <div className="ds-pending-cell">
-              <span className="ds-pending-label">After</span>
-              <span className="ds-pending-value">—</span>
-            </div>
-          </div>
-          <div className="ds-pending-row">
-            <div className="ds-pending-row-cell">
-              <span className="ds-pending-label">Confidence</span>
-              <span className="ds-pending-value">—</span>
-            </div>
-            <div className="ds-pending-row-cell">
-              <span className="ds-pending-label">Money at risk</span>
-              <span className="ds-pending-value">—</span>
-            </div>
-          </div>
-          <p className="ds-pending-caption">
-            We&apos;re saving a slot here for live before-and-after numbers, wiring it up next week.
-          </p>
-        </section>
+        {dataLines.length > 0 && (
+          <section className="ds-section ds-evidence">
+            <div className="ds-eyebrow">Why {agentName} is recommending this</div>
+            <ul className="ds-evidence-list">
+              {dataLines.map((line, i) => (
+                <li key={i} className="ds-evidence-row">
+                  {Array.isArray(line) ? line.join(" · ") : String(line)}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {Number.isFinite(decision.meta.dollarsAtRisk) && (decision.meta.dollarsAtRisk ?? 0) > 0 && (
+          <section className="ds-section ds-stake">
+            <div className="ds-eyebrow">Estimated impact</div>
+            <p className="ds-stake-value">{formatMoney(decision.meta.dollarsAtRisk!)}</p>
+            <p className="ds-stake-caption">{agentName}&apos;s estimate from recent performance.</p>
+          </section>
+        )}
 
         <section className="ds-section ds-risk">
-          <div className="ds-eyebrow">Risk</div>
+          <div className="ds-eyebrow">Signals</div>
           {!contract ? (
             <div className="ds-risk-missing">
               <span aria-hidden="true" />
@@ -251,14 +262,14 @@ export function ApprovalDetailSheet({
             </div>
           ) : (
             <ul className="ds-risk-chips">
-              {chips.map((c) => (
+              {[...chips, confidenceChip(decision.meta.confidence)].filter(Boolean).map((c) => (
                 <li
-                  key={c.key}
+                  key={c!.key}
                   className="ds-risk-chip"
-                  data-tone={c.strong ? "strong" : c.soft ? "soft" : "normal"}
+                  data-tone={c!.strong ? "strong" : c!.soft ? "soft" : "normal"}
                 >
                   <span className="ds-risk-chip-bullet" aria-hidden="true" />
-                  {c.label}
+                  {c!.label}
                 </li>
               ))}
             </ul>
@@ -289,12 +300,26 @@ export function ApprovalDetailSheet({
             }}
             onConfirm={handlePrimary}
           />
+        ) : declining && !alreadyHandled ? (
+          <DeclineInline
+            note={declineNote}
+            onNote={setDeclineNote}
+            onCancel={() => {
+              setDeclining(false);
+              setDeclineNote("");
+            }}
+            onConfirm={() => {
+              onDismiss(declineNote.trim() || undefined);
+            }}
+          />
         ) : (
           <>
             <button
               type="button"
               className="ds-action ds-action-dismiss"
-              onClick={onDismiss}
+              onClick={() => {
+                if (!alreadyHandled) setDeclining(true);
+              }}
               disabled={!!alreadyHandled}
             >
               {decision.presentation.dismissLabel || "Dismiss"}

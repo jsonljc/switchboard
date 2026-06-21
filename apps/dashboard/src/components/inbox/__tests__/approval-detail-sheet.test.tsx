@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { Decision, RiskContract } from "@/lib/decisions/types";
 
 // ── Mock heavy dependencies ───────────────────────────────────────────────────
@@ -329,9 +330,20 @@ describe("<ApprovalDetailSheet>", () => {
       expect(onSecondary).toHaveBeenCalledTimes(1);
     });
 
-    it("onDismiss fires when the dismiss button is clicked", () => {
+    it("clicking dismiss reveals the inline reason capture (not a direct onDismiss call)", () => {
       const { onDismiss } = renderSheet(makeDecision());
       fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+      // The inline reason field appears
+      expect(screen.getByPlaceholderText(/why|reason/i)).toBeInTheDocument();
+      // onDismiss is NOT called yet
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it("onDismiss fires (with undefined note) after confirming the decline with no reason", () => {
+      const { onDismiss } = renderSheet(makeDecision());
+      fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+      fireEvent.click(screen.getByRole("button", { name: /confirm decline/i }));
+      expect(onDismiss).toHaveBeenCalledWith(undefined);
       expect(onDismiss).toHaveBeenCalledTimes(1);
     });
 
@@ -394,6 +406,169 @@ describe("<ApprovalDetailSheet>", () => {
       renderSheet(makeDecision({ agentKey: "riley" }));
       const dialog = screen.getByRole("dialog");
       expect(dialog).toHaveAttribute("data-agent", "riley");
+    });
+  });
+
+  // ── Task 3: evidence block, at-stake, signals redesign ────────────────────────
+
+  /**
+   * Builder for a recommendation-type Decision with meta overrides.
+   * Spreads a base fixture so individual tests only specify what they care about.
+   */
+  function recWith(
+    overrides: {
+      dataLines?: Array<string | string[]>;
+      dollarsAtRisk?: number;
+      confidence?: number;
+    } = {},
+  ): Decision {
+    return makeDecision({
+      meta: {
+        riskContract: lowContract,
+        ...(overrides.dollarsAtRisk !== undefined && { dollarsAtRisk: overrides.dollarsAtRisk }),
+        ...(overrides.confidence !== undefined && { confidence: overrides.confidence }),
+      },
+      presentation: {
+        primaryLabel: "Yes, send it",
+        secondaryLabel: "Not yet",
+        dismissLabel: "Dismiss",
+        dataLines: overrides.dataLines ?? [],
+      },
+    });
+  }
+
+  const noop = {
+    onClose: vi.fn(),
+    onCommit: vi.fn(),
+    onSecondary: vi.fn(),
+    onDismiss: vi.fn(),
+  };
+
+  describe("(h) evidence section (Task 3)", () => {
+    it("shows evidence dataLines in their own block and no dead placeholder", () => {
+      render(
+        <ApprovalDetailSheet
+          decision={recWith({ dataLines: [["Impact", "+18 bookings/wk"]] })}
+          {...noop}
+        />,
+      );
+      expect(screen.getByText("Impact · +18 bookings/wk")).toBeInTheDocument();
+      expect(screen.queryByText(/preview not yet wired/i)).not.toBeInTheDocument();
+    });
+
+    it("does NOT render the dead ds-pending placeholder at all", () => {
+      const { container } = render(<ApprovalDetailSheet decision={recWith()} {...noop} />);
+      expect(container.querySelector(".ds-pending")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("(i) at-stake section (Task 3)", () => {
+    it("renders dollar-at-stake in S$ only when > 0", () => {
+      const { rerender } = render(
+        <ApprovalDetailSheet decision={recWith({ dollarsAtRisk: 450 })} {...noop} />,
+      );
+      expect(screen.getByText(/S\$450/)).toBeInTheDocument();
+      rerender(<ApprovalDetailSheet decision={recWith({ dollarsAtRisk: 0 })} {...noop} />);
+      expect(screen.queryByText(/Estimated impact/i)).not.toBeInTheDocument();
+    });
+
+    it("does NOT render at-stake section when dollarsAtRisk is absent", () => {
+      render(<ApprovalDetailSheet decision={recWith()} {...noop} />);
+      expect(screen.queryByText(/Estimated impact/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("(j) signals / confidence chip (Task 3)", () => {
+    it("renders a banded confidence chip when present", () => {
+      render(<ApprovalDetailSheet decision={recWith({ confidence: 0.9 })} {...noop} />);
+      expect(screen.getByText("High confidence")).toBeInTheDocument();
+    });
+
+    it("renders 'Medium confidence' chip for confidence 0.6", () => {
+      render(<ApprovalDetailSheet decision={recWith({ confidence: 0.6 })} {...noop} />);
+      expect(screen.getByText("Medium confidence")).toBeInTheDocument();
+    });
+
+    it("renders risk section heading as 'Signals' (not 'Risk')", () => {
+      render(<ApprovalDetailSheet decision={recWith({ confidence: 0.9 })} {...noop} />);
+      // The section eyebrow should say "Signals" now
+      expect(screen.getByText("Signals")).toBeInTheDocument();
+    });
+  });
+
+  // ── Task 4: reason-on-override (optional note on decline) ────────────────────
+
+  describe("(k) decline reason capture (Task 4)", () => {
+    it("clicking dismiss reveals an inline reason capture (not a direct onDismiss call)", async () => {
+      const onDismiss = vi.fn();
+      render(<ApprovalDetailSheet decision={recWith({})} {...noop} onDismiss={onDismiss} />);
+      await userEvent.click(screen.getByRole("button", { name: /decline|dismiss/i }));
+      // reason field should now be visible
+      expect(screen.getByPlaceholderText(/why|reason/i)).toBeInTheDocument();
+      // onDismiss must NOT have been called yet
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it("captures an optional reason on decline and forwards it to onDismiss", async () => {
+      const onDismiss = vi.fn();
+      render(<ApprovalDetailSheet decision={recWith({})} {...noop} onDismiss={onDismiss} />);
+      await userEvent.click(screen.getByRole("button", { name: /decline|dismiss/i }));
+      await userEvent.type(screen.getByPlaceholderText(/why|reason/i), "Budget already maxed");
+      await userEvent.click(screen.getByRole("button", { name: /confirm decline|decline/i }));
+      expect(onDismiss).toHaveBeenCalledWith("Budget already maxed");
+    });
+
+    it("confirming with no text calls onDismiss with undefined (not empty string)", async () => {
+      const onDismiss = vi.fn();
+      render(<ApprovalDetailSheet decision={recWith({})} {...noop} onDismiss={onDismiss} />);
+      await userEvent.click(screen.getByRole("button", { name: /decline|dismiss/i }));
+      // Leave the reason field empty
+      await userEvent.click(screen.getByRole("button", { name: /confirm decline|decline/i }));
+      expect(onDismiss).toHaveBeenCalledWith(undefined);
+    });
+
+    it("cancelling the decline reason returns to the main action row", async () => {
+      const onDismiss = vi.fn();
+      render(<ApprovalDetailSheet decision={recWith({})} {...noop} onDismiss={onDismiss} />);
+      await userEvent.click(screen.getByRole("button", { name: /decline|dismiss/i }));
+      // reason field is visible
+      expect(screen.getByPlaceholderText(/why|reason/i)).toBeInTheDocument();
+      // cancel
+      await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
+      // reason field gone, main actions back
+      expect(screen.queryByPlaceholderText(/why|reason/i)).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /decline|dismiss/i })).toBeInTheDocument();
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it("declining state resets when decision changes", async () => {
+      const dec1 = recWith({});
+      const dec2 = { ...recWith({}), id: "dec-2" };
+      const handlers = { ...noop, onDismiss: vi.fn() };
+      const { rerender } = render(<ApprovalDetailSheet decision={dec1} {...handlers} />);
+      await userEvent.click(screen.getByRole("button", { name: /decline|dismiss/i }));
+      expect(screen.getByPlaceholderText(/why|reason/i)).toBeInTheDocument();
+      // swap decision
+      rerender(<ApprovalDetailSheet decision={dec2} {...handlers} />);
+      expect(screen.queryByPlaceholderText(/why|reason/i)).not.toBeInTheDocument();
+    });
+
+    it("the high-risk approve ConfirmInline is unaffected by the declining flow", async () => {
+      const confirmRiskContract = {
+        riskLevel: "high" as const,
+        externalEffect: false,
+        financialEffect: false,
+        clientFacing: false,
+        requiresConfirmation: true,
+      };
+      const { onCommit } = renderSheet(
+        makeDecision({ meta: { riskContract: confirmRiskContract } }),
+      );
+      // Primary shows "..." suffix (must confirm)
+      await userEvent.click(screen.getByRole("button", { name: /yes, send it…/i }));
+      // ConfirmInline for approve is showing
+      expect(screen.getByText(/one last check/i)).toBeInTheDocument();
+      expect(onCommit).not.toHaveBeenCalled();
     });
   });
 });

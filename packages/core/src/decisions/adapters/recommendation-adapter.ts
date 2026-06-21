@@ -36,6 +36,8 @@ export function adaptRecommendation(
         clientFacing: row.clientFacing ?? false,
         requiresConfirmation: row.requiresConfirmation ?? false,
       },
+      dollarsAtRisk: row.dollarsAtRisk,
+      confidence: row.confidence,
     },
   };
 }

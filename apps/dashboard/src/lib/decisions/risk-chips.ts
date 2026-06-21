@@ -20,3 +20,14 @@ export function riskChips(contract?: RiskContract): RiskChip[] {
     out.push({ key: "safe", label: "No side effects outside Switchboard", soft: true });
   return out;
 }
+
+export function confidenceChip(confidence?: number): RiskChip | null {
+  if (confidence === undefined || !Number.isFinite(confidence)) return null;
+  const label =
+    confidence >= 0.8
+      ? "High confidence"
+      : confidence >= 0.5
+        ? "Medium confidence"
+        : "Low confidence";
+  return { key: "confidence", label, soft: true };
+}
