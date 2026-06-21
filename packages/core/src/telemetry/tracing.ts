@@ -4,10 +4,17 @@
  * Otherwise falls back to no-op so the core package has no hard dependency.
  */
 
+export interface SpanStartOptions {
+  /** Span start time as epoch milliseconds. The OTel adapter converts to an HrTime tuple. */
+  startTime?: number;
+  /** OTel SpanKind numeric value (INTERNAL=0, SERVER=1, CLIENT=2, PRODUCER=3, CONSUMER=4). */
+  kind?: number;
+}
+
 export interface Span {
   setAttribute(key: string, value: string | number | boolean): void;
   setStatus(code: "OK" | "ERROR", message?: string): void;
-  end(): void;
+  end(endTime?: number): void;
 }
 
 export interface Tracer {
@@ -15,13 +22,14 @@ export interface Tracer {
     name: string,
     attributes?: Record<string, string | number | boolean>,
     parent?: Span,
+    options?: SpanStartOptions,
   ): Span;
 }
 
 class NoopSpan implements Span {
   setAttribute(_key: string, _value: string | number | boolean): void {}
   setStatus(_code: "OK" | "ERROR", _message?: string): void {}
-  end(): void {}
+  end(_endTime?: number): void {}
 }
 
 export class NoopTracer implements Tracer {
@@ -29,6 +37,7 @@ export class NoopTracer implements Tracer {
     _name: string,
     _attributes?: Record<string, string | number | boolean>,
     _parent?: Span,
+    _options?: SpanStartOptions,
   ): Span {
     return new NoopSpan();
   }
@@ -58,7 +67,18 @@ export interface OTelContextBridge {
 interface RawOtelSpan {
   setAttribute(key: string, value: unknown): void;
   setStatus(status: { code: number; message?: string }): void;
-  end(): void;
+  end(endTime?: unknown): void;
+}
+
+/**
+ * Convert epoch milliseconds to an OTel HrTime tuple [seconds, nanoseconds] (unambiguous across
+ * OTel versions vs a bare number). Assumes a non-negative epoch — always true for persisted
+ * `requestedAt`/`createdAt` anchors and `createdAt - durationMs` (durationMs << createdAt).
+ */
+function epochMsToHrTime(epochMs: number): [number, number] {
+  const seconds = Math.trunc(epochMs / 1000);
+  const nanos = Math.round((epochMs - seconds * 1000) * 1e6);
+  return [seconds, nanos];
 }
 
 /**
@@ -83,8 +103,8 @@ export function createOTelTracer(
       setStatus(code, message) {
         raw.setStatus({ code: code === "OK" ? 1 : 2, message });
       },
-      end() {
-        raw.end();
+      end(endTime) {
+        raw.end(endTime !== undefined ? epochMsToHrTime(endTime) : undefined);
       },
     };
     rawByWrapper.set(span, raw);
@@ -92,13 +112,20 @@ export function createOTelTracer(
   }
 
   return {
-    startSpan(name, attributes?, parent?) {
+    startSpan(name, attributes?, parent?, options?) {
       const parentRaw = parent ? rawByWrapper.get(parent) : undefined;
       const context =
         parentRaw && contextBridge
           ? contextBridge.with(contextBridge.active(), parentRaw)
           : undefined;
-      const raw = otelTracer.startSpan(name, undefined, context);
+      let otelOptions: { startTime?: [number, number]; kind?: number } | undefined;
+      if (options && (options.kind !== undefined || options.startTime !== undefined)) {
+        otelOptions = {};
+        if (options.kind !== undefined) otelOptions.kind = options.kind;
+        if (options.startTime !== undefined)
+          otelOptions.startTime = epochMsToHrTime(options.startTime);
+      }
+      const raw = otelTracer.startSpan(name, otelOptions, context);
       if (attributes) {
         for (const [k, v] of Object.entries(attributes)) raw.setAttribute(k, v);
       }
