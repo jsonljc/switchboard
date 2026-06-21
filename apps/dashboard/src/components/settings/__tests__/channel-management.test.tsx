@@ -154,4 +154,19 @@ describe("ChannelManagement - WhatsApp manual token form removal", () => {
       channels: [{ channel: "telegram", botToken: "tg-token-123" }],
     });
   });
+
+  it("renders StatePanel (role=status) when no channels are provisioned", () => {
+    // channels is already [] from the beforeEach setup
+    wrap(<ChannelManagement />);
+
+    // StatePanel with role=status should be present
+    const panel = screen.getByRole("status");
+    expect(panel).toBeInTheDocument();
+
+    // Heading text from our new StatePanel
+    expect(screen.getByRole("heading", { name: /no channels yet/i })).toBeInTheDocument();
+
+    // Old plain-text fallback must NOT appear
+    expect(screen.queryByText("No channels provisioned yet.")).not.toBeInTheDocument();
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 const useOrgDeploymentId = vi.fn();
 const useBusinessFacts = vi.fn();
@@ -81,6 +81,28 @@ describe("BusinessFactsPage", () => {
     render(<BusinessFactsPage />);
     expect(screen.getByTestId("operational-state-section")).toBeInTheDocument();
     expect(screen.getByTestId("operational-state-section").dataset.timezone).toBe("Asia/Singapore");
+  });
+
+  it("renders a StatePanel error state when business facts query fails", () => {
+    const refetch = vi.fn();
+    useOrgDeploymentId.mockReturnValue({ deploymentId: "dep_1", isLoading: false, isError: false });
+    useBusinessFacts.mockReturnValue({
+      data: undefined,
+      error: new Error("Network error"),
+      refetch,
+    });
+    render(<BusinessFactsPage />);
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    // eyebrow "Couldn't load" and title both contain "couldn't load" - use getAllByText
+    expect(screen.getAllByText(/couldn't load/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/we couldn't load your business facts/i)).toBeInTheDocument();
+    // Old raw error text must NOT appear
+    expect(screen.queryByText(/failed to load business facts/i)).not.toBeInTheDocument();
+
+    // Clicking "Try again" must call refetch
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it("passes the saved org timezone to the operational-state section", () => {

@@ -5,6 +5,7 @@ import { AGENT_REGISTRY } from "@switchboard/schemas";
 import type { HandoffReason } from "@switchboard/schemas";
 import { relativeTime, dueIn } from "@/lib/decisions/time";
 import { useEscalationDetail } from "@/hooks/use-escalation-detail";
+import { StatePanel } from "@/components/query-states";
 import { InboxAgentAvatar } from "./inbox-agent-avatar";
 import type { Decision } from "@/lib/decisions/types";
 import type { ConversationTurn } from "@/hooks/use-escalation-detail";
@@ -92,12 +93,14 @@ function HandoffFetchError({
 }) {
   return (
     <SheetShell agentKey={agentKey} onClose={onClose}>
-      <div className="sheet-body ds-body ds-fetch-error">
-        <div className="ds-eyebrow">Couldn&apos;t load this handoff</div>
-        <p>The connection dropped on the way to your team. The list is still safe — try again.</p>
-        <button type="button" className="ds-action ds-action-secondary" onClick={onRetry}>
-          Try again
-        </button>
+      <div className="sheet-body ds-body">
+        <StatePanel
+          role="alert"
+          eyebrow="Couldn't load"
+          title="We couldn't load this handoff"
+          body="This is usually momentary. Try again in a moment."
+          onRetry={onRetry}
+        />
       </div>
     </SheetShell>
   );

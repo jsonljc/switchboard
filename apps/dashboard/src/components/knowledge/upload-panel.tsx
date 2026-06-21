@@ -9,6 +9,8 @@ import {
   useUploadKnowledge,
   useDeleteDocument,
 } from "@/hooks/use-knowledge";
+import { Skeleton } from "@/components/query-states/skeleton";
+import { StatePanel } from "@/components/query-states/state-panel";
 
 interface UploadPanelProps {
   agentId?: string;
@@ -18,7 +20,7 @@ export function UploadPanel({ agentId }: UploadPanelProps) {
   const { toast } = useToast();
   const [isDragging, setIsDragging] = useState(false);
 
-  const { data, isLoading } = useKnowledgeDocuments(agentId);
+  const { data, isLoading, isError, refetch } = useKnowledgeDocuments(agentId);
   const uploadMutation = useUploadKnowledge();
   const deleteMutation = useDeleteDocument();
 
@@ -127,7 +129,18 @@ export function UploadPanel({ agentId }: UploadPanelProps) {
         </div>
       </div>
 
-      {isLoading && <div className="text-[14px] text-muted-foreground">Loading documents...</div>}
+      {isLoading && (
+        <div
+          data-testid="upload-panel-loading"
+          className="space-y-3"
+          role="status"
+          aria-label="Loading documents"
+        >
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-14 rounded-lg" />
+          <Skeleton className="h-14 rounded-lg" />
+        </div>
+      )}
 
       {!isLoading && documents.length > 0 && (
         <div className="space-y-3">
@@ -160,10 +173,22 @@ export function UploadPanel({ agentId }: UploadPanelProps) {
         </div>
       )}
 
-      {!isLoading && documents.length === 0 && (
-        <div className="text-[14px] text-muted-foreground text-center py-8">
-          No documents uploaded yet
-        </div>
+      {!isLoading && isError && (
+        <StatePanel
+          role="alert"
+          eyebrow="Couldn't load"
+          title="We couldn't load your documents."
+          body="This is usually momentary. Try again in a moment."
+          onRetry={() => refetch()}
+        />
+      )}
+
+      {!isLoading && !isError && documents.length === 0 && (
+        <StatePanel
+          role="status"
+          title="No documents yet"
+          body="Upload a text or markdown file to give your agents contextual knowledge to draw from."
+        />
       )}
     </div>
   );
