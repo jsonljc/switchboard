@@ -99,7 +99,12 @@ function matchWhere(row: Row, where?: Row): boolean {
   if (!where) return true;
   for (const [key, cond] of Object.entries(where)) {
     const value = row[key];
-    if (cond !== null && typeof cond === "object") {
+    if (cond instanceof Date) {
+      // Bare-Date equality: compare by instant, not object identity. A Prisma `where: { col: date }`
+      // equality would otherwise reference-compare to a guaranteed mismatch (a silent zero-match). Must
+      // precede the generic object branch since a Date is `typeof === "object"`.
+      if (!(value instanceof Date) || value.getTime() !== cond.getTime()) return false;
+    } else if (cond !== null && typeof cond === "object") {
       if (!matchOperator(value, cond as Row)) return false;
     } else if (value !== cond) {
       return false;
@@ -119,6 +124,50 @@ function applyDistinct(rows: Row[], distinct?: readonly string[]): Row[] {
   });
 }
 
+/** Promise / framework-introspection keys that must pass THROUGH the unmodeled-surface guard untouched
+ *  (else a thenable probe or a test matcher inspecting the object would trip the throw). */
+const GUARD_PASSTHROUGH: ReadonlySet<string> = new Set([
+  "then",
+  "catch",
+  "finally",
+  "toJSON",
+  "constructor",
+  "asymmetricMatch",
+  "$$typeof",
+  "nodeType",
+]);
+
+/** Wrap a Prisma-style model so an unmodeled METHOD fails LOUD ("model it before use") at call time,
+ *  rather than as an opaque `x is not a function` TypeError surfacing many layers up in a store leg.
+ *  Symbol + introspection keys pass through. The slices add store legs incrementally, so a future leg
+ *  that reaches for an unmodeled method gets a precise "model it" signal instead of a confusing crash. */
+function guardModel<T extends object>(modelName: string, methods: T): T {
+  return new Proxy(methods, {
+    get(target, prop, receiver) {
+      if (typeof prop === "symbol" || GUARD_PASSTHROUGH.has(prop) || prop in target) {
+        return Reflect.get(target, prop, receiver);
+      }
+      return () => {
+        throw new Error(
+          `revenue-loop-substrate: ${modelName}.${String(prop)} is not modeled (model it before use)`,
+        );
+      };
+    },
+  });
+}
+
+/** Wrap the client so an unmodeled MODEL likewise fails LOUD when one of its methods is invoked. */
+function guardClient<T extends object>(client: T): T {
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (typeof prop === "symbol" || GUARD_PASSTHROUGH.has(prop) || prop in target) {
+        return Reflect.get(target, prop, receiver);
+      }
+      return guardModel(String(prop), {});
+    },
+  });
+}
+
 interface SkillRequestContextLike {
   sessionId: string;
   orgId: string;
@@ -134,6 +183,7 @@ export class InMemoryRevenueDb {
   private receipts: Row[] = [];
   private receiptedBookings = new Map<string, Row>();
   private outbox: Row[] = [];
+  private lifecycleRevenueEvents: Row[] = [];
   private seq = 0;
 
   private id(prefix: string): string {
@@ -167,6 +217,16 @@ export class InMemoryRevenueDb {
 
   listReceipts(): Array<Row & { createdAt: Date; bookingId: string | null }> {
     return this.receipts.slice() as Array<Row & { createdAt: Date; bookingId: string | null }>;
+  }
+
+  /** Snapshot of the outbox (payment leg writes a `purchased` event via createMany). */
+  listOutbox(): Row[] {
+    return this.outbox.slice();
+  }
+
+  /** Snapshot of the lifecycle revenue events (payment leg writes a verified deposit). */
+  listRevenueEvents(): Row[] {
+    return this.lifecycleRevenueEvents.slice();
   }
 
   getReceiptedBooking(bookingId: string): Row | undefined {
@@ -243,11 +303,13 @@ export class InMemoryRevenueDb {
     };
   }
 
-  /** Prisma-shaped client used as BOTH the booking tx and the read projections' `prisma`. */
+  /** Prisma-shaped client used as BOTH the booking tx and the read projections' `prisma`. Every model
+   *  is wrapped so an unmodeled method/model fails LOUD ("model it before use") instead of a confusing
+   *  TypeError surfacing inside a real store leg (see guardModel / guardClient). */
   get client() {
     const values = (m: Map<string, Row>): Row[] => Array.from(m.values());
-    return {
-      booking: {
+    return guardClient({
+      booking: guardModel("booking", {
         findFirst: async (args: { where?: Row }): Promise<Row | null> =>
           values(this.bookings).find((r) => matchWhere(r, args.where)) ?? null,
         update: async (args: { where: { id: string }; data: Row }): Promise<Row> => {
@@ -255,8 +317,8 @@ export class InMemoryRevenueDb {
           if (row) Object.assign(row, args.data);
           return row ?? {};
         },
-      },
-      receipt: {
+      }),
+      receipt: guardModel("receipt", {
         findFirst: async (args: { where?: Row }): Promise<Row | null> =>
           this.receipts.find((r) => matchWhere(r, args.where)) ?? null,
         findMany: async (args: { where?: Row; distinct?: readonly string[] }): Promise<Row[]> =>
@@ -284,8 +346,8 @@ export class InMemoryRevenueDb {
           }
           return { count };
         },
-      },
-      opportunity: {
+      }),
+      opportunity: guardModel("opportunity", {
         findFirst: async (args: { where?: Row }): Promise<Row | null> =>
           values(this.opportunities).find((r) => matchWhere(r, args.where)) ?? null,
         updateMany: async (args: { where?: Row; data: Row }): Promise<{ count: number }> => {
@@ -298,12 +360,12 @@ export class InMemoryRevenueDb {
           }
           return { count };
         },
-      },
-      contact: {
+      }),
+      contact: guardModel("contact", {
         findFirst: async (args: { where?: Row }): Promise<Row | null> =>
           values(this.contacts).find((r) => matchWhere(r, args.where)) ?? null,
-      },
-      receiptedBooking: {
+      }),
+      receiptedBooking: guardModel("receiptedBooking", {
         findFirst: async (args: { where?: Row }): Promise<Row | null> => {
           for (const r of this.receiptedBookings.values()) {
             if (matchWhere(r, args.where)) return r;
@@ -315,17 +377,53 @@ export class InMemoryRevenueDb {
           this.receiptedBookings.set(data["bookingId"] as string, { ...data });
           return data;
         },
-      },
-      conversionRecord: { findFirst: async (): Promise<Row | null> => null },
-      lifecycleRevenueEvent: { findMany: async (): Promise<Row[]> => [] },
-      workTrace: { findFirst: async (): Promise<Row | null> => null },
-      outboxEvent: {
+      }),
+      conversionRecord: guardModel("conversionRecord", {
+        findFirst: async (): Promise<Row | null> => null,
+      }),
+      // Stateful: PrismaRevenueStore.record findFirst-dedupes on (org, externalReference) then creates,
+      // and getView reads findMany({ where: { org, bookingId } }) for paymentEventIds. The slice-1
+      // `findMany: []` stub left the revenue-event half inert; the payment leg needs it real.
+      lifecycleRevenueEvent: guardModel("lifecycleRevenueEvent", {
+        findFirst: async (args: { where?: Row }): Promise<Row | null> =>
+          this.lifecycleRevenueEvents.find((r) => matchWhere(r, args.where)) ?? null,
+        findMany: async (args: { where?: Row }): Promise<Row[]> =>
+          this.lifecycleRevenueEvents.filter((r) => matchWhere(r, args.where)),
+        create: async (args: { data: Row }): Promise<Row> => {
+          const data = args.data;
+          const row: Row = {
+            ...data,
+            id: (data["id"] as string) ?? this.id("rev"),
+            createdAt: (data["createdAt"] as Date) ?? new Date(),
+          };
+          this.lifecycleRevenueEvents.push(row);
+          return row;
+        },
+      }),
+      workTrace: guardModel("workTrace", { findFirst: async (): Promise<Row | null> => null }),
+      // PrismaOutboxStore.write uses createMany({ skipDuplicates }) (a SQL ON CONFLICT DO NOTHING on the
+      // unique eventId); the booking issuance path still uses create. Model both.
+      outboxEvent: guardModel("outboxEvent", {
         create: async (args: { data: Row }): Promise<Row> => {
           this.outbox.push(args.data);
           return args.data;
         },
-      },
-    };
+        createMany: async (args: {
+          data: Row[];
+          skipDuplicates?: boolean;
+        }): Promise<{ count: number }> => {
+          let count = 0;
+          for (const row of args.data) {
+            if (args.skipDuplicates && this.outbox.some((e) => e["eventId"] === row["eventId"])) {
+              continue;
+            }
+            this.outbox.push(row);
+            count += 1;
+          }
+          return { count };
+        },
+      }),
+    });
   }
 
   /** Build the REAL calendar-book tool over this substrate with a stub Google Calendar provider. */
