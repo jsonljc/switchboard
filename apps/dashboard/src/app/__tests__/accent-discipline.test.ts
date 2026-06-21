@@ -25,14 +25,19 @@ describe("editorial accent discipline (audit M8)", () => {
     expect(contrastRatio(WHITE_CARD, accent)).toBeLessThan(4.5);
     expect(contrastRatio(CREAM_CANVAS, accent)).toBeLessThan(4.5);
     // It fails even the 3:1 large-text bar on cream, so it cannot be ANY text
-    // (not even the big display numeral) — only decorative fills.
+    // (not even the big display numeral); only decorative fills.
     expect(contrastRatio(CREAM_CANVAS, accent)).toBeLessThan(3.0);
   });
 
-  it("the warm-red editorial ink (coral-deep) passes AA on both white cards and cream", () => {
+  it("the warm-red editorial ink (coral-deep) is small-text AA on white cards, large-text AA on cream", () => {
+    // coral-deep clears small-text AA (4.5) on white cards (5.51). On the CREAM
+    // canvas the repo's live grain sampling is ~3.96 (token-governance), so it
+    // clears only the 3:1 large-text bar there, NOT 4.5; nominal-cream math
+    // overstates it. Use coral-deep for small editorial text on card/white
+    // grounds; on the bare grain it is a large-text-only color.
     const ink = paletteTriple("palette-coral-deep");
     expect(contrastRatio(WHITE_CARD, ink)).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(CREAM_CANVAS, ink)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(CREAM_CANVAS, ink)).toBeGreaterThanOrEqual(3.0);
   });
 
   it("declares one editorial ink token mapped to the brand warm-red", () => {
