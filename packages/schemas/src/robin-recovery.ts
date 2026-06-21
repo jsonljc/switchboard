@@ -31,3 +31,18 @@ export const RobinRecoveryCampaignParamsSchema = z
     path: ["recipientCount"],
   });
 export type RobinRecoveryCampaignParams = z.infer<typeof RobinRecoveryCampaignParamsSchema>;
+
+/**
+ * Parameters for a robin.recovery_send.retry intent: identifies the specific RobinRecoverySend row
+ * to retry, the contact and booking it covers, and the current attempt count used for backoff
+ * computation. The rowId is the row's id (not the dedupeKey) so the retry executor reclaims the
+ * existing row rather than creating a new one.
+ */
+export const RobinRecoveryRetryParamsSchema = z.object({
+  rowId: z.string().min(1),
+  contactId: z.string().min(1),
+  bookingId: z.string().min(1),
+  campaignKind: z.string().min(1),
+  attempts: z.number().int().nonnegative(),
+});
+export type RobinRecoveryRetryParams = z.infer<typeof RobinRecoveryRetryParamsSchema>;

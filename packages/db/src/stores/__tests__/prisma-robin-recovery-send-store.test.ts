@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PrismaRobinRecoverySendStore } from "../prisma-robin-recovery-send-store.js";
 
 function makePrisma() {
-  return { robinRecoverySend: { create: vi.fn(), update: vi.fn() } };
+  return { robinRecoverySend: { create: vi.fn(), update: vi.fn(), findMany: vi.fn() } };
 }
 
 describe("PrismaRobinRecoverySendStore", () => {
@@ -63,17 +63,60 @@ describe("PrismaRobinRecoverySendStore", () => {
     expect(prisma.robinRecoverySend.update.mock.calls[0]![0].data.messageId).toBeNull();
   });
 
-  it("markSkipped / markFailed set terminal state", async () => {
+  it("markSkipped sets terminal skipped state", async () => {
     prisma.robinRecoverySend.update.mockResolvedValue({});
     await store.markSkipped("rs_1", "template_not_approved");
     expect(prisma.robinRecoverySend.update).toHaveBeenCalledWith({
       where: { id: "rs_1" },
       data: { status: "skipped", skipReason: "template_not_approved" },
     });
-    await store.markFailed("rs_1", "boom");
+  });
+
+  it("findDue returns explicitly-rescheduled pending rows within attempt cap and age window", async () => {
+    prisma.robinRecoverySend.findMany.mockResolvedValue([]);
+    const now = new Date("2026-06-21T20:00:00.000Z");
+    await store.findDue(now, 100);
+    expect(prisma.robinRecoverySend.findMany).toHaveBeenCalledWith({
+      where: {
+        status: "pending",
+        nextRetryAt: { lte: now },
+        attempts: { lt: 3 },
+        createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+      },
+      orderBy: { nextRetryAt: "asc" },
+      take: 100,
+      select: {
+        id: true,
+        organizationId: true,
+        contactId: true,
+        bookingId: true,
+        campaignKind: true,
+        attempts: true,
+      },
+    });
+  });
+
+  it("markFailed re-queues (pending + nextRetryAt) when nextRetryAt is provided", async () => {
+    prisma.robinRecoverySend.update.mockResolvedValue({});
+    const next = new Date("2026-06-21T20:15:00.000Z");
+    await store.markFailed("rs_1", "boom", next);
     expect(prisma.robinRecoverySend.update).toHaveBeenCalledWith({
       where: { id: "rs_1" },
-      data: { status: "failed", lastError: "boom" },
+      data: { status: "pending", attempts: { increment: 1 }, nextRetryAt: next, lastError: "boom" },
+    });
+  });
+
+  it("markFailed dead-letters (failed + nextRetryAt null) when nextRetryAt is null", async () => {
+    prisma.robinRecoverySend.update.mockResolvedValue({});
+    await store.markFailed("rs_1", "boom", null);
+    expect(prisma.robinRecoverySend.update).toHaveBeenCalledWith({
+      where: { id: "rs_1" },
+      data: {
+        status: "failed",
+        attempts: { increment: 1 },
+        nextRetryAt: null,
+        lastError: "boom",
+      },
     });
   });
 });

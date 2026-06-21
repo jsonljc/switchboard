@@ -1,5 +1,13 @@
 import type { PrismaClient } from "@prisma/client";
-import type { CreateRobinRecoverySendInput, RobinRecoverySendStore } from "@switchboard/core";
+import type {
+  CreateRobinRecoverySendInput,
+  RobinRecoverySendStore,
+  DueRobinRecoverySend,
+} from "@switchboard/core";
+import {
+  ROBIN_RECOVERY_MAX_SEND_ATTEMPTS,
+  ROBIN_RECOVERY_RETRY_MAX_AGE_MS,
+} from "@switchboard/core";
 
 export class PrismaRobinRecoverySendStore implements RobinRecoverySendStore {
   constructor(private readonly prisma: PrismaClient) {}
@@ -22,6 +30,32 @@ export class PrismaRobinRecoverySendStore implements RobinRecoverySendStore {
     return { id: row.id };
   }
 
+  async findDue(now: Date, limit: number): Promise<DueRobinRecoverySend[]> {
+    // Retry-cron reclaim: ONLY explicitly-rescheduled rows (nextRetryAt set + due). Fresh cohort rows
+    // (nextRetryAt null) belong to the cohort executor, so this DELIBERATELY drops the prior-art
+    // "OR nextRetryAt null" leg (avoids a double-send race with the daily cohort cron). lte excludes
+    // nulls in SQL, so it is the explicit-reschedule filter. createdAt floor is the MAX_AGE stale guard.
+    const minCreatedAt = new Date(now.getTime() - ROBIN_RECOVERY_RETRY_MAX_AGE_MS);
+    return this.prisma.robinRecoverySend.findMany({
+      where: {
+        status: "pending",
+        nextRetryAt: { lte: now },
+        attempts: { lt: ROBIN_RECOVERY_MAX_SEND_ATTEMPTS },
+        createdAt: { gte: minCreatedAt },
+      },
+      orderBy: { nextRetryAt: "asc" },
+      take: limit,
+      select: {
+        id: true,
+        organizationId: true,
+        contactId: true,
+        bookingId: true,
+        campaignKind: true,
+        attempts: true,
+      },
+    });
+  }
+
   async markSent(id: string, messageId: string | null): Promise<void> {
     // route-governance: store-mutation-deferred. Single-row id-scoped update on our own freshly
     // minted uuid; org-scoping tracked for #643 (the org-scoped leg is the contact read at dispatch).
@@ -40,12 +74,16 @@ export class PrismaRobinRecoverySendStore implements RobinRecoverySendStore {
     });
   }
 
-  async markFailed(id: string, error: string): Promise<void> {
+  async markFailed(id: string, error: string, nextRetryAt: Date | null): Promise<void> {
     // route-governance: store-mutation-deferred. Single-row id-scoped update on our own freshly
     // minted uuid; org-scoping tracked for #643 (the org-scoped leg is the contact read at dispatch).
+    // When nextRetryAt is non-null: re-queue for a retry (status stays pending, attempt count increments).
+    // When nextRetryAt is null: dead-letter the row (terminal failed, nextRetryAt cleared explicitly).
     await this.prisma.robinRecoverySend.update({
       where: { id },
-      data: { status: "failed", lastError: error },
+      data: nextRetryAt
+        ? { status: "pending", attempts: { increment: 1 }, nextRetryAt, lastError: error }
+        : { status: "failed", attempts: { increment: 1 }, nextRetryAt: null, lastError: error },
     });
   }
 }

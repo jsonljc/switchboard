@@ -2329,8 +2329,11 @@ model RobinRecoverySend {
   dedupeKey          String    @unique
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
+  attempts           Int       @default(0)
+  nextRetryAt        DateTime?
 
   @@index([organizationId, bookingId])
+  @@index([status, nextRetryAt])
 }
 
 // ---------------------------------------------------------------------------
