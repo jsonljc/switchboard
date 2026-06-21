@@ -47,4 +47,15 @@ describe("DataModeBanner", () => {
     expect(titled).not.toBeNull();
     expect(titled?.getAttribute("title")).toMatch(/live systems are not being queried/i);
   });
+
+  it("renders on the caution tint, not raw amber (audit M1)", () => {
+    render(
+      <DataModeProvider mode="demo">
+        <DataModeBanner />
+      </DataModeProvider>,
+    );
+    const strip = screen.getByRole("status");
+    expect(strip.className).toContain("bg-caution-subtle");
+    expect(strip.className).not.toMatch(/amber/);
+  });
 });

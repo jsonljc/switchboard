@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
+import { NoticeBar } from "@/components/ui/notice-bar";
 
 /**
  * Global strip nudging an authenticated-but-unverified user to verify their
  * email, with a one-click resend. Self-hides for verified or unauthenticated
  * sessions. `session.emailVerified` is refreshed from the DB on each token
  * refresh (see lib/auth.ts), so the banner disappears once the user verifies
- * without a re-login. Quiet amber styling, matching DataModeBanner.
+ * without a re-login. Quiet caution styling, matching DataModeBanner.
  *
  * The resend route (POST /api/dashboard/auth/resend-verification) is session
  * gated, so this in-app banner is the only valid caller; the pre-login
@@ -51,10 +52,7 @@ export function VerifyEmailBanner() {
   };
 
   return (
-    <div
-      role="status"
-      className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-900 ring-1 ring-amber-200"
-    >
+    <NoticeBar>
       <span>Verify your email to secure your account.</span>
       {resendState === "sent" || resendState === "error" ? (
         <span>{message}</span>
@@ -68,6 +66,6 @@ export function VerifyEmailBanner() {
           {resendState === "loading" ? "Sending..." : "Resend verification email"}
         </button>
       )}
-    </div>
+    </NoticeBar>
   );
 }
