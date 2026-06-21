@@ -14,6 +14,7 @@ type ContactRead = {
   consentGrantedAt?: Date | null;
   consentRevokedAt?: Date | null;
   phoneE164?: string | null;
+  duplicateContactRisk?: boolean | null;
 } | null;
 
 function makeTx(opts: {
@@ -26,6 +27,7 @@ function makeTx(opts: {
     consentGrantedAt?: Date | null;
     consentRevokedAt?: Date | null;
     phoneE164?: string | null;
+    duplicateContactRisk?: boolean | null;
   } | null;
   duplicateContact?: { id: string } | null;
   createImpl?: () => Promise<unknown>;
@@ -194,5 +196,53 @@ describe("issueReceiptedBookingInTx", () => {
       const data = create.mock.calls[0]![0].data as { exceptions: Array<{ code: string }> };
       expect(data.exceptions.map((e) => e.code)).not.toContain("duplicate_contact_risk");
     }
+  });
+
+  it("flags duplicate_contact_risk from the persisted intake flag even with no shared phone (A4)", async () => {
+    // The A4 lead-intake matcher persists Contact.duplicateContactRisk; issuance ORs it in, so the
+    // intake-time producer feeds evaluateExceptions even when the phone probe finds nothing (email-only).
+    const { tx, create } = makeTx({
+      evidenceContact: { leadgenId: "lead_1", phoneE164: null, duplicateContactRisk: true },
+      duplicateContact: null,
+    });
+
+    await issueReceiptedBookingInTx(tx, baseArgs);
+
+    const data = create.mock.calls[0]![0].data as { exceptions: Array<{ code: string }> };
+    expect(data.exceptions.map((e) => e.code)).toContain("duplicate_contact_risk");
+  });
+
+  it("does NOT flag when neither the persisted intake flag nor a shared phone is present", async () => {
+    const { tx, create } = makeTx({
+      evidenceContact: {
+        leadgenId: "lead_1",
+        phoneE164: "+6591234567",
+        duplicateContactRisk: false,
+      },
+      duplicateContact: null,
+    });
+
+    await issueReceiptedBookingInTx(tx, baseArgs);
+
+    const data = create.mock.calls[0]![0].data as { exceptions: Array<{ code: string }> };
+    expect(data.exceptions.map((e) => e.code)).not.toContain("duplicate_contact_risk");
+  });
+
+  it("emits EXACTLY ONE duplicate_contact_risk entry when both the intake flag and a shared phone apply (no double-flag)", async () => {
+    // The two producers (A4 intake flag + the issuance phone probe) collapse to a single OR'd boolean
+    // before evaluateExceptions, which emits at most one entry per code. Proves the cross-slice seam.
+    const { tx, create } = makeTx({
+      evidenceContact: {
+        leadgenId: "lead_1",
+        phoneE164: "+6591234567",
+        duplicateContactRisk: true,
+      },
+      duplicateContact: { id: "ct-2" },
+    });
+
+    await issueReceiptedBookingInTx(tx, baseArgs);
+
+    const data = create.mock.calls[0]![0].data as { exceptions: Array<{ code: string }> };
+    expect(data.exceptions.filter((e) => e.code === "duplicate_contact_risk")).toHaveLength(1);
   });
 });
