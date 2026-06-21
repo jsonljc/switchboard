@@ -59,5 +59,9 @@ export interface Decision {
     bindingHash?: string;
     /** Workflow approvals only: approved but dispatch failed; primary action is Retry. */
     dispatchFailed?: boolean;
+    /** Estimated whole-dollar impact (>= 0) from the recommendation row; render only when > 0. SGD. */
+    dollarsAtRisk?: number;
+    /** Recommendation confidence 0..1; rendered as a qualitative band, not a precise %. */
+    confidence?: number;
   };
 }
