@@ -450,14 +450,26 @@ describe("token governance — paper grain (GR1)", () => {
       path.resolve(process.cwd(), "src/components/results/results.module.css"),
       "utf8",
     );
-    for (const sel of ["campaignCard", "agentCard"]) {
-      const rule = resultsCss.match(new RegExp(`\\.${sel}\\s*\\{([^}]*)\\}`));
-      expect(rule, `.${sel} rule must exist`).not.toBeNull();
-      expect(rule![1], `.${sel} must not be transparent`).not.toMatch(/background:\s*transparent/);
-      expect(rule![1], `.${sel} must carry an opaque ground`).toMatch(
-        /background:\s*var\(--canvas-2\)/,
-      );
-    }
+    // campaignCard retains --canvas-2 (Task C re-voice not yet applied).
+    const campaignRule = resultsCss.match(/\.campaignCard\s*\{([^}]*)\}/);
+    expect(campaignRule, ".campaignCard rule must exist").not.toBeNull();
+    expect(campaignRule![1], ".campaignCard must not be transparent").not.toMatch(
+      /background:\s*transparent/,
+    );
+    expect(campaignRule![1], ".campaignCard must carry an opaque ground").toMatch(
+      /background:\s*var\(--canvas-2\)/,
+    );
+
+    // agentCard re-voiced to --paper-raised (Task B mercury re-voice).
+    // --paper-raised resolves to #ffffff (opaque white) via .mercuryVoice scope.
+    const agentRule = resultsCss.match(/\.agentCard\s*\{([^}]*)\}/);
+    expect(agentRule, ".agentCard rule must exist").not.toBeNull();
+    expect(agentRule![1], ".agentCard must not be transparent").not.toMatch(
+      /background:\s*transparent/,
+    );
+    expect(agentRule![1], ".agentCard must carry an opaque ground").toMatch(
+      /background:\s*var\(--paper-raised\)/,
+    );
   });
 });
 
