@@ -21,8 +21,8 @@ export function WorthIt({ cost, narrative }: { cost: CostBreakdown; narrative: s
           <p className={css.worthItEstimate}>market-rate estimate</p>
         </div>
 
-        {/* Cell 3: You saved — amber emphasis, co-weighted (same scale as "You pay") */}
-        <div className={css.worthItCell}>
+        {/* Cell 3: You saved — amber emphasis + warm cream ground, co-weighted (same scale as "You pay") */}
+        <div className={`${css.worthItCell} ${css.worthItCellSaving}`}>
           <p className={`${css.worthItNum} ${css.worthItNumAmber}`}>{fmtSGD(cost.saving)}</p>
           <p className={css.worthItLabel}>You saved</p>
         </div>

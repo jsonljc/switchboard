@@ -159,3 +159,92 @@ describe("/results governed re-voiced classes — no residual --font-home-serif"
     });
   }
 });
+
+// ─── Task C: detail/data surface token swaps ─────────────────────────────────
+
+const worthItTsx = readFileSync(
+  path.resolve(process.cwd(), "src/components/results/worth-it.tsx"),
+  "utf8",
+);
+
+describe("WorthIt savings cell — worthItCellSaving wired (Task C)", () => {
+  it("worth-it.tsx applies worthItCellSaving to the savings/You-saved cell", () => {
+    // The savings cell must carry both worthItCell and worthItCellSaving class names.
+    expect(worthItTsx).toMatch(/worthItCellSaving/);
+  });
+
+  it("worthItCellSaving is applied alongside worthItCell on the same element", () => {
+    // Both class names should appear near each other (within 120 chars) OR in a compound expression.
+    expect(worthItTsx).toMatch(
+      /worthItCell[\s\S]{0,120}worthItCellSaving|worthItCellSaving[\s\S]{0,120}worthItCell/,
+    );
+  });
+});
+
+describe("Detail surfaces — serif swaps (Task C)", () => {
+  it(".proofQualityEmpty uses var(--serif) not --font-home-serif", () => {
+    const block = classBlock(resultsCss, "proofQualityEmpty");
+    expect(block).toMatch(/font-family:\s*var\(--serif\)/);
+    expect(block).not.toMatch(/var\(--font-home-serif\)/);
+  });
+
+  it(".stateFirstRunTitle uses var(--serif) not --font-home-serif", () => {
+    const block = classBlock(resultsCss, "stateFirstRunTitle");
+    expect(block).toMatch(/font-family:\s*var\(--serif\)/);
+    expect(block).not.toMatch(/var\(--font-home-serif\)/);
+  });
+
+  it(".mcEmpty uses var(--serif) not --font-home-serif", () => {
+    const block = classBlock(resultsCss, "mcEmpty");
+    expect(block).toMatch(/font-family:\s*var\(--serif\)/);
+    expect(block).not.toMatch(/var\(--font-home-serif\)/);
+  });
+});
+
+describe("Detail surfaces — canvas->paper border/bg swaps (Task C)", () => {
+  it(".disclosureRule border uses --hair not --canvas-3", () => {
+    const block = classBlock(resultsCss, "disclosureRule");
+    expect(block).toMatch(/--hair\b/);
+    expect(block).not.toMatch(/var\(--canvas-3\)/);
+  });
+
+  it(".stateBanner border uses --hair-soft not --canvas-3", () => {
+    const block = classBlock(resultsCss, "stateBanner");
+    expect(block).toMatch(/--hair-soft\b/);
+    expect(block).not.toMatch(/var\(--canvas-3\)/);
+  });
+
+  it(".campaignCard background uses --paper-raised not --canvas-2", () => {
+    const block = classBlock(resultsCss, "campaignCard");
+    expect(block).toMatch(/background:\s*var\(--paper-raised\)/);
+    expect(block).not.toMatch(/var\(--canvas-2\)/);
+  });
+
+  it(".reconcileSelect uses --paper-raised bg and --hair border", () => {
+    const block = classBlock(resultsCss, "reconcileSelect");
+    expect(block).toMatch(/background:\s*var\(--paper-raised\)/);
+    expect(block).toMatch(/--hair\b/);
+    expect(block).not.toMatch(/var\(--canvas-2\)/);
+    expect(block).not.toMatch(/var\(--canvas-3\)/);
+  });
+
+  it(".reconcileInput uses --paper-raised bg and --hair border", () => {
+    const block = classBlock(resultsCss, "reconcileInput");
+    expect(block).toMatch(/background:\s*var\(--paper-raised\)/);
+    expect(block).toMatch(/--hair\b/);
+    expect(block).not.toMatch(/var\(--canvas-2\)/);
+    expect(block).not.toMatch(/var\(--canvas-3\)/);
+  });
+
+  it(".skeletonBlock uses --paper-deep not --canvas-3", () => {
+    const block = classBlock(resultsCss, "skeletonBlock");
+    expect(block).toMatch(/background:\s*var\(--paper-deep\)/);
+    expect(block).not.toMatch(/var\(--canvas-3\)/);
+  });
+
+  it(".skeletonCard uses --paper-deep not --canvas-3", () => {
+    const block = classBlock(resultsCss, "skeletonCard");
+    expect(block).toMatch(/background:\s*var\(--paper-deep\)/);
+    expect(block).not.toMatch(/var\(--canvas-3\)/);
+  });
+});

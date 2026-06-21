@@ -406,7 +406,7 @@
 
 /* Empty state: quiet serif prose, same register as the managed-comparison empty */
 .proofQualityEmpty {
-  font-family: var(--font-home-serif);
+  font-family: var(--serif);
   font-size: 1rem;
   line-height: 1.55;
   color: var(--ink-3);
@@ -476,7 +476,7 @@
 /* Bar track (muted bg) */
 .proofQualityRungTrack {
   height: 6px;
-  background: var(--canvas-3);
+  background: var(--paper-deep);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -493,7 +493,7 @@
 
 /* Empty rung keeps the lighter track colour so it stays legible at width 0 */
 .proofQualityRungBar[data-empty="true"] {
-  background: var(--canvas-3);
+  background: var(--paper-deep);
 }
 
 .proofQualityRungNum {
@@ -512,7 +512,7 @@
   gap: 0.375rem;
   margin-top: 0.25rem;
   padding-top: 0.5rem;
-  border-top: 1px solid var(--canvas-3);
+  border-top: 1px solid var(--hair);
 }
 
 .proofQualityWorklistHead {
@@ -559,7 +559,7 @@
   list-style: none;
   margin: 0.375rem 0 0;
   padding-top: 0.375rem;
-  border-top: 1px dashed var(--canvas-3);
+  border-top: 1px dashed var(--hair);
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
@@ -605,7 +605,7 @@
   color: var(--ink-3);
   margin: 0.25rem 0 0;
   padding-top: 0.5rem;
-  border-top: 1px solid var(--canvas-3);
+  border-top: 1px solid var(--hair);
 }
 
 /* ─── Verdict line ─── */
@@ -746,10 +746,10 @@
   gap: 0;
 }
 
-/* Hairline rule above the toggle — --canvas-3 */
+/* Hairline rule above the toggle — --hair */
 .disclosureRule {
   border: none;
-  border-top: 1px solid var(--canvas-3);
+  border-top: 1px solid var(--hair);
   margin: 0;
 }
 
@@ -915,7 +915,7 @@
   padding: 0.375rem 0.5rem;
   text-align: right;
   white-space: nowrap;
-  border-bottom: 1px solid var(--canvas-3);
+  border-bottom: 1px solid var(--hair);
   vertical-align: bottom;
 }
 
@@ -923,7 +923,7 @@
   text-align: left;
   position: sticky;
   left: 0;
-  background: var(--canvas-2);
+  background: var(--paper-raised);
   z-index: 1;
 }
 
@@ -953,7 +953,7 @@
 
 /* Body rows */
 .campaignRow:nth-child(even) {
-  background: var(--canvas-2);
+  background: var(--paper-raised);
 }
 
 .campaignRow:hover {
@@ -991,7 +991,7 @@
 
 /* Footer total row */
 .campaignFooterRow {
-  border-top: 1px solid var(--canvas-3);
+  border-top: 1px solid var(--hair);
 }
 
 .campaignFooterRow .campaignTdSticky {
@@ -1021,7 +1021,7 @@
 .roasBar {
   position: relative;
   height: 20px;
-  background: var(--canvas-3);
+  background: var(--paper-deep);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -1068,7 +1068,7 @@
 /* Inactive sort chip */
 .campaignMobileSortChip {
   background: none;
-  border: 1px solid var(--canvas-3);
+  border: 1px solid var(--hair);
   border-radius: 99px;
   cursor: pointer;
   font-family: var(--mono);
@@ -1123,7 +1123,7 @@
   padding: 0.875rem 1rem;
   border: 1px solid hsl(var(--border));
   border-radius: 6px;
-  background: var(--canvas-2);
+  background: var(--paper-raised);
 }
 
 /* Card header: rank + name */
@@ -1265,7 +1265,7 @@
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--ink-3);
-  border-bottom: 1px solid var(--canvas-3);
+  border-bottom: 1px solid var(--hair);
   padding-bottom: 0.375rem;
 }
 
@@ -1325,7 +1325,7 @@
 
 /* Empty state message */
 .mcEmpty {
-  font-family: var(--font-home-serif);
+  font-family: var(--serif);
   font-size: 1rem;
   line-height: 1.55;
   color: var(--ink-3);
@@ -1529,7 +1529,7 @@
   flex-direction: column;
   gap: 0.375rem;
   padding: 1rem 1.25rem;
-  border: 1px solid var(--canvas-3);
+  border: 1px solid var(--hair-soft);
   border-left: 3px solid hsl(var(--action) / 0.5);
   border-radius: 6px;
   background: hsl(var(--action) / 0.04);
@@ -1586,7 +1586,7 @@
 
 /* Title: warm serif */
 .stateFirstRunTitle {
-  font-family: var(--font-home-serif);
+  font-family: var(--serif);
   font-size: 1.125rem;
   line-height: 1.5;
   color: var(--ink);
@@ -1621,7 +1621,7 @@
 
 /* Generic block placeholder — animated shimmer via opacity pulse */
 .skeletonBlock {
-  background: var(--canvas-3);
+  background: var(--paper-deep);
   border-radius: 4px;
   animation: skeletonPulse 1.6s ease-in-out infinite;
 }
@@ -1636,7 +1636,7 @@
 .skeletonCard {
   flex: 1;
   height: 6rem;
-  background: var(--canvas-3);
+  background: var(--paper-deep);
   border-radius: 6px;
   animation: skeletonPulse 1.6s ease-in-out infinite;
 }
@@ -1790,8 +1790,8 @@
 .reconcileSelect {
   font-size: 0.75rem;
   color: var(--ink);
-  background: var(--canvas-2);
-  border: 1px solid var(--canvas-3);
+  background: var(--paper-raised);
+  border: 1px solid var(--hair);
   border-radius: 4px;
   padding: 0.1875rem 0.375rem;
   cursor: pointer;
@@ -1806,8 +1806,8 @@
 .reconcileInput {
   font-size: 0.75rem;
   color: var(--ink);
-  background: var(--canvas-2);
-  border: 1px solid var(--canvas-3);
+  background: var(--paper-raised);
+  border: 1px solid var(--hair);
   border-radius: 4px;
   padding: 0.25rem 0.5rem;
   outline: none;
@@ -1861,7 +1861,7 @@
   text-transform: uppercase;
   color: var(--ink-3);
   background: none;
-  border: 1px solid var(--canvas-3);
+  border: 1px solid var(--hair);
   border-radius: 4px;
   padding: 0.25rem 0.625rem;
   cursor: pointer;
@@ -1894,7 +1894,7 @@
   text-transform: uppercase;
   color: var(--ink-3);
   background: none;
-  border: 1px solid var(--canvas-3);
+  border: 1px solid var(--hair);
   border-radius: 4px;
   padding: 0.1875rem 0.5rem;
   cursor: pointer;

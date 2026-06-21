@@ -450,14 +450,15 @@ describe("token governance — paper grain (GR1)", () => {
       path.resolve(process.cwd(), "src/components/results/results.module.css"),
       "utf8",
     );
-    // campaignCard retains --canvas-2 (Task C re-voice not yet applied).
+    // campaignCard re-voiced to --paper-raised (Task C mercury re-voice).
+    // --paper-raised resolves to #ffffff (opaque white) via .mercuryVoice scope.
     const campaignRule = resultsCss.match(/\.campaignCard\s*\{([^}]*)\}/);
     expect(campaignRule, ".campaignCard rule must exist").not.toBeNull();
     expect(campaignRule![1], ".campaignCard must not be transparent").not.toMatch(
       /background:\s*transparent/,
     );
     expect(campaignRule![1], ".campaignCard must carry an opaque ground").toMatch(
-      /background:\s*var\(--canvas-2\)/,
+      /background:\s*var\(--paper-raised\)/,
     );
 
     // agentCard re-voiced to --paper-raised (Task B mercury re-voice).
