@@ -6,7 +6,7 @@ interface UpsertContactInput {
   organizationId: string;
   deploymentId: string;
   phone?: string;
-  email?: string;
+  email?: string | null;
   name?: string | null;
   channel?: string;
   sourceType: string;

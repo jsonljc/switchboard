@@ -1,4 +1,7 @@
 import type { LeadIntake } from "@switchboard/schemas";
+import { normalizeToE164 } from "@switchboard/schemas";
+import { normalizeEmail } from "../identity/normalize.js";
+import { decideContactMatch } from "./match-contact-identity.js";
 
 export interface LeadIntakeStore {
   findContactByIdempotency(organizationId: string, key: string): Promise<{ id: string } | null>;
@@ -24,7 +27,7 @@ export interface LeadIntakeStore {
     organizationId: string;
     deploymentId: string;
     phone?: string;
-    email?: string;
+    email?: string | null;
     name?: string | null;
     channel?: string;
     sourceType: string;
@@ -67,39 +70,70 @@ export class LeadIntakeHandler {
     if (existing) {
       return { contactId: existing.id, duplicate: true };
     }
-    // CTWA click and Instant Form submission both serve as WhatsApp messaging
-    // consent — flag opt-in for those sources when the lead lands on the
-    // whatsapp channel. Email/SMS leads do not get a WhatsApp opt-in.
-    const isWhatsAppLead = intake.contact.channel === "whatsapp";
-    const optInSource = isWhatsAppLead
-      ? intake.source === "ctwa"
-        ? "ctwa"
-        : intake.source === "instant_form"
-          ? "web_form"
-          : null
-      : null;
-    const contact = await this.deps.store.upsertContact({
-      organizationId: intake.organizationId,
-      deploymentId: intake.deploymentId,
-      phone: intake.contact.phone,
-      email: intake.contact.email,
-      channel: intake.contact.channel,
-      sourceType: intake.source,
-      sourceAdId: intake.attribution.sourceAdId,
-      sourceCampaignId: intake.attribution.sourceCampaignId,
-      sourceAdsetId: intake.attribution.sourceAdsetId,
-      attribution: intake.attribution,
-      idempotencyKey: intake.idempotencyKey,
-      ...(optInSource ? { messagingOptIn: true, messagingOptInSource: optInSource } : {}),
-    });
+
+    // A4 identity matcher: look up existing contacts by normalized phone OR email BEFORE creating, so a
+    // same person arriving via two ad paths (CTWA + Instant Form) collapses to one Contact. Reuse only
+    // on a corroborated single match; flag (separate record, never merge) on ambiguity/conflict.
+    const phoneE164 = normalizeToE164(intake.contact.phone ?? null);
+    const email = intake.contact.email ? normalizeEmail(intake.contact.email) : null;
+    const candidates =
+      phoneE164 || email
+        ? await this.deps.store.findByPhoneOrEmail({
+            organizationId: intake.organizationId,
+            phoneE164,
+            email,
+          })
+        : [];
+    const decision = decideContactMatch(
+      { phoneE164, email, name: intake.contact.name ?? null },
+      candidates,
+    );
+
+    let contactId: string;
+    if (decision.kind === "reuse") {
+      // Reuse preserves the matched contact untouched. Lead intake only ever carries an opt-in or
+      // neutral signal (never a restriction), so the most-restrictive consolidation of {existing,
+      // incoming} is always the existing state — writing nothing is what guarantees consent is never
+      // widened on reuse (D1).
+      contactId = decision.contactId;
+    } else {
+      // CTWA click and Instant Form submission both serve as WhatsApp messaging consent — flag opt-in
+      // for those sources when the lead lands on the whatsapp channel. Email/SMS leads do not.
+      const isWhatsAppLead = intake.contact.channel === "whatsapp";
+      const optInSource = isWhatsAppLead
+        ? intake.source === "ctwa"
+          ? "ctwa"
+          : intake.source === "instant_form"
+            ? "web_form"
+            : null
+        : null;
+      const contact = await this.deps.store.upsertContact({
+        organizationId: intake.organizationId,
+        deploymentId: intake.deploymentId,
+        phone: intake.contact.phone,
+        email, // normalized (lowercased) at write so the email-index lookup is canonical
+        name: intake.contact.name ?? null,
+        channel: intake.contact.channel,
+        sourceType: intake.source,
+        sourceAdId: intake.attribution.sourceAdId,
+        sourceCampaignId: intake.attribution.sourceCampaignId,
+        sourceAdsetId: intake.attribution.sourceAdsetId,
+        attribution: intake.attribution,
+        idempotencyKey: intake.idempotencyKey,
+        duplicateContactRisk: decision.kind === "create_flagged",
+        ...(optInSource ? { messagingOptIn: true, messagingOptInSource: optInSource } : {}),
+      });
+      contactId = contact.id;
+    }
+
     await this.deps.store.createActivity({
-      contactId: contact.id,
+      contactId,
       organizationId: intake.organizationId,
       deploymentId: intake.deploymentId,
       kind: "lead_received",
       sourceType: intake.source,
       metadata: { attribution: intake.attribution },
     });
-    return { contactId: contact.id, duplicate: false };
+    return { contactId, duplicate: false };
   }
 }
