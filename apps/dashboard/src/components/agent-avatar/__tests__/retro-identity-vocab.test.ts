@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 // PL-6 retro identity: the pixel-sprite + riso "registration" frame is the
 // signature asset. These guards pin the non-portrait pixel/riso vocabulary so a
 // later edit cannot silently revert it back to generic chrome. (Component-level
-// behavior — crisp integer sprite scaling — is covered by
+// behavior, crisp integer sprite scaling, is covered by
 // printed-portrait-avatar.test.tsx.)
 const DASH_SRC = resolve(__dirname, "..", "..", "..");
 const pipCss = readFileSync(
