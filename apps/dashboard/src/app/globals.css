@@ -248,6 +248,10 @@
     --hair: var(--hairline);
     --hair-soft: hsl(40 15% 90%);
     --editorial-accent: hsl(var(--palette-editorial-accent));
+    /* AA-passing warm-red ink for small editorial highlights (the bright
+       --editorial-accent is scoped to large display numerals; it fails AA as
+       text at 2.69:1). One brand warm-red: the gate-asserted coral-deep. */
+    --editorial-accent-ink: hsl(var(--palette-coral-deep));
     --col: 640px;
     --col-wide: 1080px;
     --gap-section: 144px;
@@ -882,7 +886,8 @@
     text-wrap: pretty;
   }
   .greeting-prose .accent {
-    color: var(--editorial-accent);
+    /* The agent's name reads in the agent's own color (Alex = deep coral, AA). */
+    color: var(--agent-alex-deep);
     font-style: normal;
   }
   .portrait {
@@ -1011,7 +1016,7 @@
     flex: 1;
   }
   .win-prose .accent {
-    color: var(--editorial-accent);
+    color: var(--editorial-accent-ink);
     font-style: normal;
   }
   .win-foot {
@@ -1262,7 +1267,7 @@
     align-self: flex-start;
   }
   .tile[data-stage="hot"] .tile-stage {
-    color: var(--editorial-accent);
+    color: var(--editorial-accent-ink);
   }
   .tile[data-stage="warm"] .tile-stage {
     color: hsl(35 40% 45%);
