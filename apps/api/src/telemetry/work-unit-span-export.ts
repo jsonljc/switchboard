@@ -15,7 +15,15 @@ export interface ExecutionTraceRow {
   status?: string;
   durationMs?: number;
   turnCount?: number;
-  tokenUsage?: { input?: number; output?: number; model?: string };
+  createdAt?: Date | string;
+  tokenUsage?: {
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    cacheCreation?: number;
+    costUsd?: number;
+    model?: string;
+  };
   toolCalls?: unknown[];
 }
 
@@ -27,6 +35,8 @@ export interface WorkTraceSummary {
   outcome?: string;
   riskScore?: number;
   durationMs?: number;
+  requestedAt?: string;
+  completedAt?: string;
 }
 
 /**
@@ -44,6 +54,8 @@ export interface WorkTraceReadLike {
     outcome?: string;
     riskScore?: number;
     durationMs?: number;
+    requestedAt?: string;
+    completedAt?: string;
   };
 }
 
@@ -54,6 +66,19 @@ export interface WorkUnitSpanExportDeps {
   workTraceStore?: {
     getByWorkUnitId(workUnitId: string): Promise<WorkTraceReadLike | null>;
   };
+}
+
+/** ISO string or Date -> epoch milliseconds; undefined when unparseable. */
+function toEpochMs(value: Date | string | undefined): number | undefined {
+  if (value instanceof Date) {
+    const t = value.getTime();
+    return Number.isFinite(t) ? t : undefined;
+  }
+  if (typeof value === "string") {
+    const t = Date.parse(value);
+    return Number.isFinite(t) ? t : undefined;
+  }
+  return undefined;
 }
 
 export function mapExecutionTracesToSpanInput(
@@ -72,6 +97,10 @@ export function mapExecutionTracesToSpanInput(
     model: t.tokenUsage?.model,
     inputTokens: t.tokenUsage?.input,
     outputTokens: t.tokenUsage?.output,
+    createdAtMs: toEpochMs(t.createdAt),
+    cacheReadTokens: t.tokenUsage?.cacheRead,
+    cacheCreationTokens: t.tokenUsage?.cacheCreation,
+    costUsd: t.tokenUsage?.costUsd,
     // toolCalls is unknown[] from JSON; the core projection guards each field defensively.
     toolCalls: (t.toolCalls ?? []) as WorkUnitExecution["toolCalls"],
   }));
@@ -85,6 +114,8 @@ export function mapExecutionTracesToSpanInput(
       outcome: workTrace?.outcome,
       riskScore: workTrace?.riskScore,
       durationMs: workTrace?.durationMs,
+      requestedAtMs: toEpochMs(workTrace?.requestedAt),
+      completedAtMs: toEpochMs(workTrace?.completedAt),
     },
     executions,
   };
@@ -114,6 +145,8 @@ export async function exportWorkUnitSpans(
       outcome: wt.trace.outcome,
       riskScore: wt.trace.riskScore,
       durationMs: wt.trace.durationMs,
+      requestedAt: wt.trace.requestedAt,
+      completedAt: wt.trace.completedAt,
     };
   }
   projectWorkUnitSpans(mapExecutionTracesToSpanInput(workUnitId, traces, workTrace), getTracer());
