@@ -1,0 +1,25 @@
+/* Shared delta badge — mono 400/500/600 only; no italic (governed). */
+.delta {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Positive: amber (--action raw HSL triple; wrap with hsl()) */
+.deltaPos {
+  color: hsl(var(--action));
+}
+
+/* Negative: muted ink */
+.deltaNeg {
+  color: var(--ink-3);
+}
+
+/* Flat: quieter muted ink */
+.deltaFlat {
+  color: var(--ink-4);
+}

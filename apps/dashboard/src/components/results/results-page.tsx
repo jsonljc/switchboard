@@ -31,6 +31,7 @@ import { Colophon } from "./colophon";
 import { MetaConnectBanner, ErrorBanner, FirstRunNote, ResultsSkeleton } from "./states";
 import { usePaidVisits } from "@/app/(auth)/(mercury)/reports/hooks/use-paid-visits";
 import styles from "./results.module.css";
+import mercuryVoice from "@/components/reports-shared/mercury-voice.module.css";
 
 export function ResultsPage() {
   const router = useRouter();
@@ -143,7 +144,7 @@ export function ResultsPage() {
 
   return (
     <>
-      <div className={styles.column}>
+      <div className={`${styles.column} ${mercuryVoice.mercuryVoice}`}>
         <ResultsHeader
           window={w}
           onWindow={setWindow}

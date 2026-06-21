@@ -1,0 +1,88 @@
+/**
+ * Mercury-voice shared token foundation for the reports register.
+ * Applied via the .mercuryVoice class scope -- import and add to the
+ * page root so all descendant voice classes resolve these custom props.
+ *
+ * Mirrors .reportsPage in reports/reports.module.css (the /reports
+ * register). /results will consume this file (Task C/D) instead of
+ * carrying its own duplicated token block.
+ *
+ * NOTE: .eyebrow uses font-weight: 600 (not 700 as in reports.module.css).
+ * The /reports register is exempt from TY3 mono-weight governance
+ * (its (mercury)/ path is in TYPE_VOICE_EXEMPT). This file lives at
+ * components/reports-shared/ which IS governed -- the TY3 guard enforces
+ * that every mono font-weight in governed CSS matches a loaded JetBrains
+ * cut (400/500/600 only). 700 is not loaded, so 600 (SemiBold) is used.
+ */
+
+.mercuryVoice {
+  --serif: var(--font-serif-mercury);
+  --mono: var(--font-mono-mercury);
+  --paper: hsl(45 25% 98%);
+  --paper-warm: hsl(42 32% 95%);
+  --paper-raised: #ffffff;
+  --paper-deep: hsl(40 22% 93%);
+  --ink-5: #c8beae;
+  --hair-strong: rgba(14, 12, 10, 0.16);
+  --accent: var(--char-accent);
+  --accent-deep: hsl(30 60% 32%);
+  --accent-soft: hsl(38 70% 86%);
+  --accent-paper: hsl(42 70% 92%);
+  --duration: 280ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --page-x: 28px;
+  --max-w: 74rem;
+}
+
+/* font-weight: 600 (SemiBold) -- loaded JetBrains cut; 700 reserved for the
+   ungovened (mercury)/ register only (token-governance TY3 guard). */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: inline-block;
+}
+
+.section {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 56px var(--page-x);
+  border-top: 1px solid var(--hair);
+}
+
+.section:first-of-type {
+  border-top: none;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.sectionHead .eyebrow {
+  color: var(--ink);
+}
+
+.pageTitle {
+  font-family: var(--serif);
+  font-size: clamp(36px, 4.6vw, 56px);
+  font-weight: 500;
+  letter-spacing: -0.014em;
+  line-height: 1;
+  color: var(--ink);
+  margin-top: 12px;
+}
+
+/* TY2 governance: the accent is distinguished by color on governed surfaces.
+   The ungovened (mercury)/ register carries an italic style; this shared file
+   must not -- italic is banned from governed CSS (type-voice TY2 guard). */
+.pageTitle .accent {
+  color: var(--accent-deep);
+  font-weight: 500;
+}

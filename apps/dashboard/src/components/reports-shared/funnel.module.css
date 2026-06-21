@@ -1,0 +1,109 @@
+/* Shared funnel widget styles. Mercury-voiced, governed.
+   Mono font-weight 400/500/600 only; no italic; no raw hex color literals. */
+
+/* Section wrapper */
+.funnelSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Section header: eyebrow left + caption right (mirrors /reports sectionHead) */
+.funnelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+/* Caption: quiet qualifier — "five stages · proportional" */
+.funnelCaption {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+/* Row list — no list markers */
+.funnelRows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+/* Individual row: stage · bar · number · delta · label */
+.funnelRow {
+  display: grid;
+  grid-template-columns: 9rem 1fr auto auto auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Stage label — straight from wire, quiet ink */
+.funnelStage {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Bar track — full remaining width, paper-deep bg (mercury token) */
+.funnelBarTrack {
+  height: 6px;
+  background: var(--paper-deep);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+/* Bar fill — amber (--action raw HSL triple) */
+.funnelBar {
+  height: 100%;
+  background: hsl(var(--action));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+
+/* Empty bar gets a lighter placeholder so it's still visible */
+.funnelBar[data-empty="true"] {
+  background: var(--paper-deep);
+}
+
+/* Count number — mono tabular */
+.funnelN {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Wire label (formatted string like "342k") — mono, quieter */
+.funnelLabel {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* Narrative footer — editorial byline */
+.funnelNarrative {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* Narrative marker — agent + date, slightly emphasized */
+.funnelNarrativeMarker {
+  font-weight: 600;
+  color: var(--ink-2);
+}

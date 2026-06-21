@@ -3,8 +3,8 @@ import { useMemo, useState } from "react";
 import type { CampaignRow } from "@switchboard/schemas";
 import styles from "../reports.module.css";
 import { fmtSGD, fmtPct, fmtInt } from "@/components/reports-shared/format";
-
-type SortDir = "asc" | "desc";
+import { sortCampaigns, nextSortDir } from "@/components/reports-shared/campaigns-sort";
+import type { CampaignSortKey, SortDir } from "@/components/reports-shared/campaigns-sort";
 
 interface Column {
   id: keyof CampaignRow;
@@ -26,34 +26,19 @@ const COLS: Column[] = [
 ];
 
 export function Campaigns({ campaigns }: { campaigns: CampaignRow[] }) {
-  const [sortCol, setSortCol] = useState<keyof CampaignRow>("revenue");
+  const [sortCol, setSortCol] = useState<CampaignSortKey>("revenue");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const roasMax = Math.max(...campaigns.map((c) => c.roas ?? 0), 1);
 
-  const sorted = useMemo(() => {
-    const arr = [...campaigns];
-    arr.sort((a, b) => {
-      const av = a[sortCol];
-      const bv = b[sortCol];
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1;
-      if (bv == null) return -1;
-      if (typeof av === "string" && typeof bv === "string") {
-        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-      }
-      return sortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
-    });
-    return arr;
-  }, [campaigns, sortCol, sortDir]);
+  const sorted = useMemo(
+    () => sortCampaigns(campaigns, sortCol, sortDir),
+    [campaigns, sortCol, sortDir],
+  );
 
   function clickHeader(col: Column) {
-    if (sortCol === col.id) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortCol(col.id);
-      setSortDir(col.num ? "desc" : "asc");
-    }
+    setSortDir(nextSortDir(sortCol, col.id, sortDir, col.num));
+    setSortCol(col.id);
   }
 
   const tot = campaigns.reduce(
