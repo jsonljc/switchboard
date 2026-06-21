@@ -30,6 +30,18 @@ export interface ManagedWebhookDeps {
     checkDedup(channel: string, messageId: string): Promise<boolean>;
   };
   ctwaAdapter?: CtwaAdapterLike;
+  /**
+   * Resolves the org's Alex AgentDeployment so a CTWA lead is attributed to that
+   * deployment id (not the channel-connection id) on the ActivityLog feed - the
+   * per-Alex CRM feed reads ActivityLog.listByDeployment. Narrowed to the single
+   * method the route needs; satisfied structurally by `PrismaDeploymentResolver`.
+   */
+  deploymentResolver?: {
+    resolveByOrgAndSlug(
+      organizationId: string,
+      skillSlug: string,
+    ): Promise<{ deploymentId: string }>;
+  };
   onStatusUpdate?: (
     status: {
       messageId: string;
@@ -153,12 +165,32 @@ export function registerManagedWebhookRoutes(app: FastifyInstance, deps: Managed
       typeof incoming.metadata?.["ctwaClid"] === "string" &&
       (incoming.metadata["ctwaClid"] as string).length > 0
     ) {
+      const orgId = gatewayEntry.orgId;
+      // Attribute the lead to the org's Alex AgentDeployment (mirroring the Meta
+      // Instant-Form path) so it lands on Alex's per-deployment ActivityLog feed
+      // (listByDeployment). lead.intake is platform-direct, so this payload
+      // deploymentId is the sole attribution source - the channel-connection id
+      // would silently miss Alex's feed. Fall back to the connection id (and warn)
+      // if Alex can't be resolved: never drop a paid lead.
+      let leadDeploymentId = gatewayEntry.deploymentConnectionId;
+      if (deps.deploymentResolver) {
+        try {
+          const alex = await deps.deploymentResolver.resolveByOrgAndSlug(orgId, "alex");
+          leadDeploymentId = alex.deploymentId;
+        } catch (err: unknown) {
+          console.warn("[managed-webhook] CTWA Alex resolution failed; using connection id", {
+            err,
+            organizationId: orgId,
+            connectionId: gatewayEntry.deploymentConnectionId,
+          });
+        }
+      }
       void deps.ctwaAdapter
         .ingest({
           from: incoming.principalId,
           metadata: incoming.metadata,
-          organizationId: gatewayEntry.orgId,
-          deploymentId: gatewayEntry.deploymentConnectionId,
+          organizationId: orgId,
+          deploymentId: leadDeploymentId,
         })
         .catch((err: unknown) =>
           console.warn("[managed-webhook] CTWA intake failed", {

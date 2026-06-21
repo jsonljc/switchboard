@@ -42,7 +42,10 @@ function makeEntry(
   };
 }
 
-async function buildApp(entry: GatewayEntry): Promise<FastifyInstance> {
+async function buildApp(
+  entry: GatewayEntry,
+  extraDeps: Partial<ManagedWebhookDeps> = {},
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   // The REAL production form decoder (extracted from main.ts): block_actions
   // arrive form-encoded; the parser unwraps `payload` and preserves rawBody.
@@ -58,6 +61,7 @@ async function buildApp(entry: GatewayEntry): Promise<FastifyInstance> {
   });
   const deps: ManagedWebhookDeps = {
     registry: { getGatewayByWebhookPath: () => entry },
+    ...extraDeps,
   };
   registerManagedWebhookRoutes(app, deps);
   await app.ready();
@@ -218,6 +222,135 @@ describe("managed webhook identity forwarding", () => {
 
     expect(res.statusCode).toBe(401);
     expect(handleIncoming).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("attributes a CTWA lead to the org's resolved Alex deployment, not the channel connection", async () => {
+    // A Click-to-WhatsApp inbound (metadata.ctwaClid set) must be attributed to
+    // the org's Alex AgentDeployment id so the per-Alex ActivityLog feed
+    // (listByDeployment) picks it up - mirroring the Meta Instant-Form path.
+    // Today the route forwards gatewayEntry.deploymentConnectionId (the channel
+    // binding id), so every CTWA lead silently misses Alex's feed.
+    const adapter = {
+      channel: "whatsapp",
+      verifyRequest: () => true,
+      parseIncomingMessage: () => ({
+        id: "wa_1",
+        channel: "whatsapp" as const,
+        channelMessageId: "wamid.1",
+        threadId: "+6591234567",
+        principalId: "+6591234567",
+        organizationId: null,
+        text: "hi",
+        attachments: [],
+        timestamp: new Date(),
+        metadata: { ctwaClid: "clid_abc" },
+      }),
+      extractMessageId: () => null,
+      sendTextReply: vi.fn(async () => {}),
+    } as unknown as GatewayEntry["adapter"];
+
+    const ingest = vi.fn(
+      async (
+        _msg: {
+          from: string;
+          metadata: Record<string, unknown>;
+          organizationId: string;
+          deploymentId: string;
+        },
+        _opts?: { parentWorkUnitId?: string },
+      ) => {},
+    );
+    const resolveByOrgAndSlug = vi.fn(async (_organizationId: string, _skillSlug: string) => ({
+      deploymentId: "alex_dep",
+    }));
+
+    const handleIncoming = gatewaySpy();
+    const entry: GatewayEntry = {
+      ...makeEntry(adapter, handleIncoming),
+      channel: "whatsapp",
+      deploymentConnectionId: "conn_1",
+      orgId: "org-1",
+    };
+    const app = await buildApp(entry, {
+      ctwaAdapter: { ingest },
+      deploymentResolver: { resolveByOrgAndSlug },
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/webhook/managed/abc",
+      headers: { "content-type": "application/json" },
+      payload: { any: "thing" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(resolveByOrgAndSlug).toHaveBeenCalledWith("org-1", "alex");
+    expect(ingest).toHaveBeenCalledTimes(1);
+    expect(ingest.mock.calls[0]![0].deploymentId).toBe("alex_dep");
+    await app.close();
+  });
+
+  it("falls back to the channel connection id (and warns) when Alex cannot be resolved - never drops a paid lead", async () => {
+    const adapter = {
+      channel: "whatsapp",
+      verifyRequest: () => true,
+      parseIncomingMessage: () => ({
+        id: "wa_1",
+        channel: "whatsapp" as const,
+        channelMessageId: "wamid.1",
+        threadId: "+6591234567",
+        principalId: "+6591234567",
+        organizationId: null,
+        text: "hi",
+        attachments: [],
+        timestamp: new Date(),
+        metadata: { ctwaClid: "clid_abc" },
+      }),
+      extractMessageId: () => null,
+      sendTextReply: vi.fn(async () => {}),
+    } as unknown as GatewayEntry["adapter"];
+
+    const ingest = vi.fn(
+      async (
+        _msg: {
+          from: string;
+          metadata: Record<string, unknown>;
+          organizationId: string;
+          deploymentId: string;
+        },
+        _opts?: { parentWorkUnitId?: string },
+      ) => {},
+    );
+    const resolveByOrgAndSlug = vi.fn(async (_organizationId: string, _skillSlug: string) => {
+      throw new Error("No active deployment found for org=org-1 slug=alex");
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const handleIncoming = gatewaySpy();
+    const entry: GatewayEntry = {
+      ...makeEntry(adapter, handleIncoming),
+      channel: "whatsapp",
+      deploymentConnectionId: "conn_1",
+      orgId: "org-1",
+    };
+    const app = await buildApp(entry, {
+      ctwaAdapter: { ingest },
+      deploymentResolver: { resolveByOrgAndSlug },
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/webhook/managed/abc",
+      headers: { "content-type": "application/json" },
+      payload: { any: "thing" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(ingest).toHaveBeenCalledTimes(1);
+    expect(ingest.mock.calls[0]![0].deploymentId).toBe("conn_1");
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
     await app.close();
   });
 

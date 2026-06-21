@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import rawBody from "fastify-raw-body";
 import { timingSafeEqual } from "node:crypto";
 import type { ReplySink } from "@switchboard/core";
-import { ChannelGateway, setMetrics } from "@switchboard/core";
+import { ChannelGateway, setMetrics, PrismaDeploymentResolver } from "@switchboard/core";
 import { checkIngressRateLimit } from "./adapters/security.js";
 import { createPromMetrics, metricsRoute } from "./bootstrap/metrics.js";
 import { RuntimeRegistry } from "./managed/runtime-registry.js";
@@ -233,6 +233,10 @@ async function main() {
   let stopHealthChecker: (() => void) | null = null;
   let sseManager: SseSessionManager | null = null;
   let managedGateway: import("@switchboard/core").ChannelGateway | null = null;
+  // Resolves the org's Alex AgentDeployment for CTWA lead attribution (see the
+  // managed webhook route). Only available when DATABASE_URL is set; the route
+  // falls back to the channel-connection id when unwired so a lead is never lost.
+  let ctwaDeploymentResolver: PrismaDeploymentResolver | null = null;
 
   if (process.env["DATABASE_URL"]) {
     try {
@@ -242,6 +246,7 @@ async function main() {
       managedGateway = createGatewayBridge(prisma, {
         platformIngress: platformIngressAdapter,
       });
+      ctwaDeploymentResolver = new PrismaDeploymentResolver(prisma as never);
 
       registry = new RuntimeRegistry();
       await registry.loadAll(prisma, managedGateway);
@@ -409,6 +414,7 @@ async function main() {
       failedMessageStore,
       ctwaAdapter,
       dedup: { checkDedup },
+      ...(ctwaDeploymentResolver ? { deploymentResolver: ctwaDeploymentResolver } : {}),
       ...(onStatusUpdate ? { onStatusUpdate } : {}),
     });
   }
