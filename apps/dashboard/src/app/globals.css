@@ -1057,7 +1057,10 @@
     color: var(--ink);
   }
   .hero-num .accent {
-    color: var(--editorial-accent);
+    /* Even at display size the bright accent is only 2.69:1 on cream (below the
+       3:1 large-text bar), so the numeral accent also uses the AA warm-red ink.
+       --editorial-accent now survives only as decorative fills (e.g. pips). */
+    color: var(--editorial-accent-ink);
     font-style: normal;
   }
   .hero-num .light {
