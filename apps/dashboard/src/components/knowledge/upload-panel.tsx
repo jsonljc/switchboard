@@ -20,7 +20,7 @@ export function UploadPanel({ agentId }: UploadPanelProps) {
   const { toast } = useToast();
   const [isDragging, setIsDragging] = useState(false);
 
-  const { data, isLoading } = useKnowledgeDocuments(agentId);
+  const { data, isLoading, isError, refetch } = useKnowledgeDocuments(agentId);
   const uploadMutation = useUploadKnowledge();
   const deleteMutation = useDeleteDocument();
 
@@ -173,7 +173,17 @@ export function UploadPanel({ agentId }: UploadPanelProps) {
         </div>
       )}
 
-      {!isLoading && documents.length === 0 && (
+      {!isLoading && isError && (
+        <StatePanel
+          role="alert"
+          eyebrow="Couldn't load"
+          title="We couldn't load your documents."
+          body="This is usually momentary. Try again in a moment."
+          onRetry={() => refetch()}
+        />
+      )}
+
+      {!isLoading && !isError && documents.length === 0 && (
         <StatePanel
           role="status"
           title="No documents yet"

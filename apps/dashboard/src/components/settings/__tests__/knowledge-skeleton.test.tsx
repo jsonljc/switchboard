@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { KnowledgeSkeleton } from "../knowledge-skeleton";
 
 describe("KnowledgeSkeleton - shared Skeleton composition (audit B1)", () => {
-  it("renders the shared Skeleton blocks (aria-hidden decorative) — no hand-rolled bg-muted", () => {
+  it("renders the shared Skeleton blocks (aria-hidden decorative) - no hand-rolled bg-muted", () => {
     const { container } = render(<KnowledgeSkeleton />);
 
     // The shared Skeleton is aria-hidden="true"; there must be at least one.

@@ -80,7 +80,7 @@ function mockReady() {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("WhatsAppManagement — StatePanel empty states", () => {
+describe("WhatsAppManagement - StatePanel empty states", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

@@ -1589,19 +1589,6 @@
   }
 }
 
-.ds-fetch-error {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 40px;
-}
-.ds-fetch-error p {
-  font-size: 14px;
-  color: var(--ink-2);
-  line-height: 1.5;
-  max-width: 34ch;
-}
-
 /* =========================================================
    TOAST STACK
    ========================================================= */

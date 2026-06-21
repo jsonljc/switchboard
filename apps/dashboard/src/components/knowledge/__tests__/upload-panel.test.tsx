@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import type { ReactNode } from "react";
@@ -38,6 +38,44 @@ describe("UploadPanel - loading state", () => {
     // Skeleton elements are aria-hidden so we check via data-testid or class; use
     // the data-testid we add on the loading container.
     expect(screen.getByTestId("upload-panel-loading")).toBeInTheDocument();
+  });
+});
+
+describe("UploadPanel - error state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders role=alert (not role=status) when the hook is in an error state", () => {
+    const refetch = vi.fn();
+    useKnowledgeDocuments.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch,
+    });
+    wrap(<UploadPanel />);
+
+    // Must show an alert, not the empty-state status panel.
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    // The "No documents yet" empty-state must NOT appear in error state.
+    expect(screen.queryByText(/no documents yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("calls refetch when the retry button is clicked", () => {
+    const refetch = vi.fn();
+    useKnowledgeDocuments.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch,
+    });
+    wrap(<UploadPanel />);
+
+    const retryBtn = screen.getByRole("button", { name: /try again/i });
+    fireEvent.click(retryBtn);
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 });
 
