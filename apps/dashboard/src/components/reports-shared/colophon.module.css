@@ -1,0 +1,64 @@
+/* Shared colophon footer styles. Governed: mono 400/500/600 only, no italic. */
+
+/* Outer wrapper — top hairline, quiet spacing */
+.colophon {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--hair);
+}
+
+/* Top row: period label + live/sample badge */
+.colophonTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Period + optional lowercase label */
+.colophonPeriod {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+/* Live / Sample badge */
+.colophonBadge {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  border: 1px solid var(--hair);
+  border-radius: 99px;
+  padding: 0.1875rem 0.5rem;
+}
+
+.colophonBadge[data-live="true"] {
+  color: hsl(var(--action));
+  border-color: hsl(var(--action) / 0.35);
+  background: hsl(var(--action) / 0.07);
+}
+
+/* Generated timestamp + optional org */
+.colophonTimestamp {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  color: var(--ink-4);
+  margin: 0;
+}
+
+/* Attribution caveat — fineprint in --ink-4 */
+.colophonCaveat {
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--ink-4);
+  margin: 0;
+}

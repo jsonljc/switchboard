@@ -5,34 +5,8 @@ import { fmtSGD, fmtInt, fmtPct } from "@/components/reports-shared/format";
 import { fmtRatio } from "./results-model";
 import type { CampaignRow } from "./types";
 import styles from "./results.module.css";
-
-// ─── Sort helpers ────────────────────────────────────────────────────────────
-
-type SortKey =
-  | "name"
-  | "spend"
-  | "impressions"
-  | "inlineLinkClicks"
-  | "inlineLinkClickCtr"
-  | "costPerInlineLinkClick"
-  | "leads"
-  | "cpl"
-  | "clickToLeadRate"
-  | "revenue"
-  | "roas";
-
-function sortCampaigns(campaigns: CampaignRow[], key: SortKey, dir: "asc" | "desc"): CampaignRow[] {
-  return [...campaigns].sort((a, b) => {
-    const av = a[key] ?? (dir === "asc" ? Infinity : -Infinity);
-    const bv = b[key] ?? (dir === "asc" ? Infinity : -Infinity);
-    if (typeof av === "string" && typeof bv === "string") {
-      return dir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-    }
-    const an = av as number;
-    const bn = bv as number;
-    return dir === "asc" ? an - bn : bn - an;
-  });
-}
+import { sortCampaigns, nextSortDir } from "@/components/reports-shared/campaigns-sort";
+import type { CampaignSortKey, SortDir } from "@/components/reports-shared/campaigns-sort";
 
 // ─── ROAS bar (amber-only depth) ─────────────────────────────────────────────
 
@@ -56,10 +30,10 @@ function SortBtn({
   onClick,
 }: {
   label: string;
-  sortKey: SortKey;
-  currentKey: SortKey;
+  sortKey: CampaignSortKey;
+  currentKey: CampaignSortKey;
   dir: "asc" | "desc";
-  onClick: (key: SortKey) => void;
+  onClick: (key: CampaignSortKey) => void;
 }) {
   const active = currentKey === sortKey;
   const arrow = active ? (dir === "asc" ? " ↑" : " ↓") : "";
@@ -85,16 +59,12 @@ export function CampaignsSection({
   campaigns: CampaignRow[];
   layout: "mobile" | "desktop";
 }) {
-  const [sortKey, setSortKey] = useState<SortKey>("revenue");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortKey, setSortKey] = useState<CampaignSortKey>("revenue");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  function handleSort(key: SortKey) {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("desc");
-    }
+  function handleSort(key: CampaignSortKey) {
+    setSortDir(nextSortDir(sortKey, key, sortDir, key !== "name"));
+    setSortKey(key);
   }
 
   const sorted = useMemo(
@@ -276,7 +246,7 @@ export function CampaignsSection({
   }
 
   // Mobile card list
-  const mobileSortKeys: { label: string; key: SortKey }[] = [
+  const mobileSortKeys: { label: string; key: CampaignSortKey }[] = [
     { label: "Revenue", key: "revenue" },
     { label: "ROAS", key: "roas" },
     { label: "Leads", key: "leads" },
