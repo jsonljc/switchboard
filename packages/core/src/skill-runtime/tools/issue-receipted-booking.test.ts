@@ -4,6 +4,18 @@ import {
   issueReceiptedBookingInTx,
 } from "./issue-receipted-booking.js";
 
+/** Mirrors ReceiptedBookingIssuanceTx.contact.findFirst's return so the typed spy stays assignable. */
+type ContactRead = {
+  id?: string | null;
+  leadgenId?: string | null;
+  sourceType?: string | null;
+  firstTouchChannel?: string | null;
+  pdpaJurisdiction?: string | null;
+  consentGrantedAt?: Date | null;
+  consentRevokedAt?: Date | null;
+  phoneE164?: string | null;
+} | null;
+
 function makeTx(opts: {
   existingRow?: { id: string } | null;
   evidenceContact?: {
@@ -13,7 +25,9 @@ function makeTx(opts: {
     pdpaJurisdiction?: string | null;
     consentGrantedAt?: Date | null;
     consentRevokedAt?: Date | null;
+    phoneE164?: string | null;
   } | null;
+  duplicateContact?: { id: string } | null;
   createImpl?: () => Promise<unknown>;
 }) {
   // Typed spy (NOT a bare vi.fn): a zero-arg impl would infer an empty-tuple mock.calls and break
@@ -21,6 +35,17 @@ function makeTx(opts: {
   const create = vi.fn<(args: { data: Record<string, unknown> }) => Promise<unknown>>(
     opts.createImpl ?? (async () => ({ id: "rb_1" })),
   );
+  // Branch the two contact reads: the duplicate probe is the only findFirst whose where carries
+  // phoneE164; the evidence read is by id. Typed args keep mock.calls sound under tsc.
+  const contactFindFirst = vi.fn<
+    (a: {
+      where: Record<string, unknown>;
+      select?: Record<string, boolean>;
+    }) => Promise<ContactRead>
+  >(async (a) => {
+    if (a.where.phoneE164 !== undefined) return opts.duplicateContact ?? null;
+    return opts.evidenceContact ?? null;
+  });
   return {
     tx: {
       receiptedBooking: {
@@ -28,7 +53,7 @@ function makeTx(opts: {
         create,
       },
       contact: {
-        findFirst: vi.fn().mockResolvedValue(opts.evidenceContact ?? null),
+        findFirst: contactFindFirst,
       },
     },
     create,
@@ -122,5 +147,52 @@ describe("issueReceiptedBookingInTx", () => {
   it("rethrows a non-P2002 create error (a real failure is not masked)", async () => {
     const { tx } = makeTx({ createImpl: () => Promise.reject(new Error("connection lost")) });
     await expect(issueReceiptedBookingInTx(tx, baseArgs)).rejects.toThrow("connection lost");
+  });
+
+  it("flags duplicate_contact_risk when another contact shares the non-null phoneE164", async () => {
+    const { tx, create } = makeTx({
+      evidenceContact: { leadgenId: "lead_1", phoneE164: "+6591234567" },
+      duplicateContact: { id: "ct-2" }, // a real, distinct contact shares the phone
+    });
+
+    await issueReceiptedBookingInTx(tx, baseArgs);
+
+    // the probe is org-scoped, exact phoneE164, and excludes self
+    expect(tx.contact.findFirst).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", phoneE164: "+6591234567", id: { not: "ct-1" } },
+      select: { id: true },
+    });
+    const data = create.mock.calls[0]![0].data as { exceptions: Array<{ code: string }> };
+    expect(data.exceptions.map((e) => e.code)).toContain("duplicate_contact_risk");
+  });
+
+  it("does NOT flag duplicate_contact_risk when no other contact shares the phoneE164", async () => {
+    const { tx, create } = makeTx({
+      evidenceContact: { leadgenId: "lead_1", phoneE164: "+6591234567" },
+      duplicateContact: null,
+    });
+
+    await issueReceiptedBookingInTx(tx, baseArgs);
+
+    const data = create.mock.calls[0]![0].data as { exceptions: Array<{ code: string }> };
+    expect(data.exceptions.map((e) => e.code)).not.toContain("duplicate_contact_risk");
+  });
+
+  it("skips the probe and never flags when phoneE164 is null/empty/whitespace", async () => {
+    for (const phoneE164 of [null, "", "   "]) {
+      const { tx, create } = makeTx({
+        evidenceContact: { leadgenId: "lead_1", phoneE164 },
+        duplicateContact: { id: "ct-2" }, // present, but must stay unreachable (no probe issued)
+      });
+
+      await issueReceiptedBookingInTx(tx, baseArgs);
+
+      const probed = tx.contact.findFirst.mock.calls.some(
+        (c) => (c[0] as { where: Record<string, unknown> }).where.phoneE164 !== undefined,
+      );
+      expect(probed).toBe(false);
+      const data = create.mock.calls[0]![0].data as { exceptions: Array<{ code: string }> };
+      expect(data.exceptions.map((e) => e.code)).not.toContain("duplicate_contact_risk");
+    }
   });
 });
