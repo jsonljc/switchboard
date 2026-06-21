@@ -33,9 +33,12 @@ interface MetaLeadIntakeDeps {
 export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowHandler {
   return {
     async execute(workUnit, services: WorkflowRuntimeServices) {
+      // greetingTemplateName is no longer consumed: the first-touch greeting template is now
+      // selected from the WhatsApp registry by (intentClass, jurisdiction) inside
+      // meta.lead.greeting.send (D2). The route + Connection.greetingTemplateName column are
+      // retained for backward-compat but are inert; the greeting no longer reads a raw name.
       const input = workUnit.parameters as {
         payload: unknown;
-        greetingTemplateName: string;
       };
 
       const adOptimizer = await import("@switchboard/ad-optimizer");
@@ -157,7 +160,6 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
             contactId: ingestResult.contactId,
             phone: greetingPhone,
             firstName: name?.split(" ")[0] ?? "there",
-            templateName: input.greetingTemplateName,
           },
         });
         if (!greetingResult.ok) {

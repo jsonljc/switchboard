@@ -35,6 +35,15 @@ export interface ProactiveEligibilityInput {
    * the static registry default (draft) governs and the send stays blocked.
    */
   approvalOverlay?: TemplateApprovalOverlay;
+  /**
+   * First-touch send (e.g. the meta.lead.greeting.send greeting to a brand-new lead).
+   * A first-touch lead has no captured PDPA grant yet (consent status "pending") — that
+   * is the EXPECTED state, and its lawful basis is the source-aware opt-in / 24h window
+   * checked below, NOT a stored grant. So firstTouch=true relaxes ONLY the consent_pending
+   * block. Revocation still always wins, and the opt-in/window + approved-template gates are
+   * NOT bypassed. Omitted/false → the established-contact gate (pending blocks) is unchanged.
+   */
+  firstTouch?: boolean;
 }
 
 /**
@@ -60,7 +69,12 @@ export function evaluateProactiveSendEligibility(
     messageClass: "proactive",
   });
   if (consent.action === "block") {
-    return { eligible: false, reason: consent.reasonCode };
+    // Revocation ALWAYS blocks. A first-touch send relaxes ONLY a consent_pending block
+    // (the not-yet-granted state of a brand-new lead) and defers to the opt-in/window basis
+    // checked next; every other block, and any non-first-touch send, blocks here.
+    if (!(input.firstTouch === true && consent.reasonCode === "consent_pending")) {
+      return { eligible: false, reason: consent.reasonCode };
+    }
   }
 
   // 2. WhatsApp 24h window / opt-in.

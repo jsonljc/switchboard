@@ -6,6 +6,10 @@ export const IntentClassSchema = z.enum([
   "aftercare-checkin",
   "re-engagement-offer",
   "consult-followup",
+  // First-touch greeting to a brand-new Meta lead. A business-initiated first
+  // message that MUST ride a pre-approved Marketing-category template (Meta hard-
+  // rejects an unapproved one) gated through evaluateProactiveSendEligibility.
+  "first-touch-greeting",
 ]);
 export type IntentClass = z.infer<typeof IntentClassSchema>;
 

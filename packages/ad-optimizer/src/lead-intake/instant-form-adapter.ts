@@ -50,6 +50,12 @@ export function buildInstantFormIntake(
       ...(email ? { email } : {}),
       ...(phone ? { phone } : {}),
       ...(name ? { name } : {}),
+      // A phone-bearing Instant Form lead is greeted on WhatsApp, and submitting the form
+      // (which collects the WhatsApp opt-in) IS the messaging-consent basis. Tagging the
+      // channel "whatsapp" makes LeadIntakeHandler record messagingOptIn=true /
+      // messagingOptInSource="web_form" — the source-aware opt-in the first-touch greeting
+      // gate reads. Email-only leads (no phone, cannot be WhatsApp-greeted) are left untagged.
+      ...(phone ? { channel: "whatsapp" as const } : {}),
     },
     attribution: {
       leadgen_id: lead.leadgenId,

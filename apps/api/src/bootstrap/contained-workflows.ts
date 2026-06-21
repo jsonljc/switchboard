@@ -418,30 +418,27 @@ export async function bootstrapContainedWorkflows(
     resolveOrgSendCreds: resolveOrgWhatsAppSend,
   });
 
-  // meta.lead.greeting.send: the first-touch greeting is a PROACTIVE WhatsApp template,
-  // so it is gated on the PDPA proactive consent bar (NOT sent unconditionally). The CTWA
-  // ad-click is a legitimate first-touch opt-in basis, so a brand-new CTWA lead with no
-  // captured grant is greeted with a recorded `ctwa_optin` decision; a consent revocation
-  // always wins. `ctwaOptIn` is read from the Contact's messagingOptInSource (set to "ctwa"
-  // only for CTWA leads — an Instant Form lead has no WhatsApp opt-in from the form alone).
+  // meta.lead.greeting.send: the first-touch greeting is a business-initiated PROACTIVE
+  // WhatsApp template, so it clears the SAME approved-template + source-aware opt-in gate the
+  // reminder/follow-up siblings enforce (evaluateProactiveSendEligibility). It reuses the shared
+  // proactive send context (consent + messagingOptIn opt-in basis + per-org approval overlay +
+  // business name for sender identity), resolving the WhatsApp 24h-window timestamp by the
+  // contactId+org compound key (mirrors the reminder) so a genuine inbound-bearing CTWA lead can
+  // ride the free-entry-point window. The greeting workflow supplies firstTouch + a phone-derived
+  // jurisdiction fallback for a brand-new lead with no stamped pdpaJurisdiction.
   const greetingSendHandler = buildMetaLeadGreetingWorkflow({
     getSendContext: async (orgId, contactId) => {
       const prisma = prismaClient as import("@switchboard/db").PrismaClient;
-      const contact = await prisma.contact.findFirst({
-        where: { id: contactId, organizationId: orgId },
-        select: {
-          pdpaJurisdiction: true,
-          consentGrantedAt: true,
-          consentRevokedAt: true,
-          messagingOptInSource: true,
-        },
+      const thread = await prisma.conversationThread.findUnique({
+        where: { contactId_organizationId: { contactId, organizationId: orgId } },
+        select: { lastWhatsAppInboundAt: true },
       });
-      return {
-        consentGrantedAt: contact?.consentGrantedAt ?? null,
-        consentRevokedAt: contact?.consentRevokedAt ?? null,
-        pdpaJurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
-        ctwaOptIn: contact?.messagingOptInSource === "ctwa",
-      };
+      return buildWhatsAppSendContext(
+        prisma,
+        orgId,
+        contactId,
+        thread?.lastWhatsAppInboundAt ?? null,
+      );
     },
     resolveOrgSendCreds: resolveOrgWhatsAppSend,
   });

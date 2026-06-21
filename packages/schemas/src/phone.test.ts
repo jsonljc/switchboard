@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeToE164, isE164 } from "./phone.js";
+import { normalizeToE164, isE164, jurisdictionFromE164 } from "./phone.js";
 
 describe("isE164", () => {
   it("accepts a valid E.164 number", () => {
@@ -45,5 +45,24 @@ describe("normalizeToE164", () => {
   });
   it("normalizes a raw E.164 without leading + (WhatsApp wa_id format)", () => {
     expect(normalizeToE164("6591234567")).toBe("+6591234567");
+  });
+});
+
+describe("jurisdictionFromE164", () => {
+  it("maps a +65 SG number to SG", () => {
+    expect(jurisdictionFromE164("+6591234567")).toBe("SG");
+  });
+  it("maps a +60 MY number to MY", () => {
+    expect(jurisdictionFromE164("+60123456789")).toBe("MY");
+  });
+  it("returns null for a non-SG/MY country code", () => {
+    expect(jurisdictionFromE164("+14155551234")).toBeNull();
+  });
+  it("returns null for null/empty/non-E164 input (never guesses)", () => {
+    expect(jurisdictionFromE164(null)).toBeNull();
+    expect(jurisdictionFromE164(undefined)).toBeNull();
+    expect(jurisdictionFromE164("")).toBeNull();
+    // A bare number without a leading + is not a jurisdiction signal.
+    expect(jurisdictionFromE164("6591234567")).toBeNull();
   });
 });

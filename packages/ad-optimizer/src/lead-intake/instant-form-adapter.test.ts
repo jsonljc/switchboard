@@ -104,6 +104,37 @@ describe("buildInstantFormIntake", () => {
     expect(intake!.contact.phone).toBe("+6591234567");
   });
 
+  it("marks a phone-bearing Instant Form lead as a whatsapp-channel lead (so the handler captures the ad-form opt-in)", () => {
+    // The handler keys messagingOptIn=true / messagingOptInSource="web_form" off
+    // contact.channel === "whatsapp" for an instant_form lead (lead-intake-handler.test.ts).
+    // Without this, every IF greeting would dark-hole at no_optin.
+    const intake = buildInstantFormIntake(
+      makeLead({
+        fieldData: [
+          { name: "phone_number", values: ["91234567"] },
+          { name: "full_name", values: ["Alice"] },
+        ],
+      }),
+      { now: () => new Date("2026-04-26T00:00:00Z") },
+    );
+    expect(intake!.contact.phone).toBe("+6591234567");
+    expect(intake!.contact.channel).toBe("whatsapp");
+  });
+
+  it("does NOT mark an email-only Instant Form lead (no phone) as a whatsapp lead", () => {
+    const intake = buildInstantFormIntake(
+      makeLead({
+        fieldData: [
+          { name: "email", values: ["a@b.com"] },
+          { name: "full_name", values: ["Alice"] },
+        ],
+      }),
+      { now: () => new Date("2026-04-26T00:00:00Z") },
+    );
+    expect(intake!.contact.email).toBe("a@b.com");
+    expect(intake!.contact.channel).toBeUndefined();
+  });
+
   it("still ingests when phone is un-normalizable but an email is present", () => {
     const intake = buildInstantFormIntake(
       {

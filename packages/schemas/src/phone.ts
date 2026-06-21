@@ -63,3 +63,19 @@ export function normalizeToE164(
   // Refuse to guess.
   return null;
 }
+
+/**
+ * Map an E.164 number to its PDPA jurisdiction by country code: +65 → SG, +60 → MY.
+ * Returns null for any other country code or a non-E.164 input (never guesses).
+ *
+ * Used to pick a jurisdiction-specific WhatsApp template for a first-touch send, when the
+ * contact has no stamped `pdpaJurisdiction` yet (a brand-new lead — jurisdiction is only
+ * stamped later, when a governed conversation begins). The stamped jurisdiction, when present,
+ * always takes precedence over this phone-derived guess.
+ */
+export function jurisdictionFromE164(phone: string | null | undefined): "SG" | "MY" | null {
+  if (!phone) return null;
+  if (phone.startsWith("+65")) return "SG";
+  if (phone.startsWith("+60")) return "MY";
+  return null;
+}
