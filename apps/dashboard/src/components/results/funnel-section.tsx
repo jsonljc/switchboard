@@ -1,4 +1,4 @@
-import { fmtInt } from "@/app/(auth)/(mercury)/reports/components/format";
+import { fmtInt } from "@/components/reports-shared/format";
 import type { FunnelRowData, FunnelNarrative } from "./types";
 import { DeltaBadge } from "./delta-badge";
 import styles from "./results.module.css";

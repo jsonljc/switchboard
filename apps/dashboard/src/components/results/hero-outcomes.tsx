@@ -1,4 +1,4 @@
-import { fmtSGD, fmtInt } from "@/app/(auth)/(mercury)/reports/components/format";
+import { fmtSGD, fmtInt } from "@/components/reports-shared/format";
 import type { ResultsModel } from "./results-model";
 import { DeltaBadge } from "./delta-badge";
 import styles from "./results.module.css";

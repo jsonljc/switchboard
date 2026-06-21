@@ -1,5 +1,5 @@
 import type { ResultsModel } from "./results-model";
-import { fmtInt, fmtPct } from "@/app/(auth)/(mercury)/reports/components/format";
+import { fmtInt, fmtPct } from "@/components/reports-shared/format";
 import styles from "./results.module.css";
 
 /** Held-appointment rate: of the consults that matured in this window, how many

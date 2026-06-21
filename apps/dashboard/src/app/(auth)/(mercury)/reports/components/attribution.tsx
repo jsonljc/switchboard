@@ -1,6 +1,6 @@
 import type { AttributionData } from "@switchboard/schemas";
 import styles from "../reports.module.css";
-import { fmtSGD } from "./format";
+import { fmtSGD } from "@/components/reports-shared/format";
 import { DeltaBadge } from "./delta-badge";
 
 export function Attribution({ data }: { data: AttributionData }) {

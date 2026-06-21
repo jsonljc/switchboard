@@ -1,6 +1,6 @@
 import type { CostBreakdown } from "@switchboard/schemas";
 import styles from "../reports.module.css";
-import { fmtSGD } from "./format";
+import { fmtSGD } from "@/components/reports-shared/format";
 
 export function CostVsValue({ cost, narrative }: { cost: CostBreakdown; narrative: string }) {
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { fmtSGD } from "@/app/(auth)/(mercury)/reports/components/format";
+import { fmtSGD } from "@/components/reports-shared/format";
 import type { PaidVisitRow } from "@switchboard/schemas";
 import styles from "./results.module.css";
 

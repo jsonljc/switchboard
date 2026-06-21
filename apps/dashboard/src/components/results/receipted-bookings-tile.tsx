@@ -1,5 +1,5 @@
 import type { ResultsModel } from "./results-model";
-import { fmtInt } from "@/app/(auth)/(mercury)/reports/components/format";
+import { fmtInt } from "@/components/reports-shared/format";
 import styles from "./results.module.css";
 
 /** Receipted bookings: how many bookings produced a proof receipt in this window. A
