@@ -164,6 +164,21 @@ export interface BuildTestServerOptions {
    */
   runInTransaction?: import("../bootstrap/operator-intents/revenue.js").RunInTransaction;
   /**
+   * Provide a ReceiptWriter + PaymentVerifier (alongside revenueStore + outboxWriter +
+   * runInTransaction) to register the payment.record_verified intent. The whole-loop revenue-proof
+   * e2e wires these over the in-memory substrate (PrismaReceiptStore.mint as the writer; a fake PSP
+   * fetch-back as the verifier) to drive the REAL payment handler through real ingress. Without BOTH,
+   * the intent stays unregistered and submit() returns intent_not_found.
+   */
+  receiptWriter?: import("../bootstrap/operator-intents/record-verified-payment.js").ReceiptWriter;
+  paymentVerifier?: import("../bootstrap/operator-intents/record-verified-payment.js").PaymentVerifier;
+  /**
+   * Provide a ReceiptHeldPromoter alongside bookingAttendanceWriter so an "attended" outcome promotes
+   * the booking's calendar receipt booked -> held (the attendance proof-write). The e2e wires
+   * PrismaReceiptStore over the substrate as the promoter.
+   */
+  receiptHeldPromoter?: import("../bootstrap/operator-intents/attendance.js").ReceiptHeldPromoter;
+  /**
    * Skip registering the global HTTP idempotency middleware (#678). The HTTP
    * layer caches POST responses on `method:route:org:actor:sha256(body)` and
    * short-circuits replays before any route runs — which masks the *ingress*
@@ -508,7 +523,10 @@ export async function buildTestServer(options: BuildTestServerOptions = {}): Pro
     revenueStore: app.revenueEventStore ?? undefined,
     outboxWriter: options.outboxWriter,
     runInTransaction: options.runInTransaction ?? (async (fn) => fn(undefined)),
+    receiptWriter: options.receiptWriter,
+    paymentVerifier: options.paymentVerifier,
     bookingAttendanceWriter: options.bookingAttendanceWriter,
+    receiptHeldPromoter: options.receiptHeldPromoter,
     reconcileBookingWriter: options.reconcileBookingWriter,
     contactEraser: options.eraseContactWriter,
   });
