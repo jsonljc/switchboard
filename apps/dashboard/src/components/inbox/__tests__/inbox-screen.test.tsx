@@ -562,12 +562,15 @@ describe("<InboxScreen>", () => {
       expect(wfApproveMock).toHaveBeenCalledWith("hash-1", undefined);
     });
 
-    it("Reject fires the lifecycle reject", async () => {
+    it("Reject fires the lifecycle reject after confirming the decline reason step", async () => {
       feedByKey = () => successFeed([workflowDecision]);
       const { container } = render(<InboxScreen />);
 
       fireEvent.click(container.querySelector("[data-card-body]") as HTMLElement);
+      // Clicking "Reject" opens the inline decline reason capture
       fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+      // Confirm the decline (no reason typed — optional)
+      fireEvent.click(screen.getByRole("button", { name: /confirm decline/i }));
 
       await Promise.resolve();
       expect(wfRejectMock).toHaveBeenCalled();

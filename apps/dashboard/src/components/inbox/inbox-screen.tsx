@@ -71,10 +71,10 @@ function ApprovalDetailItem({ decision, onClose }: ApprovalDetailItemProps) {
       .catch(() => {});
   };
 
-  const handleDismiss = () => {
+  const handleDismiss = (note?: string) => {
     if (action.isPending) return;
     void action
-      .dismiss()
+      .dismiss(note)
       .then(onClose)
       .catch(() => {});
   };
@@ -143,10 +143,10 @@ function WorkflowApprovalDetailItem({ decision, onClose }: ApprovalDetailItemPro
       });
   };
 
-  const handleReject = () => {
+  const handleReject = (note?: string) => {
     if (action.isPending) return;
     void action
-      .reject()
+      .reject(note)
       .then(() => {
         onClose();
         toast({ title: "Rejected", description: `${agentName} won't run this.` });

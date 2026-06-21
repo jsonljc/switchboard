@@ -98,7 +98,7 @@ export interface ApprovalDetailSheetProps {
   onClose: () => void;
   onCommit: (note?: string) => void;
   onSecondary: () => void;
-  onDismiss: () => void;
+  onDismiss: (note?: string) => void;
 }
 
 export function ApprovalDetailSheet({
@@ -122,10 +122,14 @@ export function ApprovalDetailSheet({
 
   const [confirming, setConfirming] = useState(false);
   const [note, setNote] = useState("");
+  const [declining, setDeclining] = useState(false);
+  const [declineNote, setDeclineNote] = useState("");
 
   useEffect(() => {
     setConfirming(false);
     setNote("");
+    setDeclining(false);
+    setDeclineNote("");
   }, [decision.id]);
 
   const handlePrimary = () => {
@@ -263,12 +267,49 @@ export function ApprovalDetailSheet({
             }}
             onConfirm={handlePrimary}
           />
+        ) : declining && !alreadyHandled ? (
+          <div className="ds-confirm">
+            <div className="ds-confirm-head">
+              <span aria-hidden="true" />
+              <span>Optional: add a reason for the audit log.</span>
+            </div>
+            <textarea
+              className="ds-confirm-note"
+              rows={2}
+              placeholder="Why are you declining? (optional)"
+              value={declineNote}
+              onChange={(e) => setDeclineNote(e.target.value)}
+            />
+            <div className="ds-confirm-actions">
+              <button
+                type="button"
+                className="ds-action ds-action-secondary"
+                onClick={() => {
+                  setDeclining(false);
+                  setDeclineNote("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="ds-action ds-action-dismiss"
+                onClick={() => {
+                  onDismiss(declineNote.trim() || undefined);
+                }}
+              >
+                Confirm decline
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             <button
               type="button"
               className="ds-action ds-action-dismiss"
-              onClick={onDismiss}
+              onClick={() => {
+                if (!alreadyHandled) setDeclining(true);
+              }}
               disabled={!!alreadyHandled}
             >
               {decision.presentation.dismissLabel || "Dismiss"}
