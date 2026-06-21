@@ -75,6 +75,39 @@ function ConfirmInline({
   );
 }
 
+interface DeclineInlineProps {
+  note: string;
+  onNote: (v: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+function DeclineInline({ note, onNote, onCancel, onConfirm }: DeclineInlineProps) {
+  return (
+    <div className="ds-confirm">
+      <div className="ds-confirm-head">
+        <span aria-hidden="true" />
+        <span>Optional: add a reason for the audit log.</span>
+      </div>
+      <textarea
+        className="ds-confirm-note"
+        rows={2}
+        placeholder="Why are you declining? (optional)"
+        value={note}
+        onChange={(e) => onNote(e.target.value)}
+      />
+      <div className="ds-confirm-actions">
+        <button type="button" className="ds-action ds-action-secondary" onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="button" className="ds-action ds-action-dismiss" onClick={onConfirm}>
+          Confirm decline
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export interface AlreadyHandledState {
   kind: string;
   label: string;
@@ -268,40 +301,17 @@ export function ApprovalDetailSheet({
             onConfirm={handlePrimary}
           />
         ) : declining && !alreadyHandled ? (
-          <div className="ds-confirm">
-            <div className="ds-confirm-head">
-              <span aria-hidden="true" />
-              <span>Optional: add a reason for the audit log.</span>
-            </div>
-            <textarea
-              className="ds-confirm-note"
-              rows={2}
-              placeholder="Why are you declining? (optional)"
-              value={declineNote}
-              onChange={(e) => setDeclineNote(e.target.value)}
-            />
-            <div className="ds-confirm-actions">
-              <button
-                type="button"
-                className="ds-action ds-action-secondary"
-                onClick={() => {
-                  setDeclining(false);
-                  setDeclineNote("");
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="ds-action ds-action-dismiss"
-                onClick={() => {
-                  onDismiss(declineNote.trim() || undefined);
-                }}
-              >
-                Confirm decline
-              </button>
-            </div>
-          </div>
+          <DeclineInline
+            note={declineNote}
+            onNote={setDeclineNote}
+            onCancel={() => {
+              setDeclining(false);
+              setDeclineNote("");
+            }}
+            onConfirm={() => {
+              onDismiss(declineNote.trim() || undefined);
+            }}
+          />
         ) : (
           <>
             <button
