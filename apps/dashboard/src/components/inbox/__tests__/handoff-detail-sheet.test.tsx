@@ -111,6 +111,52 @@ describe("HandoffDetailSheet — states", () => {
     fireEvent.click(screen.getByRole("button", { name: /try again/i }));
     expect(refetchMock).toHaveBeenCalled();
   });
+
+  it("error state renders a StatePanel with role=alert", () => {
+    detailState = { isLoading: false, isError: true, refetch: refetchMock };
+    render(
+      <HandoffDetailSheet
+        decision={makeDecision()}
+        onReply={noop}
+        onResolve={noopResolve}
+        onClose={() => {}}
+        nowMs={NOW}
+      />,
+    );
+    // StatePanel renders role="alert" for genuine failures
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("error state preserves the dialog shell (role=dialog, aria-modal, aria-label)", () => {
+    detailState = { isLoading: false, isError: true, refetch: refetchMock };
+    render(
+      <HandoffDetailSheet
+        decision={makeDecision()}
+        onReply={noop}
+        onResolve={noopResolve}
+        onClose={() => {}}
+        nowMs={NOW}
+      />,
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toHaveAttribute("aria-label", "Handoff detail");
+  });
+
+  it("error state retry button wires to refetch", () => {
+    detailState = { isLoading: false, isError: true, refetch: refetchMock };
+    render(
+      <HandoffDetailSheet
+        decision={makeDecision()}
+        onReply={noop}
+        onResolve={noopResolve}
+        onClose={() => {}}
+        nowMs={NOW}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    expect(refetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("HandoffDetailSheet — data render", () => {
