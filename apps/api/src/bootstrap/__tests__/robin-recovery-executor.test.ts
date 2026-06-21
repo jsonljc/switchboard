@@ -306,4 +306,82 @@ describe("buildRobinRecoverySendExecutor", () => {
       "alex_re_engagement_offer_sg_v1",
     );
   });
+
+  // Multi-tenant per-org send-credential resolution.
+  describe("per-org send creds (multi-tenant)", () => {
+    it("sends from the campaign ORG's phone id + token, not the global token/env phone id", async () => {
+      const resolveOrgSendCreds = vi.fn().mockResolvedValue({ token: "T2", phoneNumberId: "P2" });
+      // Global resolvers return values that MUST NOT be used when the org resolves.
+      const deps = makeDeps({
+        resolveOrgSendCreds,
+        resolveSendToken: () => "GLOBAL_TOK",
+        resolvePhoneNumberId: () => "GLOBAL_PN",
+      });
+      const { handler } = buildRobinRecoverySendExecutor(deps as never);
+      const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
+      expect(res.outputs).toEqual({ sent: 1, skipped: 0, failed: 0, total: 1 });
+      expect(resolveOrgSendCreds).toHaveBeenCalledWith("org_1");
+      expect(deps.sendTemplate.mock.calls[0]![0]).toMatchObject({
+        accessToken: "T2",
+        phoneNumberId: "P2",
+      });
+    });
+
+    it("falls back to the global token + env/phone resolvers when the org resolver returns null", async () => {
+      const resolveOrgSendCreds = vi.fn().mockResolvedValue(null);
+      const deps = makeDeps({
+        resolveOrgSendCreds,
+        resolveSendToken: () => "GLOBAL_TOK",
+        resolvePhoneNumberId: () => "GLOBAL_PN",
+      });
+      const { handler } = buildRobinRecoverySendExecutor(deps as never);
+      const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
+      expect(res.outputs).toEqual({ sent: 1, skipped: 0, failed: 0, total: 1 });
+      expect(deps.sendTemplate.mock.calls[0]![0]).toMatchObject({
+        accessToken: "GLOBAL_TOK",
+        phoneNumberId: "GLOBAL_PN",
+      });
+    });
+
+    it("applies PER-FIELD fallback: org phone id + global token when the org omits token", async () => {
+      const resolveOrgSendCreds = vi.fn().mockResolvedValue({ token: null, phoneNumberId: "P2" });
+      const deps = makeDeps({
+        resolveOrgSendCreds,
+        resolveSendToken: () => "GLOBAL_TOK",
+        resolvePhoneNumberId: () => "GLOBAL_PN",
+      });
+      const { handler } = buildRobinRecoverySendExecutor(deps as never);
+      await handler.execute(makeWorkUnit([C1]) as never, {} as never);
+      expect(deps.sendTemplate.mock.calls[0]![0]).toMatchObject({
+        accessToken: "GLOBAL_TOK",
+        phoneNumberId: "P2",
+      });
+    });
+
+    it("HEADLINE: two different campaign orgs send from two different phone numbers", async () => {
+      const resolveOrgSendCreds = vi.fn(async (orgId: string) =>
+        orgId === "orgA"
+          ? { token: "T_A", phoneNumberId: "P_A" }
+          : { token: "T_B", phoneNumberId: "P_B" },
+      );
+      const deps = makeDeps({ resolveOrgSendCreds });
+      const { handler } = buildRobinRecoverySendExecutor(deps as never);
+      await handler.execute(
+        { ...makeWorkUnit([C1]), organizationId: "orgA" } as never,
+        {} as never,
+      );
+      await handler.execute(
+        { ...makeWorkUnit([C1]), organizationId: "orgB" } as never,
+        {} as never,
+      );
+      expect(deps.sendTemplate.mock.calls[0]![0]).toMatchObject({
+        accessToken: "T_A",
+        phoneNumberId: "P_A",
+      });
+      expect(deps.sendTemplate.mock.calls[1]![0]).toMatchObject({
+        accessToken: "T_B",
+        phoneNumberId: "P_B",
+      });
+    });
+  });
 });

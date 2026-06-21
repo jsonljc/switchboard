@@ -2,21 +2,10 @@ import type { WorkflowHandler } from "@switchboard/core/platform";
 import { getMetrics } from "@switchboard/core";
 import { deriveConsentStatus, evaluateConsentGate } from "@switchboard/schemas";
 import type { PdpaJurisdiction } from "@switchboard/schemas";
+import { resolveWhatsAppSendToken } from "../../lib/whatsapp-send-token.js";
 
 /** Telemetry intent label for the first-touch greeting send path. */
 const GREETING_INTENT = "meta.lead.greeting.send";
-
-/**
- * Canonical WhatsApp Cloud API **send** token resolver, inlined here so the
- * greeting honours the same `WHATSAPP_ACCESS_TOKEN ?? WHATSAPP_TOKEN` resolution
- * order as the sibling reminder/follow-up workflows (a deploy that set only the
- * legacy `WHATSAPP_TOKEN` name must not leave the greeting dark). Kept local: the
- * shared `apps/api/src/lib/whatsapp-send-token` helper is introduced on a separate
- * branch; this inline copy is intentionally the identical resolution order.
- */
-function resolveWhatsAppSendToken(): string | undefined {
-  return process.env["WHATSAPP_ACCESS_TOKEN"] ?? process.env["WHATSAPP_TOKEN"];
-}
 
 /**
  * Consent inputs for the first-touch Meta-lead greeting, scoped to the org +
@@ -36,6 +25,15 @@ export interface GreetingSendContext {
 export interface MetaLeadGreetingDeps {
   /** Reads the consent + first-touch basis for (orgId, contactId). */
   getSendContext: (orgId: string, contactId: string) => Promise<GreetingSendContext>;
+  /**
+   * Multi-tenant: resolve the sending org's own WhatsApp {token, phoneNumberId}.
+   * Returns null when the org has no whatsapp connection; the call site then
+   * falls back PER-FIELD to the global env values (single-tenant pilot). Defaults
+   * to a null-returning resolver so existing wiring/tests keep the env-only path.
+   */
+  resolveOrgSendCreds?: (
+    organizationId: string,
+  ) => Promise<{ token: string | null; phoneNumberId: string | null } | null>;
 }
 
 interface GreetingParams {
@@ -69,6 +67,7 @@ type GreetingConsentDecision = "granted" | "not_applicable" | "ctwa_optin";
  * unconditional send. Default is fail-closed: do NOT send when ineligible.
  */
 export function buildMetaLeadGreetingWorkflow(deps: MetaLeadGreetingDeps): WorkflowHandler {
+  const resolveOrgSendCreds = deps.resolveOrgSendCreds ?? (async () => null);
   return {
     async execute(workUnit) {
       const input = workUnit.parameters as unknown as GreetingParams;
@@ -122,8 +121,12 @@ export function buildMetaLeadGreetingWorkflow(deps: MetaLeadGreetingDeps): Workf
         };
       }
 
-      const accessToken = resolveWhatsAppSendToken();
-      const phoneNumberId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
+      // Multi-tenant: prefer the sending org's own send creds; PER-FIELD fall back
+      // to the global env values (single-tenant pilot) so a partial per-org row
+      // never dark-holes the deployment-wide config.
+      const perOrg = await resolveOrgSendCreds(workUnit.organizationId);
+      const accessToken = perOrg?.token ?? resolveWhatsAppSendToken();
+      const phoneNumberId = perOrg?.phoneNumberId ?? process.env["WHATSAPP_PHONE_NUMBER_ID"];
       if (!accessToken || !phoneNumberId) {
         // Infra config gap, not a per-contact decision: with no send token/phone id
         // EVERY lead greeting silently no-ops. Make it loud + countable (distinct from

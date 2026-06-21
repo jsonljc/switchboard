@@ -210,3 +210,92 @@ describe("buildMetaLeadGreetingWorkflow", () => {
     });
   });
 });
+
+// Multi-tenant per-org send-credential resolution. Its OWN describe so it never
+// collides with a sibling change inserting cases into the block above.
+describe("buildMetaLeadGreetingWorkflow - per-org send creds (multi-tenant)", () => {
+  let fetchSpy: ReturnType<typeof vi.fn<(...args: unknown[]) => Promise<Response>>>;
+
+  beforeEach(() => {
+    process.env["WHATSAPP_ACCESS_TOKEN"] = "ENV_TOK";
+    process.env["WHATSAPP_PHONE_NUMBER_ID"] = "ENV_PN";
+    fetchSpy = vi
+      .fn<(...args: unknown[]) => Promise<Response>>()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ messages: [{ id: "wamid.1" }] }), { status: 200 }),
+      );
+    vi.stubGlobal("fetch", fetchSpy);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
+    delete process.env["WHATSAPP_PHONE_NUMBER_ID"];
+    setMetrics(createInMemoryMetrics());
+  });
+
+  const ctwaCtx: GreetingSendContext = { ...pendingContext, ctwaOptIn: true };
+
+  it("sends from the resolved ORG's phone id + token, not the global env values", async () => {
+    const getSendContext = vi.fn<
+      (orgId: string, contactId: string) => Promise<GreetingSendContext>
+    >(async () => ctwaCtx);
+    const resolveOrgSendCreds = vi.fn().mockResolvedValue({ token: "T2", phoneNumberId: "P2" });
+    const workflow = buildMetaLeadGreetingWorkflow({ getSendContext, resolveOrgSendCreds });
+    const result = await workflow.execute(baseWorkUnit, services);
+    expect(result.outputs?.["sent"]).toBe(true);
+    expect(resolveOrgSendCreds).toHaveBeenCalledWith("org_1");
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe("https://graph.facebook.com/v21.0/P2/messages");
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBe("Bearer T2");
+  });
+
+  it("falls back to the global env phone id + token when the org resolver returns null", async () => {
+    const getSendContext = vi.fn<
+      (orgId: string, contactId: string) => Promise<GreetingSendContext>
+    >(async () => ctwaCtx);
+    const resolveOrgSendCreds = vi.fn().mockResolvedValue(null);
+    const workflow = buildMetaLeadGreetingWorkflow({ getSendContext, resolveOrgSendCreds });
+    const result = await workflow.execute(baseWorkUnit, services);
+    expect(result.outputs?.["sent"]).toBe(true);
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe("https://graph.facebook.com/v21.0/ENV_PN/messages");
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBe(
+      "Bearer ENV_TOK",
+    );
+  });
+
+  it("applies PER-FIELD fallback: org token + env phone id when the org omits phoneNumberId", async () => {
+    const getSendContext = vi.fn<
+      (orgId: string, contactId: string) => Promise<GreetingSendContext>
+    >(async () => ctwaCtx);
+    const resolveOrgSendCreds = vi.fn().mockResolvedValue({ token: "T2", phoneNumberId: null });
+    const workflow = buildMetaLeadGreetingWorkflow({ getSendContext, resolveOrgSendCreds });
+    await workflow.execute(baseWorkUnit, services);
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe("https://graph.facebook.com/v21.0/ENV_PN/messages");
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBe("Bearer T2");
+  });
+
+  it("HEADLINE: two different orgs resolve two different phone numbers end-to-end", async () => {
+    const getSendContext = vi.fn<
+      (orgId: string, contactId: string) => Promise<GreetingSendContext>
+    >(async () => ctwaCtx);
+    const resolveOrgSendCreds = vi.fn(async (orgId: string) =>
+      orgId === "orgA"
+        ? { token: "T_A", phoneNumberId: "P_A" }
+        : { token: "T_B", phoneNumberId: "P_B" },
+    );
+    const workflow = buildMetaLeadGreetingWorkflow({ getSendContext, resolveOrgSendCreds });
+    await workflow.execute({ ...baseWorkUnit, organizationId: "orgA" }, services);
+    await workflow.execute({ ...baseWorkUnit, organizationId: "orgB" }, services);
+    const [urlA, initA] = fetchSpy.mock.calls[0]!;
+    const [urlB, initB] = fetchSpy.mock.calls[1]!;
+    expect(urlA).toBe("https://graph.facebook.com/v21.0/P_A/messages");
+    expect(urlB).toBe("https://graph.facebook.com/v21.0/P_B/messages");
+    expect((initA as { headers: Record<string, string> }).headers.Authorization).toBe("Bearer T_A");
+    expect((initB as { headers: Record<string, string> }).headers.Authorization).toBe("Bearer T_B");
+  });
+});

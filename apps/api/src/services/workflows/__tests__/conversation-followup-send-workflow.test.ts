@@ -200,3 +200,91 @@ describe("conversation.followup.send handler — send token + config-miss", () =
     });
   });
 });
+
+// Multi-tenant per-org send-credential resolution. Its OWN describe (appended at
+// end-of-file) so it never collides with a sibling change inserting cases above.
+describe("conversation.followup.send handler - per-org send creds (multi-tenant)", () => {
+  beforeEach(() => {
+    process.env["WHATSAPP_ACCESS_TOKEN"] = "ENV_TOK";
+    process.env["WHATSAPP_PHONE_NUMBER_ID"] = "ENV_PN";
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    delete process.env["WHATSAPP_ACCESS_TOKEN"];
+    delete process.env["WHATSAPP_TOKEN"];
+    delete process.env["WHATSAPP_PHONE_NUMBER_ID"];
+    setMetrics(createInMemoryMetrics());
+  });
+
+  it("sends from the resolved ORG's phone id + token, not the global env values", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: "wamid_1" }] }) });
+    vi.stubGlobal("fetch", fetchSpy);
+    const resolveOrgSendCreds = vi.fn().mockResolvedValue({ token: "T2", phoneNumberId: "P2" });
+    const wf = buildConversationFollowUpSendWorkflow(makeDeps({ resolveOrgSendCreds }));
+    const r = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
+    expect(r.outcome).toBe("completed");
+    expect(resolveOrgSendCreds).toHaveBeenCalledWith("org_1");
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe("https://graph.facebook.com/v21.0/P2/messages");
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBe("Bearer T2");
+  });
+
+  it("falls back to the global env phone id + token when the org resolver returns null", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: "wamid_1" }] }) });
+    vi.stubGlobal("fetch", fetchSpy);
+    const resolveOrgSendCreds = vi.fn().mockResolvedValue(null);
+    const wf = buildConversationFollowUpSendWorkflow(makeDeps({ resolveOrgSendCreds }));
+    const r = await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
+    expect(r.outcome).toBe("completed");
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe("https://graph.facebook.com/v21.0/ENV_PN/messages");
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBe(
+      "Bearer ENV_TOK",
+    );
+  });
+
+  it("applies PER-FIELD fallback: org phone id + env token when the org omits token", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: "wamid_1" }] }) });
+    vi.stubGlobal("fetch", fetchSpy);
+    const resolveOrgSendCreds = vi.fn().mockResolvedValue({ token: null, phoneNumberId: "P2" });
+    const wf = buildConversationFollowUpSendWorkflow(makeDeps({ resolveOrgSendCreds }));
+    await wf.execute(baseWorkUnit as never, { submitChildWork: vi.fn() });
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe("https://graph.facebook.com/v21.0/P2/messages");
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBe(
+      "Bearer ENV_TOK",
+    );
+  });
+
+  it("HEADLINE: two different orgs resolve two different phone numbers end-to-end", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: "wamid_1" }] }) });
+    vi.stubGlobal("fetch", fetchSpy);
+    const resolveOrgSendCreds = vi.fn(async (orgId: string) =>
+      orgId === "orgA"
+        ? { token: "T_A", phoneNumberId: "P_A" }
+        : { token: "T_B", phoneNumberId: "P_B" },
+    );
+    const wf = buildConversationFollowUpSendWorkflow(makeDeps({ resolveOrgSendCreds }));
+    await wf.execute({ ...baseWorkUnit, organizationId: "orgA" } as never, {
+      submitChildWork: vi.fn(),
+    });
+    await wf.execute({ ...baseWorkUnit, organizationId: "orgB" } as never, {
+      submitChildWork: vi.fn(),
+    });
+    const [urlA, initA] = fetchSpy.mock.calls[0]!;
+    const [urlB, initB] = fetchSpy.mock.calls[1]!;
+    expect(urlA).toBe("https://graph.facebook.com/v21.0/P_A/messages");
+    expect(urlB).toBe("https://graph.facebook.com/v21.0/P_B/messages");
+    expect((initA as { headers: Record<string, string> }).headers.Authorization).toBe("Bearer T_A");
+    expect((initB as { headers: Record<string, string> }).headers.Authorization).toBe("Bearer T_B");
+  });
+});
