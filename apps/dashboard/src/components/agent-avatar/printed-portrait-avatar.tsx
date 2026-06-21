@@ -4,6 +4,7 @@
 import type { AgentKey } from "@switchboard/schemas";
 import { AnimatedSprite } from "@/components/cockpit/sprite/animated-sprite";
 import type { SpriteVariantKey, VariantBundle } from "@/components/cockpit/sprite/types";
+import { SPRITE_SIZE } from "@/components/cockpit/sprite/build-sprite";
 import { ALEX_VARIANTS, DEFAULT_ALEX_VARIANT } from "@/lib/cockpit/alex-config";
 import { RILEY_VARIANTS, DEFAULT_RILEY_VARIANT } from "@/lib/cockpit/riley/riley-config";
 import { MIRA_VARIANTS, DEFAULT_MIRA_VARIANT } from "@/lib/cockpit/mira/mira-config";
@@ -40,6 +41,25 @@ const AGENT_LETTER: Record<AgentKey, string> = {
   riley: "R",
   mira: "M",
 };
+
+/**
+ * Crisp pixel scaling. A {@link SPRITE_SIZE}-unit sprite reads as even pixels
+ * only at an integer multiple of its grid: a 1.5x scale staggers pixel widths
+ * 1,2,1,2 (the "aliased" look the audit flagged on the 44px panel chip). Snap
+ * the inset plate to the largest integer multiple of SPRITE_SIZE that fits the
+ * chip box; a tiny chip that cannot hold a full 1x keeps a sub-1x sprite (it is
+ * too small to show the unevenness). The result never exceeds `boxPx`.
+ *
+ * @param boxPx outer chip size in px
+ * @param inset ground-reveal ratio (the sprite targets `boxPx * inset`)
+ */
+export function crispSpriteSize(boxPx: number, inset = 0.82): number {
+  const target = boxPx * inset;
+  if (target < SPRITE_SIZE) return Math.round(target);
+  const nearest = Math.round(target / SPRITE_SIZE) * SPRITE_SIZE;
+  const maxFit = Math.floor(boxPx / SPRITE_SIZE) * SPRITE_SIZE;
+  return Math.min(nearest, maxFit);
+}
 
 export interface PrintedPortraitAvatarProps {
   agentKey: AgentKey;
@@ -92,10 +112,12 @@ export function PrintedPortraitAvatar({
     : null;
   const playing = allowMotion && visual.playing && !reduced;
   const fill = size === "fill";
-  // Sprite box: 82% of the frame (the identity ground shows around the inset
-  // plate). In fill mode the 82% lives in CSS (.fillInner); in number mode it
-  // is the rounded px size.
-  const spriteSize = fill ? ("fill" as const) : Math.round(size * 0.82);
+  // Sprite box: ~82% of the frame (the identity ground shows around the inset
+  // plate). In fill mode the 82% lives in CSS (.fillInner); in number mode the
+  // px size is snapped to an integer multiple of the 24px sprite grid so the
+  // pixels stay even (crispSpriteSize) instead of staggering at a fractional
+  // scale.
+  const spriteSize = fill ? ("fill" as const) : crispSpriteSize(size);
   // Fallback letter (unreached today; every agent ships a sprite). In fill mode
   // there is no px box to derive from; 40px reads correctly at hero scale.
   const letterSize = fill ? 40 : Math.round(size * 0.4);
