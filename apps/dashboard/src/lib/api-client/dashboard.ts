@@ -13,7 +13,9 @@ import type {
   OpportunityStage,
   PaidVisitRow,
   ReconcileBookingActionBody,
+  HomeSummary,
 } from "@switchboard/schemas";
+import { HomeSummarySchema } from "@switchboard/schemas";
 import { createIdempotencyKey } from "@/lib/idempotency";
 import { SwitchboardAgentsClient } from "./agents";
 
@@ -188,6 +190,11 @@ export class SwitchboardDashboardClient extends SwitchboardAgentsClient {
     return this.request<ReportDataV1>(`/api/dashboard/reports/refresh?${params.toString()}`, {
       method: "POST",
     });
+  }
+
+  async getHomeSummary(): Promise<HomeSummary> {
+    const raw = await this.request<{ summary: unknown }>("/api/dashboard/home/summary");
+    return HomeSummarySchema.parse(raw.summary);
   }
 
   /**
