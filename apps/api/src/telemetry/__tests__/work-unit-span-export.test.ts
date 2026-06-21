@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { setTracer, getTracer, type Span, type Tracer } from "@switchboard/core";
+import {
+  setTracer,
+  getTracer,
+  type Span,
+  type Tracer,
+  type SpanStartOptions,
+} from "@switchboard/core";
 import {
   mapExecutionTracesToSpanInput,
   exportWorkUnitSpans,
@@ -13,12 +19,17 @@ class RecordingTracer implements Tracer {
     name: string;
     attributes: Record<string, unknown>;
     parentId: number | null;
+    startTimeMs?: number;
+    endTimeMs?: number;
+    kind?: number;
+    ended: boolean;
   }> = [];
   private m = new WeakMap<Span, number>();
   startSpan(
     name: string,
     attributes?: Record<string, string | number | boolean>,
     parent?: Span,
+    options?: SpanStartOptions,
   ): Span {
     const id = this.spans.length;
     this.spans.push({
@@ -26,13 +37,19 @@ class RecordingTracer implements Tracer {
       name,
       attributes: { ...(attributes ?? {}) },
       parentId: parent ? (this.m.get(parent) ?? null) : null,
+      startTimeMs: options?.startTime,
+      kind: options?.kind,
+      ended: false,
     });
     const span: Span = {
       setAttribute: (k, v) => {
         this.spans[id]!.attributes[k] = v;
       },
       setStatus: () => {},
-      end: () => {},
+      end: (endTime?: number) => {
+        this.spans[id]!.ended = true;
+        this.spans[id]!.endTimeMs = endTime;
+      },
     };
     this.m.set(span, id);
     return span;
@@ -167,5 +184,65 @@ describe("exportWorkUnitSpans — flag gate + enrichment + read-only", () => {
     );
     const root = tracer.spans.find((s) => s.parentId === null)!;
     expect(root.attributes["switchboard.intent"]).toBeUndefined(); // enrichment skipped -> no leak
+  });
+});
+
+describe("mapExecutionTracesToSpanInput — timing + cache/cost lift (E4c)", () => {
+  it("lifts createdAt -> createdAtMs and cache/cost from tokenUsage", () => {
+    const createdAt = new Date(1_700_000_000_100);
+    const input = mapExecutionTracesToSpanInput("wu_1", [
+      row({
+        createdAt,
+        tokenUsage: {
+          input: 100,
+          output: 50,
+          cacheRead: 900,
+          cacheCreation: 100,
+          costUsd: 0.01,
+          model: "claude-opus-4-6",
+        },
+      }),
+    ]);
+    expect(input.executions[0]!.createdAtMs).toBe(1_700_000_000_100);
+    expect(input.executions[0]!.cacheReadTokens).toBe(900);
+    expect(input.executions[0]!.cacheCreationTokens).toBe(100);
+    expect(input.executions[0]!.costUsd).toBe(0.01);
+  });
+
+  it("lifts WorkTrace ISO timestamps -> epoch-ms on the work-unit", () => {
+    const input = mapExecutionTracesToSpanInput("wu_1", [row()], {
+      requestedAt: "2023-11-14T22:13:20.000Z", // = 1_700_000_000_000
+      completedAt: "2023-11-14T22:13:20.120Z", // = 1_700_000_000_120
+    });
+    expect(input.workUnit.requestedAtMs).toBe(1_700_000_000_000);
+    expect(input.workUnit.completedAtMs).toBe(1_700_000_000_120);
+  });
+});
+
+describe("seam: realistic store rows -> mapper -> projection carry REAL timing (E4c)", () => {
+  it("root span gets real requestedAt/completedAt; execution span gets derived synthetic timing + cache attrs", () => {
+    return import("@switchboard/core").then(({ projectWorkUnitSpans }) => {
+      const tracer = new RecordingTracer();
+      const input = mapExecutionTracesToSpanInput(
+        "wu_1",
+        [
+          row({
+            createdAt: new Date(1_700_000_000_100),
+            durationMs: 40,
+            tokenUsage: { input: 1, output: 1, cacheRead: 7, model: "claude-opus-4-6" },
+          }),
+        ],
+        { requestedAt: "2023-11-14T22:13:20.000Z", completedAt: "2023-11-14T22:13:20.120Z" },
+      );
+      projectWorkUnitSpans(input, tracer);
+      const root = tracer.spans.find((s) => s.parentId === null)!;
+      const exec = tracer.spans.find((s) => s.name.startsWith("chat"))!;
+      expect(root.startTimeMs).toBe(1_700_000_000_000);
+      expect(root.endTimeMs).toBe(1_700_000_000_120);
+      expect(exec.endTimeMs).toBe(1_700_000_000_100);
+      expect(exec.startTimeMs).toBe(1_700_000_000_060); // createdAt - durationMs
+      expect(exec.attributes["switchboard.timing.synthetic"]).toBe(true);
+      expect(exec.attributes["gen_ai.usage.cache_read_input_tokens"]).toBe(7);
+    });
   });
 });

@@ -53,3 +53,65 @@ describe("Tracer parenting extension", () => {
     expect(() => tracer.startSpan("c", undefined, parent).end()).not.toThrow();
   });
 });
+
+describe("Tracer timing + kind extension (E4c)", () => {
+  it("forwards startTime (as an HrTime tuple) + kind via the OTel options slot, and endTime to raw.end", () => {
+    const started: Array<{ name: string; options: unknown; context: unknown }> = [];
+    const ended: unknown[] = [];
+    const fakeOtelTracer = {
+      startSpan: vi.fn((name: string, options?: unknown, context?: unknown) => {
+        started.push({ name, options, context });
+        return {
+          setAttribute: vi.fn(),
+          setStatus: vi.fn(),
+          end: vi.fn((endTime?: unknown) => ended.push(endTime)),
+        };
+      }),
+    };
+    const tracer = createOTelTracer(fakeOtelTracer);
+    const span = tracer.startSpan("chat alex", { a: "1" }, undefined, {
+      startTime: 1_700_000_000_500,
+      kind: 2,
+    });
+    span.end(1_700_000_001_000);
+
+    expect(started).toHaveLength(1);
+    // 1_700_000_000_500 ms -> [1_700_000_000 s, 500_000_000 ns]; kind passed through verbatim
+    expect(started[0]!.options).toEqual({ startTime: [1_700_000_000, 500_000_000], kind: 2 });
+    // 1_700_000_001_000 ms -> [1_700_000_001, 0]
+    expect(ended).toEqual([[1_700_000_001, 0]]);
+  });
+
+  it("builds NO OTel options object when neither startTime nor kind is supplied (E4b back-compat)", () => {
+    const started: Array<{ options: unknown }> = [];
+    const fakeOtelTracer = {
+      startSpan: vi.fn((_name: string, options?: unknown) => {
+        started.push({ options });
+        return { setAttribute: vi.fn(), setStatus: vi.fn(), end: vi.fn() };
+      }),
+    };
+    const tracer = createOTelTracer(fakeOtelTracer);
+    tracer.startSpan("p", { a: "1" }); // legacy 2-arg caller
+    expect(started[0]!.options).toBeUndefined();
+  });
+
+  it("passes only kind (no startTime key) when startTime is omitted", () => {
+    const started: Array<{ options: unknown }> = [];
+    const fakeOtelTracer = {
+      startSpan: vi.fn((_name: string, options?: unknown) => {
+        started.push({ options });
+        return { setAttribute: vi.fn(), setStatus: vi.fn(), end: vi.fn() };
+      }),
+    };
+    const tracer = createOTelTracer(fakeOtelTracer);
+    tracer.startSpan("invoke_agent", undefined, undefined, { kind: 0 });
+    expect(started[0]!.options).toEqual({ kind: 0 });
+  });
+
+  it("NoopTracer accepts the 4-arg form + end(endTime) and stays a no-op", () => {
+    const tracer = new NoopTracer();
+    const parent = tracer.startSpan("p", { a: "1" });
+    const child = tracer.startSpan("c", { b: "2" }, parent, { startTime: 1, kind: 0 });
+    expect(() => child.end(2)).not.toThrow();
+  });
+});
