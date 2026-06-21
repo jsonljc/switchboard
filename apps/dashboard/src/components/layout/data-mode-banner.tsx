@@ -2,10 +2,11 @@
 "use client";
 
 import { useDataMode } from "@/lib/data-mode/client";
+import { NoticeBar } from "@/components/ui/notice-bar";
 
 /**
  * Global indicator strip rendered at the top of the page whenever data
- * mode is "demo". Quiet amber styling — not an error state. Visible to any
+ * mode is "demo". Quiet caution styling, not an error state. Visible to any
  * session, not gated on dev-user (stakeholders viewing preview deployments
  * need to know they're looking at demo data).
  *
@@ -17,13 +18,5 @@ export function DataModeBanner() {
   const mode = useDataMode();
   if (mode !== "demo") return null;
 
-  return (
-    <div
-      role="status"
-      title="Live systems are not being queried."
-      className="flex items-center justify-center bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-900 ring-1 ring-amber-200"
-    >
-      Demo data mode
-    </div>
-  );
+  return <NoticeBar title="Live systems are not being queried.">Demo data mode</NoticeBar>;
 }

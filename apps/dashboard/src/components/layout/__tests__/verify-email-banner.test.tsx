@@ -94,4 +94,12 @@ describe("VerifyEmailBanner", () => {
 
     await waitFor(() => expect(screen.getByText(/could not resend/i)).toBeInTheDocument());
   });
+
+  it("renders on the caution tint, not raw amber (audit M1)", () => {
+    useSessionMock.mockReturnValue({ data: { emailVerified: null }, status: "authenticated" });
+    render(<VerifyEmailBanner />);
+    const strip = screen.getByRole("status");
+    expect(strip.className).toContain("bg-caution-subtle");
+    expect(strip.className).not.toMatch(/amber/);
+  });
 });
