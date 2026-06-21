@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/query-states";
+import { Skeleton, StatePanel } from "@/components/query-states";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -175,7 +175,11 @@ export function ChannelManagement() {
       </CardHeader>
       <CardContent className="space-y-4">
         {channels.length === 0 && (
-          <p className="text-sm text-muted-foreground">No channels provisioned yet.</p>
+          <StatePanel
+            role="status"
+            title="No channels yet"
+            body="Add Telegram or Slack to start receiving messages. WhatsApp is connected via the Channels page."
+          />
         )}
 
         {channels.map((ch) => (

@@ -24,6 +24,7 @@ import {
   FileText,
 } from "lucide-react";
 import Link from "next/link";
+import { StatePanel } from "@/components/query-states";
 import { WhatsAppSendTest } from "./whatsapp-send-test";
 import { CreateTemplateDialog } from "./whatsapp-template-create";
 
@@ -81,15 +82,6 @@ function TemplateBadge({
     );
   }
   return <Badge variant="outline">{lower}</Badge>;
-}
-
-function SectionError({ message }: { message: string }) {
-  return (
-    <div className="flex items-center gap-2 text-sm text-destructive py-4">
-      <AlertCircle className="h-4 w-4 shrink-0" />
-      <span>{message}</span>
-    </div>
-  );
 }
 
 function SectionSkeleton() {
@@ -265,10 +257,12 @@ function PhoneNumbersSection({
   data,
   isLoading,
   error,
+  onRetry,
 }: {
   data: { phoneNumbers: WhatsAppPhoneNumber[] } | undefined;
   isLoading: boolean;
   error: Error | null;
+  onRetry: () => void;
 }) {
   return (
     <Card>
@@ -277,9 +271,21 @@ function PhoneNumbersSection({
       </CardHeader>
       <CardContent>
         {isLoading && <SectionSkeleton />}
-        {error && <SectionError message="Failed to load phone numbers." />}
+        {error && (
+          <StatePanel
+            role="alert"
+            eyebrow="Couldn't load"
+            title="Phone numbers unavailable"
+            body="We couldn't fetch your registered phone numbers. Try again."
+            onRetry={onRetry}
+          />
+        )}
         {data && data.phoneNumbers.length === 0 && (
-          <p className="text-sm text-muted-foreground">No phone numbers registered.</p>
+          <StatePanel
+            role="status"
+            title="No phone numbers registered"
+            body="Register a WhatsApp phone number through Meta Business Suite to get started."
+          />
         )}
         {data && data.phoneNumbers.length > 0 && (
           <div className="overflow-x-auto">
@@ -333,10 +339,12 @@ function TemplatesSection({
   data,
   isLoading,
   error,
+  onRetry,
 }: {
   data: { templates: WhatsAppTemplate[] } | undefined;
   isLoading: boolean;
   error: Error | null;
+  onRetry: () => void;
 }) {
   return (
     <Card>
@@ -346,12 +354,22 @@ function TemplatesSection({
       </CardHeader>
       <CardContent>
         {isLoading && <SectionSkeleton />}
-        {error && <SectionError message="Failed to load message templates." />}
+        {error && (
+          <StatePanel
+            role="alert"
+            eyebrow="Couldn't load"
+            title="Templates unavailable"
+            body="We couldn't fetch your message templates. Try again."
+            onRetry={onRetry}
+          />
+        )}
         {data && data.templates.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <FileText className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">No message templates found.</p>
-          </div>
+          <StatePanel
+            role="status"
+            icon={<FileText className="h-8 w-8" />}
+            title="No message templates found"
+            body="Create a template to start sending approved WhatsApp messages."
+          />
         )}
         {data && data.templates.length > 0 && (
           <div className="overflow-x-auto">
@@ -427,7 +445,13 @@ export function WhatsAppManagement() {
     return (
       <Card>
         <CardContent className="py-8">
-          <SectionError message="Failed to load WhatsApp account status." />
+          <StatePanel
+            role="alert"
+            eyebrow="Couldn't load"
+            title="WhatsApp account unavailable"
+            body="We couldn't load your WhatsApp account status. Try again."
+            onRetry={() => void account.refetch()}
+          />
         </CardContent>
       </Card>
     );
@@ -446,7 +470,12 @@ export function WhatsAppManagement() {
     <div className="space-y-6">
       <ReadinessBanner readiness={readiness} />
       <SetupSection data={account.data} />
-      <PhoneNumbersSection data={phones.data} isLoading={phones.isLoading} error={phones.error} />
+      <PhoneNumbersSection
+        data={phones.data}
+        isLoading={phones.isLoading}
+        error={phones.error}
+        onRetry={() => void phones.refetch()}
+      />
       <WhatsAppSendTest
         phoneNumbers={phones.data?.phoneNumbers ?? []}
         templates={templates.data?.templates ?? []}
@@ -456,6 +485,7 @@ export function WhatsAppManagement() {
         data={templates.data}
         isLoading={templates.isLoading}
         error={templates.error}
+        onRetry={() => void templates.refetch()}
       />
     </div>
   );
