@@ -726,7 +726,8 @@
     inset: -3px;
     border-radius: 50%;
     border: 1px solid hsl(140 50% 38% / 0.4);
-    animation: pulse-ring 2s ease-out infinite;
+    /* Fire once on mount, then rest: a steady dot already reads as live (audit M6). */
+    animation: pulse-ring 2s ease-out;
   }
   @keyframes pulse-ring {
     0% {
