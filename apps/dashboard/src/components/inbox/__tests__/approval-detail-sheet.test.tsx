@@ -396,4 +396,91 @@ describe("<ApprovalDetailSheet>", () => {
       expect(dialog).toHaveAttribute("data-agent", "riley");
     });
   });
+
+  // ── Task 3: evidence block, at-stake, signals redesign ────────────────────────
+
+  /**
+   * Builder for a recommendation-type Decision with meta overrides.
+   * Spreads a base fixture so individual tests only specify what they care about.
+   */
+  function recWith(
+    overrides: {
+      dataLines?: Array<string | string[]>;
+      dollarsAtRisk?: number;
+      confidence?: number;
+    } = {},
+  ): Decision {
+    return makeDecision({
+      meta: {
+        riskContract: lowContract,
+        ...(overrides.dollarsAtRisk !== undefined && { dollarsAtRisk: overrides.dollarsAtRisk }),
+        ...(overrides.confidence !== undefined && { confidence: overrides.confidence }),
+      },
+      presentation: {
+        primaryLabel: "Yes, send it",
+        secondaryLabel: "Not yet",
+        dismissLabel: "Dismiss",
+        dataLines: overrides.dataLines ?? [],
+      },
+    });
+  }
+
+  const noop = {
+    onClose: vi.fn(),
+    onCommit: vi.fn(),
+    onSecondary: vi.fn(),
+    onDismiss: vi.fn(),
+  };
+
+  describe("(h) evidence section (Task 3)", () => {
+    it("shows evidence dataLines in their own block and no dead placeholder", () => {
+      render(
+        <ApprovalDetailSheet
+          decision={recWith({ dataLines: [["Impact", "+18 bookings/wk"]] })}
+          {...noop}
+        />,
+      );
+      expect(screen.getByText("Impact · +18 bookings/wk")).toBeInTheDocument();
+      expect(screen.queryByText(/preview not yet wired/i)).not.toBeInTheDocument();
+    });
+
+    it("does NOT render the dead ds-pending placeholder at all", () => {
+      const { container } = render(<ApprovalDetailSheet decision={recWith()} {...noop} />);
+      expect(container.querySelector(".ds-pending")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("(i) at-stake section (Task 3)", () => {
+    it("renders dollar-at-stake in S$ only when > 0", () => {
+      const { rerender } = render(
+        <ApprovalDetailSheet decision={recWith({ dollarsAtRisk: 450 })} {...noop} />,
+      );
+      expect(screen.getByText(/S\$450/)).toBeInTheDocument();
+      rerender(<ApprovalDetailSheet decision={recWith({ dollarsAtRisk: 0 })} {...noop} />);
+      expect(screen.queryByText(/Estimated impact/i)).not.toBeInTheDocument();
+    });
+
+    it("does NOT render at-stake section when dollarsAtRisk is absent", () => {
+      render(<ApprovalDetailSheet decision={recWith()} {...noop} />);
+      expect(screen.queryByText(/Estimated impact/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("(j) signals / confidence chip (Task 3)", () => {
+    it("renders a banded confidence chip when present", () => {
+      render(<ApprovalDetailSheet decision={recWith({ confidence: 0.9 })} {...noop} />);
+      expect(screen.getByText("High confidence")).toBeInTheDocument();
+    });
+
+    it("renders 'Medium confidence' chip for confidence 0.6", () => {
+      render(<ApprovalDetailSheet decision={recWith({ confidence: 0.6 })} {...noop} />);
+      expect(screen.getByText("Medium confidence")).toBeInTheDocument();
+    });
+
+    it("renders risk section heading as 'Signals' (not 'Risk')", () => {
+      render(<ApprovalDetailSheet decision={recWith({ confidence: 0.9 })} {...noop} />);
+      // The section eyebrow should say "Signals" now
+      expect(screen.getByText("Signals")).toBeInTheDocument();
+    });
+  });
 });
