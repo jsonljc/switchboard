@@ -730,7 +730,7 @@
   border-radius: 2px;
 }
 
-/* Empty / error state: serif line (mirrors .decisionEmptyLine) — flat, no shadow. */
+/* Empty / error state: serif line (mirrors .decisionEmptyLine); flat, no shadow. */
 .logEmptyLine {
   font-family: var(--font-home-serif);
   font-variation-settings: "opsz" 18;
