@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export type RoleFocus = "leads" | "bookings" | "care" | "growth" | "default";
@@ -70,23 +70,6 @@ export function OperatorCharacter({
   const styleScale = STYLE_SCALE[workingStyle];
   const toneFilter = TONE_FILTER[tone];
 
-  // Pulse the aura on any config change
-  const [auraKey, setAuraKey] = useState(0);
-  const prevConfig = useRef({ roleFocus, workingStyle, tone, autonomy });
-
-  useEffect(() => {
-    const prev = prevConfig.current;
-    if (
-      prev.roleFocus !== roleFocus ||
-      prev.workingStyle !== workingStyle ||
-      prev.tone !== tone ||
-      prev.autonomy !== autonomy
-    ) {
-      setAuraKey((k) => k + 1);
-      prevConfig.current = { roleFocus, workingStyle, tone, autonomy };
-    }
-  }, [roleFocus, workingStyle, tone, autonomy]);
-
   // Pause animations when the tab is hidden — stops GPU work on background tabs
   const [animationPaused, setAnimationPaused] = useState(false);
   useEffect(() => {
@@ -110,12 +93,9 @@ export function OperatorCharacter({
         aria-hidden="true"
       >
         <div
-          key={auraKey}
-          className="w-[90%] h-[92%] rounded-full animate-aura-breathe"
+          className="w-[90%] h-[92%] rounded-full"
           style={{
             background: `radial-gradient(ellipse at 50% 44%, ${colors.aura}26 0%, ${colors.aura}14 30%, ${colors.aura}06 55%, transparent 72%)`,
-            willChange: "transform, opacity",
-            animationPlayState: playState,
           }}
         />
       </div>

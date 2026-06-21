@@ -540,6 +540,12 @@
     opacity: 0.5;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  /* Steady, full-opacity affordance instead of a pulse (mirrors the swipe-card twin). */
+  .decision-foot-affordance[data-armed="true"] {
+    animation: none;
+  }
+}
 
 /* =========================================================
    RISK PILL — hairline weight, never a traffic light.
