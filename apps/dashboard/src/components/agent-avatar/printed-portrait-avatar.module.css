@@ -60,7 +60,9 @@
   height: 28%;
   min-width: 6px;
   min-height: 6px;
-  border-radius: 50%;
+  /* Pixel block, not a round Material dot: the status pip echoes the 24px
+     sprite grid (a small chamfered square reads as one big pixel). */
+  border-radius: 2px;
   box-shadow: 0 0 0 2px hsl(var(--surface));
 }
 .pip[data-pip="active"] {

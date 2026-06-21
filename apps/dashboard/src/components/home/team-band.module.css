@@ -26,8 +26,21 @@
   color: var(--ink-3);
   margin: 0;
 }
+/* A pixel-block registration tick before the eyebrow: extends the poster's
+   print treatment to the heading (matches the chamfered-square status pip). */
+.heading::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  vertical-align: 0.08em;
+  border-radius: 1px;
+  background: hsl(var(--palette-ink-500) / 0.55);
+}
 
 .poster {
+  position: relative; /* anchors the registration crop-marks */
   /* The grain layer rides in a file-local property so the dark and
      reduced-motion off rules can drop it without restating the gradient
      stack. Intensity is the baked feColorMatrix alpha (0.19): the spec's
@@ -60,6 +73,48 @@
   /* Top padding reserves the featured lift (6px) so it never clips. */
   padding: 24px 14px 16px;
 }
+
+/* Riso/print registration crop-marks: a short L-tick hugging each of the four
+   corners, painted as eight gradient slivers (one horizontal + one vertical
+   arm per corner). Decorative print-reference chrome (the portrait+riso frame
+   is the identity signature), muted ink, static — no motion to strip. */
+.registration {
+  position: absolute;
+  inset: 9px;
+  pointer-events: none;
+  --_tick: hsl(var(--palette-ink-500) / 0.5);
+  --_arm: 12px;
+  --_stroke: 1.5px;
+  background-image:
+    linear-gradient(var(--_tick), var(--_tick)),
+    linear-gradient(var(--_tick), var(--_tick)),
+    linear-gradient(var(--_tick), var(--_tick)),
+    linear-gradient(var(--_tick), var(--_tick)),
+    linear-gradient(var(--_tick), var(--_tick)),
+    linear-gradient(var(--_tick), var(--_tick)),
+    linear-gradient(var(--_tick), var(--_tick)),
+    linear-gradient(var(--_tick), var(--_tick));
+  background-repeat: no-repeat;
+  background-position:
+    left top,
+    left top,
+    right top,
+    right top,
+    left bottom,
+    left bottom,
+    right bottom,
+    right bottom;
+  background-size:
+    var(--_arm) var(--_stroke),
+    var(--_stroke) var(--_arm),
+    var(--_arm) var(--_stroke),
+    var(--_stroke) var(--_arm),
+    var(--_arm) var(--_stroke),
+    var(--_stroke) var(--_arm),
+    var(--_arm) var(--_stroke),
+    var(--_stroke) var(--_arm);
+}
+
 /* Dark and reduced motion strip the grain; the ground stays. Mirrors the
    canvas rule (.dark body / reduced-motion -> background-image: none). */
 :global(.dark) .poster {
