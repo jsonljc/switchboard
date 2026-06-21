@@ -4,7 +4,10 @@ import type {
   DeploymentContext,
   DeploymentResolver,
 } from "@switchboard/core/platform";
-import { ROBIN_RECOVERY_SEND_INTENT } from "../services/workflows/robin-recovery-request.js";
+import {
+  ROBIN_RECOVERY_SEND_INTENT,
+  ROBIN_RECOVERY_RETRY_INTENT,
+} from "../services/workflows/robin-recovery-request.js";
 
 /** Options for the authoritative deployment resolver wired into PlatformIngress. */
 export interface ResolveAuthoritativeDeploymentOptions {
@@ -45,6 +48,9 @@ export const PLATFORM_DIRECT_WORKFLOW_INTENTS: ReadonlySet<string> = new Set<str
   "meta.lead.inquiry.record",
   "lead.intake",
   ROBIN_RECOVERY_SEND_INTENT,
+  // The bounded-retry re-send of an already-approved campaign recipient: a 1:1 allow-only send.
+  // Auto-executes (no park): consent + template re-validated in the retry executor at send time.
+  ROBIN_RECOVERY_RETRY_INTENT,
 ]);
 
 /** Minimal registry shape the predicate needs (structural; the real IntentRegistry satisfies it). */

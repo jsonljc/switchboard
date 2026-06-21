@@ -73,3 +73,45 @@ export function buildRecoveryCampaignSubmitRequest(
     idempotencyKey: `mutate:robin:${input.organizationId}:${weekKey}:recovery`,
   };
 }
+
+/**
+ * The auto-executing per-row retry intent (no approval gate; consent + template re-validated
+ * in the retry executor). Distinct from the cohort campaign intent which PARKS for human approval.
+ */
+export const ROBIN_RECOVERY_RETRY_INTENT = "robin.recovery_send.retry";
+
+export interface RecoveryRetrySubmitInput {
+  organizationId: string;
+  rowId: string;
+  contactId: string;
+  bookingId: string;
+  campaignKind: string;
+  attempts: number;
+}
+
+/**
+ * Build the canonical submit request for a single-row recovery retry. Uses the seeded
+ * `{ id: "system", type: "system" }` principal (a bespoke system:<x> hard-denies), trigger
+ * "schedule", and a per-row + per-attempt idempotency key so concurrent cron ticks dedup safely.
+ * The retry is a 1:1 re-send of an existing RobinRecoverySend row (no new dedup row is created);
+ * consent and template are re-validated in-executor at retry time.
+ */
+export function buildRecoveryRetrySubmitRequest(
+  input: RecoveryRetrySubmitInput,
+): CanonicalSubmitRequest {
+  return {
+    organizationId: input.organizationId,
+    actor: { id: "system", type: "system" },
+    intent: ROBIN_RECOVERY_RETRY_INTENT,
+    parameters: {
+      rowId: input.rowId,
+      contactId: input.contactId,
+      bookingId: input.bookingId,
+      campaignKind: input.campaignKind,
+      attempts: input.attempts,
+    },
+    trigger: "schedule",
+    surface: { surface: "api" },
+    idempotencyKey: `mutate:robin:${input.organizationId}:retry:${input.rowId}:${input.attempts}`,
+  };
+}

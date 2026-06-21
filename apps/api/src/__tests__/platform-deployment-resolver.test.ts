@@ -16,7 +16,10 @@ import {
   buildPlatformDirectIntentPredicate,
   PLATFORM_DIRECT_WORKFLOW_INTENTS,
 } from "../bootstrap/platform-deployment-resolver.js";
-import { ROBIN_RECOVERY_SEND_INTENT } from "../services/workflows/robin-recovery-request.js";
+import {
+  ROBIN_RECOVERY_SEND_INTENT,
+  ROBIN_RECOVERY_RETRY_INTENT,
+} from "../services/workflows/robin-recovery-request.js";
 
 function makeResult(overrides: Partial<DeploymentResolverResult> = {}): DeploymentResolverResult {
   return {
@@ -191,6 +194,30 @@ describe("resolveAuthoritativeDeployment", () => {
     expect(lookupCalled).toBe(false);
   });
 
+  it("resolves robin.recovery_send.retry to platform-direct", async () => {
+    let lookupCalled = false;
+    const throwingResolver: DeploymentResolver = {
+      resolveByOrgAndSlug: async () => {
+        lookupCalled = true;
+        throw new Error("No active deployment found for org=org-1 slug=robin");
+      },
+      resolveByDeploymentId: async () => makeResult(),
+      resolveByChannelToken: async () => makeResult(),
+    };
+    const authoritative = resolveAuthoritativeDeployment(throwingResolver, {
+      isPlatformDirectIntent: (intent) => intent === ROBIN_RECOVERY_RETRY_INTENT,
+    });
+
+    const ctx = await authoritative.resolve({
+      organizationId: "org-1",
+      intent: ROBIN_RECOVERY_RETRY_INTENT,
+    } as unknown as CanonicalSubmitRequest);
+
+    expect(ctx.deploymentId).toBe("platform-direct");
+    expect(ctx.skillSlug).toBe("robin");
+    expect(lookupCalled).toBe(false);
+  });
+
   it("still resolves skill intents via the deployment lookup when the predicate is false", async () => {
     let resolvedSlug: string | undefined;
     const result = makeResult({ skillSlug: "alex", deploymentId: "dep-alex" });
@@ -243,6 +270,7 @@ describe("buildPlatformDirectIntentPredicate", () => {
     "meta.lead.inquiry.record",
     "lead.intake",
     ROBIN_RECOVERY_SEND_INTENT,
+    ROBIN_RECOVERY_RETRY_INTENT,
   ])("treats platform-initiated workflow intent %s as platform-direct", (intent) => {
     expect(predicate(intent)).toBe(true);
   });
@@ -259,7 +287,7 @@ describe("buildPlatformDirectIntentPredicate", () => {
     expect(predicate("alex.conversation")).toBe(false);
   });
 
-  it("the carve-out set is exactly the 6 platform-initiated intents (drift guard)", () => {
+  it("the carve-out set is exactly the 7 platform-initiated intents (drift guard)", () => {
     expect([...PLATFORM_DIRECT_WORKFLOW_INTENTS].sort()).toEqual(
       [
         "conversation.followup.send",
@@ -268,6 +296,7 @@ describe("buildPlatformDirectIntentPredicate", () => {
         "meta.lead.greeting.send",
         "meta.lead.inquiry.record",
         ROBIN_RECOVERY_SEND_INTENT,
+        ROBIN_RECOVERY_RETRY_INTENT,
       ].sort(),
     );
   });
