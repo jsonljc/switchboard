@@ -215,6 +215,43 @@ export const WHATSAPP_TEMPLATES: ReadonlyArray<WhatsAppTemplate> = [
       { name: "business_name", description: "The medspa's display name." },
     ],
   },
+  // First-touch greeting to a brand-new Meta lead (the meta.lead.greeting.send path). A
+  // business-initiated first message MUST ride a pre-approved Marketing-category template
+  // (Meta hard-rejects an unapproved one), so it is gated through evaluateProactiveSendEligibility
+  // like its reminder/follow-up siblings. The body carries sender identity ({{business_name}})
+  // and an opt-out path (reply STOP) per SG DNC ss.44/45 and MY PDPA s.43.
+  {
+    name: "first_touch_greeting_sg_v1",
+    metaTemplateName: "alex_first_touch_greeting_sg_v1",
+    intentClass: "first-touch-greeting",
+    jurisdiction: "SG",
+    templateCategory: "marketing",
+    approvalStatus: "draft",
+    body:
+      "Hi {{lead_name}}, thanks for your interest in {{business_name}}. " +
+      "We would love to help you book a consultation. Reply here with any questions, " +
+      "or reply STOP to opt out.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name (sender identity)." },
+    ],
+  },
+  {
+    name: "first_touch_greeting_my_v1",
+    metaTemplateName: "alex_first_touch_greeting_my_v1",
+    intentClass: "first-touch-greeting",
+    jurisdiction: "MY",
+    templateCategory: "marketing",
+    approvalStatus: "draft",
+    body:
+      "Hi {{lead_name}}, thanks for your interest in {{business_name}}. " +
+      "We would love to help you book a consultation. Reply here with any questions, " +
+      "or reply STOP to opt out.",
+    variables: [
+      { name: "lead_name", description: "The lead's first name." },
+      { name: "business_name", description: "The medspa's display name (sender identity)." },
+    ],
+  },
 ];
 
 export function selectTemplate(args: {

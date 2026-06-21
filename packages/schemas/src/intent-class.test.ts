@@ -9,6 +9,7 @@ describe("IntentClassSchema", () => {
       "aftercare-checkin",
       "re-engagement-offer",
       "consult-followup",
+      "first-touch-greeting",
     ]) {
       expect(IntentClassSchema.parse(v)).toBe(v);
     }

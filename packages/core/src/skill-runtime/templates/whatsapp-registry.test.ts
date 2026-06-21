@@ -22,6 +22,7 @@ describe("selectTemplate", () => {
       "aftercare-checkin",
       "re-engagement-offer",
       "consult-followup",
+      "first-touch-greeting",
     ] as const) {
       for (const jurisdiction of ["SG", "MY"] as const) {
         const t = selectTemplate({ intentClass, jurisdiction });
@@ -129,8 +130,33 @@ describe("parseTemplateApprovalOverlay", () => {
 });
 
 describe("WHATSAPP_TEMPLATES", () => {
-  it("has 10 entries (5 intent classes × 2 jurisdictions)", () => {
-    expect(WHATSAPP_TEMPLATES).toHaveLength(10);
+  it("has 12 entries (6 intent classes × 2 jurisdictions)", () => {
+    expect(WHATSAPP_TEMPLATES).toHaveLength(12);
+  });
+
+  it("all first-touch-greeting entries are marketing-category (Meta business-initiated)", () => {
+    const ft = WHATSAPP_TEMPLATES.filter((t) => t.intentClass === "first-touch-greeting");
+    expect(ft.length).toBe(2);
+    for (const t of ft) {
+      expect(t.templateCategory, t.name).toBe("marketing");
+    }
+  });
+
+  it("every first-touch-greeting body carries sender identity + an opt-out path (PDPA DNC)", () => {
+    const ft = WHATSAPP_TEMPLATES.filter((t) => t.intentClass === "first-touch-greeting");
+    for (const t of ft) {
+      // Sender identity: the business-name placeholder is rendered into the first message.
+      expect(t.body, t.name).toContain("{{business_name}}");
+      // Opt-out path: SG DNC ss.44/45, MY PDPA s.43 require a withdrawal route in the message.
+      expect(t.body.toUpperCase(), t.name).toContain("STOP");
+    }
+  });
+
+  it("the first-touch-greeting templates ship draft (blocked until Meta approval)", () => {
+    const ft = WHATSAPP_TEMPLATES.filter((t) => t.intentClass === "first-touch-greeting");
+    for (const t of ft) {
+      expect(t.approvalStatus, t.name).toBe("draft");
+    }
   });
 
   it("every entry has a populated templateCategory", () => {
