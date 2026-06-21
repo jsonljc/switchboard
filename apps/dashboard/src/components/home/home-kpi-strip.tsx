@@ -61,7 +61,7 @@ export function HomeKpiStrip(): React.JSX.Element {
   return (
     <section className={styles.strip} aria-label="This week">
       <ValueTile metric={attributedValueCents} />
-      <CountTile metric={bookings} label="Bookings" />
+      <CountTile metric={bookings} label="Bookings" sub="Attributed this week" />
       <ApprovalTile count={approval} />
     </section>
   );
@@ -92,7 +92,15 @@ function ValueTile({ metric }: { metric: HomeSummaryCentsMetric }) {
   );
 }
 
-function CountTile({ metric, label }: { metric: HomeSummaryCountMetric; label: string }) {
+function CountTile({
+  metric,
+  label,
+  sub,
+}: {
+  metric: HomeSummaryCountMetric;
+  label: string;
+  sub?: string;
+}) {
   return (
     <div className={styles.tile} data-kind="count">
       <span className={styles.eyebrow}>{label}</span>
@@ -100,6 +108,7 @@ function CountTile({ metric, label }: { metric: HomeSummaryCountMetric; label: s
         <>
           <span className={styles.figure}>{metric.value}</span>
           <DeltaBadge delta={toDelta(metric.value, metric.comparator?.value)} />
+          {sub !== undefined && <span className={styles.sub}>{sub}</span>}
         </>
       ) : metric.state === "unavailable" ? (
         <span className={styles.empty}>Not available right now.</span>

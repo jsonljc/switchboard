@@ -93,6 +93,57 @@ describe("HomeKpiStrip", () => {
     expect(screen.queryByText(/No attributed bookings yet/)).toBeNull();
   });
 
+  it("renders 'Attributed this week' sub-label on bookings tile when metric is ready", () => {
+    summary.mockReturnValue({
+      data: {
+        attributedValueCents: {
+          state: "ready",
+          value: 100000,
+          comparator: { window: "week", value: 50000 },
+          freshness,
+        },
+        bookings: { state: "ready", value: 3, comparator: { window: "week", value: 2 }, freshness },
+        currency: "SGD",
+        generatedAt: freshness.generatedAt,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    decisions.mockReturnValue({
+      data: { counts: { approval: 0 } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+
+    render(<HomeKpiStrip />);
+    expect(screen.getByText("Attributed this week")).toBeInTheDocument();
+  });
+
+  it("does not render 'Attributed this week' sub-label on bookings tile when metric is empty or unavailable", () => {
+    summary.mockReturnValue({
+      data: {
+        attributedValueCents: { state: "empty", reason: "no_current_week_bookings" },
+        bookings: { state: "empty", reason: "no_current_week_bookings" },
+        currency: "SGD",
+        generatedAt: freshness.generatedAt,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    decisions.mockReturnValue({
+      data: { counts: { approval: 0 } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+
+    render(<HomeKpiStrip />);
+    expect(screen.queryByText("Attributed this week")).toBeNull();
+  });
+
   it("renders the honest unavailable state for bookings tile when store is down", () => {
     summary.mockReturnValue({
       data: {
