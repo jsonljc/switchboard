@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { Span, Tracer } from "./tracing.js";
+import type { Span, SpanStartOptions, Tracer } from "./tracing.js";
 import { projectWorkUnitSpans, type WorkUnitSpanInput } from "./work-unit-spans.js";
 
 interface RecordedSpan {
@@ -11,6 +11,9 @@ interface RecordedSpan {
   parentId: number | null;
   status?: { code: "OK" | "ERROR"; message?: string };
   ended: boolean;
+  kind?: number;
+  startTimeMs?: number;
+  endTimeMs?: number;
 }
 
 class RecordingTracer implements Tracer {
@@ -20,6 +23,7 @@ class RecordingTracer implements Tracer {
     name: string,
     attributes?: Record<string, string | number | boolean>,
     parent?: Span,
+    options?: SpanStartOptions,
   ): Span {
     const rec: RecordedSpan = {
       id: this.spans.length,
@@ -27,6 +31,8 @@ class RecordingTracer implements Tracer {
       attributes: { ...(attributes ?? {}) },
       parentId: parent ? (this.byWrapper.get(parent)?.id ?? null) : null,
       ended: false,
+      kind: options?.kind,
+      startTimeMs: options?.startTime,
     };
     this.spans.push(rec);
     const span: Span = {
@@ -36,8 +42,9 @@ class RecordingTracer implements Tracer {
       setStatus: (code, message) => {
         rec.status = { code, message };
       },
-      end: () => {
+      end: (endTime?: number) => {
         rec.ended = true;
+        rec.endTimeMs = endTime;
       },
     };
     this.byWrapper.set(span, rec);
@@ -302,4 +309,114 @@ it("the projection module imports nothing from the db layer (one-directional)", 
   const src = readFileSync(fileURLToPath(new URL("./work-unit-spans.ts", import.meta.url)), "utf8");
   expect(src).not.toMatch(/@switchboard\/db/);
   expect(src).not.toMatch(/from\s+["'].*\/db\//);
+});
+
+describe("projectWorkUnitSpans — honest timing + SpanKind (E4c)", () => {
+  const T0 = 1_700_000_000_000;
+
+  it("work-unit span carries REAL requestedAt/completedAt times + INTERNAL kind", () => {
+    const tracer = new RecordingTracer();
+    projectWorkUnitSpans(
+      {
+        workUnit: {
+          workUnitId: "wu_1",
+          requestedAtMs: T0,
+          completedAtMs: T0 + 120,
+          durationMs: 120,
+        },
+        executions: [],
+      },
+      tracer,
+    );
+    const root = tracer.spans.find((s) => s.parentId === null)!;
+    expect(root.startTimeMs).toBe(T0);
+    expect(root.endTimeMs).toBe(T0 + 120);
+    expect(root.kind).toBe(0); // INTERNAL
+    expect("switchboard.timing.synthetic" in root.attributes).toBe(false); // real, not marked
+  });
+
+  it("work-unit end falls back to requestedAt + durationMs when completedAt is absent", () => {
+    const tracer = new RecordingTracer();
+    projectWorkUnitSpans(
+      { workUnit: { workUnitId: "wu_1", requestedAtMs: T0, durationMs: 90 }, executions: [] },
+      tracer,
+    );
+    const root = tracer.spans.find((s) => s.parentId === null)!;
+    expect(root.endTimeMs).toBe(T0 + 90);
+  });
+
+  it("execution span: end = createdAt, start = createdAt - durationMs, CLIENT kind, marked synthetic", () => {
+    const tracer = new RecordingTracer();
+    projectWorkUnitSpans(
+      {
+        workUnit: { workUnitId: "wu_1", requestedAtMs: T0 },
+        executions: [{ skillSlug: "alex", createdAtMs: T0 + 100, durationMs: 40, toolCalls: [] }],
+      },
+      tracer,
+    );
+    const exec = tracer.spans.find((s) => s.name.startsWith("chat"))!;
+    expect(exec.startTimeMs).toBe(T0 + 60);
+    expect(exec.endTimeMs).toBe(T0 + 100);
+    expect(exec.kind).toBe(2); // CLIENT
+    expect(exec.attributes["switchboard.timing.synthetic"]).toBe(true);
+  });
+
+  it("tool spans pack sequentially within the exec window, INTERNAL kind, marked synthetic", () => {
+    const tracer = new RecordingTracer();
+    const tool = (toolId: string, durationMs: number) => ({
+      toolId,
+      operation: "op",
+      params: {},
+      result: { status: "success" as const },
+      durationMs,
+      governanceDecision: "auto-approved" as const,
+    });
+    projectWorkUnitSpans(
+      {
+        workUnit: { workUnitId: "wu_1" },
+        executions: [
+          {
+            createdAtMs: T0 + 100,
+            durationMs: 50,
+            toolCalls: [tool("book", 10), tool("notify", 15)],
+          },
+        ],
+      },
+      tracer,
+    );
+    // execStart = (T0+100) - 50 = T0+50
+    const t0 = tracer.spans.find((s) => s.name === "execute_tool book")!;
+    const t1 = tracer.spans.find((s) => s.name === "execute_tool notify")!;
+    expect(t0.startTimeMs).toBe(T0 + 50);
+    expect(t0.endTimeMs).toBe(T0 + 60);
+    expect(t1.startTimeMs).toBe(T0 + 60);
+    expect(t1.endTimeMs).toBe(T0 + 75);
+    expect(t0.kind).toBe(0);
+    expect(t0.attributes["switchboard.timing.synthetic"]).toBe(true);
+    expect(t1.attributes["switchboard.timing.synthetic"]).toBe(true);
+  });
+
+  it("degrades to no explicit times (E4b flat) when anchors are missing — structure preserved", () => {
+    const tracer = new RecordingTracer();
+    projectWorkUnitSpans(
+      {
+        workUnit: { workUnitId: "wu_1" },
+        executions: [{ skillSlug: "a", durationMs: 10, toolCalls: [] }],
+      },
+      tracer,
+    );
+    const root = tracer.spans.find((s) => s.parentId === null)!;
+    const exec = tracer.spans.find((s) => s.name.startsWith("chat"))!;
+    expect(root.startTimeMs).toBeUndefined();
+    expect(exec.startTimeMs).toBeUndefined();
+    expect("switchboard.timing.synthetic" in exec.attributes).toBe(false); // nothing synthesized -> not marked
+    expect(tracer.spans.every((s) => s.ended)).toBe(true);
+  });
+
+  it("guards the root work_unit.id with setIfString (empty id -> attribute absent)", () => {
+    const tracer = new RecordingTracer();
+    projectWorkUnitSpans({ workUnit: { workUnitId: "" }, executions: [] }, tracer);
+    const root = tracer.spans.find((s) => s.parentId === null)!;
+    expect("switchboard.work_unit.id" in root.attributes).toBe(false);
+  });
 });
