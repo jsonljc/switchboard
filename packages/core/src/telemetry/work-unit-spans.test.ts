@@ -420,3 +420,51 @@ describe("projectWorkUnitSpans — honest timing + SpanKind (E4c)", () => {
     expect("switchboard.work_unit.id" in root.attributes).toBe(false);
   });
 });
+
+import type { OTelContextBridge, SpanStartOptions as SpanStartOptionsFromBarrel } from "./index.js";
+
+describe("projectWorkUnitSpans — cache/cost + provider attributes (E4c)", () => {
+  it("maps cache token + cost attributes on the execution span", () => {
+    const tracer = new RecordingTracer();
+    projectWorkUnitSpans(
+      {
+        workUnit: { workUnitId: "wu_1" },
+        executions: [
+          {
+            skillSlug: "alex",
+            model: "claude-opus-4-6",
+            cacheReadTokens: 900,
+            cacheCreationTokens: 100,
+            costUsd: 0.012,
+            toolCalls: [],
+          },
+        ],
+      },
+      tracer,
+    );
+    const exec = tracer.spans.find((s) => s.name.startsWith("chat"))!;
+    expect(exec.attributes["gen_ai.usage.cache_read_input_tokens"]).toBe(900);
+    expect(exec.attributes["gen_ai.usage.cache_creation_input_tokens"]).toBe(100);
+    expect(exec.attributes["switchboard.cost_usd"]).toBe(0.012);
+    expect(exec.attributes["gen_ai.provider.name"]).toBe("anthropic");
+  });
+
+  it("omits gen_ai.provider.name when the model is not a Claude model", () => {
+    const tracer = new RecordingTracer();
+    projectWorkUnitSpans(
+      { workUnit: { workUnitId: "wu_1" }, executions: [{ model: "gpt-4o", toolCalls: [] }] },
+      tracer,
+    );
+    const exec = tracer.spans.find((s) => s.name.startsWith("chat"))!;
+    expect("gen_ai.provider.name" in exec.attributes).toBe(false);
+  });
+});
+
+describe("telemetry barrel (E4c)", () => {
+  it("re-exports OTelContextBridge + SpanStartOptions types", () => {
+    const bridge: OTelContextBridge = { active: () => null, with: (_c, _s) => null };
+    const opts: SpanStartOptionsFromBarrel = { startTime: 1, kind: 0 };
+    expect(typeof bridge.active).toBe("function");
+    expect(opts.kind).toBe(0);
+  });
+});

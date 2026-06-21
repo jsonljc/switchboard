@@ -24,6 +24,9 @@ export interface WorkUnitExecution {
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  costUsd?: number;
   createdAtMs?: number;
   toolCalls: ReadonlyArray<ToolCallRecord>;
 }
@@ -48,6 +51,12 @@ const SPAN_KIND = { INTERNAL: 0, CLIENT: 2 } as const;
 
 function finiteOrUndef(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function providerForModel(model: unknown): string | undefined {
+  return typeof model === "string" && model.toLowerCase().includes("claude")
+    ? "anthropic"
+    : undefined;
 }
 
 function workUnitStatus(wu: WorkUnitSpanParent): "OK" | "ERROR" {
@@ -108,6 +117,14 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
     execSpan.setAttribute("gen_ai.system", "switchboard");
     execSpan.setAttribute("gen_ai.operation.name", "chat");
     setIfString(execSpan, "gen_ai.request.model", execution.model);
+    setIfString(execSpan, "gen_ai.provider.name", providerForModel(execution.model));
+    setIfFinite(execSpan, "gen_ai.usage.cache_read_input_tokens", execution.cacheReadTokens);
+    setIfFinite(
+      execSpan,
+      "gen_ai.usage.cache_creation_input_tokens",
+      execution.cacheCreationTokens,
+    );
+    setIfFinite(execSpan, "switchboard.cost_usd", execution.costUsd);
     setIfFinite(execSpan, "gen_ai.usage.input_tokens", execution.inputTokens);
     setIfFinite(execSpan, "gen_ai.usage.output_tokens", execution.outputTokens);
     setIfString(execSpan, "switchboard.skill.slug", execution.skillSlug);
