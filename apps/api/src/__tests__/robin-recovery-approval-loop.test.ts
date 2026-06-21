@@ -115,10 +115,15 @@ function inMemoryRecoverySendStore(): {
       const r = rows.find((x) => x.id === id);
       if (r) r.status = `skipped:${reason}`;
     },
-    markFailed: async (id, error) => {
+    markFailed: async (id, error, nextRetryAt) => {
       const r = rows.find((x) => x.id === id);
-      if (r) r.status = `failed:${error}`;
+      // A transient failure (nextRetryAt set) re-queues the SAME row (status pending); a terminal
+      // failure (null) dead-letters it (status failed). Mirrors the real prisma store.
+      if (r) r.status = nextRetryAt ? "pending" : `failed:${error}`;
     },
+    // The approve-to-dispatch loop never reclaims rows (the retry cron owns findDue); a minimal
+    // no-due implementation keeps this mock conformant to the bounded-retry store iface.
+    findDue: async () => [],
   };
   return { store, rows };
 }

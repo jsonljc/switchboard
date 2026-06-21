@@ -3,47 +3,27 @@ import {
   evaluateProactiveSendEligibility,
   getMetrics,
   type RobinRecoverySendStore,
-  type TemplateApprovalOverlay,
 } from "@switchboard/core";
-import {
-  RobinRecoveryCampaignParamsSchema,
-  buildRecoveryDedupeKey,
-  type IntentClass,
-  type PdpaJurisdiction,
-} from "@switchboard/schemas";
+import { RobinRecoveryCampaignParamsSchema, buildRecoveryDedupeKey } from "@switchboard/schemas";
 import { ROBIN_RECOVERY_SEND_INTENT } from "../services/workflows/robin-recovery-request.js";
 import { resolveWhatsAppSendToken } from "../lib/whatsapp-send-token.js";
+import {
+  dispatchRecoveryRow,
+  evaluateRecoveryEligibility,
+  isOrgConfigSkip,
+  defaultSendTemplate,
+  type RecoverySendContext,
+  type RecoveryTemplateSendArgs,
+  type RecoveryTemplateSendResult,
+} from "./robin-recovery-send-core.js";
 
-const RECOVERY_INTENT_CLASS: IntentClass = "re-engagement-offer";
 const RECOVERY_CAMPAIGN_KIND = "no_show";
 
-/** Per-recipient send context resolved at dispatch (org-scoped). Mirrors ReminderSendContext. */
-export interface RecoverySendContext {
-  consentGrantedAt: Date | string | null;
-  consentRevokedAt: Date | string | null;
-  pdpaJurisdiction: PdpaJurisdiction | null;
-  messagingOptIn: boolean;
-  lastWhatsAppInboundAt: Date | null;
-  jurisdiction: "SG" | "MY" | null;
-  leadName: string;
-  businessName: string;
-  phone: string | null;
-  approvalOverlay?: TemplateApprovalOverlay;
-}
-
-export interface RecoveryTemplateSendArgs {
-  accessToken: string;
-  phoneNumberId: string;
-  to: string;
-  metaTemplateName: string;
-  leadName: string;
-  businessName: string;
-}
-export interface RecoveryTemplateSendResult {
-  ok: boolean;
-  messageId?: string | null;
-  error?: string;
-}
+export type {
+  RecoverySendContext,
+  RecoveryTemplateSendArgs,
+  RecoveryTemplateSendResult,
+} from "./robin-recovery-send-core.js";
 
 export interface RobinRecoverySendExecutorDeps {
   /** Org-scoped per-recipient phone + consent + org-name + template-approval-overlay resolution. */
@@ -77,44 +57,12 @@ export interface RobinRecoverySendExecutorDeps {
   ) => Promise<Set<string>>;
   /** Injectable clock for the rebooked re-check; defaults to wall-clock. */
   now?: () => Date;
+  /** Injectable RNG for the retry backoff full-jitter; defaults to Math.random. */
+  random?: () => number;
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
-}
-
-async function defaultSendTemplate(
-  args: RecoveryTemplateSendArgs,
-): Promise<RecoveryTemplateSendResult> {
-  const response = await fetch(`https://graph.facebook.com/v21.0/${args.phoneNumberId}/messages`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${args.accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to: args.to,
-      type: "template",
-      template: {
-        name: args.metaTemplateName,
-        language: { code: "en" },
-        // The re-engagement-offer template declares two variables: lead_name, business_name.
-        components: [
-          {
-            type: "body",
-            parameters: [
-              { type: "text", text: args.leadName },
-              { type: "text", text: args.businessName },
-            ],
-          },
-        ],
-      },
-    }),
-  });
-  if (!response.ok) return { ok: false, error: await response.text() };
-  const json = (await response.json()) as { messages?: Array<{ id?: string }> };
-  return { ok: true, messageId: json.messages?.[0]?.id ?? null };
 }
 
 /**
@@ -135,6 +83,7 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
   const resolvePhoneId =
     deps.resolvePhoneNumberId ?? (() => process.env["WHATSAPP_PHONE_NUMBER_ID"]);
   const resolveOrgSendCreds = deps.resolveOrgSendCreds ?? (async () => null);
+  const random = deps.random ?? Math.random;
 
   return {
     intent: ROBIN_RECOVERY_SEND_INTENT,
@@ -217,32 +166,13 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
             continue;
           }
 
-          const eligibility = evaluateProactiveSendEligibility({
-            contact: {
-              pdpaJurisdiction: ctx.pdpaJurisdiction,
-              consentGrantedAt: ctx.consentGrantedAt,
-              consentRevokedAt: ctx.consentRevokedAt,
-              messagingOptIn: ctx.messagingOptIn,
-            },
-            lastWhatsAppInboundAt: ctx.lastWhatsAppInboundAt,
-            intentClass: RECOVERY_INTENT_CLASS,
-            jurisdiction: ctx.jurisdiction,
-            // A no-show re-engagement is inherently a MARKETING-class message (the only
-            // re-engagement-offer template is marketing). The real controls are the per-campaign
-            // manager approval + the per-recipient PDPA proactive consent gate, not this flag.
-            allowMarketingTemplate: true,
-            selectTemplateFn: deps.selectTemplateFn,
-            approvalOverlay: ctx.approvalOverlay,
-          });
+          const eligibility = evaluateRecoveryEligibility(ctx, deps.selectTemplateFn);
 
           // rank 7: a template that is unapproved (an org-wide approval gap, identical for every
           // candidate) or absent (e.g. a not-yet-stamped jurisdiction, per-recipient) is a config/data
           // gap, not a send decision worth burning a dedup row -> skip WITHOUT claiming, so a later run
           // re-engages once the template is approved (or the jurisdiction is set).
-          if (
-            !eligibility.eligible &&
-            (eligibility.reason === "template_not_approved" || eligibility.reason === "no_template")
-          ) {
+          if (isOrgConfigSkip(eligibility)) {
             skipped++;
             continue;
           }
@@ -274,46 +204,24 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
             throw err;
           }
 
-          // Post-claim per-recipient terminal outcomes (recorded for audit). A transient error here is
-          // isolated to this recipient and marks the claimed row failed (never strands it pending).
-          try {
-            // rank 14: a contact who rebooked between dispatch and now must not be re-engaged. This IS
-            // a terminal per-recipient decision (unlike the org-config gate), so the dedup row is kept.
-            if (rebookedContactIds.has(candidate.contactId)) {
-              await deps.store.markSkipped(rowId, "already_rebooked");
-              skipped++;
-              continue;
-            }
-            if (!eligibility.eligible) {
-              await deps.store.markSkipped(rowId, eligibility.reason);
-              skipped++;
-              continue;
-            }
-            if (!ctx.phone) {
-              await deps.store.markSkipped(rowId, "missing_contact_phone");
-              skipped++;
-              continue;
-            }
-
-            const result = await sendTemplate({
+          // Post-claim per-recipient send + state-write + backoff, the SHARED path the retry executor
+          // also calls. A send failure schedules retry-1 (attempts 0 is never terminal at MAX=3), so the
+          // cohort first attempt re-queues rather than dead-letters; markSkipped paths stay terminal.
+          const r = await dispatchRecoveryRow(
+            {
+              rowId,
+              attempts: 0,
+              ctx,
+              eligibility,
+              rebooked: rebookedContactIds.has(candidate.contactId),
               accessToken,
               phoneNumberId,
-              to: ctx.phone,
-              metaTemplateName: eligibility.template.metaTemplateName,
-              leadName: ctx.leadName,
-              businessName: ctx.businessName,
-            });
-            if (!result.ok) {
-              await deps.store.markFailed(rowId, result.error ?? "whatsapp_send_failed");
-              failed++;
-              continue;
-            }
-            await deps.store.markSent(rowId, result.messageId ?? null);
-            sent++;
-          } catch (err) {
-            await deps.store.markFailed(rowId, err instanceof Error ? err.message : String(err));
-            failed++;
-          }
+            },
+            { store: deps.store, sendTemplate, now: () => now, random, onDeadLetter: undefined },
+          );
+          if (r.outcome === "sent") sent++;
+          else if (r.outcome === "skipped") skipped++;
+          else failed++;
         }
 
         return {

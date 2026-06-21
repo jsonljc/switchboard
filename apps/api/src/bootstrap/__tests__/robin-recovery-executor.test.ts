@@ -39,6 +39,7 @@ function makeStore() {
     markSent: vi.fn().mockResolvedValue(undefined),
     markSkipped: vi.fn().mockResolvedValue(undefined),
     markFailed: vi.fn().mockResolvedValue(undefined),
+    findDue: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -242,9 +243,23 @@ describe("buildRobinRecoverySendExecutor", () => {
     });
     const { handler } = buildRobinRecoverySendExecutor(deps as never);
     const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
-    expect(deps.store.markFailed).toHaveBeenCalledWith("rs_1", "rate limited");
+    // A cohort send failure now schedules retry-1 (attempts 0 is never terminal at MAX=3), so the
+    // 3rd markFailed arg is a non-null nextRetryAt (the row stays pending for the retry cron).
+    expect(deps.store.markFailed).toHaveBeenCalledWith("rs_1", "rate limited", expect.any(Date));
     expect(res.outcome).toBe("completed");
     expect(res.outputs).toEqual({ sent: 0, skipped: 0, failed: 1, total: 1 });
+  });
+
+  it("a cohort send failure leaves the row pending for retry, not terminal", async () => {
+    const deps = makeDeps({
+      sendTemplate: vi.fn().mockResolvedValue({ ok: false, error: "rate limited" }),
+    });
+    const { handler } = buildRobinRecoverySendExecutor(deps as never);
+    await handler.execute(makeWorkUnit([C1]) as never, {} as never);
+    // The 3rd arg is the next retry time: a Date, NOT null (null would dead-letter the row).
+    const call = deps.store.markFailed.mock.calls[0]!;
+    expect(call[2]).toBeInstanceOf(Date);
+    expect(call[2]).not.toBeNull();
   });
 
   it("idempotent under retried dispatch: a second run claims P2002 for all -> 0 sends", async () => {
@@ -288,7 +303,7 @@ describe("buildRobinRecoverySendExecutor", () => {
     const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
     expect(res.outcome).toBe("completed");
     expect(res.outputs).toEqual({ sent: 0, skipped: 0, failed: 1, total: 1 });
-    expect(deps.store.markFailed).toHaveBeenCalledWith("rs_1", "ECONNRESET");
+    expect(deps.store.markFailed).toHaveBeenCalledWith("rs_1", "ECONNRESET", expect.any(Date));
   });
 
   it("real registry stays blocked without an approval overlay (fail-closed) -> NO claim, no send", async () => {
