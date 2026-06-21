@@ -30,6 +30,7 @@ export interface ReceiptedBookingIssuanceTx {
       consentGrantedAt?: Date | null;
       consentRevokedAt?: Date | null;
       phoneE164?: string | null;
+      duplicateContactRisk?: boolean | null;
     } | null>;
   };
 }
@@ -89,19 +90,21 @@ export async function issueReceiptedBookingInTx(
       consentGrantedAt: true,
       consentRevokedAt: true,
       phoneE164: true,
+      duplicateContactRisk: true,
     },
   });
 
-  // Write-side duplicate-contact detection (issuance-time, once per booking). The flag is persisted
-  // into the issuance row's exceptions array, carried forward on the read path (assembleViewExceptions),
-  // and durably resolvable via resolve_exception. It MUST be detected here, not recomputed in getView:
-  // a read-side recompute would re-open an operator-RESOLVED duplicate on every read (a recomputable
-  // code wins and drops the persisted resolved entry) and add an N+1 probe across listForCohort.
-  // Match key = the canonical phoneE164 column (exact equality), org-scoped, excluding self; a
-  // null/empty/whitespace key carries no dedup identity, so the probe is skipped and risk stays false.
+  // Duplicate-contact detection (issuance-time, once per booking). Two producers feed this one flag:
+  // (1) the A4 lead-intake matcher persists Contact.duplicateContactRisk on an ambiguous/conflicting
+  // identity (covers the email-only case the phone probe below misses), and (2) an issuance-time probe
+  // for another contact sharing the canonical phoneE164 (exact, org-scoped, excluding self). They are
+  // ORed: evaluateExceptions emits at most one entry and mergeExceptions de-dups by code, so no
+  // double-flag. The flag is persisted into the issuance row's exceptions, carried forward on the read
+  // path, and durably resolvable; it MUST be detected here, not recomputed in getView (a read-side
+  // recompute would re-open an operator-RESOLVED duplicate on every read and add an N+1 probe).
   const rawPhoneE164 = evidenceContact?.phoneE164 ?? null;
-  let duplicateContactRisk = false;
-  if (rawPhoneE164 && rawPhoneE164.trim().length > 0) {
+  let duplicateContactRisk = evidenceContact?.duplicateContactRisk === true;
+  if (!duplicateContactRisk && rawPhoneE164 && rawPhoneE164.trim().length > 0) {
     const otherWithSamePhone = await tx.contact.findFirst({
       where: {
         organizationId: args.organizationId,

@@ -30,6 +30,7 @@ function mkContact(overrides: Partial<Contact> = {}): Contact {
     messagingOptInAt: TS_B,
     messagingOptInSource: "ctwa",
     messagingOptOutAt: null,
+    duplicateContactRisk: false,
     firstContactAt: TS_B,
     lastActivityAt: TS_A,
     createdAt: TS_B,

@@ -24,11 +24,13 @@ function makeStore(): LeadIntakeStore & {
   upsertContact: ReturnType<typeof vi.fn>;
   createActivity: ReturnType<typeof vi.fn>;
   findContactByIdempotency: ReturnType<typeof vi.fn>;
+  findByPhoneOrEmail: ReturnType<typeof vi.fn>;
 } {
   return {
     upsertContact: vi.fn().mockResolvedValue({ id: "contact_1" }),
     createActivity: vi.fn().mockResolvedValue({ id: "act_1" }),
     findContactByIdempotency: vi.fn().mockResolvedValue(null),
+    findByPhoneOrEmail: vi.fn().mockResolvedValue([]),
   };
 }
 

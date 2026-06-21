@@ -21,6 +21,7 @@ describe("LeadIntakeHandler", () => {
     upsertContact: ReturnType<typeof vi.fn>;
     createActivity: ReturnType<typeof vi.fn>;
     findContactByIdempotency: ReturnType<typeof vi.fn>;
+    findByPhoneOrEmail: ReturnType<typeof vi.fn>;
   };
   let handler: LeadIntakeHandler;
 
@@ -29,6 +30,8 @@ describe("LeadIntakeHandler", () => {
       upsertContact: vi.fn().mockResolvedValue({ id: "contact_1" }),
       createActivity: vi.fn().mockResolvedValue({ id: "act_1" }),
       findContactByIdempotency: vi.fn().mockResolvedValue(null),
+      // Default: no identity match -> create path (existing tests unchanged). Matcher cases set this per-test.
+      findByPhoneOrEmail: vi.fn().mockResolvedValue([]),
     };
     handler = new LeadIntakeHandler({ store });
   });
@@ -104,5 +107,77 @@ describe("LeadIntakeHandler", () => {
     const callArgs = store.upsertContact.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(callArgs.messagingOptIn).toBeUndefined();
     expect(callArgs.messagingOptInSource).toBeUndefined();
+  });
+
+  // --- A4 identity matcher ---
+
+  it("reuses an existing contact on a corroborated match and does not create a new one", async () => {
+    store.findByPhoneOrEmail.mockResolvedValueOnce([
+      { id: "existing", name: "Jane Tan", phoneE164: "+6591234567", email: null },
+    ]);
+    const res = await handler.handle(
+      makeIntake({ contact: { phone: "91234567", name: "jane tan", channel: "whatsapp" } }),
+    );
+    expect(res).toEqual({ contactId: "existing", duplicate: false });
+    expect(store.upsertContact).not.toHaveBeenCalled();
+    expect(store.createActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ contactId: "existing", kind: "lead_received" }),
+    );
+  });
+
+  it("does not widen consent on reuse (performs no write to the matched contact)", async () => {
+    // The matched contact may be opted-out/revoked; reuse must preserve it. Lead intake only carries an
+    // opt-in/neutral signal, so the most-restrictive consolidation is to write nothing to it on reuse.
+    store.findByPhoneOrEmail.mockResolvedValueOnce([
+      { id: "existing", name: "Jane", phoneE164: "+6591234567", email: null },
+    ]);
+    await handler.handle(
+      makeIntake({
+        source: "ctwa",
+        contact: { phone: "91234567", name: "Jane", channel: "whatsapp" },
+      }),
+    );
+    expect(store.upsertContact).not.toHaveBeenCalled();
+  });
+
+  it("flags a same-phone-different-name lead and creates a separate contact (not merged)", async () => {
+    store.findByPhoneOrEmail.mockResolvedValueOnce([
+      { id: "other", name: "Bob", phoneE164: "+6591234567", email: null },
+    ]);
+    store.upsertContact.mockResolvedValueOnce({ id: "new" });
+    const res = await handler.handle(
+      makeIntake({ contact: { phone: "91234567", name: "Jane", channel: "whatsapp" } }),
+    );
+    expect(res.contactId).toBe("new");
+    expect(store.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({ duplicateContactRisk: true }),
+    );
+  });
+
+  it("creates a new contact with name threaded and flag false when nothing matches", async () => {
+    store.upsertContact.mockResolvedValueOnce({ id: "new" });
+    await handler.handle(
+      makeIntake({ contact: { phone: "91234567", name: "Jane Tan", channel: "whatsapp" } }),
+    );
+    expect(store.upsertContact).toHaveBeenCalledWith(
+      expect.objectContaining({ duplicateContactRisk: false, name: "Jane Tan" }),
+    );
+  });
+
+  it("reuses on an email-only corroborated match and queries with a normalized email", async () => {
+    store.findByPhoneOrEmail.mockResolvedValueOnce([
+      { id: "existing", name: "Jane", phoneE164: null, email: "jane@x.com" },
+    ]);
+    const res = await handler.handle(
+      makeIntake({
+        source: "instant_form",
+        contact: { email: "Jane@X.com", name: "Jane", channel: "whatsapp" },
+      }),
+    );
+    expect(res.contactId).toBe("existing");
+    expect(store.findByPhoneOrEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "jane@x.com", phoneE164: null }),
+    );
+    expect(store.upsertContact).not.toHaveBeenCalled();
   });
 });

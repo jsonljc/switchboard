@@ -1823,6 +1823,11 @@ model Contact {
   consentUpdatedBy         String?
   consentNotes             String?   @db.Text
 
+  // Set at lead intake (A4 identity matcher) when this contact matched an existing one but could not be
+  // corroborated as the same person. Read at booking issuance and ORed into the duplicate_contact_risk
+  // exception. Monotonic: never cleared post-intake (operator resolution is per-ReceiptedBooking).
+  duplicateContactRisk Boolean @default(false)
+
   opportunities Opportunity[]
   revenueEvents LifecycleRevenueEvent[]
   ownerTasks    OwnerTask[]
@@ -1833,6 +1838,7 @@ model Contact {
   @@index([organizationId, stage])
   @@index([organizationId, phone])
   @@index([organizationId, phoneE164])
+  @@index([organizationId, email])
   @@index([organizationId, lastActivityAt])
   @@index([organizationId, leadgenId])
   @@index([organizationId, sourceType, createdAt])

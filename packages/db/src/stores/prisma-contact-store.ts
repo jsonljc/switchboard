@@ -438,6 +438,7 @@ function mapRowToContact(row: {
   messagingOptInAt?: Date | null;
   messagingOptInSource?: string | null;
   messagingOptOutAt?: Date | null;
+  duplicateContactRisk?: boolean | null;
   firstContactAt: Date;
   lastActivityAt: Date;
   createdAt: Date;
@@ -460,6 +461,7 @@ function mapRowToContact(row: {
     messagingOptInAt: row.messagingOptInAt ?? null,
     messagingOptInSource: (row.messagingOptInSource ?? null) as MessagingOptInSource | null,
     messagingOptOutAt: row.messagingOptOutAt ?? null,
+    duplicateContactRisk: row.duplicateContactRisk ?? false,
     firstContactAt: row.firstContactAt,
     lastActivityAt: row.lastActivityAt,
     createdAt: row.createdAt,

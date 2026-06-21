@@ -39,6 +39,22 @@ describe("ThreadStatusSchema", () => {
 });
 
 describe("ContactSchema", () => {
+  it("defaults duplicateContactRisk to false and accepts true", () => {
+    const base = {
+      id: "c1",
+      organizationId: "org1",
+      primaryChannel: "whatsapp" as const,
+      firstContactAt: new Date(),
+      lastActivityAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    expect(ContactSchema.parse(base).duplicateContactRisk).toBe(false);
+    expect(ContactSchema.parse({ ...base, duplicateContactRisk: true }).duplicateContactRisk).toBe(
+      true,
+    );
+  });
+
   it("validates a complete contact", () => {
     const contact = {
       id: "c-1",

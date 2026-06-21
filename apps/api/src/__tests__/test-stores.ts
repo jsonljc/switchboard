@@ -199,6 +199,7 @@ export class TestContactStore implements ContactStore {
       messagingOptInAt: messagingOptIn ? now : null,
       messagingOptInSource: input.messagingOptInSource ?? null,
       messagingOptOutAt: null,
+      duplicateContactRisk: false,
       firstContactAt: now,
       lastActivityAt: now,
       createdAt: now,

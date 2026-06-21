@@ -66,6 +66,7 @@ describe("FallbackHandler", () => {
     messagingOptInAt: null,
     messagingOptInSource: null,
     messagingOptOutAt: null,
+    duplicateContactRisk: false,
     firstContactAt: new Date(),
     lastActivityAt: new Date(),
     createdAt: new Date(),
