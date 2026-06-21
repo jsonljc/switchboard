@@ -12,3 +12,4 @@ export {
   listModelCosts,
 } from "./llm-costs.js";
 export type { ModelCostEntry } from "./llm-costs.js";
+export * from "./work-unit-spans.js";
