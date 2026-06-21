@@ -53,6 +53,24 @@ function finiteOrUndef(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+/**
+ * Derive an honest [start, end] for a span: both set iff both anchors exist, the optional
+ * parent-start clamp keeps the child from starting before its parent, AND the result is not
+ * inverted. Any inconsistency (missing anchor, clock skew, clamp-induced inversion) degrades
+ * to flat timing rather than emit a misleading/inverted span.
+ */
+function deriveSpanTiming(
+  startRaw: number | undefined,
+  endRaw: number | undefined,
+  parentStartMs?: number,
+): { startMs?: number; endMs?: number } {
+  if (startRaw === undefined || endRaw === undefined) return {};
+  let start = startRaw;
+  if (parentStartMs !== undefined && start < parentStartMs) start = parentStartMs;
+  if (start > endRaw) return {};
+  return { startMs: start, endMs: endRaw };
+}
+
 function providerForModel(model: unknown): string | undefined {
   return typeof model === "string" && model.toLowerCase().includes("claude")
     ? "anthropic"
@@ -87,10 +105,8 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
     (rootStartRaw !== undefined && wuDuration !== undefined
       ? rootStartRaw + wuDuration
       : undefined);
-  // symmetric: both or neither (prevents start-without-end -> OTel substitutes Date.now())
-  const rootTimed = rootStartRaw !== undefined && rootEndRaw !== undefined;
-  const rootStartMs = rootTimed ? rootStartRaw : undefined;
-  const rootEndMs = rootTimed ? rootEndRaw : undefined;
+  // deriveSpanTiming: both or neither; clock-skew (completedAt < requestedAt) degrades to flat
+  const { startMs: rootStartMs, endMs: rootEndMs } = deriveSpanTiming(rootStartRaw, rootEndRaw);
 
   // Work-unit (root) span — REAL requestedAt/completedAt timing (not marked synthetic)
   const root = tracer.startSpan("invoke_agent", undefined, undefined, {
@@ -109,9 +125,13 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
   setIfFinite(root, "switchboard.duration_ms", wu.durationMs);
   root.setStatus(workUnitStatus(wu));
 
-  // Fix A: guard against non-array executions (Prisma Json column can hold a non-array at runtime)
-  const executions = Array.isArray(input.executions) ? input.executions : [];
-  for (const execution of executions) {
+  // Guard against non-array executions (Prisma Json column can hold a non-array at runtime)
+  const executions: unknown[] = Array.isArray(input.executions) ? input.executions : [];
+  for (const execRaw of executions) {
+    // Narrow: null or non-object element -> skip (never throw)
+    if (execRaw === null || typeof execRaw !== "object") continue;
+    const execution = execRaw as WorkUnitExecution;
+
     // Execution span — end = REAL createdAt, start = createdAt - durationMs (derived, synthetic)
     const execEndRaw = finiteOrUndef(execution.createdAtMs);
     const execDuration = finiteOrUndef(execution.durationMs);
@@ -119,14 +139,12 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
       execEndRaw !== undefined && execDuration !== undefined
         ? execEndRaw - execDuration
         : undefined;
-    // symmetric: both or neither
-    const execTimed = execStartRaw !== undefined && execEndRaw !== undefined;
-    let execStartMs = execTimed ? execStartRaw : undefined;
-    const execEndMs = execTimed ? execEndRaw : undefined;
-    // Fix B: a child cannot start before its parent
-    if (execStartMs !== undefined && rootStartMs !== undefined && execStartMs < rootStartMs) {
-      execStartMs = rootStartMs;
-    }
+    // deriveSpanTiming: clamps to rootStart and degrades to flat if start > end (inversion guard)
+    const { startMs: execStartMs, endMs: execEndMs } = deriveSpanTiming(
+      execStartRaw,
+      execEndRaw,
+      rootStartMs,
+    );
 
     const execSpan = tracer.startSpan(`chat ${execution.skillSlug ?? "skill"}`, undefined, root, {
       startTime: execStartMs,
@@ -154,8 +172,8 @@ export function projectWorkUnitSpans(input: WorkUnitSpanInput, tracer: Tracer): 
     if (execStartMs !== undefined) execSpan.setAttribute("switchboard.timing.synthetic", true);
     execSpan.setStatus(executionStatus(execution.status));
 
-    // Fix A: guard against non-array toolCalls (Prisma Json column can hold a non-array at runtime)
-    const toolCalls = Array.isArray(execution.toolCalls) ? execution.toolCalls : [];
+    // Guard against non-array toolCalls (Prisma Json column can hold a non-array at runtime)
+    const toolCalls: unknown[] = Array.isArray(execution.toolCalls) ? execution.toolCalls : [];
     // Tools packed sequentially within the exec window (synthetic)
     let cursorMs = execStartMs;
     for (const call of toolCalls) {
@@ -178,8 +196,8 @@ function emitToolSpan(
   const timed = cursorMs !== undefined && execEndMs !== undefined;
   const clampStart = timed ? Math.min(cursorMs!, execEndMs!) : undefined;
 
-  // Defensive narrowing: non-object or null -> malformed
-  if (call === null || typeof call !== "object") {
+  // DRY: emit a zero-width malformed span and leave the cursor unchanged
+  const emitMalformed = (): number | undefined => {
     const s = tracer.startSpan("execute_tool <malformed>", undefined, execSpan, {
       startTime: clampStart,
       kind: SPAN_KIND.INTERNAL,
@@ -187,24 +205,20 @@ function emitToolSpan(
     s.setAttribute("switchboard.tool.malformed", true);
     s.end(clampStart);
     return cursorMs;
-  }
+  };
+
+  // Defensive narrowing: non-object or null -> malformed
+  if (call === null || typeof call !== "object") return emitMalformed();
 
   const rec = call as Record<string, unknown>;
   const toolId = rec["toolId"];
 
   // Non-string toolId -> malformed
-  if (typeof toolId !== "string") {
-    const s = tracer.startSpan("execute_tool <malformed>", undefined, execSpan, {
-      startTime: clampStart,
-      kind: SPAN_KIND.INTERNAL,
-    });
-    s.setAttribute("switchboard.tool.malformed", true);
-    s.end(clampStart);
-    return cursorMs;
-  }
+  if (typeof toolId !== "string") return emitMalformed();
 
-  const dur = finiteOrUndef(rec["durationMs"]) ?? 0;
-  // Fix B: clamp tool start+end into [..., execEndMs] — no child exceeds parent
+  // Floor dur at 0: negative durationMs would invert toolStart+dur < toolStart
+  const dur = Math.max(0, finiteOrUndef(rec["durationMs"]) ?? 0);
+  // Clamp tool start+end into [..., execEndMs] — no child exceeds parent; dur>=0 so start<=end always
   const toolStartMs = clampStart;
   const toolEndMs = timed ? Math.min(cursorMs! + dur, execEndMs!) : undefined;
 
