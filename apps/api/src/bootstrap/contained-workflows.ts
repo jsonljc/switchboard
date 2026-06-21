@@ -209,6 +209,7 @@ export async function bootstrapContainedWorkflows(
     PrismaRecommendationStore,
     PrismaRobinRecoverySendStore,
     PrismaConnectionStore,
+    PrismaBookingStore,
   } = await import("@switchboard/db");
   const { InstantFormAdapter } = await import("@switchboard/ad-optimizer");
   const { buildMarkHandoffRecommendationActed } =
@@ -400,6 +401,11 @@ export async function bootstrapContainedWorkflows(
   const robinRecoverySendStore = new PrismaRobinRecoverySendStore(
     prismaClient as ConstructorParameters<typeof PrismaRobinRecoverySendStore>[0],
   );
+  // rank 14: re-check future bookings at SEND time (post-approval) so a contact who rebooked between
+  // dispatch and send is not re-engaged. Same booking-store query the dispatch cron uses (inngest.ts).
+  const robinRecoveryBookingStore = new PrismaBookingStore(
+    prismaClient as ConstructorParameters<typeof PrismaBookingStore>[0],
+  );
   const robinRecoverySendExecutor = buildRobinRecoverySendExecutor({
     store: robinRecoverySendStore,
     getSendContext: async (orgId, contactId) => {
@@ -416,6 +422,8 @@ export async function bootstrapContainedWorkflows(
       );
     },
     resolveOrgSendCreds: resolveOrgWhatsAppSend,
+    findFutureBookingContactIds: (orgId, contactIds, now) =>
+      robinRecoveryBookingStore.findFutureBookingContactIds(orgId, contactIds, now),
   });
 
   // meta.lead.greeting.send: the first-touch greeting is a business-initiated PROACTIVE

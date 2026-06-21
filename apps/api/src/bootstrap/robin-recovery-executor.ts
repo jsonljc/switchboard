@@ -65,6 +65,18 @@ export interface RobinRecoverySendExecutorDeps {
   resolveOrgSendCreds?: (
     organizationId: string,
   ) => Promise<{ token: string | null; phoneNumberId: string | null } | null>;
+  /**
+   * rank 14: re-check future bookings at SEND time. The dispatch-side self-rebook exclusion is frozen
+   * at dispatch; a contact who rebooked between then and this (post-approval) send must not be
+   * re-engaged. Resolved ONCE over the cohort. Absent -> no rebooked contacts (re-check is inert).
+   */
+  findFutureBookingContactIds?: (
+    orgId: string,
+    contactIds: string[],
+    now: Date,
+  ) => Promise<Set<string>>;
+  /** Injectable clock for the rebooked re-check; defaults to wall-clock. */
+  now?: () => Date;
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
@@ -175,16 +187,69 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
         let skipped = 0;
         let failed = 0;
 
-        for (const candidate of candidates) {
-          const dedupeKey = buildRecoveryDedupeKey(
-            orgId,
-            candidate.bookingId,
-            RECOVERY_CAMPAIGN_KIND,
-          );
+        const now = (deps.now ?? (() => new Date()))();
+        // rank 14: re-check future bookings at SEND time. The dispatch-side self-rebook exclusion is
+        // frozen at dispatch; a contact who rebooked between then and this (post-approval) send must
+        // not be re-engaged. Batch-resolved once over the cohort; an absent resolver -> no rebooked
+        // contacts (the re-check is inert until wired).
+        const rebookedContactIds = deps.findFutureBookingContactIds
+          ? await deps.findFutureBookingContactIds(
+              orgId,
+              candidates.map((c) => c.contactId),
+              now,
+            )
+          : new Set<string>();
 
-          // CLAIM-FIRST: insert the dedup row before resolving/sending. A P2002 means this no-show
-          // was already contacted (a prior week's overlapping campaign, or a concurrent/retried
-          // dispatch) -> SKIP, never re-send. This is what makes the send idempotent under retry.
+        for (const candidate of candidates) {
+          // Resolve consent / jurisdiction / phone / template-approval BEFORE claiming. An org-wide
+          // config gap (a draft or absent template) must burn NO dedup rows (rank 7), mirroring the
+          // creds short-circuit. A transient resolve failure here is isolated and claims nothing, so a
+          // later run re-resolves (no stranded pending row, no silent under-delivery).
+          let ctx: RecoverySendContext;
+          try {
+            ctx = await deps.getSendContext(orgId, candidate.contactId);
+          } catch (err) {
+            console.warn(
+              `[robin.recovery_campaign.send] context resolve failed for contact ${candidate.contactId}; ` +
+                `skipped without claiming: ${err instanceof Error ? err.message : String(err)}`,
+            );
+            failed++;
+            continue;
+          }
+
+          const eligibility = evaluateProactiveSendEligibility({
+            contact: {
+              pdpaJurisdiction: ctx.pdpaJurisdiction,
+              consentGrantedAt: ctx.consentGrantedAt,
+              consentRevokedAt: ctx.consentRevokedAt,
+              messagingOptIn: ctx.messagingOptIn,
+            },
+            lastWhatsAppInboundAt: ctx.lastWhatsAppInboundAt,
+            intentClass: RECOVERY_INTENT_CLASS,
+            jurisdiction: ctx.jurisdiction,
+            // A no-show re-engagement is inherently a MARKETING-class message (the only
+            // re-engagement-offer template is marketing). The real controls are the per-campaign
+            // manager approval + the per-recipient PDPA proactive consent gate, not this flag.
+            allowMarketingTemplate: true,
+            selectTemplateFn: deps.selectTemplateFn,
+            approvalOverlay: ctx.approvalOverlay,
+          });
+
+          // rank 7: a template that is unapproved (an org-wide approval gap, identical for every
+          // candidate) or absent (e.g. a not-yet-stamped jurisdiction, per-recipient) is a config/data
+          // gap, not a send decision worth burning a dedup row -> skip WITHOUT claiming, so a later run
+          // re-engages once the template is approved (or the jurisdiction is set).
+          if (
+            !eligibility.eligible &&
+            (eligibility.reason === "template_not_approved" || eligibility.reason === "no_template")
+          ) {
+            skipped++;
+            continue;
+          }
+
+          // CLAIM: insert the dedup row now that a send is actually intended. A P2002 means this no-show
+          // was already contacted (a prior overlapping campaign or a concurrent/retried dispatch) ->
+          // SKIP, never re-send. The unique(dedupeKey) is the idempotency guard right before the send.
           let rowId: string;
           try {
             rowId = (
@@ -194,7 +259,11 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
                 bookingId: candidate.bookingId,
                 campaignKind: RECOVERY_CAMPAIGN_KIND,
                 campaignWorkUnitId: workUnit.id,
-                dedupeKey,
+                dedupeKey: buildRecoveryDedupeKey(
+                  orgId,
+                  candidate.bookingId,
+                  RECOVERY_CAMPAIGN_KIND,
+                ),
               })
             ).id;
           } catch (err) {
@@ -205,35 +274,16 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
             throw err;
           }
 
-          // Everything after the claim is wrapped so a transient error (a DB read blip, a network
-          // reject, etc.) is ISOLATED to this recipient: it never throws the whole batch and never
-          // strands the already-claimed row as pending (which a retry would P2002-skip = silent
-          // under-delivery). On a throw the row is marked failed (terminal, single-attempt) and the
-          // loop moves on. Note: consent is still strictly checked BEFORE any send below.
+          // Post-claim per-recipient terminal outcomes (recorded for audit). A transient error here is
+          // isolated to this recipient and marks the claimed row failed (never strands it pending).
           try {
-            // Resolve phone + consent org-scoped AT DISPATCH so consent is re-validated at send time
-            // (the recipient phone is deliberately not frozen in the cohort).
-            const ctx = await deps.getSendContext(orgId, candidate.contactId);
-
-            const eligibility = evaluateProactiveSendEligibility({
-              contact: {
-                pdpaJurisdiction: ctx.pdpaJurisdiction,
-                consentGrantedAt: ctx.consentGrantedAt,
-                consentRevokedAt: ctx.consentRevokedAt,
-                messagingOptIn: ctx.messagingOptIn,
-              },
-              lastWhatsAppInboundAt: ctx.lastWhatsAppInboundAt,
-              intentClass: RECOVERY_INTENT_CLASS,
-              jurisdiction: ctx.jurisdiction,
-              // A no-show re-engagement is inherently a MARKETING-class message (the only
-              // re-engagement-offer template is marketing). The real controls are the per-campaign
-              // manager approval + the per-recipient PDPA proactive consent gate, not this flag;
-              // with it false the only available template is unreachable and the executor is inert.
-              allowMarketingTemplate: true,
-              selectTemplateFn: deps.selectTemplateFn,
-              approvalOverlay: ctx.approvalOverlay,
-            });
-
+            // rank 14: a contact who rebooked between dispatch and now must not be re-engaged. This IS
+            // a terminal per-recipient decision (unlike the org-config gate), so the dedup row is kept.
+            if (rebookedContactIds.has(candidate.contactId)) {
+              await deps.store.markSkipped(rowId, "already_rebooked");
+              skipped++;
+              continue;
+            }
             if (!eligibility.eligible) {
               await deps.store.markSkipped(rowId, eligibility.reason);
               skipped++;

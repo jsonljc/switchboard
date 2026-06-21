@@ -170,12 +170,26 @@ describe("buildRobinRecoverySendExecutor", () => {
     expect(deps.store.markSent).toHaveBeenCalledWith("rs_1", "wamid.1");
   });
 
-  it("consent ineligible (draft template) -> claim + markSkipped(reason), no send", async () => {
+  it("rank 7: draft/unapproved template -> org-config skip, claims ZERO dedup rows, no send", async () => {
+    // A draft template is an org-wide config gap (like missing creds), NOT a per-recipient decision:
+    // claim nothing so a later run re-engages the WHOLE cohort once the template is approved.
     const deps = makeDeps({ selectTemplateFn: () => ({ ...APPROVED, approvalStatus: "draft" }) });
     const { handler } = buildRobinRecoverySendExecutor(deps as never);
+    const res = await handler.execute(makeWorkUnit([C1, C2]) as never, {} as never);
+    expect(deps.store.create).not.toHaveBeenCalled();
+    expect(deps.store.markSkipped).not.toHaveBeenCalled();
+    expect(deps.sendTemplate).not.toHaveBeenCalled();
+    expect(res.outputs).toEqual({ sent: 0, skipped: 2, failed: 0, total: 2 });
+  });
+
+  it("rank 14: a contact who rebooked since dispatch -> markSkipped(already_rebooked), no send", async () => {
+    const findFutureBookingContactIds = vi.fn().mockResolvedValue(new Set(["c_1"]));
+    const deps = makeDeps({ findFutureBookingContactIds });
+    const { handler } = buildRobinRecoverySendExecutor(deps as never);
     const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
-    expect(deps.store.create).toHaveBeenCalledTimes(1);
-    expect(deps.store.markSkipped).toHaveBeenCalledWith("rs_1", "template_not_approved");
+    // Re-checked at SEND time (post-approval), org-scoped, over the cohort's contact ids.
+    expect(findFutureBookingContactIds).toHaveBeenCalledWith("org_1", ["c_1"], expect.any(Date));
+    expect(deps.store.markSkipped).toHaveBeenCalledWith("rs_1", "already_rebooked");
     expect(deps.sendTemplate).not.toHaveBeenCalled();
     expect(res.outputs).toEqual({ sent: 0, skipped: 1, failed: 0, total: 1 });
   });
@@ -202,12 +216,13 @@ describe("buildRobinRecoverySendExecutor", () => {
     expect(deps.sendTemplate).not.toHaveBeenCalled();
   });
 
-  it("dedup hit (P2002 on claim) -> skip, no context read, no send (no double-send)", async () => {
+  it("dedup hit (P2002 on claim) -> skip, no send (no double-send); context resolved before the claim", async () => {
     const deps = makeDeps();
     deps.store.create.mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }));
     const { handler } = buildRobinRecoverySendExecutor(deps as never);
     const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
-    expect(deps.getSendContext).not.toHaveBeenCalled();
+    // The reorder resolves eligibility before claiming; the unique(dedupeKey) P2002 still gates the send.
+    expect(deps.getSendContext).toHaveBeenCalledTimes(1);
     expect(deps.sendTemplate).not.toHaveBeenCalled();
     expect(res.outputs).toEqual({ sent: 0, skipped: 1, failed: 0, total: 1 });
   });
@@ -243,27 +258,28 @@ describe("buildRobinRecoverySendExecutor", () => {
     expect(res2.outputs).toEqual({ sent: 0, skipped: 1, failed: 0, total: 1 });
   });
 
-  it("isolates a mid-batch transient error (getSendContext throws): that recipient -> failed, others still send, batch completes", async () => {
+  it("isolates a mid-batch transient error (getSendContext throws): that recipient -> failed with NO claimed row, others still send", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const deps = makeDeps();
-    deps.store.create
-      .mockResolvedValueOnce({ id: "rs_1" })
-      .mockResolvedValueOnce({ id: "rs_2" })
-      .mockResolvedValueOnce({ id: "rs_3" });
+    // create is reached only by the two recipients whose context resolves (C1, C3).
+    deps.store.create.mockResolvedValueOnce({ id: "rs_1" }).mockResolvedValueOnce({ id: "rs_2" });
     deps.getSendContext
       .mockResolvedValueOnce(eligibleCtx({ phone: "+6591111111" }))
       .mockRejectedValueOnce(new Error("db blip"))
       .mockResolvedValueOnce(eligibleCtx({ phone: "+6593333333" }));
     const { handler } = buildRobinRecoverySendExecutor(deps as never);
     const res = await handler.execute(makeWorkUnit([C1, C2, C3]) as never, {} as never);
-    // The whole batch must NOT throw; the one error is isolated to its recipient.
+    // The whole batch must NOT throw; the pre-claim resolve failure is isolated to its recipient.
     expect(res.outcome).toBe("completed");
     expect(res.outputs).toEqual({ sent: 2, skipped: 0, failed: 1, total: 3 });
-    // The claimed row for the failed recipient is marked failed (never left orphaned pending).
-    expect(deps.store.markFailed).toHaveBeenCalledWith("rs_2", "db blip");
-    // Recipients 1 and 3 still sent.
+    // A pre-claim resolve failure claims NO row (re-evaluated next campaign), so markFailed never fires.
+    expect(deps.store.markFailed).not.toHaveBeenCalled();
+    expect(deps.store.create).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    // Recipients 1 and 3 still claim (rs_1, rs_2) and send.
     expect(deps.sendTemplate).toHaveBeenCalledTimes(2);
     expect(deps.store.markSent).toHaveBeenCalledWith("rs_1", "wamid.1");
-    expect(deps.store.markSent).toHaveBeenCalledWith("rs_3", "wamid.1");
+    expect(deps.store.markSent).toHaveBeenCalledWith("rs_2", "wamid.1");
   });
 
   it("isolates a sendTemplate network rejection (not just !ok) -> markFailed, no batch throw", async () => {
@@ -275,15 +291,16 @@ describe("buildRobinRecoverySendExecutor", () => {
     expect(deps.store.markFailed).toHaveBeenCalledWith("rs_1", "ECONNRESET");
   });
 
-  it("real registry stays blocked without an approval overlay (fail-closed default)", async () => {
-    // No selectTemplateFn: exercise the REAL registry (re-engagement template ships draft).
+  it("real registry stays blocked without an approval overlay (fail-closed) -> NO claim, no send", async () => {
+    // No selectTemplateFn: exercise the REAL registry (re-engagement template ships draft). Org-config
+    // gap -> claim nothing (rank 7).
     const deps = makeDeps({
       selectTemplateFn: undefined,
       getSendContext: vi.fn().mockResolvedValue(eligibleCtx()),
     });
     const { handler } = buildRobinRecoverySendExecutor(deps as never);
     await handler.execute(makeWorkUnit([C1]) as never, {} as never);
-    expect(deps.store.markSkipped).toHaveBeenCalledWith("rs_1", "template_not_approved");
+    expect(deps.store.create).not.toHaveBeenCalled();
     expect(deps.sendTemplate).not.toHaveBeenCalled();
   });
 
