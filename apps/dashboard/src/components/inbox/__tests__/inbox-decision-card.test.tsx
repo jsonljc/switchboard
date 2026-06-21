@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { render, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { InboxDecisionCard } from "../inbox-decision-card";
 import type { Decision, RiskContract } from "@/lib/decisions/types";
 
@@ -276,6 +276,38 @@ describe("<InboxDecisionCard> (doorway card)", () => {
       fireEvent.click(getByRole("button", { name: /open alex panel/i }));
       expect(onOpenAgent).toHaveBeenCalledWith("alex");
       expect(onOpenDetail).not.toHaveBeenCalled();
+    });
+  });
+
+  // (g) quiet dollar-at-stake hint — visible only when dollarsAtRisk > 0
+  describe("dollar-at-stake hint", () => {
+    it("shows a quiet dollar figure only when dollarsAtRisk > 0", () => {
+      const { rerender } = render(
+        <InboxDecisionCard
+          decision={makeApproval(lowSafe, { meta: { riskContract: lowSafe, dollarsAtRisk: 450 } })}
+          onApprove={vi.fn()}
+          onSkip={vi.fn()}
+          onOpenDetail={vi.fn()}
+          onTakeOver={vi.fn()}
+        />,
+      );
+      expect(screen.getByText(/S\$450/)).toBeInTheDocument();
+
+      rerender(
+        <InboxDecisionCard
+          decision={makeApproval(lowSafe, { meta: { riskContract: lowSafe, dollarsAtRisk: 0 } })}
+          onApprove={vi.fn()}
+          onSkip={vi.fn()}
+          onOpenDetail={vi.fn()}
+          onTakeOver={vi.fn()}
+        />,
+      );
+      expect(screen.queryByText(/S\$/)).not.toBeInTheDocument();
+    });
+
+    it("shows no dollar figure when dollarsAtRisk is absent", () => {
+      renderCard(makeApproval(lowSafe));
+      expect(screen.queryByText(/S\$/)).not.toBeInTheDocument();
     });
   });
 });
