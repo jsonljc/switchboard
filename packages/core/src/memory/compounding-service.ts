@@ -8,6 +8,7 @@ import {
   computeConfidenceScore,
   isKnownCanonicalKey,
 } from "@switchboard/schemas";
+import type { DeploymentMemorySource } from "@switchboard/schemas";
 import { StaleVersionError } from "../approval/state-machine.js";
 import { buildSummarizationPrompt, buildFactExtractionPrompt } from "./extraction-prompts.js";
 import { shouldExtractOutcomePatterns } from "./outcome-pattern-extractor.js";
@@ -60,6 +61,7 @@ export interface CompoundingDeploymentMemoryStore {
     content: string;
     confidence?: number;
     canonicalKey?: string | null;
+    source?: DeploymentMemorySource | null;
   }): Promise<{ id: string }>;
   incrementConfidence(
     organizationId: string,

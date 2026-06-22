@@ -1,4 +1,5 @@
 import { StaleVersionError } from "@switchboard/core";
+import type { DeploymentMemorySource } from "@switchboard/schemas";
 import type { PrismaDbClient } from "../prisma-db.js";
 
 export interface CreateDeploymentMemoryInput {
@@ -8,6 +9,7 @@ export interface CreateDeploymentMemoryInput {
   content: string;
   confidence?: number;
   canonicalKey?: string | null;
+  source?: DeploymentMemorySource | null;
 }
 
 export class PrismaDeploymentMemoryStore {
@@ -15,18 +17,54 @@ export class PrismaDeploymentMemoryStore {
 
   async create(input: CreateDeploymentMemoryInput) {
     const now = new Date();
-    return this.prisma.deploymentMemory.create({
-      data: {
-        organizationId: input.organizationId,
-        deploymentId: input.deploymentId,
-        category: input.category,
-        content: input.content,
-        canonicalKey: input.canonicalKey ?? null,
-        confidence: input.confidence ?? 0.5,
-        sourceCount: 1,
-        lastSeenAt: now,
-      },
-    });
+    const data = {
+      organizationId: input.organizationId,
+      deploymentId: input.deploymentId,
+      category: input.category,
+      content: input.content,
+      canonicalKey: input.canonicalKey ?? null,
+      confidence: input.confidence ?? 0.5,
+      sourceCount: 1,
+      lastSeenAt: now,
+      source: input.source ?? null,
+      validFrom: now,
+    };
+    try {
+      return await this.prisma.deploymentMemory.create({ data });
+    } catch (err) {
+      // The unique is on CONTENT (org, deployment, category, content). With
+      // invalidate-not-delete, an evicted/decayed row physically remains and
+      // blocks re-creating the same content (P2002). Deterministic resolution:
+      // if the colliding row is INVALIDATED, resurrect it (a fresh assertion
+      // supersedes the tombstone, taking the NEW write's canonicalKey/confidence/
+      // source); if it is LIVE, rethrow so the caller's existing duplicate
+      // handling runs unchanged (the taste/revenue_proven crons + the pattern
+      // P2002 recovery only ever collide with LIVE rows, so they are unaffected).
+      if (!isPrismaUniqueConstraintError(err)) throw err;
+      const colliding = await this.prisma.deploymentMemory.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          deploymentId: input.deploymentId,
+          category: input.category,
+          content: input.content,
+        },
+      });
+      if (!colliding || colliding.invalidatedAt === null) throw err;
+      return this.prisma.deploymentMemory.update({
+        where: { id: colliding.id },
+        data: {
+          invalidatedAt: null,
+          validTo: null,
+          validFrom: now,
+          lastDecayedAt: null,
+          confidence: input.confidence ?? 0.5,
+          sourceCount: 1,
+          lastSeenAt: now,
+          canonicalKey: input.canonicalKey ?? null,
+          source: input.source ?? null,
+        },
+      });
+    }
   }
 
   async incrementConfidence(organizationId: string, id: string, newConfidence: number) {
@@ -165,4 +203,14 @@ export class PrismaDeploymentMemoryStore {
     // metric's meaning (rows decayed this run). Invalidations are a side effect.
     return decremented.count;
   }
+}
+
+/** P2002 (unique-constraint) classifier — matches Prisma's error code, not its message. */
+function isPrismaUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: string }).code === "P2002"
+  );
 }

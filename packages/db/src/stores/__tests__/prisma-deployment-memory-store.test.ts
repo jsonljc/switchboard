@@ -367,4 +367,66 @@ describe("PrismaDeploymentMemoryStore", () => {
       await expect(store.invalidate("org-1", "mem-1")).rejects.toBeInstanceOf(StaleVersionError);
     });
   });
+
+  describe("create provenance + resurrection", () => {
+    it("persists source + validFrom on a fresh create", async () => {
+      const prisma = createMockPrisma();
+      prisma.deploymentMemory.create.mockResolvedValue({ id: "m1" });
+      const store = new PrismaDeploymentMemoryStore(prisma as never);
+      await store.create({
+        organizationId: "o1",
+        deploymentId: "d1",
+        category: "fact",
+        content: "c",
+        source: "conversation-compounding",
+      });
+      const data = prisma.deploymentMemory.create.mock.calls[0]![0]!.data;
+      expect(data.source).toBe("conversation-compounding");
+      expect(data.validFrom).toBeInstanceOf(Date);
+    });
+    it("resurrects an invalidated colliding row on P2002", async () => {
+      const prisma = createMockPrisma();
+      prisma.deploymentMemory.create.mockRejectedValue({ code: "P2002" });
+      prisma.deploymentMemory.findFirst.mockResolvedValue({
+        id: "old",
+        invalidatedAt: new Date(),
+      });
+      prisma.deploymentMemory.update.mockResolvedValue({ id: "old" });
+      const store = new PrismaDeploymentMemoryStore(prisma as never);
+      const r = await store.create({
+        organizationId: "o1",
+        deploymentId: "d1",
+        category: "fact",
+        content: "c",
+        source: "conversation-compounding",
+      });
+      expect(prisma.deploymentMemory.findFirst).toHaveBeenCalled();
+      const upd = prisma.deploymentMemory.update.mock.calls[0]![0]!;
+      expect(upd.where).toEqual({ id: "old" });
+      expect(upd.data.invalidatedAt).toBeNull();
+      expect(upd.data.validTo).toBeNull();
+      expect(upd.data.sourceCount).toBe(1);
+      expect(r).toEqual({ id: "old" });
+    });
+    it("rethrows P2002 when the colliding row is LIVE (no resurrection)", async () => {
+      const prisma = createMockPrisma();
+      prisma.deploymentMemory.create.mockRejectedValue({ code: "P2002" });
+      prisma.deploymentMemory.findFirst.mockResolvedValue({ id: "live", invalidatedAt: null });
+      const store = new PrismaDeploymentMemoryStore(prisma as never);
+      await expect(
+        store.create({ organizationId: "o1", deploymentId: "d1", category: "fact", content: "c" }),
+      ).rejects.toMatchObject({ code: "P2002" });
+      expect(prisma.deploymentMemory.findFirst).toHaveBeenCalled();
+      expect(prisma.deploymentMemory.update).not.toHaveBeenCalled();
+    });
+    it("rethrows P2002 when no colliding row is found (race)", async () => {
+      const prisma = createMockPrisma();
+      prisma.deploymentMemory.create.mockRejectedValue({ code: "P2002" });
+      prisma.deploymentMemory.findFirst.mockResolvedValue(null);
+      const store = new PrismaDeploymentMemoryStore(prisma as never);
+      await expect(
+        store.create({ organizationId: "o1", deploymentId: "d1", category: "fact", content: "c" }),
+      ).rejects.toMatchObject({ code: "P2002" });
+    });
+  });
 });
