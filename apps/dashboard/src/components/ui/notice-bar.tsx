@@ -9,7 +9,7 @@ const noticeBarVariants = cva(
       tone: {
         // Light caution tint ground carries the tone; dark --foreground ink
         // carries the text (~15:1). The mid-tone text-caution on this tint is
-        // only ~4.4:1 (fails AA), so we never pair them. See Badge #4b note.
+        // only ~4.4:1 (fails AA), so we never pair them.
         caution: "bg-caution-subtle text-foreground ring-caution/25",
       },
     },

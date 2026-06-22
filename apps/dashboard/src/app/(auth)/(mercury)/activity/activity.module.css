@@ -41,7 +41,7 @@
   --paper-deep:   hsl(40 22% 93%);
   --ink:          #0E0C0A;
   --ink-2:        #3A332B;
-  --ink-3:        #6B6052;
+  --ink-3:        hsl(var(--palette-ink-500));
   --ink-4:        #A39786;
   --ink-5:        #C8BEAE;
   --hair:        rgba(14, 12, 10, 0.08);
