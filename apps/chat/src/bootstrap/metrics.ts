@@ -234,6 +234,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "Robin recovery sends that exhausted bounded retries and dead-lettered (terminal failed); labeled by intent + reason",
       ["intent", "reason"],
     ),
+    rileyReallocationCapEvaluated: new PromCounter(
+      "switchboard_riley_reallocation_cap_evaluated_total",
+      "Riley reallocate pre-write blast-radius cap evaluations by org and outcome (within_cap/delta_cap/share_cap); the cap is the only active blast-radius protection. Fires only when the reallocate executor runs (gated by RILEY_REALLOCATE_SELF_EXECUTION_ENABLED)",
+      ["orgId", "outcome"],
+    ),
     llmCacheCallsTotal: new PromCounter(
       "switchboard_llm_cache_calls_total",
       "Per-LLM-call prompt-cache effectiveness by model and outcome (hit/populate/miss); a sustained miss rate is the silent cache-invalidation signal",

@@ -83,13 +83,13 @@ describe("buildRileyPipelineViewModel", () => {
       expect(vm.tiles[0]!.ctx).toBe("$80 at risk · rotate creative");
     });
 
-    it("uses known-intent map for scale_budget → 'scale budget'", () => {
+    it("uses known-intent map for scale_budget → 'increase budget'", () => {
       const vm = buildRileyPipelineViewModel({
         rows: [row({ intent: "recommendation.scale_budget", dollarsAtRisk: 1200 })],
         totalCount: 1,
         now: NOW,
       });
-      expect(vm.tiles[0]!.ctx).toBe("$1,200 at risk · scale budget");
+      expect(vm.tiles[0]!.ctx).toBe("$1,200 at risk · increase budget");
     });
 
     it("falls back to underscore-stripped intent for unknown actions", () => {

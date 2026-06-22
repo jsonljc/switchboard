@@ -584,6 +584,12 @@ export async function registerInngest(
     // SPEC-1B: RILEY_REALLOCATE_SELF_EXECUTION_ENABLED=true wires the budget
     // reallocate initiator; default absent = dark. Env-only gate (no per-deployment
     // field in v1; mirrors RILEY_PAUSE_SELF_EXECUTION_ENABLED pattern).
+    // FLAG-FLIP GATE (A6/D3): flipping this on is a real-money self-execution boundary. The ONLY
+    // active blast-radius protection is the executor's pre-write cap (assertWithinBlastRadius); the
+    // contract's guardrails + reset_prior_budget rollback are NOT WIRED (BLAST_RADIUS_PROTECTIONS,
+    // packages/ad-optimizer). HARD precondition before flipping: wire AND exercise end-to-end the
+    // forward guardrail monitor + automated rollback + a genuine kill-switch. An off-flag is not a
+    // safety boundary (Knight Capital). See docs/runbooks/riley-reallocation-go-live.md.
     ...(process.env["RILEY_REALLOCATE_SELF_EXECUTION_ENABLED"] === "true"
       ? { rileyBudgetSubmitter }
       : {}),

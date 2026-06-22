@@ -25,7 +25,7 @@ export const RILEY_MEDIUM_DOLLAR_THRESHOLD = 100;
 const RILEY_ACTION_VERB_BY_INTENT: Record<string, string> = {
   "recommendation.pause_adset": "pause",
   "recommendation.rotate_creative": "rotate creative",
-  "recommendation.scale_budget": "scale budget",
+  "recommendation.scale_budget": "increase budget",
 };
 
 export function buildRileyPipelineViewModel(input: BuildRileyPipelineInput): PipelineViewModel {

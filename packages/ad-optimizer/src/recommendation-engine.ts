@@ -350,7 +350,7 @@ export function generateRecommendations(
         "scale",
         0.7,
         "this_week",
-        `Campaign is performing well under target CPA — scale budget by up to ${MAX_BUDGET_INCREASE_PERCENT}%`,
+        `Campaign is performing well under target CPA; increase budget by up to ${MAX_BUDGET_INCREASE_PERCENT}%`,
         [
           `Approve draft with ${MAX_BUDGET_INCREASE_PERCENT}% higher budget`,
           `Budget increase capped at ${MAX_BUDGET_INCREASE_PERCENT}%`,

@@ -41,9 +41,9 @@ export function computeBudgetDelta(
 
 /**
  * The Spec-1B campaign-budget scale factor: a +20% daily-budget increase. Mirrors the recommendation
- * engine's advertised "scale budget by up to 20%" (MAX_BUDGET_INCREASE_PERCENT) but is kept
+ * engine's advertised "increase budget by up to 20%" (MAX_BUDGET_INCREASE_PERCENT) but is kept
  * independent of that UI-copy constant on purpose: this is the money math, not the recommendation
- * text. v1 only scales UP; decreases (review_budget) are deferred.
+ * text. v1 is budget-increase-only (scales UP); decreases (review_budget) are deferred.
  */
 export const REALLOCATE_SCALE_FACTOR = 1.2;
 

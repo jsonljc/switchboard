@@ -19,6 +19,29 @@
  */
 
 /**
+ * Honesty marker (A6 / decision D3): the wiring state of this contract's three protections. The
+ * ONLY one with a consumer today is the pre-write cap; the forward guardrails and the automated
+ * rollback are a FORWARD INTERFACE with ZERO consumer (grep proves no `.guardrails`/`.rollback`/
+ * `reset_prior_budget` read outside this module's own test). Recorded intent, not enforcement.
+ * Wiring AND exercising end-to-end (at least once) the forward guardrail-evaluation monitor +
+ * automated rollback + a genuine kill-switch is a HARD precondition of flipping
+ * RILEY_REALLOCATE_SELF_EXECUTION_ENABLED. See docs/runbooks/riley-reallocation-go-live.md.
+ * Mirrors the SPEC_1B_PENDING_KINDS idiom (a typed const documenting deferred state). Inaccurate
+ * comments are worse than none; an off-flag is not a safety boundary (Knight Capital).
+ */
+export const BLAST_RADIUS_PROTECTIONS = {
+  /** assertWithinBlastRadius: WIRED. The reallocate executor calls it before every Meta write. */
+  preWriteCap: "wired",
+  /** BlastRadiusContract.guardrails: NOT WIRED. No forward monitor reads them (deferred per D3). */
+  forwardGuardrails: "not_wired",
+  /** BlastRadiusRollback / reset_prior_budget: NOT WIRED. Nothing runs the rollback (deferred D3). */
+  automatedRollback: "not_wired",
+} as const;
+
+/**
+ * NOT WIRED (BLAST_RADIUS_PROTECTIONS.forwardGuardrails): a guardrail metric a FUTURE outcome-
+ * attribution monitor would evaluate. Zero consumer today (deferred per D3).
+ *
  * A guardrail signal the forward monitor (the slice-3 outcome-attribution cron)
  * evaluates over its window and trips on. Machine-comparable, NOT prose: each
  * carries a numeric `breachAbove` threshold the cron compares a measured share
@@ -47,6 +70,9 @@ export interface BlastRadiusGuardrail {
 }
 
 /**
+ * NOT WIRED (BLAST_RADIUS_PROTECTIONS.automatedRollback): the automated breach response a FUTURE
+ * monitor would run. Zero consumer today (deferred per D3); recorded intent, not enforcement.
+ *
  * Automated rollback for the reallocate class: on a tripped guardrail the monitor
  * re-sets the campaign's prior daily budget. The executor MUST capture the prior
  * value before the write (the read-modify-re-read executor, spec section 7) so the
@@ -78,9 +104,11 @@ export interface BlastRadiusContract {
    * "small account, large relative move" case a flat dollar cap misses.
    */
   maxAccountSpendShare: number;
-  /** Guardrail thresholds the forward outcome-attribution cron evaluates. */
+  /** NOT WIRED: guardrail thresholds a FUTURE outcome-attribution monitor would evaluate; zero
+   *  consumer today (BLAST_RADIUS_PROTECTIONS.forwardGuardrails). Forward interface, not enforcement. */
   guardrails: BlastRadiusGuardrail[];
-  /** Automated breach response for the reallocate class. */
+  /** NOT WIRED: the automated breach response a FUTURE monitor would run; zero consumer today
+   *  (BLAST_RADIUS_PROTECTIONS.automatedRollback). Forward interface, not enforcement. */
   rollback: BlastRadiusRollback;
 }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   assertWithinBlastRadius,
+  BLAST_RADIUS_PROTECTIONS,
   DEFAULT_BLAST_RADIUS_CONTRACT,
   type BlastRadiusContract,
   type BlastRadiusGuardrailMetric,
@@ -173,5 +174,13 @@ describe("DEFAULT_BLAST_RADIUS_CONTRACT — the v1 default the reallocate execut
       ok: false,
       reason: "SHARE_CAP",
     });
+  });
+});
+
+describe("BLAST_RADIUS_PROTECTIONS — honest wiring state (A6/D3)", () => {
+  it("marks the pre-write cap WIRED and the forward guardrails + rollback NOT WIRED", () => {
+    expect(BLAST_RADIUS_PROTECTIONS.preWriteCap).toBe("wired");
+    expect(BLAST_RADIUS_PROTECTIONS.forwardGuardrails).toBe("not_wired");
+    expect(BLAST_RADIUS_PROTECTIONS.automatedRollback).toBe("not_wired");
   });
 });
