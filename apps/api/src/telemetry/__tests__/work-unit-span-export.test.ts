@@ -11,7 +11,10 @@ import {
   exportWorkUnitSpans,
   isWorkUnitTracingEnabled,
   buildWorkUnitSpanExportHook,
+  type WorkUnitSpanExportDeps,
 } from "../work-unit-span-export.js";
+import type { PlatformIngressConfig } from "@switchboard/core/platform";
+import type { PrismaExecutionTraceStore, PrismaWorkTraceStore } from "@switchboard/db";
 
 // minimal recording tracer (mirrors the core test double)
 class RecordingTracer implements Tracer {
@@ -318,11 +321,23 @@ describe("buildWorkUnitSpanExportHook — fire-and-forget, error-swallowing hook
     warnSpy.mockRestore();
   });
 
-  it("compile-time seam: the hook return type is assignable to the PlatformIngressConfig hook shape", () => {
-    const _pin: (info: { organizationId: string; workUnitId: string }) => void =
+  it("compile-time seam: hook + real Prisma stores satisfy the cross-package contracts", () => {
+    // (1) The hook's return type IS the REAL PlatformIngressConfig.onWorkUnitComplete field type
+    // (not an inline-duplicated shape) — if core's hook signature drifts, this stops compiling.
+    const _pin: NonNullable<PlatformIngressConfig["onWorkUnitComplete"]> =
       buildWorkUnitSpanExportHook({
         executionTraceStore: { findByWorkUnitId: vi.fn().mockResolvedValue([]) },
       });
+
+    // (2) The REAL @switchboard/db stores form a valid WorkUnitSpanExportDeps (type-level seam;
+    // never invoked). Drift in either store's findByWorkUnitId / getByWorkUnitId signature breaks
+    // compilation here, catching a producer/consumer mismatch the app.ts wiring relies on.
+    const _depsFromRealStores = (
+      executionTraceStore: PrismaExecutionTraceStore,
+      workTraceStore: PrismaWorkTraceStore,
+    ): WorkUnitSpanExportDeps => ({ executionTraceStore, workTraceStore });
+
     expect(typeof _pin).toBe("function");
+    expect(typeof _depsFromRealStores).toBe("function");
   });
 });
