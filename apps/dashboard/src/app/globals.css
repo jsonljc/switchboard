@@ -1457,4 +1457,9 @@
    every Mercury route keeps today's Inter end to end, portals included. */
 body:has(.app-header):not(:has([data-register="mercury"])) {
   font-family: var(--font-body-app);
+  /* TY5 type collapse: the authed register speaks ONE serif (Fraunces). The
+     :root default below stays Source Serif 4, which Mercury + pre-auth inherit
+     because the marker excludes them from this rule. Generalizes the choice
+     inbox-design-base.css already made locally. */
+  --serif: var(--font-display-app);
 }

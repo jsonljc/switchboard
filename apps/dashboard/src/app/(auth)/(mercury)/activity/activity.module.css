@@ -211,7 +211,7 @@
   flex-wrap: wrap;
 }
 .errBannerEyebrow {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -229,7 +229,7 @@
   min-width: 16rem;
 }
 .errBannerRetry {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10.5px;
   letter-spacing: 0.14em;
   font-weight: 700;
@@ -260,7 +260,7 @@
   align-items: flex-start;
 }
 .emptyEyebrow {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -291,7 +291,7 @@
 }
 .emptyMeta {
   margin-top: 6px;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11px;
   color: var(--ink-4);
   letter-spacing: 0.02em;
@@ -309,7 +309,7 @@
 }
 .emptyCta {
   margin-top: 8px;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10.5px;
   letter-spacing: 0.14em;
   font-weight: 700;
@@ -342,7 +342,7 @@
   border-top: 1px solid var(--hair);
 }
 .pagInfo {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11.5px;
   letter-spacing: 0.04em;
   color: var(--ink-3);
@@ -362,7 +362,7 @@
   gap: 10px;
 }
 .pagBtn {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10.5px;
   letter-spacing: 0.14em;
   font-weight: 700;
@@ -405,7 +405,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--ink-3);
@@ -416,7 +416,7 @@
   font-weight: 600;
 }
 .stalePillRefresh {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -470,7 +470,7 @@
   padding-top: 0;
 }
 .filterStripEyebrow {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -488,7 +488,7 @@
   overflow: hidden;
 }
 .scopeSegmentBtn {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -536,7 +536,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -559,7 +559,7 @@
 }
 .comboInput {
   width: 100%;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11.5px;
   letter-spacing: 0.04em;
   color: var(--ink);
@@ -581,7 +581,7 @@
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10px;
   color: var(--ink-4);
   pointer-events: none;
@@ -591,7 +591,7 @@
   right: 22px;
   top: 50%;
   transform: translateY(-50%);
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 14px;
   color: var(--ink-4);
   padding: 0 4px;
@@ -617,7 +617,7 @@
   z-index: 50;
 }
 .comboBand {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -632,7 +632,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 7px 14px;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11.5px;
   letter-spacing: 0.04em;
   color: var(--ink);
@@ -669,7 +669,7 @@
   gap: 6px;
 }
 .actorPill {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10.5px;
   letter-spacing: 0.12em;
   font-weight: 700;
@@ -718,7 +718,7 @@
   border: 1px solid var(--hair-strong);
   border-radius: 2px;
   background: var(--paper-raised);
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11px;
   letter-spacing: 0.03em;
 }
@@ -744,14 +744,14 @@
   background: transparent;
   border: none;
   outline: none;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11px;
   color: var(--ink);
   width: 7.5rem;
   padding: 0;
 }
 .dateRangeClear {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 12px;
   color: var(--ink-4);
   padding: 0 4px;
@@ -776,7 +776,7 @@
   background: transparent;
   border: none;
   outline: none;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--ink-2);
@@ -797,7 +797,7 @@
   background: transparent;
   border: none;
   outline: none;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11px;
   color: var(--ink);
   padding: 7px 10px;
@@ -808,7 +808,7 @@
 }
 
 .filterClear {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 10.5px;
   letter-spacing: 0.14em;
   font-weight: 700;
@@ -833,7 +833,7 @@
   flex: 1;
 }
 .filterMeta {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-mono-mercury, ui-monospace, monospace);
   font-size: 11px;
   color: var(--ink-4);
   letter-spacing: 0.04em;
@@ -852,8 +852,8 @@
 .arowTarget { animation: targetFlash 1.6s ease; }
 @keyframes targetFlash { 0%, 30% { background: var(--amber-paper); } 100% { background: transparent; } }
 .colTime { display: flex; flex-direction: column; gap: 2px; }
-.colTimeClock { font-family: var(--font-mono, ui-monospace, monospace); }
-.colTimeRel { font-family: var(--font-mono, ui-monospace, monospace); opacity: 0.6; }
+.colTimeClock { font-family: var(--font-mono-mercury, ui-monospace, monospace); }
+.colTimeRel { font-family: var(--font-mono-mercury, ui-monospace, monospace); opacity: 0.6; }
 .colEvent { min-width: 0; }
 .evtBadge { display: inline-flex; align-items: center; gap: 7px; padding: 4px 9px; border: 1px solid var(--hair-strong); border-radius: 2px; }
 .evtBand { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-5); flex-shrink: 0; }
@@ -861,16 +861,16 @@
 .evtBadge[data-band="identity"] .evtBand { background: var(--ink-3); }
 .evtBadge[data-band="event"] .evtBand { background: var(--ink-5); }
 .evtBadge[data-band="agent"] .evtBand { background: var(--ink); }
-.evtText { font-family: var(--font-mono, ui-monospace, monospace); white-space: nowrap; }
-.colActor { display: flex; align-items: center; gap: 9px; min-width: 0; font-family: var(--font-mono, ui-monospace, monospace); }
-.actorGlyph { width: 28px; height: 18px; border: 1px solid var(--hair-strong); border-radius: 1px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; }
+.evtText { font-family: var(--font-mono-mercury, ui-monospace, monospace); white-space: nowrap; }
+.colActor { display: flex; align-items: center; gap: 9px; min-width: 0; font-family: var(--font-mono-mercury, ui-monospace, monospace); }
+.actorGlyph { width: 28px; height: 18px; border: 1px solid var(--hair-strong); border-radius: 1px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; }
 .actorGlyph[data-actor="agent"] { background: var(--amber-paper); border-color: var(--amber); color: var(--amber-deep); }
 .colActorId { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.colEntity { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-family: var(--font-mono, ui-monospace, monospace); }
+.colEntity { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-family: var(--font-mono-mercury, ui-monospace, monospace); }
 .colEntityType { font-size: 10px; text-transform: uppercase; opacity: 0.6; }
 .colEntityId { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .colSummary { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.redactedBadge { display: inline-block; margin-left: 8px; padding: 1px 6px; border: 1px dashed var(--ink-3); border-radius: 999px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; }
+.redactedBadge { display: inline-block; margin-left: 8px; padding: 1px 6px; border: 1px dashed var(--ink-3); border-radius: 999px; font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 9.5px; }
 .colChevron { display: inline-flex; align-items: center; justify-content: center; }
 .chevron { display: inline-block; }
 .chevronOpen { display: inline-block; transform: rotate(90deg); }
@@ -881,30 +881,30 @@
 @media (max-width: 980px) { .drawerInner { grid-template-columns: 1fr; gap: 26px; } }
 .dsection { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .dsectionFull { grid-column: 1 / -1; }
-.dsectionLabel { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.6; }
+.dsectionLabel { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.6; }
 .dsectionLabelDim { opacity: 0.55; font-weight: 600; }
-.dsectionFullIso { font-family: var(--font-mono, ui-monospace, monospace); font-size: 13px; }
+.dsectionFullIso { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 13px; }
 .dsectionTz { opacity: 0.5; }
 .dsectionNote { font-size: 12px; opacity: 0.7; font-style: italic; margin-top: 2px; }
-.dsectionMono { font-family: var(--font-mono, ui-monospace, monospace); font-style: normal; }
+.dsectionMono { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-style: normal; }
 .snapKeys { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.snapKey { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; padding: 3px 8px; background: var(--paper-raised); border: 1px solid var(--hair); border-radius: 2px; }
-.snapRedacted { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 3px 8px; border: 1px dashed var(--ink-3); border-radius: 2px; opacity: 0.7; }
+.snapKey { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 11px; padding: 3px 8px; background: var(--paper-raised); border: 1px solid var(--hair); border-radius: 2px; }
+.snapRedacted { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 3px 8px; border: 1px dashed var(--ink-3); border-radius: 2px; opacity: 0.7; }
 .evnone { font-size: 12.5px; opacity: 0.6; font-style: italic; }
 
 /* Evidence rows */
 .evlist { display: flex; flex-direction: column; gap: 10px; }
 .evrow { display: grid; grid-template-columns: 56px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 8px 10px; background: var(--paper-raised); border: 1px solid var(--hair); border-radius: 2px; }
-.evtype { font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.6; }
-.evhash { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evtype { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.6; }
+.evhash { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .evhashPrefix { font-weight: 600; }
 .evhashRest { opacity: 0.4; }
-.absenceNote { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10.5px; opacity: 0.7; padding: 8px 10px; border: 1px dashed var(--hair-strong); border-radius: 2px; }
+.absenceNote { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 10.5px; opacity: 0.7; padding: 8px 10px; border: 1px dashed var(--hair-strong); border-radius: 2px; }
 
 /* Hash chain */
 .chain { display: flex; flex-direction: column; gap: 12px; padding: 14px 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
 .chainRow { display: grid; grid-template-columns: 100px minmax(0,1fr) auto; gap: 14px; align-items: center; }
-.chainHash { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12.5px; word-break: break-all; line-height: 1.45; }
+.chainHash { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 12.5px; word-break: break-all; line-height: 1.45; }
 .chainAnchor .chainHash { opacity: 0.6; font-style: italic; }
 .chainActions { display: inline-flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
@@ -912,30 +912,30 @@
 .linkpair { display: flex; flex-direction: column; gap: 8px; }
 .linkrow { display: grid; grid-template-columns: 92px minmax(0,1fr) auto auto; gap: 10px; align-items: center; padding: 8px 10px; background: var(--paper-raised); border: 1px solid var(--hair); border-radius: 2px; }
 .linkrowEmpty { background: transparent; border: 1px dashed var(--hair-strong); }
-.linkrowVal { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.linkrowVal { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .linkrowEmpty .linkrowVal { font-style: italic; opacity: 0.6; }
-.openlink { font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 5px 10px; border: 1px solid var(--ink); border-radius: 2px; text-decoration: none; color: inherit; }
+.openlink { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 5px 10px; border: 1px solid var(--ink); border-radius: 2px; text-decoration: none; color: inherit; }
 .openlink:hover { background: var(--ink); color: var(--paper-raised); }
 
 /* Copy buttons */
-.copybtn { font-family: var(--font-mono, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 5px 10px; border: 1px solid var(--hair-strong); border-radius: 2px; background: transparent; cursor: pointer; }
+.copybtn { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 5px 10px; border: 1px solid var(--hair-strong); border-radius: 2px; background: transparent; cursor: pointer; }
 .copybtnCopied { background: var(--amber); color: var(--paper-raised); border-color: var(--amber); }
 .copybtnPrimary { border-color: var(--ink); }
 
 /* Activity v2 table shell */
 .tableWrap { max-width: 74rem; margin: 0 auto; padding: 22px 28px 16px; }
 .tableHead { display: grid; grid-template-columns: 96px minmax(180px,220px) minmax(150px,180px) minmax(150px,180px) 1fr 24px; gap: 14px; align-items: end; padding: 0 12px 10px 14px; border-bottom: 1px solid var(--ink); }
-.tableHeadCol { font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.6; }
+.tableHeadCol { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.6; }
 
 /* Activity v2 page head */
 .pageHeadWrap { background: transparent; }
 .pageHead { max-width: 74rem; margin: 0 auto; padding: 36px 28px 22px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 32px; align-items: flex-end; }
 @media (max-width: 860px) { .pageHead { grid-template-columns: 1fr; gap: 22px; } }
 .pageHeadLead { min-width: 0; }
-.eyebrow { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.6; display: inline-block; }
+.eyebrow { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.6; display: inline-block; }
 .pageTitle { font-family: var(--font-display, "Source Serif 4", serif); font-size: clamp(34px, 4.2vw, 48px); font-weight: 500; letter-spacing: -0.014em; line-height: 1.02; margin-top: 10px; }
 .pageSub { font-family: var(--font-sans, "Inter", sans-serif); font-size: 14.5px; opacity: 0.7; margin-top: 12px; max-width: 44em; line-height: 1.55; }
 .pageMeta { display: grid; gap: 0 36px; align-items: end; }
 .statTile { display: flex; flex-direction: column; gap: 5px; min-width: 4.5rem; }
-.statTileV { font-family: var(--font-mono, ui-monospace, monospace); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.statTileSub { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; opacity: 0.6; letter-spacing: 0.02em; }
+.statTileV { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.statTileSub { font-family: var(--font-mono-mercury, ui-monospace, monospace); font-size: 11px; opacity: 0.6; letter-spacing: 0.02em; }
