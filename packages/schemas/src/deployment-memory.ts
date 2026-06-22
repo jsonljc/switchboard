@@ -84,6 +84,7 @@ export const DeploymentMemorySchema = z.object({
   // rows + non-compounding writers leave them null. invalidatedAt IS NULL is the
   // liveness predicate; validTo is the valid-time end (set together in the
   // automatic evict/decay paths).
+  // Naming note: this uses validTo + invalidatedAt (a soft-delete flag), intentionally distinct from temporal-fact.ts's validUntil + status enum; do not auto-harmonize.
   source: DeploymentMemorySourceSchema.nullable().optional(),
   validFrom: z.coerce.date().nullable().optional(),
   validTo: z.coerce.date().nullable().optional(),

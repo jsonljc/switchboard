@@ -50,8 +50,12 @@ export class PrismaDeploymentMemoryStore {
         },
       });
       if (!colliding || colliding.invalidatedAt === null) throw err;
-      return this.prisma.deploymentMemory.update({
-        where: { id: colliding.id },
+      const resurrected = await this.prisma.deploymentMemory.updateMany({
+        where: {
+          id: colliding.id,
+          organizationId: input.organizationId,
+          invalidatedAt: { not: null },
+        },
         data: {
           invalidatedAt: null,
           validTo: null,
@@ -64,6 +68,10 @@ export class PrismaDeploymentMemoryStore {
           source: input.source ?? null,
         },
       });
+      // Lost the resurrection race (row concurrently resurrected/removed) — rethrow
+      // the original P2002 so the caller's existing duplicate handling runs.
+      if (resurrected.count === 0) throw err;
+      return { id: colliding.id };
     }
   }
 
@@ -191,6 +199,7 @@ export class PrismaDeploymentMemoryStore {
     // the guard would defer invalidating a row decremented-to-floor THIS run by a
     // full cycle.
     const now = new Date();
+    // route-governance: store-mutation-global
     await this.prisma.deploymentMemory.updateMany({
       where: {
         lastSeenAt: { lt: input.cutoffDate },

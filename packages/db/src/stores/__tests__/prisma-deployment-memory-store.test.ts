@@ -391,7 +391,7 @@ describe("PrismaDeploymentMemoryStore", () => {
         id: "old",
         invalidatedAt: new Date(),
       });
-      prisma.deploymentMemory.update.mockResolvedValue({ id: "old" });
+      prisma.deploymentMemory.updateMany.mockResolvedValue({ count: 1 });
       const store = new PrismaDeploymentMemoryStore(prisma as never);
       const r = await store.create({
         organizationId: "o1",
@@ -401,8 +401,10 @@ describe("PrismaDeploymentMemoryStore", () => {
         source: "conversation-compounding",
       });
       expect(prisma.deploymentMemory.findFirst).toHaveBeenCalled();
-      const upd = prisma.deploymentMemory.update.mock.calls[0]![0]!;
-      expect(upd.where).toEqual({ id: "old" });
+      const upd = prisma.deploymentMemory.updateMany.mock.calls[0]![0]!;
+      // Org-scoped + liveness-guarded WHERE (single-row updates go through
+      // updateMany so count===0 conflates missing-row + tenant-mismatch).
+      expect(upd.where).toEqual({ id: "old", organizationId: "o1", invalidatedAt: { not: null } });
       expect(upd.data.invalidatedAt).toBeNull();
       expect(upd.data.validTo).toBeNull();
       expect(upd.data.sourceCount).toBe(1);
@@ -417,12 +419,24 @@ describe("PrismaDeploymentMemoryStore", () => {
         store.create({ organizationId: "o1", deploymentId: "d1", category: "fact", content: "c" }),
       ).rejects.toMatchObject({ code: "P2002" });
       expect(prisma.deploymentMemory.findFirst).toHaveBeenCalled();
-      expect(prisma.deploymentMemory.update).not.toHaveBeenCalled();
+      expect(prisma.deploymentMemory.updateMany).not.toHaveBeenCalled();
     });
     it("rethrows P2002 when no colliding row is found (race)", async () => {
       const prisma = createMockPrisma();
       prisma.deploymentMemory.create.mockRejectedValue({ code: "P2002" });
       prisma.deploymentMemory.findFirst.mockResolvedValue(null);
+      const store = new PrismaDeploymentMemoryStore(prisma as never);
+      await expect(
+        store.create({ organizationId: "o1", deploymentId: "d1", category: "fact", content: "c" }),
+      ).rejects.toMatchObject({ code: "P2002" });
+    });
+    it("rethrows the original P2002 when the resurrection update matches 0 rows (lost race)", async () => {
+      const prisma = createMockPrisma();
+      prisma.deploymentMemory.create.mockRejectedValue({ code: "P2002" });
+      prisma.deploymentMemory.findFirst.mockResolvedValue({ id: "old", invalidatedAt: new Date() });
+      // The row was concurrently resurrected/removed between findFirst and the
+      // guarded updateMany, so count===0 — the original P2002 must surface.
+      prisma.deploymentMemory.updateMany.mockResolvedValue({ count: 0 });
       const store = new PrismaDeploymentMemoryStore(prisma as never);
       await expect(
         store.create({ organizationId: "o1", deploymentId: "d1", category: "fact", content: "c" }),
