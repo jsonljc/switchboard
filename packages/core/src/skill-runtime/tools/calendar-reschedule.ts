@@ -36,14 +36,40 @@ const NO_CONTACT = (): ToolResult =>
       "Escalate to the operator; do not change an appointment without an active contact.",
   });
 
-// The booking is resolved from the trusted ctx.contactId, so a model-supplied
-// contactId can never reach another contact's bookings. An optional `service`
-// only narrows WITHIN the contact's own upcoming bookings (soonest-first).
-function resolveTarget(bookings: UpcomingBooking[], service?: string): UpcomingBooking | undefined {
-  const narrowed = service
-    ? bookings.filter((b) => b.service.toLowerCase() === service.toLowerCase())
-    : bookings;
-  return (narrowed.length > 0 ? narrowed : bookings)[0];
+// The lead asked for a service that matches none of their upcoming bookings. Surface the
+// bookings they DO hold so the model asks which one they mean, mirroring NO_UPCOMING_BOOKING
+// (a recoverable conversational failure, not a human escalation) rather than acting on an
+// unrelated appointment.
+const NO_MATCHING = (verb: "move" | "cancel", availableServices: string[]): ToolResult =>
+  fail("NO_MATCHING_BOOKING", `I don't see a matching appointment to ${verb}.`, {
+    retryable: false,
+    data: { availableServices },
+    modelRemediation:
+      `The contact's upcoming appointments are: ${availableServices.join(", ")}. ` +
+      `Ask which one they mean before you ${verb} it; do not ${verb} an appointment they did not name.`,
+  });
+
+// The booking is resolved from the trusted ctx.contactId, so a model-supplied contactId can
+// never reach another contact's bookings. An optional `service` narrows WITHIN the contact's
+// own upcoming bookings (soonest-first). When a `service` is supplied but matches NONE of the
+// contact's bookings we MUST NOT fall back to an unrelated booking: acting on the soonest-of-all
+// would reschedule/cancel the WRONG appointment (e.g. a "botox" request landing on a "filler"
+// booking). Surface no_match so the caller asks which appointment.
+type TargetResolution =
+  | { kind: "ok"; booking: UpcomingBooking }
+  | { kind: "none" }
+  | { kind: "no_match"; availableServices: string[] };
+
+function resolveTarget(bookings: UpcomingBooking[], service?: string): TargetResolution {
+  const soonest = bookings[0];
+  if (!soonest) return { kind: "none" };
+  if (!service) return { kind: "ok", booking: soonest };
+  const narrowed = bookings.filter((b) => b.service.toLowerCase() === service.toLowerCase());
+  const match = narrowed[0];
+  if (!match) {
+    return { kind: "no_match", availableServices: [...new Set(bookings.map((b) => b.service))] };
+  }
+  return { kind: "ok", booking: match };
 }
 
 export function buildRescheduleOperations(
@@ -83,14 +109,17 @@ export function buildRescheduleOperations(
           service?: string;
         };
         const upcoming = await deps.bookingStore.findUpcomingByContact(orgId, contactId);
-        const target = resolveTarget(upcoming, input.service);
-        if (!target) {
+        const resolution = resolveTarget(upcoming, input.service);
+        if (resolution.kind === "none") {
           return fail("NO_UPCOMING_BOOKING", "I don't see an upcoming appointment to move.", {
             retryable: false,
             modelRemediation:
               "Tell the lead you don't see an upcoming booking and offer to book a new appointment.",
           });
         }
+        if (resolution.kind === "no_match")
+          return NO_MATCHING("move", resolution.availableServices);
+        const target = resolution.booking;
         const resolved = await resolveProviderOrFail(deps, orgId);
         if ("failure" in resolved) return resolved.failure;
         const provider = resolved.provider;
@@ -176,13 +205,16 @@ export function buildRescheduleOperations(
         if (!contactId) return NO_CONTACT();
         const input = params as { service?: string };
         const upcoming = await deps.bookingStore.findUpcomingByContact(orgId, contactId);
-        const target = resolveTarget(upcoming, input.service);
-        if (!target) {
+        const resolution = resolveTarget(upcoming, input.service);
+        if (resolution.kind === "none") {
           return fail("NO_UPCOMING_BOOKING", "I don't see an upcoming appointment to cancel.", {
             retryable: false,
             modelRemediation: "Tell the lead you don't see an upcoming booking to cancel.",
           });
         }
+        if (resolution.kind === "no_match")
+          return NO_MATCHING("cancel", resolution.availableServices);
+        const target = resolution.booking;
         const resolved = await resolveProviderOrFail(deps, orgId);
         if ("failure" in resolved) return resolved.failure;
         const provider = resolved.provider;
