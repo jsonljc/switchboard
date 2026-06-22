@@ -311,3 +311,14 @@ it("cancel matches the requested service case-insensitively and trims surroundin
   expect(res.status).toBe("success");
   expect(d.bookingStore.cancel).toHaveBeenCalledWith("org-1", "b1");
 });
+
+it("cancel fails closed for a whitespace-only service rather than acting on a booking", async () => {
+  // Guards the edge case: a non-empty-but-blank service must NOT degrade to the soonest
+  // booking. It normalizes to "" which matches nothing, so it surfaces NO_MATCHING_BOOKING.
+  const d = deps(); // `upcoming` holds a single "botox" booking (b1)
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({
+    service: "   ",
+  });
+  expect(res.error?.code).toBe("NO_MATCHING_BOOKING");
+  expect(d.bookingStore.cancel).not.toHaveBeenCalled();
+});
