@@ -302,3 +302,12 @@ it("reschedule selects the service-matched booking among several, not the soones
   expect(d.bookingStore.reschedule).toHaveBeenCalledWith("org-1", "b2", expect.any(Object));
   expect(rescheduleBooking).toHaveBeenCalledWith("evt-2", expect.any(Object));
 });
+
+it("cancel matches the requested service case-insensitively and trims surrounding whitespace", async () => {
+  const d = deps(); // `upcoming` holds a single "botox" booking (b1)
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({
+    service: "  Botox ",
+  });
+  expect(res.status).toBe("success");
+  expect(d.bookingStore.cancel).toHaveBeenCalledWith("org-1", "b1");
+});

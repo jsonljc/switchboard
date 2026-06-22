@@ -64,7 +64,11 @@ function resolveTarget(bookings: UpcomingBooking[], service?: string): TargetRes
   const soonest = bookings[0];
   if (!soonest) return { kind: "none" };
   if (!service) return { kind: "ok", booking: soonest };
-  const narrowed = bookings.filter((b) => b.service.toLowerCase() === service.toLowerCase());
+  // Case-insensitive + trimmed exact match, matching the service-name matching convention in
+  // booking-value.ts so a model-supplied "  Botox " still matches a stored "botox" booking.
+  const narrowed = bookings.filter(
+    (b) => b.service.trim().toLowerCase() === service.trim().toLowerCase(),
+  );
   const match = narrowed[0];
   if (!match) {
     return { kind: "no_match", availableServices: [...new Set(bookings.map((b) => b.service))] };
