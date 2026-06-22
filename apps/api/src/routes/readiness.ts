@@ -8,6 +8,7 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   assertAlexSkillPackSeeded,
   classifyBusinessFacts,
+  proactiveIntakeAllowPolicyId,
   type BusinessFactsStatus,
   type KnowledgeEntryReader,
 } from "@switchboard/db";
@@ -76,6 +77,11 @@ export interface ReadinessContext {
   // customer-fixable). For the console.warn + no-leak test; read by no check, never serialized.
   alexSkillPackDiagnostic: string | null;
   businessFactsStatus: BusinessFactsStatus;
+  // True iff the per-org proactive-send allow policy (proactiveIntakeAllowPolicyId) is
+  // seeded + active. Without it the PolicyEngine default-denies every greeting / reminder /
+  // follow-up / lead-intake intent, so proactive sends ship prod-inert by DENY even though
+  // the deployment resolves. Conservatively false on any read error (mirrors the skill-pack gate).
+  proactiveGovernanceSeeded: boolean;
 }
 
 // ── PrismaLike — narrow type for readiness queries ─────────────────────────
@@ -158,6 +164,12 @@ export interface PrismaLike {
     }): Promise<{ id: string } | null>;
   };
   knowledgeEntry: KnowledgeEntryReader["knowledgeEntry"];
+  policy: {
+    findUnique(args: {
+      where: { id: string };
+      select: { active: true };
+    }): Promise<{ active: boolean } | null>;
+  };
 }
 
 // ── Shared helper — assembles ReadinessContext from Prisma ──────────────────
@@ -264,6 +276,23 @@ export async function buildReadinessContext(
     );
   }
 
+  // Proactive-send governance: the per-org allow policy (seeded by provisionOrgAgentDeployments)
+  // that lifts the PolicyEngine default-deny for greeting / reminder / follow-up / lead-intake
+  // intents. Reuse the canonical id-builder so the readiness probe and the seed producer cannot
+  // drift. Conservative: stay false on any read error so an unverifiable org is not green-lit.
+  let proactiveGovernanceSeeded = false;
+  try {
+    const policyRow = await prisma.policy.findUnique({
+      where: { id: proactiveIntakeAllowPolicyId(orgId) },
+      select: { active: true },
+    });
+    proactiveGovernanceSeeded = policyRow?.active === true;
+  } catch (err) {
+    console.warn(
+      `[readiness] proactive-governance check failed org=${orgId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   return {
     managedChannels,
     connections: mappedConnections,
@@ -281,6 +310,7 @@ export async function buildReadinessContext(
     alexSkillPackSeeded,
     alexSkillPackDiagnostic,
     businessFactsStatus,
+    proactiveGovernanceSeeded,
   };
 }
 
@@ -327,6 +357,9 @@ export function checkReadiness(ctx: ReadinessContext): ReadinessReport {
 
   // 12. business-facts-present (advisory)
   checks.push(checkBusinessFactsPresent(ctx));
+
+  // 13. proactive-governance-seeded (blocking)
+  checks.push(checkProactiveGovernanceSeeded(ctx));
 
   const ready = checks.filter((c) => c.blocking).every((c) => c.status === "pass");
 
@@ -624,6 +657,24 @@ function checkBusinessFactsPresent(ctx: ReadinessContext): ReadinessCheck {
     blocking,
     status: "fail",
     message: "Business facts not set yet — Alex will escalate hours/pricing questions until added",
+  };
+}
+
+function checkProactiveGovernanceSeeded(ctx: ReadinessContext): ReadinessCheck {
+  const id = "proactive-governance-seeded";
+  const label = "Proactive messaging enabled";
+  // Blocking: without the seeded allow policy the agent cannot proactively reach customers
+  // (greetings / reminders / follow-ups / lead intake all default-deny), so the org is not
+  // launch-ready. Message stays operator-friendly and never leaks the policy id / gate internals
+  // (the policy is system-seeded and self-heals on the next agent-config load).
+  return {
+    id,
+    label,
+    blocking: true,
+    status: ctx.proactiveGovernanceSeeded ? "pass" : "fail",
+    message: ctx.proactiveGovernanceSeeded
+      ? "Proactive messaging is enabled — greetings, reminders and follow-ups can send"
+      : "Proactive messaging isn't enabled yet — greetings, reminders and follow-ups won't send. Reload your agent configuration, or contact support if this persists.",
   };
 }
 
