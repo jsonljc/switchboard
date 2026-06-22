@@ -152,3 +152,18 @@ export async function exportWorkUnitSpans(
   }
   projectWorkUnitSpans(mapExecutionTracesToSpanInput(workUnitId, traces, workTrace), getTracer());
 }
+
+/**
+ * Build the PlatformIngress onWorkUnitComplete hook: a fire-and-forget, error-swallowing
+ * span export for a processed work unit. Wire in app.ts ONLY when tracing is enabled.
+ * The export is read-only and internally gated; a failure (sync or async) never propagates.
+ */
+export function buildWorkUnitSpanExportHook(
+  deps: WorkUnitSpanExportDeps,
+): (info: { organizationId: string; workUnitId: string }) => void {
+  return ({ organizationId, workUnitId }) => {
+    void exportWorkUnitSpans(deps, organizationId, workUnitId).catch((err) => {
+      console.warn("[work-unit-span-export] span export failed for work unit", workUnitId, err);
+    });
+  };
+}

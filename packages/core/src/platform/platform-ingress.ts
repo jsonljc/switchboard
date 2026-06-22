@@ -59,6 +59,15 @@ export interface PlatformIngressConfig {
    * 2026-06-05-slack-approval-notifications-design.md section 2).
    */
   approvalNotifier?: ApprovalNotifier;
+  /**
+   * Optional best-effort hook fired once after submit() processes a work unit
+   * (success, deny, governance-error, or require_approval). Read-only telemetry:
+   * a synchronous throw is caught and logged and NEVER affects the submission;
+   * the async export is the hook implementation's own concern. Wired in app.ts to
+   * the OTel work-unit span exporter (one-directional projection; WorkTrace stays
+   * canonical). Mirrors the approvalNotifier fire-and-forget posture.
+   */
+  onWorkUnitComplete?: (info: { organizationId: string; workUnitId: string }) => void;
   /** Injectable for tests — defaults to setTimeout-based delay. */
   delayFn?: (ms: number) => Promise<void>;
 }
@@ -284,6 +293,8 @@ export class PlatformIngress {
         governanceCompletedAt,
         result,
       );
+      // E4c: best-effort work-unit span export (after trace persist).
+      this.fireWorkUnitComplete(workUnit);
       return { ok: true, result, workUnit };
     }
 
@@ -297,6 +308,8 @@ export class PlatformIngress {
         governanceCompletedAt,
         result,
       );
+      // E4c: best-effort work-unit span export (after trace persist).
+      this.fireWorkUnitComplete(workUnit);
       return { ok: true, result, workUnit };
     }
 
@@ -318,6 +331,9 @@ export class PlatformIngress {
         governanceCompletedAt,
         result,
       );
+      // E4c: best-effort work-unit span export (after trace persist). One fire
+      // here covers BOTH approval returns (with- and without-lifecycle).
+      this.fireWorkUnitComplete(workUnit);
 
       if (this.config.lifecycleService) {
         const routingConfig = this.config.approvalRoutingConfig ?? DEFAULT_ROUTING_CONFIG;
@@ -498,7 +514,26 @@ export class PlatformIngress {
       );
     }
 
+    // E4c: best-effort work-unit span export (after trace persist).
+    this.fireWorkUnitComplete(workUnit);
     return { ok: true, result: executionResult, workUnit };
+  }
+
+  /**
+   * Best-effort work-unit-complete hook. A synchronously-throwing hook is caught
+   * and logged; it can never affect the submission. The hook itself is responsible
+   * for not awaiting / swallowing any async work (telemetry must never block submit).
+   */
+  private fireWorkUnitComplete(workUnit: WorkUnit): void {
+    if (!this.config.onWorkUnitComplete) return;
+    try {
+      this.config.onWorkUnitComplete({
+        organizationId: workUnit.organizationId,
+        workUnitId: workUnit.id,
+      });
+    } catch (err) {
+      console.warn("[PlatformIngress] onWorkUnitComplete hook threw", err);
+    }
   }
 
   private buildFailedResult(workUnit: WorkUnit, code: string, message: string): ExecutionResult {

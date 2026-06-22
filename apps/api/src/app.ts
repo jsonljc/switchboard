@@ -773,6 +773,13 @@ export async function buildServer() {
     app.log,
   );
 
+  // E4c slice C: a best-effort, fire-and-forget OTel work-unit span export fired
+  // after submit() processes a work unit. Gated on OTEL_EXPORTER_OTLP_ENDPOINT;
+  // undefined (full no-op) when tracing is off. Read-only; never blocks/breaks submit.
+  const { buildWorkUnitSpanExportHook, isWorkUnitTracingEnabled } =
+    await import("./telemetry/work-unit-span-export.js");
+  const { PrismaExecutionTraceStore } = await import("@switchboard/db");
+
   const platformIngress = new PlatformIngress({
     intentRegistry,
     modeRegistry,
@@ -791,6 +798,13 @@ export async function buildServer() {
     auditLedger: ledger,
     operatorAlerter,
     approvalNotifier,
+    onWorkUnitComplete:
+      isWorkUnitTracingEnabled() && app.prisma
+        ? buildWorkUnitSpanExportHook({
+            executionTraceStore: new PrismaExecutionTraceStore(app.prisma),
+            workTraceStore: app.workTraceStore ?? undefined,
+          })
+        : undefined,
   });
   app.decorate("platformIngress", platformIngress);
 
