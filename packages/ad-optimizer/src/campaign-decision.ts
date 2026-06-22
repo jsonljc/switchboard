@@ -15,6 +15,7 @@ import { applyTier } from "./analyzers/economic-target.js";
 import { LearningPhaseGuard } from "./learning-phase-guard.js";
 import { evidenceFamilyFor } from "./evidence-floor.js";
 import { resetsLearningFor } from "./action-reset-classification.js";
+import { scaleValueFloorMet, scaleUnprovenPaidValueWatch } from "./recommendation-watches.js";
 import type { RevenueState } from "./revenue-state.js";
 
 function safeDivide(a: number, b: number): number {
@@ -103,6 +104,17 @@ export interface CampaignDecisionInput {
    * outcome adjustment (back-compat with every existing caller and the eval).
    */
   outcomeMultiplierByKind?: (action: RecommendationOutput["action"]) => number;
+  /**
+   * A12 (count-vs-value gate): the campaign's verified-paid value for the window. PRESENCE of this
+   * object activates the floor on the `scale` -> reallocate money-move (the live audit-runner passes
+   * it whenever the paid-value provider is wired); absent ⇒ no gate (back-compat with every existing
+   * caller and the eval). `paidValueCents` is the campaign's type="purchased" ConversionRecord value
+   * sum (cents) for the window, or null when none is attributed. A null / non-finite / zero value
+   * FAILS the floor (fail-closed) and demotes the `scale` rec to a `scale_unproven_paid_value` watch,
+   * so a cheap cost-per-lead campaign whose leads never pay does not auto-scale. Never fabricates a
+   * pass on missing data.
+   */
+  paidValueGate?: { paidValueCents: number | null };
 }
 
 export interface CampaignDecisionResult {
@@ -232,6 +244,32 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
         campaignName: item.campaignName,
         pattern: "measurement_untrusted",
         message: `Holding "${item.action}": a suspected account-wide conversion-reporting shift makes the cost signal untrustworthy this cycle. ${item.estimatedImpact}`,
+        checkBackDate: input.nextCycleDate,
+      });
+      continue;
+    }
+    // A12 (count-vs-value gate): a `scale` rec is the executable budget-increase money-move
+    // (scale -> reallocate). Require PROVEN paid value before it can flow: a cheap cost-per-LEAD
+    // campaign whose leads never PAY must not auto-scale. Fail-closed -- when the gate is active
+    // (the live audit-runner passes paidValueGate whenever the paid-value provider is wired) and
+    // this campaign has no finite positive attributed paid value, demote to a visible, recoverable
+    // `scale_unproven_paid_value` watch (it graduates to a real money-move once paid receipts
+    // populate). This is the EARLIEST point in the scale -> reallocate transition: `scale` is
+    // produced ONLY by generateRecommendations, and the dispatch hard-abstains unless
+    // actionType==="scale" (riley-budget-dispatch.ts), so the rec never becomes a reallocation
+    // candidate. Placed AFTER the measurement_untrusted block on purpose: scale is costDriven, so an
+    // untrusted denominator (a stronger hold) already demotes it above and short-circuits this. Gate
+    // absent (undefined) => no demotion (back-compat). Mirrors the measurement_untrusted demotion.
+    if (
+      item.action === "scale" &&
+      input.paidValueGate &&
+      !scaleValueFloorMet(input.paidValueGate)
+    ) {
+      watches.push({
+        ...scaleUnprovenPaidValueWatch({
+          campaignId: item.campaignId,
+          campaignName: item.campaignName,
+        }),
         checkBackDate: input.nextCycleDate,
       });
       continue;
