@@ -28,8 +28,10 @@ export function Verdict({ model }: VerdictProps) {
       aria-label="verdict"
       data-shape={shape}
     >
-      <span className={styles.eyebrow}>{eyebrow}</span>
-      <span className={styles.hello}>{salutation}</span>
+      <div className={styles.verdictTop}>
+        <span className={styles.eyebrow}>{eyebrow}</span>
+        <span className={styles.hello}>{salutation}</span>
+      </div>
       <h1 className={styles.line}>
         {typeof line === "string" ? (
           line
