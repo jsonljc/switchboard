@@ -8,8 +8,10 @@
 // lie about the operation — the id IS the dedup boundary). Deliberate route-class
 // split per #654; this is an intentional classification, not a validator bypass.
 import type { FastifyPluginAsync } from "fastify";
+import { APPROVER_ROLES } from "@switchboard/core";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 import { assertOrgAccess } from "../utils/org-access.js";
+import { requireRole } from "../utils/require-role.js";
 
 export const actionLifecycleRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/actions/:id/execute - Execute a previously approved work unit
@@ -24,6 +26,11 @@ export const actionLifecycleRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+
+      // Approver-role floor (A16): executing a previously approved work unit is a
+      // privileged dispatch; only approver/operator/admin may trigger it. Dev mode
+      // (authDisabled) bypasses, matching assertOrgAccess. Runs before the org gate.
+      if (!(await requireRole(request, reply, ...APPROVER_ROLES))) return;
 
       // Tenant isolation: verify the caller's org owns this work unit before
       // executing. executeApproved runs off a WorkTrace when no legacy envelope

@@ -10,6 +10,7 @@ import {
   ParkedLifecycleNotFoundError,
   ParkedLifecycleAlreadyRespondedError,
   ParkedLifecycleExpiredError,
+  ParkedLifecycleNotAuthorizedError,
 } from "../../approval/respond-to-parked-lifecycle.js";
 import { DispatchAdmissionError } from "../../approval/dispatch-admission.js";
 import {
@@ -302,9 +303,48 @@ describe("refusalCodeForError", () => {
     [new Error('Cannot approve: lifecycle status is "approved"'), "conflict"],
     [new Error("stale binding hash"), "stale"],
     [new Error("Self-approval is not permitted"), "self_approval"],
+    [new ParkedLifecycleNotAuthorizedError("lc-1", "intruder"), "not_authorized"],
     [new Error("anything else"), "execution_error"],
     ["not-an-error", "execution_error"],
   ])("maps %s to %s", (err, code) => {
     expect(refusalCodeForError(err)).toBe(code);
+  });
+});
+
+describe("respondToChannelApproval: A16 designated-approver membership (fallback leg)", () => {
+  it("refuses not_authorized when the bound approver is not in the revision's approvers list", async () => {
+    // The bound principal ("principal-1") carries an approver role, so the surface
+    // role floor passes, but it is NOT a designated approver for this action. The
+    // shared core membership spine (respondToParkedLifecycle) must refuse, surfacing
+    // as not_authorized via refusalCodeForError.
+    const w = await makeLifecycleWorld({ noApprovalRow: true, approvers: ["someone-else"] });
+    const deps: ChannelApprovalRespondDeps = {
+      approvalStore: w.approvalStore,
+      bindingStore: makeBindingStore({ principalId: "principal-1" } as never),
+      identityStore: makeIdentityStore(makePrincipal(["operator"])),
+      respondDeps: w.respondDeps as never,
+    };
+    const outcome = await respondToChannelApproval(
+      deps,
+      makeRequest({ approvalId: w.lifecycle.id }),
+    );
+    expect(outcome).toEqual({ kind: "refused", code: "not_authorized" });
+    expect(w.executeApproved).not.toHaveBeenCalled();
+  });
+
+  it("approves when the bound approver IS a designated approver", async () => {
+    const w = await makeLifecycleWorld({ noApprovalRow: true, approvers: ["principal-1"] });
+    const deps: ChannelApprovalRespondDeps = {
+      approvalStore: w.approvalStore,
+      bindingStore: makeBindingStore({ principalId: "principal-1" } as never),
+      identityStore: makeIdentityStore(makePrincipal(["operator"])),
+      respondDeps: w.respondDeps as never,
+    };
+    const outcome = await respondToChannelApproval(
+      deps,
+      makeRequest({ approvalId: w.lifecycle.id }),
+    );
+    expect(outcome).toEqual({ kind: "responded", action: "approve", executionSuccess: true });
+    expect(w.executeApproved).toHaveBeenCalledTimes(1);
   });
 });

@@ -152,6 +152,8 @@ export function makeRespondDeps(impl?: { throwInRespond?: boolean }) {
 export async function makeLifecycleWorld(opts?: {
   failDispatch?: boolean;
   noApprovalRow?: boolean;
+  /** Designated approvers for the revision's approvalScopeSnapshot (A16). Empty/omitted = unrestricted. */
+  approvers?: string[];
 }) {
   const store = new InMemoryLifecycleStore();
   const lifecycleService = new ApprovalLifecycleService({ store });
@@ -161,7 +163,7 @@ export async function makeLifecycleWorld(opts?: {
     expiresAt: new Date(Date.now() + 3_600_000),
     initialRevision: {
       parametersSnapshot: { campaignId: "camp-1" },
-      approvalScopeSnapshot: {},
+      approvalScopeSnapshot: opts?.approvers ? { approvers: opts.approvers } : {},
       bindingHash: "hash123",
       createdBy: "user-orig",
     },

@@ -64,6 +64,24 @@ export class ParkedLifecycleExpiredError extends Error {
   }
 }
 
+/**
+ * Thrown when an approver-role principal responds to an approval whose revision
+ * carries a non-empty `approvalScopeSnapshot.approvers` list that does NOT include
+ * them. This is the designated-approver MEMBERSHIP floor — the shared core spine
+ * behind both the API respond route and the chat/bridge surface (A16). It is the
+ * finer-grained companion to the surface role floor (requireRole /
+ * principalHasApproverRole): role = "may approve at all", membership = "is a
+ * designated approver for THIS action". Mapped to HTTP 403 by the API route and to
+ * the `not_authorized` refusal code on the chat surface.
+ */
+export class ParkedLifecycleNotAuthorizedError extends Error {
+  readonly code = "not_authorized";
+  constructor(lifecycleId: string, respondedBy: string) {
+    super(`Principal ${respondedBy} is not a designated approver for lifecycle ${lifecycleId}`);
+    this.name = "ParkedLifecycleNotAuthorizedError";
+  }
+}
+
 export interface RespondToParkedLifecycleDeps {
   lifecycleService: ApprovalLifecycleService;
   workTraceStore: WorkTraceStore;
@@ -151,6 +169,7 @@ export async function respondToParkedLifecycle(
     );
   }
   assertNotSelfApproval(deps, params, trace);
+  await assertApproverMembership(deps, lifecycle.id, params.respondedBy);
   if (!params.bindingHash) throw new Error("bindingHash is required to approve");
 
   const workUnit = workUnitFromTrace(trace);
@@ -219,6 +238,7 @@ async function retryDispatch(
     throw new Error(`WorkTrace not found for parked lifecycle ${lifecycle.id}`);
   }
   assertNotSelfApproval(deps, params, traceResult.trace);
+  await assertApproverMembership(deps, lifecycle.id, params.respondedBy);
   if (!lifecycle.currentExecutableWorkUnitId) {
     throw new Error(`Lifecycle ${lifecycle.id} has no executable work unit to retry`);
   }
@@ -251,6 +271,50 @@ function assertNotSelfApproval(
   if (deps.selfApprovalAllowed) return;
   if (trace.actor.id === params.respondedBy) {
     throw new Error("Self-approval is not permitted");
+  }
+}
+
+/** Coerce the revision's `approvalScopeSnapshot.approvers` (typed `unknown`) to a
+ * string[] defensively — a malformed snapshot yields an empty (unrestricted) list
+ * rather than throwing. */
+function coerceApprovers(snapshot: Record<string, unknown> | undefined): string[] {
+  const raw = snapshot?.["approvers"];
+  return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [];
+}
+
+/**
+ * Designated-approver membership floor (A16). When the CURRENT revision's
+ * `approvalScopeSnapshot.approvers` is a non-empty list, only a principal in that
+ * list may approve. Empty/absent list = unrestricted (the pilot default,
+ * `DEFAULT_ROUTING_CONFIG.defaultApprovers = []`) so nobody is locked out.
+ *
+ * Defense-in-depth, NOT the primary gate: the surface role floor (requireRole on
+ * the API route; principalHasApproverRole on the chat surface) is the always-on,
+ * never-fail-open authorization. So if the revision lookup itself FAILS we fail
+ * OPEN (log + skip) rather than block a legitimate member on a transient store
+ * blip — the role floor still stands. Call only on APPROVE paths, AFTER the
+ * self-approval guard, so self-approval (the universal four-eyes invariant) keeps
+ * precedence over membership.
+ */
+async function assertApproverMembership(
+  deps: RespondToParkedLifecycleDeps,
+  lifecycleId: string,
+  respondedBy: string,
+): Promise<void> {
+  let revision;
+  try {
+    revision = await deps.lifecycleService.getCurrentRevision(lifecycleId);
+  } catch (err) {
+    deps.logger.error(
+      { err, lifecycleId },
+      "Approver-membership check skipped: current-revision lookup failed (role floor still applies)",
+    );
+    return;
+  }
+  const approvers = coerceApprovers(revision?.approvalScopeSnapshot);
+  if (approvers.length === 0) return;
+  if (!approvers.includes(respondedBy)) {
+    throw new ParkedLifecycleNotAuthorizedError(lifecycleId, respondedBy);
   }
 }
 

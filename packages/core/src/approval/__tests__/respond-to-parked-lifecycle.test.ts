@@ -85,6 +85,7 @@ describe("respondToParkedLifecycle", () => {
     workUnitId = "wu-1",
     bindingHash = "h1",
     params: Record<string, unknown> = { campaignId: "camp-1" },
+    approvers?: string[],
   ) {
     traces.set(workUnitId, makeTrace(workUnitId, params));
     const { lifecycle } = await store.createLifecycleWithRevision({
@@ -93,7 +94,7 @@ describe("respondToParkedLifecycle", () => {
       expiresAt: new Date(Date.now() + 3_600_000),
       initialRevision: {
         parametersSnapshot: params,
-        approvalScopeSnapshot: {},
+        approvalScopeSnapshot: approvers ? { approvers, riskCategory: "medium" } : {},
         bindingHash,
         createdBy: "system",
       },
@@ -361,5 +362,98 @@ describe("respondToParkedLifecycle", () => {
         respondedBy: "operator_jane",
       }),
     ).rejects.toBeInstanceOf(ParkedLifecycleAlreadyRespondedError);
+  });
+
+  // --- A16: designated-approver membership floor (approvalScopeSnapshot.approvers) ---
+  // Enforced ONLY when the approvers list is non-empty (pilot default is []), on the
+  // APPROVE paths only, AFTER the self-approval guard. The role floor (requireRole /
+  // principalHasApproverRole) is the primary surface gate; this is the shared core spine.
+
+  it("approve: blocks a non-member responder when approvers is non-empty (A16)", async () => {
+    const lc = await park("wu-1", "h1", { campaignId: "camp-1" }, ["reviewer_1"]);
+    await expect(
+      respondToParkedLifecycle(deps(), {
+        lifecycleId: lc.id,
+        action: "approve",
+        respondedBy: "operator_jane", // carries the role, but not a designated approver
+        bindingHash: "h1",
+      }),
+    ).rejects.toThrow(/not a designated approver/i);
+    expect((await store.getLifecycleById(lc.id))?.status).toBe("pending");
+    expect(executeApproved).not.toHaveBeenCalled();
+  });
+
+  it("approve: allows a member responder when approvers is non-empty (A16)", async () => {
+    const lc = await park("wu-1", "h1", { campaignId: "camp-1" }, ["operator_jane"]);
+    const result = await respondToParkedLifecycle(deps(), {
+      lifecycleId: lc.id,
+      action: "approve",
+      respondedBy: "operator_jane",
+      bindingHash: "h1",
+    });
+    expect(result.approvalState.status).toBe("approved");
+    expect(executeApproved).toHaveBeenCalledWith("wu-1");
+  });
+
+  it("approve: self-approval is refused BEFORE the membership check (A16 precedence)", async () => {
+    // The originator is "system" (makeTrace actor) and is NOT in the approvers list.
+    // Self-approval must win so the operator sees the four-eyes reason, not membership.
+    const lc = await park("wu-1", "h1", { campaignId: "camp-1" }, ["reviewer_1"]);
+    await expect(
+      respondToParkedLifecycle(deps(), {
+        lifecycleId: lc.id,
+        action: "approve",
+        respondedBy: "system",
+        bindingHash: "h1",
+      }),
+    ).rejects.toThrow(/self-approval/i);
+  });
+
+  it("approve: fails OPEN (still approves) when the revision lookup throws (A16 defense-in-depth)", async () => {
+    const lc = await park("wu-1", "h1", { campaignId: "camp-1" }, ["reviewer_1"]);
+    logger.error.mockClear();
+    // The membership probe reads via lifecycleService.getCurrentRevision; approveLifecycle
+    // reads store.getCurrentRevision directly, so this spy degrades only the probe. The role
+    // floor remains the primary gate, so a probe outage must not block a legitimate approval.
+    // NB: this models a TRANSIENT one-shot blip (probe throws, the approve read succeeds). A
+    // genuine revision-store outage fails CLOSED at approveLifecycle (same store read), so the
+    // fail-open window is narrow and role-floor-bounded by construction.
+    const spy = vi.spyOn(service, "getCurrentRevision");
+    spy.mockRejectedValue(new Error("revision store unavailable"));
+    const result = await respondToParkedLifecycle(deps(), {
+      lifecycleId: lc.id,
+      action: "approve",
+      respondedBy: "operator_jane", // a non-member, but the probe failed -> not enforced
+      bindingHash: "h1",
+    });
+    expect(result.approvalState.status).toBe("approved");
+    expect(logger.error).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("RETRY: blocks a non-member responder on recovery_required re-approval (A16)", async () => {
+    executeApproved.mockResolvedValueOnce({
+      ...okResult(),
+      success: false,
+      summary: "first failure",
+    });
+    const lc = await park("wu-1", "h1", { campaignId: "camp-1" }, ["operator_jane"]);
+    // A member drives the first (failing) approve -> recovery_required.
+    await respondToParkedLifecycle(deps(), {
+      lifecycleId: lc.id,
+      action: "approve",
+      respondedBy: "operator_jane",
+      bindingHash: "h1",
+    });
+    expect((await store.getLifecycleById(lc.id))?.status).toBe("recovery_required");
+    // A non-member cannot retry the recovery dispatch.
+    await expect(
+      respondToParkedLifecycle(deps(), {
+        lifecycleId: lc.id,
+        action: "approve",
+        respondedBy: "intruder",
+        bindingHash: "h1",
+      }),
+    ).rejects.toThrow(/not a designated approver/i);
   });
 });

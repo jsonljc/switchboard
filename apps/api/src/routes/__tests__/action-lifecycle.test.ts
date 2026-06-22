@@ -13,6 +13,8 @@ async function buildApp(opts: {
   authOrgId?: string;
   envelope?: ReturnType<typeof envOwnedBy> | null;
   trace?: { organizationId: string } | null;
+  principalId?: string;
+  roles?: string[];
 }): Promise<{ app: FastifyInstance; executeApproved: ReturnType<typeof vi.fn> }> {
   const app = Fastify({ logger: false });
   app.decorate("authDisabled", opts.authDisabled);
@@ -21,13 +23,28 @@ async function buildApp(opts: {
   const getByWorkUnitId = vi
     .fn()
     .mockResolvedValue(opts.trace ? { trace: opts.trace, integrity: { status: "ok" } } : null);
+  // A16: the approver-role floor (requireRole) resolves the principal from the
+  // identity store. Existing cases default to an approver-role principal so the
+  // floor passes and the ORG gate stays the asserted reason; new cases override
+  // principalId (incl. an explicit `undefined` for the no-principal-binding case)
+  // and roles.
+  const roles = opts.roles ?? ["operator"];
+  const getPrincipal = vi.fn(async (id: string) =>
+    id ? { id, type: "user", name: "P", organizationId: opts.authOrgId ?? null, roles } : null,
+  );
   app.decorate("platformLifecycle", { executeApproved, requestUndo: vi.fn() } as unknown as never);
-  app.decorate("storageContext", { envelopes: { getById } } as unknown as never);
+  app.decorate("storageContext", {
+    envelopes: { getById },
+    identity: { getPrincipal },
+  } as unknown as never);
   app.decorate("workTraceStore", { getByWorkUnitId } as unknown as never);
   app.decorate("platformIngress", {} as unknown as never);
   app.decorateRequest("organizationIdFromAuth", undefined);
+  app.decorateRequest("principalIdFromAuth", undefined);
+  const principalId = "principalId" in opts ? opts.principalId : "op_default";
   app.addHook("onRequest", async (request) => {
     request.organizationIdFromAuth = opts.authOrgId;
+    request.principalIdFromAuth = principalId;
   });
   await app.register(actionLifecycleRoutes, { prefix: "/api/actions" });
   return { app, executeApproved };
@@ -114,6 +131,49 @@ describe("POST /api/actions/:id/execute — tenant isolation", () => {
     const res = await app.inject({ method: "POST", url: "/api/actions/missing/execute" });
     expect(executeApproved).toHaveBeenCalledWith("missing");
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe("POST /api/actions/:id/execute — approver-role floor (A16)", () => {
+  it("403s a requester-only principal and never reaches executeApproved", async () => {
+    const { app, executeApproved } = await buildApp({
+      authDisabled: false,
+      authOrgId: "org_a",
+      principalId: "req_1",
+      roles: ["requester"],
+      trace: { organizationId: "org_a" },
+    });
+    const res = await app.inject({ method: "POST", url: "/api/actions/wt_1/execute" });
+    expect(res.statusCode).toBe(403);
+    expect(executeApproved).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("403s when auth is enabled but no principal is bound", async () => {
+    const { app, executeApproved } = await buildApp({
+      authDisabled: false,
+      authOrgId: "org_a",
+      principalId: undefined,
+      trace: { organizationId: "org_a" },
+    });
+    const res = await app.inject({ method: "POST", url: "/api/actions/wt_1/execute" });
+    expect(res.statusCode).toBe(403);
+    expect(executeApproved).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("lets an operator-role principal past the role floor and execute", async () => {
+    const { app, executeApproved } = await buildApp({
+      authDisabled: false,
+      authOrgId: "org_a",
+      principalId: "op_1",
+      roles: ["operator"],
+      trace: { organizationId: "org_a" },
+    });
+    const res = await app.inject({ method: "POST", url: "/api/actions/wt_1/execute" });
+    expect(res.statusCode).toBe(200);
+    expect(executeApproved).toHaveBeenCalledWith("wt_1");
     await app.close();
   });
 });

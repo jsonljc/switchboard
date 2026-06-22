@@ -9,10 +9,13 @@ import {
   ParkedLifecycleNotFoundError,
   ParkedLifecycleAlreadyRespondedError,
   ParkedLifecycleExpiredError,
+  ParkedLifecycleNotAuthorizedError,
+  APPROVER_ROLES,
 } from "@switchboard/core";
 import { ApprovalRespondBodySchema } from "../validation.js";
 import { sanitizeErrorMessage } from "../utils/error-sanitizer.js";
 import { assertOrgAccess } from "../utils/org-access.js";
+import { requireRole } from "../utils/require-role.js";
 
 const respondJsonSchema = zodToJsonSchema(ApprovalRespondBodySchema, { target: "openApi3" });
 
@@ -119,6 +122,15 @@ async function respondViaParkedLifecycle(
         .code(404)
         .send({ error: "Approval not found", code: "not_found", statusCode: 404 });
     }
+    if (err instanceof ParkedLifecycleNotAuthorizedError) {
+      // Designated-approver membership floor (A16): the responder is not in this
+      // approval's approvers list. 403 (authorization), distinct from the generic 400.
+      return reply.code(403).send({
+        error: sanitizeErrorMessage(err, 403),
+        code: "not_authorized",
+        statusCode: 403,
+      });
+    }
     if (err instanceof ParkedLifecycleAlreadyRespondedError) {
       return reply.code(409).send({
         error: sanitizeErrorMessage(err, 409),
@@ -184,6 +196,12 @@ export const approvalsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+
+      // Approver-role floor (A16): only a principal carrying approver/operator/admin
+      // may respond to an approval. Dev mode (authDisabled) bypasses, matching the
+      // rest of the route and assertOrgAccess. The finer designated-approver
+      // membership check lives in core respondToParkedLifecycle (shared with chat).
+      if (!(await requireRole(request, reply, ...APPROVER_ROLES))) return;
 
       const parsed = ApprovalRespondBodySchema.safeParse(request.body);
       if (!parsed.success) {

@@ -25,6 +25,7 @@ import {
   ParkedLifecycleNotFoundError,
   ParkedLifecycleAlreadyRespondedError,
   ParkedLifecycleExpiredError,
+  ParkedLifecycleNotAuthorizedError,
 } from "../approval/respond-to-parked-lifecycle.js";
 import { DispatchAdmissionError } from "../approval/dispatch-admission.js";
 import { StaleVersionError } from "../approval/state-machine.js";
@@ -143,6 +144,7 @@ export function refusalCodeForError(err: unknown): ChannelApprovalRefusalCode {
   if (err instanceof ParkedLifecycleNotFoundError) return "not_found";
   if (err instanceof ParkedLifecycleAlreadyRespondedError) return "already_responded";
   if (err instanceof ParkedLifecycleExpiredError) return "expired";
+  if (err instanceof ParkedLifecycleNotAuthorizedError) return "not_authorized";
   if (err instanceof DispatchAdmissionError) return "admission_failed";
   if (err instanceof Error && /lifecycle status is "/.test(err.message)) {
     // Race: another responder mutated state between our pre-check and the
