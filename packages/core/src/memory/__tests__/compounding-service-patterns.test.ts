@@ -59,6 +59,40 @@ describe("ConversationCompoundingService — outcome-pattern writes (PR-3.1 book
     );
   });
 
+  it("tags the pattern create with source: pattern-merge", async () => {
+    // Provenance: every new pattern written by the compounding service must carry
+    // source="pattern-merge" so downstream consumers can attribute the write.
+    const localDeps = createMockDeps();
+    const bookingStore: BookingAttributionStore = {
+      findByWorkTraceIds: vi.fn().mockResolvedValue([]),
+      findInWindow: vi.fn().mockResolvedValue([{ id: "bk-1" }]),
+    };
+    localDeps.deploymentMemoryStore.findByCategory.mockResolvedValue([]);
+    localDeps.deploymentMemoryStore.findByCategoryAndCanonicalKey.mockResolvedValue([]);
+    primeSummarizeAndExtract(
+      localDeps,
+      { summary: "Customer booked", outcome: "booked" },
+      {
+        patterns: [
+          {
+            text: "Customers ask about downtime before booking",
+            canonicalKey: "objection:downtime_work",
+          },
+        ],
+      },
+    );
+    localDeps.embeddingAdapter.embed.mockResolvedValue(new Array(1024).fill(0.1));
+
+    const localService = new ConversationCompoundingService({ ...localDeps, bookingStore });
+    await localService.processConversationEnd({ ...baseEvent, contactId: "contact-1" });
+
+    const patternCreates = localDeps.deploymentMemoryStore.create.mock.calls.filter(
+      (c) => c[0].category === "pattern",
+    );
+    expect(patternCreates).toHaveLength(1);
+    expect(patternCreates[0]![0]).toMatchObject({ source: "pattern-merge" });
+  });
+
   it("does not write pattern-category memories for non-booked outcomes", async () => {
     for (const outcome of ["lost", "qualified", "info_request", "escalated"] as const) {
       const localDeps = createMockDeps();
