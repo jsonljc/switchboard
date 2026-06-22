@@ -13,7 +13,7 @@ export class PrismaOwnerMemoryStore implements OwnerMemoryAccess {
 
   async listAllMemories(orgId: string, deploymentId: string): Promise<DeploymentMemoryEntry[]> {
     const rows = await this.prisma.deploymentMemory.findMany({
-      where: { organizationId: orgId, deploymentId },
+      where: { organizationId: orgId, deploymentId, invalidatedAt: null },
       orderBy: { confidence: "desc" },
     });
     return rows.map((r) => ({

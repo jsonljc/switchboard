@@ -92,7 +92,7 @@ export class PrismaAggregateMemoryStore implements AggregateScopedMemoryAccess {
     category: string,
   ): Promise<DeploymentMemoryEntry[]> {
     const rows = await this.prisma.deploymentMemory.findMany({
-      where: { organizationId: orgId, deploymentId, category },
+      where: { organizationId: orgId, deploymentId, category, invalidatedAt: null },
     });
     return rows.map((r) => ({
       id: r.id,

@@ -38,6 +38,7 @@ export class PrismaCustomerMemoryStore implements CustomerScopedMemoryAccess {
         deploymentId,
         confidence: { gte: 0.7 },
         sourceCount: { gte: 3 },
+        invalidatedAt: null,
       },
       orderBy: { confidence: "desc" },
     });

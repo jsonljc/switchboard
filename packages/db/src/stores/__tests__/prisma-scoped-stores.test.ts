@@ -62,6 +62,7 @@ describe("PrismaCustomerMemoryStore", () => {
         deploymentId: "d",
         confidence: { gte: 0.7 },
         sourceCount: { gte: 3 },
+        invalidatedAt: null,
       },
       orderBy: { confidence: "desc" },
     });
@@ -116,7 +117,7 @@ describe("PrismaOwnerMemoryStore", () => {
     prisma.deploymentMemory.findMany.mockResolvedValue([]);
     await store.listAllMemories("o", "d");
     expect(prisma.deploymentMemory.findMany).toHaveBeenCalledWith({
-      where: { organizationId: "o", deploymentId: "d" },
+      where: { organizationId: "o", deploymentId: "d", invalidatedAt: null },
       orderBy: { confidence: "desc" },
     });
   });
