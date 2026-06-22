@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { proactiveIntakeAllowPolicyId } from "@switchboard/db";
 import {
   checkReadiness,
   buildReadinessContext,
@@ -65,6 +66,7 @@ function makeContext(overrides: Partial<ReadinessContext> = {}): ReadinessContex
     alexSkillPackSeeded: true,
     alexSkillPackDiagnostic: null,
     businessFactsStatus: "present",
+    proactiveGovernanceSeeded: true,
     ...overrides,
   };
 }
@@ -74,7 +76,7 @@ describe("checkReadiness", () => {
     const report = checkReadiness(makeContext());
     expect(report.ready).toBe(true);
     expect(report.checks.every((c) => c.status === "pass")).toBe(true);
-    expect(report.checks).toHaveLength(13);
+    expect(report.checks).toHaveLength(14);
   });
 
   // ── email-verified ──────────────────────────────────────────────────────
@@ -347,6 +349,7 @@ describe("checkReadiness", () => {
       "calendar",
       "alex-skill-pack-seeded",
       "business-facts-present",
+      "proactive-governance-seeded",
     ]);
   });
 
@@ -429,6 +432,30 @@ describe("checkReadiness", () => {
     expect(report.ready).toBe(true);
   });
 
+  // ── proactive-governance-seeded (blocking) ───────────────────────────────
+
+  it("proactive-governance-seeded passes when the proactive allow policy is seeded", () => {
+    const report = checkReadiness(makeContext({ proactiveGovernanceSeeded: true }));
+    const check = report.checks.find((c) => c.id === "proactive-governance-seeded")!;
+    expect(check.status).toBe("pass");
+    expect(check.blocking).toBe(true);
+  });
+
+  it("proactive-governance-seeded fails (blocking) when the policy is missing — blocks go-live", () => {
+    const report = checkReadiness(makeContext({ proactiveGovernanceSeeded: false }));
+    const check = report.checks.find((c) => c.id === "proactive-governance-seeded")!;
+    expect(check.status).toBe("fail");
+    expect(check.blocking).toBe(true);
+    expect(report.ready).toBe(false);
+  });
+
+  it("proactive-governance-seeded message never leaks the raw policy id or governance internals", () => {
+    const report = checkReadiness(makeContext({ proactiveGovernanceSeeded: false }));
+    const check = report.checks.find((c) => c.id === "proactive-governance-seeded")!;
+    expect(check.message).not.toContain("policy_allow_proactive_intake");
+    expect(check.message).not.toContain("default-deny");
+  });
+
   // ── calendar (advisory) ───────────────────────────────────────────────────────
 
   it("calendar passes (google) when both Google env vars are present in context", () => {
@@ -486,8 +513,14 @@ describe("checkReadiness", () => {
   });
 });
 
-function makePrismaMock(opts: { knowledgeRow?: { content: string } | null } = {}): PrismaLike {
+function makePrismaMock(
+  opts: {
+    knowledgeRow?: { content: string } | null;
+    policyRow?: { active: boolean } | null;
+  } = {},
+): PrismaLike {
   const row = opts.knowledgeRow === undefined ? { content: "x".repeat(80) } : opts.knowledgeRow;
+  const policyRow = opts.policyRow === undefined ? { active: true } : opts.policyRow;
   return {
     managedChannel: { findMany: async () => [] },
     connection: { findMany: async () => [] },
@@ -497,6 +530,7 @@ function makePrismaMock(opts: { knowledgeRow?: { content: string } | null } = {}
     deploymentConnection: { findMany: async () => [] },
     dashboardUser: { findFirst: async () => null },
     knowledgeEntry: { findFirst: async () => row },
+    policy: { findUnique: async () => policyRow },
   } as unknown as PrismaLike;
 }
 
@@ -521,6 +555,60 @@ describe("buildReadinessContext — alex skill pack", () => {
     expect(report.ready).toBe(false);
     const check = report.checks.find((c) => c.id === "alex-skill-pack-seeded")!;
     expect(check.id).toBe("alex-skill-pack-seeded");
+    expect(check.blocking).toBe(true);
+    expect(check.status).toBe("fail");
+  });
+});
+
+describe("buildReadinessContext — proactive governance policy", () => {
+  it("sets proactiveGovernanceSeeded=true when the allow policy is active", async () => {
+    const ctx = await buildReadinessContext(
+      makePrismaMock({ policyRow: { active: true } }),
+      "org_demo",
+    );
+    expect(ctx.proactiveGovernanceSeeded).toBe(true);
+  });
+
+  it("sets proactiveGovernanceSeeded=false when the allow policy is absent", async () => {
+    const ctx = await buildReadinessContext(makePrismaMock({ policyRow: null }), "org_demo");
+    expect(ctx.proactiveGovernanceSeeded).toBe(false);
+  });
+
+  it("sets proactiveGovernanceSeeded=false when the allow policy exists but is inactive", async () => {
+    const ctx = await buildReadinessContext(
+      makePrismaMock({ policyRow: { active: false } }),
+      "org_demo",
+    );
+    expect(ctx.proactiveGovernanceSeeded).toBe(false);
+  });
+
+  it("queries the canonical per-org proactive-intake allow policy id (mirrors the seed producer)", async () => {
+    let queriedId: string | undefined;
+    const prisma = {
+      managedChannel: { findMany: async () => [] },
+      connection: { findMany: async () => [] },
+      agentDeployment: { findFirst: async () => null },
+      organizationConfig: { findUnique: async () => null },
+      businessConfig: { findUnique: async () => null },
+      deploymentConnection: { findMany: async () => [] },
+      dashboardUser: { findFirst: async () => null },
+      knowledgeEntry: { findFirst: async () => ({ content: "x".repeat(80) }) },
+      policy: {
+        findUnique: async (args: { where: { id: string } }) => {
+          queriedId = args.where.id;
+          return { active: true };
+        },
+      },
+    } as unknown as PrismaLike;
+    await buildReadinessContext(prisma, "org_demo");
+    expect(queriedId).toBe(proactiveIntakeAllowPolicyId("org_demo"));
+  });
+
+  it("a missing proactive policy surfaces a blocking proactive-governance-seeded fail", async () => {
+    const ctx = await buildReadinessContext(makePrismaMock({ policyRow: null }), "org_demo");
+    expect(ctx.proactiveGovernanceSeeded).toBe(false);
+    const report = checkReadiness(ctx);
+    const check = report.checks.find((c) => c.id === "proactive-governance-seeded")!;
     expect(check.blocking).toBe(true);
     expect(check.status).toBe("fail");
   });
