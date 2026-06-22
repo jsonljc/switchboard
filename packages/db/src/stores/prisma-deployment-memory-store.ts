@@ -1,4 +1,5 @@
 import { StaleVersionError } from "@switchboard/core";
+import type { DeploymentMemorySource } from "@switchboard/schemas";
 import type { PrismaDbClient } from "../prisma-db.js";
 
 export interface CreateDeploymentMemoryInput {
@@ -8,6 +9,7 @@ export interface CreateDeploymentMemoryInput {
   content: string;
   confidence?: number;
   canonicalKey?: string | null;
+  source?: DeploymentMemorySource | null;
 }
 
 export class PrismaDeploymentMemoryStore {
@@ -15,18 +17,62 @@ export class PrismaDeploymentMemoryStore {
 
   async create(input: CreateDeploymentMemoryInput) {
     const now = new Date();
-    return this.prisma.deploymentMemory.create({
-      data: {
-        organizationId: input.organizationId,
-        deploymentId: input.deploymentId,
-        category: input.category,
-        content: input.content,
-        canonicalKey: input.canonicalKey ?? null,
-        confidence: input.confidence ?? 0.5,
-        sourceCount: 1,
-        lastSeenAt: now,
-      },
-    });
+    const data = {
+      organizationId: input.organizationId,
+      deploymentId: input.deploymentId,
+      category: input.category,
+      content: input.content,
+      canonicalKey: input.canonicalKey ?? null,
+      confidence: input.confidence ?? 0.5,
+      sourceCount: 1,
+      lastSeenAt: now,
+      source: input.source ?? null,
+      validFrom: now,
+    };
+    try {
+      return await this.prisma.deploymentMemory.create({ data });
+    } catch (err) {
+      // The unique is on CONTENT (org, deployment, category, content). With
+      // invalidate-not-delete, an evicted/decayed row physically remains and
+      // blocks re-creating the same content (P2002). Deterministic resolution:
+      // if the colliding row is INVALIDATED, resurrect it (a fresh assertion
+      // supersedes the tombstone, taking the NEW write's canonicalKey/confidence/
+      // source); if it is LIVE, rethrow so the caller's existing duplicate
+      // handling runs unchanged (the taste/revenue_proven crons + the pattern
+      // P2002 recovery only ever collide with LIVE rows, so they are unaffected).
+      if (!isPrismaUniqueConstraintError(err)) throw err;
+      const colliding = await this.prisma.deploymentMemory.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          deploymentId: input.deploymentId,
+          category: input.category,
+          content: input.content,
+        },
+      });
+      if (!colliding || colliding.invalidatedAt === null) throw err;
+      const resurrected = await this.prisma.deploymentMemory.updateMany({
+        where: {
+          id: colliding.id,
+          organizationId: input.organizationId,
+          invalidatedAt: { not: null },
+        },
+        data: {
+          invalidatedAt: null,
+          validTo: null,
+          validFrom: now,
+          lastDecayedAt: null,
+          confidence: input.confidence ?? 0.5,
+          sourceCount: 1,
+          lastSeenAt: now,
+          canonicalKey: input.canonicalKey ?? null,
+          source: input.source ?? null,
+        },
+      });
+      // Lost the resurrection race (row concurrently resurrected/removed) — rethrow
+      // the original P2002 so the caller's existing duplicate handling runs.
+      if (resurrected.count === 0) throw err;
+      return { id: colliding.id };
+    }
   }
 
   async incrementConfidence(organizationId: string, id: string, newConfidence: number) {
@@ -49,7 +95,7 @@ export class PrismaDeploymentMemoryStore {
 
   async listByDeployment(organizationId: string, deploymentId: string) {
     return this.prisma.deploymentMemory.findMany({
-      where: { organizationId, deploymentId },
+      where: { organizationId, deploymentId, invalidatedAt: null },
       orderBy: { confidence: "desc" },
     });
   }
@@ -66,6 +112,7 @@ export class PrismaDeploymentMemoryStore {
         deploymentId,
         confidence: { gte: minConfidence },
         sourceCount: { gte: minSourceCount },
+        invalidatedAt: null,
       },
       orderBy: { confidence: "desc" },
     });
@@ -73,7 +120,7 @@ export class PrismaDeploymentMemoryStore {
 
   async findByCategory(organizationId: string, deploymentId: string, category: string) {
     return this.prisma.deploymentMemory.findMany({
-      where: { organizationId, deploymentId, category },
+      where: { organizationId, deploymentId, category, invalidatedAt: null },
     });
   }
 
@@ -84,7 +131,7 @@ export class PrismaDeploymentMemoryStore {
     canonicalKey: string,
   ) {
     return this.prisma.deploymentMemory.findMany({
-      where: { organizationId, deploymentId, category, canonicalKey },
+      where: { organizationId, deploymentId, category, canonicalKey, invalidatedAt: null },
     });
   }
 
@@ -95,9 +142,18 @@ export class PrismaDeploymentMemoryStore {
     if (result.count === 0) throw new StaleVersionError(id, -1, -1);
   }
 
+  async invalidate(organizationId: string, id: string): Promise<void> {
+    const now = new Date();
+    const result = await this.prisma.deploymentMemory.updateMany({
+      where: { id, organizationId, invalidatedAt: null },
+      data: { invalidatedAt: now, validTo: now },
+    });
+    if (result.count === 0) throw new StaleVersionError(id, -1, -1);
+  }
+
   async countByDeployment(organizationId: string, deploymentId: string): Promise<number> {
     return this.prisma.deploymentMemory.count({
-      where: { organizationId, deploymentId },
+      where: { organizationId, deploymentId, invalidatedAt: null },
     });
   }
 
@@ -107,7 +163,7 @@ export class PrismaDeploymentMemoryStore {
   ): Promise<{ id: string; confidence: number } | null> {
     // Lowest confidence wins; ties broken by oldest lastSeenAt (LRU).
     return this.prisma.deploymentMemory.findFirst({
-      where: { organizationId, deploymentId },
+      where: { organizationId, deploymentId, invalidatedAt: null },
       orderBy: [{ confidence: "asc" }, { lastSeenAt: "asc" }],
       select: { id: true, confidence: true },
     });
@@ -120,10 +176,13 @@ export class PrismaDeploymentMemoryStore {
     startOfDay: Date;
   }): Promise<number> {
     // route-governance: store-mutation-global — cross-org confidence decay batch.
-    const result = await this.prisma.deploymentMemory.updateMany({
+    // Pass 1: decrement live, stale, above-floor rows (idempotent per UTC day via
+    // the lastDecayedAt guard). invalidatedAt:null skips already soft-removed rows.
+    const decremented = await this.prisma.deploymentMemory.updateMany({
       where: {
         lastSeenAt: { lt: input.cutoffDate },
         confidence: { gt: input.floor },
+        invalidatedAt: null,
         OR: [{ lastDecayedAt: null }, { lastDecayedAt: { lt: input.startOfDay } }],
       },
       data: {
@@ -131,6 +190,36 @@ export class PrismaDeploymentMemoryStore {
         lastDecayedAt: new Date(),
       },
     });
-    return result.count;
+    // Pass 2: invalidate-not-delete. A STALE row that has decayed to/below the
+    // floor is spent; soft-remove it (frees a cap slot, preserves history) rather
+    // than leaving a zombie. lastSeenAt < cutoffDate is SAFETY-CRITICAL here: it is
+    // the only thing scoping decay, so omitting it would wrongly invalidate a
+    // recently-seen low-confidence row. We deliberately do NOT carry pass-1's
+    // lastDecayedAt OR-guard: invalidatedAt:null already makes this idempotent, and
+    // the guard would defer invalidating a row decremented-to-floor THIS run by a
+    // full cycle.
+    const now = new Date();
+    // route-governance: store-mutation-global
+    await this.prisma.deploymentMemory.updateMany({
+      where: {
+        lastSeenAt: { lt: input.cutoffDate },
+        confidence: { lte: input.floor },
+        invalidatedAt: null,
+      },
+      data: { invalidatedAt: now, validTo: now },
+    });
+    // Return the DECREMENTED count to preserve the existing outcomePatternsDecayed
+    // metric's meaning (rows decayed this run). Invalidations are a side effect.
+    return decremented.count;
   }
+}
+
+/** P2002 (unique-constraint) classifier — matches Prisma's error code, not its message. */
+function isPrismaUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: string }).code === "P2002"
+  );
 }

@@ -3,6 +3,7 @@ import {
   InteractionSummarySchema,
   DeploymentMemorySchema,
   DeploymentMemoryCategorySchema,
+  DeploymentMemorySourceSchema,
   InteractionOutcomeSchema,
   computeConfidenceScore,
 } from "../deployment-memory.js";
@@ -99,5 +100,48 @@ describe("computeConfidenceScore", () => {
 
   it("returns 1.0 when owner-confirmed", () => {
     expect(computeConfidenceScore(1, true)).toBe(1.0);
+  });
+});
+
+describe("DeploymentMemorySourceSchema", () => {
+  it("enumerates the four provenance sources in order", () => {
+    expect(DeploymentMemorySourceSchema.options).toEqual([
+      "conversation-compounding",
+      "pattern-merge",
+      "operator",
+      "decay",
+    ]);
+  });
+  it("rejects an unknown source", () => {
+    expect(DeploymentMemorySourceSchema.safeParse("magic").success).toBe(false);
+  });
+});
+
+describe("DeploymentMemorySchema provenance + valid-time", () => {
+  const base = {
+    id: "m1",
+    organizationId: "o1",
+    deploymentId: "d1",
+    category: "fact",
+    content: "c",
+    confidence: 0.5,
+    sourceCount: 1,
+    lastSeenAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  it("parses without the new optional fields (backward compatible)", () => {
+    expect(DeploymentMemorySchema.safeParse(base).success).toBe(true);
+  });
+  it("parses with source + valid-time populated", () => {
+    expect(
+      DeploymentMemorySchema.safeParse({
+        ...base,
+        source: "conversation-compounding",
+        validFrom: new Date(),
+        validTo: null,
+        invalidatedAt: null,
+      }).success,
+    ).toBe(true);
   });
 });

@@ -22,6 +22,21 @@ export const DeploymentMemoryCategorySchema = z.enum([
 ]);
 export type DeploymentMemoryCategory = z.infer<typeof DeploymentMemoryCategorySchema>;
 
+/**
+ * Provenance of a DeploymentMemory write — who/what asserted the fact. Set at
+ * create time (and on resurrection of a tombstoned row); reinforcement never
+ * mutates it. "operator" + "decay" are reserved for the governed writers landing
+ * in S8b/S8c. Mirrors `category`: a Prisma String validated by a Zod enum (the
+ * Prisma column is `source String?`).
+ */
+export const DeploymentMemorySourceSchema = z.enum([
+  "conversation-compounding",
+  "pattern-merge",
+  "operator",
+  "decay",
+]);
+export type DeploymentMemorySource = z.infer<typeof DeploymentMemorySourceSchema>;
+
 export const InteractionOutcomeSchema = z.enum([
   "booked",
   "qualified",
@@ -65,6 +80,15 @@ export const DeploymentMemorySchema = z.object({
   lastSeenAt: z.coerce.date(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
+  // Provenance + bi-temporal valid-time (S8a). All nullable/optional: legacy
+  // rows + non-compounding writers leave them null. invalidatedAt IS NULL is the
+  // liveness predicate; validTo is the valid-time end (set together in the
+  // automatic evict/decay paths).
+  // Naming note: this uses validTo + invalidatedAt (a soft-delete flag), intentionally distinct from temporal-fact.ts's validUntil + status enum; do not auto-harmonize.
+  source: DeploymentMemorySourceSchema.nullable().optional(),
+  validFrom: z.coerce.date().nullable().optional(),
+  validTo: z.coerce.date().nullable().optional(),
+  invalidatedAt: z.coerce.date().nullable().optional(),
 });
 export type DeploymentMemory = z.infer<typeof DeploymentMemorySchema>;
 

@@ -36,6 +36,7 @@ export function createMockDeps() {
       countByDeployment: vi.fn().mockResolvedValue(0),
       findEvictionCandidate: vi.fn().mockResolvedValue(null),
       delete: vi.fn().mockResolvedValue(undefined),
+      invalidate: vi.fn().mockResolvedValue(undefined),
     },
   };
 }

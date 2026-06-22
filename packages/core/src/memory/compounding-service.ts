@@ -8,6 +8,7 @@ import {
   computeConfidenceScore,
   isKnownCanonicalKey,
 } from "@switchboard/schemas";
+import type { DeploymentMemorySource } from "@switchboard/schemas";
 import { StaleVersionError } from "../approval/state-machine.js";
 import { buildSummarizationPrompt, buildFactExtractionPrompt } from "./extraction-prompts.js";
 import { shouldExtractOutcomePatterns } from "./outcome-pattern-extractor.js";
@@ -60,6 +61,7 @@ export interface CompoundingDeploymentMemoryStore {
     content: string;
     confidence?: number;
     canonicalKey?: string | null;
+    source?: DeploymentMemorySource | null;
   }): Promise<{ id: string }>;
   incrementConfidence(
     organizationId: string,
@@ -77,6 +79,13 @@ export interface CompoundingDeploymentMemoryStore {
     deploymentId: string,
   ): Promise<{ id: string; confidence: number } | null>;
   delete(organizationId: string, id: string): Promise<void>;
+  /**
+   * Soft-remove (invalidate) a memory: set invalidatedAt + validTo, never
+   * physically delete, so an evicted/decayed row frees a cap slot while its
+   * history + provenance survive. Throws StaleVersionError when already gone
+   * (drop-in for the eviction path's existing delete() error handling).
+   */
+  invalidate(organizationId: string, id: string): Promise<void>;
 }
 
 export interface DeploymentMemoryEvidenceStore {
@@ -369,10 +378,10 @@ export class ConversationCompoundingService {
       const candidate = await this.memoryStore.findEvictionCandidate(organizationId, deploymentId);
       if (!candidate || NEW_FACT_CONFIDENCE <= candidate.confidence) return;
       try {
-        await this.memoryStore.delete(organizationId, candidate.id);
+        await this.memoryStore.invalidate(organizationId, candidate.id);
       } catch (err) {
-        // StaleVersionError means the candidate was deleted by a concurrent
-        // writer between find and delete — drop this fact rather than create a
+        // StaleVersionError means the candidate was invalidated by a concurrent
+        // writer between find and invalidate — drop this fact rather than create a
         // row without a freed slot (which would push past the cap). Any other
         // error is a real failure and must propagate to the caller's boundary.
         if (err instanceof StaleVersionError) {
@@ -389,6 +398,7 @@ export class ConversationCompoundingService {
       category: fact.category,
       content: fact.fact,
       confidence: NEW_FACT_CONFIDENCE,
+      source: "conversation-compounding",
     });
   }
 
@@ -443,6 +453,7 @@ export class ConversationCompoundingService {
       deploymentId,
       category: "faq",
       content: question,
+      source: "conversation-compounding",
     });
   }
 
@@ -513,6 +524,7 @@ export class ConversationCompoundingService {
         content: patternText,
         canonicalKey,
         confidence: initialConfidence,
+        source: "pattern-merge",
       });
       metrics.outcomePatternsCreated.inc({ deploymentId });
       metrics.outcomePatternConfidence.observe({ deploymentId }, initialConfidence);

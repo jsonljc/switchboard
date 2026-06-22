@@ -199,6 +199,7 @@ describe("ConversationCompoundingService", () => {
       expect.any(Number),
     );
     expect(deps.deploymentMemoryStore.create).not.toHaveBeenCalled();
+    expect(deps.deploymentMemoryStore.invalidate).not.toHaveBeenCalled();
     expect(deps.deploymentMemoryStore.delete).not.toHaveBeenCalled();
   });
 
@@ -219,9 +220,35 @@ describe("ConversationCompoundingService", () => {
 
     await service.processConversationEnd(baseEvent);
 
-    expect(deps.deploymentMemoryStore.delete).toHaveBeenCalledWith("org-1", "mem-stale");
+    // Eviction now routes through invalidate (soft-remove), NOT delete (hard-remove).
+    expect(deps.deploymentMemoryStore.invalidate).toHaveBeenCalledWith("org-1", "mem-stale");
+    expect(deps.deploymentMemoryStore.delete).not.toHaveBeenCalled();
     expect(deps.deploymentMemoryStore.create).toHaveBeenCalledWith(
       expect.objectContaining({ content: "New high-value fact", category: "fact" }),
+    );
+  });
+
+  it("tags the fact create with source: conversation-compounding", async () => {
+    // Provenance: every new fact written by the compounding service must carry
+    // source="conversation-compounding" so downstream invalidate/decay paths can
+    // attribute the write correctly.
+    deps.deploymentMemoryStore.countByDeployment.mockResolvedValue(0);
+    deps.llmClient.complete
+      .mockResolvedValueOnce(JSON.stringify({ summary: "Chat.", outcome: "info_request" }))
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          facts: [{ fact: "A fact with provenance", confidence: 0.8, category: "fact" }],
+          questions: [],
+        }),
+      );
+
+    await service.processConversationEnd(baseEvent);
+
+    expect(deps.deploymentMemoryStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "fact",
+        source: "conversation-compounding",
+      }),
     );
   });
 
@@ -245,6 +272,7 @@ describe("ConversationCompoundingService", () => {
 
     await service.processConversationEnd(baseEvent);
 
+    expect(deps.deploymentMemoryStore.invalidate).not.toHaveBeenCalled();
     expect(deps.deploymentMemoryStore.delete).not.toHaveBeenCalled();
     expect(deps.deploymentMemoryStore.create).not.toHaveBeenCalled();
   });
@@ -266,20 +294,23 @@ describe("ConversationCompoundingService", () => {
 
     await service.processConversationEnd(baseEvent);
 
+    expect(deps.deploymentMemoryStore.invalidate).not.toHaveBeenCalled();
     expect(deps.deploymentMemoryStore.delete).not.toHaveBeenCalled();
     expect(deps.deploymentMemoryStore.create).not.toHaveBeenCalled();
   });
 
-  it("drops the new fact on a StaleVersionError when the eviction candidate vanished mid-flight", async () => {
-    // Race: another writer deleted the candidate between find and delete.
-    // delete() throws StaleVersionError (P2025) — we must not create a row
+  it("drops the new fact on a StaleVersionError when the eviction candidate vanished mid-flight (invalidate path)", async () => {
+    // Race: another writer invalidated the candidate between find and invalidate.
+    // invalidate() throws StaleVersionError (count===0) — we must not create a row
     // without having freed a slot, and must swallow this specific error.
     deps.deploymentMemoryStore.countByDeployment.mockResolvedValue(500);
     deps.deploymentMemoryStore.findEvictionCandidate.mockResolvedValue({
       id: "mem-gone",
       confidence: 0.3,
     });
-    deps.deploymentMemoryStore.delete.mockRejectedValue(new StaleVersionError("mem-gone", -1, -1));
+    deps.deploymentMemoryStore.invalidate.mockRejectedValue(
+      new StaleVersionError("mem-gone", -1, -1),
+    );
     deps.llmClient.complete
       .mockResolvedValueOnce(JSON.stringify({ summary: "Chat.", outcome: "info_request" }))
       .mockResolvedValueOnce(
@@ -293,7 +324,7 @@ describe("ConversationCompoundingService", () => {
     expect(deps.deploymentMemoryStore.create).not.toHaveBeenCalled();
   });
 
-  it("does not swallow a non-StaleVersionError raised by the eviction delete", async () => {
+  it("does not swallow a non-StaleVersionError raised by the eviction invalidate", async () => {
     // A genuine DB failure during eviction must NOT be treated as the benign
     // race: it is rethrown past the eviction catch (no eviction warn) and lands
     // on processConversationEnd's error boundary (console.error). No fact is
@@ -303,7 +334,7 @@ describe("ConversationCompoundingService", () => {
       id: "mem-stale",
       confidence: 0.3,
     });
-    deps.deploymentMemoryStore.delete.mockRejectedValue(new Error("connection reset"));
+    deps.deploymentMemoryStore.invalidate.mockRejectedValue(new Error("connection reset"));
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     deps.llmClient.complete
