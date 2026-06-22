@@ -1,4 +1,8 @@
 // packages/ad-optimizer/src/inngest-functions.ts
+/* eslint-disable max-lines -- the ad-optimizer cron-wiring orchestrator at the 600-line cap: the A12
+   count-vs-value paid-value provider wiring (CronDependencies field + the AuditRunner spread) tipped
+   it over. Like its audit-runner.ts sibling this is the per-cron dependency-assembly seam; splitting
+   the cron registration out is the right follow-up but is out of scope for this money-adjacent slice. */
 import { Inngest, type InngestFunction } from "inngest";
 
 const inngestClient = new Inngest({ id: "switchboard" });
