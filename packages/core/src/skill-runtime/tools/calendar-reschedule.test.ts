@@ -15,6 +15,25 @@ const upcoming = [
   },
 ];
 
+const twoBookings = [
+  {
+    id: "b1",
+    calendarEventId: "evt-1",
+    service: "filler",
+    startsAt: new Date("2026-06-12T02:00:00Z"),
+    endsAt: new Date("2026-06-12T03:00:00Z"),
+    status: "confirmed",
+  },
+  {
+    id: "b2",
+    calendarEventId: "evt-2",
+    service: "dysport",
+    startsAt: new Date("2026-06-15T02:00:00Z"),
+    endsAt: new Date("2026-06-15T03:00:00Z"),
+    status: "confirmed",
+  },
+];
+
 function deps(over: Record<string, unknown> = {}) {
   return {
     calendarProviderFactory: vi.fn().mockResolvedValue({
@@ -192,4 +211,114 @@ it("cancel returns CANCEL_FAILURE and does NOT delete the calendar event when th
   const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({});
   expect(res.error?.code).toBe("CANCEL_FAILURE");
   expect(cancelBooking).not.toHaveBeenCalled();
+});
+
+it("cancel does NOT cancel an unrelated booking when the requested service matches none", async () => {
+  const d = deps({
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue(twoBookings),
+      reschedule: vi.fn(),
+      cancel: vi.fn().mockResolvedValue({ id: "b1" }),
+    },
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({
+    service: "botox",
+  });
+  expect(res.status).toBe("error");
+  expect(res.error?.code).toBe("NO_MATCHING_BOOKING");
+  expect(d.bookingStore.cancel).not.toHaveBeenCalled();
+  expect((res.data as { availableServices?: string[] }).availableServices).toEqual([
+    "filler",
+    "dysport",
+  ]);
+});
+
+it("reschedule does NOT move an unrelated booking when the requested service matches none", async () => {
+  const d = deps({
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue(twoBookings),
+      reschedule: vi.fn().mockResolvedValue({ id: "b1" }),
+      cancel: vi.fn(),
+    },
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.reschedule"]!.execute({
+    slotStart: "2026-06-20T02:00:00Z",
+    slotEnd: "2026-06-20T03:00:00Z",
+    calendarId: "primary",
+    service: "botox",
+  });
+  expect(res.error?.code).toBe("NO_MATCHING_BOOKING");
+  expect(d.bookingStore.reschedule).not.toHaveBeenCalled();
+});
+
+it("cancel selects the booking matching the requested service, not the soonest", async () => {
+  const d = deps({
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue(twoBookings),
+      reschedule: vi.fn(),
+      cancel: vi.fn().mockResolvedValue({ id: "b2" }),
+    },
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({
+    service: "dysport",
+  });
+  expect(res.status).toBe("success");
+  expect(d.bookingStore.cancel).toHaveBeenCalledWith("org-1", "b2");
+});
+
+it("cancel with no service still targets the soonest booking (unchanged)", async () => {
+  const d = deps({
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue(twoBookings),
+      reschedule: vi.fn(),
+      cancel: vi.fn().mockResolvedValue({ id: "b1" }),
+    },
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({});
+  expect(res.status).toBe("success");
+  expect(d.bookingStore.cancel).toHaveBeenCalledWith("org-1", "b1");
+});
+
+it("reschedule selects the service-matched booking among several, not the soonest", async () => {
+  const rescheduleBooking = vi.fn().mockResolvedValue({});
+  const d = deps({
+    calendarProviderFactory: vi.fn().mockResolvedValue({
+      rescheduleBooking,
+      cancelBooking: vi.fn().mockResolvedValue(undefined),
+    }),
+    bookingStore: {
+      findUpcomingByContact: vi.fn().mockResolvedValue(twoBookings),
+      reschedule: vi.fn().mockResolvedValue({ id: "b2" }),
+      cancel: vi.fn(),
+    },
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.reschedule"]!.execute({
+    slotStart: "2026-06-20T02:00:00Z",
+    slotEnd: "2026-06-20T03:00:00Z",
+    calendarId: "primary",
+    service: "dysport",
+  });
+  expect(res.status).toBe("success");
+  expect(d.bookingStore.reschedule).toHaveBeenCalledWith("org-1", "b2", expect.any(Object));
+  expect(rescheduleBooking).toHaveBeenCalledWith("evt-2", expect.any(Object));
+});
+
+it("cancel matches the requested service case-insensitively and trims surrounding whitespace", async () => {
+  const d = deps(); // `upcoming` holds a single "botox" booking (b1)
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({
+    service: "  Botox ",
+  });
+  expect(res.status).toBe("success");
+  expect(d.bookingStore.cancel).toHaveBeenCalledWith("org-1", "b1");
+});
+
+it("cancel fails closed for a whitespace-only service rather than acting on a booking", async () => {
+  // Guards the edge case: a non-empty-but-blank service must NOT degrade to the soonest
+  // booking. It normalizes to "" which matches nothing, so it surfaces NO_MATCHING_BOOKING.
+  const d = deps(); // `upcoming` holds a single "botox" booking (b1)
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.cancel"]!.execute({
+    service: "   ",
+  });
+  expect(res.error?.code).toBe("NO_MATCHING_BOOKING");
+  expect(d.bookingStore.cancel).not.toHaveBeenCalled();
 });
