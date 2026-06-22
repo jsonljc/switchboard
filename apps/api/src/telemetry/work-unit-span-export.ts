@@ -133,10 +133,13 @@ export async function exportWorkUnitSpans(
 ): Promise<void> {
   if (!isWorkUnitTracingEnabled()) return;
   const traces = await deps.executionTraceStore.findByWorkUnitId(orgId, workUnitId);
-  if (traces.length === 0) return;
+
+  // Lift the (tenant-guarded) WorkTrace enrichment. Fetched even with zero execution rows so a
+  // non-executing work unit (deny / require_approval / governance-error: a WorkTrace but no
+  // ExecutionTrace rows) still renders a root-only span. getByWorkUnitId returns
+  // WorkTraceReadResult = { trace, integrity }; enrichment fields live under .trace.
   let workTrace: WorkTraceSummary | undefined;
   const wt = await deps.workTraceStore?.getByWorkUnitId(workUnitId);
-  // getByWorkUnitId returns WorkTraceReadResult = { trace, integrity }; enrichment fields are under .trace.
   // tenant guard: only enrich from a WorkTrace that belongs to the same org (no cross-tenant leak).
   if (wt && wt.trace.organizationId === orgId) {
     workTrace = {
@@ -150,6 +153,12 @@ export async function exportWorkUnitSpans(
       completedAt: wt.trace.completedAt,
     };
   }
+
+  // Nothing to render: no execution rows AND no tenant-matched WorkTrace (true no-op).
+  if (traces.length === 0 && !workTrace) return;
+
+  // Zero traces + a WorkTrace -> a root-only span (governance outcome / status / org). With rows,
+  // the full work-unit -> execution -> tool waterfall (unchanged).
   projectWorkUnitSpans(mapExecutionTracesToSpanInput(workUnitId, traces, workTrace), getTracer());
 }
 
