@@ -1,4 +1,5 @@
 import type { WorkflowHandler, WorkTrace } from "@switchboard/core/platform";
+import { getMetrics } from "@switchboard/core";
 import {
   RileyBudgetExecutionInput,
   ExecutionReceiptSchema,
@@ -306,6 +307,18 @@ export function buildRileyBudgetExecutionWorkflow(deps: RileyBudgetExecutionDeps
         deltaSigned,
         accountSpend ?? Number.NaN,
       );
+      // Detective telemetry (A6/D3): record the cap verdict once, on BOTH the refuse-return and
+      // the accept-continue path. The cap is the only active blast-radius protection; this makes
+      // its accept-vs-refuse rate observable the moment the executor runs (flag-gated, see the
+      // metric doc + docs/runbooks/riley-reallocation-go-live.md). NOT a money-path change.
+      getMetrics().rileyReallocationCapEvaluated.inc({
+        orgId: organizationId,
+        outcome: verdict.ok
+          ? "within_cap"
+          : verdict.reason === "DELTA_CAP"
+            ? "delta_cap"
+            : "share_cap",
+      });
       if (!verdict.ok) {
         return {
           outcome: "failed",

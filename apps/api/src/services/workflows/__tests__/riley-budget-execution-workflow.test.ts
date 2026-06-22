@@ -3,6 +3,7 @@ import { buildRileyBudgetExecutionWorkflow } from "../riley-budget-execution-wor
 import { ExecutionReceiptSchema, type ExecutionReceipt } from "@switchboard/schemas";
 import { DEFAULT_BLAST_RADIUS_CONTRACT } from "@switchboard/ad-optimizer";
 import type { WorkUnit, WorkflowRuntimeServices } from "@switchboard/core/platform";
+import { setMetrics, createInMemoryMetrics, getMetrics } from "@switchboard/core";
 
 const services = {} as WorkflowRuntimeServices; // executor never submits child work
 const NOW = new Date("2026-06-14T12:00:00.000Z");
@@ -504,5 +505,31 @@ describe("buildRileyBudgetExecutionWorkflow — cap, lease, write (S5)", () => {
       "not_found",
     );
     expect(h.markApplied).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("buildRileyBudgetExecutionWorkflow — cap telemetry (A6)", () => {
+  it("emits within_cap on an accepted move", async () => {
+    setMetrics(createInMemoryMetrics());
+    const incSpy = vi.spyOn(getMetrics().rileyReallocationCapEvaluated, "inc");
+    const h = harness();
+    await h.handler.execute(workUnit(), services);
+    expect(incSpy).toHaveBeenCalledWith({ orgId: "org_1", outcome: "within_cap" });
+  });
+
+  it("emits delta_cap when the dollar cap is breached", async () => {
+    setMetrics(createInMemoryMetrics());
+    const incSpy = vi.spyOn(getMetrics().rileyReallocationCapEvaluated, "inc");
+    const h = harness();
+    await h.handler.execute(workUnit(params({ toCents: 50_000 })), services);
+    expect(incSpy).toHaveBeenCalledWith({ orgId: "org_1", outcome: "delta_cap" });
+  });
+
+  it("emits share_cap when account spend cannot size the move (null spend)", async () => {
+    setMetrics(createInMemoryMetrics());
+    const incSpy = vi.spyOn(getMetrics().rileyReallocationCapEvaluated, "inc");
+    const h = harness({ getAccountDailySpendCents: vi.fn(async () => null) });
+    await h.handler.execute(workUnit(), services);
+    expect(incSpy).toHaveBeenCalledWith({ orgId: "org_1", outcome: "share_cap" });
   });
 });
