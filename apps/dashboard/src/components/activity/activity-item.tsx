@@ -17,7 +17,7 @@ const iconColorMap = {
   success: "text-positive",
   denied: "text-destructive",
   pending: "text-caution",
-  info: "text-blue-500",
+  info: "text-muted-foreground",
   warning: "text-caution",
 };
 
