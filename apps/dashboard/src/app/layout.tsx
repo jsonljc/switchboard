@@ -1,13 +1,5 @@
 import type { Metadata } from "next";
-import {
-  Inter,
-  DM_Sans,
-  Space_Mono,
-  Source_Serif_4,
-  JetBrains_Mono,
-  Fraunces,
-  Geist,
-} from "next/font/google";
+import { Inter, DM_Sans, Source_Serif_4, JetBrains_Mono, Fraunces, Geist } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
 
@@ -21,13 +13,6 @@ const dmSans = DM_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-display",
-  display: "swap",
-});
-
-const spaceMono = Space_Mono({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-mono",
   display: "swap",
 });
 
@@ -92,7 +77,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${dmSans.variable} ${spaceMono.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${geist.variable} ${fraunces.variable}`}
+      className={`${inter.variable} ${dmSans.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${geist.variable} ${fraunces.variable}`}
       suppressHydrationWarning
     >
       <body className={inter.className}>
