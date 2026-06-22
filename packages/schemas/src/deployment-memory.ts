@@ -92,6 +92,28 @@ export const DeploymentMemorySchema = z.object({
 });
 export type DeploymentMemory = z.infer<typeof DeploymentMemorySchema>;
 
+/**
+ * Parameters for the governed `memory.write` operator intent (S8b) — the
+ * non-conversation path for writing a DeploymentMemory through PlatformIngress
+ * (operator_mutation + system_auto_approved + non-financial), so the write is
+ * audited via WorkTrace, idempotent, and routed through the governance gate.
+ * organizationId is NOT a parameter: it comes from the authenticated
+ * workUnit.organizationId, never a body field (mirrors ReconcileBookingParametersSchema).
+ * `source` is REQUIRED — provenance ("who asserted this fact") is the point of S8.
+ * `validFrom` is intentionally NOT a parameter: the store sets it to write-time
+ * `now`; writer-asserted valid-time is a deliberate future extension (no current
+ * or planned writer asserts one).
+ */
+export const MemoryWriteParametersSchema = z.object({
+  deploymentId: z.string().min(1),
+  category: DeploymentMemoryCategorySchema,
+  content: z.string().min(1),
+  source: DeploymentMemorySourceSchema,
+  confidence: z.number().min(0).max(1).optional(),
+  canonicalKey: z.string().min(1).nullable().optional(),
+});
+export type MemoryWriteParameters = z.infer<typeof MemoryWriteParametersSchema>;
+
 export const ConfidenceFormulaSchema = z.object({
   sourceCount: z.number().int().positive(),
   ownerConfirmed: z.boolean(),
