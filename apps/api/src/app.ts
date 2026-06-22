@@ -951,6 +951,9 @@ export async function buildServer() {
     const { PrismaReceiptStore } = await import("@switchboard/db");
     const { PrismaBookingStore } = await import("@switchboard/db");
     const { PrismaReceiptedBookingStore } = await import("@switchboard/db");
+    // Fresh instance: the deploymentMemoryStore decorated above is scoped to a different
+    // `if (prismaClient)` block and is not in scope here.
+    const { PrismaDeploymentMemoryStore } = await import("@switchboard/db");
     const prismaOutbox = new PrismaOutboxStore(prismaClient);
     const prismaReceipts = new PrismaReceiptStore(prismaClient);
     // Fresh instance: the `reportStores.bookings` above is scoped to a different
@@ -958,6 +961,9 @@ export async function buildServer() {
     const bookingAttendanceStore = new PrismaBookingStore(prismaClient);
     // The governed write-side store for receipt.reconcile_booking (override / flag / resolve).
     const reconcileBookingStore = new PrismaReceiptedBookingStore(prismaClient);
+    // The governed write-side store for memory.write (S8b). PrismaDeploymentMemoryStore.create
+    // satisfies MemoryWriteStore structurally (its create() accepts source -- S8a).
+    const memoryWriteStore = new PrismaDeploymentMemoryStore(prismaClient);
 
     // operator.erase_contact eraser: wraps the SAME full delete cascade as the Meta data-deletion
     // callback (eraseContactFully) behind the operator-direct intent, plus an org-scoped existence
@@ -1088,6 +1094,7 @@ export async function buildServer() {
       reconcileBookingWriter: reconcileBookingStore,
       weeklyReportDeliveryWriter,
       contactEraser,
+      memoryWriteStore,
       logger: app.log,
     });
   }
