@@ -36,6 +36,7 @@ export {
   ParkedLifecycleNotFoundError,
   ParkedLifecycleAlreadyRespondedError,
   ParkedLifecycleExpiredError,
+  ParkedLifecycleNotAuthorizedError,
   type ExecuteApprovedLike,
   type RespondToParkedLifecycleDeps,
   type RespondToParkedLifecycleParams,

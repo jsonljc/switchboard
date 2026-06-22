@@ -124,6 +124,15 @@ async function buildScopedApp(): Promise<ScopedTestApp> {
         } as unknown;
       }),
     },
+    // A16: the approver-role floor (requireRole) on POST /api/approvals/:id/respond
+    // resolves the principal here. Every bound principal is an approver so the floor
+    // passes and these cases keep asserting ORG isolation (the dimension under test),
+    // not the role floor.
+    identity: {
+      getPrincipal: vi.fn(async (id: string) =>
+        id ? { id, type: "user", name: id, organizationId: null, roles: ["approver"] } : null,
+      ),
+    },
   };
 
   // ── Mocks for governance + lifecycle. ──
