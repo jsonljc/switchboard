@@ -12,7 +12,10 @@ import type {
 } from "@switchboard/core/platform";
 import { WorkflowMode } from "@switchboard/core/platform";
 import type { IntentRegistry } from "@switchboard/core/platform";
-import { buildRobinRecoverySendExecutor } from "./robin-recovery-executor.js";
+import {
+  buildRobinRecoverySendExecutor,
+  buildRobinRecoverySendRetryExecutor,
+} from "./robin-recovery-executor.js";
 import { resolveOrgWhatsAppSendCreds } from "../lib/whatsapp-send-creds.js";
 import type { PlatformIngress, SubmitWorkResponse } from "@switchboard/core/platform";
 import type { ChildWorkRequest } from "@switchboard/core/platform";
@@ -26,6 +29,8 @@ import type { ReminderSendSubmitInput } from "../services/workflows/reminder-sen
 import {
   buildRecoveryCampaignSubmitRequest,
   type RecoveryCampaignSubmitInput,
+  buildRecoveryRetrySubmitRequest,
+  type RecoveryRetrySubmitInput,
 } from "../services/workflows/robin-recovery-request.js";
 import {
   buildRecommendationHandoffSubmitRequest,
@@ -82,6 +87,14 @@ export interface ContainedWorkflowBootstrapResult {
   submitRecoveryCampaign: (
     input: RecoveryCampaignSubmitInput,
   ) => Promise<SubmitWorkResponse | null>;
+  /**
+   * Top-level submit closure for the Robin bounded-retry cron (A5b). Each per-row
+   * retry submits through PlatformIngress with the seeded system principal; consent,
+   * template, and rebooked state are re-validated in the executor at retry time.
+   * The auto-execute guarantee is the seeded allow-only retry policy + platform-direct
+   * resolution (never parks, never requires human approval).
+   */
+  submitRecoveryRetry: (input: RecoveryRetrySubmitInput) => Promise<SubmitWorkResponse>;
   /**
    * Top-level submit closure for the Riley weekly-audit cron's agent handoff
    * (Contract 3). Builds the canonical request (or returns null when Riley abstains)
@@ -406,21 +419,39 @@ export async function bootstrapContainedWorkflows(
   const robinRecoveryBookingStore = new PrismaBookingStore(
     prismaClient as ConstructorParameters<typeof PrismaBookingStore>[0],
   );
+  // Shared send-context resolver for both the cohort executor and the retry executor.
+  // Looks up the contact's phone + consent + org name + template-approval overlay;
+  // reuses the thread's lastWhatsAppInboundAt (or null when no thread exists yet).
+  // Extracted here so the retry path does NOT duplicate this logic.
+  const getRecoverySendContext = async (orgId: string, contactId: string) => {
+    const prisma = prismaClient as import("@switchboard/db").PrismaClient;
+    const thread = await prisma.conversationThread.findUnique({
+      where: { contactId_organizationId: { contactId, organizationId: orgId } },
+      select: { lastWhatsAppInboundAt: true },
+    });
+    return buildWhatsAppSendContext(
+      prisma,
+      orgId,
+      contactId,
+      thread?.lastWhatsAppInboundAt ?? null,
+    );
+  };
+
   const robinRecoverySendExecutor = buildRobinRecoverySendExecutor({
     store: robinRecoverySendStore,
-    getSendContext: async (orgId, contactId) => {
-      const prisma = prismaClient as import("@switchboard/db").PrismaClient;
-      const thread = await prisma.conversationThread.findUnique({
-        where: { contactId_organizationId: { contactId, organizationId: orgId } },
-        select: { lastWhatsAppInboundAt: true },
-      });
-      return buildWhatsAppSendContext(
-        prisma,
-        orgId,
-        contactId,
-        thread?.lastWhatsAppInboundAt ?? null,
-      );
-    },
+    getSendContext: getRecoverySendContext,
+    resolveOrgSendCreds: resolveOrgWhatsAppSend,
+    findFutureBookingContactIds: (orgId, contactIds, now) =>
+      robinRecoveryBookingStore.findFutureBookingContactIds(orgId, contactIds, now),
+  });
+
+  // Single-recipient auto-executing retry executor. Re-validates consent + template + rebooked
+  // state at retry time. Uses the same store, creds, and send-context as the cohort executor.
+  // approvalPolicy on the workflowIntents entry is DECORATIVE; auto-execute is guaranteed by the
+  // seeded allow-only retry policy (Task 10) + platform-direct resolution (Task 8).
+  const robinRecoverySendRetryExecutor = buildRobinRecoverySendRetryExecutor({
+    store: robinRecoverySendStore,
+    getSendContext: getRecoverySendContext,
     resolveOrgSendCreds: resolveOrgWhatsAppSend,
     findFutureBookingContactIds: (orgId, contactIds, now) =>
       robinRecoveryBookingStore.findFutureBookingContactIds(orgId, contactIds, now),
@@ -477,6 +508,7 @@ export async function bootstrapContainedWorkflows(
     ["conversation.followup.send", followUpSendHandler],
     ["conversation.reminder.send", reminderSendHandler],
     [robinRecoverySendExecutor.intent, robinRecoverySendExecutor.handler],
+    [robinRecoverySendRetryExecutor.intent, robinRecoverySendRetryExecutor.handler],
   ]);
 
   modeRegistry.register(new WorkflowMode({ handlers, services }));
@@ -644,6 +676,19 @@ export async function bootstrapContainedWorkflows(
       approvalPolicy: "always",
       allowedTriggers: ["schedule"],
     },
+    {
+      // Robin bounded-retry single-recipient re-send (A5b). approvalPolicy here is DECORATIVE;
+      // the auto-execute guarantee is the seeded allow-only retry policy (Task 10) + the
+      // platform-direct resolver carve-out (Task 8). Consent, template approval, and rebooked
+      // state are re-validated in the executor at retry time -- a revoked/rebooked contact is
+      // skipped, not re-engaged. The */15 cron (inngest.ts) is the only submitter; not reachable
+      // from the public API. Non-financial (no outbound spend).
+      intent: robinRecoverySendRetryExecutor.intent,
+      workflowId: robinRecoverySendRetryExecutor.intent,
+      budgetClass: "cheap",
+      approvalPolicy: "none",
+      allowedTriggers: ["schedule"],
+    },
   ];
 
   for (const reg of workflowIntents) {
@@ -697,6 +742,7 @@ export async function bootstrapContainedWorkflows(
   ): Promise<SubmitWorkResponse | null> => {
     const req = buildRecoveryCampaignSubmitRequest(input);
     if (!req) return null;
+
     return platformIngress.submit(req);
   };
 
@@ -770,11 +816,19 @@ export async function bootstrapContainedWorkflows(
     return platformIngress.submit(buildMiraConceptDraftSubmitRequest(input, resolved));
   };
 
+  // Robin bounded-retry per-row submit closure (A5b). The */15 cron passes a single
+  // RobinRecoverySend row; buildRecoveryRetrySubmitRequest encodes the row fields as
+  // parameters for the retry executor. The platform-direct carve-out resolver (Task 8)
+  // routes this intent to platform-direct so it never throws deployment_not_found.
+  const submitRecoveryRetry = (input: RecoveryRetrySubmitInput): Promise<SubmitWorkResponse> =>
+    platformIngress.submit(buildRecoveryRetrySubmitRequest(input));
+
   return {
     instantFormAdapter,
     submitScheduledFollowUp,
     submitScheduledReminder,
     submitRecoveryCampaign,
+    submitRecoveryRetry,
     submitRecommendationHandoff,
     submitRileyPause,
     submitRileyBudget,

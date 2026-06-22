@@ -35,6 +35,7 @@ import {
   PrismaOperationalStateStore,
   PrismaFailedMessageRetentionStore,
   PrismaLeadIntakeStore,
+  PrismaRobinRecoverySendStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -138,7 +139,14 @@ import {
   createRobinRecoveryDispatchCron,
   type RobinRecoveryDispatchDeps,
 } from "../services/cron/robin-recovery-dispatch.js";
-import type { RecoveryCampaignSubmitInput } from "../services/workflows/robin-recovery-request.js";
+import {
+  createRobinRecoveryRetryDispatchCron,
+  type RobinRecoveryRetryDispatchDeps,
+} from "../services/cron/robin-recovery-retry-dispatch.js";
+import type {
+  RecoveryCampaignSubmitInput,
+  RecoveryRetrySubmitInput,
+} from "../services/workflows/robin-recovery-request.js";
 import type { ReminderSendSubmitInput } from "../services/workflows/reminder-send-request.js";
 import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
@@ -212,6 +220,13 @@ export interface RegisterInngestOptions {
   submitRecoveryCampaign?: (
     input: RecoveryCampaignSubmitInput,
   ) => Promise<SubmitWorkResponse | null>;
+  /**
+   * Top-level submit closure for the Robin bounded-retry cron (A5b). Built in
+   * bootstrapContainedWorkflows; each per-row retry submits through PlatformIngress with
+   * the seeded system principal. Consent + template + rebooked are re-validated in-executor.
+   * Absent in test/degraded boot when the contained-workflow bootstrap was skipped.
+   */
+  submitRecoveryRetry?: (input: RecoveryRetrySubmitInput) => Promise<SubmitWorkResponse>;
   /**
    * Top-level submit closure for the Riley weekly-audit cron's agent handoff
    * (Contract 3). Built in bootstrapContainedWorkflows and threaded here so the cron
@@ -1018,6 +1033,21 @@ export async function registerInngest(
     },
   };
 
+  // Robin bounded-retry cron dependencies (A5b). The store is used only by the
+  // retry cron (findDue); the cohort executor uses the store instance built inside
+  // bootstrapContainedWorkflows. Both are backed by the same Prisma client.
+  const robinRecoverySendStore = new PrismaRobinRecoverySendStore(app.prisma!);
+  const robinRecoveryRetryDispatchDeps: RobinRecoveryRetryDispatchDeps = {
+    failure: asyncFailure,
+    findDueRetries: (now, limit) => robinRecoverySendStore.findDue(now, limit),
+    submitRecoveryRetry: (input) => {
+      if (!options.submitRecoveryRetry) {
+        throw new Error("submitRecoveryRetry not wired");
+      }
+      return options.submitRecoveryRetry(input);
+    },
+  };
+
   // PCD Registry backfill cron dependencies
   const productIdentityStore = new PrismaProductIdentityStore(app.prisma);
 
@@ -1459,6 +1489,7 @@ export async function registerInngest(
       createScheduledFollowUpDispatchCron(scheduledFollowUpDispatchDeps),
       createAppointmentReminderDispatchCron(appointmentReminderDispatchDeps),
       createRobinRecoveryDispatchCron(robinRecoveryDispatchDeps),
+      createRobinRecoveryRetryDispatchCron(robinRecoveryRetryDispatchDeps),
       createPcdRegistryBackfillCron(pcdRegistryBackfillDeps),
       createLifecycleStalledSweepCron({
         failure: asyncFailure,
