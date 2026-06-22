@@ -107,6 +107,7 @@ export type RileyDecisionInputCase = Pick<
   | "hybrid"
   | "approvalHistory"
   | "outcomeHistory"
+  | "paidValueGate"
 >;
 
 export interface RileyRawDecision {
@@ -193,6 +194,9 @@ export function decideRawForCase(
     ...(targetSource ? { targetSource } : {}),
     ...(confidenceModifierByKind ? { confidenceModifierByKind } : {}),
     ...(outcomeMultiplierByKind ? { outcomeMultiplierByKind } : {}),
+    // A12: forward the count-vs-value gate exactly as the live audit-runner does (built only when
+    // the paid-value provider is wired). Absent ⇒ no gate (existing fixtures are byte-unchanged).
+    ...(c.paidValueGate ? { paidValueGate: c.paidValueGate } : {}),
   });
 
   return {
