@@ -12,7 +12,7 @@ const css = readFileSync(
 );
 const decl = css.match(/\.activityPage\b[\s\S]*?--ink-3:\s*([^;]+);/);
 
-describe("/activity ink-3 — canonical ramp primitive, no bare hex", () => {
+describe("/activity ink-3 - canonical ramp primitive, no bare hex", () => {
   it("declares --ink-3 in the .activityPage scope", () => {
     expect(decl, "--ink-3 must be declared on .activityPage").not.toBeNull();
   });

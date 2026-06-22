@@ -12,7 +12,7 @@ const source = readFileSync(
 );
 const mapMatch = source.match(/const iconColorMap = \{([\s\S]*?)\};/);
 
-describe("activity-item icon colors — editorial register tokens only", () => {
+describe("activity-item icon colors - editorial register tokens only", () => {
   it("defines the iconColorMap literal", () => {
     expect(mapMatch, "iconColorMap literal must exist").not.toBeNull();
   });
