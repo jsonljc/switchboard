@@ -64,6 +64,7 @@ function buildConfig(overrides: {
   alerter?: OperatorAlerter;
   auditLedger?: AuditLedger;
   delayFn?: (ms: number) => Promise<void>;
+  onWorkUnitComplete?: (info: { organizationId: string; workUnitId: string }) => void;
 }): PlatformIngressConfig {
   const intentRegistry = new IntentRegistry();
   intentRegistry.register(testRegistration as never);
@@ -87,6 +88,7 @@ function buildConfig(overrides: {
     operatorAlerter: overrides.alerter,
     auditLedger: overrides.auditLedger,
     delayFn: overrides.delayFn,
+    onWorkUnitComplete: overrides.onWorkUnitComplete,
   };
 }
 
@@ -206,5 +208,44 @@ describe("PlatformIngress execution-path exception", () => {
 
     // The rejection must be the ORIGINAL handler error, not "trace store down".
     await expect(ingress.submit(baseRequest)).rejects.toBe(boom);
+  });
+});
+
+describe("PlatformIngress onWorkUnitComplete on the failed-execution throw path", () => {
+  it("fires onWorkUnitComplete exactly once on the failed-execution throw path AND still rethrows the original error", async () => {
+    const boom = new Error("handler boom");
+    const onWorkUnitComplete = vi.fn();
+    const traceStore = makeTraceStore();
+    const ingress = new PlatformIngress(
+      buildConfig({ mode: makeThrowingMode(boom), traceStore, onWorkUnitComplete }),
+    );
+
+    await expect(ingress.submit(baseRequest)).rejects.toBe(boom); // contract unchanged: original error rethrows
+
+    expect(onWorkUnitComplete).toHaveBeenCalledTimes(1); // RED before fix: 0 (catch path did not fire)
+    expect(onWorkUnitComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org_1", workUnitId: expect.any(String) }),
+    );
+  });
+
+  it("a throwing onWorkUnitComplete on the failed-execution path is swallowed; the original execution error still surfaces", async () => {
+    const boom = new Error("handler boom");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const onWorkUnitComplete = vi.fn(() => {
+      throw new Error("hook boom");
+    });
+    const traceStore = makeTraceStore();
+    const ingress = new PlatformIngress(
+      buildConfig({ mode: makeThrowingMode(boom), traceStore, onWorkUnitComplete }),
+    );
+
+    // The hook throws, but fireWorkUnitComplete swallows it; the ORIGINAL boom (not "hook boom") rethrows.
+    await expect(ingress.submit(baseRequest)).rejects.toBe(boom);
+    expect(onWorkUnitComplete).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[PlatformIngress] onWorkUnitComplete hook threw",
+      expect.anything(),
+    );
+    warnSpy.mockRestore();
   });
 });
