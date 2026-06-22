@@ -125,6 +125,7 @@ describe("PrismaDeploymentMemoryStore", () => {
         where: expect.objectContaining({
           confidence: { gte: 0.66 },
           sourceCount: { gte: 3 },
+          invalidatedAt: null,
         }),
       }),
     );
@@ -181,7 +182,7 @@ describe("PrismaDeploymentMemoryStore", () => {
     (prisma.deploymentMemory.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     await store.listByDeployment("org-1", "dep-1");
     expect(prisma.deploymentMemory.findMany).toHaveBeenCalledWith({
-      where: { organizationId: "org-1", deploymentId: "dep-1" },
+      where: { organizationId: "org-1", deploymentId: "dep-1", invalidatedAt: null },
       orderBy: { confidence: "desc" },
     });
   });
@@ -190,7 +191,12 @@ describe("PrismaDeploymentMemoryStore", () => {
     (prisma.deploymentMemory.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     await store.findByCategory("org-1", "dep-1", "preference");
     expect(prisma.deploymentMemory.findMany).toHaveBeenCalledWith({
-      where: { organizationId: "org-1", deploymentId: "dep-1", category: "preference" },
+      where: {
+        organizationId: "org-1",
+        deploymentId: "dep-1",
+        category: "preference",
+        invalidatedAt: null,
+      },
     });
   });
 
@@ -217,7 +223,7 @@ describe("PrismaDeploymentMemoryStore", () => {
     const result = await store.countByDeployment("org-1", "dep-1");
     expect(result).toBe(7);
     expect(prisma.deploymentMemory.count).toHaveBeenCalledWith({
-      where: { organizationId: "org-1", deploymentId: "dep-1" },
+      where: { organizationId: "org-1", deploymentId: "dep-1", invalidatedAt: null },
     });
   });
 
@@ -231,7 +237,7 @@ describe("PrismaDeploymentMemoryStore", () => {
 
     expect(result).toEqual({ id: "mem-stale", confidence: 0.31 });
     expect(prisma.deploymentMemory.findFirst).toHaveBeenCalledWith({
-      where: { organizationId: "org-1", deploymentId: "dep-1" },
+      where: { organizationId: "org-1", deploymentId: "dep-1", invalidatedAt: null },
       orderBy: [{ confidence: "asc" }, { lastSeenAt: "asc" }],
       select: { id: true, confidence: true },
     });
@@ -265,6 +271,7 @@ describe("PrismaDeploymentMemoryStore", () => {
         deploymentId: "dep-1",
         category: "pattern",
         canonicalKey: "objection:downtime_work",
+        invalidatedAt: null,
       },
     });
     expect(rows).toHaveLength(1);
@@ -297,38 +304,42 @@ describe("PrismaDeploymentMemoryStore", () => {
     });
   });
 
-  it("decayStale updates only rows not yet decayed today AND stale by lastSeenAt", async () => {
-    const startOfDay = new Date("2026-05-14T00:00:00Z");
-    const cutoff = new Date("2026-04-14T07:00:00Z");
-    (prisma.deploymentMemory.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
-      count: 3,
+  it("decays above-floor stale rows and invalidates at-floor stale rows (2-pass)", async () => {
+    const prisma = createMockPrisma();
+    prisma.deploymentMemory.updateMany
+      .mockResolvedValueOnce({ count: 4 }) // pass 1: decrement
+      .mockResolvedValueOnce({ count: 2 }); // pass 2: invalidate
+    const store = new PrismaDeploymentMemoryStore(prisma as never);
+    const cutoffDate = new Date("2026-01-01");
+    const startOfDay = new Date("2026-06-22");
+    const count = await store.decayStale({ cutoffDate, decayAmount: 0.1, floor: 0.3, startOfDay });
+    expect(count).toBe(4); // returns the DECREMENTED count (metric meaning preserved)
+    expect(prisma.deploymentMemory.updateMany).toHaveBeenCalledTimes(2);
+    // Pin the FULL where on BOTH passes (toEqual, not toMatchObject) — the
+    // staleness predicate lastSeenAt:{lt:cutoffDate} is safety-critical on pass 2
+    // (it is the ONLY thing scoping decay; omitting it would invalidate
+    // recently-seen low-confidence rows). This assertion is the RED guard.
+    const pass1 = prisma.deploymentMemory.updateMany.mock.calls[0]![0]!;
+    expect(pass1.where).toEqual({
+      lastSeenAt: { lt: cutoffDate },
+      confidence: { gt: 0.3 },
+      invalidatedAt: null,
+      OR: [{ lastDecayedAt: null }, { lastDecayedAt: { lt: startOfDay } }],
     });
-
-    const result = await store.decayStale({
-      cutoffDate: cutoff,
-      decayAmount: 0.1,
-      floor: 0.3,
-      startOfDay,
+    expect(pass1.data.confidence).toEqual({ decrement: 0.1 });
+    const pass2 = prisma.deploymentMemory.updateMany.mock.calls[1]![0]!;
+    expect(pass2.where).toEqual({
+      lastSeenAt: { lt: cutoffDate },
+      confidence: { lte: 0.3 },
+      invalidatedAt: null,
     });
-
-    expect(result).toBe(3);
-    expect(prisma.deploymentMemory.updateMany).toHaveBeenCalledWith({
-      where: {
-        lastSeenAt: { lt: cutoff },
-        confidence: { gt: 0.3 },
-        OR: [{ lastDecayedAt: null }, { lastDecayedAt: { lt: startOfDay } }],
-      },
-      data: {
-        confidence: { decrement: 0.1 },
-        lastDecayedAt: expect.any(Date),
-      },
-    });
+    expect(pass2.data).toEqual({ invalidatedAt: expect.any(Date), validTo: expect.any(Date) });
   });
 
   it("decayStale floor: rows already at floor are not decremented further", async () => {
-    (prisma.deploymentMemory.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
-      count: 0,
-    });
+    (prisma.deploymentMemory.updateMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ count: 0 }) // pass 1: none decremented
+      .mockResolvedValueOnce({ count: 0 }); // pass 2: none invalidated
     const result = await store.decayStale({
       cutoffDate: new Date(),
       decayAmount: 0.1,
@@ -336,5 +347,24 @@ describe("PrismaDeploymentMemoryStore", () => {
       startOfDay: new Date(),
     });
     expect(result).toBe(0);
+  });
+
+  describe("invalidate", () => {
+    it("soft-removes by setting invalidatedAt + validTo, scoped to live rows", async () => {
+      const prisma = createMockPrisma();
+      prisma.deploymentMemory.updateMany.mockResolvedValue({ count: 1 });
+      const store = new PrismaDeploymentMemoryStore(prisma as never);
+      await store.invalidate("org-1", "mem-1");
+      const arg = prisma.deploymentMemory.updateMany.mock.calls[0]![0]!;
+      expect(arg.where).toEqual({ id: "mem-1", organizationId: "org-1", invalidatedAt: null });
+      expect(arg.data.invalidatedAt).toBeInstanceOf(Date);
+      expect(arg.data.validTo).toBeInstanceOf(Date);
+    });
+    it("throws StaleVersionError when the row is already gone/invalidated", async () => {
+      const prisma = createMockPrisma();
+      prisma.deploymentMemory.updateMany.mockResolvedValue({ count: 0 });
+      const store = new PrismaDeploymentMemoryStore(prisma as never);
+      await expect(store.invalidate("org-1", "mem-1")).rejects.toBeInstanceOf(StaleVersionError);
+    });
   });
 });

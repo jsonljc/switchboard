@@ -77,6 +77,13 @@ export interface CompoundingDeploymentMemoryStore {
     deploymentId: string,
   ): Promise<{ id: string; confidence: number } | null>;
   delete(organizationId: string, id: string): Promise<void>;
+  /**
+   * Soft-remove (invalidate) a memory: set invalidatedAt + validTo, never
+   * physically delete, so an evicted/decayed row frees a cap slot while its
+   * history + provenance survive. Throws StaleVersionError when already gone
+   * (drop-in for the eviction path's existing delete() error handling).
+   */
+  invalidate(organizationId: string, id: string): Promise<void>;
 }
 
 export interface DeploymentMemoryEvidenceStore {
