@@ -831,6 +831,11 @@ export async function buildServer() {
         input: import("./services/workflows/robin-recovery-request.js").RecoveryCampaignSubmitInput,
       ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse | null>)
     | undefined;
+  let submitRecoveryRetry:
+    | ((
+        input: import("./services/workflows/robin-recovery-request.js").RecoveryRetrySubmitInput,
+      ) => Promise<import("@switchboard/core/platform").SubmitWorkResponse>)
+    | undefined;
   let submitRecommendationHandoff:
     | ((
         input: import("./services/workflows/recommendation-handoff-request.js").RecommendationHandoffSubmitInput,
@@ -884,6 +889,7 @@ export async function buildServer() {
     submitScheduledFollowUp = result.submitScheduledFollowUp;
     submitScheduledReminder = result.submitScheduledReminder;
     submitRecoveryCampaign = result.submitRecoveryCampaign;
+    submitRecoveryRetry = result.submitRecoveryRetry;
     submitRecommendationHandoff = result.submitRecommendationHandoff;
     submitRileyPause = result.submitRileyPause;
     submitRileyBudget = result.submitRileyBudget;
@@ -1206,6 +1212,7 @@ export async function buildServer() {
     submitScheduledFollowUp,
     submitScheduledReminder,
     submitRecoveryCampaign,
+    submitRecoveryRetry,
     submitRecommendationHandoff,
     submitRileyPause,
     submitRileyBudget,

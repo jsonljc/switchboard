@@ -66,6 +66,11 @@ export interface SwitchboardMetrics {
    *  are recorded only as the work outcome's skipReason, never on this counter.
    *  Labeled by intent + reason. */
   whatsappProactiveSendSkipped: Counter;
+  /** A Robin no-show recovery send EXHAUSTED its bounded retries (or hit a terminal config gap at
+   *  retry) and dead-lettered (status=failed, nextRetryAt cleared). The never-silent per-recipient
+   *  terminal-failure signal; a sustained rate (or the high-ratio cron alert) is a send-path outage.
+   *  Labeled by intent + reason (max_retries_exhausted | config_missing | context_resolve_failed). */
+  robinRecoverySendFailed: Counter;
   /** Per-LLM-call prompt-cache effectiveness, labeled by model + outcome:
    *  hit (cache_read>0), populate (read=0, creation>0 — benign first-touch of a
    *  prefix), miss (read=0 AND creation=0 — a cacheable static prefix that neither
@@ -158,6 +163,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     skillLlmCostUsdTotal: new InMemoryCounter(),
     governanceVerdictsRecorded: new InMemoryCounter(),
     whatsappProactiveSendSkipped: new InMemoryCounter(),
+    robinRecoverySendFailed: new InMemoryCounter(),
     llmCacheCallsTotal: new InMemoryCounter(),
     skillContextFillRatio: new InMemoryHistogram(),
   };

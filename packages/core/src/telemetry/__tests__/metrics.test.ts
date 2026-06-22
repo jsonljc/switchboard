@@ -120,6 +120,12 @@ describe("whatsappProactiveSendSkipped", () => {
   });
 });
 
+describe("robinRecoverySendFailed", () => {
+  it("createInMemoryMetrics exposes robinRecoverySendFailed", () => {
+    expect(typeof createInMemoryMetrics().robinRecoverySendFailed.inc).toBe("function");
+  });
+});
+
 describe("recordLlmCacheEffectiveness", () => {
   it("classifies a cache read as a hit and records {model, outcome:hit} with no warn", () => {
     const m = createInMemoryMetrics();

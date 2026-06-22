@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   buildRobinRecoveryAllowPolicyInput,
   buildRobinRecoveryApprovalPolicyInput,
+  buildRobinRecoveryRetryAllowPolicyInput,
   seedRobinRecoveryPolicies,
 } from "../robin-recovery-governance.js";
 
@@ -24,9 +25,19 @@ describe("robin recovery governance policies", () => {
     expect(p.rule.conditions[0]!.value).toBe("^robin\\.recovery_campaign\\.send$");
   });
 
-  it("seeds BOTH policies (never one without the other)", async () => {
+  it("retry allow policy is allow-only, anchored to the retry intent", () => {
+    const p = buildRobinRecoveryRetryAllowPolicyInput("o1");
+    expect(p.effect).toBe("allow");
+    expect(p.organizationId).toBe("o1");
+    expect(p.rule.conditions[0]!.value).toBe("^robin\\.recovery_send\\.retry$");
+    // The retry auto-executes: it carries NO approval partner (unlike the cohort campaign).
+    expect("approvalRequirement" in p).toBe(false);
+  });
+
+  it("seedRobinRecoveryPolicies upserts THREE policies", async () => {
     const upsert = vi.fn().mockResolvedValue({});
     await seedRobinRecoveryPolicies({ policy: { upsert } } as never, "org_1");
-    expect(upsert).toHaveBeenCalledTimes(2);
+    // cohort-allow + cohort-approval + retry-allow.
+    expect(upsert).toHaveBeenCalledTimes(3);
   });
 });

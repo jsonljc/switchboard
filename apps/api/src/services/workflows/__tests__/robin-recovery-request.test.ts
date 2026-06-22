@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   buildRecoveryCampaignSubmitRequest,
+  buildRecoveryRetrySubmitRequest,
   ROBIN_RECOVERY_SEND_INTENT,
 } from "../robin-recovery-request.js";
+import { RobinRecoveryRetryParamsSchema } from "@switchboard/schemas";
 
 // Date-based candidate (the read/filter output shape), NOT the ISO payload shape.
 const candidate = {
@@ -47,6 +49,22 @@ describe("buildRecoveryCampaignSubmitRequest", () => {
     expect(params.candidates[0]!.startsAt).toBe("2026-06-03T09:00:00.000Z"); // serialized to ISO
     // Keyed by the ISO-week of asOf (not the scan window), so re-runs within a week dedup.
     expect(req!.idempotencyKey).toBe("mutate:robin:org_1:2026-06-15:recovery");
+  });
+
+  it("buildRecoveryRetrySubmitRequest uses the seeded system principal + per-row idempotency key + a schema-valid params payload", () => {
+    const req = buildRecoveryRetrySubmitRequest({
+      organizationId: "o1",
+      rowId: "r1",
+      contactId: "c1",
+      bookingId: "b1",
+      campaignKind: "no_show",
+      attempts: 1,
+    });
+    expect(req.actor).toEqual({ id: "system", type: "system" });
+    expect(req.intent).toBe("robin.recovery_send.retry");
+    expect(req.trigger).toBe("schedule");
+    expect(req.idempotencyKey).toBe("mutate:robin:o1:retry:r1:1");
+    expect(RobinRecoveryRetryParamsSchema.safeParse(req.parameters).success).toBe(true);
   });
 
   it("buckets the idempotency key by ISO-week+org (same week same key; next week new key)", () => {
