@@ -15,9 +15,11 @@ describe("shared funnel responsive grid", () => {
     // The desktop breakpoint exists.
     expect(css).toMatch(/@media\s*\(min-width:\s*1024px\)/);
 
-    // Within it, .funnelRows becomes a 2-column grid.
+    // Within the SAME media block, .funnelRows becomes a 2-column grid.
+    // `\s*` after the media `{` and `[^}]*` inside the .funnelRows body keep the
+    // match scoped to one block, so an un-nested rule elsewhere cannot satisfy it.
     expect(css).toMatch(
-      /@media\s*\(min-width:\s*1024px\)\s*\{[\s\S]*\.funnelRows\s*\{[\s\S]*grid-template-columns:\s*1fr\s+1fr/,
+      /@media\s*\(min-width:\s*1024px\)\s*\{\s*\.funnelRows\s*\{[^}]*grid-template-columns:\s*1fr\s+1fr/,
     );
   });
 });
