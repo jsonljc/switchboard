@@ -341,3 +341,74 @@ describe("buildWorkUnitSpanExportHook — fire-and-forget, error-swallowing hook
     expect(typeof _depsFromRealStores).toBe("function");
   });
 });
+
+describe("exportWorkUnitSpans — root-only span for non-executing legs (deny/approval/gov-error)", () => {
+  const OLD = process.env["OTEL_EXPORTER_OTLP_ENDPOINT"];
+  let originalTracer: Tracer;
+  beforeEach(() => {
+    originalTracer = getTracer();
+  });
+  afterEach(() => {
+    if (OLD === undefined) delete process.env["OTEL_EXPORTER_OTLP_ENDPOINT"];
+    else process.env["OTEL_EXPORTER_OTLP_ENDPOINT"] = OLD;
+    setTracer(originalTracer);
+  });
+
+  it("renders exactly one root span (no exec/tool children) from the WorkTrace when there are zero execution rows", async () => {
+    process.env["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4318";
+    const tracer = new RecordingTracer();
+    setTracer(tracer);
+    const findByWorkUnitId = vi.fn(async () => []); // deny/approval/gov-error: WorkTrace but 0 exec rows
+    const getByWorkUnitId = vi.fn(async () => ({
+      trace: {
+        organizationId: "org_1",
+        intent: "book_appt",
+        governanceOutcome: "deny",
+        outcome: "denied",
+        riskScore: 0.9,
+        durationMs: 12,
+      },
+    }));
+    await exportWorkUnitSpans(
+      { executionTraceStore: { findByWorkUnitId }, workTraceStore: { getByWorkUnitId } },
+      "org_1",
+      "wu_1",
+    );
+    const roots = tracer.spans.filter((s) => s.parentId === null);
+    expect(roots).toHaveLength(1); // RED before fix: 0 (early-return on zero traces)
+    expect(tracer.spans).toHaveLength(1); // root only — no exec/tool spans
+    expect(roots[0]!.attributes["switchboard.governance.outcome"]).toBe("deny");
+    expect(roots[0]!.attributes["switchboard.intent"]).toBe("book_appt");
+    expect(roots[0]!.attributes["switchboard.work_unit.id"]).toBe("wu_1");
+  });
+
+  it("is a no-op when there are zero execution rows AND no WorkTrace (store returns null)", async () => {
+    process.env["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4318";
+    const tracer = new RecordingTracer();
+    setTracer(tracer);
+    const findByWorkUnitId = vi.fn(async () => []);
+    const getByWorkUnitId = vi.fn(async () => null);
+    await exportWorkUnitSpans(
+      { executionTraceStore: { findByWorkUnitId }, workTraceStore: { getByWorkUnitId } },
+      "org_1",
+      "wu_1",
+    );
+    expect(tracer.spans).toHaveLength(0);
+  });
+
+  it("is a no-op when zero execution rows + a cross-tenant WorkTrace (no bare root, no leak)", async () => {
+    process.env["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4318";
+    const tracer = new RecordingTracer();
+    setTracer(tracer);
+    const findByWorkUnitId = vi.fn(async () => []);
+    const getByWorkUnitId = vi.fn(async () => ({
+      trace: { organizationId: "OTHER_ORG", intent: "leak" },
+    }));
+    await exportWorkUnitSpans(
+      { executionTraceStore: { findByWorkUnitId }, workTraceStore: { getByWorkUnitId } },
+      "org_1",
+      "wu_1",
+    );
+    expect(tracer.spans).toHaveLength(0); // tenant guard -> nothing rendered for this org
+  });
+});
