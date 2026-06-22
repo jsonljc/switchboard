@@ -133,8 +133,9 @@ function buildHarness(opts?: { carveOut?: boolean; store?: MemoryWriteStore }) {
   const intentRegistry = new IntentRegistry();
   const modeRegistry = new ExecutionModeRegistry();
   bootstrapOperatorIntents({ intentRegistry, modeRegistry, memoryWriteStore: store });
-  // no entitlementResolver: org-level entitlement is S8c caller-wiring, not S8b's gate (omitting it
-  // is load-bearing -- an entitlementResolver here would short-circuit before the auto-approve path).
+  // no entitlementResolver: this harness isolates the governance gate. Entitlement is an orthogonal
+  // org-level check (in prod it runs before the gate on every submit and returns entitled for an
+  // active org); omitting it here keeps the test focused on the auto-approve short-circuit.
   const ingress = new PlatformIngress({
     intentRegistry,
     modeRegistry,
