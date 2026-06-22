@@ -138,3 +138,19 @@ describe("deployment-memory routes — cross-tenant authorization (A1)", () => {
     expect(prisma.knowledgeChunk.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe("deployment-memory provenance — owner corrections tag source=operator (S8a follow-up)", () => {
+  it("passes source=operator to the store on a same-org correction", async () => {
+    const prisma = buildMockPrisma();
+    const app = await buildApp({ prisma, organizationId: "org_a" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/marketplace/org_a/deployments/dep-1/memory",
+      payload: { content: "Closed on Sundays", category: "fact" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.deploymentMemory.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ source: "operator" }) }),
+    );
+  });
+});
