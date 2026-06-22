@@ -134,6 +134,14 @@ describe("<TeamBand>", () => {
     expect(document.querySelectorAll('[data-featured="true"]')).toHaveLength(0);
   });
 
+  it("frames the poster with decorative riso registration crop-marks", () => {
+    render(<TeamBand agents={AGENTS} />);
+    const marks = screen.getByTestId("poster-registration");
+    expect(marks).toBeInTheDocument();
+    // Decorative print-reference chrome: hidden from assistive tech.
+    expect(marks.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("renders the portraits in fluid hero mode", () => {
     const { container } = render(<TeamBand agents={AGENTS} />);
     const heroAvatars = container.querySelectorAll('[data-hero="true"][data-size="fill"]');

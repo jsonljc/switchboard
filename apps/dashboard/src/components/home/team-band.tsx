@@ -64,6 +64,13 @@ export function TeamBand({ agents, onOpenAgent }: TeamBandProps) {
     <section className={styles.band} aria-label="Your team">
       <h2 className={styles.heading}>Your team</h2>
       <div className={styles.poster} data-testid="team-poster">
+        {/* Riso/print registration crop-marks: decorative corner ticks that
+            frame the poster like a printed plate. Static, identity-only. */}
+        <span
+          className={styles.registration}
+          aria-hidden="true"
+          data-testid="poster-registration"
+        />
         <div className={styles.grid} role="list">
           {agents.map((agent) => {
             const { key, name, setUp, halted } = agent;
