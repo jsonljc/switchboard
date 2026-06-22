@@ -7,6 +7,7 @@ import type {
   AdsClientInterface,
   AuditConfig,
   BookedValueByCampaignProvider,
+  PaidValueByCampaignProvider,
 } from "./audit-runner.js";
 import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/schemas";
 import type { SignalHealthReport, SignalHealthReportProvider } from "./signal-health-checker.js";
@@ -91,6 +92,13 @@ export interface CronDependencies {
    * PrismaConversionRecordStore. Absent ⇒ trueROAS reported null (graceful).
    */
   bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
+  /**
+   * A12 (count-vs-value gate). Optional. Per-campaign VERIFIED-PAID (cents) provider so the weekly
+   * audit gates the `scale` -> reallocate money-move on proven paid value. The same store singleton
+   * as bookedValueByCampaignProvider (keyed on orgId). Wired in apps/api/src/bootstrap/inngest.ts.
+   * Absent ⇒ no gate (back-compat).
+   */
+  paidValueByCampaignProvider?: PaidValueByCampaignProvider;
   /** D7-2: per-org operator approve/reject counts by action kind; resolveLearnedModifiers turns it
    * into a bounded, abstaining confidence modifier (wired in apps/api). Absent ⇒ no modifier. */
   approvalRateProvider?: (
@@ -306,6 +314,10 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
           ...(coverageValidator ? { coverageValidator } : {}),
           ...(deps.bookedValueByCampaignProvider
             ? { bookedValueByCampaignProvider: deps.bookedValueByCampaignProvider }
+            : {}),
+          // A12: forward the paid-value provider so the weekly audit gates scale on proven paid value.
+          ...(deps.paidValueByCampaignProvider
+            ? { paidValueByCampaignProvider: deps.paidValueByCampaignProvider }
             : {}),
           ...(deps.recommendationEmitter
             ? {

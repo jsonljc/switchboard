@@ -552,6 +552,12 @@ export async function registerInngest(
     createSignalHealthChecker,
     recommendationEmitter: rileyRecommendationEmitter,
     bookedValueByCampaignProvider: bookedValueByCampaignStore,
+    // A12 (count-vs-value gate): the SAME store instance implements the paid sibling
+    // (queryPaidValueCentsByCampaign over type="purchased"). Wiring it makes the floor LIVE: a
+    // `scale` -> reallocate money-move only flows for a campaign with finite positive verified-paid
+    // value, else it is held as a `scale_unproven_paid_value` watch. A prerequisite for flipping
+    // RILEY_REALLOCATE_SELF_EXECUTION_ENABLED (see docs/runbooks/riley-reallocation-go-live.md).
+    paidValueByCampaignProvider: bookedValueByCampaignStore,
     // D7-2 (Riley's first learning wire): feed the per-org operator approval-rate
     // aggregate into the weekly audit so the per-campaign recommendation engine applies a
     // bounded, abstaining per-kind confidence modifier (v1 scopes it to that path; the
