@@ -492,6 +492,11 @@ export class PlatformIngress {
         workUnit,
         retryable: false,
       });
+      // E4c follow-up: fire the work-unit-complete hook on the failed-execution path too. The trace
+      // is already sealed above (finalizeTrace/persistTrace), so a downstream exporter reads a
+      // complete (failed) trace. Best-effort + swallowing (fireWorkUnitComplete try/catch); the
+      // original executionErr still rethrows below, so submit's error contract is unchanged.
+      this.fireWorkUnitComplete(workUnit);
       throw executionErr;
     }
     const completedAt = new Date().toISOString();
