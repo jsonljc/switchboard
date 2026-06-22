@@ -126,6 +126,16 @@ describe("robinRecoverySendFailed", () => {
   });
 });
 
+describe("rileyReallocationCapEvaluated", () => {
+  it("createInMemoryMetrics exposes rileyReallocationCapEvaluated and accepts {orgId, outcome}", () => {
+    const m = createInMemoryMetrics();
+    expect(typeof m.rileyReallocationCapEvaluated.inc).toBe("function");
+    expect(() =>
+      m.rileyReallocationCapEvaluated.inc({ orgId: "org_1", outcome: "within_cap" }),
+    ).not.toThrow();
+  });
+});
+
 describe("recordLlmCacheEffectiveness", () => {
   it("classifies a cache read as a hit and records {model, outcome:hit} with no warn", () => {
     const m = createInMemoryMetrics();

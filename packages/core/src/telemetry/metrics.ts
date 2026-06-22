@@ -71,6 +71,15 @@ export interface SwitchboardMetrics {
    *  terminal-failure signal; a sustained rate (or the high-ratio cron alert) is a send-path outage.
    *  Labeled by intent + reason (max_retries_exhausted | config_missing | context_resolve_failed). */
   robinRecoverySendFailed: Counter;
+  /** Riley reallocate pre-write blast-radius cap evaluation OUTCOME, emitted once per
+   *  `assertWithinBlastRadius` call in the reallocate executor (the ONLY active blast-radius
+   *  protection). outcome in {within_cap, delta_cap, share_cap} mirrors the verdict union;
+   *  share_cap also covers an unsizable/non-finite account spend (fails closed). Detective
+   *  control (A6/D3): makes the cap accept-vs-refuse rate observable. Reachability EQUALS the
+   *  reallocate executor's: it fires only when the executor runs, gated behind
+   *  RILEY_REALLOCATE_SELF_EXECUTION_ENABLED (default OFF). NOT a separate flag, NOT observable
+   *  while the executor is dark. Labeled by orgId + outcome. */
+  rileyReallocationCapEvaluated: Counter;
   /** Per-LLM-call prompt-cache effectiveness, labeled by model + outcome:
    *  hit (cache_read>0), populate (read=0, creation>0 — benign first-touch of a
    *  prefix), miss (read=0 AND creation=0 — a cacheable static prefix that neither
@@ -164,6 +173,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     governanceVerdictsRecorded: new InMemoryCounter(),
     whatsappProactiveSendSkipped: new InMemoryCounter(),
     robinRecoverySendFailed: new InMemoryCounter(),
+    rileyReallocationCapEvaluated: new InMemoryCounter(),
     llmCacheCallsTotal: new InMemoryCounter(),
     skillContextFillRatio: new InMemoryHistogram(),
   };
