@@ -75,10 +75,10 @@ export class PrismaRobinRecoverySendStore implements RobinRecoverySendStore {
   }
 
   async markFailed(id: string, error: string, nextRetryAt: Date | null): Promise<void> {
-    // route-governance: store-mutation-deferred. Single-row id-scoped update on our own freshly
-    // minted uuid; org-scoping tracked for #643 (the org-scoped leg is the contact read at dispatch).
     // When nextRetryAt is non-null: re-queue for a retry (status stays pending, attempt count increments).
     // When nextRetryAt is null: dead-letter the row (terminal failed, nextRetryAt cleared explicitly).
+    // route-governance: store-mutation-deferred. Single-row id-scoped update on our own freshly
+    // minted uuid; org-scoping tracked for #643 (the org-scoped leg is the contact read at dispatch).
     await this.prisma.robinRecoverySend.update({
       where: { id },
       data: nextRetryAt
