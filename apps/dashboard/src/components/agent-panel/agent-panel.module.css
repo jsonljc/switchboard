@@ -264,7 +264,9 @@
   position: relative;
 }
 
-/* Eyebrow: "since you hired Alex" or "this week" */
+/* Eyebrow doubles as the stat-zone header: a full-width labeled rule that
+   defines the hero as THE headline zone (PL-9), so the number never reads as a
+   lone figure floating in an empty card. */
 .heroEyebrow {
   font-family: var(--font-home-sans);
   font-size: 10px;
@@ -272,9 +274,11 @@
   text-transform: uppercase;
   color: var(--ink-3);
   margin: 0;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hair-soft);
 }
 
 /* Hero number row: big numeral + unit label */
@@ -487,7 +491,7 @@
 */
 
 .decisionSection {
-  padding: 18px 20px 4px;
+  padding: 12px 20px 4px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -528,7 +532,8 @@
   border: 1px solid var(--hair-soft);
   border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: var(--shadow-card);
+  /* Flattened (no shadow): the elevated hero card above is the one stat zone;
+     the activity cards recede into a denser supporting group (PL-9). */
 }
 
 /* Each decision row is a native button for a11y */
@@ -584,7 +589,8 @@
   height: 12px;
 }
 
-/* Empty / error state: serif line */
+/* Empty / error state: serif line. Flat (no shadow) to match the flattened
+   populated list, so an empty slot never reads as more elevated than a full one. */
 .decisionEmptyLine {
   font-family: var(--font-home-serif);
   font-variation-settings: "opsz" 18;
@@ -594,7 +600,6 @@
   background: var(--surface);
   border: 1px solid var(--hair-soft);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
   margin: 0;
 }
 
@@ -625,7 +630,7 @@
 
 /* Section wrapper — same rhythm as .decisionSection */
 .logSection {
-  padding: 18px 20px 12px;
+  padding: 12px 20px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -655,7 +660,7 @@
   border: 1px solid var(--hair-soft);
   border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: var(--shadow-card);
+  /* Flattened to match the decision list (PL-9 supporting group). */
 }
 
 /* Each row: text + timestamp in a 2-column grid */
@@ -725,7 +730,7 @@
   border-radius: 2px;
 }
 
-/* Empty / error state: serif line (mirrors .decisionEmptyLine) */
+/* Empty / error state: serif line (mirrors .decisionEmptyLine); flat, no shadow. */
 .logEmptyLine {
   font-family: var(--font-home-serif);
   font-variation-settings: "opsz" 18;
@@ -735,7 +740,6 @@
   background: var(--surface);
   border: 1px solid var(--hair-soft);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
   margin: 0;
 }
 
