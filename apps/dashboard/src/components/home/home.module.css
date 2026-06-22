@@ -31,13 +31,15 @@
 .bentoRail { display: contents; }
 @media (min-width: 1024px) {
   .column {
-    max-width: 1080px; /* bound the page column (audit M4); margin:0 auto centers it */
+    /* Fill the shell content cell. The shell already bounds it (--app-frame 1280
+       minus the 216px nav rail + insets ~= 912px), so a column/main re-cap would
+       never bite; the bento below splits that cell into main + a quiet rail. */
+    max-width: none;
     padding: 32px 0 56px;
   }
   .bento {
     display: grid;
-    grid-template-columns: minmax(0, 720px) var(--home-rail, 320px);
-    justify-content: center;
+    grid-template-columns: minmax(0, 1fr) var(--home-rail, 320px);
     gap: 28px;
     align-items: start;
   }
@@ -84,6 +86,12 @@
   height: 1px;
   background: var(--hair-soft);
   max-width: 80px;
+}
+/* Folded into the verdictTop row the eyebrow shrink-wraps, so its trailing rule
+   would collapse to a sliver between the eyebrow and the salutation; drop it so
+   the two read as one clean line. */
+.verdictTop .eyebrow::after {
+  display: none;
 }
 .hello {
   font-family: var(--font-display-app);
