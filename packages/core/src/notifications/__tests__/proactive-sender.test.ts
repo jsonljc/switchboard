@@ -239,4 +239,106 @@ describe("ProactiveSender", () => {
       );
     });
   });
+
+  // ── Multi-tenant send (A15) ────────────────────────────────────────
+  // sendProactiveForOrg threads the SENDING org through the single notifier:
+  // (1) resolves that org's own WhatsApp send creds (per-field fallback to the
+  // global env creds), so tenant B's reply ships from tenant B's WABA number;
+  // (2) passes the org to the 24h-window gate so the gate reads the replying
+  // org's inbound, not the freshest cross-org row. The in-memory daily-rate-limit
+  // map is the SAME instance across both entry points (no fresh per-request sender).
+
+  describe("sendProactiveForOrg (multi-tenant)", () => {
+    it("sends WhatsApp from the resolved org's own phoneNumberId + token", async () => {
+      const sender = new ProactiveSender({
+        credentials: { whatsapp: { token: "global-tok", phoneNumberId: "global-pn" } },
+        resolveOrgSendCreds: async (org) =>
+          org === "orgB" ? { token: "B-tok", phoneNumberId: "B-pn" } : null,
+      });
+
+      await sender.sendProactiveForOrg("orgB", "+15551234567", "whatsapp", "from B");
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, options] = mockFetch.mock.calls[0]!;
+      expect(url).toBe("https://graph.facebook.com/v21.0/B-pn/messages");
+      expect(options.headers.Authorization).toBe("Bearer B-tok");
+    });
+
+    it("falls back per-field to the global creds when the org has no connection", async () => {
+      const sender = new ProactiveSender({
+        credentials: { whatsapp: { token: "global-tok", phoneNumberId: "global-pn" } },
+        resolveOrgSendCreds: async () => null,
+      });
+
+      await sender.sendProactiveForOrg("orgA", "+15551234567", "whatsapp", "pilot");
+
+      const [url, options] = mockFetch.mock.calls[0]!;
+      expect(url).toBe("https://graph.facebook.com/v21.0/global-pn/messages");
+      expect(options.headers.Authorization).toBe("Bearer global-tok");
+    });
+
+    it("falls back ONLY the missing field (org phoneNumberId, global token)", async () => {
+      const sender = new ProactiveSender({
+        credentials: { whatsapp: { token: "global-tok", phoneNumberId: "global-pn" } },
+        // Tech-provider model: org has its own number, token falls back to the global system-user token.
+        resolveOrgSendCreds: async () => ({ token: null, phoneNumberId: "B-pn" }),
+      });
+
+      await sender.sendProactiveForOrg("orgB", "+15551234567", "whatsapp", "mixed");
+
+      const [url, options] = mockFetch.mock.calls[0]!;
+      expect(url).toBe("https://graph.facebook.com/v21.0/B-pn/messages");
+      expect(options.headers.Authorization).toBe("Bearer global-tok");
+    });
+
+    it("passes the sending org to the 24h-window gate", async () => {
+      const isWithinWindow = vi.fn(async () => true);
+      const sender = new ProactiveSender({
+        credentials: { whatsapp: { token: "t", phoneNumberId: "pn" } },
+        isWithinWindow,
+        resolveOrgSendCreds: async () => null,
+      });
+
+      await sender.sendProactiveForOrg("orgB", "+15551234567", "whatsapp", "m");
+
+      expect(isWithinWindow).toHaveBeenCalledWith("+15551234567", "orgB");
+    });
+
+    it("throws WhatsAppWindowClosedError when the replying org's window is closed", async () => {
+      const sender = new ProactiveSender({
+        credentials: { whatsapp: { token: "t", phoneNumberId: "pn" } },
+        isWithinWindow: async (_chat, org) => org === "orgOpen",
+        resolveOrgSendCreds: async () => null,
+      });
+
+      await expect(
+        sender.sendProactiveForOrg("orgClosed", "+15551234567", "whatsapp", "m"),
+      ).rejects.toBeInstanceOf(WhatsAppWindowClosedError);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("shares ONE daily-rate-limit map across sendProactive and sendProactiveForOrg", async () => {
+      // No fresh per-request sender: 20 org-blind sends consume the budget; the
+      // 21st (org-aware) to the same chatId is rate-limited, proving one map.
+      const sender = new ProactiveSender({ telegram: { botToken: "b" } });
+
+      for (let i = 0; i < 20; i++) await sender.sendProactive("chat_1", "telegram", `m${i}`);
+      await sender.sendProactiveForOrg("orgB", "chat_1", "telegram", "21st");
+
+      expect(mockFetch).toHaveBeenCalledTimes(20);
+    });
+
+    it("warns and skips when neither org nor global creds yield a WhatsApp number", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const sender = new ProactiveSender({
+        credentials: {},
+        resolveOrgSendCreds: async () => null,
+      });
+
+      await sender.sendProactiveForOrg("orgB", "+15551234567", "whatsapp", "m");
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("No WhatsApp credentials"));
+    });
+  });
 });

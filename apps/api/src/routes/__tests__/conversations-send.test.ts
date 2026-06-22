@@ -46,7 +46,7 @@ function makeWorkTraceStore(
 describe("POST /api/conversations/:threadId/send", () => {
   it("delegates to store.sendOperatorMessage, then enriches WorkTrace with delivery outcome", async () => {
     const sendOperatorMessage = vi.fn().mockResolvedValue(makeStoreResult());
-    const sendProactive = vi.fn().mockResolvedValue(undefined);
+    const sendProactiveForOrg = vi.fn().mockResolvedValue(undefined);
     const workTraceStore = makeWorkTraceStore();
     const app = await buildConversationTestApp({
       conversationStateStore: {
@@ -55,7 +55,7 @@ describe("POST /api/conversations/:threadId/send", () => {
         releaseEscalationToAi: vi.fn(),
       },
       workTraceStore,
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       organizationId: "org_1",
       principalId: "principal_1",
     });
@@ -74,7 +74,7 @@ describe("POST /api/conversations/:threadId/send", () => {
       operator: { type: "user", id: "principal_1" },
       message: { text: "hi" },
     });
-    expect(sendProactive).toHaveBeenCalledWith("p1", "telegram", "hi");
+    expect(sendProactiveForOrg).toHaveBeenCalledWith("org_1", "p1", "telegram", "hi");
     expect(workTraceStore.update).toHaveBeenCalledWith(
       "wt_1",
       expect.objectContaining({
@@ -95,7 +95,7 @@ describe("POST /api/conversations/:threadId/send", () => {
 
   it("returns 502 and records deliveryResult=failed when channel delivery throws", async () => {
     const sendOperatorMessage = vi.fn().mockResolvedValue(makeStoreResult());
-    const sendProactive = vi.fn().mockRejectedValue(new Error("Telegram API 500"));
+    const sendProactiveForOrg = vi.fn().mockRejectedValue(new Error("Telegram API 500"));
     const workTraceStore = makeWorkTraceStore();
     const app = await buildConversationTestApp({
       conversationStateStore: {
@@ -104,7 +104,7 @@ describe("POST /api/conversations/:threadId/send", () => {
         releaseEscalationToAi: vi.fn(),
       },
       workTraceStore,
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       organizationId: "org_1",
     });
 

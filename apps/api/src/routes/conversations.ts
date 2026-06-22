@@ -338,7 +338,10 @@ export const conversationsRoutes: FastifyPluginAsync = async (app) => {
       let deliveryResult: string;
       let httpResult: { code: number; body: Record<string, unknown> };
       try {
-        await app.agentNotifier.sendProactive(
+        // A15: org-aware send — ships from THIS org's WABA creds and gates the 24h
+        // window on THIS org's inbound (orgId is the auth org, in scope above).
+        await app.agentNotifier.sendProactiveForOrg(
+          orgId,
           storeResult.destinationPrincipalId,
           storeResult.channel,
           message,

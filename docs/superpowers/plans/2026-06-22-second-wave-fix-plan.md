@@ -9,7 +9,7 @@ review are already baked into each slice.
 ## Build-loop protocol
 
 - **One slice per fresh session, off `main`, in a new worktree:** `git worktree add
-  .claude/worktrees/<slug> -b <branch> main && cd .claude/worktrees/<slug> && pnpm worktree:init`.
+.claude/worktrees/<slug> -b <branch> main && cd .claude/worktrees/<slug> && pnpm worktree:init`.
 - **Process:** brainstorm only if the design is genuinely open (most slices below have a
   determined design and can go straight to a short plan); then TDD execute; then request an
   independent code review; then verify; then merge clean (squash, conventional commit,
@@ -24,18 +24,18 @@ review are already baked into each slice.
 
 ## Slice ledger
 
-| Slice | Gaps | Severity | Status |
-|---|---|---|---|
-| A15 | P1-1 + P1-2 (agentNotifier multi-tenant) | P1 | not started |
-| A16 | P1-4 (API approver-role floor) | P1 | not started |
-| A17 | P1-3 (weekly-report recipient isolation) | P1 | not started |
-| A18 | P1-5 + P1-7 (consent: CTWA opt-in + reuse re-greeting) | P1 | not started |
-| A19 | P1-6 (booking-consent resolver-error fail-closed) | P1 | not started |
-| A20 | P1-8 (Mira measured-signal over full cohort) | P1 | not started |
-| A21 | P1-9 (Riley config coercion) | P1 | not started |
-| A22 | P2-1 (payments-webhook entitlement carve-out) | P2 (high-leverage) | not started |
-| A23+ | remaining P2 (P2-2..P2-21) | P2 | backlog (table below) |
-| A24+ | P3 (P3-1..P3-8) | P3 | backlog (table below) |
+| Slice | Gaps                                                   | Severity           | Status                          |
+| ----- | ------------------------------------------------------ | ------------------ | ------------------------------- |
+| A15   | P1-1 + P1-2 (agentNotifier multi-tenant)               | P1                 | merged (`fix/wa-reply-per-org`) |
+| A16   | P1-4 (API approver-role floor)                         | P1                 | not started                     |
+| A17   | P1-3 (weekly-report recipient isolation)               | P1                 | not started                     |
+| A18   | P1-5 + P1-7 (consent: CTWA opt-in + reuse re-greeting) | P1                 | not started                     |
+| A19   | P1-6 (booking-consent resolver-error fail-closed)      | P1                 | not started                     |
+| A20   | P1-8 (Mira measured-signal over full cohort)           | P1                 | not started                     |
+| A21   | P1-9 (Riley config coercion)                           | P1                 | not started                     |
+| A22   | P2-1 (payments-webhook entitlement carve-out)          | P2 (high-leverage) | not started                     |
+| A23+  | remaining P2 (P2-2..P2-21)                             | P2                 | backlog (table below)           |
+| A24+  | P3 (P3-1..P3-8)                                        | P3                 | backlog (table below)           |
 
 **Recommended order:** A15 -> A16 -> A17 -> A18 -> A19 -> A21 -> A20 -> A22, then the P2/P3
 backlog. A15-A17 are the multi-tenant / four-eyes go-live blockers; do them before tenant #2.

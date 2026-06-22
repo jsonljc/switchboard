@@ -81,7 +81,7 @@ function makeWorkTraceStore() {
 describe("POST /api/escalations/:id/reply", () => {
   it("escalate-tool path: resolves contactId via WorkTrace, delegates with target:{contactId}, delivers, finalizes", async () => {
     const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
-    const sendProactive = vi.fn().mockResolvedValue(undefined);
+    const sendProactiveForOrg = vi.fn().mockResolvedValue(undefined);
     const workTraceStore = makeWorkTraceStore();
     // The escalate-tool handoff has a WorkTrace lineage carrying the contactId.
     const workTraceFindFirst = vi.fn().mockResolvedValue({ contactId: "c1" });
@@ -93,7 +93,7 @@ describe("POST /api/escalations/:id/reply", () => {
         releaseEscalationToAi,
       },
       workTraceStore,
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       prisma,
       organizationId: "org_1",
       principalId: "principal_1",
@@ -126,7 +126,8 @@ describe("POST /api/escalations/:id/reply", () => {
       reply: { text: "We can fit you in at 3pm tomorrow." },
       target: { contactId: "c1" },
     });
-    expect(sendProactive).toHaveBeenCalledWith(
+    expect(sendProactiveForOrg).toHaveBeenCalledWith(
+      "org_1",
       "user-phone-123",
       "whatsapp",
       "We can fit you in at 3pm tomorrow.",
@@ -148,7 +149,7 @@ describe("POST /api/escalations/:id/reply", () => {
 
   it("gateway path: WorkTrace miss falls back to target:{threadId: sessionId}", async () => {
     const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
-    const sendProactive = vi.fn().mockResolvedValue(undefined);
+    const sendProactiveForOrg = vi.fn().mockResolvedValue(undefined);
     // Default makePrisma workTraceFindFirst resolves null => gateway-gate handoff
     // (no WorkTrace lineage); the route must fall back to the sessionId threadId.
     const prisma = makePrisma();
@@ -159,7 +160,7 @@ describe("POST /api/escalations/:id/reply", () => {
         releaseEscalationToAi,
       },
       workTraceStore: makeWorkTraceStore(),
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       prisma,
       organizationId: "org_1",
       principalId: "principal_1",
@@ -191,7 +192,7 @@ describe("POST /api/escalations/:id/reply", () => {
         releaseEscalationToAi,
       },
       workTraceStore: makeWorkTraceStore(),
-      agentNotifier: { sendProactive: vi.fn() } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg: vi.fn() } as unknown as AgentNotifier,
       prisma: makePrisma({ workTraceFindFirst }),
       organizationId: "org_1",
     });
@@ -209,7 +210,7 @@ describe("POST /api/escalations/:id/reply", () => {
 
   it("returns 502 and records deliveryResult=failed when channel delivery throws", async () => {
     const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
-    const sendProactive = vi.fn().mockRejectedValue(new Error("WhatsApp API 500"));
+    const sendProactiveForOrg = vi.fn().mockRejectedValue(new Error("WhatsApp API 500"));
     const workTraceStore = makeWorkTraceStore();
     const app = await buildConversationTestApp({
       conversationStateStore: {
@@ -218,7 +219,7 @@ describe("POST /api/escalations/:id/reply", () => {
         releaseEscalationToAi,
       },
       workTraceStore,
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       prisma: makePrisma(),
       organizationId: "org_1",
     });
@@ -328,7 +329,7 @@ describe("POST /api/escalations/:id/reply", () => {
   it("is idempotent: a re-POST after release short-circuits without re-delivering", async () => {
     // The handoff is already released (its reply was delivered on a prior POST).
     const releaseEscalationToAi = vi.fn();
-    const sendProactive = vi.fn();
+    const sendProactiveForOrg = vi.fn();
     const updateMany = vi.fn();
     const prisma = makePrisma({
       handoffFindUnique: vi
@@ -343,7 +344,7 @@ describe("POST /api/escalations/:id/reply", () => {
         releaseEscalationToAi,
       },
       workTraceStore: makeWorkTraceStore(),
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       prisma,
       organizationId: "org_1",
     });
@@ -359,13 +360,13 @@ describe("POST /api/escalations/:id/reply", () => {
     expect(body.replySent).toBe(true);
     // No second delivery, no second release.
     expect(releaseEscalationToAi).not.toHaveBeenCalled();
-    expect(sendProactive).not.toHaveBeenCalled();
+    expect(sendProactiveForOrg).not.toHaveBeenCalled();
     expect(updateMany).not.toHaveBeenCalled();
   });
 
   it("rolls the release back to pending when delivery fails, so the owner can retry", async () => {
     const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
-    const sendProactive = vi.fn().mockRejectedValue(new Error("WhatsApp API 500"));
+    const sendProactiveForOrg = vi.fn().mockRejectedValue(new Error("WhatsApp API 500"));
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const app = await buildConversationTestApp({
       conversationStateStore: {
@@ -374,7 +375,7 @@ describe("POST /api/escalations/:id/reply", () => {
         releaseEscalationToAi,
       },
       workTraceStore: makeWorkTraceStore(),
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       prisma: makePrisma({ handoffUpdateMany: updateMany }),
       organizationId: "org_1",
     });
@@ -404,7 +405,7 @@ describe("POST /api/escalations/:id/reply", () => {
     // returns an honest 502 so the owner is not told "Handed back" while the
     // customer got silence.
     const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
-    const sendProactive = vi.fn().mockRejectedValue(new WhatsAppWindowClosedError("…4567"));
+    const sendProactiveForOrg = vi.fn().mockRejectedValue(new WhatsAppWindowClosedError("…4567"));
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const workTraceStore = makeWorkTraceStore();
     const app = await buildConversationTestApp({
@@ -414,7 +415,7 @@ describe("POST /api/escalations/:id/reply", () => {
         releaseEscalationToAi,
       },
       workTraceStore,
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       prisma: makePrisma({ handoffUpdateMany: updateMany }),
       organizationId: "org_1",
     });
@@ -447,7 +448,7 @@ describe("POST /api/escalations/:id/reply", () => {
 
   it("releases the handoff org-scoped and does not roll back when delivery succeeds", async () => {
     const releaseEscalationToAi = vi.fn().mockResolvedValue(makeReleaseResult());
-    const sendProactive = vi.fn().mockResolvedValue(undefined);
+    const sendProactiveForOrg = vi.fn().mockResolvedValue(undefined);
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const app = await buildConversationTestApp({
       conversationStateStore: {
@@ -456,7 +457,7 @@ describe("POST /api/escalations/:id/reply", () => {
         releaseEscalationToAi,
       },
       workTraceStore: makeWorkTraceStore(),
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       prisma: makePrisma({ handoffUpdateMany: updateMany }),
       organizationId: "org_1",
     });
@@ -468,7 +469,7 @@ describe("POST /api/escalations/:id/reply", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(sendProactive).toHaveBeenCalled();
+    expect(sendProactiveForOrg).toHaveBeenCalled();
     // Exactly one mutation: the org-scoped release. A successful delivery does
     // not roll back.
     expect(updateMany).toHaveBeenCalledTimes(1);

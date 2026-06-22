@@ -10,6 +10,7 @@ export { ProactiveSender, WhatsAppWindowClosedError } from "./proactive-sender.j
 export type {
   AgentNotifier,
   ChannelCredentials,
+  OrgWhatsAppSendCreds,
   ProactiveSenderConfig,
 } from "./proactive-sender.js";
 export { classifyNotification } from "./notification-classifier.js";
