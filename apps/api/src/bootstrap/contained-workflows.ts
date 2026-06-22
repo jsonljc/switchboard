@@ -611,8 +611,12 @@ export async function bootstrapContainedWorkflows(
       // governance-gate.ts) - the seeded require_approval(mandatory) policy (db seed
       // riley-budget-governance.ts) parks it for a human, and "mandatory" survives the
       // autonomous-deployment spend lever. approvalPolicy here is decorative (the policy engine reads
-      // policyApprovalOverride). The executor is a fail-closed placeholder (EXECUTOR_NOT_WIRED) until
-      // the real read-modify-re-read executor lands in PR 1B-1.5. Internal-trigger-only.
+      // policyApprovalOverride). The executor is the REAL read-modify-re-read reallocate executor
+      // (buildRileyBudgetExecutorHandler -> buildRileyBudgetExecutionWorkflow), wired into the
+      // handler map above (rileyBudgetExecutor.handler). The reallocate path stays dark in prod
+      // because the SUBMITTER that emits this intent is gated behind
+      // RILEY_REALLOCATE_SELF_EXECUTION_ENABLED (bootstrap/inngest.ts); the flag-flip safety gate
+      // is docs/runbooks/riley-reallocation-go-live.md. Internal-trigger-only.
       intent: rileyBudgetExecutor.intent,
       workflowId: rileyBudgetExecutor.intent,
       budgetClass: "cheap",
