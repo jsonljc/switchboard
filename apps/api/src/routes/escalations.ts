@@ -364,7 +364,10 @@ export const escalationsRoutes: FastifyPluginAsync = async (app) => {
       if (app.agentNotifier) {
         deliveryAttempted = true;
         try {
-          await app.agentNotifier.sendProactive(
+          // A15: org-aware send — ships from THIS org's WABA creds and gates the 24h
+          // window on THIS org's inbound (orgId is the auth org, in scope above).
+          await app.agentNotifier.sendProactiveForOrg(
+            orgId,
             storeResult.destinationPrincipalId,
             storeResult.channel,
             message,

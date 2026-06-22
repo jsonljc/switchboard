@@ -93,7 +93,7 @@ describe("Routes never mutate prisma.conversationState directly", () => {
       workTraceId: "wt_1",
       appendedMessage: { role: "owner", text: "hi", timestamp: "now" },
     });
-    const sendProactive = vi.fn().mockResolvedValue(undefined);
+    const sendProactiveForOrg = vi.fn().mockResolvedValue(undefined);
 
     const app = await buildConversationTestApp({
       conversationStateStore: {
@@ -102,7 +102,7 @@ describe("Routes never mutate prisma.conversationState directly", () => {
         releaseEscalationToAi: vi.fn(),
       },
       workTraceStore: makeWorkTraceStore(),
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       prisma: {
         conversationState: { update: updateSpy },
         handoff: { findUnique: vi.fn(), update: vi.fn() },
@@ -131,7 +131,7 @@ describe("Routes never mutate prisma.conversationState directly", () => {
       workTraceId: "wt_1",
       appendedReply: { role: "owner", text: "hi", timestamp: "now" },
     });
-    const sendProactive = vi.fn().mockResolvedValue(undefined);
+    const sendProactiveForOrg = vi.fn().mockResolvedValue(undefined);
 
     const app = await buildConversationTestApp({
       conversationStateStore: {
@@ -140,7 +140,7 @@ describe("Routes never mutate prisma.conversationState directly", () => {
         releaseEscalationToAi,
       },
       workTraceStore: makeWorkTraceStore(),
-      agentNotifier: { sendProactive } as unknown as AgentNotifier,
+      agentNotifier: { sendProactiveForOrg } as unknown as AgentNotifier,
       prisma: {
         conversationState: { update: updateSpy },
         handoff: {

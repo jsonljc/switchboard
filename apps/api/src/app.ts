@@ -30,6 +30,8 @@ import { installErrorHandler } from "./bootstrap/error-handler.js";
 import { initSentry, wireSentryErrorHandler } from "./bootstrap/sentry.js";
 import { createPromMetrics, metricsRoute } from "./metrics.js";
 import { resolveWhatsAppSendToken } from "./lib/whatsapp-send-token.js";
+import { resolveOrgWhatsAppSendCreds } from "./lib/whatsapp-send-creds.js";
+import { isRecipientWithinOrgWindow } from "./lib/whatsapp-window-gate.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { authRateLimit } from "./middleware/rate-limit.js";
 import apiVersionPlugin from "./versioning.js";
@@ -410,25 +412,16 @@ export async function buildServer() {
 
   const hasAnyCreds = telegramBotToken || whatsappToken || slackBotToken;
   if (hasAnyCreds) {
-    const { ProactiveSender, isWithinWhatsAppWindow } =
-      await import("@switchboard/core/notifications");
-    // WhatsApp 24h customer-care window gate. ProactiveSender invokes this only on
-    // the WhatsApp path, where `recipient` is the destination phone (the
-    // ConversationState.principalId carried as destinationPrincipalId). Derive the
-    // last-inbound timestamp from the conversation state keyed by that phone; a
-    // missing row (no inbound on record) is treated as OUTSIDE the window
-    // (isWithinWhatsAppWindow(null) === false → fail closed). Without a DB there is
-    // no inbound history to consult, so we also fail closed. The send then throws
-    // WhatsAppWindowClosedError instead of silently dropping the message.
-    const isWithinWindow = async (recipient: string): Promise<boolean> => {
-      if (!prismaClient) return false;
-      const row = await prismaClient.conversationState.findFirst({
-        where: { principalId: recipient, channel: "whatsapp" },
-        orderBy: { lastInboundAt: "desc" },
-        select: { lastInboundAt: true },
-      });
-      return isWithinWhatsAppWindow(row?.lastInboundAt ?? null);
-    };
+    const { ProactiveSender } = await import("@switchboard/core/notifications");
+    // Per-org WhatsApp send creds (A15): resolve the SENDING org's own
+    // {token, phoneNumberId} from its canonical "whatsapp" Connection so a second
+    // tenant's operator/escalation reply ships from its OWN WABA number, with a
+    // per-field fallback to the global env creds for the single-tenant pilot (no
+    // per-org Connection). One store instance; the resolver reads per-request (no
+    // caching) so a rotation / new tenant takes effect on the next send and creds
+    // never bleed across orgs. Mirrors bootstrap/contained-workflows.ts.
+    const { PrismaConnectionStore } = await import("@switchboard/db");
+    const connectionStore = prismaClient ? new PrismaConnectionStore(prismaClient) : null;
     agentNotifier = new ProactiveSender({
       credentials: {
         telegram: telegramBotToken ? { botToken: telegramBotToken } : undefined,
@@ -438,7 +431,17 @@ export async function buildServer() {
             : undefined,
         slack: slackBotToken ? { botToken: slackBotToken } : undefined,
       },
-      isWithinWindow,
+      // 24h customer-care window gate scoped to the SENDING org (A15). Reads
+      // ConversationThread.lastWhatsAppInboundAt for the org+phone (the same column
+      // the proactive-workflow sends read), failing closed on no DB / no org / no
+      // matching thread / no inbound — the send then throws WhatsAppWindowClosedError
+      // rather than letting Meta silently drop a free-form message. See
+      // lib/whatsapp-window-gate.ts.
+      isWithinWindow: (recipient, organizationId) =>
+        isRecipientWithinOrgWindow(prismaClient, recipient, organizationId),
+      resolveOrgSendCreds: connectionStore
+        ? (organizationId) => resolveOrgWhatsAppSendCreds(connectionStore, organizationId)
+        : undefined,
     });
   } else {
     app.log.warn(
