@@ -34,11 +34,14 @@ import type { IdentitySpec, Policy } from "@switchboard/schemas";
 import {
   buildRobinRecoveryAllowPolicyInput,
   buildRobinRecoveryApprovalPolicyInput,
+  buildRobinRecoveryRetryAllowPolicyInput,
 } from "@switchboard/db";
 import { resolveAuthoritativeDeployment } from "../bootstrap/platform-deployment-resolver.js";
 import {
   buildRecoveryCampaignSubmitRequest,
+  buildRecoveryRetrySubmitRequest,
   ROBIN_RECOVERY_SEND_INTENT,
+  ROBIN_RECOVERY_RETRY_INTENT,
 } from "../services/workflows/robin-recovery-request.js";
 
 const ORG = "org-acme";
@@ -82,6 +85,18 @@ function approvalPolicy(): Policy {
     ...buildRobinRecoveryApprovalPolicyInput(ORG),
     cartridgeId: null,
     effect: "require_approval",
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  } as Policy;
+}
+
+// The allow-ONLY retry policy. Seeded alone, the retry intent must EXECUTE through the real ingress
+// (the inverse of the cohort, whose require_approval partner parks it).
+function retryAllowPolicy(): Policy {
+  return {
+    ...buildRobinRecoveryRetryAllowPolicyInput(ORG),
+    cartridgeId: null,
+    effect: "allow",
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
   } as Policy;
@@ -206,6 +221,80 @@ function buildIngress(
   return { ingress, traces };
 }
 
+function retryRegistration(): IntentRegistration {
+  return {
+    intent: ROBIN_RECOVERY_RETRY_INTENT,
+    defaultMode: "workflow",
+    allowedModes: ["workflow"],
+    executor: { mode: "workflow", workflowId: ROBIN_RECOVERY_RETRY_INTENT },
+    parameterSchema: {},
+    mutationClass: "write",
+    budgetClass: "cheap",
+    approvalPolicy: "none",
+    idempotent: false,
+    allowedTriggers: ["schedule"],
+    timeoutMs: 300_000,
+    retryable: true,
+  };
+}
+
+// The retry ingress: the retry intent is platform-direct + has a registered handler that EXECUTES
+// (mirrors the shipped retry executor's success shape). Seeded with the allow-only retry policy, a
+// submit must run this handler, NOT park - the inverse of the cohort live-path proof.
+function buildRetryIngress(policies: Policy[]): {
+  ingress: PlatformIngress;
+  traces: WorkTrace[];
+} {
+  const intentRegistry = new IntentRegistry();
+  intentRegistry.register(retryRegistration());
+
+  // Mirrors the ROBIN_RECOVERY_SEND_INTENT placeholder, but it EXECUTES (the retry auto-executes, it
+  // is never parked); a trivial sent/not-dead-lettered outputs shape stands in for the real executor.
+  const retryHandler: WorkflowHandler = {
+    async execute() {
+      return {
+        outcome: "completed",
+        summary: "retry sent (placeholder)",
+        outputs: { outcome: "sent", deadLettered: false },
+      };
+    },
+  };
+  const modeRegistry = new ExecutionModeRegistry();
+  modeRegistry.register(
+    new WorkflowMode({
+      handlers: new Map<string, WorkflowHandler>([[ROBIN_RECOVERY_RETRY_INTENT, retryHandler]]),
+      services: {
+        submitChildWork: async () => {
+          throw new Error("no child work in this test");
+        },
+      },
+    }),
+  );
+
+  const { store, traces } = inMemoryTraceStore();
+  const ingress = new PlatformIngress({
+    intentRegistry,
+    modeRegistry,
+    governanceGate: buildGate(policies),
+    deploymentResolver: resolveAuthoritativeDeployment(throwingResolver(), {
+      isPlatformDirectIntent: (i) => i === ROBIN_RECOVERY_RETRY_INTENT,
+    }),
+    traceStore: store,
+  });
+  return { ingress, traces };
+}
+
+function retryReq() {
+  return buildRecoveryRetrySubmitRequest({
+    organizationId: ORG,
+    rowId: "r1",
+    contactId: "ct_1",
+    bookingId: "bk_1",
+    campaignKind: "no_show",
+    attempts: 1,
+  });
+}
+
 // The real producer chain: a no-show row -> selectRecoveryCandidates (dedupe/exclude) ->
 // buildRecoveryCampaignSubmitRequest, so this proof cannot drift from the cron's submit mechanism.
 function campaignReq(asOf: Date) {
@@ -272,5 +361,17 @@ describe("robin recovery producer (live path through real ingress + carve-out re
     const executed = res.ok && res.result.outcome === "completed";
     expect(parked).toBe(false);
     expect(executed).toBe(false); // default-deny neither parks nor runs the placeholder
+  });
+
+  it("robin.recovery_send.retry auto-executes through the real ingress (allow-only, not parked)", async () => {
+    // The INVERSE of the cohort park proof: with ONLY the allow-only retry policy seeded, the retry
+    // submit runs the handler (outcome completed) and never parks. This is the strongest acceptance
+    // proof that the retry auto-executes through the same real submit stack the cron fires.
+    const { ingress } = buildRetryIngress([retryAllowPolicy()]);
+    const res = await ingress.submit(retryReq());
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect("approvalRequired" in res && res.approvalRequired).toBe(false); // executed, NOT parked
+    expect(res.result.outcome).toBe("completed");
   });
 });

@@ -225,8 +225,10 @@ export {
 export {
   buildRobinRecoveryAllowPolicyInput,
   buildRobinRecoveryApprovalPolicyInput,
+  buildRobinRecoveryRetryAllowPolicyInput,
   robinRecoveryAllowPolicyId,
   robinRecoveryApprovalPolicyId,
+  robinRecoveryRetryAllowPolicyId,
   seedRobinRecoveryPolicies,
 } from "./seed/robin-recovery-governance.js";
 export {
