@@ -31,12 +31,13 @@
 .bentoRail { display: contents; }
 @media (min-width: 1024px) {
   .column {
-    max-width: none; /* fill the shell content frame instead of the 640px column */
+    max-width: 1080px; /* bound the page column (audit M4); margin:0 auto centers it */
     padding: 32px 0 56px;
   }
   .bento {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--home-rail, 320px);
+    grid-template-columns: minmax(0, 720px) var(--home-rail, 320px);
+    justify-content: center;
     gap: 28px;
     align-items: start;
   }
@@ -55,8 +56,16 @@
 .verdict {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 6px 4px;
+  gap: 6px;
+  padding: 2px 4px;
+}
+/* Salutation folds into the eyebrow row (audit density): eyebrow + hello share
+   one baseline-aligned line, so the verdict hero reads tighter above the band. */
+.verdictTop {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .eyebrow {
   font-family: var(--mono);

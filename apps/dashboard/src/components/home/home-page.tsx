@@ -260,25 +260,20 @@ export function HomePage({ initialAgent = null }: HomePageProps = {}) {
     </HomeModuleBoundary>
   );
 
-  // ACTIVE: Verdict → NeedsYou → TeamBand → ThisWeek → WhileYouSlept → Permissions
-  // CALM:   Verdict → ThisWeek (promoted) → TeamBand → WhileYouSlept → Permissions
-  //         (NeedsYou is not rendered when empty)
-  const modules = isCalm
-    ? [verdictNode, thisWeekNode, teamBandNode, whileYouSleptNode, permissionsNode]
-    : [verdictNode, needsYouNode, teamBandNode, thisWeekNode, whileYouSleptNode, permissionsNode];
-
-  // Bento split (desktop only — display:contents below lg keeps the flat mobile order):
-  // hero = verdict (modules[0]); main = next N "active" modules; rail = the quiet remainder.
-  const [heroNode, ...restNodes] = modules;
-  const mainCount = isCalm ? 2 : 3; // active: NeedsYou, TeamBand, ThisWeek · calm: ThisWeek, TeamBand
-  const mainNodes = restNodes.slice(0, mainCount);
-  const railNodes = restNodes.slice(mainCount);
+  // Composition (desktop bento; display:contents below lg keeps the flat mobile stack):
+  // Full-width stack: KpiStrip (data hero), Verdict (voice), TeamBand (crew band).
+  // Bento below: a measure-capped main (the decision queue, or This Week when calm)
+  // beside a quiet rail (While You Slept, Permissions). TeamBand is promoted to a
+  // full-width band (audit H3) so the crew reads as a poster, not a cramped tile.
+  const mainNodes = isCalm ? [thisWeekNode] : [needsYouNode, thisWeekNode];
+  const railNodes = [whileYouSleptNode, permissionsNode];
 
   return (
     <>
       <div className={styles.column}>
         <HomeKpiStrip />
-        {heroNode}
+        {verdictNode}
+        {teamBandNode}
         <div className={styles.bento}>
           <div className={styles.bentoMain}>{mainNodes}</div>
           <div className={styles.bentoRail}>{railNodes}</div>

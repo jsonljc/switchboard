@@ -310,16 +310,17 @@ describe("HomePage", () => {
       "While you slept",
     ]);
 
-    // Team Band sits between Needs You and This Week: assert via an agent tile's
-    // position relative to the Needs You and This Week landmarks.
-    const needsYou = screen.getByLabelText("Needs you");
+    // Team Band sits ABOVE the bento (audit H3): the crew band reads as a
+    // full-width poster between the Verdict and the decision queue, so an agent
+    // tile comes AFTER the verdict landmark and BEFORE the Needs You landmark.
+    const verdict = screen.getByLabelText("verdict");
     const teamTile = screen.getByTestId("team-mate-alex");
-    const thisWeek = screen.getByLabelText("This week note");
+    const needsYou = screen.getByLabelText("Needs you");
     expect(
-      needsYou.compareDocumentPosition(teamTile) & Node.DOCUMENT_POSITION_FOLLOWING,
+      verdict.compareDocumentPosition(teamTile) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      teamTile.compareDocumentPosition(thisWeek) & Node.DOCUMENT_POSITION_FOLLOWING,
+      teamTile.compareDocumentPosition(needsYou) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -342,11 +343,12 @@ describe("HomePage", () => {
     // WorkInProgress was removed from the layout.
     expect(modulesInOrder(container)).toEqual(["verdict", "This week note", "While you slept"]);
 
-    // This Week appears BEFORE Team Band (promoted).
-    const thisWeek = screen.getByLabelText("This week note");
+    // Team Band is above the bento now (audit H3), so an agent tile comes
+    // BEFORE the This Week landmark even in the calm (This-Week-promoted) layout.
     const teamTile = screen.getByTestId("team-mate-alex");
+    const thisWeek = screen.getByLabelText("This week note");
     expect(
-      thisWeek.compareDocumentPosition(teamTile) & Node.DOCUMENT_POSITION_FOLLOWING,
+      teamTile.compareDocumentPosition(thisWeek) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
     // Verdict shows the calm all-clear.
