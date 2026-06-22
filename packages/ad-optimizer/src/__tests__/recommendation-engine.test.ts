@@ -113,6 +113,10 @@ describe("generateRecommendations", () => {
     expect(scale).toBeDefined();
     const stepsText = scale!.steps.join(" ");
     expect(stepsText).toContain("20%");
+    // A6 rank-24: the operator-facing headline says "increase budget" (budget-increase-only),
+    // not the ambiguous "scale budget", and carries no em-dash.
+    expect(scale!.estimatedImpact).toContain("increase budget");
+    expect(scale!.estimatedImpact).not.toContain("—");
   });
 
   it("returns empty array for stable campaign (CPA=100, target=100, no diagnoses)", () => {
