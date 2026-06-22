@@ -73,6 +73,28 @@ export class PrismaReceiptStore implements ReceiptStore {
     return result.count;
   }
 
+  /**
+   * Inverse of promoteCalendarBookedToHeld: revert a booking's calendar receipt held -> booked when a
+   * prior "attended" is corrected to "no_show", so the proof receipt never overstates attendance.
+   * Scoped to (org, booking, kind=calendar, status=held) so it never touches a payment receipt, a void,
+   * or an already-booked row, and stays org-isolated. Returns the number of rows demoted. Like promote,
+   * a zero count is a legitimate no-op (no held calendar receipt for this booking) — best-effort, never
+   * throws. The updateMany no-match returns {count:0} here BY DESIGN (not an abort): a no_show on a
+   * never-promoted booking is a valid no-op, mirroring promote.
+   */
+  async demoteCalendarHeldToBooked(organizationId: string, bookingId: string): Promise<number> {
+    const result = await this.prisma.receipt.updateMany({
+      where: {
+        organizationId,
+        bookingId,
+        kind: "calendar",
+        status: "held",
+      },
+      data: { status: "booked" },
+    });
+    return result.count;
+  }
+
   async findByBooking(orgId: string, bookingId: string): Promise<Receipt[]> {
     const rows = await this.prisma.receipt.findMany({
       where: { organizationId: orgId, bookingId },

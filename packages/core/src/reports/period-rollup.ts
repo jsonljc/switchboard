@@ -37,6 +37,17 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
 
     const ctx: RollupContext = { orgId, current, prior, computedAt };
 
+    // Assemble the receipted-booking cohort ONCE (A7 rank19): the quality and revenue dimensions
+    // both consume this single snapshot, so the expensive N+1 getView fan-out runs once (not twice)
+    // and the two dimensions can never disagree on the cohort. A shared promise keeps the assembly
+    // concurrent with the other rollup legs (no serialization before the Promise.all). The COUNT leg
+    // (computeReceiptedBookings) reads a distinct store and stays independent below.
+    const receiptedViews = deps.stores.receiptedBookings.listForCohort({
+      orgId,
+      from: current.start,
+      to: current.end,
+    });
+
     const [
       attribution,
       funnelResult,
@@ -59,8 +70,8 @@ export function createPeriodRollup(deps: ReportDependencies): PeriodRollup {
       computeConsentCompleteness(ctx, deps.stores.contacts),
       computeRecoveryCandidates(ctx, deps.stores.bookings),
       computeReceiptedBookings(ctx, deps.stores.receipts),
-      computeReceiptedBookingQuality(ctx, deps.stores.receiptedBookings),
-      computeReceiptedBookingRevenue(ctx, deps.stores.receiptedBookings),
+      receiptedViews.then(computeReceiptedBookingQuality),
+      receiptedViews.then(computeReceiptedBookingRevenue),
     ]);
 
     const pullquote = await deps.pullQuoteGenerator({

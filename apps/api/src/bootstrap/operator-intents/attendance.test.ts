@@ -55,6 +55,7 @@ describe("buildRecordAttendanceHandler", () => {
     };
     const promoter: ReceiptHeldPromoter = {
       promoteCalendarBookedToHeld: vi.fn(async () => 1),
+      demoteCalendarHeldToBooked: vi.fn(async () => 0),
     };
     const result = await buildRecordAttendanceHandler(writer, promoter).execute(
       makeWorkUnit({ bookingId: "b1", outcome: "attended", recordedBy: "owner" }),
@@ -64,18 +65,23 @@ describe("buildRecordAttendanceHandler", () => {
     expect(result.outputs?.receiptsPromoted).toBe(1);
   });
 
-  it("does NOT promote a receipt when the outcome is no_show", async () => {
+  it("demotes the calendar receipt held->booked (and does NOT promote) when the outcome is no_show", async () => {
     const writer: BookingAttendanceWriter = {
       recordAttendance: vi.fn(async () => ({ id: "b1", attendance: "no_show" })),
     };
     const promoter: ReceiptHeldPromoter = {
       promoteCalendarBookedToHeld: vi.fn(async () => 0),
+      demoteCalendarHeldToBooked: vi.fn(async () => 1),
     };
     const result = await buildRecordAttendanceHandler(writer, promoter).execute(
       makeWorkUnit({ bookingId: "b1", outcome: "no_show", recordedBy: "owner" }),
     );
+    // A7 rank12: a no_show corrects a prior "attended" so the held receipt reverts to booked,
+    // never overstating attendance. Promote stays untouched on this path.
+    expect(promoter.demoteCalendarHeldToBooked).toHaveBeenCalledWith("org-1", "b1");
     expect(promoter.promoteCalendarBookedToHeld).not.toHaveBeenCalled();
     expect(result.outcome).toBe("completed");
+    expect(result.outputs?.receiptsDemoted).toBe(1);
   });
 
   it("completes without promotion when no promoter is wired (back-compat)", async () => {
@@ -96,10 +102,28 @@ describe("buildRecordAttendanceHandler", () => {
       promoteCalendarBookedToHeld: vi.fn(async () => {
         throw new Error("db down");
       }),
+      demoteCalendarHeldToBooked: vi.fn(async () => 0),
     };
     await expect(
       buildRecordAttendanceHandler(writer, promoter).execute(
         makeWorkUnit({ bookingId: "b1", outcome: "attended", recordedBy: "owner" }),
+      ),
+    ).rejects.toThrow("db down");
+  });
+
+  it("propagates a demoter failure on no_show (fail loud; attendance is idempotent on retry)", async () => {
+    const writer: BookingAttendanceWriter = {
+      recordAttendance: vi.fn(async () => ({ id: "b1", attendance: "no_show" })),
+    };
+    const promoter: ReceiptHeldPromoter = {
+      promoteCalendarBookedToHeld: vi.fn(async () => 0),
+      demoteCalendarHeldToBooked: vi.fn(async () => {
+        throw new Error("db down");
+      }),
+    };
+    await expect(
+      buildRecordAttendanceHandler(writer, promoter).execute(
+        makeWorkUnit({ bookingId: "b1", outcome: "no_show", recordedBy: "owner" }),
       ),
     ).rejects.toThrow("db down");
   });

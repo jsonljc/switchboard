@@ -15,12 +15,14 @@ export interface BookingAttendanceWriter {
 }
 
 /**
- * Promotes a booking's calendar receipt booked -> held once attendance is confirmed.
- * PrismaReceiptStore satisfies it structurally. Optional: when unwired the handler still
- * records attendance, it just does not weld the receipt primitive.
+ * Welds a booking's calendar receipt status to attendance: promote booked -> held on "attended",
+ * and the inverse demote held -> booked on "no_show" (when a prior "attended" is corrected), so the
+ * proof receipt never overstates attendance. PrismaReceiptStore satisfies it structurally. Optional:
+ * when unwired the handler still records attendance, it just does not weld the receipt primitive.
  */
 export interface ReceiptHeldPromoter {
   promoteCalendarBookedToHeld(organizationId: string, bookingId: string): Promise<number>;
+  demoteCalendarHeldToBooked(organizationId: string, bookingId: string): Promise<number>;
 }
 
 export function buildRecordAttendanceHandler(
@@ -51,13 +53,20 @@ export function buildRecordAttendanceHandler(
         throw err;
       }
 
-      // Attendance is the source of truth (and is already persisted). Promoting the calendar
-      // receipt booked -> held is a secondary proof write, only on "attended". A failure here
-      // propagates (fail loud) rather than silently desyncing the receipt; recordAttendance is
-      // idempotent on (id, org), so retrying the whole action is safe.
+      // Attendance is the source of truth (and is already persisted). Welding the calendar receipt
+      // status is a secondary proof write: promote booked -> held on "attended", and the inverse
+      // demote held -> booked on "no_show" so a corrected attendance never leaves the receipt
+      // overstating the visit. A failure here propagates (fail loud) rather than silently desyncing
+      // the receipt; recordAttendance is idempotent on (id, org), so retrying the whole action is safe.
       let receiptsPromoted = 0;
+      let receiptsDemoted = 0;
       if (receiptPromoter && params.outcome === "attended") {
         receiptsPromoted = await receiptPromoter.promoteCalendarBookedToHeld(
+          workUnit.organizationId,
+          params.bookingId,
+        );
+      } else if (receiptPromoter && params.outcome === "no_show") {
+        receiptsDemoted = await receiptPromoter.demoteCalendarHeldToBooked(
           workUnit.organizationId,
           params.bookingId,
         );
@@ -66,7 +75,7 @@ export function buildRecordAttendanceHandler(
       return {
         outcome: "completed" as const,
         summary: `Recorded ${params.outcome} for booking ${params.bookingId}`,
-        outputs: { booking, receiptsPromoted },
+        outputs: { booking, receiptsPromoted, receiptsDemoted },
       };
     },
   };

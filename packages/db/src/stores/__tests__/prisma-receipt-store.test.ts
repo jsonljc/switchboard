@@ -159,6 +159,29 @@ describe("PrismaReceiptStore", () => {
     });
   });
 
+  describe("demoteCalendarHeldToBooked", () => {
+    it("demotes only held calendar receipts for the org+booking and returns the count", async () => {
+      prisma.receipt.updateMany.mockResolvedValueOnce({ count: 1 });
+      const count = await store.demoteCalendarHeldToBooked("org-1", "bk-1");
+      expect(prisma.receipt.updateMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          bookingId: "bk-1",
+          kind: "calendar",
+          status: "held",
+        },
+        data: { status: "booked" },
+      });
+      expect(count).toBe(1);
+    });
+
+    it("returns 0 without throwing when no held calendar receipt matches (best-effort, mirrors promote)", async () => {
+      prisma.receipt.updateMany.mockResolvedValueOnce({ count: 0 });
+      const count = await store.demoteCalendarHeldToBooked("org-1", "no-receipt");
+      expect(count).toBe(0);
+    });
+  });
+
   describe("countReceiptedBookingsInWindow", () => {
     it("counts DISTINCT bookings among org-scoped, non-void calendar receipts in [from, to)", async () => {
       const from = new Date("2026-06-08T00:00:00Z");

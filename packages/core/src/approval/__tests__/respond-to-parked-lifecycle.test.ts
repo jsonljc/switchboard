@@ -137,6 +137,9 @@ describe("respondToParkedLifecycle", () => {
     const trace = traces.get("wu-1");
     expect(trace?.approvalOutcome).toBe("approved");
     expect(trace?.approvalRespondedBy).toBe("operator_jane");
+    // A7 rank5: the approved trace stamps the approval lifecycle id so the receipted-booking
+    // view's humanApprovalId proof link resolves (it is NULL today because this was omitted).
+    expect(trace?.approvalId).toBe(lc.id);
 
     const dispatches = store.listDispatchRecords();
     expect(dispatches).toHaveLength(1);

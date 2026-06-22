@@ -1,9 +1,8 @@
-import type { RollupContext } from "./types.js";
-import type { ReportStores } from "./interfaces.js";
 import type {
   AttributionConfidence,
   ExceptionCode,
   ReceiptedBookingQualityData,
+  ReceiptedBookingView,
   ReceiptedBookingWorklistItem,
 } from "@switchboard/schemas";
 
@@ -53,9 +52,10 @@ function compareWorklist(a: ReceiptedBookingWorklistItem, b: ReceiptedBookingWor
  * Roll the receipted-booking read-projection (spec slice 4) up into a proof-quality summary for the
  * owner report: how many receipted bookings sit at each attribution-confidence rung, how many carry
  * each open exception code, and the per-booking WORKLIST behind `bookingsNeedingAttention` (the
- * specific bookings the owner can act on, worst-first, capped). Consumes `receiptedBookings.listForCohort`
- * (the same distinct booked|held calendar-receipt cohort as the north-star count), so `cohortSize`
- * matches `receiptedBookings.count` except for orphaned cohort rows the store filters out.
+ * specific bookings the owner can act on, worst-first, capped). Consumes the pre-assembled cohort
+ * `views` (the same distinct booked|held calendar-receipt cohort as the north-star count, assembled
+ * once by period-rollup), so `cohortSize` matches `receiptedBookings.count` except for orphaned cohort
+ * rows the store filters out.
  *
  * Pure aggregation: `attributionConfidence` and `exceptions` were already derived per booking by the
  * store via the pure `core/receipts` functions, so this never re-implements scoring (no drift). The
@@ -67,15 +67,8 @@ function compareWorklist(a: ReceiptedBookingWorklistItem, b: ReceiptedBookingWor
  * code is a compile-time error here rather than a silently dropped bucket.
  */
 export async function computeReceiptedBookingQuality(
-  ctx: RollupContext,
-  receiptedBookings: ReportStores["receiptedBookings"],
+  views: ReceiptedBookingView[],
 ): Promise<ReceiptedBookingQualityData> {
-  const views = await receiptedBookings.listForCohort({
-    orgId: ctx.orgId,
-    from: ctx.current.start,
-    to: ctx.current.end,
-  });
-
   const confidence: Record<AttributionConfidence, number> = {
     deterministic: 0,
     high: 0,

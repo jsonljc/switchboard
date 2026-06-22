@@ -62,6 +62,11 @@ export async function writeApprovedPayloadToTrace(args: {
     lifecycle.actionEnvelopeId,
     {
       parameters: frozenParameters,
+      // Proof-chain link (A7 rank5): stamp the approval lifecycle id so the receipted-booking
+      // view's humanApprovalId resolves. approvalId is a one-shot trace field (work-trace-lock.ts),
+      // undefined on the parked path until this write, so first-set is allowed and a retry with the
+      // same lifecycle.id is idempotent (isEqual => not rejected), exactly like the approval* fields.
+      approvalId: lifecycle.id,
       approvalOutcome: args.approvalOutcome,
       approvalRespondedBy: args.respondedBy,
       approvalRespondedAt: args.respondedAt,
