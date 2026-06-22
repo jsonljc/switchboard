@@ -107,3 +107,14 @@
   font-weight: 600;
   color: var(--ink-2);
 }
+
+/* Desktop: stacked list becomes a two-column grid (restores the /results
+   behavior dropped in the #1237 dedup; both surfaces share this widget). */
+@media (min-width: 1024px) {
+  .funnelRows {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 32px;
+    align-items: start;
+  }
+}
