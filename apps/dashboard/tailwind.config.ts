@@ -109,7 +109,11 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-sans)"],
         display: ["var(--font-display)"],
-        mono: ["var(--font-mono)"],
+        // Rides the editorial --mono token (JetBrains + a monospace fallback
+        // chain) so the font-mono utility survives the Space Mono drop instead
+        // of inheriting the proportional body face. sans/display still resolve
+        // to loaded faces (Inter / DM Sans).
+        mono: ["var(--mono)"],
       },
       transitionTimingFunction: {
         standard: "cubic-bezier(0.4, 0, 0.2, 1)",

@@ -69,6 +69,20 @@ describe("type collapse: Space Mono dropped (TY5)", () => {
     expect(offenders, offenders.join("\n")).toEqual([]);
   });
 
+  it("the Tailwind font-mono utility rides a surviving face, not the dropped --font-mono", () => {
+    // tailwind.config.ts lives at the package root (outside collectGovernedFiles'
+    // walked roots) and `font-mono` is a className, not a CSS-var string, so the
+    // governed-CSS sweep above cannot see this consumer. Dropping Space Mono
+    // orphaned --font-mono; the utility must ride the editorial mono token (which
+    // carries its own monospace fallback) or every font-mono element (error
+    // digests, IDs, phone numbers) inherits the proportional body face.
+    const tw = readFileSync(path.resolve(process.cwd(), "tailwind.config.ts"), "utf8");
+    const monoDecl = tw.match(/mono:\s*\[([^\]]*)\]/);
+    expect(monoDecl, "fontFamily.mono must be defined in tailwind.config.ts").not.toBeNull();
+    expect(monoDecl![1]).not.toMatch(/var\(--font-mono(?![-\w])/);
+    expect(monoDecl![1]).toMatch(/var\(--mono\)|var\(--font-mono-editorial\)/);
+  });
+
   it("the Mercury activity surface keeps a real mono (repointed, no dangling var)", () => {
     const activity = readFileSync(
       path.resolve(process.cwd(), "src/app/(auth)/(mercury)/activity/activity.module.css"),
