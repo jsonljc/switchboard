@@ -93,6 +93,7 @@ export {
   DISMISS_DISQUALIFICATION_INTENT,
   ERASE_CONTACT_INTENT,
   GRANT_CONSENT_INTENT,
+  MEMORY_WRITE_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
   RECONCILE_BOOKING_INTENT,
   RECORD_ATTENDANCE_INTENT,
@@ -102,6 +103,8 @@ export {
 } from "./operator-intents/shared.js";
 export { buildEraseContactHandler } from "./operator-intents/erase-contact.js";
 export type { OperatorContactEraser } from "./operator-intents/erase-contact.js";
+export { buildMemoryWriteHandler } from "./operator-intents/memory-write.js";
+export type { MemoryWriteStore } from "./operator-intents/memory-write.js";
 export { buildDeliverWeeklyReportHandler } from "./operator-intents/deliver-weekly-report.js";
 export type { WeeklyReportDeliveryWriter } from "./operator-intents/deliver-weekly-report.js";
 export { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
