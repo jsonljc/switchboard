@@ -36,6 +36,26 @@ v1 only scales budgets UP (`REALLOCATE_SCALE_FACTOR = 1.2`, a +20% increase). De
   (`buildShadowReallocationReport`), which reports the `blastRadiusRejected` count without moving
   money.
 
+## Count-vs-value gate (A12) and the paid-value data dependency
+
+Riley's `scale` -> reallocate money-move is gated on PROVEN paid value: a `scale` rec only becomes a
+reallocation candidate when the campaign has finite, positive, campaign-attributed verified-paid
+value (the per-campaign sum of `type:"purchased"` ConversionRecord value). When paid value is absent,
+non-finite, or zero, the rec is demoted to a `scale_unproven_paid_value` watch (fail-closed; it
+surfaces and recovers as receipts populate). The advisory is never silently dropped. The gate lives in
+`decideForCampaign` (the earliest point in the scale -> reallocate transition) and is fed by
+`PrismaConversionRecordStore.queryPaidValueCentsByCampaign`, wired as `paidValueByCampaignProvider` in
+`apps/api/src/bootstrap/inngest.ts`. It is independent of the self-execution flag: the floor is live
+whenever the weekly audit runs, so it already shapes the parked-for-approval proposals today.
+
+Paid value is produced ONLY by verified payments that carry campaign attribution (the
+`record-verified-payment` / revenue operator intents write `type:"purchased"` ConversionRecords with
+the real paid amount and `sourceCampaignId`; the record-store defaults `origin` to `"live"`, which the
+floor query requires, so a future producer writing `origin:"seed"`/`"demo"` would correctly NOT satisfy
+the floor). Until an org records campaign-attributed verified payments, every `scale` for that org
+surfaces as a `scale_unproven_paid_value` watch rather than a budget-increase money-move. This is the
+intended fail-closed default, not a bug: the gate never fabricates a pass on missing data.
+
 ## HARD precondition before flipping the flag (do NOT flip until ALL are true)
 
 1. The forward guardrail-evaluation monitor is WIRED (it reads `BlastRadiusContract.guardrails`
@@ -48,6 +68,13 @@ v1 only scales budgets UP (`REALLOCATE_SCALE_FACTOR = 1.2`, a +20% increase). De
    monitor, the rollback restored the prior budget, the kill-switch halted execution). An
    unexercised rollback is assumed broken; an off-flag is not a safety boundary (Knight Capital).
 5. A Tier-0 credentialed pilot org is provisioned (the executor needs live meta-ads credentials).
+6. The count-vs-value gate (A12) has DATA: the pilot org records campaign-attributed verified
+   payments, so the paid-value floor can pass a genuinely-paying campaign. Confirm on the real org
+   that at least one scaling-candidate campaign resolves a finite positive paid value (watch the
+   `scale_unproven_paid_value` watch clear for a paying campaign). Without this, the floor abstains by
+   holding every scale as a watch: safe, but the reallocation feature stays dark even with the flag on.
 
-Until 1-5 hold, `RILEY_REALLOCATE_SELF_EXECUTION_ENABLED` stays OFF. Wiring 1-4 is explicitly out
-of scope for the contract-honesty slice (deferred per decision D3; NIST AI RMF staged autonomy).
+Until 1-6 hold, `RILEY_REALLOCATE_SELF_EXECUTION_ENABLED` stays OFF. Wiring 1-4 is explicitly out
+of scope for the contract-honesty slice (deferred per decision D3; NIST AI RMF staged autonomy). A6
+(honest blast-radius contract + cap telemetry) and A12 (this count-vs-value gate) are the two code
+prerequisites that are now COMPLETE; the remaining preconditions are operational.

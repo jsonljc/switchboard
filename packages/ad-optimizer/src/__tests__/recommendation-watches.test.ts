@@ -3,6 +3,8 @@ import { describe, it, expect } from "vitest";
 import {
   insufficientEvidenceWatch,
   audienceOfferMismatchWatch,
+  scaleValueFloorMet,
+  scaleUnprovenPaidValueWatch,
 } from "../recommendation-watches.js";
 
 const base = { campaignId: "camp-1", campaignName: "Test Campaign" };
@@ -38,6 +40,41 @@ describe("audienceOfferMismatchWatch", () => {
 
   it("carries an actionable, non-empty message with no em-dash", () => {
     const watch = audienceOfferMismatchWatch(base);
+    expect(watch.message.length).toBeGreaterThan(0);
+    expect(watch.message).not.toContain("—");
+  });
+});
+
+describe("scaleValueFloorMet (A12 count-vs-value floor, fail-closed)", () => {
+  it("passes only on finite positive paid value", () => {
+    expect(scaleValueFloorMet({ paidValueCents: 50000 })).toBe(true);
+    expect(scaleValueFloorMet({ paidValueCents: 1 })).toBe(true);
+  });
+
+  it("fails closed on null / zero / negative", () => {
+    expect(scaleValueFloorMet({ paidValueCents: null })).toBe(false);
+    expect(scaleValueFloorMet({ paidValueCents: 0 })).toBe(false);
+    expect(scaleValueFloorMet({ paidValueCents: -100 })).toBe(false);
+  });
+
+  it("fails closed on non-finite (NaN / Infinity)", () => {
+    expect(scaleValueFloorMet({ paidValueCents: Number.NaN })).toBe(false);
+    expect(scaleValueFloorMet({ paidValueCents: Number.POSITIVE_INFINITY })).toBe(false);
+  });
+});
+
+describe("scaleUnprovenPaidValueWatch", () => {
+  it("builds a scale_unproven_paid_value watch with a blank checkBackDate", () => {
+    const watch = scaleUnprovenPaidValueWatch(base);
+    expect(watch.type).toBe("watch");
+    expect(watch.pattern).toBe("scale_unproven_paid_value");
+    expect(watch.campaignId).toBe("camp-1");
+    expect(watch.campaignName).toBe("Test Campaign");
+    expect(watch.checkBackDate).toBe("");
+  });
+
+  it("carries a non-empty message with no em-dash", () => {
+    const watch = scaleUnprovenPaidValueWatch(base);
     expect(watch.message.length).toBeGreaterThan(0);
     expect(watch.message).not.toContain("—");
   });

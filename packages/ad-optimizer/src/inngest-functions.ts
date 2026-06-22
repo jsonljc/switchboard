@@ -1,4 +1,8 @@
 // packages/ad-optimizer/src/inngest-functions.ts
+/* eslint-disable max-lines -- the ad-optimizer cron-wiring orchestrator at the 600-line cap: the A12
+   count-vs-value paid-value provider wiring (CronDependencies field + the AuditRunner spread) tipped
+   it over. Like its audit-runner.ts sibling this is the per-cron dependency-assembly seam; splitting
+   the cron registration out is the right follow-up but is out of scope for this money-adjacent slice. */
 import { Inngest, type InngestFunction } from "inngest";
 
 const inngestClient = new Inngest({ id: "switchboard" });
@@ -7,6 +11,7 @@ import type {
   AdsClientInterface,
   AuditConfig,
   BookedValueByCampaignProvider,
+  PaidValueByCampaignProvider,
 } from "./audit-runner.js";
 import type { CrmDataProvider, CampaignInsightsProvider } from "@switchboard/schemas";
 import type { SignalHealthReport, SignalHealthReportProvider } from "./signal-health-checker.js";
@@ -91,6 +96,13 @@ export interface CronDependencies {
    * PrismaConversionRecordStore. Absent ⇒ trueROAS reported null (graceful).
    */
   bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
+  /**
+   * A12 (count-vs-value gate). Optional. Per-campaign VERIFIED-PAID (cents) provider so the weekly
+   * audit gates the `scale` -> reallocate money-move on proven paid value. The same store singleton
+   * as bookedValueByCampaignProvider (keyed on orgId). Wired in apps/api/src/bootstrap/inngest.ts.
+   * Absent ⇒ no gate (back-compat).
+   */
+  paidValueByCampaignProvider?: PaidValueByCampaignProvider;
   /** D7-2: per-org operator approve/reject counts by action kind; resolveLearnedModifiers turns it
    * into a bounded, abstaining confidence modifier (wired in apps/api). Absent ⇒ no modifier. */
   approvalRateProvider?: (
@@ -306,6 +318,10 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
           ...(coverageValidator ? { coverageValidator } : {}),
           ...(deps.bookedValueByCampaignProvider
             ? { bookedValueByCampaignProvider: deps.bookedValueByCampaignProvider }
+            : {}),
+          // A12: forward the paid-value provider so the weekly audit gates scale on proven paid value.
+          ...(deps.paidValueByCampaignProvider
+            ? { paidValueByCampaignProvider: deps.paidValueByCampaignProvider }
             : {}),
           ...(deps.recommendationEmitter
             ? {

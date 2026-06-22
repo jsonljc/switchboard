@@ -236,6 +236,60 @@ describe("PrismaConversionRecordStore", () => {
     });
   });
 
+  describe("queryPaidValueCentsByCampaign (A12 paid sibling, type=purchased)", () => {
+    const window = { from: new Date("2026-04-01"), to: new Date("2026-04-30") };
+
+    it("sums verified-paid value (cents) per campaign, preserving cents (no /100)", async () => {
+      (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { sourceCampaignId: "camp_1", _sum: { value: 50000 } },
+        { sourceCampaignId: "camp_2", _sum: { value: 12345 } },
+      ]);
+      const result = await store.queryPaidValueCentsByCampaign({ orgId: "org_1", ...window });
+      expect(result.get("camp_1")).toBe(50000);
+      expect(result.get("camp_2")).toBe(12345);
+      expect(result.size).toBe(2);
+    });
+
+    it("filters to purchased type (NOT booked), value>0, non-null campaign, origin live, window", async () => {
+      const groupBy = prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>;
+      groupBy.mockResolvedValue([]);
+      await store.queryPaidValueCentsByCampaign({ orgId: "org_1", ...window });
+      const where = groupBy.mock.calls[0]![0].where;
+      expect(where.type).toBe("purchased");
+      expect(where.origin).toBe("live");
+      expect(where.value).toEqual({ gt: 0 });
+      expect(where.sourceCampaignId).toEqual({ not: null });
+      expect(where.occurredAt.gte).toBeInstanceOf(Date);
+      expect(where.occurredAt.lte).toBeInstanceOf(Date);
+    });
+
+    it("scopes to campaignIds when provided", async () => {
+      const groupBy = prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>;
+      groupBy.mockResolvedValue([]);
+      await store.queryPaidValueCentsByCampaign({
+        orgId: "org_1",
+        ...window,
+        campaignIds: ["camp_1", "camp_2"],
+      });
+      expect(groupBy.mock.calls[0]![0].where.sourceCampaignId).toEqual({
+        in: ["camp_1", "camp_2"],
+      });
+    });
+
+    it("omits campaigns with zero/null paid value — honest absence, the floor fails closed", async () => {
+      (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { sourceCampaignId: "camp_1", _sum: { value: 50000 } },
+        { sourceCampaignId: "camp_2", _sum: { value: 0 } },
+        { sourceCampaignId: null, _sum: { value: 9999 } },
+      ]);
+      const result = await store.queryPaidValueCentsByCampaign({ orgId: "org_1", ...window });
+      expect(result.get("camp_1")).toBe(50000);
+      expect(result.has("camp_2")).toBe(false);
+      expect(result.has("")).toBe(false);
+      expect(result.size).toBe(1);
+    });
+  });
+
   describe("queryBookedStatsByCampaign", () => {
     const window = {
       from: new Date("2026-05-01T00:00:00Z"),

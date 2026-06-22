@@ -38,6 +38,7 @@ export type {
   AuditConfig,
   AdsClientInterface,
   BookedValueByCampaignProvider,
+  PaidValueByCampaignProvider,
 } from "./audit-runner.js";
 export {
   createWeeklyAuditCron,

@@ -76,3 +76,36 @@ export function audienceOfferMismatchIfSilent(
   if (!diagnoses.some((d) => d.pattern === "audience_offer_mismatch")) return null;
   return audienceOfferMismatchWatch(base);
 }
+
+/**
+ * A12 (count-vs-value gate): the paid-value floor for a `scale` -> reallocate money-move.
+ * A `scale` rec may flow to the reallocation dispatch ONLY when the campaign has finite,
+ * positive, campaign-attributed VERIFIED-PAID value. Fail-closed: null (no attributed paid
+ * value), non-finite (NaN/Infinity from a poisoned sum), zero, or negative all return false,
+ * so a cheap-cost-per-lead campaign whose leads never pay is held, never auto-scaled. Pure;
+ * Number.isFinite-guarded before any comparison (every comparison with NaN is false, so a
+ * comparison-only floor would silently pass NaN).
+ */
+export function scaleValueFloorMet(gate: { paidValueCents: number | null }): boolean {
+  const v = gate.paidValueCents;
+  return typeof v === "number" && Number.isFinite(v) && v > 0;
+}
+
+/**
+ * Watch surfaced when a `scale` rec is demoted by the paid-value floor: the campaign's cost
+ * per lead is under target, but no verified-paid revenue is attributed to it yet, so a budget
+ * increase is not justified on lead count alone. Visible + recoverable (it graduates to a real
+ * scale money-move once paid receipts populate). `checkBackDate` is filled by the caller
+ * (campaign-decision.ts) from `input.nextCycleDate`, like the other watches.
+ */
+export function scaleUnprovenPaidValueWatch(base: WatchBase): WatchOutput {
+  return {
+    type: "watch",
+    campaignId: base.campaignId,
+    campaignName: base.campaignName,
+    pattern: "scale_unproven_paid_value",
+    message:
+      "Holding a budget increase: cost per lead is under target, but no verified-paid revenue is attributed to this campaign yet, so scaling is not justified on lead count alone. Re-checking next cycle as paid receipts populate.",
+    checkBackDate: "",
+  };
+}

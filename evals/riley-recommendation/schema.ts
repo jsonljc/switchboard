@@ -80,6 +80,13 @@ export const RileyCaseSchema = z.object({
   outcomeHistory: z
     .record(z.string(), z.object({ corroboratedUp: z.number(), corroboratedDown: z.number() }))
     .optional(),
+  /** A12: optional count-vs-value gate input. When present, the harness passes it into
+   * decideForCampaign exactly as the live audit-runner does (built only when the paid-value
+   * provider is wired), proving the gate end-to-end through the REAL engine. `paidValueCents`
+   * is the campaign's verified-paid (type="purchased") value for the window (cents), or null when
+   * none is attributed; a null / non-finite / zero value fails the floor and demotes a `scale` rec
+   * to a `scale_unproven_paid_value` watch (fail-closed). */
+  paidValueGate: z.object({ paidValueCents: z.number().nullable() }).optional(),
   /** D7-2: optional per-action confidence assertions. The engine's emitted confidence for
    * the named action must satisfy the bound(s). `equals` pins an exact value (close to 5
    * decimals); `min`/`max` pin the bounded band. Proves the modifier moved (or abstained

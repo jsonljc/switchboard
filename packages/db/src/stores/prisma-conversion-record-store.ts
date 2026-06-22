@@ -254,6 +254,45 @@ export class PrismaConversionRecordStore {
   }
 
   /**
+   * Per-campaign sum of VERIFIED-PAID conversion value for the window, in MINOR units
+   * (cents). The paid sibling of queryBookedValueCentsByCampaign: identical filters except
+   * `type:"purchased"` (a verified-payment ConversionRecord written by the record-verified-payment
+   * / revenue operator intents, carrying the real paid amount + sourceCampaignId) instead of
+   * "booked" (expected value at issuance). A campaign with no valued purchased record is ABSENT
+   * from the map (the caller reads absence as "no proven paid value" => the A12 count-vs-value floor
+   * fails closed), never a fabricated 0.
+   */
+  async queryPaidValueCentsByCampaign(query: {
+    orgId: string;
+    from: Date;
+    to: Date;
+    campaignIds?: string[];
+  }): Promise<Map<string, number>> {
+    const rows = await this.prisma.conversionRecord.groupBy({
+      by: ["sourceCampaignId"],
+      where: {
+        organizationId: query.orgId,
+        type: "purchased",
+        origin: "live",
+        value: { gt: 0 },
+        occurredAt: { gte: query.from, lte: query.to },
+        sourceCampaignId: query.campaignIds ? { in: query.campaignIds } : { not: null },
+      },
+      _sum: { value: true },
+    });
+
+    const result = new Map<string, number>();
+    for (const row of rows as Array<{
+      sourceCampaignId: string | null;
+      _sum: { value: number | null };
+    }>) {
+      const sum = row._sum.value ?? 0;
+      if (row.sourceCampaignId && sum > 0) result.set(row.sourceCampaignId, sum);
+    }
+    return result;
+  }
+
+  /**
    * Sibling of queryBookedValueCentsByCampaign returning BOTH the cents sum
    * and the record count per campaign, aggregated over the SAME predicate
    * (`type:"booked"` AND `value > 0` AND present `sourceCampaignId`), so the

@@ -158,6 +158,22 @@ export interface BookedValueByCampaignProvider {
 }
 
 /**
+ * A12 (count-vs-value gate): per-campaign VERIFIED-PAID value provider (the paid sibling of
+ * BookedValueByCampaignProvider). Implemented by the same PrismaConversionRecordStore
+ * (.queryPaidValueCentsByCampaign over type="purchased" ConversionRecords). Values are CENTS, keyed
+ * by campaignId; an absent campaign means "no proven paid value" => the count-vs-value floor in
+ * decideForCampaign fails closed and the `scale` rec is held, not auto-scaled.
+ */
+export interface PaidValueByCampaignProvider {
+  queryPaidValueCentsByCampaign(query: {
+    orgId: string;
+    from: Date;
+    to: Date;
+    campaignIds?: string[];
+  }): Promise<Map<string, number>>;
+}
+
+/**
  * Slice-4c: latest operator operational-state confirmation (the 4a
  * substrate). Implementation is PrismaOperationalStateStore.getLatest in
  * @switchboard/db, injected at the app layer (ad-optimizer is Layer 2 and
@@ -213,6 +229,10 @@ export interface AuditDependencies {
    * in `campaignEconomics`. Absent → trueROAS reported null (graceful). Does NOT
    * affect the Gate-4 breach basis, which uses booking COUNTS from byCampaign. */
   bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
+  /** A12 (count-vs-value gate). Optional. Supplies per-campaign VERIFIED-PAID value (cents) so the
+   * `scale` -> reallocate money-move is gated on proven paid value. Absent → no gate (back-compat).
+   * Wired to the same store as bookedValueByCampaignProvider in apps/api. */
+  paidValueByCampaignProvider?: PaidValueByCampaignProvider;
   /** Optional bootstrap callback: routes each emitted creative rec (post-abstention) to a governed Mira draft. */
   recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
   /** Optional (Phase-C). Routes the arbitration-PRIMARY pause to the governed
@@ -312,6 +332,7 @@ export class AuditRunner {
   private readonly signalHealthChecker?: SignalHealthReportProvider;
   private readonly coverageValidator?: AuditDependencies["coverageValidator"];
   private readonly bookedValueByCampaignProvider?: BookedValueByCampaignProvider;
+  private readonly paidValueByCampaignProvider?: PaidValueByCampaignProvider;
   private readonly recommendationHandoffSubmitter?: RecommendationHandoffSubmitter;
   private readonly rileyPauseSubmitter?: RileyPauseSubmitter;
   private readonly rileyBudgetSubmitter?: RileyBudgetSubmitter;
@@ -331,6 +352,7 @@ export class AuditRunner {
     this.signalHealthChecker = deps.signalHealthChecker;
     this.coverageValidator = deps.coverageValidator;
     this.bookedValueByCampaignProvider = deps.bookedValueByCampaignProvider;
+    this.paidValueByCampaignProvider = deps.paidValueByCampaignProvider;
     this.recommendationHandoffSubmitter = deps.recommendationHandoffSubmitter;
     this.rileyPauseSubmitter = deps.rileyPauseSubmitter;
     this.rileyBudgetSubmitter = deps.rileyBudgetSubmitter;
@@ -579,6 +601,20 @@ export class AuditRunner {
     // fake providers) ⇒ undefined ⇒ each provider call fetches per-campaign as before (back-compat).
     const prefetched = await this.prefetchAndIndexAccountRows(dateRange);
 
+    // A12: resolve per-campaign VERIFIED-PAID value ONCE (only when the provider is wired) so each
+    // per-campaign decision can gate the scale -> reallocate money-move on PROVEN paid value.
+    // Provider absent (legacy / analysis-only fake providers) => undefined => no gate (back-compat).
+    // When wired, EVERY campaign gets a paidValueGate, so a cheap-cpa campaign with no attributed
+    // paid value is held (demoted to a watch), not auto-scaled (fail-closed).
+    const paidValueByCampaign = this.paidValueByCampaignProvider
+      ? await this.paidValueByCampaignProvider.queryPaidValueCentsByCampaign({
+          orgId: this.config.orgId,
+          from: new Date(dateRange.since),
+          to: new Date(dateRange.until),
+          campaignIds: currentInsights.map((i) => i.campaignId),
+        })
+      : undefined;
+
     for (const insight of currentInsights) {
       // 5a: Check learning phase
       const learningInput = await this.insightsProvider.getCampaignLearningData({
@@ -656,6 +692,15 @@ export class AuditRunner {
         // approval modifier (absent ⇒ no adjustment). Same per-campaign v1 scope as above.
         ...(this.config.outcomeMultiplierByKind
           ? { outcomeMultiplierByKind: this.config.outcomeMultiplierByKind }
+          : {}),
+        // A12: forward this campaign's verified-paid value as the count-vs-value gate (only when the
+        // provider is wired; absent => no gate). null when no paid value is attributed => fail-closed.
+        ...(paidValueByCampaign
+          ? {
+              paidValueGate: {
+                paidValueCents: paidValueByCampaign.get(insight.campaignId) ?? null,
+              },
+            }
           : {}),
       });
       insights.push(...decision.insights);
