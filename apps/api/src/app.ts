@@ -1029,7 +1029,8 @@ export async function buildServer() {
       const { resolveOwnerReportRecipients } =
         await import("./services/reports/weekly-report-recipients.js");
       const { createResendEmailSender } = await import("./services/notifications/send-email.js");
-      const { getEscalationConfig } = await import("./services/escalation-config-service.js");
+      const { getStoredEscalationRecipients } =
+        await import("./services/escalation-config-service.js");
       const { createInMemoryBaselineStore } = await import("@switchboard/core/reports");
       const baselineForDelivery = app.baselineStore ?? createInMemoryBaselineStore();
 
@@ -1037,7 +1038,10 @@ export async function buildServer() {
         resolveRecipients: (orgId: string) =>
           resolveOwnerReportRecipients(
             {
-              getConfig: (id: string) => getEscalationConfig(prismaClient, id),
+              // Owner-report recipients are per-org STORED only (no env fallback) —
+              // never the process-global ESCALATION_EMAIL_RECIPIENTS, which would
+              // leak one shared inbox across all config-less tenants (P1-3).
+              getStoredRecipients: (id: string) => getStoredEscalationRecipients(prismaClient, id),
               listVerifiedUserEmails: async (id: string) =>
                 (
                   await prismaClient.dashboardUser.findMany({
