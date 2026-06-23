@@ -210,6 +210,8 @@ describe("respondToApproval lifecycle fork: unified dispatch chain", () => {
     // frozen payload + approval fields written onto the trace BEFORE dispatch
     expect(w.getTrace().approvalOutcome).toBe("approved");
     expect(w.getTrace().approvalRespondedBy).toBe("operator-jane");
+    // A7 rank5: approvalId stamped from the approved lifecycle (proof-chain humanApprovalId link).
+    expect(w.getTrace().approvalId).toBe(w.lifecycle.id);
     // envelope flipped to approved (executeAfterApproval admission gate)
     expect(w.getEnvelope()?.status).toBe("approved");
     // legacy row synced as a side record

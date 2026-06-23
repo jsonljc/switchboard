@@ -1,16 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import type {
   AttributionConfidence,
   ExceptionEntry,
   ReceiptedBookingView,
 } from "@switchboard/schemas";
 import { computeReceiptedBookingQuality } from "./compute-receipted-booking-quality.js";
-
-const ctx = {
-  orgId: "o1",
-  current: { start: new Date("2026-06-08"), end: new Date("2026-06-15") },
-  computedAt: new Date("2026-06-14"),
-} as never;
 
 const RAISED = new Date("2026-06-10");
 const STARTS = new Date("2026-06-16T02:00:00Z");
@@ -46,6 +40,9 @@ function mkView(
   };
 }
 
+// computeReceiptedBookingQuality consumes the pre-assembled cohort views directly (A7 rank19):
+// period-rollup assembles the cohort once and threads it into both the quality and revenue
+// dimensions, so the N+1 getView fan-out runs once and both dimensions share one snapshot.
 describe("computeReceiptedBookingQuality", () => {
   it("aggregates the confidence breakdown and the open-exception worklist over the cohort", async () => {
     const views: ReceiptedBookingView[] = [
@@ -62,9 +59,8 @@ describe("computeReceiptedBookingQuality", () => {
       ),
       mkView("unattributed", [{ code: "missing_source", raisedAt: RAISED }], "b5"),
     ];
-    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
 
-    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+    const result = await computeReceiptedBookingQuality(views);
 
     expect(result.cohortSize).toBe(5);
     expect(result.confidence).toEqual({
@@ -84,11 +80,6 @@ describe("computeReceiptedBookingQuality", () => {
     expect(result.bookingsNeedingAttention).toBe(3);
     // Worst-first: b4 (2 codes) > b5 (unattributed, 1 code) > b3 (high, 1 code).
     expect(result.worklist.map((w) => w.bookingId)).toEqual(["b4", "b5", "b3"]);
-    expect(receiptedBookings.listForCohort).toHaveBeenCalledWith({
-      orgId: "o1",
-      from: new Date("2026-06-08"),
-      to: new Date("2026-06-15"),
-    });
   });
 
   it("excludes resolved exceptions from the worklist (only open entries count)", async () => {
@@ -99,9 +90,8 @@ describe("computeReceiptedBookingQuality", () => {
         "b1",
       ),
     ];
-    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
 
-    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+    const result = await computeReceiptedBookingQuality(views);
 
     expect(result.exceptions.missing_consent).toBe(0);
     expect(result.bookingsNeedingAttention).toBe(0);
@@ -117,9 +107,8 @@ describe("computeReceiptedBookingQuality", () => {
     const views: ReceiptedBookingView[] = [
       mkView("high", [{ code: "manual_override", raisedAt: RAISED }], "b-ov-only"),
     ];
-    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
 
-    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+    const result = await computeReceiptedBookingQuality(views);
 
     // Off the headline attention count.
     expect(result.bookingsNeedingAttention).toBe(0);
@@ -144,9 +133,8 @@ describe("computeReceiptedBookingQuality", () => {
         "b-mixed",
       ),
     ];
-    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
 
-    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+    const result = await computeReceiptedBookingQuality(views);
 
     expect(result.bookingsNeedingAttention).toBe(1);
     expect(result.exceptions.manual_override).toBe(1);
@@ -155,9 +143,7 @@ describe("computeReceiptedBookingQuality", () => {
   });
 
   it("returns an all-zero breakdown with an empty worklist for an empty cohort", async () => {
-    const receiptedBookings = { listForCohort: vi.fn(async () => []) };
-
-    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+    const result = await computeReceiptedBookingQuality([]);
 
     expect(result).toEqual({
       cohortSize: 0,
@@ -184,9 +170,8 @@ describe("computeReceiptedBookingQuality", () => {
         "b1",
       ),
     ];
-    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
 
-    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+    const result = await computeReceiptedBookingQuality(views);
 
     expect(result.exceptions.missing_consent).toBe(1);
     expect(result.bookingsNeedingAttention).toBe(1);
@@ -208,9 +193,8 @@ describe("computeReceiptedBookingQuality", () => {
         { service: "Botox consult", startsAt: new Date("2026-06-16T02:00:00Z") },
       ),
     ];
-    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
 
-    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+    const result = await computeReceiptedBookingQuality(views);
 
     expect(result.worklist[0]).toEqual({
       bookingId: "b1",
@@ -228,9 +212,8 @@ describe("computeReceiptedBookingQuality", () => {
     const views: ReceiptedBookingView[] = Array.from({ length: 30 }, (_, i) =>
       mkView("unattributed", [{ code: "missing_source", raisedAt: RAISED }], `b${i}`),
     );
-    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
 
-    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+    const result = await computeReceiptedBookingQuality(views);
 
     expect(result.bookingsNeedingAttention).toBe(30);
     expect(result.worklist).toHaveLength(25);
@@ -250,9 +233,8 @@ describe("computeReceiptedBookingQuality", () => {
         startsAt: new Date("2026-06-16T00:00:00Z"),
       }),
     ];
-    const receiptedBookings = { listForCohort: vi.fn(async () => views) };
 
-    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+    const result = await computeReceiptedBookingQuality(views);
 
     expect(result.worklist.map((w) => w.bookingId)).toEqual(["bk", "bz", "ba"]);
   });
@@ -271,9 +253,8 @@ describe("computeReceiptedBookingQuality", () => {
       [{ code: "missing_source", raisedAt: RAISED }],
       "b-un",
     );
-    const receiptedBookings = { listForCohort: vi.fn(async () => [overriddenView, unhookedView]) };
 
-    const result = await computeReceiptedBookingQuality(ctx, receiptedBookings as never);
+    const result = await computeReceiptedBookingQuality([overriddenView, unhookedView]);
 
     const ovRow = result.worklist.find((w) => w.bookingId === "b-ov");
     const unRow = result.worklist.find((w) => w.bookingId === "b-un");

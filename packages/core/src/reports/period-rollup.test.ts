@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createPeriodRollup, type ReportDependencies } from "./period-rollup.js";
 import { createInMemoryReportCacheStore, createInMemoryBaselineStore } from "./in-memory-store.js";
 import type { ReportStores } from "./interfaces.js";
@@ -125,6 +125,36 @@ describe("createPeriodRollup", () => {
       },
       bookingsNeedingAttention: 0,
       worklist: [],
+    });
+  });
+
+  it("assembles the receipted-booking cohort exactly once (quality + revenue share one snapshot)", async () => {
+    const listForCohort = vi.fn(async () => []);
+    const stores: ReportStores = { ...stubStores(), receiptedBookings: { listForCohort } };
+    const rollup = createPeriodRollup(makeDeps({ stores }));
+
+    await rollup({
+      orgId: "org-1",
+      current: {
+        start: new Date("2026-04-01T00:00:00Z"),
+        end: new Date("2026-05-01T00:00:00Z"),
+        window: "THIS MONTH",
+      },
+      prior: {
+        start: new Date("2026-03-01T00:00:00Z"),
+        end: new Date("2026-04-01T00:00:00Z"),
+        window: null,
+      },
+      computedAt: new Date("2026-04-15T00:00:00Z"),
+    });
+
+    // The expensive N+1 getView fan-out runs ONCE: both the quality and revenue dimensions
+    // consume one pre-assembled cohort snapshot (A7 rank19), not one assembly each.
+    expect(listForCohort).toHaveBeenCalledTimes(1);
+    expect(listForCohort).toHaveBeenCalledWith({
+      orgId: "org-1",
+      from: new Date("2026-04-01T00:00:00Z"),
+      to: new Date("2026-05-01T00:00:00Z"),
     });
   });
 
