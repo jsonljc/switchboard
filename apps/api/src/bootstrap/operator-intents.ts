@@ -37,6 +37,7 @@ import {
   DISMISS_DISQUALIFICATION_INTENT,
   ERASE_CONTACT_INTENT,
   GRANT_CONSENT_INTENT,
+  MEMORY_WRITE_INTENT,
   RECONCILE_BOOKING_INTENT,
   RECORD_ATTENDANCE_INTENT,
   RECORD_REVENUE_INTENT,
@@ -82,6 +83,7 @@ import {
   buildEraseContactHandler,
   type OperatorContactEraser,
 } from "./operator-intents/erase-contact.js";
+import { buildMemoryWriteHandler, type MemoryWriteStore } from "./operator-intents/memory-write.js";
 
 // Re-export every public symbol the rest of the codebase imports from
 // "../bootstrap/operator-intents.js" so existing import paths stay valid.
@@ -93,6 +95,7 @@ export {
   DISMISS_DISQUALIFICATION_INTENT,
   ERASE_CONTACT_INTENT,
   GRANT_CONSENT_INTENT,
+  MEMORY_WRITE_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
   RECONCILE_BOOKING_INTENT,
   RECORD_ATTENDANCE_INTENT,
@@ -102,6 +105,8 @@ export {
 } from "./operator-intents/shared.js";
 export { buildEraseContactHandler } from "./operator-intents/erase-contact.js";
 export type { OperatorContactEraser } from "./operator-intents/erase-contact.js";
+export { buildMemoryWriteHandler } from "./operator-intents/memory-write.js";
+export type { MemoryWriteStore } from "./operator-intents/memory-write.js";
 export { buildDeliverWeeklyReportHandler } from "./operator-intents/deliver-weekly-report.js";
 export type { WeeklyReportDeliveryWriter } from "./operator-intents/deliver-weekly-report.js";
 export { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
@@ -152,6 +157,9 @@ interface OperatorIntentsBootstrapDeps {
   /** Optional: registers the operator.erase_contact intent + handler when provided. Runs the full
    *  PDPA delete cascade (eraseContactFully), org-scoped + fail-closed cross-tenant. */
   contactEraser?: OperatorContactEraser;
+  /** Optional: registers the memory.write intent + handler when provided (S8b). The governed,
+   *  non-conversation DeploymentMemory write path. */
+  memoryWriteStore?: MemoryWriteStore;
   logger?: { info(msg: string): void };
 }
 
@@ -202,6 +210,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     reconcileBookingWriter,
     weeklyReportDeliveryWriter,
     contactEraser,
+    memoryWriteStore,
     logger,
   } = deps;
 
@@ -280,6 +289,10 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     handlers.set(ERASE_CONTACT_INTENT, buildEraseContactHandler(contactEraser));
   }
 
+  if (memoryWriteStore) {
+    handlers.set(MEMORY_WRITE_INTENT, buildMemoryWriteHandler(memoryWriteStore));
+  }
+
   modeRegistry.register(new OperatorMutationMode({ handlers }));
 
   if (opportunityStore) {
@@ -318,6 +331,12 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
   if (contactEraser) {
     registerOperatorIntent(intentRegistry, ERASE_CONTACT_INTENT);
   }
+  if (memoryWriteStore) {
+    // internal + schedule: S8c reroutes the conversation-compounding writer (trigger "internal") and
+    // the decay cron (trigger "schedule") to submit through this intent. No "api" leg: there is no
+    // operator-direct route for a learned memory write (the owner-correction route is separate, T4).
+    registerOperatorIntent(intentRegistry, MEMORY_WRITE_INTENT, ["internal", "schedule"]);
+  }
 
   const intentCount =
     (opportunityStore ? 1 : 0) +
@@ -329,7 +348,8 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     (bookingAttendanceWriter ? 1 : 0) +
     (reconcileBookingWriter ? 1 : 0) +
     (weeklyReportDeliveryWriter ? 1 : 0) +
-    (contactEraser ? 1 : 0);
+    (contactEraser ? 1 : 0) +
+    (memoryWriteStore ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );

@@ -6,6 +6,7 @@ import {
   DeploymentMemorySourceSchema,
   InteractionOutcomeSchema,
   computeConfidenceScore,
+  MemoryWriteParametersSchema,
 } from "../deployment-memory.js";
 
 describe("DeploymentMemoryCategorySchema", () => {
@@ -143,5 +144,38 @@ describe("DeploymentMemorySchema provenance + valid-time", () => {
         invalidatedAt: null,
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("MemoryWriteParametersSchema", () => {
+  const base = {
+    deploymentId: "d1",
+    category: "fact",
+    content: "Closed on Sundays",
+    source: "conversation-compounding",
+  };
+  it("parses a minimal valid governed memory write", () => {
+    expect(MemoryWriteParametersSchema.safeParse(base).success).toBe(true);
+  });
+  it("parses with optional confidence + canonicalKey", () => {
+    expect(
+      MemoryWriteParametersSchema.safeParse({ ...base, confidence: 0.8, canonicalKey: "k1" })
+        .success,
+    ).toBe(true);
+  });
+  it("requires source (provenance is mandatory for a governed write)", () => {
+    const { source: _omit, ...noSource } = base;
+    expect(MemoryWriteParametersSchema.safeParse(noSource).success).toBe(false);
+  });
+  it("rejects an unknown category", () => {
+    expect(MemoryWriteParametersSchema.safeParse({ ...base, category: "nope" }).success).toBe(
+      false,
+    );
+  });
+  it("rejects an unknown source", () => {
+    expect(MemoryWriteParametersSchema.safeParse({ ...base, source: "magic" }).success).toBe(false);
+  });
+  it("rejects confidence outside [0,1]", () => {
+    expect(MemoryWriteParametersSchema.safeParse({ ...base, confidence: 1.5 }).success).toBe(false);
   });
 });

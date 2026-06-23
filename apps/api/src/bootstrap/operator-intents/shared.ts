@@ -23,6 +23,7 @@ export const RECORD_ATTENDANCE_INTENT = "booking.record_attendance";
 export const RECONCILE_BOOKING_INTENT = "receipt.reconcile_booking";
 export const DELIVER_WEEKLY_REPORT_INTENT = "ledger.deliver_weekly_report";
 export const ERASE_CONTACT_INTENT = "operator.erase_contact";
+export const MEMORY_WRITE_INTENT = "memory.write";
 
 /**
  * Sentinel deployment ID used for admin-consent verdict context. The admin

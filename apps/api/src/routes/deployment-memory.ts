@@ -57,12 +57,14 @@ export const deploymentMemoryRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: "Invalid input", details: parsed.error.issues, statusCode: 400 });
     }
     const body = parsed.data;
+    // S8a provenance: owner corrections are operator-sourced.
     const entry = await store.create({
       organizationId: orgId,
       deploymentId,
       category: body.category,
       content: body.content,
       confidence: 1.0,
+      source: "operator",
     });
     return reply.status(201).send({ data: entry });
   });
