@@ -55,10 +55,10 @@ Status describes code on `main`, not deployment. We do not claim a capability is
 
 **Gated off by design** (built, dark until flipped):
 
-- Deposit links: the Stripe Connect checkout adapter and payment-status retrieval are wired and tested; issuance through the skill runtime is not yet registered.
+- Deposit links: the deposit-link tool is registered in the skill runtime and rides a confirmed booking's prior approval, but issues live only against an organization with connected Stripe Connect credentials (the Noop adapter fails closed otherwise). No production org is enabled.
 - Riley's pause execution on Meta is capability-gated per organization; no production org is enabled.
 - Every ad object Mira creates is `PAUSED` by construction; the Meta client refuses to set `ACTIVE`.
-- Compliance gates (consent, claim scanning, messaging windows) run in observe mode during the enforcement bake.
+- Compliance gates (consent, claim scanning, messaging windows) are non-enforcing by default (observe or off) during the enforcement bake.
 - Meta Conversions API echo ships only when the pixel id and access token are configured.
 
 **Next:** close the act-on-proof leg. Held and paid receipt coverage for the full funnel, then Riley's reallocation executing through the same governed ingress as everything else.

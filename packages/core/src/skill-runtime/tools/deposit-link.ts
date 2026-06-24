@@ -1,8 +1,8 @@
-// DEFERRED — not yet registered into the skill runtime.
-// The deposit-link tool is wired into the skill runtime as part of the payment issuance
-// wiring per spec §12 de-risk ordering (PR 1A-4d). Until the live Stripe adapter lands and
-// the per-org payment-port factory is wired in apps/api, this module is defined + tested but
-// intentionally not registered. It is not dead code.
+// The deposit-link tool is registered into the skill runtime as part of the payment
+// issuance wiring per spec §12 de-risk ordering (PR 1A-4d), whenever a per-org payment-port
+// factory is injected (apps/api/src/bootstrap/skill-mode.ts). It rides a confirmed booking's
+// prior approval and issues live only against an org with connected Stripe Connect
+// credentials; otherwise the Noop adapter fails closed.
 import type { SkillTool, SkillRequestContext } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
