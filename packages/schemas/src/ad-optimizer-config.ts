@@ -12,14 +12,23 @@ import { z } from "zod";
  * cleared form field comes through as `""`. Without this preprocess,
  * `z.coerce.number("")` is `0` and the `.default(N)` never runs.
  */
+const emptyToUndefined = (v: unknown) =>
+  v === "" || v === null || v === undefined || (typeof v === "string" && v.trim() === "")
+    ? undefined
+    : v;
+
 const numericWithDefault = (fallback: number) =>
-  z.preprocess(
-    (v) =>
-      v === "" || v === null || v === undefined || (typeof v === "string" && v.trim() === "")
-        ? undefined
-        : v,
-    z.coerce.number().nonnegative().default(fallback),
-  );
+  z.preprocess(emptyToUndefined, z.coerce.number().nonnegative().default(fallback));
+
+/**
+ * Like numericWithDefault but with NO default: an unset value stays `undefined`.
+ * For optional economic targets (e.g. targetCostPerBooked) where "unset" is a real,
+ * meaningful state (no booked-CAC tier) that must never collapse to a silent 0.
+ * Still coerces operator string input to a number and rejects malformed text
+ * (e.g. "$1,500" -> NaN -> .nonnegative() throws) rather than NaN-suppressing.
+ */
+const numericOptional = () =>
+  z.preprocess(emptyToUndefined, z.coerce.number().nonnegative().optional());
 
 /**
  * Per-deployment ad-optimizer config. Lives at the top level of
@@ -52,6 +61,9 @@ export const AdOptimizerConfigSchema = z
     targetCPA: numericWithDefault(100),
     targetROAS: numericWithDefault(3),
     monthlyBudget: numericWithDefault(0),
+    // A21: the booked-CAC target. No default — unset means "no booked_cac tier",
+    // a real state the weekly-audit cron reads with a `typeof === "number"` guard.
+    targetCostPerBooked: numericOptional(),
   })
   .passthrough()
   .default({});

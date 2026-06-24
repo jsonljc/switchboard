@@ -50,6 +50,31 @@ describe("AdOptimizerConfigSchema", () => {
     expect(() => AdOptimizerConfigSchema.parse({ targetCPA: "not-a-number" })).toThrow();
   });
 
+  // A21: the booked-CAC target is ALSO an operator form value (a future wizard
+  // field), so it must coerce string -> number like the others. Unlike targetCPA/
+  // targetROAS it has NO default: an unset target means "no booked_cac tier", which
+  // must stay genuinely unset (undefined), never a silent 0.
+  it("coerces a numeric-string targetCostPerBooked to a number", () => {
+    expect(AdOptimizerConfigSchema.parse({ targetCostPerBooked: "1500" })).toMatchObject({
+      targetCostPerBooked: 1500,
+    });
+  });
+
+  it("leaves targetCostPerBooked unset (undefined) when absent — no silent default", () => {
+    expect(AdOptimizerConfigSchema.parse({}).targetCostPerBooked).toBeUndefined();
+  });
+
+  it("treats an empty-string targetCostPerBooked as unset (not 0)", () => {
+    expect(AdOptimizerConfigSchema.parse({ targetCostPerBooked: "" }).targetCostPerBooked).toBe(
+      undefined,
+    );
+  });
+
+  it("rejects a malformed targetCostPerBooked (currency/percent text) rather than coercing to NaN", () => {
+    expect(() => AdOptimizerConfigSchema.parse({ targetCostPerBooked: "$1,500" })).toThrow();
+    expect(() => AdOptimizerConfigSchema.parse({ targetCostPerBooked: "30%" })).toThrow();
+  });
+
   // PR-C.1 (#510): the preprocess strips empty-ish inputs so .default()
   // fires instead of z.coerce.number() silently producing 0. Without
   // this, an operator who clears the marketplace form field saves an
