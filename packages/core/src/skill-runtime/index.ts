@@ -24,7 +24,9 @@ export type {
 } from "./templates/whatsapp-registry.js";
 // Governance infrastructure re-exported for bootstrap wiring convenience
 export { createAgentDeploymentGovernanceResolver } from "../governance/governance-config-resolver.js";
+export type { GovernanceConfigResolver } from "../governance/governance-config-resolver.js";
 export { InMemoryGovernancePostureCache } from "../governance/posture-cache.js";
+export type { GovernancePostureCache } from "../governance/posture-cache.js";
 export { loadBannedPhrases } from "../governance/banned-phrases/index.js";
 export { loadEscalationTriggers } from "../governance/escalation-triggers/index.js";
 /** @deprecated Use `AnthropicToolAdapter` instead. Alias retained for out-of-tree consumers; removal scheduled for PR-4B follow-up. */
@@ -62,6 +64,8 @@ export type {
   ScheduleFollowUpToolFactory,
   CalendarRescheduleDeps,
   ResolveBookedValueInput,
+  ConsentPrecondition,
+  BookingConsentState,
 } from "./tools/index.js";
 export type {
   ChildWorkSubmitter,
