@@ -50,18 +50,24 @@ function deps(over: Record<string, unknown> = {}) {
   };
 }
 
-it("booking.reschedule scopes its guided auto-approve override (still gates at supervised)", () => {
+// P1-A / P3-3: reschedule + cancel act on an ALREADY-confirmed booking. They
+// previously auto-approved only at "guided" and gated at "supervised". But the
+// in-skill GovernanceHook cannot park a pending_approval, so a gate at supervised
+// is not a human-review checkpoint — it is a SILENT DEAD-END: execute() never
+// runs, the change never persists, and Alex still tells the lead "I've
+// moved/cancelled your appointment". Bring them to parity with booking.create:
+// auto-approve at supervised AND guided so Alex never confirms a change that did
+// not happen. (Operator-park-for-review at supervised is the deferred F2 posture.)
+it("booking.reschedule auto-approves at supervised AND guided (parity with booking.create — a gate dead-ends)", () => {
   const ops = buildRescheduleOperations(ctx, deps() as never);
+  expect(getToolGovernanceDecision(ops["booking.reschedule"]!, "supervised")).toBe("auto-approve");
   expect(getToolGovernanceDecision(ops["booking.reschedule"]!, "guided")).toBe("auto-approve");
-  expect(getToolGovernanceDecision(ops["booking.reschedule"]!, "supervised")).toBe(
-    "require-approval",
-  );
 });
 
-it("booking.cancel scopes its guided auto-approve override (still gates at supervised)", () => {
+it("booking.cancel auto-approves at supervised AND guided (parity with booking.create — a gate dead-ends)", () => {
   const ops = buildRescheduleOperations(ctx, deps() as never);
+  expect(getToolGovernanceDecision(ops["booking.cancel"]!, "supervised")).toBe("auto-approve");
   expect(getToolGovernanceDecision(ops["booking.cancel"]!, "guided")).toBe("auto-approve");
-  expect(getToolGovernanceDecision(ops["booking.cancel"]!, "supervised")).toBe("require-approval");
 });
 
 it("reschedule resolves the soonest booking from ctx.contactId and ignores a model contactId", async () => {

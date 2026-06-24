@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createCrmWriteToolFactory } from "./crm-write.js";
+import { getToolGovernanceDecision } from "../governance.js";
 import type { SkillRequestContext } from "../types.js";
 
 const TRUSTED_CTX: SkillRequestContext = {
@@ -110,5 +111,18 @@ describe("crm-write tool factory", () => {
     };
     expect(schema.properties["stage"]?.enum).toContain("qualified");
     expect(schema.properties["stage"]?.enum).toContain("nurturing");
+  });
+
+  // P1-A: when a booking dead-ends, Alex's fallback is to log a failed-attempt
+  // activity via crm-write.activity.log so the operator has a durable record. At
+  // the default "supervised" trust a "write" maps to require-approval and the
+  // in-skill GovernanceHook short-circuits before execute() — so the fallback
+  // record is silently swallowed too. A scoped override auto-approves the
+  // activity-log fallback at supervised (parity with escalate).
+  it("activity.log auto-approves at the default 'supervised' trust so the failed-attempt fallback is recorded", () => {
+    const { tool } = setup();
+    expect(getToolGovernanceDecision(tool.operations["activity.log"]!, "supervised")).toBe(
+      "auto-approve",
+    );
   });
 });

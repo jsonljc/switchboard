@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createEscalateToolFactory } from "./escalate.js";
+import { getToolGovernanceDecision } from "../governance.js";
+import { GovernanceHook } from "../hooks/governance-hook.js";
 import type { HandoffReason } from "../../handoff/types.js";
 import type { SkillRequestContext } from "../types.js";
 
@@ -154,5 +156,67 @@ describe("escalate tool factory", () => {
     expect(baseDeps.assembler.assemble).toHaveBeenCalledWith(
       expect.objectContaining({ reason: "medical_safety" }),
     );
+  });
+});
+
+// P1-A SAFETY-VALVE REGRESSION: escalation is the human safety valve — it must
+// never itself be gated behind approval. A freshly onboarded real org resolves to
+// "supervised" trust (ensureAlexListingForOrg seeds trustScore:0, no override). At
+// supervised, escalate's "write" effect maps to require-approval, and the in-skill
+// GovernanceHook short-circuits with proceed:false / pending_approval BEFORE
+// execute() runs — so handoffStore.save + notifier.notify never fire. The handoff
+// (incl. a medical_safety red flag or an angry customer) is silently swallowed
+// while Alex still tells the lead "someone will reach out". A scoped
+// governanceOverride auto-approves the escalation so the human handoff is assembled
+// + notified at the DEFAULT trust. Mirrors calendar-book.booking.create.
+describe("escalation is a safety valve — never gated behind approval (P1-A)", () => {
+  let baseDeps: ReturnType<typeof makeBaseDeps>;
+
+  beforeEach(() => {
+    baseDeps = makeBaseDeps();
+  });
+
+  it("handoff.create auto-approves at the default-onboarding 'supervised' trust", () => {
+    const tool = createEscalateToolFactory(baseDeps)(TEST_CONTEXT);
+    expect(getToolGovernanceDecision(tool.operations["handoff.create"]!, "supervised")).toBe(
+      "auto-approve",
+    );
+  });
+
+  it("the GovernanceHook lets handoff.create PROCEED at supervised trust (no pending_approval dead-end)", async () => {
+    const tool = createEscalateToolFactory(baseDeps)(TEST_CONTEXT);
+    const hook = new GovernanceHook(new Map([[tool.id, tool]]));
+    const result = await hook.beforeToolCall({
+      toolId: "escalate",
+      operation: "handoff.create",
+      params: { reason: "medical_safety", summary: "Lead reports a changing mole" },
+      effectCategory: "write",
+      trustLevel: "supervised",
+    });
+    expect(result.proceed).toBe(true);
+    expect(result.decision).not.toBe("pending_approval");
+    const log = hook.getGovernanceLogs().at(-1)!;
+    expect(log.decision).toBe("auto-approve");
+    expect(log.overridden).toBe(true);
+  });
+
+  it("a supervised-trust escalation actually assembles + notifies the handoff (not silently swallowed)", async () => {
+    const tool = createEscalateToolFactory(baseDeps)(TEST_CONTEXT);
+    const hook = new GovernanceHook(new Map([[tool.id, tool]]));
+    const gate = await hook.beforeToolCall({
+      toolId: "escalate",
+      operation: "handoff.create",
+      params: { reason: "negative_sentiment", summary: "Customer is angry" },
+      effectCategory: "write",
+      trustLevel: "supervised",
+    });
+    // The executor only reaches execute() once the hook proceeds.
+    expect(gate.proceed).toBe(true);
+    await tool.operations["handoff.create"]!.execute({
+      reason: "negative_sentiment",
+      summary: "Customer is angry",
+    });
+    expect(baseDeps.handoffStore.save).toHaveBeenCalled();
+    expect(baseDeps.notifier.notify).toHaveBeenCalled();
   });
 });
