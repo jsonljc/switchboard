@@ -75,6 +75,37 @@ function isUniqueConstraintError(err: unknown): boolean {
 }
 
 /**
+ * On a TRANSIENT context-resolve failure in the cohort loop, CLAIM a dedup row + re-queue it
+ * (transient) so the retry cron re-resolves the recipient (recoverable, P2-14) instead of silently
+ * dropping it for the whole ISO-week. Returns the count bucket to advance: "skipped" on a P2002
+ * (already contacted by a prior/concurrent run), else "failed" (re-queued, or a claim/requeue error
+ * that is surfaced + counted, never thrown — one bad contact must not abort the cohort).
+ */
+async function claimAndRequeueContextFailure(
+  store: RobinRecoverySendStore,
+  orgId: string,
+  candidate: { contactId: string; bookingId: string },
+  campaignWorkUnitId: string,
+  now: Date,
+  random: () => number,
+): Promise<"skipped" | "failed"> {
+  try {
+    const { id } = await store.create({
+      organizationId: orgId,
+      contactId: candidate.contactId,
+      bookingId: candidate.bookingId,
+      campaignKind: RECOVERY_CAMPAIGN_KIND,
+      campaignWorkUnitId,
+      dedupeKey: buildRecoveryDedupeKey(orgId, candidate.bookingId, RECOVERY_CAMPAIGN_KIND),
+    });
+    await store.markFailed(id, "context_resolve_failed", computeRecoveryNextRetry(0, now, random));
+    return "failed";
+  } catch (claimErr) {
+    return isUniqueConstraintError(claimErr) ? "skipped" : "failed";
+  }
+}
+
+/**
  * Robin v1 no-show recovery campaign executor. On dispatch of an APPROVED campaign it iterates the
  * frozen cohort and, per recipient: claim-first inserts a dedup row (P2002 -> skip, never re-send),
  * resolves phone + consent org-scoped at dispatch, consent-gates via evaluateProactiveSendEligibility
@@ -166,17 +197,30 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
         for (const candidate of candidates) {
           // Resolve consent / jurisdiction / phone / template-approval BEFORE claiming. An org-wide
           // config gap (a draft or absent template) must burn NO dedup rows (rank 7), mirroring the
-          // creds short-circuit. A transient resolve failure here is isolated and claims nothing, so a
-          // later run re-resolves (no stranded pending row, no silent under-delivery).
+          // creds short-circuit. A TRANSIENT resolve failure here is different: it is an infrastructure
+          // blip, NOT a config decision, so instead of silently dropping the recipient for the whole
+          // ISO-week (P2-14) we CLAIM a dedup row + re-queue it transiently, so the retry cron
+          // re-resolves it (recoverable) and it is visible. A P2002 means already-contacted -> skip; a
+          // claim/requeue failure (e.g. DB down) is counted + surfaced, never thrown (one bad contact
+          // must not abort the cohort).
           let ctx: RecoverySendContext;
           try {
             ctx = await deps.getSendContext(orgId, candidate.contactId);
           } catch (err) {
             console.warn(
               `[robin.recovery_campaign.send] context resolve failed for contact ${candidate.contactId}; ` +
-                `skipped without claiming: ${err instanceof Error ? err.message : String(err)}`,
+                `re-queuing for the retry cron: ${err instanceof Error ? err.message : String(err)}`,
             );
-            failed++;
+            const bucket = await claimAndRequeueContextFailure(
+              deps.store,
+              orgId,
+              candidate,
+              workUnit.id,
+              now,
+              random,
+            );
+            if (bucket === "skipped") skipped++;
+            else failed++;
             continue;
           }
 
