@@ -113,6 +113,9 @@ describe("IngressTracePersister", () => {
         decision,
         "2026-06-15T00:00:00.000Z",
         completedResult,
+        // executionStartedAt (>= governanceCompletedAt): a completed trace must
+        // record when it started, or the no-mutating-bypass guard rejects it.
+        "2026-06-15T00:00:01.000Z",
       );
 
       expect(persist).toHaveBeenCalledTimes(3);
