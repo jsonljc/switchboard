@@ -5,6 +5,31 @@ import {
   GovernanceVerdictSourceSchema,
 } from "../governance-verdict.js";
 
+describe("GovernanceVerdictSchema — P1-D price gate", () => {
+  it("accepts the unsubstantiated_price reason code", () => {
+    expect(GovernanceVerdictReasonSchema.safeParse("unsubstantiated_price").success).toBe(true);
+  });
+
+  it("accepts the price_gate source guard", () => {
+    expect(GovernanceVerdictSourceSchema.safeParse("price_gate").success).toBe(true);
+  });
+
+  it("validates a full block verdict from the price gate", () => {
+    const verdict = {
+      action: "block",
+      reasonCode: "unsubstantiated_price",
+      jurisdiction: "SG",
+      clinicType: "medical",
+      sourceGuard: "price_gate",
+      originalText: "It's $999 for that.",
+      auditLevel: "critical",
+      decidedAt: "2026-06-24T08:30:00.000Z",
+      conversationId: "conv_price",
+    };
+    expect(GovernanceVerdictSchema.safeParse(verdict).success).toBe(true);
+  });
+});
+
 describe("GovernanceVerdictSchema", () => {
   it("validates an allow verdict", () => {
     const verdict = {

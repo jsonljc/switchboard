@@ -44,6 +44,7 @@ vi.mock("@switchboard/core/skill-runtime", () => ({
   DeterministicSafetyGateHook: vi
     .fn()
     .mockImplementation(() => ({ name: "deterministic-safety-gate" })),
+  PriceClaimGateHook: vi.fn().mockImplementation(() => ({ name: "price-claim-gate" })),
   ClaimClassifierHook,
   PdpaConsentGateHook: vi.fn().mockImplementation(() => ({ name: "pdpa-consent-gate" })),
   WhatsAppWindowGateHook: vi.fn().mockImplementation(() => ({ name: "whatsapp-window-gate" })),
