@@ -42,6 +42,7 @@ const eligibleTemplate: ProactiveSendEligibility = {
 
 function makeStore(): RobinRecoverySendStore & {
   create: ReturnType<typeof vi.fn>;
+  markSendInFlight: ReturnType<typeof vi.fn>;
   markSent: ReturnType<typeof vi.fn>;
   markSkipped: ReturnType<typeof vi.fn>;
   markFailed: ReturnType<typeof vi.fn>;
@@ -49,6 +50,7 @@ function makeStore(): RobinRecoverySendStore & {
 } {
   return {
     create: vi.fn(),
+    markSendInFlight: vi.fn().mockResolvedValue(undefined),
     markSent: vi.fn().mockResolvedValue(undefined),
     markSkipped: vi.fn().mockResolvedValue(undefined),
     markFailed: vi.fn().mockResolvedValue(undefined),
@@ -261,6 +263,56 @@ describe("dispatchRecoveryRow", () => {
       }),
     );
     expect(store.markSent).toHaveBeenCalledWith("r1", "m1");
+    expect(res).toEqual({ outcome: "sent", deadLettered: false });
+  });
+
+  it("pre-send claim: markSendInFlight(rowId) is called BEFORE the Graph send (removes due-ness)", async () => {
+    const store = makeStore();
+    const sendTemplate = vi.fn().mockResolvedValue({ ok: true, messageId: "m1" });
+    await dispatchRecoveryRow(
+      {
+        rowId: "r1",
+        attempts: 1,
+        ctx: baseCtx(),
+        eligibility: eligibleTemplate,
+        rebooked: false,
+        accessToken: "tok",
+        phoneNumberId: "pn1",
+      },
+      deps(store, sendTemplate as never),
+    );
+    expect(store.markSendInFlight).toHaveBeenCalledWith("r1");
+    expect(store.markSendInFlight.mock.invocationCallOrder[0]!).toBeLessThan(
+      sendTemplate.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("send ok but markSent THROWS: still 'sent', NEVER re-queued (no double-send), surfaced loudly", async () => {
+    // The headline idempotency guarantee: a successful Graph send followed by a failed bookkeeping
+    // write must NOT route to finishFailed (which would re-queue and double-send on retry). The row
+    // stays non-due (markSendInFlight already cleared nextRetryAt), so the retry cron never re-sends.
+    const store = makeStore();
+    store.markSent.mockRejectedValueOnce(new Error("db write failed"));
+    const sendTemplate = vi.fn().mockResolvedValue({ ok: true, messageId: "m1" });
+    const onDeadLetter = vi.fn();
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await dispatchRecoveryRow(
+      {
+        rowId: "r1",
+        attempts: 1, // retry path: row was due (nextRetryAt <= now) before markSendInFlight
+        ctx: baseCtx(),
+        eligibility: eligibleTemplate,
+        rebooked: false,
+        accessToken: "tok",
+        phoneNumberId: "pn1",
+      },
+      deps(store, sendTemplate as never, onDeadLetter),
+    );
+    expect(sendTemplate).toHaveBeenCalledTimes(1);
+    expect(store.markSendInFlight).toHaveBeenCalledWith("r1");
+    expect(store.markFailed).not.toHaveBeenCalled(); // NOT re-queued
+    expect(onDeadLetter).not.toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalledTimes(1);
     expect(res).toEqual({ outcome: "sent", deadLettered: false });
   });
 

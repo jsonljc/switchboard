@@ -36,6 +36,7 @@ function eligibleCtx(over: Record<string, unknown> = {}) {
 function makeStore() {
   return {
     create: vi.fn().mockResolvedValue({ id: "rs_1" }),
+    markSendInFlight: vi.fn().mockResolvedValue(undefined),
     markSent: vi.fn().mockResolvedValue(undefined),
     markSkipped: vi.fn().mockResolvedValue(undefined),
     markFailed: vi.fn().mockResolvedValue(undefined),

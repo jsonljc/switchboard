@@ -221,8 +221,16 @@ export async function dispatchRecoveryRow(
     return { outcome: "skipped", deadLettered: false };
   }
 
+  // Pre-send claim: remove this row from the retry-due set BEFORE the Graph call. findDue only
+  // reclaims rows with a due nextRetryAt, so clearing it now means a crash OR a failed markSent AFTER
+  // a successful send can never re-queue this row -> the patient is never messaged twice
+  // (at-most-once). On the cohort path the row is already non-due (nextRetryAt null), so this is a
+  // no-op; on the retry path it clears the due time that selected the row this tick.
+  await deps.store.markSendInFlight(rowId);
+
+  let result: RecoveryTemplateSendResult;
   try {
-    const result = await deps.sendTemplate({
+    result = await deps.sendTemplate({
       accessToken: args.accessToken,
       phoneNumberId: args.phoneNumberId,
       to: ctx.phone,
@@ -230,14 +238,29 @@ export async function dispatchRecoveryRow(
       leadName: ctx.leadName,
       businessName: ctx.businessName,
     });
-    if (!result.ok) {
-      return finishFailed(rowId, attempts, result.error ?? "whatsapp_send_failed", deps);
-    }
-    await deps.store.markSent(rowId, result.messageId ?? null);
-    return { outcome: "sent", deadLettered: false };
   } catch (err) {
+    // The send threw before a provider ack -> a transient send failure, re-queueable below the cap.
     return finishFailed(rowId, attempts, err instanceof Error ? err.message : String(err), deps);
   }
+  if (!result.ok) {
+    return finishFailed(rowId, attempts, result.error ?? "whatsapp_send_failed", deps);
+  }
+
+  // SEND SUCCEEDED — the patient has been messaged. From here we MUST NOT re-queue: persisting the
+  // outcome is a bookkeeping write, retried as a write (by the stalled-pending reaper), NEVER as a
+  // re-send. If markSent fails the row stays pending with a null nextRetryAt (markSendInFlight above),
+  // which findDue never re-selects, so it cannot double-send; surface the anomaly loudly.
+  try {
+    await deps.store.markSent(rowId, result.messageId ?? null);
+  } catch (err) {
+    console.error(
+      `[robin.recovery] send SUCCEEDED but markSent failed for row ${rowId}; left non-due to ` +
+        `prevent a double-send (stalled-pending reaper will reconcile): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+    );
+  }
+  return { outcome: "sent", deadLettered: false };
 }
 
 /** The real Graph WhatsApp template send. Injectable in tests via DispatchRecoveryRowDeps.sendTemplate. */
