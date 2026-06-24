@@ -4,6 +4,7 @@ import type { GovernanceDecision } from "./governance-types.js";
 import type { ExecutionResult } from "./execution-result.js";
 import type { IntegrityVerdict } from "./work-trace-integrity.js";
 import { WORK_TRACE_HASH_VERSION_LATEST } from "./work-trace-hash.js";
+import { assertNoMutatingBypass } from "./work-trace-bypass-guard.js";
 
 export interface TraceInput {
   workUnit: WorkUnit;
@@ -84,7 +85,7 @@ export function buildWorkTrace(input: TraceInput): WorkTrace {
     governanceConstraints = governanceDecision.constraints;
   }
 
-  return {
+  const trace: WorkTrace = {
     workUnitId: workUnit.id,
     traceId: workUnit.traceId,
     parentWorkUnitId: workUnit.parentWorkUnitId,
@@ -119,6 +120,12 @@ export function buildWorkTrace(input: TraceInput): WorkTrace {
     contactId: workUnit.contactId,
     conversationThreadId: workUnit.conversationThreadId,
   };
+
+  // Doctrine guard: never emit a trace that attests to a mutating bypass
+  // (executed-without-approval / approve-after-execute). See work-trace-bypass-guard.ts.
+  assertNoMutatingBypass(trace);
+
+  return trace;
 }
 
 export interface ClaimTraceInput {
