@@ -66,6 +66,26 @@ describe("evaluateDenominatorStepChange", () => {
     });
     expect(r.measurementTrusted).toBe(false);
   });
+
+  it("flags untrusted on an account-wide CAPI outage (zero conversions both windows, real traffic)", () => {
+    // The whole account drew real, flat traffic across both windows but reported ZERO
+    // attributed conversions in both — the account-wide CAPI/pixel-outage signature.
+    // Previously this read as TRUSTED (early-return on previous.conversions<=0) and
+    // Riley could pause/scale on a broken signal; now it demotes to a watch.
+    const r = evaluateDenominatorStepChange({
+      currentInsights: [
+        ci({ inlineLinkClicks: 300, conversions: 0, spend: 900 }),
+        ci({ inlineLinkClicks: 200, conversions: 0, spend: 600 }),
+      ],
+      previousInsights: [
+        ci({ inlineLinkClicks: 310, conversions: 0, spend: 930 }),
+        ci({ inlineLinkClicks: 210, conversions: 0, spend: 620 }),
+      ],
+      nextCycleDate: "2026-05-21",
+    });
+    expect(r.measurementTrusted).toBe(false);
+    expect(r.accountWatch?.pattern).toBe("conversion_denominator_step_change");
+  });
 });
 
 describe("buildSignalHealthCriticalReport", () => {
