@@ -20,6 +20,7 @@ import {
   isOrgConfigSkip,
   computeRecoveryNextRetry,
   defaultSendTemplate,
+  resolveEffectiveSendCreds,
   type RecoverySendContext,
   type RecoveryTemplateSendArgs,
   type RecoveryTemplateSendResult,
@@ -109,23 +110,27 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
         const { candidates } = parsed.data;
 
         // WhatsApp send creds, resolved ONCE per campaign (all candidates share the org).
-        // Multi-tenant: prefer the campaign org's own send creds, PER-FIELD falling back to the
-        // global token + env phone id (single-tenant pilot) so a partial per-org row never
-        // dark-holes the deployment-wide config. Missing creds are an org-wide config gap, NOT a
-        // per-recipient decision: skip the whole campaign WITHOUT claiming any dedup rows, so a
-        // later run (once creds are set) can still re-engage this cohort. Loud + countable (the
-        // dark-funnel metric).
+        // Multi-tenant FAIL-CLOSED: prefer the campaign org's own creds. The phone number id is the
+        // tenant FROM-identity, so a per-org connection that omits it fails closed (org_phone_missing)
+        // rather than borrowing the global/pilot number that belongs to a DIFFERENT tenant; only the
+        // token may fall back to the global system-user token (Meta Tech Provider). The global pair is
+        // used solely when there is NO per-org connection at all (the single-tenant pilot). Missing
+        // creds are an org-wide config gap, NOT a per-recipient decision: skip the whole campaign
+        // WITHOUT claiming any dedup rows, so a later run (once fixed) can still re-engage this cohort.
+        // Loud + countable (the dark-funnel metric).
         const perOrg = await resolveOrgSendCreds(orgId);
-        const accessToken = perOrg?.token ?? resolveToken();
-        const phoneNumberId = perOrg?.phoneNumberId ?? resolvePhoneId();
-        if (!accessToken || !phoneNumberId) {
+        const creds = resolveEffectiveSendCreds(perOrg, resolveToken(), resolvePhoneId());
+        if (!creds.ok) {
           console.warn(
-            "[robin.recovery_campaign.send] WhatsApp send token or phone id missing " +
-              "(set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID); recovery campaign skipped org-wide.",
+            creds.reason === "org_phone_missing"
+              ? "[robin.recovery_campaign.send] org WhatsApp connection has no phone number id; " +
+                  "recovery campaign skipped org-wide (fail-closed: NOT falling back to a global number)."
+              : "[robin.recovery_campaign.send] WhatsApp send token or phone id missing " +
+                  "(set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID); recovery campaign skipped org-wide.",
           );
           getMetrics().whatsappProactiveSendSkipped.inc({
             intent: ROBIN_RECOVERY_SEND_INTENT,
-            reason: "config_missing",
+            reason: creds.reason,
           });
           return {
             outcome: "completed",
@@ -135,10 +140,11 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
               skipped: candidates.length,
               failed: 0,
               total: candidates.length,
-              skipReason: "config_missing",
+              skipReason: creds.reason,
             },
           };
         }
+        const { accessToken, phoneNumberId } = creds;
 
         let sent = 0;
         let skipped = 0;
@@ -320,19 +326,21 @@ export function buildRobinRecoverySendRetryExecutor(deps: RobinRecoverySendRetry
           return { outcome: "failed", deadLettered: nextRetryAt === null };
         };
 
-        // Resolve the row org's send creds (PER-FIELD fallback to global). Missing creds are a
-        // transient config gap: re-queue rather than dead-letter on the first miss.
+        // Resolve the row org's send creds, FAIL-CLOSED (mirrors the cohort path): the phone id is
+        // org-only (a missing per-org number is org_phone_missing, never the global number); the token
+        // may fall back to the global system-user token. A missing-creds gap is transient on the retry
+        // path: re-queue rather than dead-letter on the first miss.
         const perOrg = await resolveOrgSendCreds(orgId);
-        const accessToken = perOrg?.token ?? resolveToken();
-        const phoneNumberId = perOrg?.phoneNumberId ?? resolvePhoneId();
-        if (!accessToken || !phoneNumberId) {
-          const r = await failTransient("config_missing");
+        const creds = resolveEffectiveSendCreds(perOrg, resolveToken(), resolvePhoneId());
+        if (!creds.ok) {
+          const r = await failTransient(creds.reason);
           return {
             outcome: "completed",
             summary: `Recovery retry: failed${r.deadLettered ? " (dead-lettered)" : ""}`,
             outputs: { outcome: "failed", deadLettered: r.deadLettered },
           };
         }
+        const { accessToken, phoneNumberId } = creds;
 
         // Re-resolve consent / phone / template-approval AT RETRY TIME (never trust stale state). A
         // resolve throw is transient -> re-queue (or dead-letter at the cap).

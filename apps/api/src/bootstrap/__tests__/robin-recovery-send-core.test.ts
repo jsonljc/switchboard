@@ -4,6 +4,7 @@ import {
   computeRecoveryNextRetry,
   dispatchRecoveryRow,
   isOrgConfigSkip,
+  resolveEffectiveSendCreds,
   type RecoverySendContext,
   type RecoveryTemplateSendResult,
 } from "../robin-recovery-send-core.js";
@@ -92,6 +93,70 @@ describe("isOrgConfigSkip", () => {
     expect(isOrgConfigSkip({ eligible: false, reason: "no_template" })).toBe(true);
     expect(isOrgConfigSkip({ eligible: false, reason: "consent_revoked" })).toBe(false);
     expect(isOrgConfigSkip(eligibleTemplate)).toBe(false);
+  });
+});
+
+describe("resolveEffectiveSendCreds (multi-tenant fail-closed)", () => {
+  it("no per-org connection (null) + both globals -> the global pilot pair", () => {
+    expect(resolveEffectiveSendCreds(null, "GT", "GP")).toEqual({
+      ok: true,
+      accessToken: "GT",
+      phoneNumberId: "GP",
+    });
+  });
+
+  it("no per-org connection + missing global token -> config_missing", () => {
+    expect(resolveEffectiveSendCreds(null, undefined, "GP")).toEqual({
+      ok: false,
+      reason: "config_missing",
+    });
+  });
+
+  it("no per-org connection + missing global phone id -> config_missing", () => {
+    expect(resolveEffectiveSendCreds(null, "GT", undefined)).toEqual({
+      ok: false,
+      reason: "config_missing",
+    });
+  });
+
+  it("per-org connection with BOTH fields -> the org's own creds, ignoring the globals", () => {
+    expect(resolveEffectiveSendCreds({ token: "T2", phoneNumberId: "P2" }, "GT", "GP")).toEqual({
+      ok: true,
+      accessToken: "T2",
+      phoneNumberId: "P2",
+    });
+  });
+
+  it("per-org phone present + org token absent -> org phone + GLOBAL token (Tech Provider fallback)", () => {
+    // The token is not the isolation boundary: a per-org WABA number under one shared system-user
+    // token is the documented Meta Tech Provider model, so the token may fall back to the global.
+    expect(resolveEffectiveSendCreds({ token: null, phoneNumberId: "P2" }, "GT", "GP")).toEqual({
+      ok: true,
+      accessToken: "GT",
+      phoneNumberId: "P2",
+    });
+  });
+
+  it("HEADLINE: per-org token present + org PHONE ABSENT -> FAIL CLOSED (never a global number)", () => {
+    // The cross-tenant leak: tenant #2's patient must never be messaged FROM the global/pilot
+    // number. A connection exists but has no phone id -> no safe send -> org_phone_missing.
+    expect(resolveEffectiveSendCreds({ token: "T2", phoneNumberId: null }, "GT", "GP")).toEqual({
+      ok: false,
+      reason: "org_phone_missing",
+    });
+  });
+
+  it("per-org connection with NEITHER field -> fail closed on the phone id first (org_phone_missing)", () => {
+    expect(resolveEffectiveSendCreds({ token: null, phoneNumberId: null }, "GT", "GP")).toEqual({
+      ok: false,
+      reason: "org_phone_missing",
+    });
+  });
+
+  it("per-org phone present but token resolvable from neither org nor global -> config_missing", () => {
+    expect(
+      resolveEffectiveSendCreds({ token: null, phoneNumberId: "P2" }, undefined, "GP"),
+    ).toEqual({ ok: false, reason: "config_missing" });
   });
 });
 

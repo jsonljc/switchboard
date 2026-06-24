@@ -96,6 +96,48 @@ export function computeRecoveryNextRetry(
 }
 
 /**
+ * The EFFECTIVE WhatsApp send creds for a campaign org, or the reason no safe pair could be formed.
+ * `org_phone_missing` is the multi-tenant fail-closed: a per-org connection exists but lacks its own
+ * phone number id, so there is NO number we may send the tenant's patients from (we will NOT borrow
+ * a global/pilot number). `config_missing` is the deployment-wide gap (the single-tenant pilot env
+ * is unset, or no send token resolves anywhere).
+ */
+export type EffectiveSendCreds =
+  | { ok: true; accessToken: string; phoneNumberId: string }
+  | { ok: false; reason: "config_missing" | "org_phone_missing" };
+
+/**
+ * Resolve the effective WhatsApp send creds for a campaign org, FAIL-CLOSED on the multi-tenant
+ * isolation boundary.
+ *
+ * The phone number id is the FROM-identity and the tenant-isolation boundary: when the org has its
+ * own `Connection` (`perOrg` non-null) it MUST send from its OWN number, so a missing org phone id
+ * fails closed (`org_phone_missing`) instead of falling back to the global/pilot number — sending a
+ * second tenant's patient from the first tenant's number is the cross-tenant leak this guards. The
+ * token is NOT an isolation boundary (it only authorizes the call): it MAY fall back to the global
+ * system-user token, matching the Meta Tech Provider model (one system token, many per-org WABA
+ * numbers). With NO per-org connection at all (`perOrg` null) this is the single-tenant pilot, which
+ * legitimately uses the global token + global phone id (both required, else `config_missing`).
+ */
+export function resolveEffectiveSendCreds(
+  perOrg: { token: string | null; phoneNumberId: string | null } | null,
+  globalToken: string | undefined,
+  globalPhoneNumberId: string | undefined,
+): EffectiveSendCreds {
+  if (perOrg === null) {
+    // Single-tenant pilot: no per-org connection. Use the global creds; both are required.
+    if (!globalToken || !globalPhoneNumberId) return { ok: false, reason: "config_missing" };
+    return { ok: true, accessToken: globalToken, phoneNumberId: globalPhoneNumberId };
+  }
+  // A per-org connection EXISTS. The phone id is the tenant FROM-identity: org-only, NEVER global.
+  if (!perOrg.phoneNumberId) return { ok: false, reason: "org_phone_missing" };
+  // The token authorizes only; it may fall back to the global system-user token (Tech Provider).
+  const accessToken = perOrg.token ?? globalToken;
+  if (!accessToken) return { ok: false, reason: "config_missing" };
+  return { ok: true, accessToken, phoneNumberId: perOrg.phoneNumberId };
+}
+
+/**
  * An org-wide config/data gap (an unapproved or absent template) is NOT a per-recipient send
  * decision worth burning a dedup row on. The cohort executor calls this PRE-CLAIM to skip without
  * claiming, so a later run re-engages once the template is approved (or the jurisdiction is set).
