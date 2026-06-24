@@ -29,7 +29,13 @@ export function buildLeadIntakeWorkflow(handler: LeadIntakeHandler): WorkflowHan
         summary: result.duplicate
           ? `Duplicate lead — contact ${result.contactId}`
           : `Lead intake recorded — contact ${result.contactId}`,
-        outputs: { contactId: result.contactId, duplicate: result.duplicate },
+        // `outcome` is the (created|reused|idempotent_duplicate) disposition the InstantForm adapter
+        // and Meta-lead orchestrator read to greet ONLY a freshly created Contact (P1-7).
+        outputs: {
+          contactId: result.contactId,
+          duplicate: result.duplicate,
+          outcome: result.outcome,
+        },
       };
     },
   };

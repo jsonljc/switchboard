@@ -1,4 +1,4 @@
-import type { LeadIntake } from "@switchboard/schemas";
+import type { LeadIntake, LeadIntakeOutcome } from "@switchboard/schemas";
 import { normalizeToE164 } from "@switchboard/schemas";
 import { normalizeEmail } from "../identity/normalize.js";
 import { decideContactMatch } from "./match-contact-identity.js";
@@ -56,7 +56,15 @@ export interface LeadIntakeHandlerDeps {
 
 export interface LeadIntakeResult {
   contactId: string;
+  /** True ONLY for an idempotency hit (same idempotencyKey redelivered). A4 reuse is NOT a duplicate. */
   duplicate: boolean;
+  /**
+   * The disposition of this intake. The Meta-lead orchestrator greets + records an inquiry ONLY when
+   * this is `"created"`; `"reused"` (an A4 identity match into an existing Contact) and
+   * `"idempotent_duplicate"` both suppress the first-touch greeting so one corroborated person is
+   * greeted exactly once.
+   */
+  outcome: LeadIntakeOutcome;
 }
 
 export class LeadIntakeHandler {
@@ -68,7 +76,7 @@ export class LeadIntakeHandler {
       intake.idempotencyKey,
     );
     if (existing) {
-      return { contactId: existing.id, duplicate: true };
+      return { contactId: existing.id, duplicate: true, outcome: "idempotent_duplicate" };
     }
 
     // A4 identity matcher: look up existing contacts by normalized phone OR email BEFORE creating, so a
@@ -97,16 +105,13 @@ export class LeadIntakeHandler {
       // widened on reuse (D1).
       contactId = decision.contactId;
     } else {
-      // CTWA click and Instant Form submission both serve as WhatsApp messaging consent — flag opt-in
-      // for those sources when the lead lands on the whatsapp channel. Email/SMS leads do not.
+      // P1-5: only an Instant Form submission is a DURABLE WhatsApp messaging opt-in (the ad form
+      // carries the WhatsApp opt-in checkbox). A click-to-WhatsApp ad-click is NOT a permanent opt-in:
+      // a genuine CTWA lead arrives as a real WhatsApp inbound and rides the 24h lastWhatsAppInboundAt
+      // free-entry-point window instead, so it is greetable in-window and blocks no_optin afterwards
+      // (canSendWhatsAppTemplate). Email/SMS leads never opt in here.
       const isWhatsAppLead = intake.contact.channel === "whatsapp";
-      const optInSource = isWhatsAppLead
-        ? intake.source === "ctwa"
-          ? "ctwa"
-          : intake.source === "instant_form"
-            ? "web_form"
-            : null
-        : null;
+      const optInSource = isWhatsAppLead && intake.source === "instant_form" ? "web_form" : null;
       const contact = await this.deps.store.upsertContact({
         organizationId: intake.organizationId,
         deploymentId: intake.deploymentId,
@@ -134,6 +139,10 @@ export class LeadIntakeHandler {
       sourceType: intake.source,
       metadata: { attribution: intake.attribution },
     });
-    return { contactId, duplicate: false };
+    return {
+      contactId,
+      duplicate: false,
+      outcome: decision.kind === "reuse" ? "reused" : "created",
+    };
   }
 }

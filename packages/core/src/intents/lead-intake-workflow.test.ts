@@ -49,7 +49,27 @@ describe("buildLeadIntakeWorkflow (unit)", () => {
       expect.objectContaining({ organizationId: "org-1", sourceType: "ctwa" }),
     );
     expect(result.outcome).toBe("completed");
-    expect(result.outputs).toEqual({ contactId: "contact_1", duplicate: false });
+    expect(result.outputs).toEqual({
+      contactId: "contact_1",
+      duplicate: false,
+      outcome: "created",
+    });
+  });
+
+  it("passes the handler outcome through to outputs (idempotent duplicate is surfaced, not 'created')", async () => {
+    const store = makeStore();
+    store.findContactByIdempotency.mockResolvedValueOnce({ id: "dup" });
+    const wf = buildLeadIntakeWorkflow(new LeadIntakeHandler({ store }));
+
+    const result = await wf.execute({ parameters: intake } as unknown as WorkUnit, {
+      submitChildWork: vi.fn(),
+    });
+
+    expect(result.outputs).toMatchObject({
+      contactId: "dup",
+      duplicate: true,
+      outcome: "idempotent_duplicate",
+    });
   });
 
   it("returns failed outcome on invalid payload", async () => {

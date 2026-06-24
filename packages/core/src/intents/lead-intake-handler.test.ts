@@ -66,6 +66,7 @@ describe("LeadIntakeHandler", () => {
     expect(store.createActivity).not.toHaveBeenCalled();
     expect(result.contactId).toBe("existing");
     expect(result.duplicate).toBe(true);
+    expect(result.outcome).toBe("idempotent_duplicate");
   });
 
   it("scopes the idempotency lookup by organizationId (cross-tenant safety)", async () => {
@@ -76,16 +77,16 @@ describe("LeadIntakeHandler", () => {
     expect(store.findContactByIdempotency).toHaveBeenCalledWith("o1", "k1");
   });
 
-  it("flags messagingOptIn for CTWA leads on whatsapp (click is consent)", async () => {
+  it("does NOT set a durable messagingOptIn for CTWA leads (ad-click rides the 24h window, not a permanent opt-in)", async () => {
+    // P1-5: a click-to-WhatsApp ad-click is NOT a durable opt-in. A genuine CTWA lead arrives as a
+    // real WhatsApp inbound, so it rides the 24h lastWhatsAppInboundAt free-entry-point window; it
+    // must NOT be stamped messagingOptIn=true (which would let us send proactively forever).
     await handler.handle(
       makeIntake({ source: "ctwa", contact: { phone: "+1", channel: "whatsapp" } }),
     );
-    expect(store.upsertContact).toHaveBeenCalledWith(
-      expect.objectContaining({
-        messagingOptIn: true,
-        messagingOptInSource: "ctwa",
-      }),
-    );
+    const callArgs = store.upsertContact.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArgs.messagingOptIn).toBeUndefined();
+    expect(callArgs.messagingOptInSource).toBeUndefined();
   });
 
   it("flags messagingOptIn for Instant Form leads on whatsapp (form has WA opt-in)", async () => {
@@ -118,7 +119,7 @@ describe("LeadIntakeHandler", () => {
     const res = await handler.handle(
       makeIntake({ contact: { phone: "91234567", name: "jane tan", channel: "whatsapp" } }),
     );
-    expect(res).toEqual({ contactId: "existing", duplicate: false });
+    expect(res).toEqual({ contactId: "existing", duplicate: false, outcome: "reused" });
     expect(store.upsertContact).not.toHaveBeenCalled();
     expect(store.createActivity).toHaveBeenCalledWith(
       expect.objectContaining({ contactId: "existing", kind: "lead_received" }),
@@ -156,12 +157,13 @@ describe("LeadIntakeHandler", () => {
 
   it("creates a new contact with name threaded and flag false when nothing matches", async () => {
     store.upsertContact.mockResolvedValueOnce({ id: "new" });
-    await handler.handle(
+    const res = await handler.handle(
       makeIntake({ contact: { phone: "91234567", name: "Jane Tan", channel: "whatsapp" } }),
     );
     expect(store.upsertContact).toHaveBeenCalledWith(
       expect.objectContaining({ duplicateContactRisk: false, name: "Jane Tan" }),
     );
+    expect(res.outcome).toBe("created");
   });
 
   it("reuses on an email-only corroborated match and queries with a normalized email", async () => {

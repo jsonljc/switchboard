@@ -1,5 +1,5 @@
-import type { LeadIntake } from "@switchboard/schemas";
-import { normalizeToE164 } from "@switchboard/schemas";
+import type { LeadIntake, LeadIntakeOutcome } from "@switchboard/schemas";
+import { LeadIntakeOutcomeSchema, normalizeToE164 } from "@switchboard/schemas";
 import type { IngressLike } from "./ctwa-adapter.js";
 
 /**
@@ -84,6 +84,12 @@ export interface InstantFormAdapterDeps {
 export interface InstantFormIngestResult {
   contactId: string;
   duplicate: boolean;
+  /**
+   * The intake disposition, strict-parsed from the workflow outputs. The orchestrator greets +
+   * records an inquiry ONLY when this is exactly `"created"`. It is OPTIONAL and absent (undefined)
+   * whenever the value was missing/unrecognized — a fail-closed signal that must NOT be greeted.
+   */
+  outcome?: LeadIntakeOutcome;
 }
 
 /**
@@ -111,6 +117,11 @@ export class InstantFormAdapter {
     const contactId = typeof outputs?.["contactId"] === "string" ? outputs["contactId"] : undefined;
     const duplicate = outputs?.["duplicate"] === true;
     if (!contactId) return null;
-    return { contactId, duplicate };
+    // Fail closed: strict-parse the disposition. A missing or unrecognized value (e.g. an api running
+    // a stale core dist) stays undefined so the orchestrator never coerces it to a fresh "created" and
+    // re-greets a reused (duplicate=false) contact.
+    const parsedOutcome = LeadIntakeOutcomeSchema.safeParse(outputs?.["outcome"]);
+    const outcome = parsedOutcome.success ? parsedOutcome.data : undefined;
+    return { contactId, duplicate, ...(outcome ? { outcome } : {}) };
   }
 }
