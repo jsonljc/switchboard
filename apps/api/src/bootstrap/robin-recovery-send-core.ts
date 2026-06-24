@@ -47,6 +47,13 @@ export interface RecoveryTemplateSendResult {
   ok: boolean;
   messageId?: string | null;
   error?: string;
+  /**
+   * When ok=false: whether the failure is TRANSIENT (retryable) or PERMANENT. A permanent 4xx Graph
+   * error (bad template, invalid number, revoked permission, re-engagement-window violation) will
+   * never succeed on retry and is terminal-failed immediately (D4: retry transient only). Omitted is
+   * treated as transient — the conservative default that keeps a thrown/network failure re-queueable.
+   */
+  retryable?: boolean;
 }
 
 export interface DispatchRecoveryRowDeps {
@@ -195,6 +202,22 @@ async function finishFailed(
 }
 
 /**
+ * Dead-letter a row immediately, regardless of the attempt count: a PERMANENT send failure (a 4xx
+ * Graph error) will never succeed on retry, so it skips the bounded-retry backoff and terminal-fails
+ * NOW (status=failed, nextRetryAt cleared), firing onDeadLetter with a distinct reason so the
+ * permanent failure is never silent and is countable apart from retry exhaustion. (D4.)
+ */
+async function finishTerminal(
+  rowId: string,
+  error: string,
+  deps: DispatchRecoveryRowDeps,
+): Promise<{ outcome: "failed"; deadLettered: true }> {
+  await deps.store.markFailed(rowId, error, null);
+  deps.onDeadLetter?.("permanent_send_error");
+  return { outcome: "failed", deadLettered: true };
+}
+
+/**
  * The shared send + per-recipient state-write + backoff path for an ALREADY-CLAIMED row. Terminal
  * per-recipient decisions (rebooked / consent-or-template ineligible / no phone) record a SKIP and
  * are never retried. A send failure (Graph !ok or a thrown error) routes through finishFailed, which
@@ -243,7 +266,13 @@ export async function dispatchRecoveryRow(
     return finishFailed(rowId, attempts, err instanceof Error ? err.message : String(err), deps);
   }
   if (!result.ok) {
-    return finishFailed(rowId, attempts, result.error ?? "whatsapp_send_failed", deps);
+    const error = result.error ?? "whatsapp_send_failed";
+    // D4: retry transient failures only. A permanent (4xx) Graph error will never succeed on retry,
+    // so terminal-fail it now instead of burning the bounded-retry budget; transient (5xx/429/408/
+    // network) re-queues with backoff. An absent retryable flag defaults to transient (conservative).
+    return result.retryable === false
+      ? finishTerminal(rowId, error, deps)
+      : finishFailed(rowId, attempts, error, deps);
   }
 
   // SEND SUCCEEDED — the patient has been messaged. From here we MUST NOT re-queue: persisting the
@@ -293,7 +322,13 @@ export async function defaultSendTemplate(
       },
     }),
   });
-  if (!response.ok) return { ok: false, error: await response.text() };
+  if (!response.ok) {
+    // D4 classification: a 5xx (Meta server error), 429 (rate limit) or 408 (timeout) is transient
+    // and worth retrying; every other 4xx (bad template, invalid number, revoked permission, a
+    // re-engagement-window violation) is permanent and will never succeed on retry.
+    const retryable = response.status >= 500 || response.status === 429 || response.status === 408;
+    return { ok: false, error: await response.text(), retryable };
+  }
   const json = (await response.json()) as { messages?: Array<{ id?: string }> };
   return { ok: true, messageId: json.messages?.[0]?.id ?? null };
 }

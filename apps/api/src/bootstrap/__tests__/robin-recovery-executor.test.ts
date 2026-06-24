@@ -251,6 +251,27 @@ describe("buildRobinRecoverySendExecutor", () => {
     expect(res.outputs).toEqual({ sent: 0, skipped: 0, failed: 1, total: 1 });
   });
 
+  it("PERMANENT cohort send failure (4xx) -> dead-letters at attempt 0 + robinRecoverySendFailed(permanent_send_error)", async () => {
+    // D4: a permanent 4xx never succeeds on retry, so it terminal-fails immediately even on the first
+    // attempt, and the cohort path now wires onDeadLetter so that terminal failure is counted.
+    const metrics = createInMemoryMetrics();
+    const incSpy = vi.spyOn(metrics.robinRecoverySendFailed, "inc");
+    setMetrics(metrics);
+    const deps = makeDeps({
+      sendTemplate: vi
+        .fn()
+        .mockResolvedValue({ ok: false, error: "(#132000) bad template", retryable: false }),
+    });
+    const { handler } = buildRobinRecoverySendExecutor(deps as never);
+    const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
+    expect(deps.store.markFailed).toHaveBeenCalledWith("rs_1", "(#132000) bad template", null);
+    expect(incSpy).toHaveBeenCalledWith({
+      intent: ROBIN_RECOVERY_SEND_INTENT,
+      reason: "permanent_send_error",
+    });
+    expect(res.outputs).toEqual({ sent: 0, skipped: 0, failed: 1, total: 1 });
+  });
+
   it("a cohort send failure leaves the row pending for retry, not terminal", async () => {
     const deps = makeDeps({
       sendTemplate: vi.fn().mockResolvedValue({ ok: false, error: "rate limited" }),

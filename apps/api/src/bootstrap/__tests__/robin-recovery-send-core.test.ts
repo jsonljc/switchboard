@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import type { RobinRecoverySendStore, ProactiveSendEligibility } from "@switchboard/core";
 import {
   computeRecoveryNextRetry,
+  defaultSendTemplate,
   dispatchRecoveryRow,
   isOrgConfigSkip,
   resolveEffectiveSendCreds,
@@ -341,6 +342,57 @@ describe("dispatchRecoveryRow", () => {
     expect(res).toEqual({ outcome: "failed", deadLettered: false });
   });
 
+  it("PERMANENT (retryable:false) at attempts=0: terminal-fail NOW (markFailed null + onDeadLetter permanent_send_error), NOT re-queued", async () => {
+    // D4: a permanent 4xx will never succeed on retry, so it dead-letters immediately even though
+    // attempts (0) is below the cap — it does NOT burn the bounded-retry budget.
+    const store = makeStore();
+    const sendTemplate = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "(#132000) bad template", retryable: false });
+    const onDeadLetter = vi.fn();
+    const res = await dispatchRecoveryRow(
+      {
+        rowId: "r1",
+        attempts: 0,
+        ctx: baseCtx(),
+        eligibility: eligibleTemplate,
+        rebooked: false,
+        accessToken: "tok",
+        phoneNumberId: "pn1",
+      },
+      deps(store, sendTemplate as never, onDeadLetter),
+    );
+    const [id, err, nextRetryAt] = store.markFailed.mock.calls[0]!;
+    expect(id).toBe("r1");
+    expect(err).toBe("(#132000) bad template");
+    expect(nextRetryAt).toBeNull(); // terminal, not re-queued
+    expect(onDeadLetter).toHaveBeenCalledWith("permanent_send_error");
+    expect(res).toEqual({ outcome: "failed", deadLettered: true });
+  });
+
+  it("TRANSIENT (retryable:true) at attempts=0: re-queued with backoff (markFailed non-null, deadLettered:false)", async () => {
+    const store = makeStore();
+    const sendTemplate = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "503 upstream", retryable: true });
+    const onDeadLetter = vi.fn();
+    const res = await dispatchRecoveryRow(
+      {
+        rowId: "r1",
+        attempts: 0,
+        ctx: baseCtx(),
+        eligibility: eligibleTemplate,
+        rebooked: false,
+        accessToken: "tok",
+        phoneNumberId: "pn1",
+      },
+      deps(store, sendTemplate as never, onDeadLetter),
+    );
+    expect(store.markFailed.mock.calls[0]![2]).toBeInstanceOf(Date);
+    expect(onDeadLetter).not.toHaveBeenCalled();
+    expect(res).toEqual({ outcome: "failed", deadLettered: false });
+  });
+
   it("send !ok at attempts=2 (MAX-1): markFailed null, onDeadLetter(max_retries_exhausted), deadLettered:true", async () => {
     const store = makeStore();
     const sendTemplate = vi.fn().mockResolvedValue({ ok: false, error: "500" });
@@ -385,4 +437,60 @@ describe("dispatchRecoveryRow", () => {
     expect(nextRetryAt).toBeInstanceOf(Date);
     expect(res).toEqual({ outcome: "failed", deadLettered: false });
   });
+});
+
+describe("defaultSendTemplate (transient/permanent classification)", () => {
+  const sendArgs = {
+    accessToken: "tok",
+    phoneNumberId: "pn1",
+    to: "+6591234567",
+    metaTemplateName: "alex_reengage_sg_v1",
+    leadName: "Ada",
+    businessName: "Glow Clinic",
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubFetch(status: number, ok: boolean, body: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok,
+        status,
+        text: async () => (typeof body === "string" ? body : JSON.stringify(body)),
+        json: async () => body,
+      }),
+    );
+  }
+
+  it("2xx success -> ok with the provider message id", async () => {
+    stubFetch(200, true, { messages: [{ id: "wamid.OK" }] });
+    expect(await defaultSendTemplate(sendArgs)).toEqual({ ok: true, messageId: "wamid.OK" });
+  });
+
+  it.each([400, 401, 403, 404, 422])(
+    "%i (4xx) -> ok:false, retryable:false (permanent, never retried)",
+    async (status) => {
+      stubFetch(status, false, "permanent error body");
+      expect(await defaultSendTemplate(sendArgs)).toEqual({
+        ok: false,
+        error: "permanent error body",
+        retryable: false,
+      });
+    },
+  );
+
+  it.each([500, 503, 429, 408])(
+    "%i -> ok:false, retryable:true (transient, retried with backoff)",
+    async (status) => {
+      stubFetch(status, false, "transient error body");
+      expect(await defaultSendTemplate(sendArgs)).toEqual({
+        ok: false,
+        error: "transient error body",
+        retryable: true,
+      });
+    },
+  );
 });

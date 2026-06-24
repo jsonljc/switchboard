@@ -219,8 +219,11 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
           }
 
           // Post-claim per-recipient send + state-write + backoff, the SHARED path the retry executor
-          // also calls. A send failure schedules retry-1 (attempts 0 is never terminal at MAX=3), so the
-          // cohort first attempt re-queues rather than dead-letters; markSkipped paths stay terminal.
+          // also calls. A TRANSIENT send failure schedules retry-1 (attempts 0 is never terminal at
+          // MAX=3), so the cohort first attempt re-queues; a PERMANENT (4xx) failure dead-letters NOW
+          // (D4), and markSkipped paths stay terminal. onDeadLetter fires the per-recipient failure
+          // metric so a permanent first-attempt failure is never silent (the retry cron owns the
+          // metric for retry-exhaustion dead-letters).
           const r = await dispatchRecoveryRow(
             {
               rowId,
@@ -231,7 +234,17 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
               accessToken,
               phoneNumberId,
             },
-            { store: deps.store, sendTemplate, now: () => now, random, onDeadLetter: undefined },
+            {
+              store: deps.store,
+              sendTemplate,
+              now: () => now,
+              random,
+              onDeadLetter: (reason) =>
+                getMetrics().robinRecoverySendFailed.inc({
+                  intent: ROBIN_RECOVERY_SEND_INTENT,
+                  reason,
+                }),
+            },
           );
           if (r.outcome === "sent") sent++;
           else if (r.outcome === "skipped") skipped++;

@@ -71,8 +71,9 @@ export interface SwitchboardMetrics {
   /** A Robin no-show recovery send EXHAUSTED its bounded retries (or hit a terminal config gap at
    *  retry) and dead-lettered (status=failed, nextRetryAt cleared). The never-silent per-recipient
    *  terminal-failure signal; a sustained rate (or the high-ratio cron alert) is a send-path outage.
-   *  Labeled by intent + reason (max_retries_exhausted | config_missing | org_phone_missing |
-   *  context_resolve_failed). */
+   *  Labeled by intent + reason (max_retries_exhausted | permanent_send_error | config_missing |
+   *  org_phone_missing | context_resolve_failed). permanent_send_error is a 4xx Graph failure that
+   *  dead-lettered immediately without consuming the retry budget (D4: retry transient only). */
   robinRecoverySendFailed: Counter;
   /** Riley reallocate pre-write blast-radius cap evaluation OUTCOME, emitted once per
    *  `assertWithinBlastRadius` call in the reallocate executor (the ONLY active blast-radius
