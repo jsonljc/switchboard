@@ -136,10 +136,15 @@ export function buildMetaLeadIntakeWorkflow(deps: MetaLeadIntakeDeps): WorkflowH
           parentWorkUnitId: workUnit.id,
         });
         if (!ingestResult) continue;
-        if (ingestResult.duplicate) {
-          // Existing Contact for this lead — do NOT spawn greeting/inquiry
-          // a second time. Idempotency is enforced in LeadIntakeHandler via
-          // (organizationId, idempotencyKey=leadgen:<leadgenId>).
+        if (ingestResult.outcome !== "created") {
+          // Greet + record an inquiry ONLY for a freshly created Contact. Skip every other
+          // disposition so one corroborated person is greeted exactly once:
+          //  - "reused": an A4 identity match folded this lead into an existing Contact (a 2nd ad
+          //    path for the same person) — re-greeting it would double-send the billable template;
+          //  - "idempotent_duplicate": the same leadgenId was redelivered;
+          //  - undefined: a missing/unknown disposition — FAIL CLOSED (never coerce to created).
+          // (Idempotency is also enforced in LeadIntakeHandler via (organizationId,
+          // idempotencyKey=leadgen:<leadgenId>); this gate additionally closes the cross-leadgen reuse.)
           duplicates++;
           continue;
         }

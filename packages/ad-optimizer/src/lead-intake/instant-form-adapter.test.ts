@@ -244,4 +244,45 @@ describe("InstantFormAdapter", () => {
       }),
     );
   });
+
+  it("surfaces a parsed lead-intake outcome on the result", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outputs: { contactId: "c1", duplicate: false, outcome: "created" } },
+    });
+    const adapter = new InstantFormAdapter({ ingress: { submit }, now: () => new Date() });
+    const out = await adapter.ingest(makeLead());
+    expect(out).toEqual({ contactId: "c1", duplicate: false, outcome: "created" });
+  });
+
+  it("surfaces a reused outcome so the orchestrator does not re-greet a folded contact", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outputs: { contactId: "c1", duplicate: false, outcome: "reused" } },
+    });
+    const adapter = new InstantFormAdapter({ ingress: { submit }, now: () => new Date() });
+    const out = await adapter.ingest(makeLead());
+    expect(out?.outcome).toBe("reused");
+  });
+
+  it("FAILS CLOSED: a missing or unrecognized outcome surfaces as undefined, never coerced to 'created'", async () => {
+    // A reuse keeps duplicate=false, so a `duplicate ? ... : "created"` fallback would re-greet it.
+    // Strict-parse instead: an absent or junk outcome (e.g. a stale core dist) must NOT become "created".
+    const submitMissing = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outputs: { contactId: "c1", duplicate: false } },
+    });
+    const a1 = new InstantFormAdapter({
+      ingress: { submit: submitMissing },
+      now: () => new Date(),
+    });
+    expect((await a1.ingest(makeLead()))?.outcome).toBeUndefined();
+
+    const submitJunk = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outputs: { contactId: "c1", duplicate: false, outcome: "duplicate" } },
+    });
+    const a2 = new InstantFormAdapter({ ingress: { submit: submitJunk }, now: () => new Date() });
+    expect((await a2.ingest(makeLead()))?.outcome).toBeUndefined();
+  });
 });

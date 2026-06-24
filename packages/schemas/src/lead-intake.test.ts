@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { LeadIntakeSchema } from "./lead-intake.js";
+import { LeadIntakeSchema, LeadIntakeOutcomeSchema } from "./lead-intake.js";
 
 describe("LeadIntakeSchema", () => {
   it("validates a CTWA intake", () => {
@@ -47,5 +47,17 @@ describe("LeadIntakeSchema", () => {
         idempotencyKey: "x",
       }),
     ).toThrow();
+  });
+});
+
+describe("LeadIntakeOutcomeSchema", () => {
+  it("accepts the three lead-intake outcomes", () => {
+    expect(LeadIntakeOutcomeSchema.parse("created")).toBe("created");
+    expect(LeadIntakeOutcomeSchema.parse("reused")).toBe("reused");
+    expect(LeadIntakeOutcomeSchema.parse("idempotent_duplicate")).toBe("idempotent_duplicate");
+  });
+
+  it("rejects an unknown outcome (so a stale producer value cannot leak through)", () => {
+    expect(() => LeadIntakeOutcomeSchema.parse("duplicate")).toThrow();
   });
 });

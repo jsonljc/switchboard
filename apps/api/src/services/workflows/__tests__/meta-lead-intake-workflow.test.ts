@@ -30,7 +30,9 @@ const fieldExtractor = (
 
 describe("buildMetaLeadIntakeWorkflow", () => {
   it("delegates Contact creation to InstantFormAdapter and dispatches child work", async () => {
-    const ingest = vi.fn().mockResolvedValue({ contactId: "contact_1", duplicate: false });
+    const ingest = vi
+      .fn()
+      .mockResolvedValue({ contactId: "contact_1", duplicate: false, outcome: "created" });
     const fetchLeadDetail = vi.fn().mockResolvedValue({
       field_data: [
         { name: "full_name", values: ["Taylor Test"] },
@@ -93,8 +95,12 @@ describe("buildMetaLeadIntakeWorkflow", () => {
     expect(inquiryCall.idempotencyKey).toBe("meta-inquiry:lead_1");
   });
 
-  it("treats adapter duplicate=true as a no-op (no double greeting)", async () => {
-    const ingest = vi.fn().mockResolvedValue({ contactId: "contact_existing", duplicate: true });
+  it("treats an idempotent_duplicate as a no-op (no double greeting)", async () => {
+    const ingest = vi.fn().mockResolvedValue({
+      contactId: "contact_existing",
+      duplicate: true,
+      outcome: "idempotent_duplicate",
+    });
     const fetchLeadDetail = vi.fn().mockResolvedValue({
       field_data: [
         { name: "full_name", values: ["Repeat Lead"] },
@@ -120,6 +126,68 @@ describe("buildMetaLeadIntakeWorkflow", () => {
     expect(result.outputs!.created).toBe(0);
     expect(result.outputs!.duplicates).toBe(1);
     expect(ingest).toHaveBeenCalledOnce();
+    expect(submitChildWork).not.toHaveBeenCalled();
+  });
+
+  it("treats a reused contact as a no-op (does not re-greet a folded same-person lead) [P1-7]", async () => {
+    // Two distinct leadgenIds for one corroborated person: the 2nd folds into the existing Contact
+    // via the A4 identity match (outcome "reused"). It must NOT greet or record an inquiry again.
+    const ingest = vi
+      .fn()
+      .mockResolvedValue({ contactId: "contact_existing", duplicate: false, outcome: "reused" });
+    const fetchLeadDetail = vi.fn().mockResolvedValue({
+      field_data: [
+        { name: "full_name", values: ["Same Person"] },
+        { name: "phone_number", values: ["+15550001"] },
+      ],
+    });
+
+    const workflow = buildMetaLeadIntakeWorkflow({
+      instantFormAdapter: buildAdapter(ingest),
+      accessToken: "test-token",
+      parseLeadWebhook: () => [{ leadId: "lead_reuse", adId: "ad_1", formId: "form_1" }],
+      fetchLeadDetail,
+      savePendingRetry: vi.fn(),
+    });
+
+    const submitChildWork = vi.fn();
+    const result = await workflow.execute(
+      { ...baseWorkUnit, requestedAt: new Date().toISOString() },
+      { submitChildWork },
+    );
+
+    expect(result.outcome).toBe("completed");
+    expect(result.outputs!.created).toBe(0);
+    expect(result.outputs!.duplicates).toBe(1);
+    expect(submitChildWork).not.toHaveBeenCalled();
+  });
+
+  it("FAILS CLOSED: a missing/unknown outcome is not greeted (never coerced to created)", async () => {
+    // Defense in depth: if the disposition is absent (e.g. api on a stale core dist), the orchestrator
+    // must suppress the billable greeting rather than treat the lead as freshly created.
+    const ingest = vi.fn().mockResolvedValue({ contactId: "contact_x", duplicate: false });
+    const fetchLeadDetail = vi.fn().mockResolvedValue({
+      field_data: [
+        { name: "full_name", values: ["Unknown Outcome"] },
+        { name: "phone_number", values: ["+15550009"] },
+      ],
+    });
+
+    const workflow = buildMetaLeadIntakeWorkflow({
+      instantFormAdapter: buildAdapter(ingest),
+      accessToken: "test-token",
+      parseLeadWebhook: () => [{ leadId: "lead_no_outcome", adId: "ad_1", formId: "form_1" }],
+      fetchLeadDetail,
+      savePendingRetry: vi.fn(),
+    });
+
+    const submitChildWork = vi.fn();
+    const result = await workflow.execute(
+      { ...baseWorkUnit, requestedAt: new Date().toISOString() },
+      { submitChildWork },
+    );
+
+    expect(result.outputs!.created).toBe(0);
     expect(submitChildWork).not.toHaveBeenCalled();
   });
 
@@ -198,7 +266,9 @@ describe("buildMetaLeadIntakeWorkflow", () => {
   });
 
   it("saves pending retry on Graph fetch failure and continues to next lead", async () => {
-    const ingest = vi.fn().mockResolvedValue({ contactId: "contact_ok", duplicate: false });
+    const ingest = vi
+      .fn()
+      .mockResolvedValue({ contactId: "contact_ok", duplicate: false, outcome: "created" });
     const savePendingRetry = vi.fn().mockResolvedValue(undefined);
     const fetchLeadDetail = vi
       .fn()
