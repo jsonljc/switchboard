@@ -1,5 +1,6 @@
 {
   "name": "@switchboard/ad-optimizer",
+  "description": "Ad platform integration and budget optimization",
   "version": "0.1.0",
   "private": true,
   "type": "module",

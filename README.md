@@ -1,256 +1,147 @@
 # Switchboard
 
-> **Governed operating system for revenue actions.**
+> Runs the booking and ad work for WhatsApp-first clinics, keeps an honest per-dollar ledger of what that work earned, and shifts budget toward what pays off.
 
-Switchboard runs the operations side of a business through one control plane. Every revenue action — answering an inbound lead, optimizing ad spend, producing a creative — flows through the same governance, audit trail, idempotency, and human-override paths. One platform, three revenue wedges, one source of truth.
+Switchboard is built for aesthetic clinics in Singapore and Malaysia that book on WhatsApp and run without a practice-management system. It does the revenue work itself: an agent answers the lead and books the visit, every booking and payment mints a receipt, and the spend that produced each paid visit is tied back to its campaign so budget can move toward what works.
 
----
+Under the hood it is a governed operating system for revenue actions: every mutating action enters one ingress, passes one governance gate, and lands in one tamper-evident record. The loop is the product. The governance is what makes the loop trustworthy.
 
-## Three Revenue Wedges
-
-| Wedge                                    | Status             | What it does                                                                                                                                                                                                                                  |
-| ---------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Lead-to-Booking (Alex)**               | `Alpha`            | WhatsApp-native conversion agent. Inbound lead → governed qualification → Google Calendar booking. Actively under hardening; not yet shipped.                                                                                                 |
-| **Ad Optimization**                      | `Production-grade` | Meta + Google integrations. Lead ingestion, funnel and saturation analysis, automated budget and creative recommendations — all routed through governance.                                                                                    |
-| **Product / Character / Director (PCD)** | `Planned`          | Character-consistent creative across Sora, Veo, Runway, Kling, and HeyGen. Currently developed in a separate repo ([`creative-agent`](https://github.com/jsonljc/creative-agent)); integration into Switchboard targeted for a later release. |
-
-Status labels describe code maturity, not deployment status. We do not claim a wedge is "live" unless it is.
-
----
-
-## Why Switchboard Outperforms Human Operators
-
-These are properties of the architecture, not marketing. Each one ties back to a real component in the codebase.
-
-- **24/7 sub-second response.** Channel adapters answer inbound traffic in seconds. A human inbox answers in hours, and decay curves on conversion are steep.
-- **Nothing slips through the cracks.** Every action becomes a `WorkUnit` and is persisted in `WorkTrace` (`packages/core/src/platform/work-trace.ts`). No forgotten follow-ups, no "I missed that DM."
-- **Consistent judgment at scale.** `GovernanceGate.evaluate()` (`packages/core/src/platform/governance/governance-gate.ts`) applies the same identity, policy, and risk evaluation to action #1 and action #10,000. Humans drift, get tired, and apply rules unevenly.
-- **Parallel wedges, one operator.** One platform runs lead-to-booking, ad optimization, and (soon) creative production at the same time. A human team needs three specialists plus a coordinator.
-- **A learning loop that compounds.** Every decision is hashed, anchored to an audit entry, and outcome-linked (`work-trace-integrity.ts`). Policy changes are evaluated against history. Tribal knowledge does not walk out the door.
-- **Compliance built in.** Tamper-evident audit trail (SHA-256 content hash + audit-anchor binding) and first-class human-override paths (`packages/core/src/approval/lifecycle-service.ts`) mean speed _without_ losing accountability. Most "AI agents" trade one for the other.
-- **Fixed-cost economics.** Marginal cost per action approaches zero; headcount cost scales linearly with volume. A switchboard that handles 10× the volume next quarter does not need 10× the budget.
-
----
-
-## How It Works
-
-![Switchboard control plane: Channel → PlatformIngress → GovernanceGate → ExecutionMode → WorkTrace, with Human Approval branching off GovernanceGate](docs/assets/architecture.svg)
+## The revenue loop
 
 ```
-Channel (Telegram / WhatsApp / Slack / API / MCP)
-    │
-    ▼
-DeploymentResolver  →  resolve org + skill + trust context
-    │
-    ▼
-PlatformIngress.submit()  →  normalize WorkUnit, enforce idempotency
-    │
-    ▼
-┌─────────────────────────────────┐
-│  GovernanceGate.evaluate()      │
-│  ├ Identity resolution          │
-│  ├ Policy evaluation            │
-│  ├ Risk scoring                 │
-│  └ Approval routing             │
-└────────────┬────────────────────┘
-             │
-       ┌─────┴─────┐
-       ▼           ▼
-    EXECUTE    REQUIRE APPROVAL
-       │           │
-       │     Human reviews
-       │     (approve / reject → trust score update)
-       │
-       ▼
-ExecutionMode dispatches work
-  ├ SkillMode    — LLM tool-calling with auditable tools
-  ├ PipelineMode — async jobs via Inngest
-  └ CartridgeMode — legacy deterministic (bridge only)
-       │
-       ▼
-WorkTrace persisted  →  canonical lifecycle record
+  ad spend (Meta, click-to-WhatsApp)
+        |
+        v
+  WhatsApp conversation ............ Alex qualifies the lead, captures consent
+        |
+        v
+  governed booking ................. one ingress, policy check, human approval when required
+        |                            calendar receipt minted in the same database transaction
+        v
+  paid visit ....................... deposit link, payment receipt
+        |
+        v
+  per-dollar ledger ................ which spend produced which paid visit
+        |
+        v
+  reallocation ..................... Riley recommends moving budget; a human approves
+        |
+        '--> back to ad spend
 ```
 
-### What's Live Today
+The weekly metric is paid visits attributed to their cause, reported honestly as a funnel: booked and externally verified, then held, then paid.
 
-- **Ad Optimization:** Meta CAPI + Google Offline Conversions integration is real and shipping data. Funnel analysis, saturation detection, and Inngest-driven daily/weekly audits are wired and running.
-- **Alex (Lead-to-Booking):** WhatsApp ingress, governance gating, and the calendar-booking tool are all wired end-to-end. The skill is in alpha — the remaining launch blockers are tracked in `.audit/` and being worked off before we promote it to production.
-- **PCD (Creative Studio):** Lives in [`creative-agent`](https://github.com/jsonljc/creative-agent) today. Switchboard's `packages/creative-pipeline` carries UGC scaffolding (Kling provider, scripting, scene casting, realism QA) for the future integration.
+## Three operators, one loop
 
-For deeper architecture: [`docs/DOCTRINE.md`](docs/DOCTRINE.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+- **Alex** runs the conversation: qualifies the inbound WhatsApp lead, captures consent, and books into the clinic's real calendar through a governed mutation.
+- **Riley** keeps the economic truth: ingests ad performance, ties paid visits back to the spend that produced them, and surfaces budget recommendations for human approval.
+- **Mira** produces the creative: UGC-style ad content through an async pipeline, with mandatory approval before anything is published.
 
----
+They are operators of one loop, not three products. None of them can act outside the governance gate.
 
-## First-time local setup
+## What is real today, what is gated off, what is next
 
-From a fresh clone:
+Status describes code on `main`, not deployment. We do not claim a capability is live unless it is.
 
-```bash
-pnpm local:setup
+**Real today** (each ties to a component in the codebase):
+
+- A single mutating chokepoint: `PlatformIngress.submit()` enforces idempotency, entitlement, and governance in one place (`packages/core/src/platform/platform-ingress.ts`).
+- A hash-chained canonical record: every action becomes a `WorkTrace`, content-hashed and anchored to the audit ledger (`packages/core/src/platform/work-trace-integrity.ts`).
+- Receipts as first-class rows: bookings mint a calendar receipt inside the same database transaction as the booking write (`packages/core/src/skill-runtime/tools/calendar-book.ts`), with a tiered evidence model (`packages/core/src/receipts/`).
+- Approval binding: what executes is byte-equivalent to what was approved (`packages/core/src/approval/`).
+- Meta click-to-WhatsApp first-touch capture from signed webhooks, persisted at lead intake.
+- Alex's WhatsApp-to-booking path wired end to end, in alpha. Launch blockers are tracked in `docs/audits/`.
+- Riley's funnel and saturation analysis with daily and weekly audit jobs, producing recommendations for human review.
+
+**Gated off by design** (built, dark until flipped):
+
+- Deposit links: the Stripe Connect checkout adapter and payment-status retrieval are wired and tested; issuance through the skill runtime is not yet registered.
+- Riley's pause execution on Meta is capability-gated per organization; no production org is enabled.
+- Every ad object Mira creates is `PAUSED` by construction; the Meta client refuses to set `ACTIVE`.
+- Compliance gates (consent, claim scanning, messaging windows) run in observe mode during the enforcement bake.
+- Meta Conversions API echo ships only when the pixel id and access token are configured.
+
+**Next:** close the act-on-proof leg. Held and paid receipt coverage for the full funnel, then Riley's reallocation executing through the same governed ingress as everything else.
+
+## What the governance buys the owner
+
+These are properties of the architecture, not marketing. Each ties to a real component.
+
+- **Nothing slips.** Every action is persisted in `WorkTrace`. No forgotten follow-ups.
+- **Consistent judgment.** `GovernanceGate.evaluate()` applies the same identity, policy, and risk evaluation to action #1 and action #10,000.
+- **You stay in control.** Approval is lifecycle state, not a side effect. Human escalation is first-class architecture, and the riskiest legs ship dark until you flip them.
+- **Books you can trust.** Receipts are minted in the same transaction as the work they evidence, and the ledger is hash-chained. The system that does the work keeps the books.
+- **Learning that compounds.** Decisions are outcome-linked, so policy changes are evaluated against history instead of tribal memory.
+- **Always on.** Inbound leads get answered in seconds, around the clock, inside the same governed path.
+
+## Under the hood
+
+![Switchboard control plane](docs/assets/architecture.svg)
+
+```
+Channel (WhatsApp / Telegram / Slack / API)
+    |
+    v
+DeploymentResolver        resolve org + skill + trust context
+    |
+    v
+PlatformIngress.submit()  normalize WorkUnit, enforce idempotency
+    |
+    v
+GovernanceGate.evaluate() identity, policy, risk, approval routing
+    |
+    +--> EXECUTE ------------------+--> REQUIRE APPROVAL
+    |                              |       human reviews, then dispatch
+    v                              v
+ExecutionMode dispatches work (skill tool-calling, async pipelines)
+    |
+    v
+WorkTrace persisted       canonical lifecycle record
 ```
 
-This runs: `pnpm install` → environment setup → `pnpm build` → `pnpm db:migrate` → `pnpm db:seed` → `pnpm local:verify:fast`. Safe to re-run if any step fails.
+For the architectural rules and invariants: [docs/DOCTRINE.md](docs/DOCTRINE.md). For the deep reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-If Postgres is not running yet, the DB-dependent steps are skipped and the command exits non-zero with a clear "setup is incomplete" message. **This is expected** — start Postgres and re-run.
-
-The dashboard reads `apps/dashboard/.env.local`; keys marked `SYNC-FROM-ROOT` in `apps/dashboard/.env.local.example` must match the values in the root `.env` (database URL, encryption key, NextAuth secret) or auth and encryption will silently fail.
-
----
-
-## For Contributors
-
-Switchboard is a TypeScript monorepo (pnpm workspaces, Turborepo). The codebase is organized by dependency layer; circular dependencies are forbidden.
-
-### Project Structure
+## Repo layout
 
 ```
 packages/
-├── schemas/            # Zod schemas & shared types (no internal deps)
-├── sdk/                # Agent manifest, handler interface, test harness
-├── cartridge-sdk/      # Legacy cartridge interface (bridge only)
-├── creative-pipeline/  # Creative content pipeline (async jobs via Inngest)
-├── ad-optimizer/       # Ad platform integration + optimization
-├── core/               # Platform ingress, governance, skill runtime, orchestration
-└── db/                 # Prisma ORM, store implementations, credential encryption
+├── schemas/            Zod schemas & shared types (no internal deps)
+├── sdk/                Agent manifest, handler interface, test harness
+├── cartridge-sdk/      Legacy bridge, pending removal
+├── creative-pipeline/  Creative content pipeline (async jobs via Inngest)
+├── ad-optimizer/       Ad platform integration + optimization
+├── core/               Platform ingress, governance, skill runtime
+└── db/                 Prisma ORM, stores, credential encryption
 
 apps/
-├── api/          # Fastify REST API — platform ingress + governance (port 3000)
-├── chat/         # Multi-channel chat — Telegram, WhatsApp, Slack (port 3001)
-└── dashboard/    # Next.js operator UI + deployment controls (port 3002)
+├── api/          Fastify REST API (port 3000)
+├── chat/         Multi-channel chat ingress (port 3001)
+└── dashboard/    Next.js operator console (port 3002)
 ```
 
-### Dependency Layers
+Organized by dependency layer; circular dependencies are forbidden. Details in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```
-Layer 1: schemas                                              → no internal deps
-Layer 2: sdk, cartridge-sdk, creative-pipeline, ad-optimizer  → schemas only
-Layer 3: core                                                 → schemas + sdk + cartridge-sdk
-Layer 4: db                                                   → schemas + core
-Layer 5: apps/*                                               → may import anything
-```
-
-### Quick Start
-
-#### Prerequisites
-
-- Node.js 20+
-- [pnpm](https://pnpm.io/) 9.x
-- **PostgreSQL 17 or 18** (the schema uses the `vector` extension, which Homebrew's `pgvector` formula only ships for these versions)
-- **pgvector** extension for Postgres
-- Redis (optional — dedup, rate-limiting, and BullMQ fall back to in-memory if absent)
-
-On macOS:
-
-```bash
-brew install postgresql@17 pgvector
-brew services start postgresql@17
-createuser -s switchboard
-createdb -O switchboard switchboard
-psql -d switchboard -c "ALTER USER switchboard WITH PASSWORD 'switchboard';"
-```
-
-#### Setup
+## Getting started
 
 ```bash
 git clone https://github.com/jsonljc/switchboard.git
 cd switchboard
-pnpm install
-./scripts/setup-env.sh                        # generates secrets into .env AND apps/dashboard/.env.local
-pnpm db:migrate                                # apply Prisma migrations
-pnpm db:seed                                   # seed admin@switchboard.local / admin123
-pnpm build
+pnpm local:setup
 ```
 
-#### Development
+Requires Node 20+, pnpm 9, and PostgreSQL 17/18 with pgvector. Full setup, development, database, and testing docs: [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```bash
-pnpm dev                                      # all services in watch mode
+## Further reading
 
-pnpm --filter @switchboard/api dev            # http://localhost:3000
-pnpm --filter @switchboard/dashboard dev      # http://localhost:3002
-pnpm --filter @switchboard/chat dev           # http://localhost:3001 (requires a channel token, see below)
-```
-
-`apps/chat` warns (and starts with no inbound channels) when none of `TELEGRAM_BOT_TOKEN`, `WHATSAPP_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID`, or `SLACK_BOT_TOKEN` is set in development; in production, the same condition is a hard error. Configure at least one channel token to actually receive messages.
-
-##### Watching dev readiness
-
-In a second terminal pane after starting `pnpm dev`:
-
-```bash
-pnpm dev:ready
-```
-
-Polls `:3000/health`, `:3001/health`, and `:3002/api/dashboard/health` at 500ms intervals. Prints `:<port> ready` as each service responds and `All services ready ✓` when all three are up. Times out after 90 seconds with a recovery hint per still-unready port. Optional — useful when a slow cold-cache compile makes it ambiguous whether `pnpm dev` is still booting or actually broken.
-
-#### Working with the database
-
-Edits to `packages/db/prisma/schema.prisma` must be paired with a migration in the same commit.
-
-```bash
-pnpm --filter @switchboard/db exec prisma migrate dev --name <descriptive-name>
-git add packages/db/prisma/migrations/
-```
-
-`pnpm db:check-drift` runs the same validation locally (requires a running PostgreSQL — Prisma uses a shadow database to compare migrations against the schema). CI runs it on every PR and blocks merges when drift is detected.
-
-#### Docker
-
-```bash
-cp .env.example .env
-docker compose up
-
-# Individual targets
-docker build --target api -t switchboard-api .
-docker build --target chat -t switchboard-chat .
-docker build --target dashboard -t switchboard-dashboard .
-```
-
-### Testing
-
-```bash
-pnpm test                                    # all tests
-pnpm --filter @switchboard/core test         # core + governance
-pnpm --filter @switchboard/api test          # API routes
-pnpm test -- --coverage                      # with coverage
-```
-
----
-
-## Docs & Further Reading
-
-- [`docs/DOCTRINE.md`](docs/DOCTRINE.md) — architectural rules and invariants
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — deep architectural reference
-- [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — runbook for operators
-- [`docs/DEPLOYMENT-CHECKLIST.md`](docs/DEPLOYMENT-CHECKLIST.md) — production deploy checklist
-- [`creative-agent`](https://github.com/jsonljc/creative-agent) — separate repo for the PCD wedge (will be integrated)
-
----
-
-## API
-
-### Governed Execution (`/api/execute`, `/api/actions`)
-
-All business actions enter through `PlatformIngress`. Requires the `Idempotency-Key` header.
-
-### Governance (`/api/approvals`, `/api/policies`, `/api/identity`, `/api/audit`)
-
-Approval workflows, policy management, identity resolution, and the tamper-evident audit trail.
-
-### Skills & Deployment (`/api/marketplace`)
-
-Skill registration and deployment surfaces. Execution and governance state. Provisioning and runtime management.
-
-See Swagger UI at `/docs` for full endpoint documentation.
-
----
-
-## Environment Variables
-
-See [`.env.example`](.env.example) for all available options. Never commit `.env` files or secrets.
-
----
+- [docs/DOCTRINE.md](docs/DOCTRINE.md) architectural rules and invariants
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) deep architectural reference
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) operator runbook
+- [docs/DEPLOYMENT-CHECKLIST.md](docs/DEPLOYMENT-CHECKLIST.md) production deploy checklist
+- [SECURITY.md](SECURITY.md) vulnerability disclosure
+- [CONTRIBUTING.md](CONTRIBUTING.md) setup and contribution guide
 
 ## License
 
-MIT
+Copyright (c) 2026. All rights reserved.
+
+The source is visible for evaluation and security review. No license is granted to use, copy, modify, or distribute this software, in whole or in part, without prior written permission. Contributions are welcome through the process in [CONTRIBUTING.md](CONTRIBUTING.md); by submitting one you agree it may be incorporated into the project under these terms.

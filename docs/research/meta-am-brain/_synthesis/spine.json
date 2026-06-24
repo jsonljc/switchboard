@@ -1,0 +1,278 @@
+{
+  "thesis": "The strongest combined system is a COMPOUNDING KNOWLEDGE STORE with a CALIBRATION-HONEST DECISION ENGINE on top \u2014 a Karpathy-style compiled wiki of flat, typed, interlinked per-account dossiers that accrue insight one-directionally (compiled and superseded, never bidirectionally merged), feeding a deterministic Python decision engine (pacing/coverage/RS-rank/cockpit + Jack's deep-analytics suite refactored into tested code) that tells the AM what to do today and drafts the outbound behind a single-recipient clearance gate. The operator surface is Jack's 12 named slash-skills; underneath each skill is a THIN wrapper over the tested engine \u2014 the name is the ergonomics, the Python is the correctness. It is stronger than EITHER parent because it fuses the two things neither had: it takes Jack's PRODUCTION assets (named skills, per-section ownership matrix, the analyses suite, the enriched registry, narrative dual-load, file-locking, the danger-zone failure catalog, production-proven file-health limits) and grafts them onto AM Brain's PRINCIPLED spine (determinism-in-code I-1, rules-first-numbers-last I-2, unknown!=zero I-3, the draft-boundary clearance gate, the two-tier mirror/authored memory model, single-writer discipline) \u2014 so the synthesis keeps Jack's operational maturity AND AM Brain's safety/calibration discipline, while inheriting NEITHER parent's catastrophic failure mode (Jack's silent-data-loss bidirectional merge; AM Brain's hidden-engine-with-no-named-surface and its untested in-prompt math). It is genuinely unserved by Meta's GA Sales AI (~35 subagents) because Sales AI is READ-ONLY, browser-based, stateless-per-query, single-account, and runs no proactive daily loop and drafts no outbound \u2014 whereas this system is proactive (a scheduled tiered-poll daily cockpit), action-drafting (gated Gmail drafts), persistent (a compounding per-account dossier that gets smarter every meeting), portfolio-wide (reasons across all 33 accounts at once), and self-hosted; where it overlaps Sales AI (CRM reads, eval-judge grounding) it REUSES it rather than rebuilding.",
+  "invariants": [
+    {
+      "id": "I-1",
+      "law": "Determinism in code, judgment in the model. ALL classification, joining, thresholding, ranking, curve-fitting, and regression is tested Python (engine/classifiers.py, engine/analyses/*.py); the LLM does language + genuinely-ambiguous judgment only, in exactly three places: (1) extract structured facts from unstructured prose, (2) compose operator/client-facing language, (3) render low-confidence/ambiguous items as questions. A skill that asks the LLM to compute a number is a bug.",
+      "why": "Long LLM skills (1400+ lines) drift, misclassify, skip steps; a log-curve fit or diminishing-returns threshold computed in-prompt is unverifiable and silently mis-advises spend. Curve-fitting/regression is the least-ambiguous candidate for code-over-LLM.",
+      "provenance": "[AM] I-1, extended by [synth] to cover Jack's analyses suite which Jack ran as in-prompt LLM math."
+    },
+    {
+      "id": "I-2",
+      "law": "Rules first, numbers last. Categorical bands order everything (RS rank: R0 pins -> R2 gates -> R1 boosts -> R3 band-sort -> R4 numeric-tiebreak); a numeric score MUST NOT reorder across bands, only break ties within an identical band. Low-confidence / required-human-judgment items render as a QUESTION, not a recommendation.",
+      "why": "Kills confident-but-wrong output; a numeric score reordering across bands is exactly how a ranking lies.",
+      "provenance": "[AM] I-2 / SPEC ALG-5, ALG-5a."
+    },
+    {
+      "id": "I-3",
+      "law": "Unknown != zero. Never fabricate. Absent/non-numeric/non-finite inputs render as unknown (NOT 0/false/pass) and branch to an explicit unknown/unscored outcome (Number.isFinite-guard every external numeric before any comparison); uncalibrated pacing surfaces carry a PACING UNCALIBRATED banner; an uncalibrated curve carries an [UNCALIBRATED CURVE] banner and may NOT enter a client draft; unsourced proof points render [NEEDS CLEARED BENCHMARK].",
+      "why": "The #1 way dashboards lie is defaulting missing to zero/pass; NaN-blind comparison gates pass NaN as all-false.",
+      "provenance": "[AM] I-3 / SPEC DM-4, CONF-1; Number.isFinite guard from [ext] project-memory NaN-blind-gates."
+    },
+    {
+      "id": "I-4",
+      "law": "Mirror the system of record; never invent its keys. rs_id/org_id/sfid/ad_account_id copied verbatim; the brain annotates, never authors CRM/ads truth. Human-set fields living inside otherwise-generated files (status, tier, scorecard_status, RS impact_override/ease_override) are HUMAN-ONLY and never auto-overwritten.",
+      "why": "Keeps the brain subordinate to CRM/ads; the registry/SoR keys are the join contract \u2014 fabricating one undercounts or mis-joins silently. Jack learned in production that human-set fields live inside engine-regenerated files and must be carved out.",
+      "provenance": "[AM] I-4 + [Jack] section-12 human-only carve-out (the field-level enumeration AM Brain leaves latent under DM-8)."
+    },
+    {
+      "id": "I-5",
+      "law": "Field-level ownership over a per-FILE single-owner matrix. Every file/field is human-owned (agent proposes diffs), AM-confirmed (agent parks under suggested:, operator confirms), generated (agent overwrites freely, regenerable), or append-only (append only; correct via tombstone, never edit). The matrix is keyed skill x (file + protected-field-list) with explicit write-mode {overwrite-free | append-only | rewrite | propose-under-suggested}, machine-checkable in _system/ownership.md, enforced by the write-guard on EVERY write. trust_level/current_mood change ONLY on operator confirm.",
+      "why": "Safe autonomy over shared structure. Jack's per-section owner-table is mechanically-checkable documentation of write authority (better than prose); AM Brain's field-level grain (freeze trust_level even inside a /capture-owned file) is finer than Jack's section grain. Combine: matrix legibility at field resolution.",
+      "provenance": "[AM] I-5/DM-13 (field grain) overlaid with [Jack] section-12 ownership matrix (machine-checkable table + write-modes); [synth] keyed at field resolution."
+    },
+    {
+      "id": "I-6",
+      "law": "Gate the outbound, not the files. No per-file ACLs (a single operator legitimately sees all own clients; analysis spans all 33 freely). The real risk is one client's data in another's SEND \u2014 enforced at the draft boundary via single-recipient taint + cross-client hard-fail + no-raw-spend + drafts-only. There is NO send path that does not traverse gate.py; gate-bypass is a forbidden, loud-failing, blocked-and-logged operation.",
+      "why": "The leak happens at the send boundary, not in the files; for a 33-client book cross-client contamination is the catastrophic failure. Jack has NO outbound gate at all \u2014 a real safety gap. Making the gate unbypassable uses Jack's danger-zone framing.",
+      "provenance": "[AM] I-6 / SPEC Section-8 GATE-1..5 (the gate); [Jack] section-17 danger-zone framing (gate-bypass as a catastrophic forbidden op)."
+    },
+    {
+      "id": "I-7",
+      "law": "One canonical live store; no bidirectional merge, EVER. Exactly one canonical store, split by durability class: the AUTHORED tier (durable truth) is files+local-git on the canonical host with GDrive native revision-history as a free second recovery layer; the MIRROR tier (regenerable caches with fetched_at + shelf-life) may live wherever the unattended host can reach it because losing it costs nothing (re-derived next run). Additive LLM merge is DEMOTED from a scheduled loop to a MANUAL recovery-only tool (/brain:recover-merge), invoked on a detected divergence, additive, deterministic-contradiction-resolution (canonical wins), diff-confirmed before commit. No second LIVE read/write store; the optional API/memory projection of the canonical is one-way, read-only, regenerable, never written back.",
+      "why": "Bidirectional prose-merge silently loses AND fabricates data \u2014 corroborated independently by Jack's own manual ('Metamate's changes are LOST') and by the 164-silent-run disaster (personal+bidirectional+silent). The tier-split dissolves the {file+git canonical, hosted, unattended} pick-two trilemma: the trilemma only binds the un-regenerable AUTHORED tier, which gets proven file+git recovery; the regenerable MIRROR tier can ride the hosted scheduler's reachable store with a 0-files-written heartbeat guard. Recovery-only merge keeps Jack's recovery value without the always-on loss/fabrication surface.",
+      "provenance": "[AM] I-7 (one store, no merge) + [Jack] GDrive-version-history-is-the-durable-layer evidence + [synth] tier-split that resolves the host trilemma + [ext] GROUND consensus (single-canonical-store, append-only, no bidirectional merge across all 3 research angles). REV3's bare MM2-canonical flip is NOT rubber-stamped: corrected to tier-split files-canonical-for-authored."
+    },
+    {
+      "id": "I-8",
+      "law": "Mirror live, author durably; staleness is structural, not policy. SoR-derived facts are thin regenerable MIRROR caches (every value carries source + fetched_at + class shelf-life; freely deletable; query-live-first; never served stale-as-fresh). Synthesized judgment is the durable AUTHORED tier. Evidence past shelf-life is EXCLUDED from evidence-attachment and the clearance gate, and queued to the hygiene sweep. The human-legible per-account data_freshness block is COMPUTED from the underlying fetched_at stamps (cannot drift), not hand-maintained. Deep Presto analyses are the one MIRROR artifact with retain:true (high regeneration cost) and are therefore the only mirror artifact backed up.",
+      "why": "Co-mingling live spend with durable strategy makes staleness a policy question ('did anyone run /refresh?') instead of a structural one (cache expires automatically). Jack's data_freshness block is hand-maintained and can drift; computing it from fetched_at removes that drift. A 45-day-old headroom curve cited live in a QBR is the staleness lie the shelf-life machinery exists to prevent.",
+      "provenance": "[AM] I-8/DM-5/DM-6 (structural freshness) + [Jack] data_freshness block (legible display, recomputed) + [Jack] analyses/ folder as retain:true mirror artifact + [synth] computed-not-hand-maintained."
+    },
+    {
+      "id": "I-9",
+      "law": "Draft-only at launch (autonomy rung 0); graduate only on numeric criteria, never self-granted. There are TWO ladders. SEND ladder: rung 0 draft-only (everything) -> rung 1 one-tap (follow-up nudges/meeting-confirmations/report-deliveries; gate = N consecutive clean sends in category) -> rung 2 batch (cadence follow-ups/routine cited answers; gate = sustained rung 1 + zero clearance failures in QA) -> rung 3 auto-send+notify (confirmations + scheduled report sends ONLY; gate = explicit policy sign-off + instant recall + weekly audit). Pitches/objection-handling/numeric/emotional capped at rung 1 PERMANENTLY. WRITE ladder: generated files = rung 3 (overwrite freely) from day one; append-only = rung 2; AM-confirmed = rung 1; human-owned + human-only-fields = rung 0 forever.",
+      "why": "No native approval UI; external sends are highest-risk. Making both ladders explicit closes the gap where AM Brain conflated 'autonomy' with 'send autonomy' \u2014 Jack's ownership matrix IS a write-autonomy specification. Gate scoped to N-consecutive-clean rather than a fixed weekly sample so it is satisfiable at solo send volume.",
+      "provenance": "[AM] I-9 / SPEC OUT-5/OUT-6 (send ladder) + [synth] explicit WRITE ladder derived from Jack's ownership matrix; [ext] verdict correction on satisfiable gate threshold."
+    },
+    {
+      "id": "I-10",
+      "law": "Poll on schedule; there is no event path. Tiered polling: Tier1 schedule (free) -> Tier2 cache-diff filter (cheap, NO LLM, zero-network local stage-clock advancing days_in_stage from cached stage_entered_at; gates ~90% of cheap exits) -> Tier3 agent wake (LLM, only when work found). An independent unconditional 12h timer runs the 96h transcript-capture sweep, bypassing the cost filter. Heavy analytics (180d diagnostic, headroom, cpa-v-spend) have no cheap precondition and run on explicit monthly/pre-QBR cadence, NOT through Tier2.",
+      "why": "No event bus exists. The Tier2 local stage-clock is the cheapest-correct way to detect 14d/28d attribution-window and overdue-commitment crossings; forcing heavy analytics through a Tier2 gate is a false economy (the precondition check would itself need a Presto pull). The 96h window is a hard data-expiry deadline so transcript capture cannot be cost-optimized away.",
+      "provenance": "[AM] I-10 (tiered poll + 96h sweep) + [Jack] cadence-as-cost-control for heavy analytics (frequency-tiering for jobs with no cheap precondition)."
+    },
+    {
+      "id": "I-11",
+      "law": "Single-threaded writer; intelligence sub-agents are read-only. Exactly one logical writer mutates files; it is enforced single-writer-BY-CONSTRUCTION (cron is the sole scheduled writer; human edits arrive via a different surface the cron never read-modify-writes) plus an advisory atomic-mkdir/sentinel lock as a crash/reentrancy + fail-loud guard (NOT a hard mutex on an eventually-consistent store). Sub-agents (evidence-finder, benchmark-fetcher, meeting-prep researcher) and read-only mobile lookup return distilled conclusions + source refs; they MUST NOT draft outbound or write files. A true second WRITER is admitted only behind an explicit gate (8 consecutive green weeks + DSS-matrix implemented + DISJOINT writable partition where no two writers share a writable path, verified per the actual skill->agent map).",
+      "why": "Parallel writers make conflicting decisions because actions carry implicit decisions sub-agents can't see (Cognition P12, 3-0 adversarially verified, corroborated by Anthropic's production lead-writer/read-only-subagent pattern). Jack's 5-agent concurrent-write fleet works ONLY by papering over races with the bidirectional merge I-7 rejects. The disjoint-partition graduation gate makes the merge unnecessary (writers never share a writable file, so there is no conflict to merge). On an eventually-consistent store an API lock is only probabilistic, so the real guarantee is by-construction + the lock is defense-in-depth.",
+      "provenance": "[AM] ORCH-1/ORCH-2 (single writer, read-only subagents) + [Jack] mkdir-lock + task-queue + disjoint-partition + danger-zone (imported as latent gated-future infra) + [ext] Cognition P12 / Anthropic multi-agent corroboration + verdict correction (by-construction, not a hard mutex)."
+    },
+    {
+      "id": "I-12",
+      "law": "Additive history with archive-not-hoard; the agent never deletes. interactions/raw is write-once create-only (in-place edit blocked+logged; corrections via a NEW tombstone-referenced entry not_true:<claim>; do_not_rederive:true). The agent MAY NOT delete any file in any class \u2014 deletion is operator-only; the monthly stale-context review is a cockpit DELETE-CANDIDATE hygiene queue the human approves. Archival (raw -> monthly digest -> archive/) is MOVE-not-delete and allowed autonomously ONLY when git + the off-host backup are confirmed for the period; otherwise it downgrades to a candidate. Roll-up/cap bounds apply to every growth-bearing file (narrative half-year shards, rs-ledger open-vs-archive split) so no single file breaches the store's per-file ceiling.",
+      "why": "Jack's immutability-for-interactions is correct (a CI record edited after the fact silently rewrites history the pacing engine counts); his never-delete-ANYTHING is a workaround for additive-only sync that AM Brain doesn't need (git + backup let it archive safely). Autonomous deletion is the highest-blast-radius op with no upside. The tombstone closes the gap where a retracted fact is resurrected by re-ingesting an old transcript. Roll-up bounds prevent the monolith hazard the decomposition exists to kill.",
+      "provenance": "[Jack] additive-only/immutable-interactions/never-delete (the safety floor) + [AM] git-backed archive lifecycle + DM-10 tombstone + DM-11 bloat caps (the recovery-enabled hygiene) + [synth]/[ext-verdict] roll-up bounds for narrative/rs-ledger."
+    },
+    {
+      "id": "I-13",
+      "law": "Registry is sacred and stable; validate-before-write. _system/registry.yaml is the single corruption single-point (a bad write breaks every account lookup) \u2014 schema-validate on every load and before every write, write-lock it, git-commit it. It holds STABLE join-keys + resolution data only (slug, display_name, crm_name, search_aliases[], status, in_portfolio, tier, org_id, account_team_id, ad_account_ids[], sfid, narrative_path, narrative_source_url?, dossier_path). Volatile counts (rs_count/rs_pitched/rs_adopted, scorecard_status, data_freshness, updated_at, confidence) are EXCLUDED \u2014 they are generated and live in the per-account context.md header + scorecard. Resolution order: slug -> display_name -> crm_name -> search_aliases. ad_account spend/perf pulls ALWAYS bind IN(all ad_account_ids) \u2014 a single id undercounts up to 70%.",
+      "why": "A master registry mutated on every count change is a write-amplification + single-point-corruption hazard Jack himself flags. status (CRM lifecycle) and in_portfolio (does THIS AM book it; 43-vs-33) are orthogonal and both load-bearing. Jack's resolution order (adding crm_name fallback) is strictly better than name/alias-only. YAML (not JSON) because the operator hand-edits human-owned fields and YAML permits comments \u2014 behind a validate-on-load guard since it is the corruption single-point.",
+      "provenance": "[Jack] index.yaml is-sacred + validate-before-write + crm_name resolution + ad_account discovery (ACDP) + [AM] lean join-keys + in_portfolio + IN(all-ids) 70%-undercount rule + [synth] merged superset with volatile counts excluded."
+    }
+  ],
+  "layers": [
+    {
+      "id": "L0 Capability gate",
+      "role": "Re-run the NATIVE/BUILDABLE/IMPOSSIBLE capability audit before building any new capability; carry corrections; consult the danger-zone forbidden-operations list before any new write surface. Where a platform capability is missing, implement the listed fallback (never a silent omission).",
+      "built_from": "[AM] SPEC CAP-1..2 / capability-audit.md + [Jack] section-17 danger-zone catalog promoted to a machine-checkable forbidden-ops list."
+    },
+    {
+      "id": "L1 Storage",
+      "role": "ONE canonical store, tier-split by durability. AUTHORED tier = files + local-git on the canonical host (.git on LOCAL DISK, never on the cloud FUSE mount; working tree may be on the mount, markdown one-way-synced to it) with GDrive native revision-history as a free second recovery layer and a nightly off-host git bundle + git fsck tripwire for DR. MIRROR tier = regenerable caches with fetched_at + shelf-life, may live on the host-reachable store (MM2 projection allowed), 0-files-written heartbeat guard, NOT backed up (except retain:true analyses). Single-threaded writer by-construction + advisory atomic-mkdir/sentinel lock. No second live read/write store; no bidirectional merge.",
+      "built_from": "[AM] I-7/I-8 two-tier + single-writer + [Jack] GDrive-version-history-durable-layer + mkdir-lock + file-health-limits + [synth] tier-split + [ext] GROUND single-canonical-store consensus + verdict corrections (git-on-local-disk invariant, GDrive-revisions-as-bonus-until-verified, fsck tripwire)."
+    },
+    {
+      "id": "L2 Data plane",
+      "role": "pipeline.py runs READ-ONLY pulls in TWO kernel-separated legs (default-kernel leg: spend-live/rs/ci/transcript/calendar/email/crm_status via jf-graphql tunnel + meta CLIs; analytics-kernel leg: EOS/spend-fallback/p5-adoption/180d-diagnostics via Presto) into the MIRROR cache. Standardized self-describing envelope {step,status,time_ms,transport,kernel,spend_source_rung,id_match_mode,fetched_at,account_count,data,error}. Numeric-ID match first (text only as logged fallback); registry IN(all ad_account_ids); 3-rung spend cascade (GraphQL ad_insights -> edw_bir01.fct_ad_account_daily_revenue_split -> bi.fct_account_rolling_stats) with a zero/non-finite/empty guard; a failed pull renders unknown, never 0; documented dead-end registry (do-not-retry).",
+      "built_from": "[AM] fat-Python pipeline + numeric-ID-match + IN(all-ids) + envelope + dead-ends + l12-territory fallback + [Jack] named Presto tables + Tier1/Tier2 spend cascade + kernel non-mixing + ACDP discovery + [synth] two-transport, kernel-grouped legs, extended envelope."
+    },
+    {
+      "id": "L3 Knowledge / Memory",
+      "role": "Decomposed two-tier per-account dossier (MIRROR: performance.md, rs-ledger.md (open) + rs-archive (closed), interactions/<YYYY-MM>.md digest + interactions/raw-<date>-<type>.md (flattened, <=3 levels), contacts.md, analyses/<type>-<date>.md retain:true; AUTHORED: profile.md, relationship.md, style.md, narrative.md (half-year shards) + commitments.md). One auto-built read-only per-account context.md rollup (generated; header = computed data_freshness block + scorecard_status + rs counts) gives Jack's single-glance value with no write-contention. narrative.md is in-vault, dual-loaded with the structured dossier on every client-scoped read; the external Google Doc (if kept) is an upstream ingestion source only. Merged registry.yaml + config.md single-constants-source. Retrieval defaults to slug-read + grep + per-prompt recall hook (FAISS/BM25 opt-in past ~5K chunks); per-client retrieval scoping (RET-1) is index-level, not prompt-level.",
+      "built_from": "[AM] two-tier decomposed dossier + narrative dual-load + config.md + retrieval default + [Jack] ownership matrix + analyses/ folder + rich registry + data_freshness legibility + file-health limits + [synth] generated context.md rollup + merged registry + verdict fixes (flatten interactions/raw to <=3 levels, half-year narrative shards, rs open-vs-archive split)."
+    },
+    {
+      "id": "L4 Decision engine + analytics",
+      "role": "Deterministic banded engine: ALG-1 pace, ALG-2 coverage, ALG-3 solution-mix, ALG-4 evidence-attachment, ALG-5 RS-rank (rules-first-numbers-last + question-fallback), ALG-6 recovery, ALG-7 hygiene, ALG-8 cockpit \u2014 pure functions in engine/classifiers.py + render.py, named constants in config.md, unit-tested against SPEC fixtures TEST-1..16. PLUS Jack's analyses suite REFACTORED into engine/analyses/{diagnostic(ALG-9 trajectory),headroom(ALG-10 log-curve),cpa_v_spend(ALG-11 regression),levers(ALG-12 adoption),revenue_commentary(ALG-13 operator-only)} \u2014 pure functions emitting a typed AnalysisResult with born-clearance-classed fields, golden-fixture tested, math NEVER in the prompt. Each AnalysisResult emits DM-EVID objects feeding ALG-4 via an explicit producer->consumer contract (pinned with a safeParse seam test); a decisive analysis signal can set evidence_readiness=strong or suppress/raise an RS while still only setting a categorical band. Calibration honesty (CONF-1 / [UNCALIBRATED CURVE] / insufficient_data bucket) wraps everything.",
+      "built_from": "[AM] ALG-1..8 banded engine + calibration stack + [Jack] 5-analysis suite (capability) + [synth] analyses-as-tested-Python + analysis->evidence->ranking producer-consumer contract + deterministic trajectory enum."
+    },
+    {
+      "id": "L5 Safety / governance",
+      "role": "Draft-boundary clearance gate (gate.py): single-recipient taint + cross-client hard-fail + no-raw-spend/[NEEDS CLEARED BENCHMARK] + drafts-only, backed by the full GATE-1..5 claim-type x source-class decision table, default-deny, claims-register-or-INVALID, escalation taxonomy (never autonomous). The gate is UNBYPASSABLE (gate-bypass = forbidden loud-failing blocked-and-logged op). Write-guard enforces the ownership matrix + human-only-fields + immutability on EVERY write. Two autonomy ladders (SEND + WRITE). Every proposal/decision -> Context Ledger + append-only DM-AUDIT (preserves evidence-shown-at-approval-time). Single-writer-now; gated multi-agent future (disjoint-partition + DSS-matrix + 8-green-weeks).",
+      "built_from": "[AM] gate.py 3-rule + GATE-1..5 + escalation taxonomy + autonomy ladder + audit ledger + [Jack] ownership matrix + human-only-fields + danger-zone framing (gate unbypassable) + [synth] write-guard + two ladders + gated-fleet graduation."
+    },
+    {
+      "id": "L6 Runtime / host",
+      "role": "Tiered-poll scheduler, host-portable. SHIP-NOW: on-demand on the LAPTOP (launchd: /morning 07:00 SGP weekdays + 12h transcript sweep) against the existing FUSE GDrive mount + local git + python \u2014 I-7 intact, zero infra; a tiny Metamate Automation serves as the hosted 07:00 NUDGE (pings/writes a one-cell work-due Sheet, never touches files) for laptop-closed coverage. MATURITY: persistent Meta devserver crontab/systemd-timer with the vault mclone-mounted (git on local disk per VERIFY-1), once a devserver is provisioned. /cron daemon discipline (RLIMIT_AS=8GB, track last-dispatch no-double-fire, stagger >=1min, batch-and-assemble). Loud-failure discipline: heartbeat.jsonl per run, 0-written-when-due = HARD FAIL, weekly health-check asserting recency + climbing run-count + token-freshness + backup-rows>0, auto re-arm on breach.",
+      "built_from": "[AM] tiered poll + 96h sweep + /cron discipline + loud-failure guardrails + option-3-laptop-ship-now + [Jack] hosted-scheduler-runs-laptop-closed + Confucius-grant prerequisite + cadence-for-heavy-analytics + [synth] Automation-as-nudge (hosted trigger, not file I/O)."
+    },
+    {
+      "id": "Ln Conformance / eval",
+      "role": "SPEC fixtures TEST-1..16 are the engine acceptance suite; golden-fixture tests for ALG-9..13 analyses; producer->consumer safeParse seam tests; concurrency test (cron-vs-interactive no-silent-loss; lock stale-timeout); golden question set (20/playbook) + weekly grounding QA (sample 20 sent claims, human-verify vs citation, target >95%, any clearance violation = sev-1); operating metrics (pacing attainment, draft acceptance + edit distance, overdue-commitments trend, cockpit %-acted-on, operator gardening minutes/week). Eval-judge harness reuses Sales AI grounding.",
+      "built_from": "[AM] SPEC Section-14 conformance + eval-judge reuse + [ext] cross-slice-seam safeParse discipline + concurrency-test-before-deploy (GROUND verdicts)."
+    }
+  ],
+  "storage_ruling": {
+    "decision": "ONE canonical live store, TIER-SPLIT by durability class, with single-writer-by-construction + an advisory atomic lock + a one-way versioned off-host backup + a recovery-only (never scheduled) additive merge. The AUTHORED tier (un-regenerable truth: profile/relationship/style/narrative/commitments + _system) is files + LOCAL-DISK git on the canonical host, with GDrive native revision-history as a free second recovery layer (treated as a bonus until verified) and a nightly off-host git bundle + git fsck tripwire as primary DR. The MIRROR tier (regenerable caches: performance/rs-ledger/interactions/contacts/analyses, all fetched_at-stamped) may live on whatever store the unattended host can natively reach (an MM2 read-projection is permitted) because losing it costs nothing \u2014 it is re-derived next run, guarded by a 0-files-written-when-due HARD FAIL. The .git object store MUST reside on local disk, never on the cloud FUSE mount (the mount carries only the working tree; if the canonical host is a FUSE mount, git stays on local disk and markdown is one-way synced TO the mount). NO second live read/write store; the optional API/memory projection is one-way, read-only, regenerable, never written back; if an out-of-band edit ever lands in the projection it goes to a quarantine ledger drained by the manual /brain:recover-merge tool. This is the genuinely stronger model the verdicts force: it keeps REV3's single-canonical-store PRINCIPLE and the cross-source compounding consensus (single store + append-only + no bidirectional merge) AND Jack's production durability evidence (files+git+revision-history is the proven-recoverable layer) AND unblocks the unattended host (the tier-split dissolves REV3's {file+git canonical, hosted, unattended} pick-two trilemma \u2014 the trilemma only binds the un-regenerable AUTHORED tier, which gets file+git; the regenerable MIRROR tier can ride the hosted scheduler's reachable store).",
+    "rationale": "The chief-architect harvest's files-canonical hybrid was OVERTURNED 2/3 on the durability headline (git-on-a-cloud-FUSE-mount can itself corrupt \u2014 rclone-mount instability, the documented 'Google Drive Sync corrupting git repositories' class, and the operator's OWN untested VERIFY-1 'git-inside-the-mclone-mount NOT YET TESTED'), and one skeptic showed the tier-split is STRICTLY stronger than both pure REV3 and pure files-canonical. The three independent GROUND research angles (concurrency, pkm-compounding, ai-memory) converge unanimously: bidirectional sync silently loses data via last-write-wins races (corroborated by Jack's own manual: 'Metamate's changes are LOST'); single-canonical-store + append-only + one-way backup is the 2026 production consensus (Salesforce write-gates, Mem0, Anthropic client-side-canonical, Karpathy compiled-wiki supersession); the hard problem is what-to-remember + preventing retrieval from quietly-lying, not the backend. The tier-split is correct because durability policy DIFFERS by content: un-regenerable authored truth NEEDS proven recovery (files+local-git+revisions+off-host-bundle, two independent recovery layers); regenerable mirror caches need NONE (re-derived from SoR), so they can satisfy the hosted-scheduler reachability requirement without betting durable truth on a late-beta store with an unverified ~100KB cap, opaque retention, and a ~23-mission silent-stop bug. The recovery-only merge keeps Jack's documented recovery value (additive-merge converts a lost edit from permanent to recoverable) while removing the always-on loss/fabrication surface AM Brain rejects \u2014 the two parents are reconcilable on this point, not mutually exclusive. Single-writer-by-construction (cron is the sole scheduled writer; human edits via a different surface the cron never read-modify-writes) is the real guarantee; the atomic-mkdir lock is defense-in-depth crash/reentrancy + fail-loud, NOT a hard mutex (an API lock over an eventually-consistent store is only probabilistic). Jack's locking + task-queue-seam + file-health-limits + validate-before-write registry are all harvested as the production-hardened concurrency layer; only his bidirectional-merge + multi-live-writer fleet are dropped (they exist solely to serve concurrent multi-daily-driver writes a solo AM lacks).",
+    "rejected_alternatives": [
+      "REV3 bare single-store-on-MM2 (canonical = Metamate project memory, files+git demoted to nightly backup): LOSES durability of the canonical copy \u2014 bets un-regenerable authored truth on a late-beta store with an unverified ~100KB/file cap + truncation (one oversized narrative.md = silent loss), opaque version-recovery/retention, and a known ~23-mission silent-stop bug; demotes the only proven-recoverable layer (files+git+GDrive-revisions) to a nightly backup, regressing from continuous per-edit history to a backup-window gap; and CONTRADICTS AM Brain's own ship-now recommendation (\u00a711 'Now -> option 3', laptop files+git on-demand, which IS file-canonical). The tier-split keeps everything MM2-canonical uniquely buys (the regenerable tier can ride MM2 for hosted reach) without this loss.",
+      "Full Jack bidirectional sync (GDrive primary + MM2 secondary, 30-min cycle, LLM additive merge, GDrive-wins-on-conflict): LOSES simplicity AND safety for a solo operator \u2014 the 30-min always-on prose-merge buys nothing without a second concurrent live daily-driver (the solo AM has one writer) and carries the documented 'Metamate's changes are LOST' cost plus LLM-fabrication risk (the merge LLM preferentially selects generated over retrieved content, embedding that bias permanently in the narrative); the 5-agent fleet + N-by-N task-queue + dual-lock machinery is over-built for one operator. Async/batch usage (the likely solo pattern) makes silent merge losses MORE likely to hide than in Jack's daily-active usage.",
+      "Pure files-canonical hybrid (the chief-architect harvest's original: ALL tiers on files+git on a single FUSE host, headline 'strictly more durable than REV3'): OVERTURNED 2/3 \u2014 the unconditional durability headline is not defensible because git-on-a-cloud-FUSE-mount can itself corrupt (rclone-mount instability, documented GDrive-sync git-corruption class, the operator's own untested git-in-mclone-mount VERIFY-1), and it does NOT unblock the unattended host (the persistent devserver it needs is unprovisionable per the L6 spike, and the Automations-as-nudge fallback only pings the operator to open the laptop, so its ceiling is operator-ATTENDED \u2014 surrendering the laptop-closed daily cockpit MM2-canonical uniquely buys). The tier-split fixes both: git-on-local-disk invariant closes the corruption hole, and pushing only the regenerable mirror tier to the host-reachable store restores laptop-closed operation for the cockpit."
+    ],
+    "confidence": "high"
+  },
+  "section_outline": [
+    {
+      "n": 1,
+      "title": "Thesis \u2014 compounding knowledge store WITH a calibration-honest decision engine",
+      "scope": "The dual-and-layered center of gravity (compiled wiki feeding a tested decision engine, named-skill surface over a tested engine); why it is stronger than EITHER parent (Jack's production assets on AM Brain's principled spine; inherits neither's catastrophic failure mode); why it is genuinely unserved by Meta's read-only stateless single-account Sales AI; the reuse-not-rebuild stance where they overlap."
+    },
+    {
+      "n": 2,
+      "title": "Invariants \u2014 the reconciled law (I-1..I-13)",
+      "scope": "The single numbered list folding AM Brain I-1..I-10 with Jack's laws (additive-only/never-delete, per-section single-owner, immutable interactions, registry-is-sacred, danger-zone). Each law: statement + why + provenance. Conflicts resolved inline (e.g. I-7 single-store-no-merge corrected to tier-split; I-5 field-grain overlaid with Jack's matrix; I-11 single-writer-by-construction not hard-mutex; I-12 immutability+tombstone+roll-up bounds)."
+    },
+    {
+      "n": 3,
+      "title": "The storage / sync / concurrency / durability ruling (FEATURED)",
+      "scope": "The settled decision: ONE canonical store, tier-split by durability, single-writer-by-construction + advisory lock + one-way versioned off-host backup + recovery-only additive merge; git-on-local-disk invariant; AUTHORED=files+git+revisions, MIRROR=host-reachable+regenerable. The head-to-head (REV3 bare-MM2 vs full-Jack-bidirectional vs pure-files-hybrid) with what each loses. The evidence chain (Jack's own loss admission + 3 GROUND consensus angles + verdict overturns). The host-trilemma dissolution. Rejected alternatives + confidence."
+    },
+    {
+      "n": 4,
+      "title": "Layer model + system diagram",
+      "scope": "L0 capability gate, L1 storage (tier-split), L2 data plane (two kernel-legs), L3 knowledge/memory (decomposed dossier), L4 decision engine + analytics, L5 safety/governance, L6 runtime/host, Ln conformance. The full system diagram (operator -> generation -> draft-boundary gate -> drafts; decision engine + retrieval reading two-tier knowledge; data plane + ingestion feeding it; tiered-poll runtime driving it). Each layer's role + built-from provenance."
+    },
+    {
+      "n": 5,
+      "title": "Knowledge / memory model & file layout",
+      "scope": "The decomposed two-tier dossier (mirror vs authored, opposite durability policies), the generated read-only per-account context.md rollup, in-vault narrative.md dual-load (Google Doc demoted to ingestion source), the merged registry.yaml schema (stable keys, volatile counts excluded, resolution order), config.md single-constants-source, the two-granularity freshness model (structural enforcement + computed legible display), write-policy classes, file-health limits, the verdict fixes (flatten interactions/raw to <=3 levels, half-year narrative shards, rs open-vs-archive split, analyses retain:true)."
+    },
+    {
+      "n": 6,
+      "title": "Skills & operating loops \u2014 12 named skills over a tested engine",
+      "scope": "The 12-skill catalog (/morning[--weekly], /prep, /capture[--quick], /log, /sweep, /refresh, /pitch-priorities, /calendar, /analyze, /brief, /setup, /handoff) + freeform query path + auto-cockpit cron; each skill = thin wrapper (engine math -> LLM language -> ownership-matrix write) with READS/WRITES(tier+mode)/backing-ALG/engine-vs-LLM-split; the merges (/morning+/sweep render-modes, /post-meeting+/log-interaction --quick, 3 analyses -> /analyze); the daily/weekly/monthly rhythm; required_kernel tags; the one-line engine-vs-LLM split rule."
+    },
+    {
+      "n": 7,
+      "title": "Decision engine & analytics \u2014 the deterministic cortex + grafted analyses",
+      "scope": "ALG-1..8 banded engine verbatim (rules-first-numbers-last, R0->R4 ranking, calibration honesty); the AnalysisResult contract + the five grafted analyses ALG-9..13 (trajectory/headroom/cpa-v-spend/levers/revenue-commentary) refactored to tested Python with born-clearance-classed fields + golden fixtures + [UNCALIBRATED CURVE]/insufficient_data guards; the analysis->DM-EVID->ALG-4->ALG-5 producer-consumer seam (decisive signal sets evidence_readiness=strong / suppresses-raises an RS, band-only, I-2 intact) pinned with a safeParse test; cockpit + scorecard integration (trajectory-sourced risk section, diagnostics-due, operator-only weekly-review)."
+    },
+    {
+      "n": 8,
+      "title": "Data plane & access",
+      "scope": "Two named transports (jf-graphql tunnel + analytics-kernel Presto) + kernel non-mixing; the canonical pull set with named tables/IDs; the standardized self-describing envelope; ID-matching discipline (numeric-first, IN(all-ids), identity-from-am-identity.json); the 3-rung spend cascade + zero/NaN guard; two-granularity freshness; dual ingestion streams (96h VC-summary sweep + daily CRM-rich-text-note) into narrative.md; the dead-end registry; data-access.md (WORKS/DEAD-ENDS/CONSTANTS)."
+    },
+    {
+      "n": 9,
+      "title": "Safety, governance, autonomy & multi-agent",
+      "scope": "The draft-boundary clearance gate (3 rules + GATE-1..5 table + claims-register + cross-client hard-fail + escalation taxonomy) made unbypassable; the write-guard enforcing ownership matrix + human-only-fields + immutability; the two autonomy ladders (SEND + WRITE); the Context Ledger + append-only DM-AUDIT; single-writer-now + read-only intelligence subagents; the gated-multi-agent future (disjoint writable partition + DSS-matrix + 8-green-weeks + the no-two-writers-per-file gate check); the machine-checkable danger-zone forbidden-ops list."
+    },
+    {
+      "n": 10,
+      "title": "Runtime, scheduling & host",
+      "scope": "The tiered-poll funnel (Tier1 schedule -> Tier2 zero-network cache-diff stage-clock -> Tier3 LLM wake) + independent 12h/96h sweep + cadence-for-heavy-analytics; /cron daemon discipline; loud-failure/heartbeat discipline (0-written=HARD-FAIL, weekly health-check, auto re-arm); the SHIP-NOW laptop launchd + Metamate-Automation-as-nudge; the MATURITY persistent-devserver path (git-on-local-disk per VERIFY-1); the Confucius-grant prerequisite + token-freshness check; how the host evolves without degrading the store."
+    },
+    {
+      "n": 11,
+      "title": "Provenance map \u2014 what each parent + external grounding contributed",
+      "scope": "[AM] the contracts, ALG-1..8 engine, field-level ownership, calibration honesty, clearance gate, two-tier memory, single-writer, capability-audit method. [Jack] the named skills, ownership matrix, analyses suite, enriched registry, narrative dual-load, file-locking, danger-zone, file-health limits, kernel discipline, hosted-scheduler-laptop-closed. [synth] thin-wrapper skills, analyses-as-tested-Python, analysis->ranking seam, tier-split storage, generated context.md rollup, two autonomy ladders, gated-fleet graduation, Automation-as-nudge. [ext] Cognition P12, Anthropic multi-agent pattern, the 3 GROUND consensus angles, NaN-guard, cross-slice-seam discipline."
+    },
+    {
+      "n": 12,
+      "title": "Phased build plan",
+      "scope": "Phase 0 (capability audit + manual templates) -> Phase 1 ship-now solo core (L1 tier-split storage on laptop, L2 data plane verbatim, L3 decomposed dossier + dual-load, L4 ALG-1..8 + health-check, L5 gate + ledger, L6 laptop launchd + Automation-nudge, single-writer) -> Phase 2 calibration unblock + remaining analytics (headroom/cpa/levers/revenue) + RS engine + capture batches -> Phase 3 GATED maturity (persistent-devserver unattended loop, autonomy graduation, task-queue activation, eventual second-writer behind the disjoint-partition gate). Each phase: deliverable + gated-on."
+    },
+    {
+      "n": 13,
+      "title": "Conformance, evaluation & metrics",
+      "scope": "SPEC fixtures TEST-1..16 as the engine acceptance suite; golden-fixture tests for ALG-9..13; producer->consumer safeParse seam tests; the concurrency test (cron-vs-interactive no-silent-loss + lock stale-timeout) BEFORE deploy; golden question set (20/playbook) + weekly grounding QA (>95%, clearance-violation=sev-1); operating metrics (pacing attainment, draft acceptance + edit distance, overdue-commitments trend, cockpit %-acted-on, gardening minutes/week, sync-conflict/recovery-merge audit); eval-judge harness reuse."
+    },
+    {
+      "n": 14,
+      "title": "Open questions & blocking operator inputs",
+      "scope": "Blocking calibration inputs (ci_definition + targets, clearance rulings + cleared-benchmark library, SGP working calendar, book-plan tiers for the real 33 \u2014 until supplied every pacing surface carries PACING UNCALIBRATED). Unverified platform unknowns (MM2 per-file cap/retention/lock-atomicity, git-in-mclone-mount, persistent-devserver provisioning, GDrive-revision-retention-for-mounted-md, Unidash programmatic access, spend-zeros VERIFY, analyses curve-forms/thresholds, fct_performance5_account schema). Design decisions needing operator confirmation (12-skill merges vs Jack's separate invocations, whether to keep the external Doc, whether freeform query needs a 13th named skill, the disjoint-partition boundary for an eventual second writer)."
+    }
+  ],
+  "phase_plan": [
+    {
+      "phase": "Phase 0 \u2014 capability audit + manual scaffold",
+      "deliverable": "Re-run the NATIVE/BUILDABLE/IMPOSSIBLE capability audit against live tool schemas; record fallbacks (never silent omissions); build the machine-checkable danger-zone forbidden-ops list. Operator fills templates (top-10 dossiers, ~5 playbooks, manual ledgers) so the daily loop is usable by hand via the cockpit/prep/capture prompts before any automation.",
+      "gated_on": "live tool schemas; operator availability for template fill."
+    },
+    {
+      "phase": "Phase 1 \u2014 SHIP-NOW solo core (single-writer, draft-only, laptop)",
+      "deliverable": "L1 tier-split storage on the laptop (AUTHORED files + LOCAL-DISK git + GDrive-revisions + nightly off-host bundle + fsck tripwire; MIRROR regenerable caches; single-writer-by-construction + advisory atomic-mkdir lock; NO bidirectional merge). L2 data plane ported verbatim (two-transport pulls + envelope + numeric-ID-match + IN(all-ids) + 3-rung spend cascade + dead-ends); locked validated registry.yaml. L3 decomposed two-tier dossier + dual-load + generated context.md rollup + simple retrieval + recall hook + CRM-note/96h ingestion into narrative.md. L4 ALG-1..8 banded engine with new tests against SPEC fixtures TEST-1..16 + the single highest-leverage analysis (ALG-9 health-check trajectory, drives risk/coverage). L5 gate.py (3 rules + GATE-1..5) + write-guard (ownership matrix + human-only-fields + immutability) + Context Ledger + DM-AUDIT, gate unbypassable, SEND ladder at rung 0. L6 laptop launchd (/morning 07:00 SGP weekdays + 12h transcript sweep) + a tiny Metamate Automation as the hosted 07:00 nudge + /cron discipline + loud-failure heartbeat/health-check. Strangler-fig cutover from the live daily driver, account-by-account, archive-not-delete.",
+      "gated_on": "Phase 0 audit + fallbacks; data paths verified; the cron-vs-interactive concurrency test passing (no silent loss, lock stale-timeout); git-on-local-disk confirmed."
+    },
+    {
+      "phase": "Phase 2 \u2014 calibration unblock + full analytics + RS engine + capture",
+      "deliverable": "Land the blocking operator inputs (ci_definition + targets, clearance rulings + cleared-benchmark library, SGP working calendar, book-plan tiers) so the cockpit goes calibrated (PACING UNCALIBRATED banner clears). Add the remaining deep analyses ALG-10 headroom / ALG-11 cpa-v-spend / ALG-12 levers / ALG-13 revenue-commentary as tested Python with golden fixtures + [UNCALIBRATED CURVE]/insufficient_data guards; wire the analysis->DM-EVID->ALG-4->ALG-5 producer-consumer seam (safeParse-pinned) so analyses feed ranking. Full /capture batch (CI record + follow-up draft + commitment + RS-state as one approval batch) + commitments memory. Complete the 12-skill catalog as thin wrappers. Eval-judge harness + weekly grounding QA active.",
+      "gated_on": "Phase 1 core stable; operator inputs supplied; spend-zeros VERIFY resolved; analyses curve-forms/thresholds supplied (golden fixtures)."
+    },
+    {
+      "phase": "Phase 3 \u2014 GATED maturity (unattended host, autonomy graduation, multi-agent)",
+      "deliverable": "Move the daily-driver + sweep onto a persistent Meta devserver crontab/systemd-timer (git on local disk per VERIFY-1; vault mclone-mounted) for fully-unattended laptop-closed operation, once a persistent devserver is provisioned. Graduate SEND-ladder categories per numeric criteria (rung 1 follow-ups/confirmations after N consecutive clean sends; pitches/numeric/emotional stay capped at rung 1 permanently). Activate the cron->operator task-queue handoff lane (and Jack's 3h worker) when a graduated send must execute on a foreign surface. Admit a true SECOND WRITER only behind the explicit gate: 8 consecutive green weeks on LOOP metrics + Agent-IO-Security DSS-matrix implemented + a DISJOINT writable partition verified (no two writers share a writable path under the actual skill->agent map). Re-open canonical=MM2 only as a deliberate future fork IF MM2's cap/retention/silent-stop are all closed AND a redundancy story exists.",
+      "gated_on": "Phase 2 metrics green 8 consecutive weeks; persistent-devserver provisioned + git-in-mount VERIFY closed; DSS-matrix integration; disjoint-partition specified + verified; policy sign-off for any rung-3 send."
+    }
+  ],
+  "provenance_map": {
+    "am_brain": [
+      "I-1 determinism-in-code (extended to cover Jack's analyses) and I-2 rules-first-numbers-last",
+      "I-3 unknown!=zero + calibration honesty (CONF-1, [NEEDS CLEARED BENCHMARK])",
+      "the ALG-1..8 banded decision engine (pacing/coverage/solution-mix/evidence/RS-rank/recovery/hygiene/cockpit) as tested pure functions",
+      "the draft-boundary clearance gate (gate.py 3 rules + GATE-1..5 claim-type x source-class table + claims-register + cross-client hard-fail + escalation taxonomy)",
+      "the two-tier mirror/authored memory model + structural freshness (fetched_at + shelf-life, staleness is structural not policy)",
+      "field-level ownership (I-5/DM-13) + single-threaded-writer (ORCH-1) + read-only intelligence subagents (ORCH-2)",
+      "the SEND autonomy ladder (rung 0 draft-only, numeric graduation, permanent caps)",
+      "one-canonical-store / no-bidirectional-merge PRINCIPLE (I-7) \u2014 corrected to tier-split, not rubber-stamped as bare-MM2",
+      "the tiered-poll runtime + independent 96h transcript sweep + the laptop ship-now (option-3) recommendation",
+      "the Phase -1 capability-audit method + the no-CAT jf-graphql->presto data plane + l12-territory fallback + numeric-ID-match + IN(all-ids) 70%-undercount rule + dead-end registry",
+      "loud-failure/heartbeat durability guardrails (0-written=fail, verify-with-retry) elevated to a host-portable contract"
+    ],
+    "jack": [
+      "the 12 named invokable slash-skills as the operator surface (reduced from Jack's 14 by merges)",
+      "the per-section ownership matrix with explicit write-modes + the human-only-field carve-outs (status/tier/scorecard_status/RS overrides) AM Brain leaves latent",
+      "the deep-analytics suite as a CAPABILITY (health-check 180d trajectory, headroom log-curve, cpa-v-spend regression, P5/PBP levers, weekly revenue-commentary) \u2014 refactored to tested Python",
+      "the enriched registry (crm_name + display_name + status + search_aliases + resolution order slug->name->crm_name->alias) + ACDP ad-account discovery + named Presto spend tables + Tier1/Tier2 fallback cascade",
+      "narrative dual-load discipline ('consult BOTH structured context AND meeting notes') + provenance-clean CRM-note ingestion (dedup/TZ-norm/ownership-validate) + the analyses/ folder as a durable artifact class",
+      "atomic-mkdir file-locking + the cross-agent task-queue seam (inverted to a write-request lane) + the danger-zone failure catalog (promoted to a machine-checkable forbidden-ops list, gate-bypass forbidden)",
+      "production-proven file-health limits (<100KB/file, <3-level nesting, kebab-case, no spaces/unicode) + immutable-interactions + additive-only-never-delete safety floor",
+      "kernel discipline (default llmvm vs llmvm_analytics, never mix in one execution) as a runtime-host packaging constraint",
+      "the hosted-scheduler-runs-laptop-closed pattern + Confucius-grant prerequisite + cadence-as-cost-control for heavy analytics",
+      "the data_freshness legible block (recomputed from fetched_at, not hand-maintained) + registry-is-sacred validate-before-write"
+    ],
+    "synthesis": [
+      "thin-wrapper skills: the named surface FROM Jack over the tested engine FROM AM Brain (the core packaging resolution \u2014 name is ergonomics, Python is correctness)",
+      "analyses-as-tested-Python (the proof case: capability-from-Jack meets discipline-from-AM) + the AnalysisResult contract with born-clearance-classed fields",
+      "the analysis->DM-EVID->ALG-4->ALG-5 producer->consumer seam (deep analyses feed ranking, band-only, pinned with a safeParse test) \u2014 neither parent wired this",
+      "the tier-split single-canonical-store (AUTHORED=files+local-git+revisions; MIRROR=host-reachable+regenerable) that dissolves the {file+git, hosted, unattended} pick-two trilemma",
+      "the generated read-only per-account context.md rollup (Jack's single-glance value with no write-contention) + merged registry superset + two-granularity freshness (structural enforce + legible display)",
+      "the two explicit autonomy ladders (SEND + WRITE) + the gated-multi-agent graduation (disjoint writable partition + DSS-matrix + 8-green-weeks + no-two-writers-per-file check)",
+      "recovery-only additive merge (Jack's recovery value, demoted from a scheduled loop) + single-writer-by-construction with the lock as defense-in-depth (not a hard mutex on an eventually-consistent store)",
+      "the Metamate-Automation-as-nudge (hosted trigger for laptop-closed coverage, never touches files) + the engine-vs-LLM one-line split rule + the 12->fewer skill merges (/morning+/sweep, /post-meeting+/log-interaction, 3 analyses->/analyze)",
+      "field-resolution ownership matrix (Jack's section table + AM Brain's field grain) + required_kernel tags carried as a conditional host constraint",
+      "roll-up/cap bounds on growth-bearing files (half-year narrative shards, rs open-vs-archive split) + flatten interactions/raw to <=3 levels (verdict fixes)"
+    ],
+    "external": [
+      "Cognition 'Don't Build Multi-Agents' P12 (3-0 adversarially verified): parallel writers make conflicting decisions \u2014 the highest-evidence claim grounding single-writer-now",
+      "Anthropic production multi-agent research system: lead agent writes, subagents read-only/synchronous \u2014 independent corroboration of the ORCH-1 posture",
+      "GROUND concurrency angle (Stacksync + single-writer/Orleans): bidirectional sync silently loses data via last-write-wins races; single-writer achieves strong consistency without merge complexity",
+      "GROUND pkm-compounding angle (Karpathy compiled-wiki + Zettelkasten/evergreen + 'Blinded by Generated Contexts' arXiv 2401.11911 + evolving-memory SSGM arXiv 2603.11768): compounding needs one-directional flow + supersession; LLM merge biases toward generated-over-retrieved content (a hallucination sink); one-way backup is structurally safer than bidirectional sync",
+      "GROUND ai-memory angle (Salesforce write-gates + Mem0 2026 + Anthropic client-side-canonical + Oracle staleness): single-canonical-store + append-only + write-gates-before-storage is the 2026 production consensus; append-only without supersession creates 'benign data corruption' (agents reuse stale facts with false confidence)",
+      "project-memory NaN-blind comparison gates: Number.isFinite-guard every external numeric (comparison gates pass NaN as all-false) + the cross-slice-seam lesson (pin every producer->consumer seam with a safeParse test)",
+      "verdict overturns: git-on-cloud-FUSE-mount corruption class (rclone instability + GDrive-sync git-corruption) forcing the git-on-local-disk invariant; the tier-split as strictly stronger than both pure-REV3 and pure-files-hybrid; the concurrency-test-before-deploy requirement",
+      "industry backup-vs-sync consensus (one-way backup preserves deletion-recovery; bidirectional sync propagates deletions/corruptions catastrophically)"
+    ]
+  }
+}

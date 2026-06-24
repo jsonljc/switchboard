@@ -1,5 +1,6 @@
 {
   "name": "@switchboard/dashboard",
+  "description": "Next.js operator console and deployment controls",
   "version": "0.1.0",
   "private": true,
   "type": "module",

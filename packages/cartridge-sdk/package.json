@@ -1,5 +1,6 @@
 {
   "name": "@switchboard/cartridge-sdk",
+  "description": "Legacy cartridge interface (bridge only, pending removal)",
   "version": "0.1.0",
   "private": true,
   "type": "module",

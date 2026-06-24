@@ -1,5 +1,6 @@
 {
   "name": "@switchboard/sdk",
+  "description": "Agent manifest, handler interface, and test harness",
   "version": "0.1.0",
   "private": true,
   "type": "module",
