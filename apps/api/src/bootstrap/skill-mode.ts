@@ -263,15 +263,34 @@ export async function bootstrapSkillMode(
         ? notifiers[0]!
         : new NoopNotifier();
 
-  const escalationApprovers: string[] = [];
-  if (escalationEmail) escalationApprovers.push(escalationEmail);
-  if (escalationChatId) escalationApprovers.push(escalationChatId);
-
   if (notifiers.length === 0) {
     logger.info("Escalation: no notification channels configured — handoff records saved only");
   }
 
-  const handoffNotifier = new HandoffNotifier(approvalNotifier, escalationApprovers);
+  // Per-org handoff routing (P1-B): resolve escalation recipients from the
+  // handoff's organizationId, NOT a process-global ESCALATION_EMAIL / CHAT_ID
+  // (which broadcast every tenant's handoff — leadSnapshot PII included — to one
+  // shared inbox). Mirrors the A17 owner-report recipient isolation: the org's
+  // STORED escalation recipients win, else the org's OWN verified dashboard
+  // users; NO env fallback. An org with neither resolves to [] (handoff record
+  // still persisted, just not notified out).
+  const { resolveEscalationRecipients, getStoredEscalationRecipients } =
+    await import("../services/escalation-config-service.js");
+  const handoffNotifier = new HandoffNotifier(approvalNotifier, (organizationId) =>
+    resolveEscalationRecipients(
+      {
+        getStoredRecipients: (id) => getStoredEscalationRecipients(prismaClient, id),
+        listVerifiedUserEmails: async (id) =>
+          (
+            await prismaClient.dashboardUser.findMany({
+              where: { organizationId: id, emailVerified: { not: null } },
+              select: { email: true },
+            })
+          ).map((u) => u.email),
+      },
+      organizationId,
+    ),
+  );
 
   const failureHandler = new BookingFailureHandler({
     runTransaction: (fn) =>

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   getEscalationConfig,
   getStoredEscalationRecipients,
+  resolveEscalationRecipients,
 } from "../escalation-config-service.js";
 
 describe("escalation-config-service", () => {
@@ -147,5 +148,40 @@ describe("getStoredEscalationRecipients (owner-report-safe, no env fallback)", (
     const recipients = await getStoredEscalationRecipients(mockPrisma as never, "org-d");
 
     expect(recipients).toEqual([]);
+  });
+});
+
+describe("resolveEscalationRecipients (per-org handoff routing, no env fallback)", () => {
+  // Mirrors the A17 owner-report isolation: a handoff (carrying leadSnapshot PII)
+  // must route to the escalating org's OWN recipients, never a shared global list.
+
+  it("returns the org's stored escalation recipients when present", async () => {
+    const recipients = await resolveEscalationRecipients(
+      {
+        getStoredRecipients: async () => ["ops@acme.com"],
+        listVerifiedUserEmails: async () => ["should-not@be-used.com"],
+      },
+      "org-1",
+    );
+    expect(recipients).toEqual(["ops@acme.com"]);
+  });
+
+  it("falls back to the org's OWN verified dashboard users when no stored recipients", async () => {
+    const recipients = await resolveEscalationRecipients(
+      {
+        getStoredRecipients: async () => [],
+        listVerifiedUserEmails: async (orgId) => [`owner@${orgId}.test`],
+      },
+      "org-2",
+    );
+    expect(recipients).toEqual(["owner@org-2.test"]);
+  });
+
+  it("resolves both deps against the SAME orgId (no cross-tenant read)", async () => {
+    const getStoredRecipients = vi.fn().mockResolvedValue([]);
+    const listVerifiedUserEmails = vi.fn().mockResolvedValue([]);
+    await resolveEscalationRecipients({ getStoredRecipients, listVerifiedUserEmails }, "org-3");
+    expect(getStoredRecipients).toHaveBeenCalledWith("org-3");
+    expect(listVerifiedUserEmails).toHaveBeenCalledWith("org-3");
   });
 });

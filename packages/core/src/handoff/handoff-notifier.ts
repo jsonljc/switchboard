@@ -5,14 +5,26 @@
 import type { Handoff } from "./types.js";
 import type { ApprovalNotifier } from "../notifications/index.js";
 
+/**
+ * Resolves the escalation recipients for a handoff, PER organization. Injected
+ * (core must not read Prisma) and called with pkg.organizationId so one tenant's
+ * handoff — which carries leadSnapshot PII — is never broadcast to another
+ * tenant's inbox. The api wires this to a stored-recipients-then-verified-users
+ * resolver with NO env fallback, mirroring the A17 owner-report recipient
+ * isolation. Returns [] when an org has no resolvable recipients: the handoff
+ * record is still persisted by the escalate tool, it just isn't notified out.
+ */
+export type EscalationRecipientResolver = (organizationId: string) => Promise<string[]>;
+
 export class HandoffNotifier {
   constructor(
     private notifier: ApprovalNotifier,
-    private defaultApprovers: string[] = [],
+    private resolveApprovers: EscalationRecipientResolver,
   ) {}
 
   async notify(pkg: Handoff): Promise<void> {
     const message = this.formatMessage(pkg);
+    const approvers = await this.resolveApprovers(pkg.organizationId);
     await this.notifier.notify({
       approvalId: pkg.id,
       envelopeId: pkg.sessionId,
@@ -21,7 +33,7 @@ export class HandoffNotifier {
       explanation: `Handoff requested: ${pkg.reason.replace(/_/g, " ")}`,
       bindingHash: "",
       expiresAt: pkg.slaDeadlineAt,
-      approvers: this.defaultApprovers,
+      approvers,
       evidenceBundle: { reason: pkg.reason, leadId: pkg.leadSnapshot.leadId },
     });
   }

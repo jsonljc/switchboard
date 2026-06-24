@@ -78,3 +78,38 @@ export async function getStoredEscalationRecipients(
   const stored = orgConfig?.escalationConfig as StoredEscalationConfig | null;
   return stored && Array.isArray(stored.emailRecipients) ? stored.emailRecipients : [];
 }
+
+export interface EscalationRecipientResolutionDeps {
+  /**
+   * The org's STORED escalation recipients, with NO env fallback (see
+   * getStoredEscalationRecipients). Returns [] when the org has none stored.
+   */
+  getStoredRecipients: (orgId: string) => Promise<string[]>;
+  /** Verified dashboard-user emails for the org (emailVerified is non-null). */
+  listVerifiedUserEmails: (orgId: string) => Promise<string[]>;
+}
+
+/**
+ * Resolves who is notified when an agent escalates a conversation to a human,
+ * PER organization. A handoff carries leadSnapshot PII, so it must route to the
+ * escalating org's OWN recipients — never a process-global env list, which would
+ * broadcast one tenant's handoff to a shared inbox.
+ *
+ * Resolution order (per-org ONLY, no env fallback):
+ *   1. The org's STORED escalation recipients win when present.
+ *   2. Otherwise fall back to the org's OWN verified dashboard-user emails.
+ *
+ * Structurally mirrors resolveOwnerReportRecipients (same isolation rule) but is
+ * a DISTINCT function on purpose: a future change to owner-report routing must
+ * never silently alter live human-escalation routing.
+ */
+export async function resolveEscalationRecipients(
+  deps: EscalationRecipientResolutionDeps,
+  orgId: string,
+): Promise<string[]> {
+  const stored = await deps.getStoredRecipients(orgId);
+  if (stored.length > 0) {
+    return stored;
+  }
+  return deps.listVerifiedUserEmails(orgId);
+}
