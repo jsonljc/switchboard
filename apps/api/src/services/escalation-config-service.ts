@@ -54,3 +54,27 @@ export async function getEscalationConfig(
     notifyOnBreach: process.env.ESCALATION_NOTIFY_ON_BREACH !== "false",
   };
 }
+
+/**
+ * Owner-report-safe recipient read: returns ONLY the per-org STORED escalation
+ * recipients (OrganizationConfig.escalationConfig.emailRecipients), with NO env
+ * fallback. Unlike getEscalationConfig, this never reads the process-global
+ * ESCALATION_EMAIL_RECIPIENTS, so a config-less org can never inherit another
+ * tenant's shared inbox. The weekly owner-report resolver consumes this and
+ * falls through to the org's own verified dashboard users when it is empty.
+ *
+ * Do NOT add an env fallback here — that would re-open the cross-tenant leak
+ * (P1-3) this function exists to close.
+ */
+export async function getStoredEscalationRecipients(
+  prisma: PrismaClient,
+  organizationId: string,
+): Promise<string[]> {
+  const orgConfig = await prisma.organizationConfig.findUnique({
+    where: { id: organizationId },
+    select: { escalationConfig: true },
+  });
+
+  const stored = orgConfig?.escalationConfig as StoredEscalationConfig | null;
+  return stored && Array.isArray(stored.emailRecipients) ? stored.emailRecipients : [];
+}
