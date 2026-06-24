@@ -90,20 +90,24 @@ const DEFAULT_RISK_INPUT: RiskInput = {
 const OUTBOUND_SPEND_KEYS = SPEND_KEYS.filter((key) => key !== "amount");
 
 /**
- * Outbound money-move intent prefixes that must NEVER ride the system_auto_approved
- * short-circuit, even when no outbound spend delta can be read from their parameters
- * (the dollars may live in a field the extractor cannot see). The CONFIRMED entry is
- * adoptimizer.campaign.reallocate, the Spec-1B reallocation intent
- * (docs/superpowers/specs/2026-06-05-close-the-revenue-loop-design.md, C6 / 1B-1),
- * which that spec registers require_approval; the other two are anticipated outbound
- * siblings. This denylist is the structural backstop if any is ever mis-registered
- * auto-approved. Keep tiny; add new OUTBOUND money-move intents here. See the F4
- * registry guard and feedback_system_auto_approved_bypasses_spend_gates.
+ * Money-AFFECTING self-execution intent prefixes that must NEVER ride the system_auto_approved
+ * short-circuit, even when no spend delta can be read from their parameters (the dollars may live
+ * in a field the extractor cannot see, or — for pause — there is no outbound delta at all). The
+ * CONFIRMED reallocate entry is the Spec-1B reallocation intent
+ * (docs/superpowers/specs/2026-06-05-close-the-revenue-loop-design.md, C6 / 1B-1), which that spec
+ * registers require_approval; scale + shift_budget_to_source are anticipated outbound siblings.
+ * `adoptimizer.campaign.pause` is here as DEFENSE-IN-DEPTH (D9-2): a self-executing pause stops
+ * spend on a campaign — money-affecting, and dangerous on a broken signal — so it must require a
+ * human even though it carries no outbound delta. It is already gated by its seeded mandatory
+ * require_approval policy; this denylist is the structural backstop if that policy is ever
+ * stripped/misconfigured. Keep tiny; add new money-affecting self-execution intents here. See the
+ * F4 registry guard and feedback_system_auto_approved_bypasses_spend_gates.
  */
 const FINANCIAL_AUTO_APPROVE_DENYLIST = [
   "adoptimizer.campaign.reallocate",
   "adoptimizer.campaign.scale",
   "adoptimizer.campaign.shift_budget_to_source",
+  "adoptimizer.campaign.pause",
 ] as const;
 
 /** True when the proposal carries a finite, non-zero OUTBOUND budget delta under
