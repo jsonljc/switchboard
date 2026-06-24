@@ -1,5 +1,6 @@
 {
   "name": "@switchboard/db",
+  "description": "Prisma ORM, store implementations, and credential encryption",
   "version": "0.1.0",
   "private": true,
   "type": "module",

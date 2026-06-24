@@ -1,5 +1,6 @@
 {
   "name": "switchboard",
+  "description": "Governed revenue loop for WhatsApp-first clinics: booking and ad operations, receipts, and budget reallocation under one governance gate",
   "private": true,
   "packageManager": "pnpm@9.15.4",
   "engines": {

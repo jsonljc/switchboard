@@ -1,0 +1,47 @@
+# A6 — Riley contract honesty + cap telemetry — loop state (orchestration scratch, not committed)
+
+Durable record lives in memory note project_riley_capability_audit_2026_06_10 + moc_riley.
+
+Goal: make the blast-radius contract honest (mark guardrails + reset_prior_budget rollback NOT-YET-WIRED; document the pre-write cap as the only active protection), add detective telemetry to the pre-write cap, fix the stale EXECUTOR_NOT_WIRED comment, clarify scale-up = budget-increase-only in operator copy, record the flag-flip gate. NO forward monitor (deferred per D3).
+Authority: SURFACE-before-merge (money-adjacent: Riley budget reallocation). Task-size: standard.
+Base: origin/main @ 115c15d5f (re-fetched) baseline_sha: (capture at PLAN)
+Worktree: .claude/worktrees/agents-fix-a6-riley branch: fix/riley-contract-honesty
+merge_safety: stop-glob touched = YES (money-adjacent reallocation path; user pre-set SURFACE-before-merge) independent_review=pending
+
+## ORIENT brief (tool-verified vs main @115c15d5f)
+
+- No concurrent A6 PR/worktree (gh pr list + git worktree list). Ledger/plan = main-repo .claude scratch.
+- ZERO-CONSUMER PROOF (grep, non-test, non-contract-file): `.guardrails`/`.rollback` reads, `reset_prior_budget`/`capturePriorValue`, `BlastRadiusGuardrail`/`BlastRadiusRollback` types, and the metric strings `account_booked_conversions_drop_share`/`freed_budget_absorbed_share` have ZERO production consumers — only the contract's own test + the index.ts barrel re-export. (governance-gate.test.ts:306 `guardrails` is unrelated.) PROVEN.
+- Pre-write cap `assertWithinBlastRadius` (blast-radius-contract.ts:115-136) IS consumed: real executor riley-budget-execution-workflow.ts:304-318 (the live protection) + pure shadow harness shadow-reallocation.ts:124 (Layer-2, imports nothing, NOT a prod path — only its own test + barrel). `observedPriorCents:live` persisted at :326.
+- DRIFT: stale `EXECUTOR_NOT_WIRED` comment is at contained-workflows.ts:614-615 (NOT :559-560). The executor IS now the real read-modify-re-read handler: buildRileyBudgetExecutorHandler -> buildRileyBudgetExecutionWorkflow, wired into the handler map at contained-workflows.ts:500 -> comment is STALE.
+- Flag-flip wiring gate: inngest.ts:584-589 gates the SUBMITTER (rileyBudgetSubmitter) behind RILEY_REALLOCATE_SELF_EXECUTION_ENABLED (default dark). Executor handler is registered unconditionally; path is dark only because nothing submits the intent.
+- Metric recipe (A5b robinRecoverySendFailed): 3 factories — core telemetry/metrics.ts (interface SwitchboardMetrics:7 + createInMemoryMetrics:129) + apps/api/src/metrics.ts (PromCounter ~:232) + apps/chat/src/bootstrap/metrics.ts (PromCounter ~:232). Interface field forces cross-pkg typecheck parity. Emit idiom = getMetrics().X.inc({labels}) (from "@switchboard/core"); test idiom = setMetrics(createInMemoryMetrics()) + vi.spyOn(getMetrics().X,"inc"). bookedValueResolution precedent: labels ["orgId","outcome"], richer taxonomy.
+- Marker idiom: SPEC_1B_PENDING_KINDS (outcome-attribution-config.ts:50, typed const + activation-checklist comment) + EXECUTOR_NOT_WIRED parenthetical token. Contract is a TYPE-only module -> honesty lives in doc comments (no runtime status field = YAGNI per D3).
+- Rank 24 operator copy: pipeline-riley.ts:28 `"recommendation.scale_budget":"scale budget"` (asserted by pipeline-riley.test.ts:92, core pkg -> NO eval) + recommendation-engine.ts:353 title `"...— scale budget by up to 20%"` (NO eval fixture / ad-optimizer test asserts it; proposedActions :355-356 already increase-explicit). Type/kind "scale"/"scale_budget" stays (structural id, out of scope to rename).
+- Go-live brief: none exists (grep RILEY_REALLOCATE in docs = only the plan). Model new doc on docs/runbooks/riley-meta-insights-live-verify.md style.
+
+## Cap telemetry decision
+
+Metric: `rileyReallocationCapEvaluated` counter, labels `{orgId, outcome}`, outcome in {within_cap, delta_cap, share_cap} (mirrors the verdict union exactly; richer than the binary D3 "e.g."). Prom: `switchboard_riley_reallocation_cap_evaluated_total`. Emit in the real executor immediately after assertWithinBlastRadius (riley-budget-execution-workflow.ts ~:308). Live emit site, tested via the real handler (producer-population). HONEST reachability: shares the executor's reachability (fires when the reallocate executor runs = flag-gated), NOT a separate flag, NOT observable today (flag off). Shadow harness stays metric-free (Layer-2 purity); it already reports blastRadiusRejected in its own summary.
+
+| step                                                   | done-condition (test/cmd)                                      | RED proof                                                       | status  | evidence |
+| ------------------------------------------------------ | -------------------------------------------------------------- | --------------------------------------------------------------- | ------- | -------- |
+| T1 metric x3 factories                                 | core metrics.test.ts asserts rileyReallocationCapEvaluated     | property undefined                                              | pending |          |
+| T2 emit at cap                                         | executor test: within_cap/delta_cap/share_cap spy              | spy 0 calls                                                     | pending |          |
+| T3 contract honesty const+markers                      | blast-radius-contract.test.ts asserts BLAST_RADIUS_PROTECTIONS | const not exported                                              | pending |          |
+| T4 flag-flip gate (inngest comment + go-live brief)    | doc-only (diff+format)                                         | n/a doc                                                         | pending |          |
+| T5 stale EXECUTOR_NOT_WIRED fix                        | doc-only (diff)                                                | n/a doc                                                         | pending |          |
+| T6 rank24 copy (pipeline+estimatedImpact+plan comment) | pipeline-riley.test + rec-engine estimatedImpact test          | "scale budget" assert / estimatedImpact lacks "increase budget" | pending |          |
+
+gate_results(local): typecheck=PASS test=PASS(core4437/adopt796/api2399/chat340) lint=PASS(0err) format=PASS arch=PASS(0err-level) verify-fast=PASS security=PASS(audit exit0) build=PASS eval=PASS(riley 25+10+6) review=SHIP(0>=warn) check-routes=PASS
+CI(#1246, all 15 PASS): setup typecheck lint test(10m43s) security architecture(4m1s, check-routes --mode=error) docker analyze CodeQL secrets + 5 evals(incl Riley 1m13s). mergeStateStatus=CLEAN mergeable=MERGEABLE. Memory updated (riley topic note + MEMORY.md RESUME). DONE -> SURFACED for human merge call.
+all 6 tasks committed: T1 8acf6a73f, T2 aa15cfa47, T3 5089b0588, T4 5fb7bf2a3, T5 c231d5bc7, T6 1ffd89cf3. baseline_sha=115c15d5f (origin/main unchanged). Diff: 16 files +184/-10.
+DISCOVERED-deferred (out of A6 scope, note in surface): robin-recovery-request.ts:8 has a similar "executor is a fail-closed placeholder" comment (Robin slice, not Riley) — possibly stale too, separate slice.
+Honesty-marker em-dashes in 2 test describe titles match each file's existing convention + outside no-em-dash scope (copy/spec/doc); independent reviewer cleared. Will flag at surface.
+carry_forward: ORIENT+FRAME+PLAN+EXECUTE+VERIFY done. Rebased onto origin/main@ea7a30cdd (the 2 intervening commits #1242/#1243 are dashboard-only, ZERO overlap; fast gates re-run green post-rebase: typecheck 22/22, core4437/adopt796/api2399/chat340). 6 commits + Co-Authored-By trailer. PUSHED + PR #1246 OPENED (https://github.com/jsonljc/switchboard/pull/1246). CI watch running (bkmo305c9). SURFACE authority = money-adjacent; user makes the merge call. Post-CI-green: update memory (riley topic note + MEMORY.md RESUME), then surface to user. If CI reds on `architecture` (check-routes --mode=error) investigate (local gates miss it). Plan @ .claude/agents-fix-A6-plan.md; safety ref pre-trailer-amend = 380bb36fa. Plan @ .claude/agents-fix-A6-plan.md (REVISION 1 applied post-grade). 3-opus grade: design core PASS unanimous (live tested emit site, 3-factory parity, zero-consumer confirmed 3x, cap byte-unchanged, no speculative wiring, runbook-on-branch OK); REVISE only on Task 6 test path (**tests**/) + field names (.action/.estimatedImpact not .type/.title) + budget-reallocation-plan.ts:44 docstring drift -> all fixed in REVISION 1. EXECUTE next, TDD, commit per task, tsc per pkg before each commit, dist-rebuild lower pkgs.
+
+## Log
+
+- 2026-06-22: ORIENT complete. Worktree reset to origin/main@115c15d5f. All A6 cites re-verified; EXECUTOR_NOT_WIRED drift (:559->:614) reconciled; zero-consumer guardrails/rollback PROVEN by grep.
+- 2026-06-22: PLAN+grade (3 opus, design PASS unanimous; REVISE only Task-6 test mechanics, fixed). EXECUTE 6 TDD commits. VERIFY all gates + independent review SHIP. Rebased onto ea7a30cdd (dashboard-only). PR #1246 opened, CI all-15-green.
+- 2026-06-22: SECOND independent Senior review (user-requested, codebase/arch + works-as-intended lens) = Ready-to-merge YES, 0 Critical/0 Important. User gave merge authority -> SQUASH-MERGED #1246 (d5dcbaa5e). Local main ff'd, worktree removed, local+remote branch deleted+pruned. Memory updated (riley topic + MEMORY.md RESUME mark MERGED). A6 DONE. Next slice candidate: A12 (count-vs-value gate; pairs w/ A6 for the flag-flip).

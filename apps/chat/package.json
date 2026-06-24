@@ -1,5 +1,6 @@
 {
   "name": "@switchboard/chat",
+  "description": "Multi-channel chat ingress: Telegram, WhatsApp, Slack",
   "version": "0.1.0",
   "private": true,
   "type": "module",
