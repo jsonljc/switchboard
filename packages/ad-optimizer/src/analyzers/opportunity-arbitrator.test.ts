@@ -65,6 +65,103 @@ describe("arbitrate", () => {
     expect(r.secondary[0]?.score).toBeCloseTo(0.2, 10);
   });
 
+  // Value-ranking: a scale (budget-INCREASE) money-move should reallocate TOWARD proven
+  // paid value, not toward the campaign that merely commands more current spend. Without
+  // this, two scale candidates rank by spend share alone — a cheap-CPA, low-value campaign
+  // can out-rank a far-more-valuable one.
+  describe("value-ranking for scale candidates (proven paid value over spend share)", () => {
+    it("prefers the higher-paid-value scale campaign even when it spends less", () => {
+      // A spends 4x more (would win on spend share) but has trivial paid value; B has far
+      // higher proven paid value. With paid-value data, B must be primary.
+      const candidates = [rec("scale", "c_lowvalue"), rec("scale", "c_highvalue")];
+      const r = arbitrate({
+        candidates,
+        revenueState: trusted,
+        currentInsights: [
+          { campaignId: "c_lowvalue", spend: 8_000 },
+          { campaignId: "c_highvalue", spend: 2_000 },
+        ],
+        paidValueByCampaign: new Map([
+          ["c_lowvalue", 10_000], // cents
+          ["c_highvalue", 500_000], // cents — 50x more proven paid value
+        ]),
+      });
+      expect(r.primary).toMatchObject({ campaignId: "c_highvalue", action: "scale" });
+    });
+
+    it("falls back to spend share for scale when NO paid-value data is provided (back-compat)", () => {
+      const candidates = [rec("scale", "c_lowvalue"), rec("scale", "c_highvalue")];
+      const r = arbitrate({
+        candidates,
+        revenueState: trusted,
+        currentInsights: [
+          { campaignId: "c_lowvalue", spend: 8_000 },
+          { campaignId: "c_highvalue", spend: 2_000 },
+        ],
+      });
+      // No paid-value signal ⇒ the higher-spend candidate wins, exactly as today.
+      expect(r.primary).toMatchObject({ campaignId: "c_lowvalue", action: "scale" });
+    });
+
+    it("falls back to spend share when the account has zero attributed paid value (prod reality)", () => {
+      const candidates = [rec("scale", "c_lowvalue"), rec("scale", "c_highvalue")];
+      const r = arbitrate({
+        candidates,
+        revenueState: trusted,
+        currentInsights: [
+          { campaignId: "c_lowvalue", spend: 8_000 },
+          { campaignId: "c_highvalue", spend: 2_000 },
+        ],
+        paidValueByCampaign: new Map([
+          ["c_lowvalue", 0],
+          ["c_highvalue", 0],
+        ]),
+      });
+      expect(r.primary).toMatchObject({ campaignId: "c_lowvalue", action: "scale" });
+    });
+
+    it("does NOT let paid value flip destructive (pause) ranking — still pauses the biggest spender", () => {
+      // A pause is a loss-stopping move: materiality stays spend share so the biggest
+      // bleeder is paused first, regardless of its (irrelevant) paid value.
+      const candidates = [rec("pause", "c_bigspend"), rec("pause", "c_smallspend")];
+      const r = arbitrate({
+        candidates,
+        revenueState: trusted,
+        currentInsights: [
+          { campaignId: "c_bigspend", spend: 8_000 },
+          { campaignId: "c_smallspend", spend: 2_000 },
+        ],
+        paidValueByCampaign: new Map([
+          ["c_bigspend", 1_000],
+          ["c_smallspend", 500_000],
+        ]),
+      });
+      expect(r.primary).toMatchObject({ campaignId: "c_bigspend", action: "pause" });
+    });
+
+    it("CROSS-FAMILY: a high-paid-value scale can outrank a higher-spend pause as primary (documented)", () => {
+      // value-pool and spend-pool denominators differ, so a low-spend high-value scale (value
+      // share ~1.0) can beat a bigger-spend pause (spend share 0.8) — pushing budget toward
+      // proven value. This pins that intended cross-family precedence as a decision, not an
+      // accident; it is safe because pause self-submission is double-flag-gated + inert until
+      // paid-value data exists (see the materialityFor comment).
+      const candidates = [rec("pause", "c_bleeder"), rec("scale", "c_value")];
+      const r = arbitrate({
+        candidates,
+        revenueState: trusted,
+        currentInsights: [
+          { campaignId: "c_bleeder", spend: 8_000 }, // spend share 0.8
+          { campaignId: "c_value", spend: 2_000 }, // spend share 0.2, but all the paid value
+        ],
+        paidValueByCampaign: new Map([
+          ["c_bleeder", 0],
+          ["c_value", 500_000],
+        ]),
+      });
+      expect(r.primary).toMatchObject({ campaignId: "c_value", action: "scale" });
+    });
+  });
+
   it("non-mutating diagnostics (hold/test) are never ranked; no mutating means no primary", () => {
     const r = arbitrate({
       candidates: [rec("hold", "c1"), rec("test", "c2")],

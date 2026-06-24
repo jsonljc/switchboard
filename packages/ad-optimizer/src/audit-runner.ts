@@ -766,6 +766,9 @@ export class AuditRunner {
             revenueState: economicsRevenueState,
             currentInsights,
             ...(spendBySource ? { spendBySource } : {}),
+            // Value-ranking: rank scale candidates by proven paid value (the same per-campaign
+            // paid-value Map the scale gate already uses). Absent ⇒ spend-share, as before.
+            ...(paidValueByCampaign ? { paidValueByCampaign } : {}),
           })
         : undefined;
 
