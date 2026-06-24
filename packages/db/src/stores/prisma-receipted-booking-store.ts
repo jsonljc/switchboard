@@ -133,8 +133,12 @@ export class PrismaReceiptedBookingStore {
             })
           : null,
         booking.workTraceId
-          ? this.prisma.workTrace.findFirst({
-              where: { organizationId: orgId, id: booking.workTraceId },
+          ? // Booking.workTraceId stores ctx.workUnitId (calendar-book.ts), which is
+            // WorkTrace.workUnitId (@unique) — NOT the WorkTrace.id cuid PK. Joining on `id`
+            // never matched, leaving traceId / matchedPolicies / humanApprovalId null for every
+            // booking. Join on workUnitId (the stored value already equals it — no migration).
+            this.prisma.workTrace.findFirst({
+              where: { organizationId: orgId, workUnitId: booking.workTraceId },
               select: { traceId: true, matchedPolicies: true, approvalId: true },
             })
           : null,
