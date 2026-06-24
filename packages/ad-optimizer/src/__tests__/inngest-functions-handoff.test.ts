@@ -62,29 +62,54 @@ describe("executeWeeklyAudit — Riley -> agent handoff threading", () => {
   });
 });
 
-describe("executeWeeklyAudit — Spec-1B reallocate submitter threading (1B-1.6)", () => {
+describe("executeWeeklyAudit — Spec-1B reallocate submitter CANARY gate (1B-1.6)", () => {
   beforeEach(() => {
     auditRunnerCtor.mockClear();
   });
 
-  it("threads rileyBudgetSubmitter into EVERY deployment's AuditRunner when the flag-gated dep is present", async () => {
-    const budgetSubmitter: RileyBudgetSubmitter = vi.fn(async () => ({ parked: true }));
+  const budgetSubmitter: RileyBudgetSubmitter = vi.fn(async () => ({ parked: true }));
+
+  it("threads rileyBudgetSubmitter ONLY for a deployment with reallocateSelfExecutionEnabled true", async () => {
+    // The canary gate: the env kill switch wires the dep, but it reaches a deployment's runner
+    // ONLY when that org's per-deployment flag is on — so a flip hits one canary org, not all.
     const deps = makeDeps({
       listActiveDeployments: vi.fn().mockResolvedValue([
-        { id: "dep-1", organizationId: "org-1", inputConfig: {} },
-        { id: "dep-2", organizationId: "org-2", inputConfig: {} },
+        {
+          id: "dep-on",
+          organizationId: "org-1",
+          inputConfig: {},
+          reallocateSelfExecutionEnabled: true,
+        },
+        { id: "dep-off", organizationId: "org-2", inputConfig: {} },
+        {
+          id: "dep-false",
+          organizationId: "org-3",
+          inputConfig: {},
+          reallocateSelfExecutionEnabled: false,
+        },
       ]),
       rileyBudgetSubmitter: budgetSubmitter,
     });
     await executeWeeklyAudit(makeStep() as never, deps);
-    expect(auditRunnerCtor).toHaveBeenCalledTimes(2);
-    // v1 is env-only (no per-deployment flag): a wired dep reaches every org's runner.
+    expect(auditRunnerCtor).toHaveBeenCalledTimes(3);
     expect(auditRunnerCtor.mock.calls[0]![0].rileyBudgetSubmitter).toBe(budgetSubmitter);
-    expect(auditRunnerCtor.mock.calls[1]![0].rileyBudgetSubmitter).toBe(budgetSubmitter);
+    expect(auditRunnerCtor.mock.calls[1]![0].rileyBudgetSubmitter).toBeUndefined();
+    expect(auditRunnerCtor.mock.calls[2]![0].rileyBudgetSubmitter).toBeUndefined();
   });
 
-  it("omits rileyBudgetSubmitter from the AuditRunner when the flag is off (no dep)", async () => {
-    await executeWeeklyAudit(makeStep() as never, makeDeps());
+  it("never threads the budget submitter when the dep is absent, even for a flag-on deployment", async () => {
+    const deps = makeDeps({
+      listActiveDeployments: vi.fn().mockResolvedValue([
+        {
+          id: "dep-on",
+          organizationId: "org-1",
+          inputConfig: {},
+          reallocateSelfExecutionEnabled: true,
+        },
+      ]),
+      // rileyBudgetSubmitter intentionally absent (env kill switch off).
+    });
+    await executeWeeklyAudit(makeStep() as never, deps);
     expect(auditRunnerCtor.mock.calls[0]![0].rileyBudgetSubmitter).toBeUndefined();
   });
 });
