@@ -243,7 +243,10 @@ export async function runConversation(
   // Mock tools are created even when an executor is injected so the returned
   // `toolCalls` array is always present; an injected fake executor simply won't
   // touch them.
-  const mock = createMockTools({ bookingBehavior: fixture.mockBooking });
+  const mock = createMockTools({
+    bookingBehavior: fixture.mockBooking,
+    slotsBehavior: fixture.mockSlots,
+  });
   const executor = deps.executor ?? buildExecutor(deps, mock.tools);
 
   const messages: Array<{ role: "user" | "assistant"; content: string }> = [];

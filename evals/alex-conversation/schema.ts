@@ -51,6 +51,13 @@ export const ConversationFixtureSchema = z
      */
     mockBooking: z.enum(["success", "pending", "slot_taken"]).optional(),
     /**
+     * Optional per-fixture slots.query behavior. Omitted / "available" (default) =
+     * two open slots; "empty" = no slots, exercising the after-hours path (Alex must
+     * offer a wider window, NOT claim the system is down or escalate). See
+     * mock-tools.ts createMockTools + run-conversation.ts.
+     */
+    mockSlots: z.enum(["available", "empty"]).optional(),
+    /**
      * D3-1: which onboarding-playbook state to drive Alex's BOOKABLE_SERVICES with.
      * Omitted (default) and "absent" both mean no playbook → BOOKABLE_SERVICES renders
      * "" (free-text fallback, resolver abstains). "operator" = a priced canonical medspa

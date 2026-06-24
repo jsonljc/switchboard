@@ -143,3 +143,72 @@ describe("evaluateOracle", () => {
     expect(result.violations).toHaveLength(3);
   });
 });
+
+describe("bookingWithinWindow (slot-vs-window)", () => {
+  const WINDOW = {
+    earliestIso: "2026-06-01T00:00:00.000Z",
+    latestIso: "2026-06-01T12:00:00.000Z",
+  };
+
+  it("accepts a well-formed booking window", () => {
+    expect(
+      ConversationOracleSchema.safeParse({ expectsBooking: true, bookingWithinWindow: WINDOW })
+        .success,
+    ).toBe(true);
+  });
+
+  it("rejects a window whose earliest is after its latest", () => {
+    expect(
+      ConversationOracleSchema.safeParse({
+        bookingWithinWindow: {
+          earliestIso: "2026-06-01T12:00:00.000Z",
+          latestIso: "2026-06-01T00:00:00.000Z",
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("passes when the booking.create slotStart is within the window", () => {
+    const result = evaluateOracle(
+      [
+        {
+          toolId: "calendar-book",
+          operation: "booking.create",
+          params: { slotStart: "2026-06-01T06:00:00.000Z" },
+        },
+      ],
+      { bookingWithinWindow: WINDOW },
+    );
+    expect(result.pass).toBe(true);
+  });
+
+  it("flags a booking.create slotStart OUTSIDE the stated window", () => {
+    const result = evaluateOracle(
+      [
+        {
+          toolId: "calendar-book",
+          operation: "booking.create",
+          params: { slotStart: "2026-06-02T06:00:00.000Z" },
+        },
+      ],
+      { bookingWithinWindow: WINDOW },
+    );
+    expect(result.pass).toBe(false);
+    expect(result.violations.map((v) => v.code)).toContain("booking-outside-window");
+  });
+
+  it("flags an unverifiable booking when slotStart is missing", () => {
+    const result = evaluateOracle(
+      [{ toolId: "calendar-book", operation: "booking.create", params: {} }],
+      { bookingWithinWindow: WINDOW },
+    );
+    expect(result.violations.map((v) => v.code)).toContain("booking-window-unverifiable");
+  });
+
+  it("does not raise a window violation when no booking.create occurred", () => {
+    const result = evaluateOracle([{ toolId: "crm-query", operation: "contact.get" }], {
+      bookingWithinWindow: WINDOW,
+    });
+    expect(result.violations.map((v) => v.code)).not.toContain("booking-outside-window");
+  });
+});

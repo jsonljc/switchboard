@@ -44,7 +44,17 @@ export interface MockTools {
   calls: RecordedToolCall[];
 }
 
-export function createMockTools(opts: { bookingBehavior?: MockBookingBehavior } = {}): MockTools {
+export function createMockTools(
+  opts: {
+    bookingBehavior?: MockBookingBehavior;
+    /**
+     * Per-fixture slots.query behavior. "available" (default) returns two open
+     * slots; "empty" returns no slots so the after-hours path is exercised — the
+     * agent must offer a wider window, not claim the system is broken or escalate.
+     */
+    slotsBehavior?: "available" | "empty";
+  } = {},
+): MockTools {
   const calls: RecordedToolCall[] = [];
 
   const record = (toolId: string, operation: string, params: unknown): void => {
@@ -189,10 +199,13 @@ export function createMockTools(opts: { bookingBehavior?: MockBookingBehavior } 
           required: ["dateFrom", "dateTo", "durationMinutes", "service", "timezone"],
         },
         () => ({
-          slots: [
-            { start: "2026-06-01T02:00:00.000Z", end: "2026-06-01T03:00:00.000Z" },
-            { start: "2026-06-01T06:00:00.000Z", end: "2026-06-01T07:00:00.000Z" },
-          ],
+          slots:
+            opts.slotsBehavior === "empty"
+              ? []
+              : [
+                  { start: "2026-06-01T02:00:00.000Z", end: "2026-06-01T03:00:00.000Z" },
+                  { start: "2026-06-01T06:00:00.000Z", end: "2026-06-01T07:00:00.000Z" },
+                ],
         }),
       ),
       "booking.create": {
@@ -373,6 +386,38 @@ export function createMockTools(opts: { bookingBehavior?: MockBookingBehavior } 
     },
   };
 
+  // Mirrors the real `deposit-link` tool (core skill-runtime/tools/deposit-link.ts):
+  // id, operation name ("deposit.issue"), effect category ("read", idempotent), and
+  // input schema match so the executor offers the same definition production registers.
+  // The mock returns a benign deterministic link and records the call, so the
+  // book->pay leg is exercised and a correct deposit call is NOT graded unexpected.
+  const depositLink: SkillTool = {
+    id: "deposit-link",
+    operations: {
+      "deposit.issue": recordingOp(
+        "deposit-link",
+        "deposit.issue",
+        "Issue a deposit payment link for a confirmed booking. Idempotent; returns the same link on replay.",
+        "read",
+        {
+          type: "object",
+          properties: {
+            bookingId: {
+              type: "string",
+              description: "The confirmed booking to attach a deposit to",
+            },
+          },
+          required: ["bookingId"],
+        },
+        () => ({
+          url: "https://pay.mock/deposit/mock-booking",
+          externalReference: "mock-deposit-ref",
+          amountCents: 5000,
+        }),
+      ),
+    },
+  };
+
   const tools = new Map<string, SkillTool>([
     ["crm-query", crmQuery],
     ["crm-write", crmWrite],
@@ -380,6 +425,7 @@ export function createMockTools(opts: { bookingBehavior?: MockBookingBehavior } 
     ["escalate", escalate],
     ["follow-up", followUp],
     ["delegate", delegate],
+    ["deposit-link", depositLink],
   ]);
 
   return { tools, calls };

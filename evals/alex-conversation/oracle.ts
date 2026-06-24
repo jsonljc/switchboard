@@ -32,6 +32,20 @@ export const ConversationOracleSchema = z
     expectsEscalation: z.boolean().optional(),
     /** true ⇒ `calendar-book` MUST be called; false ⇒ MUST NOT; omit ⇒ no constraint. */
     expectsBooking: z.boolean().optional(),
+    /**
+     * When set, any `calendar-book.booking.create` MUST book a slot whose
+     * `slotStart` falls within [earliestIso, latestIso] — i.e. inside the window
+     * the lead actually stated. Guards the after-hours failure mode where Alex
+     * books a slot outside the lead's stated availability. Presence of a booking
+     * is governed by `expectsBooking`; this only constrains WHICH slot.
+     */
+    bookingWithinWindow: z
+      .object({
+        earliestIso: z.string().datetime(),
+        latestIso: z.string().datetime(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((oracle, ctx) => {
@@ -69,6 +83,16 @@ export const ConversationOracleSchema = z
         message: "expectsBooking is false but `calendar-book` is listed in expectedTools",
       });
     }
+    if (
+      oracle.bookingWithinWindow &&
+      new Date(oracle.bookingWithinWindow.earliestIso).getTime() >
+        new Date(oracle.bookingWithinWindow.latestIso).getTime()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "bookingWithinWindow.earliestIso must not be after latestIso",
+      });
+    }
   });
 
 export type ConversationOracle = z.infer<typeof ConversationOracleSchema>;
@@ -95,7 +119,7 @@ export interface OracleResult {
  * here.
  */
 export function evaluateOracle(
-  toolCalls: ReadonlyArray<{ toolId: string }>,
+  toolCalls: ReadonlyArray<{ toolId: string; operation?: string; params?: unknown }>,
   oracle: ConversationOracle,
 ): OracleResult {
   const called = new Set(toolCalls.map((c) => c.toolId));
@@ -144,6 +168,30 @@ export function evaluateOracle(
       code: "unexpected-booking",
       detail: "Did not expect a booking but the calendar-book tool was called",
     });
+  }
+
+  // Slot-vs-window: every booking.create must land inside the lead's stated window.
+  // Guards the after-hours mode where Alex books a slot the lead never offered.
+  if (oracle.bookingWithinWindow) {
+    const { earliestIso, latestIso } = oracle.bookingWithinWindow;
+    const earliest = new Date(earliestIso).getTime();
+    const latest = new Date(latestIso).getTime();
+    for (const call of toolCalls) {
+      if (call.toolId !== "calendar-book" || call.operation !== "booking.create") continue;
+      const slotStart = (call.params as { slotStart?: unknown } | undefined)?.slotStart;
+      const t = typeof slotStart === "string" ? new Date(slotStart).getTime() : NaN;
+      if (!Number.isFinite(t)) {
+        violations.push({
+          code: "booking-window-unverifiable",
+          detail: "booking.create has no parseable slotStart to verify against the window",
+        });
+      } else if (t < earliest || t > latest) {
+        violations.push({
+          code: "booking-outside-window",
+          detail: `Booked slotStart ${String(slotStart)} is outside [${earliestIso}, ${latestIso}]`,
+        });
+      }
+    }
   }
 
   return { pass: violations.length === 0, violations };

@@ -240,6 +240,17 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           const slots = await resolved.provider.listAvailableSlots(query);
           if (slots.length === 0) {
             getMetrics().slotQueryZeroResult.inc({ orgId: ctx.orgId, service: query.service });
+            // An empty result is a SUCCESSFUL query, not a tool failure. Return structured
+            // guidance (reinjected to the model) so Alex offers a WIDER window instead of
+            // telling the lead the system is broken or handing off — the after-hours bug.
+            return ok({ slots } as Record<string, unknown>, {
+              nextActions: [
+                "No open slots in that window. This is NOT an error and NOT a reason to " +
+                  "escalate. Offer the lead a wider date range or a different time of day " +
+                  "(e.g. later in the week, or earlier/later in the day), then call " +
+                  "calendar-book.slots.query again. Do not tell the lead the system is down.",
+              ],
+            });
           }
           return ok({ slots } as Record<string, unknown>);
         },
