@@ -1,6 +1,7 @@
 import type { PrismaDbClient } from "../prisma-db.js";
 import { seedRileyPausePolicies } from "./riley-pause-governance.js";
 import { seedRileyReallocatePolicies } from "./riley-budget-governance.js";
+import { seedRileyResetBudgetPolicies } from "./riley-reset-budget-governance.js";
 
 /** The marketplace listing that backs Riley. Seeded by seedMarketplace (slug "ad-optimizer"). */
 export const AD_OPTIMIZER_LISTING_SLUG = "ad-optimizer";
@@ -84,6 +85,12 @@ export async function seedRileyAdOptimizerDeployment(
   // The per-org dispatch flag stays OFF (the act-leg initiator is wired in PR 1B-1.3+); this only
   // arms the governed path so an approved reallocation parks for a human instead of hard-denying.
   await seedRileyReallocatePolicies(prisma, orgId);
+
+  // The automated reset-to-prior rollback intent (adoptimizer.campaign.reset_prior_budget) is
+  // ALLOW-ONLY: a workflow intent default-denies without an allow policy, and the rollback must
+  // auto-execute (it is a safety reversal to a captured prior, never a new spend decision). Seeding
+  // it here arms the governed path the guardrail monitor dispatches into.
+  await seedRileyResetBudgetPolicies(prisma, orgId);
 
   return { deploymentId: deployment.id };
 }
