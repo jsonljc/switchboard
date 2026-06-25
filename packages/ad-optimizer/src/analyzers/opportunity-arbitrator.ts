@@ -93,6 +93,53 @@ export interface ArbitrateInput {
   /** Per-source attributed spend (dollars); keys the account-scoped shift candidate's
    * magnitude (its params.from pool). Absent -> that candidate's magnitude is 0. */
   spendBySource?: Record<string, number>;
+  /** Per-campaign VERIFIED-PAID value (cents) for the window, when the paid-value provider
+   * is wired (the live audit-runner already computes this Map for the scale paid-value gate).
+   * Used to rank value-capture (`scale`) candidates by PROVEN paid value rather than current
+   * spend share — the north-star money move reallocates TOWARD proven value. Absent, or an
+   * account with zero total attributed paid value (prod reality until booked value is stamped),
+   * ⇒ spend-share materiality, exactly as before (back-compat with every caller and the eval). */
+  paidValueByCampaign?: ReadonlyMap<string, number>;
+}
+
+/**
+ * Value-capture materiality: a `scale` (budget-INCREASE) candidate's materiality should be
+ * its share of PROVEN paid value, not its current spend share — the reallocation money move
+ * pushes budget TOWARD what pays, so a cheap-CPA low-value campaign must not out-rank a
+ * far-more-valuable one just because it currently spends more. `valueShareByCampaign` is
+ * present only when paid-value data exists AND the account has positive total paid value;
+ * otherwise scale falls back to spend share. Destructive/structural candidates (pause, etc.)
+ * always keep spend-share materiality: pausing the biggest bleeder is the right call
+ * regardless of its (irrelevant) paid value.
+ */
+function materialityFor(
+  candidate: RecommendationOutput,
+  shareOfSpend: number,
+  valueShareByCampaign: ReadonlyMap<string, number> | undefined,
+): number {
+  if (candidate.action === "scale" && valueShareByCampaign !== undefined) {
+    return valueShareByCampaign.get(candidate.campaignId) ?? 0;
+  }
+  return shareOfSpend;
+}
+
+/** Build per-campaign value shares in [0,1] from the paid-value Map, or `undefined` when no
+ * usable signal exists (absent map, or zero/non-finite total) so callers fall back to spend
+ * share. Fail-closed: a campaign with non-finite/negative value contributes 0. */
+function buildValueShares(
+  paidValueByCampaign: ReadonlyMap<string, number> | undefined,
+): Map<string, number> | undefined {
+  if (paidValueByCampaign === undefined) return undefined;
+  let total = 0;
+  for (const v of paidValueByCampaign.values()) {
+    if (Number.isFinite(v) && v > 0) total += v;
+  }
+  if (total <= 0) return undefined;
+  const shares = new Map<string, number>();
+  for (const [campaignId, v] of paidValueByCampaign) {
+    shares.set(campaignId, Number.isFinite(v) && v > 0 ? v / total : 0);
+  }
+  return shares;
 }
 
 /** Structured magnitude (dollars) for one candidate: its campaign's spend, or for the
@@ -161,6 +208,7 @@ export function arbitrate(input: ArbitrateInput): ArbitrationResult {
   }
 
   const proximity = PROXIMITY_BY_TIER[revenueState.economicTier ?? "cpc"];
+  const valueShareByCampaign = buildValueShares(input.paidValueByCampaign);
 
   const ranked: RankedOpportunity[] = [];
   let measurementFix: MeasurementFixRef | undefined;
@@ -186,12 +234,20 @@ export function arbitrate(input: ArbitrateInput): ArbitrationResult {
 
     const magnitude = magnitudeFor(candidate, spendByCampaign, spendBySource);
     const shareOfSpend = accountSpend > 0 ? Math.min(magnitude / accountSpend, 1) : 0;
+    // Value-capture (scale) candidates rank on proven paid-value share; all others on spend
+    // share (see materialityFor). Both are in [0,1] but use DIFFERENT denominators (value-pool
+    // vs spend-pool), so a high-paid-value scale can outrank a lower-value pause and become
+    // primary. That is intended (push budget toward proven value), and safe today: this output
+    // is advisory ranking metadata, and the only primary-gated consumer (pause self-submission)
+    // is double-flag-gated (env + per-deployment) AND inert until paid-value data exists (with
+    // zero account paid value, valueShareByCampaign is undefined ⇒ pure spend-share, as before).
+    const materiality = materialityFor(candidate, shareOfSpend, valueShareByCampaign);
     const conflictPenalty =
       (mutatingCountByCampaign.get(candidate.campaignId) ?? 0) >= 2
         ? ATTRIBUTION_CONFLICT_PENALTY
         : 0;
     const score =
-      shareOfSpend * proximity * truthConfidenceFor(candidate, revenueState) -
+      materiality * proximity * truthConfidenceFor(candidate, revenueState) -
       LEARNING_RESET_PENALTY[candidate.resetsLearning] -
       conflictPenalty;
     ranked.push({ campaignId: candidate.campaignId, action: candidate.action, index, score });

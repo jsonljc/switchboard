@@ -134,6 +134,9 @@ function makeSignalReport(breaches: Breach[]): SignalHealthReport {
 export function runArbitrationCase(c: ArbitrationCase): ArbitrationDecision {
   const candidates: RecommendationOutput[] = [];
   const currentInsights: { campaignId: string; spend: number }[] = [];
+  // Value-ranking: thread the per-campaign paid value (the same paidValueGate the scale gate
+  // uses) into the arbitrator so a scale money-move ranks by proven paid value, not spend share.
+  const paidValueByCampaign = new Map<string, number>();
   for (const entry of c.campaigns) {
     const raw = decideRawForCase(
       entry.case,
@@ -142,6 +145,8 @@ export function runArbitrationCase(c: ArbitrationCase): ArbitrationDecision {
     );
     candidates.push(...raw.recommendations);
     currentInsights.push({ campaignId: entry.campaignId, spend: entry.case.current.spend });
+    const pv = entry.case.paidValueGate?.paidValueCents;
+    if (typeof pv === "number") paidValueByCampaign.set(entry.campaignId, pv);
   }
   if (c.signalBreaches && c.signalBreaches.length > 0) {
     const breaches: Breach[] = c.signalBreaches.map((b) => ({
@@ -165,6 +170,7 @@ export function runArbitrationCase(c: ArbitrationCase): ArbitrationDecision {
       effectiveTarget: c.accountEffectiveTarget,
     }),
     currentInsights,
+    ...(paidValueByCampaign.size > 0 ? { paidValueByCampaign } : {}),
   });
   return {
     primary: result.primary
