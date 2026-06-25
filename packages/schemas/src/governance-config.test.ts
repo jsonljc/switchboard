@@ -53,4 +53,14 @@ describe("buildObserveGovernanceConfig", () => {
     expect(my.jurisdiction).toBe("MY");
     expect(my.clinicType).toBe("nonMedical");
   });
+
+  it("never puts any gate in enforce (P2-A: the seeded posture cannot block)", () => {
+    const parsed = GovernanceConfigSchema.parse(cfg);
+    expect(resolveGovernanceMode(parsed)).not.toBe("enforce");
+    expect(resolveClaimClassifierConfig(parsed).mode).not.toBe("enforce");
+    expect(resolveConsentStateConfig(parsed).mode).not.toBe("enforce");
+    expect(cfg.whatsappWindow.mode).not.toBe("enforce");
+    // Structural sweep: no "enforce" string anywhere in the serialized config.
+    expect(JSON.stringify(cfg)).not.toContain("enforce");
+  });
 });
