@@ -15,6 +15,7 @@ describe("buildMiraMetricsViewModel", () => {
         inFlight: 4,
         awaitingReview: 2,
         stopped: 1,
+        measuredCount: 0,
       },
       week,
     });
@@ -41,6 +42,7 @@ describe("buildMiraMetricsViewModel", () => {
         inFlight: 2,
         awaitingReview: 1,
         stopped: 0,
+        measuredCount: 0,
       },
       week,
     });
@@ -58,6 +60,7 @@ describe("buildMiraMetricsViewModel", () => {
         inFlight: 0,
         awaitingReview: 0,
         stopped: 0,
+        measuredCount: 0,
       },
       week,
     });

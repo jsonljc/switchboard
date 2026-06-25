@@ -86,8 +86,9 @@ export interface MiraSelfBriefWorkerDeps {
       orgId: string,
       opts: { now: Date; timezone: string },
     ): Promise<{
-      jobs: Array<{ performance?: { delivery: string } }>;
-      counts: { inFlight: number };
+      // The floor is entirely count-based (inFlight + measuredCount), both
+      // computed over the full FETCH_CAP cohort — never the visible slice.
+      counts: { inFlight: number; measuredCount: number };
     }>;
   };
   memoryReader: {
@@ -152,7 +153,7 @@ export async function executeMiraSelfBriefScan(
   // only the retried run's REPORTED outcome is conservative.
   if (model.counts.inFlight >= SELF_BRIEF_BACKLOG_CAP) return { skipped: "backlog_cap" };
 
-  const hasMeasured = model.jobs.some((j) => j.performance?.delivery === "measured");
+  const hasMeasured = model.counts.measuredCount > 0;
   if (!hasMeasured) {
     const memoryRows = await deps.memoryReader.listHighConfidence(
       organizationId,
