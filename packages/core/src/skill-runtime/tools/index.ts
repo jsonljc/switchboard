@@ -16,4 +16,5 @@ export { createScheduleFollowUpToolFactory } from "./schedule-follow-up.js";
 export type { ScheduleFollowUpToolFactory } from "./schedule-follow-up.js";
 export { buildRescheduleOperations } from "./calendar-reschedule.js";
 export type { CalendarRescheduleDeps } from "./calendar-reschedule.js";
+export { enforceConsentPrecondition } from "./calendar-book-consent.js";
 export type { ConsentPrecondition, BookingConsentState } from "./calendar-book-consent.js";
