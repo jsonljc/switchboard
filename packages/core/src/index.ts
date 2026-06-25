@@ -71,6 +71,9 @@ export * from "./governance/governance-verdict-store/index.js";
 export * from "./governance/observe-review/derive-enforce-action.js";
 export * from "./governance/observe-review/summarize-observe-review.js";
 
+// Enforce-readiness evaluator (per-gate REFUSE-by-default producer gate)
+export * from "./governance/enforce-readiness/evaluate-gate-enforce-readiness.js";
+
 // Approved Compliance Claim Store (interface + types)
 export * from "./governance/classifier/approved-compliance-claim-store/index.js";
 
