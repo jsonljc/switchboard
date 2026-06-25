@@ -83,6 +83,7 @@ type AttemptStore = {
     observedPriorCents: number;
     requestedToCents: number;
     workTraceId?: string;
+    deploymentId?: string;
     now: Date;
   }) => Promise<{ claimed: true } | { claimed: false }>;
   markApplied: (a: {
@@ -283,6 +284,11 @@ describe("buildRileyBudgetExecutionWorkflow — happy path (S2)", () => {
     expect(h.getCampaign.mock.calls.length).toBe(2);
     expect(h.getAccountDailySpendCents.mock.calls.length).toBe(1);
     expect(h.updateCampaignBudget.mock.calls).toEqual([["camp_1", 6000]]);
+
+    // The claim stamps the reallocation's deployment so the guardrail monitor can find + attribute it.
+    expect(h.claimLeaseAndMark).toHaveBeenCalledWith(
+      expect.objectContaining({ deploymentId: "dep_riley" }),
+    );
 
     expect(h.markApplied).toHaveBeenCalledWith({
       executionWorkUnitId: "wu_realloc_1",
