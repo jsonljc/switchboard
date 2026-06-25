@@ -248,6 +248,10 @@ export {
 export { setRileyPauseSelfExecution } from "./seed/riley-pause-flag-toggle.js";
 export type { CapabilityAuditRecorder } from "./seed/riley-pause-flag-toggle.js";
 export {
+  setRileyReallocateKillSwitch,
+  setRileyReallocateSelfExecution,
+} from "./seed/riley-reallocate-flag-toggle.js";
+export {
   seedAlexSkillPack,
   assertAlexSkillPackSeeded,
   ALEX_SKILL_PACK_SCOPES,

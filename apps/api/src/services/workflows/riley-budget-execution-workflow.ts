@@ -135,6 +135,7 @@ export interface RileyBudgetExecutionDeps {
  *   0 parse frozen params (fail closed INVALID_REALLOCATE_INPUT).
  *   1 approval + content-binding (REALLOCATE_NOT_APPROVED; fail closed BEFORE any Meta call/decrypt).
  *   2 replay-first: applied+receipt -> replay no-op (0 Meta); any other marker -> MUTATION_RECOVERY_REQUIRED (0 Meta).
+ *   2.5 in-flight kill-switch: a runtime per-deployment stop (RILEY_REALLOCATE_KILLED, no marker, 0 Meta).
  *   3 credentials + frozen-account lock (DEPLOYMENT_ORG_MISMATCH / NO_META_CONNECTION / ACCOUNT_MISMATCH).
  *   4 live campaign read (CAMPAIGN_BUDGET_UNREADABLE / UNSUPPORTED_BUDGET_TOPOLOGY).
  *   5 drift vs the approved baseline (BUDGET_DRIFTED).
