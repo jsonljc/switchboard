@@ -136,3 +136,40 @@ describe("mock-tools — booking lifecycle (reschedule / cancel / pending / slot
     expect(calls.at(-1)).toMatchObject({ name: "calendar-book.booking.create" });
   });
 });
+
+describe("mock-tools — slots.query availability + deposit-link parity", () => {
+  const slotQuery = {
+    dateFrom: "a",
+    dateTo: "b",
+    durationMinutes: 30,
+    service: "filler",
+    timezone: "Asia/Singapore",
+  };
+
+  it("default slots.query returns open slots", async () => {
+    const { tools } = createMockTools();
+    const result = await tools.get("calendar-book")!.operations["slots.query"]!.execute(slotQuery);
+    expect(result.status).toBe("success");
+    expect((result.data as { slots: unknown[] }).slots.length).toBeGreaterThan(0);
+  });
+
+  it("slotsBehavior:'empty' makes slots.query return no slots (drives the after-hours path)", async () => {
+    const { tools } = createMockTools({ slotsBehavior: "empty" });
+    const result = await tools.get("calendar-book")!.operations["slots.query"]!.execute(slotQuery);
+    expect(result.status).toBe("success");
+    expect(result.data).toMatchObject({ slots: [] });
+  });
+
+  it("exposes a deposit-link tool whose deposit.issue op mirrors the real tool", async () => {
+    const { tools, calls } = createMockTools();
+    const deposit = tools.get("deposit-link");
+    expect(deposit?.operations["deposit.issue"]).toBeDefined();
+    expect(deposit!.operations["deposit.issue"]!.effectCategory).toBe("read");
+    const result = await deposit!.operations["deposit.issue"]!.execute({
+      bookingId: "mock-booking",
+    });
+    expect(result.status).toBe("success");
+    expect(result.data).toMatchObject({ url: expect.any(String), amountCents: expect.any(Number) });
+    expect(calls.at(-1)).toMatchObject({ name: "deposit-link.deposit.issue" });
+  });
+});
