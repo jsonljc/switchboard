@@ -415,9 +415,11 @@ export async function buildServer() {
     const { ProactiveSender } = await import("@switchboard/core/notifications");
     // Per-org WhatsApp send creds (A15): resolve the SENDING org's own
     // {token, phoneNumberId} from its canonical "whatsapp" Connection so a second
-    // tenant's operator/escalation reply ships from its OWN WABA number, with a
-    // per-field fallback to the global env creds for the single-tenant pilot (no
-    // per-org Connection). One store instance; the resolver reads per-request (no
+    // tenant's operator/escalation reply ships from its OWN WABA number. The phone id is
+    // org-only and fails closed (#1280): an onboarded org missing it throws rather than
+    // borrowing the global number; only the token may fall back to the global system-user
+    // token. The single-tenant pilot (no per-org Connection) uses the global creds.
+    // One store instance; the resolver reads per-request (no
     // caching) so a rotation / new tenant takes effect on the next send and creds
     // never bleed across orgs. Mirrors bootstrap/contained-workflows.ts.
     const { PrismaConnectionStore } = await import("@switchboard/db");
