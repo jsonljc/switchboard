@@ -10,6 +10,7 @@ import {
   Building2,
   CreditCard,
   ClipboardList,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ const ALL_SIDEBAR_ITEMS = [
   { href: "/settings/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/settings/channels", label: "Channels", icon: Radio },
   { href: "/settings/identity", label: "Identity", icon: Palette },
+  { href: "/settings/governance", label: "Compliance", icon: ShieldCheck },
   { href: "/settings/billing", label: "Billing", icon: CreditCard, requiresStripe: true },
   { href: "/settings/account", label: "Account", icon: Building2 },
 ] as const;

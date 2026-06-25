@@ -4,6 +4,8 @@ import type {
   ActivityRow,
   MiraBriefRequest,
   MiraBriefResponse,
+  GovernanceGateUnit,
+  GovernanceMode,
 } from "@switchboard/schemas";
 import type {
   PendingApproval,
@@ -27,6 +29,38 @@ export interface MiraFeedResponse {
   jobs: MiraCreativeJobSummary[];
   counts: MiraCreativeCounts;
   feed: { reviewableCount: number; renderingCount: number };
+}
+
+// Governance gate review/readiness (enforce-flip slice 4)
+export interface GovernanceUnitReview {
+  wouldBlock: number;
+  wouldRewrite: number;
+  wouldEscalate: number;
+  wouldTemplate: number;
+  total: number;
+}
+export interface GovernanceObserveSample {
+  unit: GovernanceGateUnit;
+  reasonCode: string;
+  enforceAction: string;
+  decidedAt: string;
+  conversationId: string;
+  textPreview: string;
+}
+export interface GovernanceObserveReviewResponse {
+  window: { since: string };
+  units: Record<GovernanceGateUnit, GovernanceUnitReview>;
+  samples: GovernanceObserveSample[];
+}
+export interface GovernanceEnforceReadinessUnit {
+  unit: GovernanceGateUnit;
+  currentMode: GovernanceMode;
+  ready: boolean;
+  blockingReason: string | null;
+  producer: { kind: "price" | "claim" | "template" | "none"; count: number };
+}
+export interface GovernanceEnforceReadinessResponse {
+  units: GovernanceEnforceReadinessUnit[];
 }
 
 export class SwitchboardGovernanceClient extends SwitchboardClientCore {
@@ -168,6 +202,31 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
         blocking: boolean;
       }>;
     }>(`/api/agents/${agentId}/readiness`);
+  }
+
+  // Governance gate review/readiness/flip (enforce-flip slice 4)
+  async getGovernanceObserveReview(agentId: string, since?: string) {
+    const qs = since ? `?since=${encodeURIComponent(since)}` : "";
+    return this.request<GovernanceObserveReviewResponse>(
+      `/api/agents/${agentId}/governance/observe-review${qs}`,
+    );
+  }
+
+  async getGovernanceEnforceReadiness(agentId: string) {
+    return this.request<GovernanceEnforceReadinessResponse>(
+      `/api/agents/${agentId}/governance/enforce-readiness`,
+    );
+  }
+
+  async setGovernanceGateMode(agentId: string, unit: string, mode: string, idempotencyKey: string) {
+    return this.request<{ unit: string; mode: string }>(
+      `/api/agents/${agentId}/governance/gates/${encodeURIComponent(unit)}/mode`,
+      {
+        method: "POST",
+        body: JSON.stringify({ mode }),
+        headers: { "Idempotency-Key": idempotencyKey },
+      },
+    );
   }
 
   // Governance status
