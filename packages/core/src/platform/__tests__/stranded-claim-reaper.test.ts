@@ -5,6 +5,7 @@ import {
   STRANDED_CLAIM_REAP_LIMIT,
   type StrandedClaimReaperStore,
 } from "../stranded-claim-reaper.js";
+import { WorkTraceLockedError } from "../work-trace-lock.js";
 import type { StrandedRunningClaim } from "../work-trace-recorder.js";
 import type { WorkTrace } from "../work-trace.js";
 import type { WorkTraceUpdateResult } from "../work-trace-recorder.js";
@@ -169,5 +170,99 @@ describe("reapStrandedClaims", () => {
     expect(alerter.alerts).toHaveLength(1);
     expect(alerter.alerts[0]!.severity).toBe("critical"); // a hard reap-write error IS the alarm case
     errSpy.mockRestore();
+  });
+
+  it("a THROWN WorkTraceLockedError is the SAME benign race (raced, warning) — env-independent tiering", async () => {
+    // PrismaWorkTraceStore.update SIGNALS a lock rejection differently by env: it RETURNS
+    // {ok:false} in production but THROWS WorkTraceLockedError in non-production. Both are the
+    // identical benign concurrent-seal race, so the reaper must tier them the same — otherwise
+    // a staging run would false-page critical on a race that is `warning` in prod.
+    const lockErr = new WorkTraceLockedError({
+      traceId: "t",
+      workUnitId: "wu-a",
+      intent: "revenue.record",
+      organizationId: "org-1",
+      currentOutcome: "needs_reconciliation",
+      lockedAt: "2026-06-25T11:59:00.000Z",
+      rejectedFields: ["outcome"],
+      reason: "Trace locked",
+    });
+    const store = makeStore({
+      stuck: [makeClaim({ workUnitId: "wu-a" })],
+      update: async () => {
+        throw lockErr;
+      },
+    });
+    const counter = makeCounter();
+    const alerter = makeAlerter();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await reapStrandedClaims({ store, counter, alerter, now: () => NOW }, config);
+
+    expect(result).toEqual({ scanned: 1, reaped: 0, raced: 1, failed: 0 });
+    expect(counter.calls).toHaveLength(0);
+    expect(alerter.alerts[0]!.severity).toBe("warning"); // NOT critical, in any env
+    warnSpy.mockRestore();
+  });
+
+  it("mixed batch (reaped + lock-return race + lock-throw race + hard throw): critical, counts + message labels", async () => {
+    const lockErr = new WorkTraceLockedError({
+      traceId: "t",
+      workUnitId: "wu-throwlock",
+      intent: "revenue.record",
+      organizationId: "org-1",
+      currentOutcome: "needs_reconciliation",
+      lockedAt: "2026-06-25T11:59:00.000Z",
+      rejectedFields: ["outcome"],
+      reason: "Trace locked",
+    });
+    const store = makeStore({
+      stuck: [
+        makeClaim({ workUnitId: "wu-ok" }),
+        makeClaim({ workUnitId: "wu-lockret" }),
+        makeClaim({ workUnitId: "wu-throwlock" }),
+        makeClaim({ workUnitId: "wu-harderr" }),
+      ],
+      update: async (id) => {
+        if (id === "wu-lockret")
+          return { ok: false, code: "WORK_TRACE_LOCKED", traceUnchanged: true, reason: "locked" };
+        if (id === "wu-throwlock") throw lockErr;
+        if (id === "wu-harderr") throw new Error("db down");
+        return { ok: true, trace: {} as WorkTrace };
+      },
+    });
+    const counter = makeCounter();
+    const alerter = makeAlerter();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await reapStrandedClaims({ store, counter, alerter, now: () => NOW }, config);
+
+    // 1 reaped, 2 races (one returned, one thrown), 1 hard failure.
+    expect(result).toEqual({ scanned: 4, reaped: 1, raced: 2, failed: 1 });
+    expect(counter.calls).toEqual([{ intent: "revenue.record" }]); // only the reaped row
+    expect(alerter.alerts).toHaveLength(1);
+    expect(alerter.alerts[0]!.severity).toBe("critical"); // a hard failure co-occurs -> alarm
+    // Message labels the raced + failed counts so the operator reads the right remediation.
+    expect(alerter.alerts[0]!.errorMessage).toContain("2 already-terminalized");
+    expect(alerter.alerts[0]!.errorMessage).toContain("1 hard reap-write error");
+    warnSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
+  it("scan that hits the row limit flags the alert as CAPPED (mass-strand not silently under-reported)", async () => {
+    const stuck = Array.from({ length: 3 }, (_v, i) => makeClaim({ workUnitId: `wu-${i}` }));
+    const store = makeStore({ stuck });
+    const alerter = makeAlerter();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    // limit === stuck.length -> the scan was bounded; more may remain.
+    await reapStrandedClaims(
+      { store, counter: makeCounter(), alerter, now: () => NOW },
+      { olderThanMs: STRANDED_CLAIM_MAX_AGE_MS, limit: 3 },
+    );
+
+    expect(alerter.alerts[0]!.errorMessage).toContain("CAPPED");
+    warnSpy.mockRestore();
   });
 });

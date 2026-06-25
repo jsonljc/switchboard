@@ -1,5 +1,6 @@
 import type { WorkTrace } from "./work-trace.js";
 import type { StrandedRunningClaim, WorkTraceUpdateResult } from "./work-trace-recorder.js";
+import { WorkTraceLockedError } from "./work-trace-lock.js";
 import type {
   OperatorAlerter,
   InfrastructureFailureAlert,
@@ -145,6 +146,20 @@ export async function reapStrandedClaims(
           `(key stays blocked; manual reconciliation required)`,
       );
     } catch (err) {
+      // The store may signal a lock rejection EITHER as a `{ok:false}` return (prod)
+      // OR by THROWING WorkTraceLockedError (non-prod — see PrismaWorkTraceStore.update's
+      // NODE_ENV fork). Both are the SAME benign concurrent-seal race, so classify the
+      // throw identically — otherwise the alert tier would be environment-dependent
+      // (warning in prod, false-critical in staging) for an identical event.
+      if (err instanceof WorkTraceLockedError) {
+        raced++;
+        console.warn(
+          `[stranded-claim-reaper] workUnitId=${claim.workUnitId} org=${claim.organizationId} ` +
+            `intent=${claim.intent} was already terminalized by a concurrent writer ` +
+            `(WorkTraceLockedError); skipping`,
+        );
+        continue;
+      }
       failed++;
       console.error(
         `[stranded-claim-reaper] reap threw for workUnitId=${claim.workUnitId} ` +
@@ -159,13 +174,20 @@ export async function reapStrandedClaims(
   // escalates to critical; a benign concurrent-seal race does not (the row resolved).
   if (stuck.length > 0) {
     const intents = [...new Set(stuck.map((c) => c.intent))].sort().join(", ");
+    // The scan is bounded at `limit`; hitting it means more stranded claims likely
+    // remain (drained ≤limit/run on subsequent runs) — say so, so a mass-strand
+    // incident is never silently under-reported as exactly `limit`.
+    const capped = stuck.length >= config.limit;
+    const cappedNote = capped
+      ? ` Result CAPPED at the ${config.limit}-row scan limit — more stranded claims likely remain; the next run will continue.`
+      : "";
     const alert: InfrastructureFailureAlert = {
       errorType: "stranded_claim_reaped",
       severity: failed > 0 ? "critical" : "warning",
       errorMessage:
         `Found ${stuck.length} stranded running idempotency claim(s); reaped ${reaped} to ` +
         `needs_reconciliation, ${raced} already-terminalized by a concurrent writer, ` +
-        `${failed} hard reap-write error(s). Manual reconciliation required. Intents: ${intents}.`,
+        `${failed} hard reap-write error(s). Manual reconciliation required. Intents: ${intents}.${cappedNote}`,
       retryable: false,
       occurredAt: now.toISOString(),
       source: "inngest_function",
