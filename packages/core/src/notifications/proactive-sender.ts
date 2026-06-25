@@ -58,8 +58,9 @@ export class WhatsAppSendCredsUnavailableError extends Error {
 export interface AgentNotifier {
   sendProactive(chatId: string, channelType: string, message: string): Promise<void>;
   /**
-   * Org-aware send (A15). Resolves the SENDING org's own WhatsApp send creds
-   * (per-field fallback to the global env creds) and scopes the 24h-window gate to
+   * Org-aware send (A15). Resolves the SENDING org's own WhatsApp send creds (phone
+   * id org-only and fail-closed; only the token may fall back to the global system-user
+   * token) and scopes the 24h-window gate to
    * that org, so a second tenant's reply ships from its own WABA number and clears
    * the window gate on its OWN inbound — never the freshest cross-org row.
    * Non-WhatsApp channels behave exactly like {@link AgentNotifier.sendProactive}.
@@ -81,9 +82,12 @@ export interface ChannelCredentials {
 /**
  * Per-org WhatsApp send credentials returned by a
  * {@link ProactiveSenderConfig.resolveOrgSendCreds} resolver. A field is null when the
- * org's stored connection omits it; the sender then falls back per-field to the global
- * env creds (the single-tenant pilot has no per-org connection at all). Shape mirrors
- * the API-side `resolveOrgWhatsAppSendCreds` helper.
+ * org's stored connection omits it. The sender resolves these via the fail-closed
+ * {@link resolveEffectiveWhatsAppSendCreds} rule: the phone id is org-only and fails closed
+ * when missing (never borrowed from the global creds — it is the tenant FROM-identity),
+ * while the token may fall back to the global system-user token. (The single-tenant pilot
+ * has no per-org connection at all and uses the global creds.) Shape mirrors the API-side
+ * `resolveOrgWhatsAppSendCreds` helper.
  */
 export interface OrgWhatsAppSendCreds {
   token: string | null;
@@ -149,8 +153,10 @@ export interface ProactiveSenderConfig {
   isWithinWindow?: (chatId: string, organizationId?: string) => Promise<boolean>;
   /**
    * Optional per-org WhatsApp send-creds resolver. When set, sendProactiveForOrg
-   * resolves the org's own {token, phoneNumberId} and falls back per-field to the
-   * global `credentials.whatsapp`. Absent → the global creds are used for every org.
+   * resolves the org's own {token, phoneNumberId} via the fail-closed
+   * {@link resolveEffectiveWhatsAppSendCreds} rule (phone id org-only; only the token may
+   * fall back to the global `credentials.whatsapp`). Absent → the global creds are used
+   * for every org.
    */
   resolveOrgSendCreds?: (organizationId: string) => Promise<OrgWhatsAppSendCreds | null>;
 }
