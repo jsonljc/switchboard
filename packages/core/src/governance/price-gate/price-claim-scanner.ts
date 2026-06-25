@@ -22,9 +22,11 @@ export interface PriceClaim {
 const NUM = String.raw`\d[\d,]*(?:\.\d{1,2})?`;
 
 // Leading marker (symbol or ISO code) then number, OR number then trailing code/word.
-// Case-insensitive so "sgd", "Dollars" etc. match.
+// RM appears on BOTH branches so the MY ringgit reads "RM150" (leading) and
+// "150 RM" (trailing) — a missed trailing RM would be a false NEGATIVE (a leaked
+// price). Case-insensitive so "sgd", "Dollars" etc. match.
 const PRICE_RE = new RegExp(
-  String.raw`(?:US\$|S\$|\$|RM|SGD|MYR|USD)\s?(${NUM})|(${NUM})\s?(?:SGD|MYR|USD|dollars?|ringgit)`,
+  String.raw`(?:US\$|S\$|\$|RM|SGD|MYR|USD)\s?(${NUM})|(${NUM})\s?(?:SGD|MYR|USD|RM|dollars?|ringgit)`,
   "gi",
 );
 

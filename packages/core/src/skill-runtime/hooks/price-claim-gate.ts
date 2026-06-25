@@ -80,6 +80,13 @@ export class PriceClaimGateHook implements SkillHook {
     }
 
     const { config } = resolution;
+    // INTENTIONAL coupling: the price gate shares the master deterministic
+    // governance mode (resolveGovernanceMode reads deterministicGate.mode) with the
+    // banned-phrase gate, rather than owning a price-specific sub-block. Treating
+    // both as one "deterministic safety" family keeps the fail-closed default simple
+    // and is what the activation gate (P2-A) flips. If price enforcement ever needs
+    // to be staged independently of banned-phrase enforcement, add a priceGate.mode
+    // passthrough (mirroring claimClassifier/consentState) that falls back to this.
     const mode = resolveGovernanceMode(config);
     const jurisdiction = config.jurisdiction;
     const clinicType = config.clinicType;

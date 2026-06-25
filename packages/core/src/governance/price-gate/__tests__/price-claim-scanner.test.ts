@@ -40,6 +40,24 @@ describe("extractPriceClaims", () => {
   it("returns [] for an empty / price-less reply", () => {
     expect(extractPriceClaims("Happy to help you book a consultation!")).toEqual([]);
   });
+
+  // Boundary cases — pin the intended behaviour so the edges read as decisions.
+
+  it("detects a TRAILING ringgit amount (the MY '150 RM' price form)", () => {
+    // A trailing RM is a real MY price form; missing it would be a false NEGATIVE
+    // (a leaked fabricated price — the dangerous direction for this gate).
+    expect(extractPriceClaims("That's 150 RM all in.")).toEqual([{ raw: "150 RM", amount: 150 }]);
+  });
+
+  it("treats a k-suffix literally ($1.2k -> 1.2): an intentional, SAFE over-block", () => {
+    // k/m suffixes are not expanded. "$1.2k" parses as 1.2, which won't match an
+    // approved 1200 and therefore over-blocks in enforce (recoverable), never leaks.
+    expect(extractPriceClaims("Around $1.2k.")).toEqual([{ raw: "$1.2", amount: 1.2 }]);
+  });
+
+  it("ignores spelled-out amounts (digits are required, by design)", () => {
+    expect(extractPriceClaims("It's fifty dollars.")).toEqual([]);
+  });
 });
 
 describe("findUnsubstantiatedPriceClaims", () => {
