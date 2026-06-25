@@ -361,12 +361,21 @@ describe("gradeDeterministic — claimWarnings detail (sentence + confidence + c
 // ---------------------------------------------------------------------------
 
 describe("ALEX_ALLOWED_TOOL_IDS", () => {
-  it("contains exactly the six declared Alex tools the harness mocks", () => {
+  it("contains exactly the seven declared Alex tools the harness mocks", () => {
     // Mirrors the tool set the eval harness registers in mock-tools.ts (and that the
-    // grader treats as allowed). `follow-up` (A3 parity) + `delegate` (governed agent
-    // handoff) are offered and graded, not flagged unexpected.
+    // grader treats as allowed). `follow-up` (A3 parity), `delegate` (governed agent
+    // handoff), and `deposit-link` (book->pay leg) are offered and graded, not flagged
+    // unexpected.
     expect([...ALEX_ALLOWED_TOOL_IDS].sort()).toEqual(
-      ["calendar-book", "crm-query", "crm-write", "delegate", "escalate", "follow-up"].sort(),
+      [
+        "calendar-book",
+        "crm-query",
+        "crm-write",
+        "delegate",
+        "deposit-link",
+        "escalate",
+        "follow-up",
+      ].sort(),
     );
   });
 });

@@ -11,6 +11,7 @@ export const ALEX_ALLOWED_TOOL_IDS = [
   "escalate",
   "follow-up",
   "delegate",
+  "deposit-link",
 ] as const;
 
 export type AllowedToolId = (typeof ALEX_ALLOWED_TOOL_IDS)[number];

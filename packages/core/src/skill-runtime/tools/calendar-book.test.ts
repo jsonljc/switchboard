@@ -1003,6 +1003,26 @@ describe("createCalendarBookToolFactory", () => {
 
       expect(incSpy).toHaveBeenCalledWith({ orgId: "org_trusted", service: "botox" });
     });
+
+    it("returns success WITH nextActions guidance on zero results (empty is not a failure)", async () => {
+      calendarProvider.listAvailableSlots.mockResolvedValue([]);
+
+      const result = await tool.operations["slots.query"]!.execute({
+        dateFrom: "2026-04-20T00:00:00+08:00",
+        dateTo: "2026-04-20T23:59:59+08:00",
+        durationMinutes: 30,
+        service: "botox",
+        timezone: "Asia/Singapore",
+      });
+
+      // An empty slot list is a SUCCESSFUL query, not a tool failure.
+      expect(result.status).toBe("success");
+      expect(result.data).toEqual({ slots: [] });
+      // Structured guidance tells Alex to offer a WIDER window and re-query, rather
+      // than telling the lead the system is broken / handing off (the after-hours bug).
+      expect(result.nextActions).toBeDefined();
+      expect(result.nextActions!.join(" ")).toMatch(/wider|broaden|different|not an error/i);
+    });
   });
 
   describe("slots.query failure paths", () => {
