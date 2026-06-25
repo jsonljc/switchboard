@@ -20,6 +20,7 @@ import {
   ROBIN_RECOVERY_SEND_INTENT,
   ROBIN_RECOVERY_RETRY_INTENT,
 } from "../services/workflows/robin-recovery-request.js";
+import { RILEY_RESET_PRIOR_BUDGET_INTENT } from "../services/workflows/riley-reset-budget-submit-request.js";
 
 function makeResult(overrides: Partial<DeploymentResolverResult> = {}): DeploymentResolverResult {
   return {
@@ -287,7 +288,7 @@ describe("buildPlatformDirectIntentPredicate", () => {
     expect(predicate("alex.conversation")).toBe(false);
   });
 
-  it("the carve-out set is exactly the 7 platform-initiated intents (drift guard)", () => {
+  it("the carve-out set is exactly the 8 platform-initiated intents (drift guard)", () => {
     expect([...PLATFORM_DIRECT_WORKFLOW_INTENTS].sort()).toEqual(
       [
         "conversation.followup.send",
@@ -297,7 +298,14 @@ describe("buildPlatformDirectIntentPredicate", () => {
         "meta.lead.inquiry.record",
         ROBIN_RECOVERY_SEND_INTENT,
         ROBIN_RECOVERY_RETRY_INTENT,
+        // Riley's automated reset-to-prior rollback: the only money-move in the set, safe because it
+        // is allow-only + structurally bounded to the captured prior (see the set's doc comment).
+        RILEY_RESET_PRIOR_BUDGET_INTENT,
       ].sort(),
     );
+  });
+
+  it("carves out the reset_prior_budget rollback (its adoptimizer slug has no seeded deployment)", () => {
+    expect(predicate("adoptimizer.campaign.reset_prior_budget")).toBe(true);
   });
 });

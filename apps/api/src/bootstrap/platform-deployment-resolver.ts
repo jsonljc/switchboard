@@ -8,6 +8,7 @@ import {
   ROBIN_RECOVERY_SEND_INTENT,
   ROBIN_RECOVERY_RETRY_INTENT,
 } from "../services/workflows/robin-recovery-request.js";
+import { RILEY_RESET_PRIOR_BUDGET_INTENT } from "../services/workflows/riley-reset-budget-submit-request.js";
 
 /** Options for the authoritative deployment resolver wired into PlatformIngress. */
 export interface ResolveAuthoritativeDeploymentOptions {
@@ -29,13 +30,13 @@ export interface ResolveAuthoritativeDeploymentOptions {
 }
 
 /**
- * Platform-initiated, NON-skill workflow intents whose slug (conversation / meta / lead) has no
- * seeded deployment, so the strict slug lookup throws deployment_not_found and ships them prod-inert.
- * They resolve to a platform-direct context instead. Each is non-financial and gated downstream
- * (consent / 24h window / template at the executor) and/or parks via a seeded mandatory policy
- * (Robin); platform-direct (supervised / trustScore 0) cannot relax any mandatory gate. They STILL
- * require a seeded allow policy to clear the gate's default-deny (proactive-intake-governance.ts +
- * robin-recovery-governance.ts) — resolving here only gets them TO the gate.
+ * Platform-initiated, NON-skill workflow intents whose slug (conversation / meta / lead / adoptimizer)
+ * has no seeded deployment, so the strict slug lookup throws deployment_not_found and ships them
+ * prod-inert. They resolve to a platform-direct context instead. Most are non-financial and gated
+ * downstream (consent / 24h window / template at the executor) and/or park via a seeded mandatory
+ * policy (Robin); platform-direct (supervised / trustScore 0) cannot relax any mandatory gate. They
+ * STILL require a seeded allow policy to clear the gate's default-deny (proactive-intake-governance.ts
+ * + robin-recovery-governance.ts) — resolving here only gets them TO the gate.
  *
  * meta.lead.intake is intentionally ABSENT: it threads its RESOLVED deploymentId into the lead it
  * ingests, so it must resolve the real Alex deployment (targetHint skillSlug "alex"), not
@@ -51,6 +52,13 @@ export const PLATFORM_DIRECT_WORKFLOW_INTENTS: ReadonlySet<string> = new Set<str
   // The bounded-retry re-send of an already-approved campaign recipient: a 1:1 allow-only send.
   // Auto-executes (no park): consent + template re-validated in the retry executor at send time.
   ROBIN_RECOVERY_RETRY_INTENT,
+  // Riley's automated reset-to-prior budget rollback. The ONLY money-move in this set, and it is
+  // safe here because: it is allow-only (the seeded reset policy clears default-deny, no human), it
+  // is structurally bounded (the executor can only write the captured prior targetCents, never an
+  // arbitrary value), and its `adoptimizer` slug has no seeded deployment (the platform reverses
+  // Riley's move; the executor resolves credentials from the frozen original deploymentId, not this
+  // platform-direct context). platform-direct cannot relax any gate; the bound is the executor's.
+  RILEY_RESET_PRIOR_BUDGET_INTENT,
 ]);
 
 /** Minimal registry shape the predicate needs (structural; the real IntentRegistry satisfies it). */
