@@ -19,27 +19,26 @@
  */
 
 /**
- * Honesty marker (A6 / decision D3): the wiring state of this contract's three protections.
- * The pre-write cap is fully WIRED (the executor calls it). The forward guardrails and the
- * automated rollback now have their DECISION wired — `evaluateBlastRadiusGuardrails`,
- * `planReallocationRollback`, and `runReallocationGuardrailMonitor`
- * (reallocation-guardrail-monitor.ts) read `.guardrails`/`.rollback`, are fail-closed, and are
- * unit-pinned — but the real-dep MONITOR PASS (the Meta-window measurement provider + the governed
- * reset_prior_budget dispatch through ingress) is the remaining integration, and none of it has
- * been EXERCISED end-to-end yet. So flipping RILEY_REALLOCATE_SELF_EXECUTION_ENABLED is still
- * gated: wiring the real-dep monitor pass + a genuine kill-switch + a single end-to-end exercise
- * remain HARD preconditions. See docs/runbooks/riley-reallocation-go-live.md. Mirrors the
- * SPEC_1B_PENDING_KINDS idiom. An off-flag is not a safety boundary (Knight Capital).
+ * Honesty marker (A6 / decision D3): the wiring state of this contract's three protections, now all
+ * WIRED end-to-end. The pre-write cap is called by the executor. The forward guardrails run in a
+ * scheduled monitor pass with a real Meta-window + CRM measurement provider (booked-conversion drop +
+ * the live budget), and the automated rollback dispatches the governed reset_prior_budget intent
+ * through PlatformIngress. All three are fail-closed, unit-pinned, AND staged-exercised end-to-end
+ * (riley-reallocate-act-leg-e2e.test.ts: a simulated breach trips the monitor, the reset restores the
+ * captured prior, the kill-switch halts execution). Flipping RILEY_REALLOCATE_SELF_EXECUTION_ENABLED
+ * for a canary org now waits only on the OPERATIONAL preconditions: a single LIVE-Meta exercise, a
+ * Tier-0 credentialed pilot org, and real campaign-attributed paid-value data. See
+ * docs/runbooks/riley-reallocation-go-live.md. An off-flag is not a safety boundary (Knight Capital).
  */
 export const BLAST_RADIUS_PROTECTIONS = {
   /** assertWithinBlastRadius: WIRED. The reallocate executor calls it before every Meta write. */
   preWriteCap: "wired",
-  /** evaluateBlastRadiusGuardrails: DECISION wired (fail-closed, unit-pinned). The real-dep
-   *  monitor pass (Meta-window measurement provider) is the remaining integration. */
-  forwardGuardrails: "decision_wired",
-  /** planReallocationRollback + runReallocationGuardrailMonitor: DECISION wired. The governed
-   *  reset_prior_budget DISPATCH (through ingress) is the remaining integration. */
-  automatedRollback: "decision_wired",
+  /** evaluateBlastRadiusGuardrails: WIRED into the scheduled monitor pass with a real Meta-window +
+   *  CRM measurement provider; fail-closed, unit-pinned, staged-exercised. */
+  forwardGuardrails: "wired",
+  /** planReallocationRollback + runReallocationGuardrailMonitor: WIRED, with the governed
+   *  reset_prior_budget DISPATCH through ingress; staged-exercised end-to-end. */
+  automatedRollback: "wired",
 } as const;
 
 /**
