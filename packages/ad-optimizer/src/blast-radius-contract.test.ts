@@ -178,12 +178,14 @@ describe("DEFAULT_BLAST_RADIUS_CONTRACT — the v1 default the reallocate execut
 });
 
 describe("BLAST_RADIUS_PROTECTIONS — honest wiring state (A6/D3)", () => {
-  it("marks the pre-write cap WIRED and the forward guardrails + rollback DECISION-wired", () => {
-    // The decision logic (evaluateBlastRadiusGuardrails / planReallocationRollback /
-    // runReallocationGuardrailMonitor) is now built + fail-closed + unit-pinned; the real-dep
-    // monitor pass (Meta-window measurement + governed reset_prior_budget dispatch) remains.
+  it("marks all three protections WIRED end-to-end (monitor pass + governed rollback, staged-exercised)", () => {
+    // The forward guardrails now run in a scheduled monitor pass with a real Meta-window + CRM
+    // measurement provider, and the rollback dispatches the governed reset_prior_budget intent
+    // through ingress; all three are fail-closed, unit-pinned, and staged-exercised end-to-end
+    // (riley-reallocate-act-leg-e2e.test.ts). A canary flip now waits only on operational
+    // preconditions (live-Meta exercise, pilot org, paid-value data).
     expect(BLAST_RADIUS_PROTECTIONS.preWriteCap).toBe("wired");
-    expect(BLAST_RADIUS_PROTECTIONS.forwardGuardrails).toBe("decision_wired");
-    expect(BLAST_RADIUS_PROTECTIONS.automatedRollback).toBe("decision_wired");
+    expect(BLAST_RADIUS_PROTECTIONS.forwardGuardrails).toBe("wired");
+    expect(BLAST_RADIUS_PROTECTIONS.automatedRollback).toBe("wired");
   });
 });
