@@ -28,6 +28,8 @@ export interface CreateMetaMutationAttemptInput {
   observedPriorCents: number;
   requestedToCents: number;
   workTraceId?: string | null;
+  /** The reallocation's deployment, for the guardrail monitor's credential resolution + attribution. */
+  deploymentId?: string | null;
 }
 
 export interface ClaimLeaseAndMarkInput {
@@ -38,6 +40,8 @@ export interface ClaimLeaseAndMarkInput {
   observedPriorCents: number;
   requestedToCents: number;
   workTraceId?: string | null;
+  /** The reallocation's deployment, stamped so the guardrail monitor can resolve creds + attribute. */
+  deploymentId?: string | null;
   /** The executor's execution clock; the active-lease probe compares heldUntil against it. */
   now: Date;
   /** Override the default lease TTL (tests/tuning). */
@@ -45,6 +49,27 @@ export interface ClaimLeaseAndMarkInput {
 }
 
 export type ClaimLeaseResult = { claimed: true; row: MetaMutationAttempt } | { claimed: false };
+
+/** The forward guardrail monitor's verdict for an applied reallocation (mirrors the ad-optimizer
+ *  ReallocationMonitorOutcome union); persisted to guardrailOutcome once a monitor pass resolves it. */
+export type ReallocationGuardrailOutcome =
+  | "held"
+  | "rolled_back"
+  | "rollback_noop"
+  | "rollback_unrestorable";
+
+/** One applied, un-monitored reallocation the guardrail monitor must evaluate. `appliedAt` is the
+ *  markApplied time (updatedAt for an applied, guardrailOutcome-null row; applied is terminal until
+ *  the monitor sets the outcome). `deploymentId` may be null only for legacy rows (none in prod). */
+export interface PendingGuardrailReallocation {
+  executionWorkUnitId: string;
+  organizationId: string;
+  deploymentId: string | null;
+  adAccountId: string;
+  campaignId: string;
+  observedPriorCents: number;
+  appliedAt: Date;
+}
 
 /**
  * Spec-1B: the durable at-most-once marker AND campaign serialization lease for the budget
@@ -71,6 +96,7 @@ export class PrismaMetaMutationAttemptStore {
         observedPriorCents: input.observedPriorCents,
         requestedToCents: input.requestedToCents,
         workTraceId: input.workTraceId ?? null,
+        deploymentId: input.deploymentId ?? null,
       },
     });
   }
@@ -118,6 +144,7 @@ export class PrismaMetaMutationAttemptStore {
           observedPriorCents: input.observedPriorCents,
           requestedToCents: input.requestedToCents,
           workTraceId: input.workTraceId ?? null,
+          deploymentId: input.deploymentId ?? null,
         },
       });
       return { claimed: true, row };
@@ -160,6 +187,86 @@ export class PrismaMetaMutationAttemptStore {
         status: "pending",
       },
       data: { status: "recovery_required" },
+    });
+    return { transitioned: res.count > 0 };
+  }
+
+  // ───────────────────────── guardrail-monitoring queue (PR-3) ─────────────────────────
+
+  /** The half-open "the contract window has elapsed" predicate the monitor queue shares: an applied,
+   *  un-monitored row whose apply-time proxy (updatedAt) is at-or-before now - minWindowMs. */
+  private pendingGuardrailWhere(now: Date, minWindowMs: number) {
+    return {
+      status: "applied",
+      guardrailOutcome: null,
+      updatedAt: { lte: new Date(now.getTime() - minWindowMs) },
+    } as const;
+  }
+
+  /**
+   * Distinct organizations with at least one applied, un-monitored reallocation whose contract window
+   * has elapsed. The dispatch cron fans one monitor event per returned org (mirrors the
+   * outcome-attribution dispatch). Empty when no org has self-executed, so the daily pass is inert.
+   */
+  async listOrgsWithPendingGuardrail(now: Date, minWindowMs: number): Promise<string[]> {
+    const rows = await this.prisma.metaMutationAttempt.findMany({
+      where: this.pendingGuardrailWhere(now, minWindowMs),
+      distinct: ["organizationId"],
+      select: { organizationId: true },
+    });
+    return rows.map((r) => r.organizationId);
+  }
+
+  /**
+   * The applied, un-monitored reallocations for ONE org the monitor evaluates this pass. `appliedAt`
+   * is the markApplied time (updatedAt; applied is terminal until the monitor sets guardrailOutcome).
+   */
+  async listPendingGuardrailForOrg(
+    organizationId: string,
+    now: Date,
+    minWindowMs: number,
+  ): Promise<PendingGuardrailReallocation[]> {
+    const rows = await this.prisma.metaMutationAttempt.findMany({
+      where: { organizationId, ...this.pendingGuardrailWhere(now, minWindowMs) },
+      select: {
+        executionWorkUnitId: true,
+        organizationId: true,
+        deploymentId: true,
+        adAccountId: true,
+        campaignId: true,
+        observedPriorCents: true,
+        updatedAt: true,
+      },
+    });
+    return rows.map((r) => ({
+      executionWorkUnitId: r.executionWorkUnitId,
+      organizationId: r.organizationId,
+      deploymentId: r.deploymentId,
+      adAccountId: r.adAccountId,
+      campaignId: r.campaignId,
+      observedPriorCents: r.observedPriorCents,
+      appliedAt: r.updatedAt,
+    }));
+  }
+
+  /**
+   * Record the monitor's verdict, first-writer-wins: only an applied, still-un-monitored row flips,
+   * so two concurrent monitor passes on the same org cannot double-resolve. count===0 is a benign
+   * no-op (already resolved by a concurrent pass), never a throw.
+   */
+  async markGuardrailOutcome(args: {
+    executionWorkUnitId: string;
+    organizationId: string;
+    outcome: ReallocationGuardrailOutcome;
+  }): Promise<{ transitioned: boolean }> {
+    const res = await this.prisma.metaMutationAttempt.updateMany({
+      where: {
+        executionWorkUnitId: args.executionWorkUnitId,
+        organizationId: args.organizationId,
+        status: "applied",
+        guardrailOutcome: null,
+      },
+      data: { guardrailOutcome: args.outcome },
     });
     return { transitioned: res.count > 0 };
   }

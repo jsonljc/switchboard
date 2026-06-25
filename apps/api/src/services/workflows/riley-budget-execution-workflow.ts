@@ -84,6 +84,7 @@ export interface RileyBudgetExecutionDeps {
       observedPriorCents: number;
       requestedToCents: number;
       workTraceId?: string;
+      deploymentId?: string;
       now: Date;
     }): Promise<{ claimed: true } | { claimed: false }>;
     markApplied(args: {
@@ -339,6 +340,9 @@ export function buildRileyBudgetExecutionWorkflow(deps: RileyBudgetExecutionDeps
         observedPriorCents: live,
         requestedToCents: input.toCents,
         workTraceId: approval.workTraceId,
+        // Stamp the reallocation's deployment so the guardrail monitor can resolve credentials +
+        // attribute the rollback (the monitor's listPendingGuardrailForOrg reads it back).
+        deploymentId,
         now: now(),
       });
       if (!claim.claimed) {

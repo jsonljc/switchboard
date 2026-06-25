@@ -17,8 +17,12 @@ export async function buildRileyResetBudgetExecutorHandler(
 ): Promise<{ intent: string; handler: WorkflowHandler }> {
   const { RILEY_RESET_PRIOR_BUDGET_INTENT } =
     await import("../services/workflows/riley-reset-budget-submit-request.js");
-  const { PrismaDeploymentConnectionStore, PrismaDeploymentStore, decryptCredentials } =
-    await import("@switchboard/db");
+  const {
+    PrismaDeploymentConnectionStore,
+    PrismaDeploymentStore,
+    PrismaMetaMutationAttemptStore,
+    decryptCredentials,
+  } = await import("@switchboard/db");
   const { MetaAdsClient } = await import("@switchboard/ad-optimizer");
 
   const connectionStore = new PrismaDeploymentConnectionStore(
@@ -26,6 +30,9 @@ export async function buildRileyResetBudgetExecutorHandler(
   );
   const deploymentStore = new PrismaDeploymentStore(
     prismaClient as ConstructorParameters<typeof PrismaDeploymentStore>[0],
+  );
+  const attemptStore = new PrismaMetaMutationAttemptStore(
+    prismaClient as ConstructorParameters<typeof PrismaMetaMutationAttemptStore>[0],
   );
 
   const handler = buildRileyResetBudgetExecutionWorkflow({
@@ -51,6 +58,13 @@ export async function buildRileyResetBudgetExecutorHandler(
       } catch {
         return { kind: "none" as const };
       }
+    },
+    // Org-scoped read of the forward move's captured prior: a row whose organizationId differs reads
+    // as absent, so the executor fails closed rather than trusting another tenant's capture.
+    getCapturedPrior: async ({ organizationId, rollbackOfWorkUnitId }) => {
+      const row = await attemptStore.findByExecutionWorkUnitId(rollbackOfWorkUnitId);
+      if (!row || row.organizationId !== organizationId) return null;
+      return { observedPriorCents: row.observedPriorCents };
     },
     createAdsClient: (creds) => new MetaAdsClient(creds),
   });

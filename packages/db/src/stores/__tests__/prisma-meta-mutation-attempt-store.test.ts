@@ -33,6 +33,7 @@ function mockPrisma(over?: {
   create?: (args: { data: Record<string, unknown> }) => Promise<unknown>;
   findUnique?: (args: { where: Record<string, unknown> }) => Promise<unknown>;
   findFirst?: (args: { where: Record<string, unknown> }) => Promise<unknown>;
+  findMany?: (args: Record<string, unknown>) => Promise<unknown[]>;
   updateMany?: (args: {
     where: Record<string, unknown>;
     data: Record<string, unknown>;
@@ -47,6 +48,7 @@ function mockPrisma(over?: {
       create: vi.fn(over?.create ?? (async () => ROW)),
       findUnique: vi.fn(over?.findUnique ?? (async () => null)),
       findFirst: vi.fn(over?.findFirst ?? (async () => null)),
+      findMany: vi.fn(over?.findMany ?? (async () => [])),
       updateMany: vi.fn(over?.updateMany ?? (async () => ({ count: 1 }))),
     },
   };
@@ -75,6 +77,7 @@ describe("PrismaMetaMutationAttemptStore (Spec-1B at-most-once marker + lease)",
         observedPriorCents: 5000,
         requestedToCents: 6000,
         workTraceId: "trace_1",
+        deploymentId: null,
       },
     });
   });
@@ -223,5 +226,123 @@ describe("PrismaMetaMutationAttemptStore status transitions", () => {
       status: "pending",
     });
     expect(call.data).toMatchObject({ status: "recovery_required" });
+  });
+});
+
+describe("PrismaMetaMutationAttemptStore guardrail-monitoring (PR-3)", () => {
+  it("claimLeaseAndMark stamps the deploymentId on the pending marker", async () => {
+    const prisma = mockPrisma();
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    await store.claimLeaseAndMark({ ...CLAIM, deploymentId: "dep_riley" });
+    const created = prisma.metaMutationAttempt.create.mock.calls[0]![0] as {
+      data: Record<string, unknown>;
+    };
+    expect(created.data.deploymentId).toBe("dep_riley");
+  });
+
+  it("claimLeaseAndMark defaults deploymentId to null when omitted", async () => {
+    const prisma = mockPrisma();
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    await store.claimLeaseAndMark(CLAIM);
+    const created = prisma.metaMutationAttempt.create.mock.calls[0]![0] as {
+      data: Record<string, unknown>;
+    };
+    expect(created.data.deploymentId).toBeNull();
+  });
+
+  it("listOrgsWithPendingGuardrail returns distinct orgs with applied, un-monitored, window-elapsed rows", async () => {
+    const NOW = new Date("2026-06-25T12:00:00Z");
+    const prisma = mockPrisma({
+      findMany: async () => [{ organizationId: "org-a" }, { organizationId: "org-b" }],
+    });
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    const orgs = await store.listOrgsWithPendingGuardrail(NOW, 72 * 60 * 60 * 1000);
+    expect(orgs).toEqual(["org-a", "org-b"]);
+    const call = prisma.metaMutationAttempt.findMany.mock.calls[0]![0] as {
+      where: Record<string, unknown>;
+      distinct?: string[];
+      select?: Record<string, unknown>;
+    };
+    expect(call.where).toEqual({
+      status: "applied",
+      guardrailOutcome: null,
+      updatedAt: { lte: new Date(NOW.getTime() - 72 * 60 * 60 * 1000) },
+    });
+    expect(call.distinct).toEqual(["organizationId"]);
+    expect(call.select).toEqual({ organizationId: true });
+  });
+
+  it("listPendingGuardrailForOrg returns the monitor's fields with appliedAt = updatedAt", async () => {
+    const NOW = new Date("2026-06-25T12:00:00Z");
+    const updatedAt = new Date("2026-06-22T09:00:00Z");
+    const prisma = mockPrisma({
+      findMany: async () => [
+        {
+          executionWorkUnitId: "wu_1",
+          organizationId: "org-a",
+          deploymentId: "dep_riley",
+          adAccountId: "act_1",
+          campaignId: "camp_1",
+          observedPriorCents: 5000,
+          updatedAt,
+        },
+      ],
+    });
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    const rows = await store.listPendingGuardrailForOrg("org-a", NOW, 72 * 60 * 60 * 1000);
+    expect(rows).toEqual([
+      {
+        executionWorkUnitId: "wu_1",
+        organizationId: "org-a",
+        deploymentId: "dep_riley",
+        adAccountId: "act_1",
+        campaignId: "camp_1",
+        observedPriorCents: 5000,
+        appliedAt: updatedAt,
+      },
+    ]);
+    const call = prisma.metaMutationAttempt.findMany.mock.calls[0]![0] as {
+      where: Record<string, unknown>;
+    };
+    expect(call.where).toEqual({
+      organizationId: "org-a",
+      status: "applied",
+      guardrailOutcome: null,
+      updatedAt: { lte: new Date(NOW.getTime() - 72 * 60 * 60 * 1000) },
+    });
+  });
+
+  it("markGuardrailOutcome is first-writer-wins (applied + guardrailOutcome IS NULL scoped)", async () => {
+    const prisma = mockPrisma();
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    const res = await store.markGuardrailOutcome({
+      executionWorkUnitId: "wu_1",
+      organizationId: "org-a",
+      outcome: "rolled_back",
+    });
+    expect(res).toEqual({ transitioned: true });
+    const call = prisma.metaMutationAttempt.updateMany.mock.calls[0]![0] as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    expect(call.where).toEqual({
+      executionWorkUnitId: "wu_1",
+      organizationId: "org-a",
+      status: "applied",
+      guardrailOutcome: null,
+    });
+    expect(call.data).toEqual({ guardrailOutcome: "rolled_back" });
+  });
+
+  it("markGuardrailOutcome on an already-resolved row is a benign no-op (count 0)", async () => {
+    const prisma = mockPrisma({ updateMany: async () => ({ count: 0 }) });
+    const store = new PrismaMetaMutationAttemptStore(prisma as unknown as PrismaClient);
+    expect(
+      await store.markGuardrailOutcome({
+        executionWorkUnitId: "wu_1",
+        organizationId: "org-a",
+        outcome: "held",
+      }),
+    ).toEqual({ transitioned: false });
   });
 });

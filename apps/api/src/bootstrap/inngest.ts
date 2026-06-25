@@ -29,6 +29,7 @@ import {
   PrismaScheduledReminderStore,
   PrismaBookingStore,
   PrismaConversionRecordStore,
+  PrismaMetaMutationAttemptStore,
   PrismaOpportunityStore,
   PrismaReconciliationStore,
   PrismaBusinessFactsStore,
@@ -156,6 +157,14 @@ import {
   bindRileyOutcomeOrchestrator,
 } from "../services/cron/riley-outcome-attribution.js";
 import { createMetaInsightsProviderForOrg } from "../services/cron/meta-insights-adapter.js";
+import {
+  createReallocationGuardrailDispatch,
+  createReallocationGuardrailWorker,
+  buildReallocationGuardrailMonitorDeps,
+  buildReallocationRollbackDispatch,
+  MIN_GUARDRAIL_WINDOW_MS,
+} from "../services/cron/riley-reallocation-guardrail-monitor.js";
+import { buildReallocationGuardrailMeasurement } from "../services/cron/reallocation-guardrail-measurement.js";
 import {
   createCreativeAttributionDispatch,
   createCreativeAttributionWorker,
@@ -1247,6 +1256,94 @@ export async function registerInngest(
   });
 
   // ---------------------------------------------------------------------------
+  // Riley reallocate guardrail monitor (runbook §1-2): ALWAYS-ON daily safety pass
+  // ---------------------------------------------------------------------------
+  // No enable flag, deliberately: a safety monitor must never be accidentally off, and it is inert
+  // without applied reallocations (the act-leg is dark, so listOrgsWithPendingGuardrail returns []).
+  // On a breach it dispatches the governed reset_prior_budget rollback through PlatformIngress (the
+  // ONLY in-process submitter of that service-only intent). It only ever rolls back a campaign that
+  // was reallocated, which requires the reallocate canary to have been on for that org.
+  const reallocationAttemptStore = new PrismaMetaMutationAttemptStore(app.prisma);
+
+  const reallocationGuardrailMeasure = buildReallocationGuardrailMeasurement({
+    getCampaignBudgetCents: async (deploymentId, campaignId) => {
+      // Read-only budget read for rollback sizing. The deploymentId is org-scoped at its source
+      // (listPendingGuardrailForOrg(orgId) returns only that org's stamped rows), and the reset
+      // executor independently re-verifies org isolation before any write, so trusting the stamped
+      // deploymentId here is safe. The cron credential resolver resolves the deployment's org
+      // internally; a dead or missing connection returns null (fails closed -> NaN -> unrestorable).
+      const creds = await getDeploymentCredentials(deploymentId);
+      if (!creds) return null;
+      try {
+        const campaign = await new MetaAdsClient(creds).getCampaign(campaignId);
+        return campaign.dailyBudgetCents;
+      } catch {
+        return null;
+      }
+    },
+    getBookedCountForWindow: async ({ organizationId, startInclusive, endExclusive }) => {
+      try {
+        const stats = await bookedValueByCampaignStore.getBookedStatsForOrgWindow({
+          organizationId,
+          startInclusive,
+          endExclusive,
+        });
+        return stats.bookedCount;
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  const reallocationGuardrailRollback = buildReallocationRollbackDispatch({
+    // In-process submit through the front door: this bypasses the HTTP service-only guard ON PURPOSE
+    // (the monitor IS the trusted in-process submitter the guard reserves the intent for).
+    submitReset: (req) => app.platformIngress!.submit(req),
+    logger: app.log,
+  });
+
+  const reallocationGuardrailDispatch = createReallocationGuardrailDispatch(
+    {
+      listOrgsWithPending: () =>
+        reallocationAttemptStore.listOrgsWithPendingGuardrail(new Date(), MIN_GUARDRAIL_WINDOW_MS),
+      sendEvent: (event) => inngestClient.send(event),
+    },
+    makeOnFailureHandler(
+      {
+        functionId: "riley-reallocation-guardrail-dispatch",
+        eventDomain: "riley.reallocation-guardrail.dispatch",
+        riskCategory: "low",
+        alert: false,
+      },
+      asyncFailure,
+    ) as (arg: unknown) => Promise<void>,
+  );
+
+  const reallocationGuardrailWorker = createReallocationGuardrailWorker({
+    failure: asyncFailure,
+    buildMonitorDeps: (organizationId) =>
+      buildReallocationGuardrailMonitorDeps({
+        organizationId,
+        store: reallocationAttemptStore,
+        measure: reallocationGuardrailMeasure,
+        dispatchRollback: reallocationGuardrailRollback,
+        recordOutcome: (orgId, outcome) =>
+          getMetrics().rileyReallocationGuardrailOutcome.inc({ orgId, outcome }),
+        alertCritical: (message) =>
+          safeAlert(operatorAlerter, {
+            errorType: "async_job_retry_exhausted",
+            severity: "critical",
+            errorMessage: message,
+            retryable: false,
+            occurredAt: new Date().toISOString(),
+            source: "inngest_function",
+          }),
+        now: () => new Date(),
+      }),
+    logger: app.log,
+  });
+
+  // ---------------------------------------------------------------------------
   // Mira slice 2: per-creative attribution dispatch + per-org worker
   // ---------------------------------------------------------------------------
   // Dispatch fires daily at 06:30 UTC and emits one
@@ -1521,6 +1618,8 @@ export async function registerInngest(
       }),
       rileyOutcomeDispatch,
       rileyOutcomeWorker,
+      reallocationGuardrailDispatch,
+      reallocationGuardrailWorker,
       creativeAttributionDispatch,
       creativeAttributionWorker,
       creativeTasteSweep,

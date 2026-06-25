@@ -98,11 +98,19 @@ export function planReallocationRollback(
 // ──────────────────────────────── monitor orchestrator ──────────────────────────────
 
 export interface PendingReallocation {
+  /** The forward reallocation's execution work unit: the rollback's `rollbackOfWorkUnitId` and the
+   *  key the monitor marks resolved. */
+  executionWorkUnitId: string;
   deploymentId: string;
   organizationId: string;
+  /** The frozen ad account the rollback restores within. */
+  adAccountId: string;
   campaignId: string;
-  /** The pre-change daily budget the executor captured before the write (cents). */
+  /** The pre-change daily budget the executor captured before the write (cents). The rollback
+   *  restores to exactly this value. */
   observedPriorCents: number;
+  /** When the forward move was applied; the measurement provider anchors the pre/post windows here. */
+  appliedAt: Date;
   /** The blast-radius contract the move carried; its `guardrails` are evaluated here. */
   contract: BlastRadiusContract;
 }
