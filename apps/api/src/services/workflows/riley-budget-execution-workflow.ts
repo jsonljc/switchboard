@@ -47,6 +47,19 @@ export interface RileyBudgetExecutionDeps {
     bindingHash?: string;
     workTraceId?: string;
   }>;
+  /**
+   * Runtime kill-switch (runbook §3): a per-deployment stop the executor reads ONCE at the last mile
+   * (after replay-first, before credentials + the Meta write). True aborts THIS execution cleanly (no
+   * marker), so it is re-runnable once cleared. Honest scope: the executor body is one uninterrupted
+   * call, so the switch halts every execution that has NOT YET reached this check (nothing new starts
+   * its Meta sequence) plus all FUTURE executions; a unit already past the check completes its bounded
+   * Meta sequence (the dominant exposure is the dispatch surface, which this fully covers). Distinct
+   * from the canary enable flag (which gates the SUBMITTER, so an already-approved-and-dispatched unit
+   * would still reach here): this is the EXECUTOR-side stop, runtime-flippable (a DB flip, no
+   * redeploy). REQUIRED, never optional: an optional dep would let a future bootstrap silently drop the
+   * stop and recreate the hole this closes.
+   */
+  isReallocateKilled: (args: { organizationId: string; deploymentId: string }) => Promise<boolean>;
   /** Resolve the org's meta-ads credentials by deployment id WITH the org-isolation check inside. */
   getDeploymentCredentials: (
     organizationId: string,
@@ -125,6 +138,7 @@ export interface RileyBudgetExecutionDeps {
  *   0 parse frozen params (fail closed INVALID_REALLOCATE_INPUT).
  *   1 approval + content-binding (REALLOCATE_NOT_APPROVED; fail closed BEFORE any Meta call/decrypt).
  *   2 replay-first: applied+receipt -> replay no-op (0 Meta); any other marker -> MUTATION_RECOVERY_REQUIRED (0 Meta).
+ *   2.5 in-flight kill-switch: a runtime per-deployment stop (RILEY_REALLOCATE_KILLED, no marker, 0 Meta).
  *   3 credentials + frozen-account lock (DEPLOYMENT_ORG_MISMATCH / NO_META_CONNECTION / ACCOUNT_MISMATCH).
  *   4 live campaign read (CAMPAIGN_BUDGET_UNREADABLE / UNSUPPORTED_BUDGET_TOPOLOGY).
  *   5 drift vs the approved baseline (BUDGET_DRIFTED).
@@ -210,8 +224,30 @@ export function buildRileyBudgetExecutionWorkflow(deps: RileyBudgetExecutionDeps
         };
       }
 
-      // 3. Credentials + frozen-account lock.
+      // 2.5. Runtime kill-switch: a per-deployment stop read at the last mile (AFTER replay-first, so
+      // an already-applied unit still replays its receipt, and BEFORE credentials / the new Meta
+      // write). A killed unit aborts cleanly with NO marker, so it is re-runnable once the switch
+      // clears. It halts every dispatched unit that has not yet reached this point (nothing new starts
+      // its Meta sequence) + all future executions; a unit already past here completes its bounded
+      // sequence (the executor body is one uninterrupted call). Runtime (no redeploy).
       const deploymentId = workUnit.deployment.deploymentId;
+      if (await deps.isReallocateKilled({ organizationId, deploymentId })) {
+        // Observable during an incident: the engage is audited on the setter, and each turned-away
+        // dispatch is warn-logged here (the WorkTrace failure is the system of record).
+        console.warn(
+          `[riley-reallocate] kill-switch engaged: refusing execution org=${organizationId} deployment=${deploymentId} workUnit=${workUnitId}`,
+        );
+        return {
+          outcome: "failed",
+          summary: "Reallocation halted by the runtime kill-switch",
+          error: {
+            code: "RILEY_REALLOCATE_KILLED",
+            message: `The reallocate kill-switch is engaged for deployment ${deploymentId}; refusing to execute (re-runnable once cleared).`,
+          },
+        };
+      }
+
+      // 3. Credentials + frozen-account lock.
       const credsResult = await deps.getDeploymentCredentials(organizationId, deploymentId);
       if (credsResult.kind === "org_mismatch") {
         return {

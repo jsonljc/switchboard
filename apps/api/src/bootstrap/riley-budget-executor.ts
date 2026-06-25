@@ -116,6 +116,16 @@ export async function buildRileyBudgetExecutorHandler(
 
   const handler = buildRileyBudgetExecutionWorkflow({
     getApprovalContext: buildGetReallocateApprovalContext(workTraceStore),
+    // In-flight kill-switch: read the per-deployment governanceSettings.reallocateKillSwitch at the
+    // last mile. A deployment that is missing or whose org differs reads as KILLED (true) - the safe
+    // direction (refuse rather than execute on an unverifiable deployment). Runtime-flippable via
+    // setRileyReallocateKillSwitch (scripts/riley-reallocate-kill-switch.ts), no redeploy.
+    isReallocateKilled: async ({ organizationId, deploymentId }) => {
+      const deployment = await deploymentStore.findById(deploymentId);
+      if (!deployment || deployment.organizationId !== organizationId) return true;
+      const settings = (deployment.governanceSettings as Record<string, unknown> | null) ?? {};
+      return settings["reallocateKillSwitch"] === true;
+    },
     getDeploymentCredentials: async (
       organizationId,
       deploymentId,
