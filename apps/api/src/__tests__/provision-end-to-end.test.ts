@@ -123,7 +123,10 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
       agentListing: {
         upsert: vi.fn().mockResolvedValue({ id: "listing_alex", slug: "alex-conversion" }),
       },
-      agentDeployment: { upsert: vi.fn().mockResolvedValue({ id: "deployment_alex" }) },
+      agentDeployment: {
+        upsert: vi.fn().mockResolvedValue({ id: "deployment_alex" }),
+        update: vi.fn().mockResolvedValue({}),
+      },
       deploymentConnection: { upsert: vi.fn().mockResolvedValue({ id: "dc_e2e" }) },
     };
     return {
@@ -175,7 +178,10 @@ describe("provision end-to-end (standard provision path, A1–A8)", () => {
       agentListing: {
         upsert: vi.fn().mockResolvedValue({ id: "listing_alex", slug: "alex-conversion" }),
       },
-      agentDeployment: { upsert: vi.fn().mockResolvedValue({ id: "deployment_alex" }) },
+      agentDeployment: {
+        upsert: vi.fn().mockResolvedValue({ id: "deployment_alex" }),
+        update: vi.fn().mockResolvedValue({}),
+      },
       _tx: tx,
       _connection: connection,
       _managedChannel: managedChannel,

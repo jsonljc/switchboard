@@ -27,6 +27,7 @@ describe("Organizations API — day-one Riley provisioning seam", () => {
     },
     agentDeployment: {
       upsert: vi.fn().mockResolvedValue({ id: "deployment_alex" }),
+      update: vi.fn().mockResolvedValue({}),
     },
     orgAgentEnablement: {
       upsert: vi.fn().mockResolvedValue({}),

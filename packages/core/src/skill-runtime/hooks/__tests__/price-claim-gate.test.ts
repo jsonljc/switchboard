@@ -4,6 +4,7 @@ import type { PriceClaimGateHookDeps } from "../price-claim-gate.js";
 import { InMemoryGovernancePostureCache } from "../../../governance/posture-cache.js";
 import type { SaveGovernanceVerdictInput } from "../../../governance/governance-verdict-store/types.js";
 import type { SkillHookContext, SkillExecutionResult } from "../../types.js";
+import { buildObserveGovernanceConfig } from "@switchboard/schemas";
 
 type Spy = ReturnType<typeof vi.fn>;
 
@@ -114,6 +115,28 @@ describe("PriceClaimGateHook.afterSkill", () => {
     await hook.afterSkill(ctx, result);
     expect(result.response).toBe("It's $999 for that.");
     expect(spies.verdictStore.save).not.toHaveBeenCalled();
+  });
+
+  it("P2-A inertness: the seeded observe config never blocks, even with zero approved prices", async () => {
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({
+        status: "resolved" as const,
+        config: buildObserveGovernanceConfig({ jurisdiction: "SG", clinicType: "medical" }),
+      }),
+      approvedPrices: [], // worst case: the org has no approved prices yet
+    });
+    const hook = new PriceClaimGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("Our HydraFacial is $250.");
+    await hook.afterSkill(ctx, result);
+
+    // Telemetry only: response unchanged, no handoff, no status flip.
+    expect(result.response).toBe("Our HydraFacial is $250.");
+    expect(spies.conversationStore.setConversationStatus).not.toHaveBeenCalled();
+    expect(spies.handoffStore.save).not.toHaveBeenCalled();
+    // A verdict IS recorded (observe = log) with action "allow".
+    expect(spies.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "allow", sourceGuard: "price_gate" }),
+    );
   });
 
   it("allows a price that matches an operator-approved service price (enforce)", async () => {

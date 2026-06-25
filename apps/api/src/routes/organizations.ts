@@ -13,6 +13,7 @@ import { buildManagedWebhookPath } from "../lib/managed-webhook-path.js";
 import { resolveProvisionStatus, type StepResult } from "../lib/resolve-provision-status.js";
 import { provisionWhatsAppSteps } from "../lib/provision-whatsapp-steps.js";
 import { ensureAlexListingForOrg } from "../lib/ensure-alex-listing.js";
+import { deriveAlexGovernanceSeedContext } from "../lib/alex-governance-seed-context.js";
 import { notifyChatProvisionedChannel } from "../lib/notify-chat-provisioned-channel.js";
 import { checkV1ChannelLimit } from "../lib/check-v1-channel-limit.js";
 
@@ -73,7 +74,9 @@ export const organizationsRoutes: FastifyPluginAsync<OrganizationsRoutesOptions>
       // OrganizationConfig access so a brand-new org sees Alex before any
       // channel is provisioned. Idempotent; the provision route also calls
       // this as a safety net for pre-existing orgs.
-      await ensureAlexListingForOrg(orgId, app.prisma);
+      await ensureAlexListingForOrg(orgId, app.prisma, {
+        governanceSeedContext: deriveAlexGovernanceSeedContext(config),
+      });
 
       // Slice A PR 2: seed day-one agent enablement (alex, riley) so the
       // agent home pages have data on first load. Idempotent — re-runs are a

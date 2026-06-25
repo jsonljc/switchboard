@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { proactiveIntakeAllowPolicyId } from "@switchboard/db";
+import { buildObserveGovernanceConfig } from "@switchboard/schemas";
 import {
   checkReadiness,
   buildReadinessContext,
@@ -67,6 +68,7 @@ function makeContext(overrides: Partial<ReadinessContext> = {}): ReadinessContex
     alexSkillPackDiagnostic: null,
     businessFactsStatus: "present",
     proactiveGovernanceSeeded: true,
+    governanceActivated: true,
     ...overrides,
   };
 }
@@ -76,7 +78,7 @@ describe("checkReadiness", () => {
     const report = checkReadiness(makeContext());
     expect(report.ready).toBe(true);
     expect(report.checks.every((c) => c.status === "pass")).toBe(true);
-    expect(report.checks).toHaveLength(14);
+    expect(report.checks).toHaveLength(15);
   });
 
   // ── email-verified ──────────────────────────────────────────────────────
@@ -350,6 +352,7 @@ describe("checkReadiness", () => {
       "alex-skill-pack-seeded",
       "business-facts-present",
       "proactive-governance-seeded",
+      "governance-config-seeded",
     ]);
   });
 
@@ -517,14 +520,23 @@ function makePrismaMock(
   opts: {
     knowledgeRow?: { content: string } | null;
     policyRow?: { active: boolean } | null;
+    deploymentRow?: {
+      id: string;
+      status: string;
+      skillSlug: string | null;
+      organizationId: string;
+      listingId: string;
+      governanceConfig: unknown;
+    } | null;
   } = {},
 ): PrismaLike {
   const row = opts.knowledgeRow === undefined ? { content: "x".repeat(80) } : opts.knowledgeRow;
   const policyRow = opts.policyRow === undefined ? { active: true } : opts.policyRow;
+  const deploymentRow = opts.deploymentRow === undefined ? null : opts.deploymentRow;
   return {
     managedChannel: { findMany: async () => [] },
     connection: { findMany: async () => [] },
-    agentDeployment: { findFirst: async () => null },
+    agentDeployment: { findFirst: async () => deploymentRow },
     organizationConfig: { findUnique: async () => null },
     businessConfig: { findUnique: async () => null },
     deploymentConnection: { findMany: async () => [] },
@@ -611,5 +623,61 @@ describe("buildReadinessContext — proactive governance policy", () => {
     const check = report.checks.find((c) => c.id === "proactive-governance-seeded")!;
     expect(check.blocking).toBe(true);
     expect(check.status).toBe("fail");
+  });
+});
+
+describe("governance-config-seeded (advisory)", () => {
+  it("passes when a governanceConfig is activated", () => {
+    const report = checkReadiness(makeContext({ governanceActivated: true }));
+    const check = report.checks.find((c) => c.id === "governance-config-seeded")!;
+    expect(check.status).toBe("pass");
+    expect(check.blocking).toBe(false);
+  });
+
+  it("fails (advisory, non-blocking) when governance is not activated — ready stays true", () => {
+    const report = checkReadiness(makeContext({ governanceActivated: false }));
+    const check = report.checks.find((c) => c.id === "governance-config-seeded")!;
+    expect(check.status).toBe("fail");
+    expect(check.blocking).toBe(false);
+    expect(report.ready).toBe(true);
+  });
+
+  it("message never leaks gate internals", () => {
+    const report = checkReadiness(makeContext({ governanceActivated: false }));
+    const check = report.checks.find((c) => c.id === "governance-config-seeded")!;
+    expect(check.message).not.toContain("deterministicGate");
+    expect(check.message).not.toContain("enforce");
+  });
+});
+
+describe("buildReadinessContext — governance config", () => {
+  const seededDep = {
+    id: "dep-1",
+    status: "active",
+    skillSlug: "alex",
+    organizationId: "org_demo",
+    listingId: "l1",
+    governanceConfig: buildObserveGovernanceConfig({ jurisdiction: "SG", clinicType: "medical" }),
+  };
+
+  it("sets governanceActivated=true when the deployment has a valid observe config", async () => {
+    const ctx = await buildReadinessContext(
+      makePrismaMock({ deploymentRow: seededDep }),
+      "org_demo",
+    );
+    expect(ctx.governanceActivated).toBe(true);
+  });
+
+  it("sets governanceActivated=false when the deployment governanceConfig is null", async () => {
+    const ctx = await buildReadinessContext(
+      makePrismaMock({ deploymentRow: { ...seededDep, governanceConfig: null } }),
+      "org_demo",
+    );
+    expect(ctx.governanceActivated).toBe(false);
+  });
+
+  it("sets governanceActivated=false when there is no deployment", async () => {
+    const ctx = await buildReadinessContext(makePrismaMock({ deploymentRow: null }), "org_demo");
+    expect(ctx.governanceActivated).toBe(false);
   });
 });

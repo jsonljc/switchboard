@@ -13,7 +13,7 @@ vi.mock("@switchboard/db", async (importOriginal) => {
 });
 
 import { ALEX_SKILL_PACK_SCOPES } from "@switchboard/db";
-import { DEFAULT_BUSINESS_HOURS } from "@switchboard/schemas";
+import { DEFAULT_BUSINESS_HOURS, buildObserveGovernanceConfig } from "@switchboard/schemas";
 import { organizationsRoutes } from "../routes/organizations.js";
 
 describe("Organizations API — Config", () => {
@@ -46,6 +46,7 @@ describe("Organizations API — Config", () => {
     },
     agentDeployment: {
       upsert: vi.fn(),
+      update: vi.fn().mockResolvedValue({}),
     },
     orgAgentEnablement: {
       upsert: vi.fn().mockResolvedValue({}),
@@ -63,7 +64,10 @@ describe("Organizations API — Config", () => {
       id: "listing_alex",
       slug: "alex-conversion",
     });
-    mockPrisma.agentDeployment.upsert.mockResolvedValue({ id: "deployment_alex" });
+    mockPrisma.agentDeployment.upsert.mockResolvedValue({
+      id: "deployment_alex",
+      governanceConfig: buildObserveGovernanceConfig({ jurisdiction: "SG", clinicType: "medical" }),
+    });
     app = Fastify({ logger: false });
     app.decorate("prisma", mockPrisma as unknown as never);
     app.decorateRequest("organizationIdFromAuth", undefined);
@@ -102,6 +106,24 @@ describe("Organizations API — Config", () => {
       const body = res.json();
       expect(body.config.id).toBe("org_test");
       expect(body.config.name).toBe("Test Org");
+    });
+
+    it("seeds a governanceConfig derived from the org timezone (P2-A wiring)", async () => {
+      mockPrisma.organizationConfig.upsert.mockResolvedValue({
+        id: "org_test",
+        name: "Test Org",
+        businessHours: { timezone: "Asia/Kuala_Lumpur" },
+      });
+
+      const res = await app.inject({ method: "GET", url: "/api/organizations/org_test/config" });
+
+      expect(res.statusCode).toBe(200);
+      const upsertArg = mockPrisma.agentDeployment.upsert.mock.calls[0]![0] as {
+        create: { governanceConfig: { deterministicGate: { mode: string }; jurisdiction: string } };
+      };
+      // Derived MY (not the SG default) proves deriveAlexGovernanceSeedContext(config) was wired.
+      expect(upsertArg.create.governanceConfig.deterministicGate.mode).toBe("observe");
+      expect(upsertArg.create.governanceConfig.jurisdiction).toBe("MY");
     });
 
     it("auto-creates default config when none exists", async () => {
@@ -411,7 +433,13 @@ describe("Organizations API — Config", () => {
     it("Task 7: provision route routes Alex seed through ensureAlexListingForOrg helper (safety net, idempotent)", async () => {
       // Build a stateful tx mock that mimics composite-key idempotency.
       const txAgentListing = vi.fn().mockResolvedValue({ id: "L1", slug: "alex-conversion" });
-      const txAgentDeployment = vi.fn().mockResolvedValue({ id: "D1" });
+      const txAgentDeployment = vi.fn().mockResolvedValue({
+        id: "D1",
+        governanceConfig: buildObserveGovernanceConfig({
+          jurisdiction: "SG",
+          clinicType: "medical",
+        }),
+      });
       const txDeploymentConnection = vi.fn().mockResolvedValue({ id: "DC1" });
       const txConnection = vi.fn().mockResolvedValue({ id: "conn_1" });
       const txManagedChannel = vi.fn().mockResolvedValue({

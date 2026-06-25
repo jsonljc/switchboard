@@ -5,6 +5,7 @@ import { provisionOrgAgentDeployments, ensureAlexForOrg } from "./provision-org-
 // cycle now that the orchestrator is also exported from index.ts.
 import { recommendationHandoffApprovalPolicyId } from "./recommendation-handoff-governance.js";
 import { rileyPauseAllowPolicyId, rileyPauseApprovalPolicyId } from "./riley-pause-governance.js";
+import { MEDSPA_PILOT_GOVERNANCE_CONFIG } from "./medspa-governance-config.js";
 
 interface ListingUpsertArgs {
   where: { slug: string };
@@ -72,7 +73,12 @@ function buildMockPrisma(
           "ad-optimizer": "deploy_riley",
           alex: "deploy_alex",
         };
-        return { id: idBySlug[skillSlug] ?? "deploy_mira" };
+        // Echo the create's governanceConfig so the P2-A backfill guard short-circuits
+        // (Prisma's upsert returns the created row including governanceConfig).
+        return {
+          id: idBySlug[skillSlug] ?? "deploy_mira",
+          governanceConfig: args.create.governanceConfig ?? null,
+        };
       }),
     },
     policy: {
@@ -260,6 +266,10 @@ describe("provisionOrgAgentDeployments", () => {
         listingId: "listing_alex-conversion",
       });
       expect(dep.create).toMatchObject({ skillSlug: "alex", status: "active" });
+      // P2-A: the create seeds the all-gates-observe governanceConfig so a CLI-onboarded
+      // pilot's gates run as telemetry on the first inbound lead (synced with the
+      // apps/api sibling, which the GET /config path runs).
+      expect(dep.create.governanceConfig).toEqual(MEDSPA_PILOT_GOVERNANCE_CONFIG);
       // No-clobber so a re-run never overwrites operator-set deployment state.
       expect(dep.update).toEqual({});
     });

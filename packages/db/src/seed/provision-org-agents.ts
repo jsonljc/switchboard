@@ -5,6 +5,7 @@ import { seedMiraCreativeDeployment } from "./seed-mira-creative-deployment.js";
 import { seedMiraPilotOrgs } from "./seed-mira-pilot-orgs.js";
 import { seedRobinRecoveryPolicies } from "./robin-recovery-governance.js";
 import { seedProactiveIntakePolicies } from "./proactive-intake-governance.js";
+import { MEDSPA_PILOT_GOVERNANCE_CONFIG } from "./medspa-governance-config.js";
 
 export interface ProvisionOrgAgentsResult {
   riley: { deploymentId: string };
@@ -87,8 +88,24 @@ export async function ensureAlexForOrg(
       listingId: listing.id,
       status: "active",
       skillSlug: "alex",
+      // P2-A: seed the all-gates-observe governanceConfig so a CLI-onboarded pilot's
+      // afterSkill gates run as telemetry on the first inbound lead, not inert until a
+      // dashboard GET /config load. SG/medical default (pilots are SG medspas); the
+      // apps/api sibling derives jurisdiction from the org timezone where available.
+      governanceConfig: MEDSPA_PILOT_GOVERNANCE_CONFIG,
     },
   });
+
+  // Backfill a pre-P2-A deployment whose governanceConfig is null. Guarded on the
+  // upsert's returned value so an operator's later enforce flip is never overwritten
+  // (mirrors ensureAlexListingForOrg).
+  if (deployment.governanceConfig === null || deployment.governanceConfig === undefined) {
+    await db.agentDeployment.update({
+      where: { id: deployment.id },
+      data: { governanceConfig: MEDSPA_PILOT_GOVERNANCE_CONFIG },
+    });
+  }
+
   return { listingId: listing.id, deploymentId: deployment.id };
 }
 
