@@ -28,6 +28,32 @@ export class WhatsAppWindowClosedError extends Error {
   }
 }
 
+/**
+ * Thrown on the org-aware send path when the SENDING org has its own WhatsApp connection but that
+ * connection does not yield usable send credentials — either it lacks a phone number id of its own
+ * (`org_phone_missing`: the phoneNumberId is the tenant FROM-identity, so borrowing the global/pilot
+ * number would ship the message FROM another tenant's WABA number — a cross-tenant leak), or no send
+ * token resolves anywhere (`config_missing` for an already-onboarded org). In both cases the tenant
+ * is onboarded, so we fail closed and THROW (rather than silently skip) — the caller surfaces an
+ * honest delivery failure instead of a phantom success, and a silently-dropped operator or
+ * escalation reply is worse than a visible 502. The single-tenant pilot (no per-org connection at
+ * all) is NOT this error — it keeps the legacy silent warn+skip. The message carries only the
+ * (non-PII) organization id and the reason; never the recipient phone or any credential.
+ */
+export class WhatsAppSendCredsUnavailableError extends Error {
+  readonly kind = "whatsapp_send_creds_unavailable" as const;
+  readonly reason: "org_phone_missing" | "config_missing";
+  constructor(organizationId: string, reason: "org_phone_missing" | "config_missing") {
+    super(
+      `WhatsApp send blocked for org ${organizationId} (${reason}): its connection did not yield ` +
+        `usable send credentials of its own. Refusing to borrow another tenant's number or report ` +
+        `a phantom delivery (fail-closed tenant isolation).`,
+    );
+    this.name = "WhatsAppSendCredsUnavailableError";
+    this.reason = reason;
+  }
+}
+
 /** Interface for sending proactive messages to business owners. */
 export interface AgentNotifier {
   sendProactive(chatId: string, channelType: string, message: string): Promise<void>;
@@ -64,6 +90,51 @@ export interface OrgWhatsAppSendCreds {
   phoneNumberId: string | null;
 }
 
+/**
+ * The EFFECTIVE WhatsApp send creds for a sending org, or the reason no safe pair could be formed.
+ * `org_phone_missing` is the multi-tenant fail-closed: a per-org connection exists but lacks its own
+ * phone number id, so there is no number we may send this org's message from. `config_missing` is a
+ * deployment-wide gap (the single-tenant pilot env is unset, or no token resolves anywhere).
+ */
+export type EffectiveWhatsAppCreds =
+  | { ok: true; token: string; phoneNumberId: string }
+  | { ok: false; reason: "config_missing" | "org_phone_missing" };
+
+/**
+ * Resolve the effective WhatsApp send creds for a sending org, FAIL-CLOSED on the multi-tenant
+ * isolation boundary. Pure (no I/O) so it is unit-testable in isolation. Mirrors the API-side
+ * `resolveEffectiveSendCreds` (Robin recovery, PR #1271); the two paths share one isolation rule.
+ *
+ * `perOrg` is the org's own creds from its canonical "whatsapp" Connection, or `null` when the org
+ * has NO per-org connection at all (the single-tenant pilot). `global` is the deployment env creds.
+ *
+ * The rule is ASYMMETRIC because the two fields play different roles:
+ * - `phoneNumberId` is the tenant FROM-identity (which number the recipient sees). When a per-org
+ *   connection EXISTS it is org-only — a missing one fails closed (`org_phone_missing`), NEVER
+ *   falling back to the global/pilot number. That fallback is the cross-tenant leak this guards.
+ * - `token` only authorizes the Graph call, so it MAY fall back to the global system-user token
+ *   (the Meta Tech Provider model: one system token authorizes many per-org WABA numbers).
+ *
+ * With NO per-org connection (`perOrg === null`) this is the pilot: the global token + phone id are
+ * both required (else `config_missing`).
+ */
+export function resolveEffectiveWhatsAppSendCreds(
+  perOrg: OrgWhatsAppSendCreds | null,
+  global: { token: string; phoneNumberId: string } | undefined,
+): EffectiveWhatsAppCreds {
+  if (perOrg === null) {
+    // Single-tenant pilot: no per-org connection. Use the global creds; both fields are required.
+    if (!global?.token || !global?.phoneNumberId) return { ok: false, reason: "config_missing" };
+    return { ok: true, token: global.token, phoneNumberId: global.phoneNumberId };
+  }
+  // A per-org connection EXISTS. The phone id is the tenant FROM-identity: org-only, NEVER global.
+  if (!perOrg.phoneNumberId) return { ok: false, reason: "org_phone_missing" };
+  // The token authorizes only; it may fall back to the global system-user token (Tech Provider).
+  const token = perOrg.token ?? global?.token ?? null;
+  if (!token) return { ok: false, reason: "config_missing" };
+  return { ok: true, token, phoneNumberId: perOrg.phoneNumberId };
+}
+
 /** Maximum proactive messages per chat per day. */
 const MAX_DAILY_MESSAGES = 20;
 
@@ -86,6 +157,10 @@ export interface ProactiveSenderConfig {
 
 export class ProactiveSender implements AgentNotifier {
   private credentials: ChannelCredentials;
+  // Daily send counts keyed per (sending org, chat) — see {@link rateLimitKey}. Keying by org as
+  // well as chat keeps one tenant's outreach to a recipient from consuming another tenant's daily
+  // budget for the SAME recipient (a customer phone shared across businesses, or a chat-id collision
+  // across channels) — a cross-tenant interference + activity-inference seam.
   private dailyCounts = new Map<string, { count: number; resetAt: number }>();
   private isWithinWindow: ((chatId: string, organizationId?: string) => Promise<boolean>) | null;
   private resolveOrgSendCreds:
@@ -128,20 +203,32 @@ export class ProactiveSender implements AgentNotifier {
   }
 
   /**
-   * Resolve the sending org's WhatsApp creds, per-field falling back to the global
-   * `credentials.whatsapp`. Returns undefined (→ "no creds" warn+skip) only when BOTH
-   * the org and the global lack a field. No resolver configured → the global creds.
+   * Resolve the sending org's effective WhatsApp creds via the fail-closed
+   * {@link resolveEffectiveWhatsAppSendCreds} rule (phone id org-only, token may fall back). No
+   * resolver configured → the global creds (no per-org notion exists, e.g. no DB).
+   *
+   * When a per-org connection EXISTS (`perOrg !== null`) but does not yield usable creds — a missing
+   * phone id (`org_phone_missing`) OR no token anywhere (`config_missing` for an onboarded org) — we
+   * THROW {@link WhatsAppSendCredsUnavailableError}: the tenant is onboarded, so we never borrow the
+   * global/pilot number and never report a phantom success; the caller surfaces an honest failure.
+   * Only the genuine single-tenant pilot (`perOrg === null` with an incomplete global config) returns
+   * undefined, preserving the legacy silent warn+skip in {@link sendWhatsApp} (an unconfigured
+   * deployment-wide channel, not a tenant-isolation fault).
    */
   private async resolveWhatsAppCreds(
     organizationId: string,
   ): Promise<{ token: string; phoneNumberId: string } | undefined> {
     const global = this.credentials.whatsapp;
     if (!this.resolveOrgSendCreds) return global;
-    const resolved = await this.resolveOrgSendCreds(organizationId);
-    const token = resolved?.token ?? global?.token ?? null;
-    const phoneNumberId = resolved?.phoneNumberId ?? global?.phoneNumberId ?? null;
-    if (!token || !phoneNumberId) return undefined;
-    return { token, phoneNumberId };
+    const perOrg = await this.resolveOrgSendCreds(organizationId);
+    const effective = resolveEffectiveWhatsAppSendCreds(perOrg, global);
+    if (effective.ok) return { token: effective.token, phoneNumberId: effective.phoneNumberId };
+    // A per-org connection exists but yields no usable creds → fail closed loudly (onboarded tenant).
+    if (perOrg !== null) {
+      throw new WhatsAppSendCredsUnavailableError(organizationId, effective.reason);
+    }
+    // perOrg === null → single-tenant pilot, deployment-wide gap: keep the legacy silent warn+skip.
+    return undefined;
   }
 
   /**
@@ -156,7 +243,7 @@ export class ProactiveSender implements AgentNotifier {
     whatsappCreds: { token: string; phoneNumberId: string } | undefined,
     organizationId: string | undefined,
   ): Promise<void> {
-    if (!this.checkRateLimit(chatId)) {
+    if (!this.checkRateLimit(chatId, organizationId)) {
       // chatId is the phone only on the WhatsApp channel; Telegram/Slack ids are not phones.
       const idForLog = channelType === "whatsapp" ? maskPhone(chatId) : chatId;
       console.warn(`[ProactiveSender] Rate limit reached for chat ${idForLog}. Message not sent.`);
@@ -178,12 +265,22 @@ export class ProactiveSender implements AgentNotifier {
     }
   }
 
-  private checkRateLimit(chatId: string): boolean {
+  /**
+   * Build the per-(org, chat) rate-limit key. The NUL separator can appear in neither a cuid org id
+   * nor a phone / chat id, so distinct (org, chat) pairs can never collide onto one key. The legacy
+   * org-blind path (no org) uses a single `*` bucket, preserving its per-chat behavior.
+   */
+  private rateLimitKey(chatId: string, organizationId: string | undefined): string {
+    return `${organizationId ?? "*"}\u0000${chatId}`;
+  }
+
+  private checkRateLimit(chatId: string, organizationId: string | undefined): boolean {
+    const key = this.rateLimitKey(chatId, organizationId);
     const now = Date.now();
-    const entry = this.dailyCounts.get(chatId);
+    const entry = this.dailyCounts.get(key);
 
     if (!entry || now >= entry.resetAt) {
-      this.dailyCounts.set(chatId, { count: 1, resetAt: now + 24 * 60 * 60 * 1000 });
+      this.dailyCounts.set(key, { count: 1, resetAt: now + 24 * 60 * 60 * 1000 });
       return true;
     }
 

@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ProactiveSender, WhatsAppWindowClosedError } from "../proactive-sender.js";
+import {
+  ProactiveSender,
+  WhatsAppWindowClosedError,
+  WhatsAppSendCredsUnavailableError,
+  resolveEffectiveWhatsAppSendCreds,
+} from "../proactive-sender.js";
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -291,6 +296,56 @@ describe("ProactiveSender", () => {
       expect(options.headers.Authorization).toBe("Bearer global-tok");
     });
 
+    it("FAILS CLOSED when a per-org connection exists but has no phone id of its own", async () => {
+      // The phoneNumberId is the tenant FROM-identity: borrowing the global/pilot number here would
+      // ship orgB's reply FROM another tenant's WABA number (the cross-tenant leak). Fail closed.
+      const sender = new ProactiveSender({
+        credentials: { whatsapp: { token: "global-tok", phoneNumberId: "global-pn" } },
+        resolveOrgSendCreds: async () => ({ token: "B-tok", phoneNumberId: null }),
+      });
+
+      await expect(
+        sender.sendProactiveForOrg("orgB", "+15551234567", "whatsapp", "leak?"),
+      ).rejects.toBeInstanceOf(WhatsAppSendCredsUnavailableError);
+      // Never borrow the global number → no Graph call at all (no phantom success either).
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("does NOT leak the global phone id into the thrown creds error (only the org id)", async () => {
+      const sender = new ProactiveSender({
+        credentials: { whatsapp: { token: "global-tok", phoneNumberId: "global-pn" } },
+        resolveOrgSendCreds: async () => ({ token: null, phoneNumberId: null }),
+      });
+
+      const err = await sender
+        .sendProactiveForOrg("orgB", "+15551234567", "whatsapp", "x")
+        .then(() => null)
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(WhatsAppSendCredsUnavailableError);
+      expect((err as Error).message).not.toContain("global-pn");
+      expect((err as Error).message).toContain("orgB");
+    });
+
+    it("FAILS CLOSED when an onboarded org's connection yields no usable token (no phantom 200)", async () => {
+      // A per-org connection exists (has a phone) but neither it nor the deployment has a token. We
+      // cannot send, but the tenant IS onboarded — throw an honest failure rather than silently
+      // dropping the reply and reporting success. Contrast the pilot (no connection) test below.
+      const sender = new ProactiveSender({
+        credentials: {}, // no global WhatsApp creds at all (global token unset)
+        resolveOrgSendCreds: async () => ({ token: null, phoneNumberId: "B-pn" }),
+      });
+
+      const err = await sender
+        .sendProactiveForOrg("orgB", "+15551234567", "whatsapp", "no token anywhere")
+        .then(() => null)
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(WhatsAppSendCredsUnavailableError);
+      expect((err as WhatsAppSendCredsUnavailableError).reason).toBe("config_missing");
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("passes the sending org to the 24h-window gate", async () => {
       const isWithinWindow = vi.fn(async () => true);
       const sender = new ProactiveSender({
@@ -317,18 +372,43 @@ describe("ProactiveSender", () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it("shares ONE daily-rate-limit map across sendProactive and sendProactiveForOrg", async () => {
-      // No fresh per-request sender: 20 org-blind sends consume the budget; the
-      // 21st (org-aware) to the same chatId is rate-limited, proving one map.
+    it("uses ONE persistent daily-rate-limit map across requests (no fresh per-request sender)", async () => {
+      // 20 sends to the SAME (org, chat) consume that bucket; the 21st is blocked → one persistent
+      // map, not a fresh sender per request (a fresh sender would reset the count on every call).
       const sender = new ProactiveSender({ telegram: { botToken: "b" } });
 
-      for (let i = 0; i < 20; i++) await sender.sendProactive("chat_1", "telegram", `m${i}`);
+      for (let i = 0; i < 20; i++)
+        await sender.sendProactiveForOrg("orgB", "chat_1", "telegram", `m${i}`);
       await sender.sendProactiveForOrg("orgB", "chat_1", "telegram", "21st");
 
       expect(mockFetch).toHaveBeenCalledTimes(20);
     });
 
-    it("warns and skips when neither org nor global creds yield a WhatsApp number", async () => {
+    it("isolates the rate-limit budget per (org, chat): one tenant cannot exhaust another's", async () => {
+      // A recipient shared across two businesses (same chatId) must not let org A's outreach consume
+      // org B's daily budget for that recipient. Each (org, chat) pair is an independent bucket.
+      const sender = new ProactiveSender({ telegram: { botToken: "b" } });
+
+      for (let i = 0; i < 20; i++)
+        await sender.sendProactiveForOrg("orgA", "chat_1", "telegram", `m${i}`);
+      await sender.sendProactiveForOrg("orgB", "chat_1", "telegram", "orgB has its own budget");
+
+      expect(mockFetch).toHaveBeenCalledTimes(21); // orgA: 20 (capped) + orgB: 1 (independent)
+    });
+
+    it("keeps the legacy org-blind bucket separate from an org-aware bucket for the same chat", async () => {
+      // The org-blind sendProactive (no org → "*" bucket) and an org-aware sendProactiveForOrg to
+      // the same chat are now DELIBERATELY independent buckets: the org-blind budget cannot throttle
+      // an org-aware send to the same recipient (the prior behavior shared one bucket).
+      const sender = new ProactiveSender({ telegram: { botToken: "b" } });
+
+      for (let i = 0; i < 20; i++) await sender.sendProactive("chat_1", "telegram", `m${i}`);
+      await sender.sendProactiveForOrg("orgB", "chat_1", "telegram", "org-aware, own bucket");
+
+      expect(mockFetch).toHaveBeenCalledTimes(21); // 20 org-blind ("*") + 1 org-aware (orgB)
+    });
+
+    it("warns and skips when neither org nor global creds yield a WhatsApp number (pilot, no connection)", async () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const sender = new ProactiveSender({
         credentials: {},
@@ -340,5 +420,52 @@ describe("ProactiveSender", () => {
       expect(mockFetch).not.toHaveBeenCalled();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("No WhatsApp credentials"));
     });
+  });
+});
+
+// ── Effective-send-creds resolution (pure, fail-closed on tenant isolation) ──────────
+// Mirrors apps/api resolveEffectiveSendCreds (Robin #1271): phoneNumberId is the tenant
+// FROM-identity (org-only, never borrowed); the token only authorizes (may fall back).
+describe("resolveEffectiveWhatsAppSendCreds", () => {
+  const global = { token: "g-tok", phoneNumberId: "g-pn" };
+
+  it("uses the global creds when there is NO per-org connection (single-tenant pilot)", () => {
+    expect(resolveEffectiveWhatsAppSendCreds(null, global)).toEqual({
+      ok: true,
+      token: "g-tok",
+      phoneNumberId: "g-pn",
+    });
+  });
+
+  it("is config_missing for the pilot when the global creds are unset", () => {
+    expect(resolveEffectiveWhatsAppSendCreds(null, undefined)).toEqual({
+      ok: false,
+      reason: "config_missing",
+    });
+  });
+
+  it("FAILS CLOSED (org_phone_missing) when a per-org connection has no phone id", () => {
+    // The leak this guards: a per-field `?? global.phoneNumberId` would borrow the global number.
+    expect(
+      resolveEffectiveWhatsAppSendCreds({ token: "o-tok", phoneNumberId: null }, global),
+    ).toEqual({ ok: false, reason: "org_phone_missing" });
+  });
+
+  it("lets the TOKEN fall back to the global system-user token (Meta Tech Provider)", () => {
+    expect(
+      resolveEffectiveWhatsAppSendCreds({ token: null, phoneNumberId: "o-pn" }, global),
+    ).toEqual({ ok: true, token: "g-tok", phoneNumberId: "o-pn" });
+  });
+
+  it("uses a fully self-sufficient org's own token + phone id (no global needed)", () => {
+    expect(
+      resolveEffectiveWhatsAppSendCreds({ token: "o-tok", phoneNumberId: "o-pn" }, undefined),
+    ).toEqual({ ok: true, token: "o-tok", phoneNumberId: "o-pn" });
+  });
+
+  it("is config_missing when an org has its phone but no token resolves anywhere", () => {
+    expect(
+      resolveEffectiveWhatsAppSendCreds({ token: null, phoneNumberId: "o-pn" }, undefined),
+    ).toEqual({ ok: false, reason: "config_missing" });
   });
 });
