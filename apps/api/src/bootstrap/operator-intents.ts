@@ -36,6 +36,7 @@ import {
   DELIVER_WEEKLY_REPORT_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,
   ERASE_CONTACT_INTENT,
+  GOVERNANCE_SET_GATE_MODE_INTENT,
   GRANT_CONSENT_INTENT,
   MEMORY_WRITE_INTENT,
   RECONCILE_BOOKING_INTENT,
@@ -84,6 +85,10 @@ import {
   type OperatorContactEraser,
 } from "./operator-intents/erase-contact.js";
 import { buildMemoryWriteHandler, type MemoryWriteStore } from "./operator-intents/memory-write.js";
+import {
+  buildGovernanceSetGateModeHandler,
+  type GovernanceSetGateModeDeps,
+} from "./operator-intents/governance-set-gate-mode.js";
 
 // Re-export every public symbol the rest of the codebase imports from
 // "../bootstrap/operator-intents.js" so existing import paths stay valid.
@@ -94,6 +99,7 @@ export {
   DELIVER_WEEKLY_REPORT_INTENT,
   DISMISS_DISQUALIFICATION_INTENT,
   ERASE_CONTACT_INTENT,
+  GOVERNANCE_SET_GATE_MODE_INTENT,
   GRANT_CONSENT_INTENT,
   MEMORY_WRITE_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
@@ -107,6 +113,8 @@ export { buildEraseContactHandler } from "./operator-intents/erase-contact.js";
 export type { OperatorContactEraser } from "./operator-intents/erase-contact.js";
 export { buildMemoryWriteHandler } from "./operator-intents/memory-write.js";
 export type { MemoryWriteStore } from "./operator-intents/memory-write.js";
+export { buildGovernanceSetGateModeHandler } from "./operator-intents/governance-set-gate-mode.js";
+export type { GovernanceSetGateModeDeps } from "./operator-intents/governance-set-gate-mode.js";
 export { buildDeliverWeeklyReportHandler } from "./operator-intents/deliver-weekly-report.js";
 export type { WeeklyReportDeliveryWriter } from "./operator-intents/deliver-weekly-report.js";
 export { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
@@ -160,6 +168,9 @@ interface OperatorIntentsBootstrapDeps {
   /** Optional: registers the memory.write intent + handler when provided (S8b). The governed,
    *  non-conversation DeploymentMemory write path. */
   memoryWriteStore?: MemoryWriteStore;
+  /** Optional: registers the governance.set_gate_mode intent + handler when provided (enforce-flip
+   *  slice 3). The readiness-guarded per-gate observe<->enforce flip. */
+  governanceSetGateMode?: GovernanceSetGateModeDeps;
   logger?: { info(msg: string): void };
 }
 
@@ -218,6 +229,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     weeklyReportDeliveryWriter,
     contactEraser,
     memoryWriteStore,
+    governanceSetGateMode,
     logger,
   } = deps;
 
@@ -300,6 +312,13 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     handlers.set(MEMORY_WRITE_INTENT, buildMemoryWriteHandler(memoryWriteStore));
   }
 
+  if (governanceSetGateMode) {
+    handlers.set(
+      GOVERNANCE_SET_GATE_MODE_INTENT,
+      buildGovernanceSetGateModeHandler(governanceSetGateMode),
+    );
+  }
+
   modeRegistry.register(new OperatorMutationMode({ handlers }));
 
   if (opportunityStore) {
@@ -345,6 +364,11 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     // the decay cron (trigger "schedule") to submit through this intent. No "api" leg: there is no
     // operator-direct route for a learned memory write (the owner-correction route is separate, T4).
     registerOperatorIntent(intentRegistry, MEMORY_WRITE_INTENT, ["internal", "schedule"]);
+  }
+  if (governanceSetGateMode) {
+    // api only: an operator flips a gate from the dashboard. Default system_auto_approved +
+    // the handler's server-side readiness REFUSE is the safety gate (not a second approver).
+    registerOperatorIntent(intentRegistry, GOVERNANCE_SET_GATE_MODE_INTENT);
   }
 
   const intentCount =

@@ -4,7 +4,7 @@ import type { PriceClaimGateHookDeps } from "../price-claim-gate.js";
 import { InMemoryGovernancePostureCache } from "../../../governance/posture-cache.js";
 import type { SaveGovernanceVerdictInput } from "../../../governance/governance-verdict-store/types.js";
 import type { SkillHookContext, SkillExecutionResult } from "../../types.js";
-import { buildObserveGovernanceConfig } from "@switchboard/schemas";
+import { buildObserveGovernanceConfig, setGateModeInConfig } from "@switchboard/schemas";
 
 type Spy = ReturnType<typeof vi.fn>;
 
@@ -226,5 +226,51 @@ describe("PriceClaimGateHook.afterSkill", () => {
     await hook.afterSkill(ctx, result);
     expect(result.response).toBe("It's $999.");
     expect(spies.verdictStore.save).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Enforce-flip slice 3 end-to-end proof: a config produced by the SAME
+// setGateModeInConfig the writer uses, flipped deterministic -> enforce, actually
+// changes the gate's behaviour at runtime — and only when flipped. This ties the
+// pure write-shape to the live gate, closing the "does the flip do anything?" gap.
+// ---------------------------------------------------------------------------
+describe("PriceClaimGateHook — setGateModeInConfig flip changes behaviour end-to-end", () => {
+  const observe = buildObserveGovernanceConfig({ jurisdiction: "SG", clinicType: "medical" });
+
+  it("flipping deterministic -> enforce blocks an unapproved priced reply (producer populated)", async () => {
+    const enforceConfig = setGateModeInConfig(observe, "deterministic", "enforce");
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({ status: "resolved" as const, config: enforceConfig }),
+      approvedPrices: [50, 1200], // populated -> the gate is ready; $250 is NOT approved
+    });
+    const hook = new PriceClaimGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("Our HydraFacial is $250.");
+    await hook.afterSkill(ctx, result);
+
+    expect(result.response).toBe(HANDOFF_TEXT); // reply replaced -> blocked
+    expect(spies.conversationStore.setConversationStatus).toHaveBeenCalledWith(
+      "sess-1",
+      "human_override",
+    );
+    expect(spies.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "block", sourceGuard: "price_gate" }),
+    );
+  });
+
+  it("the same reply under the un-flipped observe config is unchanged (telemetry only)", async () => {
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({ status: "resolved" as const, config: observe }),
+      approvedPrices: [50, 1200],
+    });
+    const hook = new PriceClaimGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("Our HydraFacial is $250.");
+    await hook.afterSkill(ctx, result);
+
+    expect(result.response).toBe("Our HydraFacial is $250."); // unchanged
+    expect(spies.conversationStore.setConversationStatus).not.toHaveBeenCalled();
+    expect(spies.verdictStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "allow", sourceGuard: "price_gate" }),
+    );
   });
 });

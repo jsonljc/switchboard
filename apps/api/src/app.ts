@@ -967,6 +967,23 @@ export async function buildServer() {
     // satisfies MemoryWriteStore structurally (its create() accepts source -- S8a).
     const memoryWriteStore = new PrismaDeploymentMemoryStore(prismaClient);
 
+    // governance.set_gate_mode (enforce-flip slice 3): the lost-update-safe per-gate writer +
+    // a producer probe that reads exactly what the gates read. The handler's server-side
+    // readiness REFUSE (enforce only) is the safety gate.
+    const {
+      PrismaGovernanceGateModeWriter,
+      createGovernanceProducerProbe,
+      PrismaPlaybookReader: PrismaPlaybookReaderForGovernance,
+    } = await import("@switchboard/db");
+    const governanceSetGateMode = {
+      writer: new PrismaGovernanceGateModeWriter(prismaClient),
+      probeProducers: createGovernanceProducerProbe({
+        playbookReader: new PrismaPlaybookReaderForGovernance(prismaClient),
+        prisma: prismaClient,
+        clock: () => new Date(),
+      }),
+    };
+
     // operator.erase_contact eraser: wraps the SAME full delete cascade as the Meta data-deletion
     // callback (eraseContactFully) behind the operator-direct intent, plus an org-scoped existence
     // gate (fail-closed cross-tenant) and a durable DataDeletionRequest audit row.
@@ -1101,6 +1118,7 @@ export async function buildServer() {
       weeklyReportDeliveryWriter,
       contactEraser,
       memoryWriteStore,
+      governanceSetGateMode,
       logger: app.log,
     });
   }
