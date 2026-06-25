@@ -68,4 +68,15 @@ describe("readGateMode", () => {
     const bad = { ...observe, whatsappWindow: { enabled: true, mode: "bogus" } } as never;
     expect(readGateMode(bad, "whatsapp")).toBe("off");
   });
+
+  it("does NOT throw on a parent-valid config with a corrupt claimClassifier sub-block (reads off)", () => {
+    // The parent schema is passthrough, so a bad claimClassifier sub-block survives a
+    // parent safeParse; readGateMode must coerce it to "off", never throw (regression).
+    const corrupt = {
+      ...observe,
+      claimClassifier: { mode: "bogus", latencyBudgetMs: -5 },
+    } as never;
+    expect(() => readGateMode(corrupt, "claims")).not.toThrow();
+    expect(readGateMode(corrupt, "claims")).toBe("off");
+  });
 });

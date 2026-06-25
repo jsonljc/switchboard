@@ -45,6 +45,11 @@ export function createGovernanceProducerProbe(
     const now = deps.clock();
     const [playbook, approvedClaimCount, orgRow] = await Promise.all([
       deps.playbookReader.readForOrganization(orgId),
+      // Coarser than the gate's per-claim substantiation (which also filters by
+      // jurisdiction + claimType and treats reviewedAt older than the 180-day window as
+      // stale). This count is the readiness FLOOR: zero valid claims always refuses (the
+      // dangerous case), but a non-zero count does not guarantee every claim type/jurisdiction
+      // is covered. Exact per-claim parity is intentionally out of scope.
       deps.prisma.approvedComplianceClaim.count({
         where: {
           deploymentId,

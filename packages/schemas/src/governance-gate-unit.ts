@@ -2,7 +2,6 @@ import { z } from "zod";
 import type { GovernanceVerdictSource } from "./governance-verdict.js";
 import {
   resolveGovernanceMode,
-  resolveClaimClassifierConfig,
   resolveConsentStateConfig,
   GovernanceModeSchema,
   type GovernanceConfig,
@@ -62,8 +61,17 @@ export function readGateMode(
   switch (unit) {
     case "deterministic":
       return resolveGovernanceMode(config);
-    case "claims":
-      return resolveClaimClassifierConfig(config).mode;
+    case "claims": {
+      // Read the mode defensively rather than via resolveClaimClassifierConfig, which
+      // `.parse()`s the whole sub-block and THROWS on a corrupt claimClassifier (a
+      // passthrough sub-block survives the parent safeParse). A corrupt sub-block must
+      // read as "off", never crash the readiness surface or the flip handler.
+      const raw = (config as unknown as Record<string, unknown> | null)?.["claimClassifier"];
+      const mode =
+        raw && typeof raw === "object" ? (raw as Record<string, unknown>)["mode"] : undefined;
+      const parsed = GovernanceModeSchema.safeParse(mode);
+      return parsed.success ? parsed.data : "off";
+    }
     case "consent":
       return resolveConsentStateConfig(config).mode;
     case "whatsapp": {

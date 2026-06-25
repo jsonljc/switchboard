@@ -38,7 +38,7 @@ export function evaluateGateEnforceReadiness(
         : {
             ready: false,
             blockingReason:
-              "Add at least one approved service price before enforcing — otherwise every priced reply is blocked.",
+              "Add at least one approved service price before enforcing. Otherwise every priced reply is blocked.",
           };
     case "claims":
       return signals.approvedClaimCount > 0
@@ -46,7 +46,7 @@ export function evaluateGateEnforceReadiness(
         : {
             ready: false,
             blockingReason:
-              "Add at least one approved compliance claim before enforcing — otherwise every efficacy claim is escalated.",
+              "Add at least one approved compliance claim before enforcing. Otherwise every efficacy claim is escalated.",
           };
     case "whatsapp":
       return signals.approvedTemplateCount > 0
@@ -54,7 +54,7 @@ export function evaluateGateEnforceReadiness(
         : {
             ready: false,
             blockingReason:
-              "Approve at least one WhatsApp template before enforcing — otherwise out-of-window replies are blocked.",
+              "Approve at least one WhatsApp template before enforcing. Otherwise out-of-window replies are blocked.",
           };
     case "consent":
       return READY;
