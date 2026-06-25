@@ -30,4 +30,48 @@ describe("conversion-denominator step-change guard", () => {
     });
     expect(r.suspected).toBe(false);
   });
+
+  // D1-1/measurement-trust: an account-wide CAPI/pixel outage zeros conversions
+  // across BOTH windows while real, flat traffic continues. The prior code early-
+  // returned "trusted" on previous.conversions<=0, so Riley would pause/scale on a
+  // broken signal. This must demote instead (suspected => measurement_untrusted).
+  it("flags sustained zero conversions across both windows despite real flat clicks (CAPI outage)", () => {
+    const r = detectDenominatorStepChange({
+      current: { clicks: 400, conversions: 0, spend: 1200 },
+      previous: { clicks: 420, conversions: 0, spend: 1250 },
+    });
+    expect(r.suspected).toBe(true);
+  });
+
+  it("does NOT flag both-zero windows when traffic is too thin to judge (insufficient evidence)", () => {
+    const r = detectDenominatorStepChange({
+      current: { clicks: 30, conversions: 0, spend: 80 },
+      previous: { clicks: 28, conversions: 0, spend: 75 },
+    });
+    expect(r.suspected).toBe(false);
+  });
+
+  it("does NOT flag when a previously-zero account STARTS converting (recovery, not a collapse)", () => {
+    const r = detectDenominatorStepChange({
+      current: { clicks: 400, conversions: 8, spend: 1200 },
+      previous: { clicks: 400, conversions: 0, spend: 1200 },
+    });
+    expect(r.suspected).toBe(false);
+  });
+
+  it("does NOT flag a both-zero window when current traffic has dried up (no live signal to judge)", () => {
+    const r = detectDenominatorStepChange({
+      current: { clicks: 5, conversions: 0, spend: 20 },
+      previous: { clicks: 400, conversions: 0, spend: 1200 },
+    });
+    expect(r.suspected).toBe(false);
+  });
+
+  it("does NOT flag on a NaN current-conversions (fail-closed: missing evidence is not a burn outage)", () => {
+    const r = detectDenominatorStepChange({
+      current: { clicks: 400, conversions: NaN, spend: 1200 },
+      previous: { clicks: 400, conversions: 0, spend: 1200 },
+    });
+    expect(r.suspected).toBe(false);
+  });
 });
