@@ -1,11 +1,8 @@
 import type { WorkflowHandler } from "@switchboard/core/platform";
 import { RileyResetBudgetExecutionInput, ExecutionReceiptSchema } from "@switchboard/schemas";
 
-/**
- * resolvedBy sentinel for the machine-executed reset rollback. Distinct from the forward reallocate
- * sentinel: the monitor (not the approver) drove this, and it is a different action class.
- */
-export const RILEY_RESET_EXECUTION_RESOLVED_BY = "riley_reset_self_execution";
+// No resolvedBy sentinel here (unlike the forward reallocate executor): a reset stamps no source
+// recommendation (a rollback is not a recommendation action), so there is nothing to attribute.
 
 /** Org-isolation-aware credential resolution result (mirrors the reallocate executor). */
 export type RileyResetBudgetCredsResult =
