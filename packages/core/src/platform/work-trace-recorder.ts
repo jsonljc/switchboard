@@ -63,18 +63,6 @@ export interface WorkTraceStore {
    */
   claim(trace: WorkTrace): Promise<WorkTraceClaimResult>;
   getByWorkUnitId(workUnitId: string): Promise<WorkTraceReadResult | null>;
-  persist(trace: WorkTrace): Promise<void>;
-  /**
-   * Atomically claim an idempotency key by inserting a `running` WorkTrace
-   * BEFORE the domain mutation (D1). Returns `{ claimed: false }` when the
-   * (organizationId, idempotencyKey) unique already exists — the caller lost
-   * the race or a prior attempt already claimed. Throws on transient store
-   * errors so the caller can retry. This return value is the concurrency lock
-   * for PlatformIngress's claim-first execute path; unlike persist(), it must
-   * NOT swallow the idempotency P2002 to void.
-   */
-  claim(trace: WorkTrace): Promise<WorkTraceClaimResult>;
-  getByWorkUnitId(workUnitId: string): Promise<WorkTraceReadResult | null>;
   update(
     workUnitId: string,
     fields: Partial<WorkTrace>,

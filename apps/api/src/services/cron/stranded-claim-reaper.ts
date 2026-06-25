@@ -62,7 +62,7 @@ export async function executeStrandedClaimReaper(
   const store = deps.store;
   if (!store) {
     // No store wired (no Postgres) — nothing to reap. Never alert.
-    return { scanned: 0, reaped: 0, failed: 0, skipped: true };
+    return { scanned: 0, reaped: 0, raced: 0, failed: 0, skipped: true };
   }
   return step.run("reap-stranded-claims", () =>
     reapStrandedClaims(

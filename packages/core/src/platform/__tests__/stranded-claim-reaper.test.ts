@@ -75,7 +75,7 @@ describe("reapStrandedClaims", () => {
 
     const result = await reapStrandedClaims({ store, counter, alerter, now: () => NOW }, config);
 
-    expect(result).toEqual({ scanned: 2, reaped: 2, failed: 0 });
+    expect(result).toEqual({ scanned: 2, reaped: 2, raced: 0, failed: 0 });
 
     // Each row aged to the terminal sink, org-scoped (tenant tripwire) + caller tagged.
     expect(store.update).toHaveBeenCalledTimes(2);
@@ -120,13 +120,16 @@ describe("reapStrandedClaims", () => {
 
     const result = await reapStrandedClaims({ store, counter, alerter, now: () => NOW }, config);
 
-    expect(result).toEqual({ scanned: 0, reaped: 0, failed: 0 });
+    expect(result).toEqual({ scanned: 0, reaped: 0, raced: 0, failed: 0 });
     expect(store.update).not.toHaveBeenCalled();
     expect(counter.calls).toHaveLength(0);
     expect(alerter.alerts).toHaveLength(0);
   });
 
-  it("a locked update-rejection counts as failed (no counter for it) but still alerts; severity escalates to critical", async () => {
+  it("a locked update-rejection is a BENIGN race (raced, not failed) — alert stays warning, no double-count", async () => {
+    // Another reaper run or a resurrected finalize sealed the row between scan and our
+    // update. The row is already terminal; counting it as a hard failure would falsely
+    // page critical. It is `raced` (benign), the counter is not bumped, severity warning.
     const store = makeStore({
       stuck: [makeClaim({ workUnitId: "wu-a" }), makeClaim({ workUnitId: "wu-b" })],
       update: async (id) =>
@@ -136,19 +139,18 @@ describe("reapStrandedClaims", () => {
     });
     const counter = makeCounter();
     const alerter = makeAlerter();
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = await reapStrandedClaims({ store, counter, alerter, now: () => NOW }, config);
 
-    expect(result).toEqual({ scanned: 2, reaped: 1, failed: 1 });
+    expect(result).toEqual({ scanned: 2, reaped: 1, raced: 1, failed: 0 });
     expect(counter.calls).toEqual([{ intent: "revenue.record" }]); // only the reaped row
     expect(alerter.alerts).toHaveLength(1);
-    expect(alerter.alerts[0]!.severity).toBe("critical"); // a reap-write failure is the alarm case
-    expect(errSpy).toHaveBeenCalled();
-    errSpy.mockRestore();
+    expect(alerter.alerts[0]!.severity).toBe("warning"); // a benign race is NOT the alarm case
+    warnSpy.mockRestore();
   });
 
-  it("an update that THROWS counts as failed and does NOT abort the batch", async () => {
+  it("an update that THROWS is a HARD failure (failed) — escalates the alert to critical, never aborts the batch", async () => {
     const store = makeStore({
       stuck: [makeClaim({ workUnitId: "wu-a" }), makeClaim({ workUnitId: "wu-b" })],
       update: async (id) => {
@@ -157,15 +159,15 @@ describe("reapStrandedClaims", () => {
       },
     });
     const counter = makeCounter();
+    const alerter = makeAlerter();
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const result = await reapStrandedClaims(
-      { store, counter, alerter: makeAlerter(), now: () => NOW },
-      config,
-    );
+    const result = await reapStrandedClaims({ store, counter, alerter, now: () => NOW }, config);
 
-    expect(result).toEqual({ scanned: 2, reaped: 1, failed: 1 });
+    expect(result).toEqual({ scanned: 2, reaped: 1, raced: 0, failed: 1 });
     expect(store.update).toHaveBeenCalledTimes(2); // the throw did not abort the second row
+    expect(alerter.alerts).toHaveLength(1);
+    expect(alerter.alerts[0]!.severity).toBe("critical"); // a hard reap-write error IS the alarm case
     errSpy.mockRestore();
   });
 });

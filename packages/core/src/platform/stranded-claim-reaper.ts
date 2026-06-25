@@ -64,7 +64,14 @@ export interface ReapStrandedClaimsResult {
   scanned: number;
   /** Claims successfully aged to needs_reconciliation. */
   reaped: number;
-  /** Claims found but whose age-out write failed/threw (left as-is for next run). */
+  /**
+   * Claims a CONCURRENT writer terminalized between scan and our update (the store
+   * rejected our write with WORK_TRACE_LOCKED): another reaper run aged it, or a
+   * resurrected finalize sealed it to completed/failed. Benign — the row is already
+   * properly terminal — so it does NOT escalate the alert.
+   */
+  raced: number;
+  /** Claims whose age-out write THREW (a hard store error) — left for the next run; the alarm case. */
   failed: number;
 }
 
@@ -90,6 +97,7 @@ export async function reapStrandedClaims(
 
   const stuck = await deps.store.findStuckRunning(olderThan, config.limit);
   let reaped = 0;
+  let raced = 0;
   let failed = 0;
 
   for (const claim of stuck) {
@@ -113,10 +121,15 @@ export async function reapStrandedClaims(
       );
 
       if (!result.ok) {
-        failed++;
-        console.error(
-          `[stranded-claim-reaper] FAILED to reap workUnitId=${claim.workUnitId} ` +
-            `org=${claim.organizationId} intent=${claim.intent} (${result.reason}); left for next run`,
+        // The store rejected our write because the row is already locked — a
+        // concurrent reaper, or a resurrected finalize, terminalized it between our
+        // scan and update. The row is now properly terminal (needs_reconciliation, or
+        // completed/failed if a finalize won the race); nothing more to do here and
+        // NOT an alarm. Log + count as a benign race so the summary alert stays warning.
+        raced++;
+        console.warn(
+          `[stranded-claim-reaper] workUnitId=${claim.workUnitId} org=${claim.organizationId} ` +
+            `intent=${claim.intent} was already terminalized by a concurrent writer (${result.reason}); skipping`,
         );
         continue;
       }
@@ -142,8 +155,8 @@ export async function reapStrandedClaims(
   }
 
   // ONE summary alert per run when ANY stranded claim was found (reaped or not) —
-  // never silent, never a per-row storm. A reap-write failure escalates to critical
-  // (a stranded claim we could not even dead-letter is the alarm case).
+  // never silent, never a per-row storm. Only a HARD reap-write error (a throw)
+  // escalates to critical; a benign concurrent-seal race does not (the row resolved).
   if (stuck.length > 0) {
     const intents = [...new Set(stuck.map((c) => c.intent))].sort().join(", ");
     const alert: InfrastructureFailureAlert = {
@@ -151,8 +164,8 @@ export async function reapStrandedClaims(
       severity: failed > 0 ? "critical" : "warning",
       errorMessage:
         `Found ${stuck.length} stranded running idempotency claim(s); reaped ${reaped} to ` +
-        `needs_reconciliation, ${failed} reap-write failure(s). Manual reconciliation required. ` +
-        `Intents: ${intents}.`,
+        `needs_reconciliation, ${raced} already-terminalized by a concurrent writer, ` +
+        `${failed} hard reap-write error(s). Manual reconciliation required. Intents: ${intents}.`,
       retryable: false,
       occurredAt: now.toISOString(),
       source: "inngest_function",
@@ -160,5 +173,5 @@ export async function reapStrandedClaims(
     await safeAlert(deps.alerter, alert);
   }
 
-  return { scanned: stuck.length, reaped, failed };
+  return { scanned: stuck.length, reaped, raced, failed };
 }
