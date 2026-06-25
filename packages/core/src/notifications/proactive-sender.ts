@@ -151,6 +151,10 @@ export interface ProactiveSenderConfig {
 
 export class ProactiveSender implements AgentNotifier {
   private credentials: ChannelCredentials;
+  // Daily send counts keyed per (sending org, chat) — see {@link rateLimitKey}. Keying by org as
+  // well as chat keeps one tenant's outreach to a recipient from consuming another tenant's daily
+  // budget for the SAME recipient (a customer phone shared across businesses, or a chat-id collision
+  // across channels) — a cross-tenant interference + activity-inference seam.
   private dailyCounts = new Map<string, { count: number; resetAt: number }>();
   private isWithinWindow: ((chatId: string, organizationId?: string) => Promise<boolean>) | null;
   private resolveOrgSendCreds:
@@ -228,7 +232,7 @@ export class ProactiveSender implements AgentNotifier {
     whatsappCreds: { token: string; phoneNumberId: string } | undefined,
     organizationId: string | undefined,
   ): Promise<void> {
-    if (!this.checkRateLimit(chatId)) {
+    if (!this.checkRateLimit(chatId, organizationId)) {
       // chatId is the phone only on the WhatsApp channel; Telegram/Slack ids are not phones.
       const idForLog = channelType === "whatsapp" ? maskPhone(chatId) : chatId;
       console.warn(`[ProactiveSender] Rate limit reached for chat ${idForLog}. Message not sent.`);
@@ -250,12 +254,22 @@ export class ProactiveSender implements AgentNotifier {
     }
   }
 
-  private checkRateLimit(chatId: string): boolean {
+  /**
+   * Build the per-(org, chat) rate-limit key. The NUL separator can appear in neither a cuid org id
+   * nor a phone / chat id, so distinct (org, chat) pairs can never collide onto one key. The legacy
+   * org-blind path (no org) uses a single `*` bucket, preserving its per-chat behavior.
+   */
+  private rateLimitKey(chatId: string, organizationId: string | undefined): string {
+    return `${organizationId ?? "*"}\u0000${chatId}`;
+  }
+
+  private checkRateLimit(chatId: string, organizationId: string | undefined): boolean {
+    const key = this.rateLimitKey(chatId, organizationId);
     const now = Date.now();
-    const entry = this.dailyCounts.get(chatId);
+    const entry = this.dailyCounts.get(key);
 
     if (!entry || now >= entry.resetAt) {
-      this.dailyCounts.set(chatId, { count: 1, resetAt: now + 24 * 60 * 60 * 1000 });
+      this.dailyCounts.set(key, { count: 1, resetAt: now + 24 * 60 * 60 * 1000 });
       return true;
     }
 

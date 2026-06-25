@@ -353,15 +353,28 @@ describe("ProactiveSender", () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it("shares ONE daily-rate-limit map across sendProactive and sendProactiveForOrg", async () => {
-      // No fresh per-request sender: 20 org-blind sends consume the budget; the
-      // 21st (org-aware) to the same chatId is rate-limited, proving one map.
+    it("uses ONE persistent daily-rate-limit map across requests (no fresh per-request sender)", async () => {
+      // 20 sends to the SAME (org, chat) consume that bucket; the 21st is blocked → one persistent
+      // map, not a fresh sender per request (a fresh sender would reset the count on every call).
       const sender = new ProactiveSender({ telegram: { botToken: "b" } });
 
-      for (let i = 0; i < 20; i++) await sender.sendProactive("chat_1", "telegram", `m${i}`);
+      for (let i = 0; i < 20; i++)
+        await sender.sendProactiveForOrg("orgB", "chat_1", "telegram", `m${i}`);
       await sender.sendProactiveForOrg("orgB", "chat_1", "telegram", "21st");
 
       expect(mockFetch).toHaveBeenCalledTimes(20);
+    });
+
+    it("isolates the rate-limit budget per (org, chat): one tenant cannot exhaust another's", async () => {
+      // A recipient shared across two businesses (same chatId) must not let org A's outreach consume
+      // org B's daily budget for that recipient. Each (org, chat) pair is an independent bucket.
+      const sender = new ProactiveSender({ telegram: { botToken: "b" } });
+
+      for (let i = 0; i < 20; i++)
+        await sender.sendProactiveForOrg("orgA", "chat_1", "telegram", `m${i}`);
+      await sender.sendProactiveForOrg("orgB", "chat_1", "telegram", "orgB has its own budget");
+
+      expect(mockFetch).toHaveBeenCalledTimes(21); // orgA: 20 (capped) + orgB: 1 (independent)
     });
 
     it("warns and skips when neither org nor global creds yield a WhatsApp number", async () => {
