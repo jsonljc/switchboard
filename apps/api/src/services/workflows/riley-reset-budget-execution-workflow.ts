@@ -21,6 +21,19 @@ export interface RileyResetBudgetExecutionDeps {
     organizationId: string,
     deploymentId: string,
   ) => Promise<RileyResetBudgetCredsResult>;
+  /**
+   * Read the forward reallocation's at-most-once marker by its execution work-unit id
+   * (`rollbackOfWorkUnitId`). The executor verifies `targetCents` equals the persisted
+   * `observedPriorCents` (the captured prior) BEFORE any Meta write, so the reset can only ever
+   * restore the value the forward move captured, never an arbitrary budget. REQUIRED, not optional:
+   * this is the structural bound that makes auto-execution safe against a future in-process caller
+   * (the HTTP edges are already blocked by the service-only guard). Org-scoped: a row whose
+   * organizationId differs reads as absent (never trust another tenant's capture).
+   */
+  getCapturedPrior: (args: {
+    organizationId: string;
+    rollbackOfWorkUnitId: string;
+  }) => Promise<{ observedPriorCents: number } | null>;
   /** Client factory (MetaAdsClient in prod; fakes in tests). A fresh client per Graph call (the
    *  reset makes at most three: pre-read, write, post-read), mirroring the reallocate executor. */
   createAdsClient: (creds: { accessToken: string; accountId: string }) => {
@@ -45,13 +58,17 @@ export interface RileyResetBudgetExecutionDeps {
  *
  * Read-modify-re-read:
  *   1 parse frozen params (fail closed INVALID_RESET_INPUT).
- *   2 credentials by the FROZEN deploymentId + org-isolation (DEPLOYMENT_ORG_MISMATCH / NO_META_CONNECTION).
- *   3 frozen-account lock (ACCOUNT_MISMATCH).
- *   4 live read (CAMPAIGN_BUDGET_UNREADABLE / UNSUPPORTED_BUDGET_TOPOLOGY).
- *   5 idempotent no-op when live already equals the target (no Meta write).
- *   6 the absolute-set Meta write (META_RESET_WRITE_ERROR).
- *   7 post-write re-read, must equal the target (RESET_POST_WRITE_MISMATCH).
- *   8 build + validate the campaign_budget_reset receipt (RESET_RECEIPT_INVALID).
+ *   2 verify the captured prior: targetCents MUST equal the forward marker's observedPriorCents
+ *     (RESET_NO_CAPTURED_PRIOR if the marker is absent, RESET_TARGET_NOT_CAPTURED_PRIOR on a
+ *     mismatch). This is the structural bound: the reset can only restore the value the forward move
+ *     captured, never an arbitrary budget, even if a future in-process caller passes a wrong target.
+ *   3 credentials by the FROZEN deploymentId + org-isolation (DEPLOYMENT_ORG_MISMATCH / NO_META_CONNECTION).
+ *   4 frozen-account lock (ACCOUNT_MISMATCH).
+ *   5 live read (CAMPAIGN_BUDGET_UNREADABLE / UNSUPPORTED_BUDGET_TOPOLOGY).
+ *   6 idempotent no-op when live already equals the target (no Meta write).
+ *   7 the absolute-set Meta write (META_RESET_WRITE_ERROR).
+ *   8 post-write re-read, must equal the target (RESET_POST_WRITE_MISMATCH).
+ *   9 build + validate the campaign_budget_reset receipt (RESET_RECEIPT_INVALID).
  *
  * Deliberately NO blast-radius cap and NO drift check, unlike the forward executor:
  *  - the move is bounded-by-construction (it restores the captured prior, whose forward delta was
@@ -79,7 +96,35 @@ export function buildRileyResetBudgetExecutionWorkflow(
       const input = parsed.data;
       const organizationId = workUnit.organizationId;
 
-      // 2. Credentials by the FROZEN deploymentId (the work unit's context is platform-direct).
+      // 2. Structural bound: targetCents must be the prior the forward move captured. The HTTP edges
+      // cannot reach this intent (the service-only guard), so this enforces the "only restores a
+      // captured prior" invariant against a future in-process caller passing a wrong target.
+      const captured = await deps.getCapturedPrior({
+        organizationId,
+        rollbackOfWorkUnitId: input.rollbackOfWorkUnitId,
+      });
+      if (!captured) {
+        return {
+          outcome: "failed",
+          summary: "No captured prior for the reset's forward work unit; refusing to restore",
+          error: {
+            code: "RESET_NO_CAPTURED_PRIOR",
+            message: `No reallocation marker for rollbackOfWorkUnitId ${input.rollbackOfWorkUnitId} in org ${organizationId}; cannot verify the restore target.`,
+          },
+        };
+      }
+      if (captured.observedPriorCents !== input.targetCents) {
+        return {
+          outcome: "failed",
+          summary: "Reset target does not match the captured prior; refusing to restore",
+          error: {
+            code: "RESET_TARGET_NOT_CAPTURED_PRIOR",
+            message: `targetCents ${input.targetCents} != captured observedPriorCents ${captured.observedPriorCents} for ${input.rollbackOfWorkUnitId}; the reset may only restore the captured prior.`,
+          },
+        };
+      }
+
+      // 3. Credentials by the FROZEN deploymentId (the work unit's context is platform-direct).
       const credsResult = await deps.getDeploymentCredentials(organizationId, input.deploymentId);
       if (credsResult.kind === "org_mismatch") {
         return {

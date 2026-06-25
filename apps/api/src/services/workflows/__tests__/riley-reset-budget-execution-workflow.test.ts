@@ -67,6 +67,7 @@ function harness(opts?: {
   budgets?: number[]; // successive getCampaign reads (pre, post)
   budgetThrows?: boolean;
   writeThrows?: boolean;
+  captured?: { observedPriorCents: number } | null; // the forward move's captured prior
 }) {
   const reads = opts?.budgets ?? [6000, 5000];
   let readIdx = 0;
@@ -83,12 +84,16 @@ function harness(opts?: {
     async (_org: string, _dep: string): Promise<CredsResult> =>
       opts?.creds ?? { kind: "ok", credentials: { accessToken: "tok", accountId: "act_1" } },
   );
+  const getCapturedPrior = vi.fn(async () =>
+    opts?.captured === undefined ? { observedPriorCents: 5000 } : opts.captured,
+  );
   const handler = buildRileyResetBudgetExecutionWorkflow({
     getDeploymentCredentials,
+    getCapturedPrior,
     createAdsClient: () => ({ getCampaign, updateCampaignBudget }),
     now: () => NOW,
   });
-  return { handler, getCampaign, updateCampaignBudget, getDeploymentCredentials };
+  return { handler, getCampaign, updateCampaignBudget, getDeploymentCredentials, getCapturedPrior };
 }
 
 describe("buildRileyResetBudgetExecutionWorkflow", () => {
@@ -98,6 +103,34 @@ describe("buildRileyResetBudgetExecutionWorkflow", () => {
     expect(res.outcome).toBe("failed");
     expect(res.error?.code).toBe("INVALID_RESET_INPUT");
     expect(h.getDeploymentCredentials).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when there is no captured prior for the forward work unit (RESET_NO_CAPTURED_PRIOR)", async () => {
+    const h = harness({ captured: null });
+    const res = await h.handler.execute(workUnit(), services);
+    expect(res.outcome).toBe("failed");
+    expect(res.error?.code).toBe("RESET_NO_CAPTURED_PRIOR");
+    expect(h.getDeploymentCredentials).not.toHaveBeenCalled();
+    expect(h.updateCampaignBudget).not.toHaveBeenCalled();
+  });
+
+  it("refuses a targetCents that is not the captured prior (RESET_TARGET_NOT_CAPTURED_PRIOR)", async () => {
+    // The structural bound: even though the HTTP edge is blocked, the executor itself rejects a
+    // target that does not equal the persisted observedPriorCents (targetCents 5000 vs captured 4000).
+    const h = harness({ captured: { observedPriorCents: 4000 } });
+    const res = await h.handler.execute(workUnit(), services);
+    expect(res.outcome).toBe("failed");
+    expect(res.error?.code).toBe("RESET_TARGET_NOT_CAPTURED_PRIOR");
+    expect(h.updateCampaignBudget).not.toHaveBeenCalled();
+  });
+
+  it("verifies the captured prior org-scoped, by the forward rollbackOfWorkUnitId", async () => {
+    const h = harness();
+    await h.handler.execute(workUnit(), services);
+    expect(h.getCapturedPrior).toHaveBeenCalledWith({
+      organizationId: "org_1",
+      rollbackOfWorkUnitId: "wu_forward_1",
+    });
   });
 
   it("resolves credentials from the FROZEN deploymentId, not the platform-direct context", async () => {
