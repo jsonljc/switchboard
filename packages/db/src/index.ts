@@ -89,6 +89,8 @@ export type {
   MetaMutationAttemptStatus,
   ClaimLeaseAndMarkInput,
   ClaimLeaseResult,
+  ReallocationGuardrailOutcome,
+  PendingGuardrailReallocation,
 } from "./stores/prisma-meta-mutation-attempt-store.js";
 export { PrismaDeploymentStateStore } from "./stores/prisma-deployment-state-store.js";
 export { PrismaDeploymentConnectionStore } from "./stores/prisma-deployment-connection-store.js";

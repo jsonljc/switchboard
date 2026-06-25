@@ -1675,10 +1675,22 @@ model MetaMutationAttempt {
   observedPriorCents  Int
   requestedToCents    Int
   workTraceId         String?
+  // The forward executor stamps the reallocation's deployment here at claim time so the guardrail
+  // monitor can resolve credentials + attribute the rollback. Nullable: legacy rows (none in prod,
+  // the act-leg is dark) stay NULL.
+  deploymentId        String?
+  // The guardrail monitor's verdict once it has evaluated this applied reallocation over its window:
+  // NULL = not yet monitored; otherwise the ReallocationMonitorOutcome (held / rolled_back /
+  // rollback_noop / rollback_unrestorable). First-writer-wins via updateMany ... WHERE IS NULL.
+  guardrailOutcome    String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   @@index([organizationId, adAccountId, campaignId, status, heldUntil])
+  // The monitor's queue scan: applied + un-monitored, ordered by the apply-time proxy (updatedAt is
+  // the markApplied time for an applied, guardrailOutcome-null row; applied is terminal until the
+  // monitor sets the outcome).
+  @@index([status, guardrailOutcome, updatedAt])
 }
 
 model ApprovalCheckpointRecord {
