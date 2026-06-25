@@ -4,6 +4,8 @@ import type {
   ActivityRow,
   MiraBriefRequest,
   MiraBriefResponse,
+  GovernanceGateUnit,
+  GovernanceMode,
 } from "@switchboard/schemas";
 import type {
   PendingApproval,
@@ -27,6 +29,38 @@ export interface MiraFeedResponse {
   jobs: MiraCreativeJobSummary[];
   counts: MiraCreativeCounts;
   feed: { reviewableCount: number; renderingCount: number };
+}
+
+// Governance gate review/readiness (enforce-flip slice 4)
+export interface GovernanceUnitReview {
+  wouldBlock: number;
+  wouldRewrite: number;
+  wouldEscalate: number;
+  wouldTemplate: number;
+  total: number;
+}
+export interface GovernanceObserveSample {
+  unit: GovernanceGateUnit;
+  reasonCode: string;
+  enforceAction: string;
+  decidedAt: string;
+  conversationId: string;
+  textPreview: string;
+}
+export interface GovernanceObserveReviewResponse {
+  window: { since: string };
+  units: Record<GovernanceGateUnit, GovernanceUnitReview>;
+  samples: GovernanceObserveSample[];
+}
+export interface GovernanceEnforceReadinessUnit {
+  unit: GovernanceGateUnit;
+  currentMode: GovernanceMode;
+  ready: boolean;
+  blockingReason: string | null;
+  producer: { kind: "price" | "claim" | "template" | "none"; count: number };
+}
+export interface GovernanceEnforceReadinessResponse {
+  units: GovernanceEnforceReadinessUnit[];
 }
 
 export class SwitchboardGovernanceClient extends SwitchboardClientCore {
@@ -168,6 +202,55 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
         blocking: boolean;
       }>;
     }>(`/api/agents/${agentId}/readiness`);
+  }
+
+  // Governance gate review/readiness/flip (enforce-flip slice 4)
+  async getGovernanceObserveReview(agentId: string, since?: string) {
+    const qs = since ? `?since=${encodeURIComponent(since)}` : "";
+    return this.request<GovernanceObserveReviewResponse>(
+      `/api/agents/${agentId}/governance/observe-review${qs}`,
+    );
+  }
+
+  async getGovernanceEnforceReadiness(agentId: string) {
+    return this.request<GovernanceEnforceReadinessResponse>(
+      `/api/agents/${agentId}/governance/enforce-readiness`,
+    );
+  }
+
+  /**
+   * Non-throwing flip: returns the backend status + body so the proxy can propagate a
+   * 409 (readiness REFUSE) and its human `reason` instead of collapsing every non-2xx to
+   * a 500 (the shared `request` helper throws a bare Error that drops status + reason).
+   */
+  async setGovernanceGateModeRaw(
+    agentId: string,
+    unit: string,
+    mode: string,
+    idempotencyKey: string,
+  ): Promise<{
+    status: number;
+    body: { unit?: string; mode?: string; error?: string; reason?: string };
+  }> {
+    const res = await fetch(
+      `${this.baseUrl}/api/agents/${agentId}/governance/gates/${encodeURIComponent(unit)}/mode`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({ mode }),
+      },
+    );
+    const body = (await res.json().catch(() => ({}))) as {
+      unit?: string;
+      mode?: string;
+      error?: string;
+      reason?: string;
+    };
+    return { status: res.status, body };
   }
 
   // Governance status
