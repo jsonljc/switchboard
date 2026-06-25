@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   InMemoryGovernancePostureCache,
+  enforceConsentPrecondition,
   type GovernanceConfigResolver,
 } from "@switchboard/core/skill-runtime";
 import {
@@ -102,5 +103,60 @@ describe("createBookingConsentPrecondition.read", () => {
     const { pre, reader } = make({ status: "missing" });
     await pre.read(ORG, CONTACT);
     expect(reader.read).toHaveBeenCalledWith(ORG, CONTACT);
+  });
+});
+
+// End-to-end seam: prove the error-fallback mode actually drives the core
+// enforcement primitive (enforceConsentPrecondition) to block/allow as intended,
+// not just that resolveMode returns the right string. Composes the REAL adapter
+// with the REAL enforceConsentPrecondition (no calendar-book fixture needed).
+function readerWith(state: {
+  pdpaJurisdiction: "SG" | "MY" | null;
+  consentGrantedAt: string | null;
+  consentRevokedAt: string | null;
+}): ContactConsentReader {
+  return { read: vi.fn().mockResolvedValue(state) } as unknown as ContactConsentReader;
+}
+
+const IDS = { deploymentId: DEP, orgId: ORG, contactId: CONTACT };
+const PENDING = { pdpaJurisdiction: "SG" as const, consentGrantedAt: null, consentRevokedAt: null };
+const GRANTED = {
+  pdpaJurisdiction: "SG" as const,
+  consentGrantedAt: "2026-01-01T00:00:00.000Z",
+  consentRevokedAt: null,
+};
+
+describe("seam: error-fallback mode drives enforceConsentPrecondition end-to-end", () => {
+  beforeEach(() => setMetrics(createInMemoryMetrics()));
+
+  it("resolver error + warm enforce + PENDING consent BLOCKS the booking (CONSENT_REQUIRED)", async () => {
+    const pre = createBookingConsentPrecondition({
+      governanceConfigResolver: resolverReturning({ status: "error", error: new Error("db down") }),
+      consentPostureCache: warm("enforce"),
+      contactConsentReader: readerWith(PENDING),
+    });
+    const result = await enforceConsentPrecondition(pre, IDS);
+    expect(result?.status).toBe("error");
+    expect(result?.error?.code).toBe("CONSENT_REQUIRED");
+  });
+
+  it("resolver error + warm enforce + GRANTED consent ALLOWS the booking (no block)", async () => {
+    const pre = createBookingConsentPrecondition({
+      governanceConfigResolver: resolverReturning({ status: "error", error: new Error("db down") }),
+      consentPostureCache: warm("enforce"),
+      contactConsentReader: readerWith(GRANTED),
+    });
+    expect(await enforceConsentPrecondition(pre, IDS)).toBeNull();
+  });
+
+  it("resolver error + COLD cache stays inert: off short-circuits before any consent read", async () => {
+    const reader = readerWith(PENDING);
+    const pre = createBookingConsentPrecondition({
+      governanceConfigResolver: resolverReturning({ status: "error", error: new Error("db down") }),
+      consentPostureCache: new InMemoryGovernancePostureCache(),
+      contactConsentReader: reader,
+    });
+    expect(await enforceConsentPrecondition(pre, IDS)).toBeNull();
+    expect(reader.read as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 });

@@ -54,6 +54,7 @@ export {
   createScheduleFollowUpToolFactory,
   buildRescheduleOperations,
   resolveBookedValueCents,
+  enforceConsentPrecondition,
 } from "./tools/index.js";
 export type {
   EscalateToolFactory,
