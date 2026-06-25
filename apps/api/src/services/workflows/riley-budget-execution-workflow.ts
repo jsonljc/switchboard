@@ -47,6 +47,16 @@ export interface RileyBudgetExecutionDeps {
     bindingHash?: string;
     workTraceId?: string;
   }>;
+  /**
+   * In-flight kill-switch (runbook §3): a runtime, per-deployment stop the executor checks at the
+   * last mile (after replay-first, before credentials + the Meta write). True halts THIS execution
+   * with a clean abort (no marker), so it is re-runnable once cleared. Distinct from the canary
+   * enable flag (which gates the SUBMITTER, so an already-approved-and-dispatched unit would still
+   * execute): this is the EXECUTOR-side stop that halts in-flight + future runs at runtime (a DB flip,
+   * no redeploy). REQUIRED, never optional: an optional dep would let a future bootstrap silently drop
+   * the stop and recreate the hole this closes.
+   */
+  isReallocateKilled: (args: { organizationId: string; deploymentId: string }) => Promise<boolean>;
   /** Resolve the org's meta-ads credentials by deployment id WITH the org-isolation check inside. */
   getDeploymentCredentials: (
     organizationId: string,
@@ -210,8 +220,24 @@ export function buildRileyBudgetExecutionWorkflow(deps: RileyBudgetExecutionDeps
         };
       }
 
-      // 3. Credentials + frozen-account lock.
+      // 2.5. In-flight kill-switch: a runtime per-deployment stop checked at the last mile (AFTER
+      // replay-first, so an already-applied unit still replays its receipt, and BEFORE credentials /
+      // the new Meta write). A killed unit aborts cleanly with NO marker, so it is re-runnable once
+      // the switch clears. Halts both in-flight (an approved, dispatched, not-yet-written unit) and
+      // every future execution, at runtime (no redeploy).
       const deploymentId = workUnit.deployment.deploymentId;
+      if (await deps.isReallocateKilled({ organizationId, deploymentId })) {
+        return {
+          outcome: "failed",
+          summary: "Reallocation halted by the runtime kill-switch",
+          error: {
+            code: "RILEY_REALLOCATE_KILLED",
+            message: `The reallocate kill-switch is engaged for deployment ${deploymentId}; refusing to execute (re-runnable once cleared).`,
+          },
+        };
+      }
+
+      // 3. Credentials + frozen-account lock.
       const credsResult = await deps.getDeploymentCredentials(organizationId, deploymentId);
       if (credsResult.kind === "org_mismatch") {
         return {

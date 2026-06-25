@@ -135,6 +135,7 @@ function harness(opts?: {
   claimLeaseAndMark?: ReturnType<typeof vi.fn>;
   markRecommendationActed?: ReturnType<typeof vi.fn>;
   attemptStore?: AttemptStore;
+  killed?: boolean;
 }) {
   const defaultApproval: ApprovalCtx = {
     approvalOutcome: "approved",
@@ -211,8 +212,12 @@ function harness(opts?: {
     markApplied,
     markRecoveryRequired,
   };
+  const isReallocateKilled = vi.fn(
+    async (_a: { organizationId: string; deploymentId: string }) => opts?.killed ?? false,
+  );
   const handler = buildRileyBudgetExecutionWorkflow({
     getApprovalContext,
+    isReallocateKilled,
     getDeploymentCredentials,
     createAdsClient,
     attemptStore,
@@ -225,6 +230,7 @@ function harness(opts?: {
   return {
     handler,
     getApprovalContext,
+    isReallocateKilled,
     getDeploymentCredentials,
     getCampaign,
     updateCampaignBudget,
@@ -540,5 +546,42 @@ describe("buildRileyBudgetExecutionWorkflow — cap telemetry (A6)", () => {
     const h = harness({ getAccountDailySpendCents: vi.fn(async () => null) });
     await h.handler.execute(workUnit(), services);
     expect(incSpy).toHaveBeenCalledWith({ orgId: "org_1", outcome: "share_cap" });
+  });
+});
+
+describe("buildRileyBudgetExecutionWorkflow — in-flight kill-switch (runbook §3)", () => {
+  it("aborts a killed execution with RILEY_REALLOCATE_KILLED and NO marker / NO Meta write", async () => {
+    const h = harness({ killed: true });
+    const res = await h.handler.execute(workUnit(), services);
+    expect(res.outcome).toBe("failed");
+    expect(res.error?.code).toBe("RILEY_REALLOCATE_KILLED");
+    // Clean abort: no lease claimed (re-runnable), no credentials resolved, no Meta call.
+    expect(h.claimLeaseAndMark).not.toHaveBeenCalled();
+    expect(h.getDeploymentCredentials).not.toHaveBeenCalled();
+    expect(h.getCampaign).not.toHaveBeenCalled();
+    expect(h.updateCampaignBudget).not.toHaveBeenCalled();
+  });
+
+  it("checks the kill-switch org-scoped, by the work unit's deployment", async () => {
+    const h = harness();
+    await h.handler.execute(workUnit(), services);
+    expect(h.isReallocateKilled).toHaveBeenCalledWith({
+      organizationId: "org_1",
+      deploymentId: "dep_riley",
+    });
+  });
+
+  it("a replay of an already-applied unit STILL returns its receipt even when killed (kill is after replay)", async () => {
+    const h = harness({
+      killed: true,
+      existingMarker: { status: "applied" },
+      existingReceipt: validReceipt,
+    });
+    const res = await h.handler.execute(workUnit(), services);
+    expect(res.outcome).toBe("completed");
+    expect((res.outputs as { replayed: boolean }).replayed).toBe(true);
+    // The kill-switch never ran (the replay short-circuited first); no new Meta write.
+    expect(h.isReallocateKilled).not.toHaveBeenCalled();
+    expect(h.updateCampaignBudget).not.toHaveBeenCalled();
   });
 });
