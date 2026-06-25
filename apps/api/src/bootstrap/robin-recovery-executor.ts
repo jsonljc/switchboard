@@ -21,6 +21,7 @@ import {
   computeRecoveryNextRetry,
   defaultSendTemplate,
   resolveEffectiveSendCreds,
+  type DispatchRecoveryRowArgs,
   type RecoverySendContext,
   type RecoveryTemplateSendArgs,
   type RecoveryTemplateSendResult,
@@ -102,6 +103,45 @@ async function claimAndRequeueContextFailure(
     return "failed";
   } catch (claimErr) {
     return isUniqueConstraintError(claimErr) ? "skipped" : "failed";
+  }
+}
+
+/**
+ * Cohort-path wrapper around dispatchRecoveryRow: builds the per-recipient deps (incl. the dead-letter
+ * metric) and ISOLATES a store-write throw so one contact's transient DB blip cannot abort the rest of
+ * the cohort (mirrors the getSendContext + claim isolation). This is safe: a confirmed send swallows
+ * its own markSent failure inside dispatchRecoveryRow, so any throw here is pre-send (markSendInFlight /
+ * markSkipped) or post-send-FAILURE (markFailed) — never after a delivered send — so no double-send is
+ * possible; count it failed + continue. (The single-row retry executor does NOT use this: there a throw
+ * should surface to the retry cron.) Returns the count bucket.
+ */
+async function dispatchCohortRow(
+  args: DispatchRecoveryRowArgs,
+  store: RobinRecoverySendStore,
+  sendTemplate: (a: RecoveryTemplateSendArgs) => Promise<RecoveryTemplateSendResult>,
+  now: Date,
+  random: () => number,
+  contactId: string,
+): Promise<"sent" | "skipped" | "failed"> {
+  try {
+    const r = await dispatchRecoveryRow(args, {
+      store,
+      sendTemplate,
+      now: () => now,
+      random,
+      onDeadLetter: (reason) =>
+        getMetrics().robinRecoverySendFailed.inc({
+          intent: ROBIN_RECOVERY_SEND_INTENT,
+          reason,
+        }),
+    });
+    return r.outcome;
+  } catch (err) {
+    console.warn(
+      `[robin.recovery_campaign.send] dispatch failed for contact ${contactId}; isolated, ` +
+        `no send double-fired: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return "failed";
   }
 }
 
@@ -265,10 +305,10 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
           // Post-claim per-recipient send + state-write + backoff, the SHARED path the retry executor
           // also calls. A TRANSIENT send failure schedules retry-1 (attempts 0 is never terminal at
           // MAX=3), so the cohort first attempt re-queues; a PERMANENT (4xx) failure dead-letters NOW
-          // (D4), and markSkipped paths stay terminal. onDeadLetter fires the per-recipient failure
-          // metric so a permanent first-attempt failure is never silent (the retry cron owns the
-          // metric for retry-exhaustion dead-letters).
-          const r = await dispatchRecoveryRow(
+          // (D4), and markSkipped paths stay terminal. dispatchCohortRow fires the per-recipient
+          // failure metric (a permanent first-attempt failure is never silent) and isolates a store
+          // throw so one contact's DB blip cannot abort the rest of the cohort.
+          const outcome = await dispatchCohortRow(
             {
               rowId,
               attempts: 0,
@@ -278,20 +318,14 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
               accessToken,
               phoneNumberId,
             },
-            {
-              store: deps.store,
-              sendTemplate,
-              now: () => now,
-              random,
-              onDeadLetter: (reason) =>
-                getMetrics().robinRecoverySendFailed.inc({
-                  intent: ROBIN_RECOVERY_SEND_INTENT,
-                  reason,
-                }),
-            },
+            deps.store,
+            sendTemplate,
+            now,
+            random,
+            candidate.contactId,
           );
-          if (r.outcome === "sent") sent++;
-          else if (r.outcome === "skipped") skipped++;
+          if (outcome === "sent") sent++;
+          else if (outcome === "skipped") skipped++;
           else failed++;
         }
 

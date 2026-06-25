@@ -349,6 +349,23 @@ describe("buildRobinRecoverySendExecutor", () => {
     expect(res.outputs).toEqual({ sent: 0, skipped: 0, failed: 1, total: 1 });
   });
 
+  it("isolates a dispatch store-write throw mid-cohort (markSendInFlight blip): that recipient -> failed, others still send, batch NOT thrown", async () => {
+    // A transient store-write throw inside dispatch (here the pre-send markSendInFlight) must not abort
+    // the rest of the cohort. It is pre-send, so no send double-fired; isolate + count failed.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const deps = makeDeps();
+    deps.store.create.mockResolvedValueOnce({ id: "rs_1" }).mockResolvedValueOnce({ id: "rs_2" });
+    deps.store.markSendInFlight
+      .mockResolvedValueOnce(undefined) // C1 claims + sends
+      .mockRejectedValueOnce(new Error("db blip")); // C2's pre-send claim throws
+    const { handler } = buildRobinRecoverySendExecutor(deps as never);
+    const res = await handler.execute(makeWorkUnit([C1, C2]) as never, {} as never);
+    expect(res.outcome).toBe("completed");
+    expect(res.outputs).toEqual({ sent: 1, skipped: 0, failed: 1, total: 2 });
+    expect(deps.sendTemplate).toHaveBeenCalledTimes(1); // only C1 reached the Graph send
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
   it("isolates a sendTemplate network rejection (not just !ok) -> markFailed, no batch throw", async () => {
     const deps = makeDeps({ sendTemplate: vi.fn().mockRejectedValue(new Error("ECONNRESET")) });
     const { handler } = buildRobinRecoverySendExecutor(deps as never);
