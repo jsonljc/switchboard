@@ -21,6 +21,7 @@ import type { RecommendationHandoffSubmitter } from "./recommendation-handoff-di
 import type { RileyPauseSubmitter } from "./riley-pause-dispatch.js";
 import type { RileyBudgetSubmitter } from "./riley-budget-dispatch.js";
 import { resolveLearnedModifiers } from "./learned-modifiers.js";
+import { resolveAuditNumerics } from "./audit-config-resolver.js";
 
 interface DeploymentInfo {
   id: string;
@@ -220,6 +221,24 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
       ? await step.run(`pixel-${deployment.id}`, () => deps.getDeploymentPixelId!(deployment.id))
       : null;
 
+    // A21 (P1-9): coerce the numeric config ONCE through the validated schema BEFORE
+    // the audit step (pure, needs no creds). Operator form values arrive as strings
+    // (seed-marketplace stores targetCPA:"30"); un-coerced they detonate or NaN-suppress
+    // in budget-analyzer. Malformed numbers (e.g. "$1,500") fail CLOSED: skip this
+    // deployment + surface via the same per-deployment alert wire, never act on a NaN.
+    const numerics = resolveAuditNumerics(deployment.inputConfig);
+    if (!numerics.ok) {
+      console.error(
+        `[ad-optimizer] invalid numeric inputConfig for deployment=${deployment.id}; ` +
+          `skipping weekly audit this cycle (fail-closed): ${String(numerics.error)}`,
+      );
+      await deps.onDeploymentFailure?.(
+        { deploymentId: deployment.id, organizationId: deployment.organizationId },
+        numerics.error,
+      );
+      continue;
+    }
+
     // PR 1.4 (D2-3 isolation half): one org's exhausted audit step must not abort
     // the fleet. The try/catch wraps the awaited step.run; Inngest still retries the
     // step under the cron's function-level budget, and only a post-exhaustion throw
@@ -232,15 +251,9 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         const creds = await deps.getDeploymentCredentials(deployment.id);
         if (!creds) return;
         const adsClient = deps.createAdsClient(creds);
-        // NOTE (PR2): read as a strict number. Sibling inputConfig fields (targetCPA/
-        // targetROAS) are stored as strings by the seed/wizard; a future producer that
-        // writes targetCostPerBooked as a string would be silently dropped here (→ Tier 2
-        // CPL, never booked_cac). When a real producer lands (wizard), route it through
-        // resolveAdOptimizerConfig/AdOptimizerConfigSchema to coerce string→number.
-        const cpb = deployment.inputConfig.targetCostPerBooked;
         // Phase-A Gate 1: optional conversions-denominator config. Default unset =
-        // back-compat (aggregate `conversions`). Guarded like targetCostPerBooked so a
-        // missing/empty producer value never silently changes the denominator.
+        // back-compat (aggregate `conversions`). Non-numeric by nature (string/array),
+        // so it does NOT route through the A21 numeric coercion above; read directly.
         const conversionActionType = deployment.inputConfig.conversionActionType;
         const attributionWindows = deployment.inputConfig.attributionWindows;
         // D7-2 + D7-1: resolve the org's bounded, abstaining learned modifiers (operator approval
@@ -253,9 +266,14 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
         const config: AuditConfig = {
           accountId: creds.accountId,
           orgId: deployment.organizationId,
-          targetCPA: deployment.inputConfig.targetCPA ?? 100,
-          targetROAS: deployment.inputConfig.targetROAS ?? 3.0,
-          ...(typeof cpb === "number" && cpb > 0 ? { targetCostPerBooked: cpb } : {}),
+          // A21: coerced numbers (operator string input normalized; malformed already
+          // failed closed above). targetCostPerBooked present only when a positive target
+          // was configured (the resolver applies the same `> 0` booked_cac-tier guard).
+          targetCPA: numerics.targetCPA,
+          targetROAS: numerics.targetROAS,
+          ...(numerics.targetCostPerBooked !== undefined
+            ? { targetCostPerBooked: numerics.targetCostPerBooked }
+            : {}),
           ...(typeof conversionActionType === "string" && conversionActionType
             ? { conversionActionType }
             : {}),
