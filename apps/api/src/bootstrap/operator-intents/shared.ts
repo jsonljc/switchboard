@@ -24,6 +24,7 @@ export const RECONCILE_BOOKING_INTENT = "receipt.reconcile_booking";
 export const DELIVER_WEEKLY_REPORT_INTENT = "ledger.deliver_weekly_report";
 export const ERASE_CONTACT_INTENT = "operator.erase_contact";
 export const MEMORY_WRITE_INTENT = "memory.write";
+export const GOVERNANCE_SET_GATE_MODE_INTENT = "governance.set_gate_mode";
 
 /**
  * Sentinel deployment ID used for admin-consent verdict context. The admin
@@ -71,4 +72,10 @@ export const OPERATOR_INTENT_ERROR_CODES = {
   // org-scoped existence check is the fail-closed cross-tenant guard — a contact in another org
   // reads as not-found here, so an operator can only erase a contact their org owns.
   CONTACT_NOT_FOUND: "CONTACT_NOT_FOUND",
+  // governance.set_gate_mode: the safety REFUSE — an enforce flip was attempted for a gate
+  // whose producer is empty (would over-block legitimate replies). Rollback to observe/off is
+  // never refused. DEPLOYMENT_NOT_FOUND / GOVERNANCE_CONFIG_INVALID surface the writer's guards.
+  GATE_NOT_ENFORCE_READY: "GATE_NOT_ENFORCE_READY",
+  DEPLOYMENT_NOT_FOUND: "DEPLOYMENT_NOT_FOUND",
+  GOVERNANCE_CONFIG_INVALID: "GOVERNANCE_CONFIG_INVALID",
 } as const;

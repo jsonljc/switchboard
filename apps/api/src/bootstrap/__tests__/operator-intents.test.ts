@@ -18,8 +18,10 @@ import {
   buildTransitionOpportunityStageHandler,
   DELIVER_WEEKLY_REPORT_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
+  GOVERNANCE_SET_GATE_MODE_INTENT,
   type WeeklyReportDeliveryWriter,
 } from "../operator-intents.js";
+import { SERVICE_ONLY_INGRESS_INTENTS } from "../../routes/service-only-intents.js";
 import type { DeliveryResult } from "../../services/reports/weekly-report-delivery.js";
 
 function mkBoardRow(overrides: Partial<OpportunityBoardRow> = {}): OpportunityBoardRow {
@@ -516,5 +518,49 @@ describe("bootstrapOperatorIntents: payment.record_verified revenue-recording fl
     const transition = intentRegistry.lookup("operator.transition_opportunity_stage");
     expect(transition).toBeDefined();
     expect(transition?.revenueRecording ?? false).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Enforce-flip slice 3: governance.set_gate_mode registers as an operator_mutation,
+// system_auto_approved, api-only intent — and must NOT be service-only (an operator
+// legitimately submits it from the dashboard). The safety gate is the handler's
+// server-side readiness REFUSE, not a second approver.
+// ---------------------------------------------------------------------------
+describe("bootstrapOperatorIntents: governance.set_gate_mode (enforce-flip slice 3)", () => {
+  const governanceSetGateMode = {
+    writer: { setGateMode: vi.fn().mockResolvedValue({ id: "dep-1" }) },
+    probeProducers: vi.fn().mockResolvedValue({
+      approvedPriceCount: 0,
+      approvedClaimCount: 0,
+      approvedTemplateCount: 0,
+    }),
+  };
+
+  it("registers system_auto_approved + operator_mutation + api-only when the dep is provided", () => {
+    const intentRegistry = new IntentRegistry();
+    const modeRegistry = new ExecutionModeRegistry();
+
+    bootstrapOperatorIntents({ intentRegistry, modeRegistry, governanceSetGateMode });
+
+    const registration = intentRegistry.lookup(GOVERNANCE_SET_GATE_MODE_INTENT);
+    expect(registration).toBeDefined();
+    expect(registration?.approvalMode).toBe("system_auto_approved");
+    expect(registration?.executor).toEqual({ mode: "operator_mutation" });
+    expect(registration?.spendBearing ?? false).toBe(false);
+    expect(intentRegistry.validateTrigger(GOVERNANCE_SET_GATE_MODE_INTENT, "api")).toBe(true);
+    expect(intentRegistry.validateTrigger(GOVERNANCE_SET_GATE_MODE_INTENT, "chat")).toBe(false);
+    expect(modeRegistry.hasMode("operator_mutation")).toBe(true);
+  });
+
+  it("does NOT register the intent when the dep is absent (default-off wiring)", () => {
+    const intentRegistry = new IntentRegistry();
+    const modeRegistry = new ExecutionModeRegistry();
+    bootstrapOperatorIntents({ intentRegistry, modeRegistry });
+    expect(intentRegistry.lookup(GOVERNANCE_SET_GATE_MODE_INTENT)).toBeUndefined();
+  });
+
+  it("is NOT a service-only intent (an operator submits it on the public edge)", () => {
+    expect(SERVICE_ONLY_INGRESS_INTENTS.has(GOVERNANCE_SET_GATE_MODE_INTENT)).toBe(false);
   });
 });

@@ -19,6 +19,14 @@ export const GOVERNANCE_GATE_UNITS = ["deterministic", "claims", "consent", "wha
 export const GovernanceGateUnitSchema = z.enum(GOVERNANCE_GATE_UNITS);
 export type GovernanceGateUnit = z.infer<typeof GovernanceGateUnitSchema>;
 
+/** Parameters for the `governance.set_gate_mode` operator-mutation intent (slice 3). */
+export const GovernanceSetGateModeParametersSchema = z.object({
+  deploymentId: z.string().min(1),
+  unit: GovernanceGateUnitSchema,
+  mode: GovernanceModeSchema,
+});
+export type GovernanceSetGateModeParameters = z.infer<typeof GovernanceSetGateModeParametersSchema>;
+
 /** Each unit's `governanceConfig` sub-block key. */
 export const GATE_UNIT_CONFIG_KEY: Record<
   GovernanceGateUnit,
