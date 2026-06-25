@@ -131,9 +131,14 @@ onboarding (and updating the seeded config) is a named follow-up.
 2. **`ensureAlexListingForOrg(orgId, db, opts?)`** (modify). New optional
    `opts.governanceSeedContext`. Build `buildObserveGovernanceConfig(ctx)` (default
    `SG`/`medical`). Set it in the `create` branch; if the upserted row's
-   `governanceConfig` is null, backfill via a conditional `updateMany` scoped to
-   `{ id, governanceConfig is null }`. The `update: {}` branch stays a no-op so existing
-   fields are never disturbed.
+   `governanceConfig` is null, backfill it with a guarded
+   `update({ where: { id }, data: { governanceConfig } })`. The guard reads the upsert's
+   returned row, so an existing (observe or enforce) config is never overwritten. The
+   `update: {}` upsert branch stays a no-op so other fields are never disturbed. (A plain
+   guarded `update` is used rather than an `updateMany` with `Prisma.DbNull`, because
+   `@switchboard/db` re-exports `Prisma` as a type only and apps/api has documented
+   friction importing `@prisma/client` values; the guard delivers the same non-clobber
+   guarantee for every realistic case, as no enforce-write path exists yet.)
 
 3. **GET /config wiring** (`routes/organizations.ts`). Pass
    `deriveAlexGovernanceSeedContext(config)` into `ensureAlexListingForOrg`. The POST
@@ -153,7 +158,7 @@ onboarding (and updating the seeded config) is a named follow-up.
 GET /config (or POST /provision)
   -> ensureAlexListingForOrg(orgId, db, { governanceSeedContext })
        -> upsert AgentDeployment (create: governanceConfig = observe)
-       -> if row.governanceConfig == null: updateMany({id, governanceConfig is null}) = observe
+       -> if upserted row.governanceConfig == null: update({id}, governanceConfig = observe)  // guarded backfill, never clobbers an existing config
   -> resolver(deploymentId) now returns {status:"resolved", config: observe}
   -> each afterSkill gate runs in observe: records a verdict, response UNCHANGED
 
