@@ -64,6 +64,21 @@ export interface IntentRegistration {
    * the long-standing Riley R1 registry-guard recommendation.
    */
   spendBearing?: boolean;
+  /**
+   * Marks an intent that RECORDS already-settled INBOUND revenue — proof that money
+   * has already moved (e.g. `payment.record_verified`, whose amount/tier are anchored
+   * to a server-side PSP fetch-back), as opposed to committing outbound spend. The
+   * inbound counterpart of {@link spendBearing}. Defaults to `false` when omitted.
+   *
+   * A revenue-recording intent is EXEMPT from the entitlement gate in
+   * `PlatformIngress.submit()` (step 1.5): refusing to record money the org already
+   * received would discard the receipt + revenue event (corrupting the proof chain)
+   * and 500 the PSP webhook into a Stripe redelivery storm. Entitlement gates OUTBOUND
+   * consumption (sends, ad-spend, bookings), not inbound bookkeeping. The gate still
+   * resolves entitlement and, on the carve-out, emits a reconciliation signal so
+   * billing can follow up on a non-entitled org that is still transacting (A22).
+   */
+  revenueRecording?: boolean;
   idempotent: boolean;
   allowedTriggers: Trigger[];
   timeoutMs: number;
