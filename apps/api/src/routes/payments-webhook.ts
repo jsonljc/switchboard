@@ -138,6 +138,23 @@ export const paymentsWebhookRoutes: FastifyPluginAsync = async (app) => {
     });
 
     if (!result.ok) {
+      // A22 defense-in-depth: payment.record_verified is carved out of the entitlement
+      // gate upstream (revenueRecording intent), so this should not normally fire, but
+      // if ingress ever returns entitlement_required (carve-out absent/regressed),
+      // acknowledge with 200 instead of a 500. A 500 makes Stripe redeliver indefinitely
+      // and the settled-deposit receipt is re-lost on every retry; recording it is proof
+      // of money that already moved, never an outbound paid action. Emit a reconciliation
+      // signal so the settled-but-unrecorded payment is recoverable. Any other (retryable)
+      // error keeps the 500 so Stripe's redelivery can succeed once the cause clears.
+      if (result.error.type === "entitlement_required") {
+        app.log.warn(
+          { error: result.error, organizationId, chargeId, bookingId: charge.bookingId },
+          "payment.record_verified blocked by entitlement; acknowledging to stop redelivery; reconciliation required",
+        );
+        return reply
+          .code(200)
+          .send({ received: true, skipped: true, reason: "entitlement_blocked_reconcile" });
+      }
       app.log.error({ error: result.error }, "payment.record_verified submission failed");
       return reply.code(500).send({ error: result.error.message, statusCode: 500 });
     }

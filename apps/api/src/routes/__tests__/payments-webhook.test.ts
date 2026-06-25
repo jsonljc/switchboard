@@ -472,3 +472,78 @@ describe("Payments webhook contract-pin: submitted params satisfy handler schema
     await app.close();
   });
 });
+
+// --- A22: ingress-failure handling. A settled deposit must never 500-storm Stripe ---
+// payment.record_verified is carved out of the entitlement gate upstream, so this branch
+// is defense-in-depth: if ingress ever returns entitlement_required (carve-out absent /
+// regressed), acknowledge with 200 + a reconciliation reason instead of a 500 that would
+// trigger Stripe redelivery forever AND re-lose the settled-but-unrecorded receipt. A
+// genuinely retryable error keeps the 500 so Stripe's redelivery can succeed later.
+describe("Payments webhook ingress-failure handling (A22)", () => {
+  const paidCharge = (id: string) => ({
+    externalReference: id,
+    bookingId: "bk-a22",
+    amountCents: 5000,
+    currency: "sgd",
+    provider: "stripe",
+    status: "paid" as const,
+  });
+
+  it("acknowledges an entitlement-blocked deposit with 200 + reconciliation reason, never a 500 storm", async () => {
+    const retrievePayment = vi.fn(async (id: string) => paidCharge(id));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c1", opportunityId: "opp1" }));
+    const submit = vi.fn(async () => ({
+      ok: false as const,
+      error: {
+        type: "entitlement_required" as const,
+        intent: "payment.record_verified",
+        message: "Organization org-ent is not entitled to execute paid actions (status: canceled)",
+        blockedStatus: "canceled",
+      },
+    }));
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-ent",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const body = piSucceeded({
+      eventId: "evt_ent",
+      account: "acct_ent",
+      paymentIntentId: "pi_ent",
+    });
+    const res = await post(app, body, sign(body, SECRET));
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      received: true,
+      skipped: true,
+      reason: "entitlement_blocked_reconcile",
+    });
+    await app.close();
+  });
+
+  it("still returns 500 on a retryable ingress error so Stripe redelivers", async () => {
+    const retrievePayment = vi.fn(async (id: string) => paidCharge(id));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c1", opportunityId: "opp1" }));
+    const submit = vi.fn(async () => ({
+      ok: false as const,
+      error: {
+        type: "upstream_error" as const,
+        intent: "payment.record_verified",
+        message: "transient downstream failure",
+      },
+    }));
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-up",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const body = piSucceeded({ eventId: "evt_up", account: "acct_up", paymentIntentId: "pi_up" });
+    const res = await post(app, body, sign(body, SECRET));
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});

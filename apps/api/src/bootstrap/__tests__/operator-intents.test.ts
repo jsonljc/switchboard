@@ -481,3 +481,40 @@ describe("bootstrapOperatorIntents: ledger.deliver_weekly_report registration", 
     expect(intentRegistry.validateTrigger(DELIVER_WEEKLY_REPORT_INTENT, "schedule")).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A22: payment.record_verified must be flagged revenueRecording so the entitlement
+// gate in PlatformIngress carves it out: a PSP-verified, already-settled deposit is
+// recorded even for a non-entitled org instead of 500-storming the Stripe webhook
+// and losing the T1 receipt + revenue event. The flag must be SPECIFIC to the
+// inbound-revenue intent, not blanket-set on every operator intent by the shared
+// registerOperatorIntent helper.
+// ---------------------------------------------------------------------------
+describe("bootstrapOperatorIntents: payment.record_verified revenue-recording flag (A22)", () => {
+  it("registers payment.record_verified as revenueRecording, and does NOT flag a non-revenue operator intent", () => {
+    const intentRegistry = new IntentRegistry();
+    const modeRegistry = new ExecutionModeRegistry();
+
+    bootstrapOperatorIntents({
+      intentRegistry,
+      modeRegistry,
+      // Control intent (operator.transition_opportunity_stage), gated by opportunityStore.
+      opportunityStore: makeStoreStub(),
+      // The five deps that gate payment.record_verified registration.
+      receiptWriter: { write: vi.fn() } as never,
+      revenueStore: { record: vi.fn() } as never,
+      outboxWriter: { write: vi.fn() } as never,
+      runInTransaction: vi.fn() as never,
+      paymentVerifier: vi.fn() as never,
+    });
+
+    const payment = intentRegistry.lookup("payment.record_verified");
+    expect(payment).toBeDefined();
+    expect(payment?.revenueRecording).toBe(true);
+
+    // Control: a sibling operator intent that records nothing inbound is NOT carved out.
+    const transition = intentRegistry.lookup("operator.transition_opportunity_stage");
+    expect(transition).toBeDefined();
+    expect(transition?.revenueRecording ?? false).toBe(false);
+  });
+});

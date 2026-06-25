@@ -33,6 +33,24 @@ function buildIngress(opts: { resolver?: BillingEntitlementResolver }): Platform
     timeoutMs: 30000,
     retryable: false,
   });
+  // A22: a revenue-recording intent (records already-settled inbound revenue, e.g.
+  // the PSP-verified payment.record_verified) is carved out of the entitlement gate;
+  // recording money that already moved is proof, not an outbound paid action.
+  intentRegistry.register({
+    intent: "revenue.proof",
+    allowedTriggers: ["api"],
+    defaultMode: "skill",
+    allowedModes: ["skill"],
+    executor: { mode: "skill", skillSlug: "noop" },
+    parameterSchema: {},
+    mutationClass: "write",
+    budgetClass: "standard",
+    approvalPolicy: "none",
+    idempotent: false,
+    timeoutMs: 30000,
+    retryable: false,
+    revenueRecording: true,
+  });
 
   const modeRegistry = new ExecutionModeRegistry();
   modeRegistry.register({
@@ -111,6 +129,42 @@ describe("PlatformIngress entitlement enforcement", () => {
         expect(result.error.blockedStatus).toBe("canceled");
       }
     }
+  });
+
+  it("records a revenue-recording intent for a non-entitled org instead of blocking (A22 carve-out)", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const resolveSpy = vi.fn(async () => blocked("canceled"));
+    const ingress = buildIngress({ resolver: { resolve: resolveSpy } });
+
+    const result = await ingress.submit(makeRequest({ intent: "revenue.proof" }));
+
+    // Entitlement was checked (so the carve-out is observed, not blindly skipped)...
+    expect(resolveSpy).toHaveBeenCalledWith("org_test");
+    // ...but the settled inbound revenue is RECORDED, never blocked with entitlement_required.
+    expect(result.ok).toBe(true);
+    // ...and a reconciliation signal is emitted so billing can follow up on the
+    // non-entitled org that is still transacting.
+    const carveoutCall = warnSpy.mock.calls.find((c) =>
+      String(c[0]).includes("[entitlement.carveout]"),
+    );
+    expect(carveoutCall).toBeDefined();
+    expect(String(carveoutCall?.[0])).toContain("revenue.proof");
+    expect(String(carveoutCall?.[0])).toContain("canceled");
+    warnSpy.mockRestore();
+  });
+
+  it("emits no carve-out signal when a revenue-recording intent's org IS entitled", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const ingress = buildIngress({ resolver: { resolve: async () => entitled() } });
+
+    const result = await ingress.submit(makeRequest({ intent: "revenue.proof" }));
+
+    expect(result.ok).toBe(true);
+    const carveoutWarns = warnSpy.mock.calls.filter((c) =>
+      String(c[0]).includes("[entitlement.carveout]"),
+    );
+    expect(carveoutWarns).toHaveLength(0);
+    warnSpy.mockRestore();
   });
 
   it("allows active orgs through to execution", async () => {
