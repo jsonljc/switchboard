@@ -168,6 +168,10 @@ export { PrismaMessageHistoryReader } from "./prisma-message-history-reader.js";
 export { PrismaActivityPreviewReader } from "./prisma-activity-preview-reader.js";
 export { PrismaReEngagementVerdictReader } from "./prisma-re-engagement-verdict-reader.js";
 export { createPrismaApprovedComplianceClaimStore } from "./prisma-approved-compliance-claim-store.js";
+export {
+  createGovernanceProducerProbe,
+  type GovernanceProducerProbeDeps,
+} from "./governance-producer-probe.js";
 export { createPrismaConsentStore } from "./prisma-consent-store.js";
 export { createPrismaContactConsentReader } from "./prisma-contact-consent-reader.js";
 export { PrismaScheduledFollowUpStore } from "./stores/prisma-scheduled-follow-up-store.js";
