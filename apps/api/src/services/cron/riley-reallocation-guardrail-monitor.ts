@@ -69,12 +69,34 @@ export function buildReallocationRollbackDispatch(
       throw new Error(`reset submit-request was null for ${r.executionWorkUnitId}`);
     }
     const response = await deps.submitReset(req);
+    // The rollback succeeded ONLY on a clean synchronous `completed` execution. Anything else means
+    // the budget was NOT restored, so THROW: the monitor's per-item catch then leaves the row
+    // UNRESOLVED (re-measured + re-dispatched next pass, deduped at ingress via reset:<wu>) instead of
+    // the caller falsely marking it rolled_back and abandoning a still-over-budget campaign. Mirrors
+    // buildRileyPauseSubmitter's phantom-success branch order (the in-repo precedent).
+    if (!response.ok) {
+      deps.logger.error(
+        `[reallocation-guardrail] reset submit error type=${response.error.type} for ${r.executionWorkUnitId}: ${response.error.message}`,
+      );
+      throw new Error(`reset submit failed (${response.error.type}) for ${r.executionWorkUnitId}`);
+    }
     if ("approvalRequired" in response) {
       // The rollback must auto-execute; a park means the allow-only seed is missing/misconfigured.
       deps.logger.error(
-        `[reallocation-guardrail] CRITICAL: reset parked instead of executing for ${r.executionWorkUnitId}; the rollback did not happen`,
+        `[reallocation-guardrail] CRITICAL: reset parked instead of executing for ${r.executionWorkUnitId} (allow-only policy missing?); the rollback did not happen`,
       );
       throw new Error(`reset parked instead of executing for ${r.executionWorkUnitId}`);
+    }
+    if (response.result.outcome !== "completed") {
+      // ok:true + a non-completed outcome = a governance deny or the reset executor returning
+      // outcome:"failed" (Meta error, account/prior mismatch, post-write mismatch). The budget was
+      // not restored.
+      deps.logger.error(
+        `[reallocation-guardrail] reset did NOT complete for ${r.executionWorkUnitId} (outcome=${response.result.outcome}); the rollback did not happen`,
+      );
+      throw new Error(
+        `reset did not complete (outcome=${response.result.outcome}) for ${r.executionWorkUnitId}`,
+      );
     }
   };
 }
@@ -148,11 +170,19 @@ export function buildReallocationGuardrailMonitorDeps(
     measureGuardrails: args.measure,
     dispatchRollback: args.dispatchRollback,
     resolveReallocation: async (r, outcome) => {
-      await args.store.markGuardrailOutcome({
+      // Dispatch-then-resolve order is deliberate and the SAFE direction: a rollback that succeeded
+      // but failed to mark (a DB blip) leaves the row applied/un-monitored, so the next pass
+      // re-measures + re-dispatches the reset (deduped at ingress via reset:<wu>, returning the cached
+      // completed result) and re-marks. Never adopt the inverse (mark-before-dispatch): that would
+      // record rolled_back for a rollback that never ran.
+      const { transitioned } = await args.store.markGuardrailOutcome({
         executionWorkUnitId: r.executionWorkUnitId,
         organizationId: r.organizationId,
         outcome,
       });
+      // A concurrent pass already resolved (and counted) this row: do not double-count the verdict
+      // metric or re-alert. First-writer-wins at the DB; the metric mirrors it.
+      if (!transitioned) return;
       args.recordOutcome(r.organizationId, outcome);
       if (outcome === "rollback_unrestorable") {
         await args.alertCritical(

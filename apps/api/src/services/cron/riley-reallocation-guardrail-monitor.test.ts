@@ -12,6 +12,24 @@ import {
   type GuardrailMeasurement,
 } from "@switchboard/ad-optimizer";
 import type { PendingGuardrailReallocation } from "@switchboard/db";
+import type { SubmitWorkResponse, ExecutionResult, WorkUnit } from "@switchboard/core/platform";
+
+// Minimal but correctly-SHAPED SubmitWorkResponse arms (the inner ExecutionResult/WorkUnit are cast,
+// but the union arm — ok/result/error/approvalRequired — is real so the dispatch's branch order is
+// genuinely exercised, unlike an `as never` fixture).
+const okResponse = (outcome: ExecutionResult["outcome"]): SubmitWorkResponse => ({
+  ok: true,
+  result: { outcome } as ExecutionResult,
+  workUnit: {} as WorkUnit,
+});
+const errResponse = (type: string): SubmitWorkResponse =>
+  ({ ok: false, error: { type, message: type } }) as unknown as SubmitWorkResponse;
+const parkedResponse = (): SubmitWorkResponse => ({
+  ok: true,
+  result: { outcome: "pending_approval" } as ExecutionResult,
+  workUnit: {} as WorkUnit,
+  approvalRequired: true,
+});
 
 const NOW = new Date("2026-06-25T12:00:00.000Z");
 
@@ -92,22 +110,21 @@ describe("buildReallocationRollbackDispatch", () => {
     };
   }
 
-  it("submits the reset built from the breach + plan", async () => {
-    const submitReset = vi.fn(async () => ({ workUnitId: "wu_reset_1" }) as never);
+  const BREACH_ARG = {
+    metric: "account_booked_conversions_drop_share" as const,
+    reason: "exceeded" as const,
+    measured: 0.5,
+    breachAbove: 0.2,
+  };
+  const PLAN = { targetCents: 5000, deltaCentsSigned: -1000 };
+
+  it("submits the reset built from the breach + plan on a completed execution", async () => {
+    const submitReset = vi.fn(async () => okResponse("completed"));
     const dispatch = buildReallocationRollbackDispatch({
       submitReset,
       logger: { warn: vi.fn(), error: vi.fn() },
     });
-    await dispatch(
-      pending(),
-      { targetCents: 5000, deltaCentsSigned: -1000 },
-      {
-        metric: "account_booked_conversions_drop_share",
-        reason: "exceeded",
-        measured: 0.5,
-        breachAbove: 0.2,
-      },
-    );
+    await dispatch(pending(), PLAN, BREACH_ARG);
     const req = (submitReset.mock.calls[0] as unknown[])[0] as {
       intent: string;
       parameters: Record<string, unknown>;
@@ -122,31 +139,42 @@ describe("buildReallocationRollbackDispatch", () => {
   });
 
   it("THROWS when the reset parks instead of executing (allow-only misconfig)", async () => {
-    const submitReset = vi.fn(async () => ({ approvalRequired: true }) as never);
     const error = vi.fn();
     const dispatch = buildReallocationRollbackDispatch({
-      submitReset,
+      submitReset: async () => parkedResponse(),
       logger: { warn: vi.fn(), error },
     });
-    await expect(
-      dispatch(
-        pending(),
-        { targetCents: 5000, deltaCentsSigned: -1000 },
-        {
-          metric: "account_booked_conversions_drop_share",
-          reason: "exceeded",
-          measured: 0.5,
-          breachAbove: 0.2,
-        },
-      ),
-    ).rejects.toThrow(/parked instead of executing/);
+    await expect(dispatch(pending(), PLAN, BREACH_ARG)).rejects.toThrow(
+      /parked instead of executing/,
+    );
     expect(error).toHaveBeenCalled();
+  });
+
+  it("THROWS on an ingress error (ok:false) so the row is re-monitored, not marked rolled_back", async () => {
+    const dispatch = buildReallocationRollbackDispatch({
+      submitReset: async () => errResponse("entitlement_required"),
+      logger: { warn: vi.fn(), error: vi.fn() },
+    });
+    await expect(dispatch(pending(), PLAN, BREACH_ARG)).rejects.toThrow(/reset submit failed/);
+  });
+
+  it("THROWS when the reset EXECUTED but FAILED (ok:true + outcome failed): the budget was NOT restored", async () => {
+    // This is the fail-open the dispatch must close: a failed reset must never read as a rollback.
+    const dispatch = buildReallocationRollbackDispatch({
+      submitReset: async () => okResponse("failed"),
+      logger: { warn: vi.fn(), error: vi.fn() },
+    });
+    await expect(dispatch(pending(), PLAN, BREACH_ARG)).rejects.toThrow(/did not complete/);
   });
 });
 
 describe("buildReallocationGuardrailMonitorDeps + runReallocationGuardrailMonitor (integration)", () => {
-  function harness(rows: PendingGuardrailReallocation[], measurement: GuardrailMeasurement) {
-    const markGuardrailOutcome = vi.fn(async () => ({ transitioned: true }));
+  function harness(
+    rows: PendingGuardrailReallocation[],
+    measurement: GuardrailMeasurement,
+    markTransitioned = true,
+  ) {
+    const markGuardrailOutcome = vi.fn(async () => ({ transitioned: markTransitioned }));
     const dispatchRollback = vi.fn(async () => {});
     const recordOutcome = vi.fn();
     const alertCritical = vi.fn();
@@ -197,6 +225,13 @@ describe("buildReallocationGuardrailMonitorDeps + runReallocationGuardrailMonito
     expect(h.alertCritical).toHaveBeenCalledWith(
       expect.stringContaining("could NOT be rolled back"),
     );
+  });
+
+  it("does NOT double-count the metric when a concurrent pass already resolved the row (transitioned:false)", async () => {
+    const h = harness([row()], HELD, false);
+    await runReallocationGuardrailMonitor(h.deps);
+    expect(h.markGuardrailOutcome).toHaveBeenCalled();
+    expect(h.recordOutcome).not.toHaveBeenCalled();
   });
 
   it("SKIPS + alarms a row with no deploymentId (cannot attribute the rollback)", async () => {

@@ -1267,8 +1267,11 @@ export async function registerInngest(
 
   const reallocationGuardrailMeasure = buildReallocationGuardrailMeasurement({
     getCampaignBudgetCents: async (deploymentId, campaignId) => {
-      // The cron credential resolver takes the deploymentId and resolves its org internally; a dead
-      // or missing connection returns null (read fails closed -> currentLiveCents NaN -> unrestorable).
+      // Read-only budget read for rollback sizing. The deploymentId is org-scoped at its source
+      // (listPendingGuardrailForOrg(orgId) returns only that org's stamped rows), and the reset
+      // executor independently re-verifies org isolation before any write, so trusting the stamped
+      // deploymentId here is safe. The cron credential resolver resolves the deployment's org
+      // internally; a dead or missing connection returns null (fails closed -> NaN -> unrestorable).
       const creds = await getDeploymentCredentials(deploymentId);
       if (!creds) return null;
       try {

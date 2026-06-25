@@ -78,6 +78,13 @@ export interface RileyResetBudgetExecutionDeps {
  * No durable lease marker: the reset relies on ingress idempotency (key reset:<forwardWorkUnitId>)
  * plus the idempotent absolute-set, so a retried dispatch re-sets the same value rather than
  * double-moving. That also keeps reset rows out of the forward monitor's queue (no recursion).
+ *
+ * Receipt edge (conscious, fails closed): the campaign_budget_reset receipt's `observedLiveCents` is
+ * PositiveSafeCents, so a live budget that reads exactly 0 (after passing the null + already-at-prior
+ * guards) would write the restore then fail receipt validation -> RESET_RECEIPT_INVALID -> failed.
+ * The Meta write already landed, so this self-heals: the next monitor pass reads live === targetCents
+ * and returns completed (restored:false), and the dispatch (which throws on a non-completed outcome)
+ * re-tries until then. Safe direction (a real restore reported as failed), never a silent loss.
  */
 export function buildRileyResetBudgetExecutionWorkflow(
   deps: RileyResetBudgetExecutionDeps,
