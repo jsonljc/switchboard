@@ -169,11 +169,17 @@ interface OperatorIntentsBootstrapDeps {
  * pass an explicit list for an intent that is also driven by a cron, e.g.
  * ["schedule", "api"] for the weekly report delivery. The hardcoded ["api"]
  * default keeps every existing caller unchanged.
+ *
+ * `revenueRecording` (A22) defaults to false; pass true only for an intent that
+ * records already-settled INBOUND revenue (e.g. payment.record_verified) so the
+ * entitlement gate in PlatformIngress carves it out instead of blocking it — the
+ * proof of money that already moved must be recorded even for a non-entitled org.
  */
 function registerOperatorIntent(
   intentRegistry: IntentRegistry,
   intent: string,
   allowedTriggers: Trigger[] = ["api"],
+  revenueRecording = false,
 ): void {
   intentRegistry.register({
     intent,
@@ -189,6 +195,7 @@ function registerOperatorIntent(
     allowedTriggers,
     timeoutMs: 30_000,
     retryable: false,
+    revenueRecording,
   });
 }
 
@@ -314,7 +321,9 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     registerOperatorIntent(intentRegistry, RECORD_REVENUE_INTENT);
   }
   if (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier) {
-    registerOperatorIntent(intentRegistry, RECORD_VERIFIED_PAYMENT_INTENT);
+    // A22: revenueRecording=true — a PSP-verified, already-settled deposit is recorded
+    // even for a non-entitled org (entitlement gates outbound spend, not inbound proof).
+    registerOperatorIntent(intentRegistry, RECORD_VERIFIED_PAYMENT_INTENT, ["api"], true);
   }
   if (bookingAttendanceWriter) {
     registerOperatorIntent(intentRegistry, RECORD_ATTENDANCE_INTENT);
