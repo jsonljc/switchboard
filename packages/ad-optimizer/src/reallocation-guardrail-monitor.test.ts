@@ -85,10 +85,13 @@ describe("planReallocationRollback", () => {
 describe("runReallocationGuardrailMonitor", () => {
   function pending(over: Partial<PendingReallocation> = {}): PendingReallocation {
     return {
+      executionWorkUnitId: "wu-fwd-1",
       deploymentId: "dep-1",
       organizationId: "org-1",
+      adAccountId: "act_1",
       campaignId: "c1",
       observedPriorCents: 5000,
+      appliedAt: new Date("2026-06-22T00:00:00.000Z"),
       contract: DEFAULT_BLAST_RADIUS_CONTRACT,
       ...over,
     };
