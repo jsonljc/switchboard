@@ -84,7 +84,10 @@ describe("provision route — persist status (N1) + idempotent resubmit (N2)", (
       agentListing: {
         upsert: vi.fn().mockResolvedValue({ id: "listing_1", slug: "alex-conversion" }),
       },
-      agentDeployment: { upsert: vi.fn().mockResolvedValue({ id: "dep_1" }) },
+      agentDeployment: {
+        upsert: vi.fn().mockResolvedValue({ id: "dep_1" }),
+        update: vi.fn().mockResolvedValue({}),
+      },
       deploymentConnection: { upsert: vi.fn().mockResolvedValue({ id: "dc_1" }) },
     };
     return {

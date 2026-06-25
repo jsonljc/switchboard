@@ -81,7 +81,10 @@ describe("provision route fixes", () => {
         agentListing: {
           upsert: vi.fn().mockResolvedValue({ id: "listing_1", slug: "alex-conversion" }),
         },
-        agentDeployment: { upsert: vi.fn().mockResolvedValue({ id: "dep_1" }) },
+        agentDeployment: {
+          upsert: vi.fn().mockResolvedValue({ id: "dep_1" }),
+          update: vi.fn().mockResolvedValue({}),
+        },
         deploymentConnection: { upsert: vi.fn().mockResolvedValue({ id: "dc_1" }) },
       };
       return {
