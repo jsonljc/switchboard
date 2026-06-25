@@ -36,7 +36,7 @@ describe("buildObserveReview", () => {
     });
 
     const out = await buildObserveReview(deps, "org-1", {});
-    if ("notFound" in out) throw new Error("unexpected notFound");
+    if (!("units" in out)) throw new Error("unexpected non-success result");
 
     expect(deps.findAlexDeployment).toHaveBeenCalledWith("org-1");
     expect(out.units.deterministic.wouldBlock).toBe(5);
@@ -54,7 +54,7 @@ describe("buildObserveReview", () => {
   it("defaults the window to 7 days before now and passes it to both store reads", async () => {
     const deps = makeDeps();
     const out = await buildObserveReview(deps, "org-1", {});
-    if ("notFound" in out) throw new Error("unexpected notFound");
+    if (!("units" in out)) throw new Error("unexpected non-success result");
 
     expect(out.window.since).toBe("2026-06-18T00:00:00.000Z");
     expect(deps.verdictStore.summarizeByDeployment).toHaveBeenCalledWith("dep-1", {
@@ -103,7 +103,7 @@ describe("buildObserveReview", () => {
     });
 
     const out = await buildObserveReview(deps, "org-1", {});
-    if ("notFound" in out) throw new Error("unexpected notFound");
+    if (!("units" in out)) throw new Error("unexpected non-success result");
 
     expect(out.samples).toHaveLength(1); // escalation_trigger sample dropped (not a flippable unit)
     expect(out.samples[0]).toMatchObject({
@@ -120,5 +120,14 @@ describe("buildObserveReview", () => {
     const deps = makeDeps({ findAlexDeployment: vi.fn().mockResolvedValue(null) });
     const out = await buildObserveReview(deps, "org-x", {});
     expect(out).toEqual({ notFound: true });
+  });
+
+  it("returns badRequest for a malformed since, before any store or deployment read", async () => {
+    const deps = makeDeps();
+    const out = await buildObserveReview(deps, "org-1", { since: "not-a-date" });
+    expect(out).toHaveProperty("badRequest");
+    // Validation happens first: no deployment lookup, no store read.
+    expect(deps.findAlexDeployment).not.toHaveBeenCalled();
+    expect(deps.verdictStore.summarizeByDeployment).not.toHaveBeenCalled();
   });
 });

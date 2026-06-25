@@ -52,7 +52,13 @@ export async function buildObserveReview(
   deps: ObserveReviewDeps,
   orgId: string,
   opts: { since?: string },
-): Promise<ObserveReviewResponse | { notFound: true }> {
+): Promise<ObserveReviewResponse | { notFound: true } | { badRequest: string }> {
+  // Validate the caller-supplied window BEFORE any store read: a malformed `since`
+  // would otherwise reach Prisma as an Invalid Date and surface as a 500.
+  if (opts.since !== undefined && Number.isNaN(new Date(opts.since).getTime())) {
+    return { badRequest: "Invalid 'since' — expected an ISO 8601 datetime string." };
+  }
+
   const deployment = await deps.findAlexDeployment(orgId);
   if (!deployment) return { notFound: true };
 
@@ -119,6 +125,9 @@ export const observeReviewRoutes: FastifyPluginAsync = async (app) => {
         { since },
       );
 
+      if ("badRequest" in result) {
+        return reply.code(400).send({ error: result.badRequest, statusCode: 400 });
+      }
       if ("notFound" in result) {
         return reply
           .code(404)

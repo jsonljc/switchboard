@@ -47,14 +47,25 @@ export function deriveEnforceAction(
       return "block";
     case "claim_classifier":
       if (reasonCode === "unsupported_claim_rewritten") return "rewrite";
+      // Every other reason the classifier emits is an escalate in enforce:
+      //  - unsupported_claim_escalated (ESCALATE_ONLY / credentials / no-template)
+      //  - classifier_timeout / classifier_error (both return kind:"escalate" — a flaky
+      //    classifier escalates to a human under enforce, the key handoff-storm signal)
+      //  - claim_substantiation_stale: emitted by BOTH the credentials/escalate path AND
+      //    the rewriteable/rewrite path. reasonCode alone cannot disambiguate and the
+      //    aggregation drops emittedText, so a stale-rewrite verdict is conservatively
+      //    counted as escalate (the larger action). Total would-act stays correct; only
+      //    the escalate/rewrite split carries a known minor skew for this one reason. A
+      //    precise split would need the classifier to emit distinct reason codes.
       if (
         reasonCode === "unsupported_claim_escalated" ||
         reasonCode === "unsupported_claim" ||
-        reasonCode === "claim_substantiation_stale"
+        reasonCode === "claim_substantiation_stale" ||
+        reasonCode === "classifier_timeout" ||
+        reasonCode === "classifier_error"
       ) {
         return "escalate";
       }
-      // classifier_timeout / classifier_error: observe records, enforce does not act.
       return "none";
     case "consent_gate":
       // Enforce blocks ONLY a revoked-contact race; the disclosure path never blocks.

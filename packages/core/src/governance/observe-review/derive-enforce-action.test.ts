@@ -18,9 +18,9 @@ describe("deriveEnforceAction", () => {
       "escalate",
     );
   });
-  it("observe telemetry (action=allow): claim timeout/error -> none", () => {
-    expect(deriveEnforceAction("claim_classifier", "classifier_timeout", "allow")).toBe("none");
-    expect(deriveEnforceAction("claim_classifier", "classifier_error", "allow")).toBe("none");
+  it("observe telemetry (action=allow): claim timeout/error -> escalate (enforce escalates to a human)", () => {
+    expect(deriveEnforceAction("claim_classifier", "classifier_timeout", "allow")).toBe("escalate");
+    expect(deriveEnforceAction("claim_classifier", "classifier_error", "allow")).toBe("escalate");
   });
   it("observe telemetry (action=allow): consent revoked -> block; disclosure/jurisdiction -> none", () => {
     expect(deriveEnforceAction("consent_gate", "consent_revoked", "allow")).toBe("block");
