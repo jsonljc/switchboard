@@ -265,14 +265,17 @@ describe("buildRileyBudgetExecutionWorkflow — happy path (S2)", () => {
     const parsed = ExecutionReceiptSchema.safeParse(receipt);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.observedPriorCents).toBe(5000);
-      expect(parsed.data.appliedCents).toBe(6000);
-      expect(parsed.data.deltaCentsSigned).toBe(1000);
-      expect(parsed.data.approvedLifecycleId).toBe("life_1");
-      expect(parsed.data.bindingHash).toBe("hash_1");
-      expect(parsed.data.workTraceId).toBe("trace_1");
-      expect(parsed.data.deploymentId).toBe("dep_riley");
       expect(parsed.data.kind).toBe("campaign_budget_reallocation");
+      // Narrow the discriminated union to read the reallocation-only fields.
+      if (parsed.data.kind === "campaign_budget_reallocation") {
+        expect(parsed.data.observedPriorCents).toBe(5000);
+        expect(parsed.data.appliedCents).toBe(6000);
+        expect(parsed.data.deltaCentsSigned).toBe(1000);
+        expect(parsed.data.approvedLifecycleId).toBe("life_1");
+        expect(parsed.data.bindingHash).toBe("hash_1");
+        expect(parsed.data.workTraceId).toBe("trace_1");
+        expect(parsed.data.deploymentId).toBe("dep_riley");
+      }
     }
     expect((res.outputs as { replayed: boolean }).replayed).toBe(false);
 
