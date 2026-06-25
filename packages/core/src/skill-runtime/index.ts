@@ -5,6 +5,8 @@ export { SimulationPolicyHook } from "./hooks/simulation-policy-hook.js";
 export { TracePersistenceHook } from "./hooks/trace-persistence-hook.js";
 export { DeterministicSafetyGateHook } from "./hooks/deterministic-safety-gate.js";
 export type { DeterministicSafetyGateHookDeps } from "./hooks/deterministic-safety-gate.js";
+export { PriceClaimGateHook } from "./hooks/price-claim-gate.js";
+export type { PriceClaimGateHookDeps } from "./hooks/price-claim-gate.js";
 export { PdpaConsentGateHook } from "./hooks/pdpa-consent-gate.js";
 export type { PdpaConsentGateHookDeps } from "./hooks/pdpa-consent-gate.js";
 export { WhatsAppWindowGateHook } from "./hooks/whatsapp-window-gate.js";

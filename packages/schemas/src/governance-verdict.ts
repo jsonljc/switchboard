@@ -44,6 +44,8 @@ export const GovernanceVerdictReasonSchema = z.enum([
   "jurisdiction_mismatch",
   // Phase 1c egress addition (send-time consent enforcement)
   "contact_resolution_missing", // egress visibility: sessionContactResolver returned null
+  // P1-D: a conversational price not substantiated by an operator-approved service price.
+  "unsubstantiated_price",
 ]);
 
 export const GovernanceVerdictSourceSchema = z.enum([
@@ -52,6 +54,7 @@ export const GovernanceVerdictSourceSchema = z.enum([
   "escalation_trigger",
   "consent_gate",
   "whatsapp_window",
+  "price_gate", // P1-D: deterministic price-vs-approved-facts gate
 ]);
 
 export const GovernanceVerdictSchema = z.object({

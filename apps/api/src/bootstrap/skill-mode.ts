@@ -76,6 +76,7 @@ export async function bootstrapSkillMode(
     GovernanceHook,
     TracePersistenceHook,
     DeterministicSafetyGateHook,
+    PriceClaimGateHook,
     ClaimClassifierHook,
     PdpaConsentGateHook,
     WhatsAppWindowGateHook,
@@ -514,6 +515,31 @@ export async function bootstrapSkillMode(
   });
 
   // ---------------------------------------------------------------------------
+  // PriceClaimGateHook (P1-D) — deterministic price-vs-approved-facts gate.
+  // Shares the master deterministic governance mode (resolveGovernanceMode) with
+  // the banned-phrase gate. In enforce mode a conversational price must match an
+  // operator-approved service price (playbook services[].price), else it blocks
+  // and routes to a human. Fails closed when the org has NO approved prices.
+  // Distinct posture cache instance (per the sibling-gate convention).
+  // ---------------------------------------------------------------------------
+  const priceGatePostureCache = new InMemoryGovernancePostureCache();
+  const priceClaimGateHook = new PriceClaimGateHook({
+    governanceConfigResolver,
+    getApprovedPrices: async (orgId) => {
+      const services = (await playbookReader.readForOrganization(orgId))?.services ?? [];
+      return services
+        .map((s) => s.price)
+        .filter((p): p is number => typeof p === "number" && Number.isFinite(p));
+    },
+    verdictStore: governanceVerdictStore,
+    handoffStore,
+    conversationStore: conversationStatusSetter,
+    postureCache: priceGatePostureCache,
+    clock: () => new Date(),
+    renderHandoff: renderHandoffTemplate,
+  });
+
+  // ---------------------------------------------------------------------------
   // ClaimClassifierHook infrastructure (Task 15/16)
   // Runs AFTER DeterministicSafetyGateHook (deterministic banned-phrase / escalation
   // triggers have already fired by this point). Per spec §6.7 the posture cache is
@@ -719,6 +745,7 @@ export async function bootstrapSkillMode(
     new GovernanceHook(toolsMap),
     safetyGateHook,
     claimClassifierHook,
+    priceClaimGateHook,
     pdpaConsentGateHook,
     whatsAppWindowGateHook,
   ];
@@ -775,6 +802,7 @@ export async function bootstrapSkillMode(
     new GovernanceHook(simulationToolsMap),
     safetyGateHook,
     claimClassifierHook,
+    priceClaimGateHook,
     pdpaConsentGateHook,
     whatsAppWindowGateHook,
     new SimulationPolicyHook(),
