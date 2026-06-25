@@ -173,6 +173,8 @@ export * from "./riley-pause-execution.js";
 export * from "./execution-receipt.js";
 // Spec-1B act leg: the frozen, human-approved reallocate parameters the executor replays
 export * from "./riley-budget-execution.js";
+// Spec-1B act leg: the frozen parameters the automated reset-to-prior rollback executor replays
+export * from "./riley-reset-budget-execution.js";
 
 // Reports v1 view-model (operator deep-dive surface)
 export * from "./reports/v1.js";

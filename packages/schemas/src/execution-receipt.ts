@@ -54,8 +54,9 @@ const CampaignBudgetResetReceiptSchema = z.object({
   deploymentId: z.string(),
   adAccountId: z.string(),
   campaignId: z.string(),
-  workTraceId: z.string(),
-  /** The replay key for THIS reset execution work unit. */
+  /** The replay key for THIS reset execution work unit. The reset's canonical WorkTrace is reachable
+   *  by this id; storing the traceId inside its own executionOutputs would be redundant (and risks the
+   *  workUnitId/traceId conflation trap), so the reset receipt omits workTraceId. */
   executionWorkUnitId: z.string(),
   /** The forward reallocation execution work unit this reset reversed. */
   rollbackOfWorkUnitId: z.string(),

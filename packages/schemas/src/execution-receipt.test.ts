@@ -7,7 +7,6 @@ const VALID_RESET = {
   deploymentId: "dep-riley",
   adAccountId: "act_123",
   campaignId: "camp_1",
-  workTraceId: "wt_reset_1",
   executionWorkUnitId: "wu_reset_1",
   rollbackOfWorkUnitId: "wu_forward_1",
   breachMetric: "account_booked_conversions_drop_share" as const,
