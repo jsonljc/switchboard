@@ -5,6 +5,7 @@ const buildPrismaMock = () => ({
   governanceVerdict: {
     create: vi.fn(),
     findMany: vi.fn(),
+    groupBy: vi.fn(),
   },
 });
 
@@ -142,6 +143,53 @@ describe("PrismaGovernanceVerdictStore", () => {
         decidedAt: { gte: from, lt: to },
       },
     });
+  });
+
+  it("summarizeByDeployment groups by (sourceGuard, reasonCode, action) and maps counts", async () => {
+    prisma.governanceVerdict.groupBy.mockResolvedValue([
+      {
+        sourceGuard: "price_gate",
+        reasonCode: "unsubstantiated_price",
+        action: "allow",
+        _count: { _all: 5 },
+      },
+      {
+        sourceGuard: "whatsapp_window",
+        reasonCode: "outside_whatsapp_window",
+        action: "template_required",
+        _count: { _all: 2 },
+      },
+    ]);
+
+    const out = await store.summarizeByDeployment("dep-1", { since: "2026-05-09T00:00:00.000Z" });
+
+    expect(prisma.governanceVerdict.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ["sourceGuard", "reasonCode", "action"],
+        where: {
+          deploymentId: "dep-1",
+          decidedAt: { gte: new Date("2026-05-09T00:00:00.000Z") },
+        },
+        _count: { _all: true },
+      }),
+    );
+    expect(out).toEqual([
+      { sourceGuard: "price_gate", reasonCode: "unsubstantiated_price", action: "allow", count: 5 },
+      {
+        sourceGuard: "whatsapp_window",
+        reasonCode: "outside_whatsapp_window",
+        action: "template_required",
+        count: 2,
+      },
+    ]);
+  });
+
+  it("summarizeByDeployment omits the decidedAt filter when since is absent", async () => {
+    prisma.governanceVerdict.groupBy.mockResolvedValue([]);
+    await store.summarizeByDeployment("dep-1");
+    expect(prisma.governanceVerdict.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { deploymentId: "dep-1" } }),
+    );
   });
 
   describe("onWrite callback", () => {

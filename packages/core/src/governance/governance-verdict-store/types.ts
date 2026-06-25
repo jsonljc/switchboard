@@ -36,4 +36,13 @@ export interface GovernanceVerdictStore {
     from: Date;
     to: Date;
   }): Promise<number>;
+  /**
+   * Bounded aggregation for the observe-review surface: counts verdicts grouped by
+   * (sourceGuard, reasonCode, action) for a deployment, optionally since a timestamp.
+   * Accurate counts without an unbounded row fetch.
+   */
+  summarizeByDeployment(
+    deploymentId: string,
+    options?: { since?: string },
+  ): Promise<Array<{ sourceGuard: string; reasonCode: string; action: string; count: number }>>;
 }

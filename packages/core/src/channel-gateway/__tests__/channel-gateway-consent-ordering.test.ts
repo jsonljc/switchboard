@@ -73,6 +73,7 @@ describe("ChannelGateway — consent-before-escalation ordering", () => {
       listByConversation: vi.fn(),
       listByDeployment: vi.fn(),
       countByDeploymentAndClaim: vi.fn(),
+      summarizeByDeployment: vi.fn(),
     };
 
     // The escalation trigger loader — if called, the test fails (ordering broken).
