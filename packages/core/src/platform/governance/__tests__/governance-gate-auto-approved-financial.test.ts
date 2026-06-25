@@ -109,6 +109,13 @@ const reallocate: Partial<IntentRegistration> = {
   executor: { mode: "workflow", workflowId: REALLOCATE_INTENT },
 };
 
+const PAUSE_INTENT = "adoptimizer.campaign.pause";
+
+const pause: Partial<IntentRegistration> = {
+  intent: PAUSE_INTENT,
+  executor: { mode: "workflow", workflowId: PAUSE_INTENT },
+};
+
 /** A seeded require_approval(mandatory) + allow pair for the reallocate action,
  *  mirroring the riley-pause seed shape: the allow makes the policy path non-deny,
  *  the require_approval escalates approval to mandatory => outcome require_approval. */
@@ -140,6 +147,50 @@ function seededReallocatePolicies(): Policy[] {
     {
       id: "p_allow",
       name: "reallocate-allow",
+      description: "",
+      organizationId: ORG,
+      cartridgeId: null,
+      priority: 50,
+      active: true,
+      rule,
+      effect: "allow",
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+  ];
+}
+
+/** A seeded require_approval(mandatory) + allow pair for the pause action, mirroring the
+ *  production riley-pause-governance seed: the allow makes the policy path non-deny, the
+ *  require_approval escalates approval to mandatory => outcome require_approval. */
+function seededPausePolicies(): Policy[] {
+  const rule = {
+    conditions: [
+      {
+        field: "actionType",
+        operator: "matches" as const,
+        value: "^adoptimizer\\.campaign\\.pause$",
+      },
+    ],
+  };
+  return [
+    {
+      id: "p_pause_appr",
+      name: "pause-approval",
+      description: "",
+      organizationId: ORG,
+      cartridgeId: null,
+      priority: 40,
+      active: true,
+      rule,
+      effect: "require_approval",
+      approvalRequirement: "mandatory",
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
+    {
+      id: "p_pause_allow",
+      name: "pause-allow",
       description: "",
       organizationId: ORG,
       cartridgeId: null,
@@ -204,6 +255,22 @@ describe("GovernanceGate system_auto_approved financial-intent guard (D9-2)", ()
     expect(decision.outcome).toBe("deny");
   });
 
+  it("refuses the short-circuit for the self-executing PAUSE intent (defense-in-depth)", async () => {
+    // A self-executing pause is money-affecting (it stops spend on a campaign) and must never
+    // ride the system_auto_approved short-circuit, even though it carries no outbound spend
+    // delta. It is already human-gated by its seeded mandatory require_approval policy; the
+    // denylist is the STRUCTURAL backstop if that policy is ever stripped/misconfigured.
+    const gate = new GovernanceGate(gateDeps());
+
+    const decision = await gate.evaluate(
+      workUnit({ campaignId: "camp_1" }, PAUSE_INTENT),
+      autoApproved(pause),
+    );
+
+    expect(decision.outcome).not.toBe("execute");
+    expect(decision.outcome).toBe("deny");
+  });
+
   it("parks the refused financial intent under a seeded require_approval policy (reaches the human gate)", async () => {
     const gate = new GovernanceGate(
       gateDeps({ loadPolicies: async () => seededReallocatePolicies() }),
@@ -212,6 +279,20 @@ describe("GovernanceGate system_auto_approved financial-intent guard (D9-2)", ()
     const decision = await gate.evaluate(
       workUnit({ spendAmount: 250 }, REALLOCATE_INTENT),
       autoApproved(reallocate),
+    );
+
+    expect(decision.outcome).toBe("require_approval");
+  });
+
+  it("parks a denylisted PAUSE under its seeded mandatory policy (the real production path)", async () => {
+    // Production reality for pause: the seeded mandatory require_approval policy reaches the
+    // human gate. The denylist refuses the auto-approve short-circuit, so the seeded policy
+    // governs and the outcome is require_approval (not an auto-execute).
+    const gate = new GovernanceGate(gateDeps({ loadPolicies: async () => seededPausePolicies() }));
+
+    const decision = await gate.evaluate(
+      workUnit({ campaignId: "camp_1" }, PAUSE_INTENT),
+      autoApproved(pause),
     );
 
     expect(decision.outcome).toBe("require_approval");
