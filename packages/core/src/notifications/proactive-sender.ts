@@ -30,21 +30,27 @@ export class WhatsAppWindowClosedError extends Error {
 
 /**
  * Thrown on the org-aware send path when the SENDING org has its own WhatsApp connection but that
- * connection lacks a phone number id of its own. The phoneNumberId is the tenant FROM-identity, so
- * there is NO number we may legitimately send this org's message from — borrowing the global/pilot
- * number would ship it FROM another tenant's WABA number (a cross-tenant leak). We fail closed and
- * THROW (rather than silently skip) so the caller surfaces an honest delivery failure instead of a
- * phantom success — a silently-dropped operator or escalation reply is worse than a visible 502. The
- * message carries only the (non-PII) organization id; never the recipient phone or any credential.
+ * connection does not yield usable send credentials — either it lacks a phone number id of its own
+ * (`org_phone_missing`: the phoneNumberId is the tenant FROM-identity, so borrowing the global/pilot
+ * number would ship the message FROM another tenant's WABA number — a cross-tenant leak), or no send
+ * token resolves anywhere (`config_missing` for an already-onboarded org). In both cases the tenant
+ * is onboarded, so we fail closed and THROW (rather than silently skip) — the caller surfaces an
+ * honest delivery failure instead of a phantom success, and a silently-dropped operator or
+ * escalation reply is worse than a visible 502. The single-tenant pilot (no per-org connection at
+ * all) is NOT this error — it keeps the legacy silent warn+skip. The message carries only the
+ * (non-PII) organization id and the reason; never the recipient phone or any credential.
  */
 export class WhatsAppSendCredsUnavailableError extends Error {
   readonly kind = "whatsapp_send_creds_unavailable" as const;
-  constructor(organizationId: string) {
+  readonly reason: "org_phone_missing" | "config_missing";
+  constructor(organizationId: string, reason: "org_phone_missing" | "config_missing") {
     super(
-      `WhatsApp send blocked for org ${organizationId}: its connection has no phone number id of ` +
-        `its own. Refusing to send from another tenant's number (fail-closed tenant isolation).`,
+      `WhatsApp send blocked for org ${organizationId} (${reason}): its connection did not yield ` +
+        `usable send credentials of its own. Refusing to borrow another tenant's number or report ` +
+        `a phantom delivery (fail-closed tenant isolation).`,
     );
     this.name = "WhatsAppSendCredsUnavailableError";
+    this.reason = reason;
   }
 }
 
@@ -199,12 +205,15 @@ export class ProactiveSender implements AgentNotifier {
   /**
    * Resolve the sending org's effective WhatsApp creds via the fail-closed
    * {@link resolveEffectiveWhatsAppSendCreds} rule (phone id org-only, token may fall back). No
-   * resolver configured → the global creds (no per-org notion exists, e.g. no DB). A per-org
-   * connection that lacks its own phone id THROWS {@link WhatsAppSendCredsUnavailableError} — tenant
-   * isolation: we never borrow the global/pilot number, and we surface an honest failure rather than
-   * a phantom success. A deployment-wide gap with no usable creds returns undefined, preserving the
-   * existing silent warn+skip in {@link sendWhatsApp} (an unconfigured channel, not an isolation
-   * fault).
+   * resolver configured → the global creds (no per-org notion exists, e.g. no DB).
+   *
+   * When a per-org connection EXISTS (`perOrg !== null`) but does not yield usable creds — a missing
+   * phone id (`org_phone_missing`) OR no token anywhere (`config_missing` for an onboarded org) — we
+   * THROW {@link WhatsAppSendCredsUnavailableError}: the tenant is onboarded, so we never borrow the
+   * global/pilot number and never report a phantom success; the caller surfaces an honest failure.
+   * Only the genuine single-tenant pilot (`perOrg === null` with an incomplete global config) returns
+   * undefined, preserving the legacy silent warn+skip in {@link sendWhatsApp} (an unconfigured
+   * deployment-wide channel, not a tenant-isolation fault).
    */
   private async resolveWhatsAppCreds(
     organizationId: string,
@@ -214,9 +223,11 @@ export class ProactiveSender implements AgentNotifier {
     const perOrg = await this.resolveOrgSendCreds(organizationId);
     const effective = resolveEffectiveWhatsAppSendCreds(perOrg, global);
     if (effective.ok) return { token: effective.token, phoneNumberId: effective.phoneNumberId };
-    if (effective.reason === "org_phone_missing") {
-      throw new WhatsAppSendCredsUnavailableError(organizationId);
+    // A per-org connection exists but yields no usable creds → fail closed loudly (onboarded tenant).
+    if (perOrg !== null) {
+      throw new WhatsAppSendCredsUnavailableError(organizationId, effective.reason);
     }
+    // perOrg === null → single-tenant pilot, deployment-wide gap: keep the legacy silent warn+skip.
     return undefined;
   }
 

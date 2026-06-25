@@ -327,6 +327,25 @@ describe("ProactiveSender", () => {
       expect((err as Error).message).toContain("orgB");
     });
 
+    it("FAILS CLOSED when an onboarded org's connection yields no usable token (no phantom 200)", async () => {
+      // A per-org connection exists (has a phone) but neither it nor the deployment has a token. We
+      // cannot send, but the tenant IS onboarded — throw an honest failure rather than silently
+      // dropping the reply and reporting success. Contrast the pilot (no connection) test below.
+      const sender = new ProactiveSender({
+        credentials: {}, // no global WhatsApp creds at all (global token unset)
+        resolveOrgSendCreds: async () => ({ token: null, phoneNumberId: "B-pn" }),
+      });
+
+      const err = await sender
+        .sendProactiveForOrg("orgB", "+15551234567", "whatsapp", "no token anywhere")
+        .then(() => null)
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(WhatsAppSendCredsUnavailableError);
+      expect((err as WhatsAppSendCredsUnavailableError).reason).toBe("config_missing");
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("passes the sending org to the 24h-window gate", async () => {
       const isWithinWindow = vi.fn(async () => true);
       const sender = new ProactiveSender({
@@ -377,7 +396,19 @@ describe("ProactiveSender", () => {
       expect(mockFetch).toHaveBeenCalledTimes(21); // orgA: 20 (capped) + orgB: 1 (independent)
     });
 
-    it("warns and skips when neither org nor global creds yield a WhatsApp number", async () => {
+    it("keeps the legacy org-blind bucket separate from an org-aware bucket for the same chat", async () => {
+      // The org-blind sendProactive (no org → "*" bucket) and an org-aware sendProactiveForOrg to
+      // the same chat are now DELIBERATELY independent buckets: the org-blind budget cannot throttle
+      // an org-aware send to the same recipient (the prior behavior shared one bucket).
+      const sender = new ProactiveSender({ telegram: { botToken: "b" } });
+
+      for (let i = 0; i < 20; i++) await sender.sendProactive("chat_1", "telegram", `m${i}`);
+      await sender.sendProactiveForOrg("orgB", "chat_1", "telegram", "org-aware, own bucket");
+
+      expect(mockFetch).toHaveBeenCalledTimes(21); // 20 org-blind ("*") + 1 org-aware (orgB)
+    });
+
+    it("warns and skips when neither org nor global creds yield a WhatsApp number (pilot, no connection)", async () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const sender = new ProactiveSender({
         credentials: {},
