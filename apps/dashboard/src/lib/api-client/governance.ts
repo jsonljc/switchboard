@@ -218,15 +218,39 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     );
   }
 
-  async setGovernanceGateMode(agentId: string, unit: string, mode: string, idempotencyKey: string) {
-    return this.request<{ unit: string; mode: string }>(
-      `/api/agents/${agentId}/governance/gates/${encodeURIComponent(unit)}/mode`,
+  /**
+   * Non-throwing flip: returns the backend status + body so the proxy can propagate a
+   * 409 (readiness REFUSE) and its human `reason` instead of collapsing every non-2xx to
+   * a 500 (the shared `request` helper throws a bare Error that drops status + reason).
+   */
+  async setGovernanceGateModeRaw(
+    agentId: string,
+    unit: string,
+    mode: string,
+    idempotencyKey: string,
+  ): Promise<{
+    status: number;
+    body: { unit?: string; mode?: string; error?: string; reason?: string };
+  }> {
+    const res = await fetch(
+      `${this.baseUrl}/api/agents/${agentId}/governance/gates/${encodeURIComponent(unit)}/mode`,
       {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+          "Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify({ mode }),
-        headers: { "Idempotency-Key": idempotencyKey },
       },
     );
+    const body = (await res.json().catch(() => ({}))) as {
+      unit?: string;
+      mode?: string;
+      error?: string;
+      reason?: string;
+    };
+    return { status: res.status, body };
   }
 
   // Governance status

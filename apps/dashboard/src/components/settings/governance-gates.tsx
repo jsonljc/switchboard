@@ -78,7 +78,7 @@ export function GovernanceGates({
             <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">{reviewSummary(g.review)}</p>
               {!g.ready && !isEnforcing ? (
-                <p className="text-sm text-caution-foreground" role="note">
+                <p id={`${g.unit}-blocking-reason`} className="text-sm text-caution" role="note">
                   {g.blockingReason}
                 </p>
               ) : null}
@@ -96,6 +96,7 @@ export function GovernanceGates({
                     disabled={!g.ready || pending}
                     onClick={() => setConfirmUnit(g.unit)}
                     aria-label={`Enforce ${GATE_LABELS[g.unit]}`}
+                    aria-describedby={!g.ready ? `${g.unit}-blocking-reason` : undefined}
                   >
                     Enforce
                   </Button>

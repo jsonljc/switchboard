@@ -12,14 +12,16 @@ export async function POST(
     await requireSession();
     const client = await getApiClient();
     const { agentId, unit } = await params;
-    const body = (await request.json().catch(() => ({}))) as { mode?: string };
-    const result = await client.setGovernanceGateMode(
+    const payload = (await request.json().catch(() => ({}))) as { mode?: string };
+    // Propagate the backend status + body (a 409 REFUSE carries a human `reason`) instead
+    // of collapsing every non-2xx to a 500.
+    const { status, body } = await client.setGovernanceGateModeRaw(
       agentId,
       unit,
-      body.mode ?? "",
+      payload.mode ?? "",
       createIdempotencyKey(),
     );
-    return NextResponse.json(result);
+    return NextResponse.json(body, { status });
   } catch (err: unknown) {
     return proxyError(
       err instanceof Error ? { error: err.message } : {},

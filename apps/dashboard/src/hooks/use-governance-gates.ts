@@ -52,8 +52,9 @@ export function useSetGovernanceGateMode(agentId = "alex") {
         body: JSON.stringify({ mode }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error || `Failed to set gate mode: ${res.status}`);
+        const body = (await res.json().catch(() => ({}))) as { error?: string; reason?: string };
+        // Prefer the human `reason` (a 409 REFUSE carries it) over the machine error code.
+        throw new Error(body.reason || body.error || `Failed to set gate mode: ${res.status}`);
       }
       return res.json() as Promise<{ unit: string; mode: string }>;
     },
