@@ -199,6 +199,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "Booking attempts blocked by the flag-gated consent precondition (enforce mode)",
       ["orgId", "reason"],
     ),
+    bookingConsentResolverError: new PromCounter(
+      "switchboard_booking_consent_resolver_error_total",
+      "Governance-config resolver errors on the booking-consent path; outcome in {enforce_from_cache, off_cold_cache} (cache-driven fail-safe, A19)",
+      ["deploymentId", "outcome"],
+    ),
     bookedValueResolution: new PromCounter(
       "switchboard_booked_value_resolution_total",
       "Booked-value resolution outcome per booking.create attempt; outcome in {resolved, no_playbook, no_match, matched_unpriced, no_lookup, read_error}. `resolved` measures catalog alignment (the booked service matched a priced playbook entry), narrower than end-to-end booked-value coverage",

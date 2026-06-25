@@ -36,6 +36,14 @@ export interface SwitchboardMetrics {
   /** F15 — booking attempts blocked by the flag-gated consent precondition
    *  (enforce mode only). Labeled by orgId + reason (consent_pending/consent_revoked). */
   bookingConsentBlocked: Counter;
+  /** A19: the booking-consent resolveMode adapter hit a governance-config RESOLVER
+   *  ERROR (store threw or stored config failed validation), distinct from the benign
+   *  "missing" (= gate off). The gate then applies the cache-driven fail-safe: outcome
+   *  "enforce_from_cache" (a warm enforce posture kept the booking gate closed) vs
+   *  "off_cold_cache" (no known posture; fell open to off, matching the outbound consent
+   *  gate's cold-cache behavior). A sustained rate is a governance-config store outage on
+   *  the booking path. Labeled by deploymentId + outcome. */
+  bookingConsentResolverError: Counter;
   /** D3-1 booked-value resolution OUTCOME per booking.create attempt that reaches
    *  value resolution (i.e. after the contact/consent/provider checks pass). Makes
    *  the prod match-vs-abstain rate observable: outcome in {resolved, no_playbook,
@@ -170,6 +178,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     bookingReschedule: new InMemoryCounter(),
     bookingCancel: new InMemoryCounter(),
     bookingConsentBlocked: new InMemoryCounter(),
+    bookingConsentResolverError: new InMemoryCounter(),
     bookedValueResolution: new InMemoryCounter(),
     policyContextSlotEmpty: new InMemoryCounter(),
     skillLlmTokensTotal: new InMemoryCounter(),

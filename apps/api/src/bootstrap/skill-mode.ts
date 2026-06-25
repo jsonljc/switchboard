@@ -15,8 +15,7 @@ import type {
   WhatsAppWindowGateConfig,
 } from "@switchboard/core/skill-runtime";
 import type { ConsentService, ContactConsentReader, PlaybookReader } from "@switchboard/core";
-import { resolveConsentStateConfig } from "@switchboard/schemas";
-import type { GovernanceMode } from "@switchboard/schemas";
+import { createBookingConsentPrecondition } from "./booking-consent-precondition.js";
 import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
 import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
 import { receiptTierForCalendarProvider } from "./receipt-tier.js";
@@ -185,8 +184,15 @@ export async function bootstrapSkillMode(
   const deploymentStore = new PrismaDeploymentStore(prismaClient);
   const governanceConfigResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
   // Constructed here (ahead of the Phase 1c hook block below) so the F15 booking
-  // consent precondition can close over the SAME reader instance.
+  // consent precondition can close over the SAME reader + posture-cache instances
+  // the PdpaConsentGateHook uses.
   const contactConsentReader = createPrismaContactConsentReader({ prisma: prismaClient });
+  // Shared consentState posture cache (A19). The PdpaConsentGateHook warms it on every
+  // resolved outbound turn with mode = resolveConsentStateConfig(config).mode; the booking
+  // consent precondition reads its last-known mode as the fail-closed fallback when the
+  // governance-config resolver transiently errors. One instance => the two consent surfaces
+  // never disagree on a deployment's last-known mode.
+  const consentPostureCache = new InMemoryGovernancePostureCache();
   // onWrite mirrors every persisted verdict into the dual-prom counter
   // (switchboard_governance_verdicts_total) — the observe-bake read surface.
   // NOTE: the slot is single-callback; the deferred lifecycle escalation hook
@@ -334,19 +340,17 @@ export async function bootstrapSkillMode(
   // mode to "observe"/"enforce" (default "off" => zero read, zero block, zero
   // live change). resolveMode reuses the SAME governanceConfigResolver +
   // resolveConsentStateConfig as the outbound PdpaConsentGateHook, so the two
-  // consent surfaces can never disagree on an org's mode. A missing/unparseable
-  // config resolves to "off" (the gate stays inert — it is strictly opt-in;
-  // it never blocks a booking for a non-enrolled org). read() forwards to the
-  // SAME ContactConsentReader instance; the core helper handles read errors
-  // fail-closed under enforce, so no try/catch is needed here.
-  const bookingConsentPrecondition = {
-    resolveMode: async (deploymentId: string): Promise<GovernanceMode> => {
-      const resolution = await governanceConfigResolver(deploymentId);
-      if (resolution.status !== "resolved") return "off";
-      return resolveConsentStateConfig(resolution.config).mode;
-    },
-    read: (orgId: string, contactId: string) => contactConsentReader.read(orgId, contactId),
-  };
+  // consent surfaces can never disagree on an org's mode. A19: a "missing" config
+  // still resolves to "off" (strictly opt-in; never blocks a non-enrolled org), but
+  // a resolver ERROR now fails closed to "enforce" when consentPostureCache holds a
+  // warm enforce posture for the deployment (else "off"), so a transient
+  // governance-config store blip can no longer silently disable an enrolled org's
+  // booking gate. See bootstrap/booking-consent-precondition.ts.
+  const bookingConsentPrecondition = createBookingConsentPrecondition({
+    governanceConfigResolver,
+    consentPostureCache,
+    contactConsentReader,
+  });
 
   const calendarBookFactory = createCalendarBookToolFactory({
     calendarProviderFactory,
@@ -539,9 +543,9 @@ export async function bootstrapSkillMode(
   // docs/superpowers/plans/2026-05-11-alex-medspa-1c-followups.md
   // ---------------------------------------------------------------------------
   const consentStore = createPrismaConsentStore({ prisma: prismaClient });
-  // contactConsentReader is constructed earlier (next to governanceConfigResolver)
-  // so the F15 booking consent precondition and this hook share one instance.
-  const consentPostureCache = new InMemoryGovernancePostureCache();
+  // contactConsentReader + consentPostureCache are constructed earlier (next to
+  // governanceConfigResolver) so the F15 booking consent precondition and this hook
+  // share one instance each (A19 cross-gate posture warming).
 
   // sessionContactResolver: maps sessionId → contactId via ConversationThread.
   // Returns null on first-message turns where the thread row hasn't been
