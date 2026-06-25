@@ -140,6 +140,7 @@ function fakeVerdictStore(): GovernanceVerdictStore & { saved: unknown[] } {
     listByConversation: async () => [],
     listByDeployment: async () => [],
     countByDeploymentAndClaim: async () => 0,
+    summarizeByDeployment: async () => [],
   };
 }
 

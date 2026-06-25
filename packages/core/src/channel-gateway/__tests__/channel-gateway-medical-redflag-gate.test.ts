@@ -65,6 +65,7 @@ function makeDeps() {
       listByConversation: vi.fn(),
       listByDeployment: vi.fn(),
       countByDeploymentAndClaim: vi.fn(),
+      summarizeByDeployment: vi.fn(),
     },
     handoffStore: {
       save: vi.fn().mockResolvedValue(undefined),

@@ -134,4 +134,24 @@ export class PrismaGovernanceVerdictStore implements GovernanceVerdictStore {
       },
     });
   }
+
+  async summarizeByDeployment(
+    deploymentId: string,
+    options?: { since?: string },
+  ): Promise<Array<{ sourceGuard: string; reasonCode: string; action: string; count: number }>> {
+    const grouped = await this.prisma.governanceVerdict.groupBy({
+      by: ["sourceGuard", "reasonCode", "action"],
+      where: {
+        deploymentId,
+        ...(options?.since ? { decidedAt: { gte: new Date(options.since) } } : {}),
+      },
+      _count: { _all: true },
+    });
+    return grouped.map((g) => ({
+      sourceGuard: g.sourceGuard,
+      reasonCode: g.reasonCode,
+      action: g.action,
+      count: g._count._all,
+    }));
+  }
 }

@@ -86,6 +86,7 @@ interface VerdictStoreSpy {
   listByConversation: Spy;
   listByDeployment: Spy;
   countByDeploymentAndClaim: Spy;
+  summarizeByDeployment: Spy;
 }
 
 interface HandoffStoreSpy {
@@ -121,6 +122,7 @@ function makeVerdictStore(): VerdictStoreSpy {
     listByConversation: vi.fn(),
     listByDeployment: vi.fn(),
     countByDeploymentAndClaim: vi.fn(),
+    summarizeByDeployment: vi.fn(),
   };
 }
 
@@ -618,6 +620,7 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
       listByConversation: vi.fn(),
       listByDeployment: vi.fn(),
       countByDeploymentAndClaim: vi.fn(),
+      summarizeByDeployment: vi.fn(),
     };
 
     const config = makeGatewayConfig(

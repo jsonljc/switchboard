@@ -67,6 +67,10 @@ export type { GovernanceProfileStore } from "./governance/profile.js";
 // Governance Verdict Store (interface + types)
 export * from "./governance/governance-verdict-store/index.js";
 
+// Observe-review roll-up (per-gate "what enforce would have done" from observe verdicts)
+export * from "./governance/observe-review/derive-enforce-action.js";
+export * from "./governance/observe-review/summarize-observe-review.js";
+
 // Approved Compliance Claim Store (interface + types)
 export * from "./governance/classifier/approved-compliance-claim-store/index.js";
 
