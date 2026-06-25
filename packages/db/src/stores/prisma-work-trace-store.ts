@@ -11,6 +11,7 @@ import type {
   WorkTraceClaimResult,
   WorkTraceLockDiagnostic,
   WorkTraceReadResult,
+  StrandedRunningClaim,
   IntegrityVerdict,
 } from "@switchboard/core/platform";
 import {
@@ -313,6 +314,45 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
     });
     if (!row) return null;
     return this.verifyAndWrap(row);
+  }
+
+  /**
+   * EV-2 / SPINE-2 — the bounded scan the stranded-claim reaper runs. Returns
+   * orphaned idempotency CLAIMS: rows still `running` with a non-null
+   * idempotencyKey whose executionStartedAt predates `olderThan`. The
+   * `idempotencyKey: { not: null }` filter is load-bearing: it excludes the
+   * KEYLESS `running` rows that conversation/lifecycle turns persist (those are
+   * live in-flight turns finalized by their own machinery — reaping them would
+   * break active conversations). Oldest-first, capped at `limit`. A narrow
+   * `select` (no integrity verify) — the reaper only needs the dead-letter
+   * identity, not the full hashed trace.
+   */
+  async findStuckRunning(olderThan: Date, limit: number): Promise<StrandedRunningClaim[]> {
+    const rows = await this.prisma.workTrace.findMany({
+      where: {
+        outcome: "running",
+        idempotencyKey: { not: null },
+        executionStartedAt: { lt: olderThan },
+      },
+      orderBy: { executionStartedAt: "asc" },
+      take: limit,
+      select: {
+        workUnitId: true,
+        organizationId: true,
+        idempotencyKey: true,
+        intent: true,
+        traceId: true,
+        executionStartedAt: true,
+      },
+    });
+    return rows.map((row) => ({
+      workUnitId: row.workUnitId,
+      organizationId: row.organizationId,
+      idempotencyKey: row.idempotencyKey ?? null,
+      intent: row.intent,
+      traceId: row.traceId,
+      executionStartedAt: row.executionStartedAt?.toISOString() ?? null,
+    }));
   }
 
   private async verifyAndWrap(

@@ -58,7 +58,7 @@ import {
   type RecommendationInput,
   type StepTools as PatternDecayStepTools,
 } from "@switchboard/core";
-import type { SubmitWorkResponse } from "@switchboard/core/platform";
+import type { SubmitWorkResponse, StrandedClaimReaperStore } from "@switchboard/core/platform";
 import { bootstrapLifecycle } from "./lifecycle.js";
 import {
   inngestClient,
@@ -152,6 +152,7 @@ import type { ReminderSendSubmitInput } from "../services/workflows/reminder-sen
 import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
 import { createLifecycleStalledSweepCron } from "../services/cron/lifecycle-stalled-sweep.js";
+import { createStrandedClaimReaperCron } from "../services/cron/stranded-claim-reaper.js";
 import {
   createRileyOutcomeAttributionWorker,
   bindRileyOutcomeOrchestrator,
@@ -1615,6 +1616,22 @@ export async function registerInngest(
         writer: lifecycleWriter,
         history: lifecycleHistory,
         readMode: lifecycleReadMode,
+      }),
+      // EV-2 / SPINE-2: age orphaned `running` ingress idempotency claims to the
+      // needs_reconciliation dead-letter sink (counter + operator alert). Reuses the
+      // app's PrismaWorkTraceStore + operatorAlerter; counts on the active registry.
+      // app.workTraceStore is typed as the narrow WorkTraceStore (findStuckRunning is
+      // off that interface to avoid forcing every mock to stub it); the real
+      // PrismaWorkTraceStore carries it, so capability-check before adopting it as a
+      // reaper store — a store without findStuckRunning makes the cron no-op.
+      createStrandedClaimReaperCron({
+        failure: asyncFailure,
+        store:
+          app.workTraceStore && "findStuckRunning" in app.workTraceStore
+            ? (app.workTraceStore as unknown as StrandedClaimReaperStore)
+            : null,
+        alerter: operatorAlerter,
+        counter: getMetrics().strandedClaimReaped,
       }),
       rileyOutcomeDispatch,
       rileyOutcomeWorker,

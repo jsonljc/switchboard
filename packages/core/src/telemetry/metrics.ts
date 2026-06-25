@@ -83,6 +83,13 @@ export interface SwitchboardMetrics {
    *  org_phone_missing | context_resolve_failed). permanent_send_error is a 4xx Graph failure that
    *  dead-lettered immediately without consuming the retry budget (D4: retry transient only). */
   robinRecoverySendFailed: Counter;
+  /** EV-2 / SPINE-2: an orphaned `running` idempotency CLAIM (process death between
+   *  PlatformIngress.claim() and finalizeTrace) was aged by the stranded-claim reaper to the
+   *  terminal `needs_reconciliation` dead-letter sink. Incremented ONCE per row actually reaped,
+   *  labeled by intent. A sustained rate is a finalize-path / crash-loop signal; ANY nonzero value
+   *  is an idempotency key that committed-or-not and now needs manual reconciliation (the key stays
+   *  blocked — the reaper never re-opens it). */
+  strandedClaimReaped: Counter;
   /** Riley reallocate pre-write blast-radius cap evaluation OUTCOME, emitted once per
    *  `assertWithinBlastRadius` call in the reallocate executor (the ONLY active blast-radius
    *  protection). outcome in {within_cap, delta_cap, share_cap} mirrors the verdict union;
@@ -191,6 +198,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     governanceVerdictsRecorded: new InMemoryCounter(),
     whatsappProactiveSendSkipped: new InMemoryCounter(),
     robinRecoverySendFailed: new InMemoryCounter(),
+    strandedClaimReaped: new InMemoryCounter(),
     rileyReallocationCapEvaluated: new InMemoryCounter(),
     rileyReallocationGuardrailOutcome: new InMemoryCounter(),
     llmCacheCallsTotal: new InMemoryCounter(),
