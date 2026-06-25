@@ -6,10 +6,16 @@ export { SlackApprovalNotifier } from "./slack-notifier.js";
 export type { SlackNotifierOptions } from "./slack-notifier.js";
 export { WhatsAppApprovalNotifier } from "./whatsapp-notifier.js";
 export type { WhatsAppNotifierConfig } from "./whatsapp-notifier.js";
-export { ProactiveSender, WhatsAppWindowClosedError } from "./proactive-sender.js";
+export {
+  ProactiveSender,
+  WhatsAppWindowClosedError,
+  WhatsAppSendCredsUnavailableError,
+  resolveEffectiveWhatsAppSendCreds,
+} from "./proactive-sender.js";
 export type {
   AgentNotifier,
   ChannelCredentials,
+  EffectiveWhatsAppCreds,
   OrgWhatsAppSendCreds,
   ProactiveSenderConfig,
 } from "./proactive-sender.js";

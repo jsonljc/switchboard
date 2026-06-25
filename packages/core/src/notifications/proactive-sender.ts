@@ -28,6 +28,26 @@ export class WhatsAppWindowClosedError extends Error {
   }
 }
 
+/**
+ * Thrown on the org-aware send path when the SENDING org has its own WhatsApp connection but that
+ * connection lacks a phone number id of its own. The phoneNumberId is the tenant FROM-identity, so
+ * there is NO number we may legitimately send this org's message from — borrowing the global/pilot
+ * number would ship it FROM another tenant's WABA number (a cross-tenant leak). We fail closed and
+ * THROW (rather than silently skip) so the caller surfaces an honest delivery failure instead of a
+ * phantom success — a silently-dropped operator or escalation reply is worse than a visible 502. The
+ * message carries only the (non-PII) organization id; never the recipient phone or any credential.
+ */
+export class WhatsAppSendCredsUnavailableError extends Error {
+  readonly kind = "whatsapp_send_creds_unavailable" as const;
+  constructor(organizationId: string) {
+    super(
+      `WhatsApp send blocked for org ${organizationId}: its connection has no phone number id of ` +
+        `its own. Refusing to send from another tenant's number (fail-closed tenant isolation).`,
+    );
+    this.name = "WhatsAppSendCredsUnavailableError";
+  }
+}
+
 /** Interface for sending proactive messages to business owners. */
 export interface AgentNotifier {
   sendProactive(chatId: string, channelType: string, message: string): Promise<void>;
@@ -62,6 +82,51 @@ export interface ChannelCredentials {
 export interface OrgWhatsAppSendCreds {
   token: string | null;
   phoneNumberId: string | null;
+}
+
+/**
+ * The EFFECTIVE WhatsApp send creds for a sending org, or the reason no safe pair could be formed.
+ * `org_phone_missing` is the multi-tenant fail-closed: a per-org connection exists but lacks its own
+ * phone number id, so there is no number we may send this org's message from. `config_missing` is a
+ * deployment-wide gap (the single-tenant pilot env is unset, or no token resolves anywhere).
+ */
+export type EffectiveWhatsAppCreds =
+  | { ok: true; token: string; phoneNumberId: string }
+  | { ok: false; reason: "config_missing" | "org_phone_missing" };
+
+/**
+ * Resolve the effective WhatsApp send creds for a sending org, FAIL-CLOSED on the multi-tenant
+ * isolation boundary. Pure (no I/O) so it is unit-testable in isolation. Mirrors the API-side
+ * `resolveEffectiveSendCreds` (Robin recovery, PR #1271); the two paths share one isolation rule.
+ *
+ * `perOrg` is the org's own creds from its canonical "whatsapp" Connection, or `null` when the org
+ * has NO per-org connection at all (the single-tenant pilot). `global` is the deployment env creds.
+ *
+ * The rule is ASYMMETRIC because the two fields play different roles:
+ * - `phoneNumberId` is the tenant FROM-identity (which number the recipient sees). When a per-org
+ *   connection EXISTS it is org-only — a missing one fails closed (`org_phone_missing`), NEVER
+ *   falling back to the global/pilot number. That fallback is the cross-tenant leak this guards.
+ * - `token` only authorizes the Graph call, so it MAY fall back to the global system-user token
+ *   (the Meta Tech Provider model: one system token authorizes many per-org WABA numbers).
+ *
+ * With NO per-org connection (`perOrg === null`) this is the pilot: the global token + phone id are
+ * both required (else `config_missing`).
+ */
+export function resolveEffectiveWhatsAppSendCreds(
+  perOrg: OrgWhatsAppSendCreds | null,
+  global: { token: string; phoneNumberId: string } | undefined,
+): EffectiveWhatsAppCreds {
+  if (perOrg === null) {
+    // Single-tenant pilot: no per-org connection. Use the global creds; both fields are required.
+    if (!global?.token || !global?.phoneNumberId) return { ok: false, reason: "config_missing" };
+    return { ok: true, token: global.token, phoneNumberId: global.phoneNumberId };
+  }
+  // A per-org connection EXISTS. The phone id is the tenant FROM-identity: org-only, NEVER global.
+  if (!perOrg.phoneNumberId) return { ok: false, reason: "org_phone_missing" };
+  // The token authorizes only; it may fall back to the global system-user token (Tech Provider).
+  const token = perOrg.token ?? global?.token ?? null;
+  if (!token) return { ok: false, reason: "config_missing" };
+  return { ok: true, token, phoneNumberId: perOrg.phoneNumberId };
 }
 
 /** Maximum proactive messages per chat per day. */
@@ -128,20 +193,27 @@ export class ProactiveSender implements AgentNotifier {
   }
 
   /**
-   * Resolve the sending org's WhatsApp creds, per-field falling back to the global
-   * `credentials.whatsapp`. Returns undefined (→ "no creds" warn+skip) only when BOTH
-   * the org and the global lack a field. No resolver configured → the global creds.
+   * Resolve the sending org's effective WhatsApp creds via the fail-closed
+   * {@link resolveEffectiveWhatsAppSendCreds} rule (phone id org-only, token may fall back). No
+   * resolver configured → the global creds (no per-org notion exists, e.g. no DB). A per-org
+   * connection that lacks its own phone id THROWS {@link WhatsAppSendCredsUnavailableError} — tenant
+   * isolation: we never borrow the global/pilot number, and we surface an honest failure rather than
+   * a phantom success. A deployment-wide gap with no usable creds returns undefined, preserving the
+   * existing silent warn+skip in {@link sendWhatsApp} (an unconfigured channel, not an isolation
+   * fault).
    */
   private async resolveWhatsAppCreds(
     organizationId: string,
   ): Promise<{ token: string; phoneNumberId: string } | undefined> {
     const global = this.credentials.whatsapp;
     if (!this.resolveOrgSendCreds) return global;
-    const resolved = await this.resolveOrgSendCreds(organizationId);
-    const token = resolved?.token ?? global?.token ?? null;
-    const phoneNumberId = resolved?.phoneNumberId ?? global?.phoneNumberId ?? null;
-    if (!token || !phoneNumberId) return undefined;
-    return { token, phoneNumberId };
+    const perOrg = await this.resolveOrgSendCreds(organizationId);
+    const effective = resolveEffectiveWhatsAppSendCreds(perOrg, global);
+    if (effective.ok) return { token: effective.token, phoneNumberId: effective.phoneNumberId };
+    if (effective.reason === "org_phone_missing") {
+      throw new WhatsAppSendCredsUnavailableError(organizationId);
+    }
+    return undefined;
   }
 
   /**
