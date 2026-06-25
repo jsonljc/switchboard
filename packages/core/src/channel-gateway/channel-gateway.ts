@@ -144,7 +144,13 @@ async function dispatchResponse(params: {
       sessionId: message.sessionId,
       role: "assistant",
       content: text,
-      workTraceId: response.result.traceId,
+      // Record the workUnitId, NOT the traceId. This id flows into
+      // ConversationEndEvent.workTraceIds, which strong booking attribution matches against
+      // Booking.workTraceId — and Booking.workTraceId stores ctx.workUnitId (== result.workUnitId),
+      // a DIFFERENT cuid from result.traceId. Recording traceId here made the strong tier never
+      // match, downgrading every booked conversation to fallback/none. (The field is named
+      // workTraceId for legacy reasons but carries the workUnitId, mirroring Booking.workTraceId.)
+      workTraceId: response.result.workUnitId,
     });
     await replySink.send(text);
   } else {

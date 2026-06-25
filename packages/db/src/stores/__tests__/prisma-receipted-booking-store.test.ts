@@ -104,6 +104,43 @@ describe("PrismaReceiptedBookingStore.getView", () => {
     });
   });
 
+  it("joins WorkTrace by workUnitId (the value Booking.workTraceId holds), not the WorkTrace.id PK", async () => {
+    // Booking.workTraceId stores ctx.workUnitId === WorkTrace.workUnitId (@unique), NOT the
+    // WorkTrace.id cuid PK. A join on { id: booking.workTraceId } never matches, so the proof
+    // chain (traceId / matchedPolicies / humanApprovalId) was null for 100% of bookings. This mock
+    // returns the WorkTrace row ONLY for a workUnitId lookup: it FAILS the id-PK join (regression)
+    // and PASSES the workUnitId join (fix). The fully-populated test above can't catch this — its
+    // mock returns the row regardless of the where-clause field.
+    prisma.booking.findFirst.mockResolvedValueOnce({
+      id: "bk-1",
+      contactId: null,
+      opportunityId: null,
+      workTraceId: "wu-123", // == ctx.workUnitId == WorkTrace.workUnitId, NOT the cuid PK
+      attendance: null,
+      service: "Botox",
+      startsAt,
+    });
+    prisma.workTrace.findFirst.mockImplementation(
+      async (args: { where: Record<string, unknown> }) =>
+        args.where["workUnitId"] === "wu-123"
+          ? { traceId: "trace-XYZ", matchedPolicies: '["policy-a"]', approvalId: "appr-1" }
+          : null,
+    );
+
+    const view = await store.getView("org-1", "bk-1", now);
+
+    // The proof-chain links surface: trace id, matched policies, and human approval id.
+    expect(view?.traceId).toBe("trace-XYZ");
+    expect(view?.matchedPolicies).toBe('["policy-a"]');
+    expect(view?.humanApprovalId).toBe("appr-1");
+    // ...because the join queried by workUnitId, never the PK (org-scoped, per F12).
+    expect(prisma.workTrace.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ organizationId: "org-1", workUnitId: "wu-123" }),
+      }),
+    );
+  });
+
   it("derives paid + paidValueCents from the booking's verified T1 payment receipts (producer population)", async () => {
     prisma.booking.findFirst.mockResolvedValueOnce({
       id: "bk-1",

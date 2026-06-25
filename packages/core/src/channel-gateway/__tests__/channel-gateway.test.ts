@@ -43,6 +43,7 @@ function createMockConfig(overrides: Partial<ChannelGatewayConfig> = {}): Channe
       submit: vi.fn().mockResolvedValue({
         ok: true,
         result: {
+          workUnitId: "wu-1",
           outcome: "completed",
           outputs: { response: "Hello from agent" },
           summary: "Responded to user",
@@ -399,7 +400,7 @@ describe("ChannelGateway", () => {
     expect(sendSpy).toHaveBeenCalledWith("Hello from agent");
   });
 
-  it("emits workTraceId on the assistant-turn onMessageRecorded callback", async () => {
+  it("emits the workUnitId (not the traceId) on the assistant-turn onMessageRecorded callback", async () => {
     const onMessageRecordedSpy = vi.fn();
     const config = createMockConfig({ onMessageRecorded: onMessageRecordedSpy });
     const gateway = new ChannelGateway(config);
@@ -413,12 +414,14 @@ describe("ChannelGateway", () => {
 
     await gateway.handleIncoming(message, replySink);
 
-    // Two calls: one for the user turn, one for the assistant turn.
-    // The assistant call carries result.traceId.
+    // The recorded id flows into ConversationEndEvent.workTraceIds, which strong booking
+    // attribution matches against Booking.workTraceId. Booking.workTraceId stores ctx.workUnitId
+    // (== result.workUnitId == "wu-1"), NOT the distinct traceId ("trace-1"). Recording traceId
+    // here downgraded EVERY booked conversation to fallback/none. Assert the workUnitId is emitted.
     expect(onMessageRecordedSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         role: "assistant",
-        workTraceId: "trace-1",
+        workTraceId: "wu-1",
       }),
     );
   });
