@@ -63,6 +63,17 @@ describe("PrismaRobinRecoverySendStore", () => {
     expect(prisma.robinRecoverySend.update.mock.calls[0]![0].data.messageId).toBeNull();
   });
 
+  it("markSendInFlight clears nextRetryAt (removes the row from the retry-due set before sending)", async () => {
+    // Pre-send claim: once an attempt starts, the row must not be re-selected by findDue (which keys
+    // on a due nextRetryAt) even if the post-send markSent fails -> at-most-once, no double-send.
+    prisma.robinRecoverySend.update.mockResolvedValue({});
+    await store.markSendInFlight("rs_1");
+    expect(prisma.robinRecoverySend.update).toHaveBeenCalledWith({
+      where: { id: "rs_1" },
+      data: { nextRetryAt: null },
+    });
+  });
+
   it("markSkipped sets terminal skipped state", async () => {
     prisma.robinRecoverySend.update.mockResolvedValue({});
     await store.markSkipped("rs_1", "template_not_approved");

@@ -54,6 +54,13 @@ export const ROBIN_RECOVERY_RETRY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
  */
 export interface RobinRecoverySendStore {
   create(input: CreateRobinRecoverySendInput): Promise<{ id: string }>;
+  /**
+   * Pre-send claim: clear nextRetryAt so the row leaves the retry-due set the instant an attempt
+   * begins. findDue only reclaims rows with a due nextRetryAt, so a crash or a failed markSent AFTER
+   * a successful Graph send can never re-queue this row -> the patient is never messaged twice
+   * (at-most-once). On the cohort path the row is already non-due, so this is a no-op.
+   */
+  markSendInFlight(id: string): Promise<void>;
   markSent(id: string, messageId: string | null): Promise<void>;
   markSkipped(id: string, reason: string): Promise<void>;
   markFailed(id: string, error: string, nextRetryAt: Date | null): Promise<void>;

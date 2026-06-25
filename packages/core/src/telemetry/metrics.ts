@@ -56,20 +56,24 @@ export interface SwitchboardMetrics {
   skillLlmTokensTotal: Counter;
   skillLlmCostUsdTotal: Counter;
   governanceVerdictsRecorded: Counter;
-  /** A proactive WhatsApp send (reminder/greeting/follow-up) was skipped for an
-   *  INFRASTRUCTURE reason rather than a per-contact eligibility decision. The
-   *  dark-funnel signal: reason="config_missing" means the api service has no
-   *  WhatsApp send token (neither WHATSAPP_ACCESS_TOKEN nor WHATSAPP_TOKEN) or
-   *  no WHATSAPP_PHONE_NUMBER_ID, so EVERY reminder + greeting + follow-up for
-   *  the whole deployment silently no-ops. Distinct from the benign per-contact
-   *  skips (unsupported_channel, consent_pending, missing_contact_phone …) which
-   *  are recorded only as the work outcome's skipReason, never on this counter.
-   *  Labeled by intent + reason. */
+  /** A proactive WhatsApp send (reminder/greeting/follow-up/Robin recovery) was
+   *  skipped for an INFRASTRUCTURE reason rather than a per-contact eligibility
+   *  decision. The dark-funnel signal: reason="config_missing" means the api service
+   *  has no WhatsApp send token (neither WHATSAPP_ACCESS_TOKEN nor WHATSAPP_TOKEN) or
+   *  no WHATSAPP_PHONE_NUMBER_ID, so EVERY send for the whole deployment silently
+   *  no-ops; reason="org_phone_missing" means a tenant's own WhatsApp connection has
+   *  no phone number id, so its campaign fails CLOSED org-wide rather than borrow a
+   *  global/pilot number (a multi-tenant isolation guard, not an env gap). Distinct
+   *  from the benign per-contact skips (unsupported_channel, consent_pending,
+   *  missing_contact_phone …) which are recorded only as the work outcome's
+   *  skipReason, never on this counter. Labeled by intent + reason. */
   whatsappProactiveSendSkipped: Counter;
   /** A Robin no-show recovery send EXHAUSTED its bounded retries (or hit a terminal config gap at
    *  retry) and dead-lettered (status=failed, nextRetryAt cleared). The never-silent per-recipient
    *  terminal-failure signal; a sustained rate (or the high-ratio cron alert) is a send-path outage.
-   *  Labeled by intent + reason (max_retries_exhausted | config_missing | context_resolve_failed). */
+   *  Labeled by intent + reason (max_retries_exhausted | permanent_send_error | config_missing |
+   *  org_phone_missing | context_resolve_failed). permanent_send_error is a 4xx Graph failure that
+   *  dead-lettered immediately without consuming the retry budget (D4: retry transient only). */
   robinRecoverySendFailed: Counter;
   /** Riley reallocate pre-write blast-radius cap evaluation OUTCOME, emitted once per
    *  `assertWithinBlastRadius` call in the reallocate executor (the ONLY active blast-radius

@@ -56,6 +56,20 @@ export class PrismaRobinRecoverySendStore implements RobinRecoverySendStore {
     });
   }
 
+  async markSendInFlight(id: string): Promise<void> {
+    // Pre-send claim: clear nextRetryAt so findDue (which keys on a due nextRetryAt) cannot re-select
+    // this row once an attempt begins. A failed markSent AFTER a successful send then leaves the row
+    // non-due rather than re-queued, so the patient is never messaged twice. Status stays "pending";
+    // a row stranded here (sent, bookkeeping failed) ages out of findDue and awaits the not-yet-built
+    // stalled-pending reaper (backlog A8b/P2-13) for active reconciliation.
+    // route-governance: store-mutation-deferred. Single-row id-scoped update on our own freshly
+    // minted uuid; org-scoping tracked for #643 (the org-scoped leg is the contact read at dispatch).
+    await this.prisma.robinRecoverySend.update({
+      where: { id },
+      data: { nextRetryAt: null },
+    });
+  }
+
   async markSent(id: string, messageId: string | null): Promise<void> {
     // route-governance: store-mutation-deferred. Single-row id-scoped update on our own freshly
     // minted uuid; org-scoping tracked for #643 (the org-scoped leg is the contact read at dispatch).

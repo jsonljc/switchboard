@@ -47,6 +47,13 @@ export interface RecoveryTemplateSendResult {
   ok: boolean;
   messageId?: string | null;
   error?: string;
+  /**
+   * When ok=false: whether the failure is TRANSIENT (retryable) or PERMANENT. A permanent 4xx Graph
+   * error (bad template, invalid number, revoked permission, re-engagement-window violation) will
+   * never succeed on retry and is terminal-failed immediately (D4: retry transient only). Omitted is
+   * treated as transient — the conservative default that keeps a thrown/network failure re-queueable.
+   */
+  retryable?: boolean;
 }
 
 export interface DispatchRecoveryRowDeps {
@@ -93,6 +100,48 @@ export function computeRecoveryNextRetry(
   );
   const jitter = Math.floor(Math.min(1, Math.max(0, random())) * capped); // full jitter [0, capped)
   return new Date(now.getTime() + jitter);
+}
+
+/**
+ * The EFFECTIVE WhatsApp send creds for a campaign org, or the reason no safe pair could be formed.
+ * `org_phone_missing` is the multi-tenant fail-closed: a per-org connection exists but lacks its own
+ * phone number id, so there is NO number we may send the tenant's patients from (we will NOT borrow
+ * a global/pilot number). `config_missing` is the deployment-wide gap (the single-tenant pilot env
+ * is unset, or no send token resolves anywhere).
+ */
+export type EffectiveSendCreds =
+  | { ok: true; accessToken: string; phoneNumberId: string }
+  | { ok: false; reason: "config_missing" | "org_phone_missing" };
+
+/**
+ * Resolve the effective WhatsApp send creds for a campaign org, FAIL-CLOSED on the multi-tenant
+ * isolation boundary.
+ *
+ * The phone number id is the FROM-identity and the tenant-isolation boundary: when the org has its
+ * own `Connection` (`perOrg` non-null) it MUST send from its OWN number, so a missing org phone id
+ * fails closed (`org_phone_missing`) instead of falling back to the global/pilot number — sending a
+ * second tenant's patient from the first tenant's number is the cross-tenant leak this guards. The
+ * token is NOT an isolation boundary (it only authorizes the call): it MAY fall back to the global
+ * system-user token, matching the Meta Tech Provider model (one system token, many per-org WABA
+ * numbers). With NO per-org connection at all (`perOrg` null) this is the single-tenant pilot, which
+ * legitimately uses the global token + global phone id (both required, else `config_missing`).
+ */
+export function resolveEffectiveSendCreds(
+  perOrg: { token: string | null; phoneNumberId: string | null } | null,
+  globalToken: string | undefined,
+  globalPhoneNumberId: string | undefined,
+): EffectiveSendCreds {
+  if (perOrg === null) {
+    // Single-tenant pilot: no per-org connection. Use the global creds; both are required.
+    if (!globalToken || !globalPhoneNumberId) return { ok: false, reason: "config_missing" };
+    return { ok: true, accessToken: globalToken, phoneNumberId: globalPhoneNumberId };
+  }
+  // A per-org connection EXISTS. The phone id is the tenant FROM-identity: org-only, NEVER global.
+  if (!perOrg.phoneNumberId) return { ok: false, reason: "org_phone_missing" };
+  // The token authorizes only; it may fall back to the global system-user token (Tech Provider).
+  const accessToken = perOrg.token ?? globalToken;
+  if (!accessToken) return { ok: false, reason: "config_missing" };
+  return { ok: true, accessToken, phoneNumberId: perOrg.phoneNumberId };
 }
 
 /**
@@ -153,6 +202,22 @@ async function finishFailed(
 }
 
 /**
+ * Dead-letter a row immediately, regardless of the attempt count: a PERMANENT send failure (a 4xx
+ * Graph error) will never succeed on retry, so it skips the bounded-retry backoff and terminal-fails
+ * NOW (status=failed, nextRetryAt cleared), firing onDeadLetter with a distinct reason so the
+ * permanent failure is never silent and is countable apart from retry exhaustion. (D4.)
+ */
+async function finishTerminal(
+  rowId: string,
+  error: string,
+  deps: DispatchRecoveryRowDeps,
+): Promise<{ outcome: "failed"; deadLettered: true }> {
+  await deps.store.markFailed(rowId, error, null);
+  deps.onDeadLetter?.("permanent_send_error");
+  return { outcome: "failed", deadLettered: true };
+}
+
+/**
  * The shared send + per-recipient state-write + backoff path for an ALREADY-CLAIMED row. Terminal
  * per-recipient decisions (rebooked / consent-or-template ineligible / no phone) record a SKIP and
  * are never retried. A send failure (Graph !ok or a thrown error) routes through finishFailed, which
@@ -179,8 +244,16 @@ export async function dispatchRecoveryRow(
     return { outcome: "skipped", deadLettered: false };
   }
 
+  // Pre-send claim: remove this row from the retry-due set BEFORE the Graph call. findDue only
+  // reclaims rows with a due nextRetryAt, so clearing it now means a crash OR a failed markSent AFTER
+  // a successful send can never re-queue this row -> the patient is never messaged twice
+  // (at-most-once). On the cohort path the row is already non-due (nextRetryAt null), so this is a
+  // no-op; on the retry path it clears the due time that selected the row this tick.
+  await deps.store.markSendInFlight(rowId);
+
+  let result: RecoveryTemplateSendResult;
   try {
-    const result = await deps.sendTemplate({
+    result = await deps.sendTemplate({
       accessToken: args.accessToken,
       phoneNumberId: args.phoneNumberId,
       to: ctx.phone,
@@ -188,14 +261,37 @@ export async function dispatchRecoveryRow(
       leadName: ctx.leadName,
       businessName: ctx.businessName,
     });
-    if (!result.ok) {
-      return finishFailed(rowId, attempts, result.error ?? "whatsapp_send_failed", deps);
-    }
-    await deps.store.markSent(rowId, result.messageId ?? null);
-    return { outcome: "sent", deadLettered: false };
   } catch (err) {
+    // The send threw before a provider ack -> a transient send failure, re-queueable below the cap.
     return finishFailed(rowId, attempts, err instanceof Error ? err.message : String(err), deps);
   }
+  if (!result.ok) {
+    const error = result.error ?? "whatsapp_send_failed";
+    // D4: retry transient failures only. A permanent (4xx) Graph error will never succeed on retry,
+    // so terminal-fail it now instead of burning the bounded-retry budget; transient (5xx/429/408/
+    // network) re-queues with backoff. An absent retryable flag defaults to transient (conservative).
+    return result.retryable === false
+      ? finishTerminal(rowId, error, deps)
+      : finishFailed(rowId, attempts, error, deps);
+  }
+
+  // SEND SUCCEEDED — the patient has been messaged. From here we MUST NOT re-queue: persisting the
+  // outcome is a bookkeeping write, NEVER a re-send. If markSent fails the row stays pending with a
+  // null nextRetryAt (markSendInFlight above), which findDue never re-selects, so it cannot
+  // double-send; it ages out of the retry-due set via findDue's createdAt floor and awaits the
+  // (not-yet-built) stalled-pending reaper (backlog A8b/P2-13) for active reconciliation. Surface
+  // the anomaly loudly so it is caught before then.
+  try {
+    await deps.store.markSent(rowId, result.messageId ?? null);
+  } catch (err) {
+    console.error(
+      `[robin.recovery] send SUCCEEDED but markSent failed for row ${rowId}; left non-due to ` +
+        `prevent a double-send (stranded pending until the A8b reaper reconciles): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+    );
+  }
+  return { outcome: "sent", deadLettered: false };
 }
 
 /** The real Graph WhatsApp template send. Injectable in tests via DispatchRecoveryRowDeps.sendTemplate. */
@@ -228,7 +324,13 @@ export async function defaultSendTemplate(
       },
     }),
   });
-  if (!response.ok) return { ok: false, error: await response.text() };
+  if (!response.ok) {
+    // D4 classification: a 5xx (Meta server error), 429 (rate limit) or 408 (timeout) is transient
+    // and worth retrying; every other 4xx (bad template, invalid number, revoked permission, a
+    // re-engagement-window violation) is permanent and will never succeed on retry.
+    const retryable = response.status >= 500 || response.status === 429 || response.status === 408;
+    return { ok: false, error: await response.text(), retryable };
+  }
   const json = (await response.json()) as { messages?: Array<{ id?: string }> };
   return { ok: true, messageId: json.messages?.[0]?.id ?? null };
 }

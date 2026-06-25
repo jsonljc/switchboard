@@ -104,6 +104,9 @@ function inMemoryRecoverySendStore(): {
       rows.push({ id, dedupeKey: input.dedupeKey, status: "pending" });
       return { id };
     },
+    // Pre-send claim: clears nextRetryAt in the real store so a failed markSent can't re-queue. This
+    // fake does not track nextRetryAt (the cohort loop never reclaims), so it is a conformant no-op.
+    markSendInFlight: async () => {},
     markSent: async (id, messageId) => {
       const r = rows.find((x) => x.id === id);
       if (r) {

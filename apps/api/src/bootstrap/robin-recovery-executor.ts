@@ -20,6 +20,8 @@ import {
   isOrgConfigSkip,
   computeRecoveryNextRetry,
   defaultSendTemplate,
+  resolveEffectiveSendCreds,
+  type DispatchRecoveryRowArgs,
   type RecoverySendContext,
   type RecoveryTemplateSendArgs,
   type RecoveryTemplateSendResult,
@@ -74,6 +76,76 @@ function isUniqueConstraintError(err: unknown): boolean {
 }
 
 /**
+ * On a TRANSIENT context-resolve failure in the cohort loop, CLAIM a dedup row + re-queue it
+ * (transient) so the retry cron re-resolves the recipient (recoverable, P2-14) instead of silently
+ * dropping it for the whole ISO-week. Returns the count bucket to advance: "skipped" on a P2002
+ * (already contacted by a prior/concurrent run), else "failed" (re-queued, or a claim/requeue error
+ * that is surfaced + counted, never thrown — one bad contact must not abort the cohort).
+ */
+async function claimAndRequeueContextFailure(
+  store: RobinRecoverySendStore,
+  orgId: string,
+  candidate: { contactId: string; bookingId: string },
+  campaignWorkUnitId: string,
+  now: Date,
+  random: () => number,
+): Promise<"skipped" | "failed"> {
+  try {
+    const { id } = await store.create({
+      organizationId: orgId,
+      contactId: candidate.contactId,
+      bookingId: candidate.bookingId,
+      campaignKind: RECOVERY_CAMPAIGN_KIND,
+      campaignWorkUnitId,
+      dedupeKey: buildRecoveryDedupeKey(orgId, candidate.bookingId, RECOVERY_CAMPAIGN_KIND),
+    });
+    await store.markFailed(id, "context_resolve_failed", computeRecoveryNextRetry(0, now, random));
+    return "failed";
+  } catch (claimErr) {
+    return isUniqueConstraintError(claimErr) ? "skipped" : "failed";
+  }
+}
+
+/**
+ * Cohort-path wrapper around dispatchRecoveryRow: builds the per-recipient deps (incl. the dead-letter
+ * metric) and ISOLATES a store-write throw so one contact's transient DB blip cannot abort the rest of
+ * the cohort (mirrors the getSendContext + claim isolation). This is safe: a confirmed send swallows
+ * its own markSent failure inside dispatchRecoveryRow, so any throw here is pre-send (markSendInFlight /
+ * markSkipped) or post-send-FAILURE (markFailed) — never after a delivered send — so no double-send is
+ * possible; count it failed + continue. (The single-row retry executor does NOT use this: there a throw
+ * should surface to the retry cron.) Returns the count bucket.
+ */
+async function dispatchCohortRow(
+  args: DispatchRecoveryRowArgs,
+  store: RobinRecoverySendStore,
+  sendTemplate: (a: RecoveryTemplateSendArgs) => Promise<RecoveryTemplateSendResult>,
+  now: Date,
+  random: () => number,
+  contactId: string,
+): Promise<"sent" | "skipped" | "failed"> {
+  try {
+    const r = await dispatchRecoveryRow(args, {
+      store,
+      sendTemplate,
+      now: () => now,
+      random,
+      onDeadLetter: (reason) =>
+        getMetrics().robinRecoverySendFailed.inc({
+          intent: ROBIN_RECOVERY_SEND_INTENT,
+          reason,
+        }),
+    });
+    return r.outcome;
+  } catch (err) {
+    console.warn(
+      `[robin.recovery_campaign.send] dispatch failed for contact ${contactId}; isolated, ` +
+        `no send double-fired: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return "failed";
+  }
+}
+
+/**
  * Robin v1 no-show recovery campaign executor. On dispatch of an APPROVED campaign it iterates the
  * frozen cohort and, per recipient: claim-first inserts a dedup row (P2002 -> skip, never re-send),
  * resolves phone + consent org-scoped at dispatch, consent-gates via evaluateProactiveSendEligibility
@@ -109,23 +181,27 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
         const { candidates } = parsed.data;
 
         // WhatsApp send creds, resolved ONCE per campaign (all candidates share the org).
-        // Multi-tenant: prefer the campaign org's own send creds, PER-FIELD falling back to the
-        // global token + env phone id (single-tenant pilot) so a partial per-org row never
-        // dark-holes the deployment-wide config. Missing creds are an org-wide config gap, NOT a
-        // per-recipient decision: skip the whole campaign WITHOUT claiming any dedup rows, so a
-        // later run (once creds are set) can still re-engage this cohort. Loud + countable (the
-        // dark-funnel metric).
+        // Multi-tenant FAIL-CLOSED: prefer the campaign org's own creds. The phone number id is the
+        // tenant FROM-identity, so a per-org connection that omits it fails closed (org_phone_missing)
+        // rather than borrowing the global/pilot number that belongs to a DIFFERENT tenant; only the
+        // token may fall back to the global system-user token (Meta Tech Provider). The global pair is
+        // used solely when there is NO per-org connection at all (the single-tenant pilot). Missing
+        // creds are an org-wide config gap, NOT a per-recipient decision: skip the whole campaign
+        // WITHOUT claiming any dedup rows, so a later run (once fixed) can still re-engage this cohort.
+        // Loud + countable (the dark-funnel metric).
         const perOrg = await resolveOrgSendCreds(orgId);
-        const accessToken = perOrg?.token ?? resolveToken();
-        const phoneNumberId = perOrg?.phoneNumberId ?? resolvePhoneId();
-        if (!accessToken || !phoneNumberId) {
+        const creds = resolveEffectiveSendCreds(perOrg, resolveToken(), resolvePhoneId());
+        if (!creds.ok) {
           console.warn(
-            "[robin.recovery_campaign.send] WhatsApp send token or phone id missing " +
-              "(set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID); recovery campaign skipped org-wide.",
+            creds.reason === "org_phone_missing"
+              ? "[robin.recovery_campaign.send] org WhatsApp connection has no phone number id; " +
+                  "recovery campaign skipped org-wide (fail-closed: NOT falling back to a global number)."
+              : "[robin.recovery_campaign.send] WhatsApp send token or phone id missing " +
+                  "(set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID); recovery campaign skipped org-wide.",
           );
           getMetrics().whatsappProactiveSendSkipped.inc({
             intent: ROBIN_RECOVERY_SEND_INTENT,
-            reason: "config_missing",
+            reason: creds.reason,
           });
           return {
             outcome: "completed",
@@ -135,10 +211,11 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
               skipped: candidates.length,
               failed: 0,
               total: candidates.length,
-              skipReason: "config_missing",
+              skipReason: creds.reason,
             },
           };
         }
+        const { accessToken, phoneNumberId } = creds;
 
         let sent = 0;
         let skipped = 0;
@@ -160,17 +237,30 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
         for (const candidate of candidates) {
           // Resolve consent / jurisdiction / phone / template-approval BEFORE claiming. An org-wide
           // config gap (a draft or absent template) must burn NO dedup rows (rank 7), mirroring the
-          // creds short-circuit. A transient resolve failure here is isolated and claims nothing, so a
-          // later run re-resolves (no stranded pending row, no silent under-delivery).
+          // creds short-circuit. A TRANSIENT resolve failure here is different: it is an infrastructure
+          // blip, NOT a config decision, so instead of silently dropping the recipient for the whole
+          // ISO-week (P2-14) we CLAIM a dedup row + re-queue it transiently, so the retry cron
+          // re-resolves it (recoverable) and it is visible. A P2002 means already-contacted -> skip; a
+          // claim/requeue failure (e.g. DB down) is counted + surfaced, never thrown (one bad contact
+          // must not abort the cohort).
           let ctx: RecoverySendContext;
           try {
             ctx = await deps.getSendContext(orgId, candidate.contactId);
           } catch (err) {
             console.warn(
               `[robin.recovery_campaign.send] context resolve failed for contact ${candidate.contactId}; ` +
-                `skipped without claiming: ${err instanceof Error ? err.message : String(err)}`,
+                `re-queuing for the retry cron: ${err instanceof Error ? err.message : String(err)}`,
             );
-            failed++;
+            const bucket = await claimAndRequeueContextFailure(
+              deps.store,
+              orgId,
+              candidate,
+              workUnit.id,
+              now,
+              random,
+            );
+            if (bucket === "skipped") skipped++;
+            else failed++;
             continue;
           }
 
@@ -213,9 +303,12 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
           }
 
           // Post-claim per-recipient send + state-write + backoff, the SHARED path the retry executor
-          // also calls. A send failure schedules retry-1 (attempts 0 is never terminal at MAX=3), so the
-          // cohort first attempt re-queues rather than dead-letters; markSkipped paths stay terminal.
-          const r = await dispatchRecoveryRow(
+          // also calls. A TRANSIENT send failure schedules retry-1 (attempts 0 is never terminal at
+          // MAX=3), so the cohort first attempt re-queues; a PERMANENT (4xx) failure dead-letters NOW
+          // (D4), and markSkipped paths stay terminal. dispatchCohortRow fires the per-recipient
+          // failure metric (a permanent first-attempt failure is never silent) and isolates a store
+          // throw so one contact's DB blip cannot abort the rest of the cohort.
+          const outcome = await dispatchCohortRow(
             {
               rowId,
               attempts: 0,
@@ -225,10 +318,14 @@ export function buildRobinRecoverySendExecutor(deps: RobinRecoverySendExecutorDe
               accessToken,
               phoneNumberId,
             },
-            { store: deps.store, sendTemplate, now: () => now, random, onDeadLetter: undefined },
+            deps.store,
+            sendTemplate,
+            now,
+            random,
+            candidate.contactId,
           );
-          if (r.outcome === "sent") sent++;
-          else if (r.outcome === "skipped") skipped++;
+          if (outcome === "sent") sent++;
+          else if (outcome === "skipped") skipped++;
           else failed++;
         }
 
@@ -320,19 +417,21 @@ export function buildRobinRecoverySendRetryExecutor(deps: RobinRecoverySendRetry
           return { outcome: "failed", deadLettered: nextRetryAt === null };
         };
 
-        // Resolve the row org's send creds (PER-FIELD fallback to global). Missing creds are a
-        // transient config gap: re-queue rather than dead-letter on the first miss.
+        // Resolve the row org's send creds, FAIL-CLOSED (mirrors the cohort path): the phone id is
+        // org-only (a missing per-org number is org_phone_missing, never the global number); the token
+        // may fall back to the global system-user token. A missing-creds gap is transient on the retry
+        // path: re-queue rather than dead-letter on the first miss.
         const perOrg = await resolveOrgSendCreds(orgId);
-        const accessToken = perOrg?.token ?? resolveToken();
-        const phoneNumberId = perOrg?.phoneNumberId ?? resolvePhoneId();
-        if (!accessToken || !phoneNumberId) {
-          const r = await failTransient("config_missing");
+        const creds = resolveEffectiveSendCreds(perOrg, resolveToken(), resolvePhoneId());
+        if (!creds.ok) {
+          const r = await failTransient(creds.reason);
           return {
             outcome: "completed",
             summary: `Recovery retry: failed${r.deadLettered ? " (dead-lettered)" : ""}`,
             outputs: { outcome: "failed", deadLettered: r.deadLettered },
           };
         }
+        const { accessToken, phoneNumberId } = creds;
 
         // Re-resolve consent / phone / template-approval AT RETRY TIME (never trust stale state). A
         // resolve throw is transient -> re-queue (or dead-letter at the cap).

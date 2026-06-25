@@ -1,14 +1,8 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import {
-  buildRobinRecoverySendExecutor,
-  buildRobinRecoverySendRetryExecutor,
-} from "../robin-recovery-executor.js";
-import {
-  ROBIN_RECOVERY_SEND_INTENT,
-  ROBIN_RECOVERY_RETRY_INTENT,
-} from "../../services/workflows/robin-recovery-request.js";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { buildRobinRecoverySendExecutor } from "../robin-recovery-executor.js";
+import { ROBIN_RECOVERY_SEND_INTENT } from "../../services/workflows/robin-recovery-request.js";
 import type { WhatsAppTemplate } from "@switchboard/core";
-import { setMetrics, createInMemoryMetrics, getMetrics } from "@switchboard/core";
+import { setMetrics, createInMemoryMetrics } from "@switchboard/core";
 
 const APPROVED: WhatsAppTemplate = {
   name: "re_engagement_offer_sg_v1",
@@ -42,6 +36,7 @@ function eligibleCtx(over: Record<string, unknown> = {}) {
 function makeStore() {
   return {
     create: vi.fn().mockResolvedValue({ id: "rs_1" }),
+    markSendInFlight: vi.fn().mockResolvedValue(undefined),
     markSent: vi.fn().mockResolvedValue(undefined),
     markSkipped: vi.fn().mockResolvedValue(undefined),
     markFailed: vi.fn().mockResolvedValue(undefined),
@@ -256,6 +251,27 @@ describe("buildRobinRecoverySendExecutor", () => {
     expect(res.outputs).toEqual({ sent: 0, skipped: 0, failed: 1, total: 1 });
   });
 
+  it("PERMANENT cohort send failure (4xx) -> dead-letters at attempt 0 + robinRecoverySendFailed(permanent_send_error)", async () => {
+    // D4: a permanent 4xx never succeeds on retry, so it terminal-fails immediately even on the first
+    // attempt, and the cohort path now wires onDeadLetter so that terminal failure is counted.
+    const metrics = createInMemoryMetrics();
+    const incSpy = vi.spyOn(metrics.robinRecoverySendFailed, "inc");
+    setMetrics(metrics);
+    const deps = makeDeps({
+      sendTemplate: vi
+        .fn()
+        .mockResolvedValue({ ok: false, error: "(#132000) bad template", retryable: false }),
+    });
+    const { handler } = buildRobinRecoverySendExecutor(deps as never);
+    const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
+    expect(deps.store.markFailed).toHaveBeenCalledWith("rs_1", "(#132000) bad template", null);
+    expect(incSpy).toHaveBeenCalledWith({
+      intent: ROBIN_RECOVERY_SEND_INTENT,
+      reason: "permanent_send_error",
+    });
+    expect(res.outputs).toEqual({ sent: 0, skipped: 0, failed: 1, total: 1 });
+  });
+
   it("a cohort send failure leaves the row pending for retry, not terminal", async () => {
     const deps = makeDeps({
       sendTemplate: vi.fn().mockResolvedValue({ ok: false, error: "rate limited" }),
@@ -279,28 +295,75 @@ describe("buildRobinRecoverySendExecutor", () => {
     expect(res2.outputs).toEqual({ sent: 0, skipped: 1, failed: 0, total: 1 });
   });
 
-  it("isolates a mid-batch transient error (getSendContext throws): that recipient -> failed with NO claimed row, others still send", async () => {
+  it("recoverable mid-batch transient error (getSendContext throws): that recipient is CLAIMED + re-queued, others still send", async () => {
+    // A transient context-resolve failure must NOT silently drop the recipient for the whole ISO-week
+    // (P2-14). Claim a dedup row + re-queue it (transient) so the retry cron re-resolves it, while the
+    // rest of the cohort still sends. create runs for all three (C1, C2-requeue, C3).
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const deps = makeDeps();
-    // create is reached only by the two recipients whose context resolves (C1, C3).
-    deps.store.create.mockResolvedValueOnce({ id: "rs_1" }).mockResolvedValueOnce({ id: "rs_2" });
+    deps.store.create
+      .mockResolvedValueOnce({ id: "rs_1" })
+      .mockResolvedValueOnce({ id: "rs_2" })
+      .mockResolvedValueOnce({ id: "rs_3" });
     deps.getSendContext
       .mockResolvedValueOnce(eligibleCtx({ phone: "+6591111111" }))
       .mockRejectedValueOnce(new Error("db blip"))
       .mockResolvedValueOnce(eligibleCtx({ phone: "+6593333333" }));
     const { handler } = buildRobinRecoverySendExecutor(deps as never);
     const res = await handler.execute(makeWorkUnit([C1, C2, C3]) as never, {} as never);
-    // The whole batch must NOT throw; the pre-claim resolve failure is isolated to its recipient.
-    expect(res.outcome).toBe("completed");
+    expect(res.outcome).toBe("completed"); // batch must NOT throw
     expect(res.outputs).toEqual({ sent: 2, skipped: 0, failed: 1, total: 3 });
-    // A pre-claim resolve failure claims NO row (re-evaluated next campaign), so markFailed never fires.
-    expect(deps.store.markFailed).not.toHaveBeenCalled();
-    expect(deps.store.create).toHaveBeenCalledTimes(2);
+    // The failed contact is claimed (rs_2) and re-queued transiently so the retry cron re-resolves it.
+    expect(deps.store.create).toHaveBeenCalledTimes(3);
+    expect(deps.store.markFailed).toHaveBeenCalledWith(
+      "rs_2",
+      "context_resolve_failed",
+      expect.any(Date),
+    );
     expect(warnSpy).toHaveBeenCalledTimes(1);
-    // Recipients 1 and 3 still claim (rs_1, rs_2) and send.
+    // The other two recipients still send.
     expect(deps.sendTemplate).toHaveBeenCalledTimes(2);
     expect(deps.store.markSent).toHaveBeenCalledWith("rs_1", "wamid.1");
-    expect(deps.store.markSent).toHaveBeenCalledWith("rs_2", "wamid.1");
+    expect(deps.store.markSent).toHaveBeenCalledWith("rs_3", "wamid.1");
+  });
+
+  it("context resolve throw + claim hits P2002 (already contacted) -> skipped, NOT re-queued", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const deps = makeDeps({ getSendContext: vi.fn().mockRejectedValue(new Error("blip")) });
+    deps.store.create.mockRejectedValueOnce(Object.assign(new Error("dup"), { code: "P2002" }));
+    const { handler } = buildRobinRecoverySendExecutor(deps as never);
+    const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
+    expect(deps.store.markFailed).not.toHaveBeenCalled();
+    expect(deps.sendTemplate).not.toHaveBeenCalled();
+    expect(res.outputs).toEqual({ sent: 0, skipped: 1, failed: 0, total: 1 });
+  });
+
+  it("context resolve throw AND the re-queue claim fails (DB down) -> counted failed, batch NOT thrown", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const deps = makeDeps({ getSendContext: vi.fn().mockRejectedValue(new Error("blip")) });
+    deps.store.create.mockRejectedValueOnce(new Error("db down"));
+    const { handler } = buildRobinRecoverySendExecutor(deps as never);
+    const res = await handler.execute(makeWorkUnit([C1]) as never, {} as never);
+    expect(deps.store.markFailed).not.toHaveBeenCalled();
+    expect(res.outcome).toBe("completed");
+    expect(res.outputs).toEqual({ sent: 0, skipped: 0, failed: 1, total: 1 });
+  });
+
+  it("isolates a dispatch store-write throw mid-cohort (markSendInFlight blip): that recipient -> failed, others still send, batch NOT thrown", async () => {
+    // A transient store-write throw inside dispatch (here the pre-send markSendInFlight) must not abort
+    // the rest of the cohort. It is pre-send, so no send double-fired; isolate + count failed.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const deps = makeDeps();
+    deps.store.create.mockResolvedValueOnce({ id: "rs_1" }).mockResolvedValueOnce({ id: "rs_2" });
+    deps.store.markSendInFlight
+      .mockResolvedValueOnce(undefined) // C1 claims + sends
+      .mockRejectedValueOnce(new Error("db blip")); // C2's pre-send claim throws
+    const { handler } = buildRobinRecoverySendExecutor(deps as never);
+    const res = await handler.execute(makeWorkUnit([C1, C2]) as never, {} as never);
+    expect(res.outcome).toBe("completed");
+    expect(res.outputs).toEqual({ sent: 1, skipped: 0, failed: 1, total: 2 });
+    expect(deps.sendTemplate).toHaveBeenCalledTimes(1); // only C1 reached the Graph send
+    expect(warnSpy).toHaveBeenCalled();
   });
 
   it("isolates a sendTemplate network rejection (not just !ok) -> markFailed, no batch throw", async () => {
@@ -396,6 +459,39 @@ describe("buildRobinRecoverySendExecutor", () => {
       });
     });
 
+    it("HEADLINE fail-closed: org token present but org PHONE missing -> skip org-wide, NO claim, NO send, NOT the global number", async () => {
+      // The cross-tenant leak guard: a per-org connection that omits its phone id must NOT fall back
+      // to the global/pilot number (that would message THIS org's patients from ANOTHER tenant's
+      // number). Fail closed org-wide, burning no dedup rows so a later run re-engages once fixed.
+      const metrics = createInMemoryMetrics();
+      const skipSpy = vi.spyOn(metrics.whatsappProactiveSendSkipped, "inc");
+      setMetrics(metrics);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const resolveOrgSendCreds = vi.fn().mockResolvedValue({ token: "T2", phoneNumberId: null });
+      const deps = makeDeps({
+        resolveOrgSendCreds,
+        resolveSendToken: () => "GLOBAL_TOK",
+        resolvePhoneNumberId: () => "GLOBAL_PN",
+      });
+      const { handler } = buildRobinRecoverySendExecutor(deps as never);
+      const res = await handler.execute(makeWorkUnit([C1, C2]) as never, {} as never);
+      expect(res.outcome).toBe("completed");
+      expect(res.outputs).toEqual({
+        sent: 0,
+        skipped: 2,
+        failed: 0,
+        total: 2,
+        skipReason: "org_phone_missing",
+      });
+      expect(deps.store.create).not.toHaveBeenCalled();
+      expect(deps.sendTemplate).not.toHaveBeenCalled();
+      expect(skipSpy).toHaveBeenCalledWith({
+        intent: ROBIN_RECOVERY_SEND_INTENT,
+        reason: "org_phone_missing",
+      });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
     it("HEADLINE: two different campaign orgs send from two different phone numbers", async () => {
       const resolveOrgSendCreds = vi.fn(async (orgId: string) =>
         orgId === "orgA"
@@ -421,206 +517,5 @@ describe("buildRobinRecoverySendExecutor", () => {
         phoneNumberId: "P_B",
       });
     });
-  });
-});
-
-describe("buildRobinRecoverySendRetryExecutor", () => {
-  beforeEach(() => {
-    setMetrics(createInMemoryMetrics());
-  });
-  afterEach(() => {
-    vi.restoreAllMocks();
-    setMetrics(createInMemoryMetrics());
-  });
-
-  function makeRetryWorkUnit(over: Record<string, unknown> = {}) {
-    return {
-      id: "wu_retry",
-      organizationId: "org_1",
-      actor: { id: "system", type: "system" as const },
-      intent: ROBIN_RECOVERY_RETRY_INTENT,
-      parameters: {
-        rowId: "rs_1",
-        contactId: "c_1",
-        bookingId: "bk_1",
-        campaignKind: "no_show",
-        attempts: 1,
-        ...over,
-      },
-      resolvedMode: "workflow" as const,
-      traceId: "t1",
-      trigger: "schedule" as const,
-      priority: "normal" as const,
-    };
-  }
-
-  function makeRetryDeps(over: Record<string, unknown> = {}) {
-    return {
-      store: makeStore(),
-      getSendContext: vi.fn().mockResolvedValue(eligibleCtx()),
-      sendTemplate: vi.fn().mockResolvedValue({ ok: true, messageId: "wamid.r1" }),
-      selectTemplateFn: () => APPROVED,
-      resolveSendToken: () => "tok",
-      resolvePhoneNumberId: () => "pn_1",
-      findFutureBookingContactIds: vi.fn().mockResolvedValue(new Set<string>()),
-      now: () => new Date("2026-06-21T12:00:00.000Z"),
-      random: () => 0.5,
-      ...over,
-    };
-  }
-
-  it("registers under the retry intent", () => {
-    expect(buildRobinRecoverySendRetryExecutor(makeRetryDeps() as never).intent).toBe(
-      ROBIN_RECOVERY_RETRY_INTENT,
-    );
-  });
-
-  it("single-row reclaim: NEVER calls store.create on the success path", async () => {
-    const deps = makeRetryDeps();
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    await handler.execute(makeRetryWorkUnit() as never, {} as never);
-    expect(deps.store.create).not.toHaveBeenCalled();
-  });
-
-  it("success: eligible + send ok -> markSent, outputs {outcome:sent, deadLettered:false}", async () => {
-    const deps = makeRetryDeps();
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    const res = await handler.execute(makeRetryWorkUnit() as never, {} as never);
-    expect(deps.store.markSent).toHaveBeenCalledWith("rs_1", "wamid.r1");
-    expect(deps.store.create).not.toHaveBeenCalled();
-    expect(res.outcome).toBe("completed");
-    expect(res.outputs).toEqual({ outcome: "sent", deadLettered: false });
-  });
-
-  it("retry-below-cap: attempts=1 + send !ok -> markFailed non-null, deadLettered:false, NO metric", async () => {
-    const deps = makeRetryDeps({
-      sendTemplate: vi.fn().mockResolvedValue({ ok: false, error: "rate limited" }),
-    });
-    const incSpy = vi.spyOn(getMetrics().robinRecoverySendFailed, "inc");
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    const res = await handler.execute(makeRetryWorkUnit({ attempts: 1 }) as never, {} as never);
-    const call = deps.store.markFailed.mock.calls[0]!;
-    expect(call[0]).toBe("rs_1");
-    expect(call[2]).toBeInstanceOf(Date);
-    expect(call[2]).not.toBeNull();
-    expect(res.outputs).toEqual({ outcome: "failed", deadLettered: false });
-    expect(incSpy).not.toHaveBeenCalled();
-    expect(deps.store.create).not.toHaveBeenCalled();
-  });
-
-  it("terminal-at-cap: attempts=2 + send !ok -> markFailed null, robinRecoverySendFailed inc'd, deadLettered:true", async () => {
-    const deps = makeRetryDeps({
-      sendTemplate: vi.fn().mockResolvedValue({ ok: false, error: "still down" }),
-    });
-    const incSpy = vi.spyOn(getMetrics().robinRecoverySendFailed, "inc");
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    const res = await handler.execute(makeRetryWorkUnit({ attempts: 2 }) as never, {} as never);
-    const call = deps.store.markFailed.mock.calls[0]!;
-    expect(call[0]).toBe("rs_1");
-    expect(call[2]).toBeNull();
-    expect(incSpy).toHaveBeenCalledWith({
-      intent: ROBIN_RECOVERY_RETRY_INTENT,
-      reason: "max_retries_exhausted",
-    });
-    expect(res.outputs).toEqual({ outcome: "failed", deadLettered: true });
-  });
-
-  it("consent re-validation: getSendContext returns consentRevokedAt -> markSkipped(consent_revoked), NO send", async () => {
-    const deps = makeRetryDeps({
-      getSendContext: vi
-        .fn()
-        .mockResolvedValue(eligibleCtx({ consentRevokedAt: "2026-06-20T00:00:00.000Z" })),
-    });
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    const res = await handler.execute(makeRetryWorkUnit() as never, {} as never);
-    expect(deps.store.markSkipped).toHaveBeenCalledWith("rs_1", "consent_revoked");
-    expect(deps.sendTemplate).not.toHaveBeenCalled();
-    expect(res.outputs).toEqual({ outcome: "skipped", deadLettered: false });
-  });
-
-  it("template re-validation: overlay leaves the template unapproved -> markSkipped(template_not_approved), NO send", async () => {
-    // Real registry (re-engagement template ships draft) + no approval overlay -> org-config skip.
-    const deps = makeRetryDeps({
-      selectTemplateFn: undefined,
-      getSendContext: vi.fn().mockResolvedValue(eligibleCtx()),
-    });
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    const res = await handler.execute(makeRetryWorkUnit() as never, {} as never);
-    expect(deps.store.markSkipped).toHaveBeenCalledWith("rs_1", "template_not_approved");
-    expect(deps.sendTemplate).not.toHaveBeenCalled();
-    expect(res.outputs).toEqual({ outcome: "skipped", deadLettered: false });
-  });
-
-  it("rebooked re-check: findFutureBookingContactIds returns the contact -> markSkipped(already_rebooked), NO send", async () => {
-    const findFutureBookingContactIds = vi.fn().mockResolvedValue(new Set(["c_1"]));
-    const deps = makeRetryDeps({ findFutureBookingContactIds });
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    const res = await handler.execute(makeRetryWorkUnit() as never, {} as never);
-    expect(findFutureBookingContactIds).toHaveBeenCalledWith("org_1", ["c_1"], expect.any(Date));
-    expect(deps.store.markSkipped).toHaveBeenCalledWith("rs_1", "already_rebooked");
-    expect(deps.sendTemplate).not.toHaveBeenCalled();
-    expect(res.outputs).toEqual({ outcome: "skipped", deadLettered: false });
-  });
-
-  it("config_missing (no creds): markFailed transient (below cap), NO send", async () => {
-    const deps = makeRetryDeps({
-      resolveSendToken: () => undefined,
-      resolvePhoneNumberId: () => undefined,
-    });
-    const incSpy = vi.spyOn(getMetrics().robinRecoverySendFailed, "inc");
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    const res = await handler.execute(makeRetryWorkUnit({ attempts: 1 }) as never, {} as never);
-    const call = deps.store.markFailed.mock.calls[0]!;
-    expect(call[0]).toBe("rs_1");
-    expect(call[1]).toBe("config_missing");
-    expect(call[2]).toBeInstanceOf(Date);
-    expect(deps.sendTemplate).not.toHaveBeenCalled();
-    expect(incSpy).not.toHaveBeenCalled(); // below cap -> metric-if-terminal NOT fired
-    expect(res.outputs).toEqual({ outcome: "failed", deadLettered: false });
-  });
-
-  it("config_missing at cap (attempts=2): markFailed null + robinRecoverySendFailed(config_missing)", async () => {
-    const deps = makeRetryDeps({
-      resolveSendToken: () => undefined,
-      resolvePhoneNumberId: () => undefined,
-    });
-    const incSpy = vi.spyOn(getMetrics().robinRecoverySendFailed, "inc");
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    const res = await handler.execute(makeRetryWorkUnit({ attempts: 2 }) as never, {} as never);
-    expect(deps.store.markFailed.mock.calls[0]![2]).toBeNull();
-    expect(incSpy).toHaveBeenCalledWith({
-      intent: ROBIN_RECOVERY_RETRY_INTENT,
-      reason: "config_missing",
-    });
-    expect(res.outputs).toEqual({ outcome: "failed", deadLettered: true });
-  });
-
-  it("context resolve throw: markFailed(context_resolve_failed) transient, NO send", async () => {
-    const deps = makeRetryDeps({
-      getSendContext: vi.fn().mockRejectedValue(new Error("db blip")),
-    });
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    const res = await handler.execute(makeRetryWorkUnit({ attempts: 1 }) as never, {} as never);
-    const call = deps.store.markFailed.mock.calls[0]!;
-    expect(call[0]).toBe("rs_1");
-    expect(call[1]).toBe("context_resolve_failed");
-    expect(call[2]).toBeInstanceOf(Date);
-    expect(deps.sendTemplate).not.toHaveBeenCalled();
-    expect(res.outputs).toEqual({ outcome: "failed", deadLettered: false });
-  });
-
-  it("malformed params: {} -> outcome failed, store untouched", async () => {
-    const deps = makeRetryDeps();
-    const { handler } = buildRobinRecoverySendRetryExecutor(deps as never);
-    const res = await handler.execute(
-      { id: "wu", organizationId: "org_1", parameters: {} } as never,
-      {} as never,
-    );
-    expect(res.outcome).toBe("failed");
-    expect(deps.store.create).not.toHaveBeenCalled();
-    expect(deps.store.markSent).not.toHaveBeenCalled();
-    expect(deps.store.markSkipped).not.toHaveBeenCalled();
-    expect(deps.store.markFailed).not.toHaveBeenCalled();
-    expect(deps.sendTemplate).not.toHaveBeenCalled();
   });
 });

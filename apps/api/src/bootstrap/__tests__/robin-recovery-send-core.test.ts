@@ -1,9 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import type { RobinRecoverySendStore, ProactiveSendEligibility } from "@switchboard/core";
 import {
   computeRecoveryNextRetry,
+  defaultSendTemplate,
   dispatchRecoveryRow,
   isOrgConfigSkip,
+  resolveEffectiveSendCreds,
   type RecoverySendContext,
   type RecoveryTemplateSendResult,
 } from "../robin-recovery-send-core.js";
@@ -41,6 +43,7 @@ const eligibleTemplate: ProactiveSendEligibility = {
 
 function makeStore(): RobinRecoverySendStore & {
   create: ReturnType<typeof vi.fn>;
+  markSendInFlight: ReturnType<typeof vi.fn>;
   markSent: ReturnType<typeof vi.fn>;
   markSkipped: ReturnType<typeof vi.fn>;
   markFailed: ReturnType<typeof vi.fn>;
@@ -48,6 +51,7 @@ function makeStore(): RobinRecoverySendStore & {
 } {
   return {
     create: vi.fn(),
+    markSendInFlight: vi.fn().mockResolvedValue(undefined),
     markSent: vi.fn().mockResolvedValue(undefined),
     markSkipped: vi.fn().mockResolvedValue(undefined),
     markFailed: vi.fn().mockResolvedValue(undefined),
@@ -92,6 +96,70 @@ describe("isOrgConfigSkip", () => {
     expect(isOrgConfigSkip({ eligible: false, reason: "no_template" })).toBe(true);
     expect(isOrgConfigSkip({ eligible: false, reason: "consent_revoked" })).toBe(false);
     expect(isOrgConfigSkip(eligibleTemplate)).toBe(false);
+  });
+});
+
+describe("resolveEffectiveSendCreds (multi-tenant fail-closed)", () => {
+  it("no per-org connection (null) + both globals -> the global pilot pair", () => {
+    expect(resolveEffectiveSendCreds(null, "GT", "GP")).toEqual({
+      ok: true,
+      accessToken: "GT",
+      phoneNumberId: "GP",
+    });
+  });
+
+  it("no per-org connection + missing global token -> config_missing", () => {
+    expect(resolveEffectiveSendCreds(null, undefined, "GP")).toEqual({
+      ok: false,
+      reason: "config_missing",
+    });
+  });
+
+  it("no per-org connection + missing global phone id -> config_missing", () => {
+    expect(resolveEffectiveSendCreds(null, "GT", undefined)).toEqual({
+      ok: false,
+      reason: "config_missing",
+    });
+  });
+
+  it("per-org connection with BOTH fields -> the org's own creds, ignoring the globals", () => {
+    expect(resolveEffectiveSendCreds({ token: "T2", phoneNumberId: "P2" }, "GT", "GP")).toEqual({
+      ok: true,
+      accessToken: "T2",
+      phoneNumberId: "P2",
+    });
+  });
+
+  it("per-org phone present + org token absent -> org phone + GLOBAL token (Tech Provider fallback)", () => {
+    // The token is not the isolation boundary: a per-org WABA number under one shared system-user
+    // token is the documented Meta Tech Provider model, so the token may fall back to the global.
+    expect(resolveEffectiveSendCreds({ token: null, phoneNumberId: "P2" }, "GT", "GP")).toEqual({
+      ok: true,
+      accessToken: "GT",
+      phoneNumberId: "P2",
+    });
+  });
+
+  it("HEADLINE: per-org token present + org PHONE ABSENT -> FAIL CLOSED (never a global number)", () => {
+    // The cross-tenant leak: tenant #2's patient must never be messaged FROM the global/pilot
+    // number. A connection exists but has no phone id -> no safe send -> org_phone_missing.
+    expect(resolveEffectiveSendCreds({ token: "T2", phoneNumberId: null }, "GT", "GP")).toEqual({
+      ok: false,
+      reason: "org_phone_missing",
+    });
+  });
+
+  it("per-org connection with NEITHER field -> fail closed on the phone id first (org_phone_missing)", () => {
+    expect(resolveEffectiveSendCreds({ token: null, phoneNumberId: null }, "GT", "GP")).toEqual({
+      ok: false,
+      reason: "org_phone_missing",
+    });
+  });
+
+  it("per-org phone present but token resolvable from neither org nor global -> config_missing", () => {
+    expect(
+      resolveEffectiveSendCreds({ token: null, phoneNumberId: "P2" }, undefined, "GP"),
+    ).toEqual({ ok: false, reason: "config_missing" });
   });
 });
 
@@ -199,6 +267,56 @@ describe("dispatchRecoveryRow", () => {
     expect(res).toEqual({ outcome: "sent", deadLettered: false });
   });
 
+  it("pre-send claim: markSendInFlight(rowId) is called BEFORE the Graph send (removes due-ness)", async () => {
+    const store = makeStore();
+    const sendTemplate = vi.fn().mockResolvedValue({ ok: true, messageId: "m1" });
+    await dispatchRecoveryRow(
+      {
+        rowId: "r1",
+        attempts: 1,
+        ctx: baseCtx(),
+        eligibility: eligibleTemplate,
+        rebooked: false,
+        accessToken: "tok",
+        phoneNumberId: "pn1",
+      },
+      deps(store, sendTemplate as never),
+    );
+    expect(store.markSendInFlight).toHaveBeenCalledWith("r1");
+    expect(store.markSendInFlight.mock.invocationCallOrder[0]!).toBeLessThan(
+      sendTemplate.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("send ok but markSent THROWS: still 'sent', NEVER re-queued (no double-send), surfaced loudly", async () => {
+    // The headline idempotency guarantee: a successful Graph send followed by a failed bookkeeping
+    // write must NOT route to finishFailed (which would re-queue and double-send on retry). The row
+    // stays non-due (markSendInFlight already cleared nextRetryAt), so the retry cron never re-sends.
+    const store = makeStore();
+    store.markSent.mockRejectedValueOnce(new Error("db write failed"));
+    const sendTemplate = vi.fn().mockResolvedValue({ ok: true, messageId: "m1" });
+    const onDeadLetter = vi.fn();
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await dispatchRecoveryRow(
+      {
+        rowId: "r1",
+        attempts: 1, // retry path: row was due (nextRetryAt <= now) before markSendInFlight
+        ctx: baseCtx(),
+        eligibility: eligibleTemplate,
+        rebooked: false,
+        accessToken: "tok",
+        phoneNumberId: "pn1",
+      },
+      deps(store, sendTemplate as never, onDeadLetter),
+    );
+    expect(sendTemplate).toHaveBeenCalledTimes(1);
+    expect(store.markSendInFlight).toHaveBeenCalledWith("r1");
+    expect(store.markFailed).not.toHaveBeenCalled(); // NOT re-queued
+    expect(onDeadLetter).not.toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    expect(res).toEqual({ outcome: "sent", deadLettered: false });
+  });
+
   it("send !ok at attempts=0: markFailed with a non-null nextRetryAt, onDeadLetter NOT called, deadLettered:false", async () => {
     const store = makeStore();
     const sendTemplate = vi.fn().mockResolvedValue({ ok: false, error: "500" });
@@ -220,6 +338,57 @@ describe("dispatchRecoveryRow", () => {
     expect(id).toBe("r1");
     expect(err).toBe("500");
     expect(nextRetryAt).toBeInstanceOf(Date);
+    expect(onDeadLetter).not.toHaveBeenCalled();
+    expect(res).toEqual({ outcome: "failed", deadLettered: false });
+  });
+
+  it("PERMANENT (retryable:false) at attempts=0: terminal-fail NOW (markFailed null + onDeadLetter permanent_send_error), NOT re-queued", async () => {
+    // D4: a permanent 4xx will never succeed on retry, so it dead-letters immediately even though
+    // attempts (0) is below the cap — it does NOT burn the bounded-retry budget.
+    const store = makeStore();
+    const sendTemplate = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "(#132000) bad template", retryable: false });
+    const onDeadLetter = vi.fn();
+    const res = await dispatchRecoveryRow(
+      {
+        rowId: "r1",
+        attempts: 0,
+        ctx: baseCtx(),
+        eligibility: eligibleTemplate,
+        rebooked: false,
+        accessToken: "tok",
+        phoneNumberId: "pn1",
+      },
+      deps(store, sendTemplate as never, onDeadLetter),
+    );
+    const [id, err, nextRetryAt] = store.markFailed.mock.calls[0]!;
+    expect(id).toBe("r1");
+    expect(err).toBe("(#132000) bad template");
+    expect(nextRetryAt).toBeNull(); // terminal, not re-queued
+    expect(onDeadLetter).toHaveBeenCalledWith("permanent_send_error");
+    expect(res).toEqual({ outcome: "failed", deadLettered: true });
+  });
+
+  it("TRANSIENT (retryable:true) at attempts=0: re-queued with backoff (markFailed non-null, deadLettered:false)", async () => {
+    const store = makeStore();
+    const sendTemplate = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "503 upstream", retryable: true });
+    const onDeadLetter = vi.fn();
+    const res = await dispatchRecoveryRow(
+      {
+        rowId: "r1",
+        attempts: 0,
+        ctx: baseCtx(),
+        eligibility: eligibleTemplate,
+        rebooked: false,
+        accessToken: "tok",
+        phoneNumberId: "pn1",
+      },
+      deps(store, sendTemplate as never, onDeadLetter),
+    );
+    expect(store.markFailed.mock.calls[0]![2]).toBeInstanceOf(Date);
     expect(onDeadLetter).not.toHaveBeenCalled();
     expect(res).toEqual({ outcome: "failed", deadLettered: false });
   });
@@ -268,4 +437,60 @@ describe("dispatchRecoveryRow", () => {
     expect(nextRetryAt).toBeInstanceOf(Date);
     expect(res).toEqual({ outcome: "failed", deadLettered: false });
   });
+});
+
+describe("defaultSendTemplate (transient/permanent classification)", () => {
+  const sendArgs = {
+    accessToken: "tok",
+    phoneNumberId: "pn1",
+    to: "+6591234567",
+    metaTemplateName: "alex_reengage_sg_v1",
+    leadName: "Ada",
+    businessName: "Glow Clinic",
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubFetch(status: number, ok: boolean, body: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok,
+        status,
+        text: async () => (typeof body === "string" ? body : JSON.stringify(body)),
+        json: async () => body,
+      }),
+    );
+  }
+
+  it("2xx success -> ok with the provider message id", async () => {
+    stubFetch(200, true, { messages: [{ id: "wamid.OK" }] });
+    expect(await defaultSendTemplate(sendArgs)).toEqual({ ok: true, messageId: "wamid.OK" });
+  });
+
+  it.each([400, 401, 403, 404, 422])(
+    "%i (4xx) -> ok:false, retryable:false (permanent, never retried)",
+    async (status) => {
+      stubFetch(status, false, "permanent error body");
+      expect(await defaultSendTemplate(sendArgs)).toEqual({
+        ok: false,
+        error: "permanent error body",
+        retryable: false,
+      });
+    },
+  );
+
+  it.each([500, 503, 429, 408])(
+    "%i -> ok:false, retryable:true (transient, retried with backoff)",
+    async (status) => {
+      stubFetch(status, false, "transient error body");
+      expect(await defaultSendTemplate(sendArgs)).toEqual({
+        ok: false,
+        error: "transient error body",
+        retryable: true,
+      });
+    },
+  );
 });
