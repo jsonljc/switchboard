@@ -126,15 +126,17 @@ describe("seedRileyAdOptimizerDeployment", () => {
     expect(noListing._policyUpserts).toHaveLength(0);
   });
 
-  it("seeds the pause + reallocate allow + mandatory approval policies alongside the deployment", async () => {
+  it("seeds the pause + reallocate + reset allow/approval policies alongside the deployment", async () => {
     await seedRileyAdOptimizerDeployment(prisma, "org_dev");
     const ids = prisma._policyUpserts.map((c) => c.where.id);
-    // Pause pair first (Phase-C), then the Spec-1B reallocate pair - both seeded both-or-neither.
+    // Pause pair first (Phase-C), then the Spec-1B reallocate pair (both seeded both-or-neither),
+    // then the allow-ONLY reset-to-prior rollback policy (auto-executes, no require_approval sibling).
     expect(ids).toEqual([
       "policy_allow_riley_pause_org_dev",
       "policy_require_approval_riley_pause_org_dev",
       "policy_allow_riley_reallocate_org_dev",
       "policy_require_approval_riley_reallocate_org_dev",
+      "policy_allow_riley_reset_budget_org_dev",
     ]);
   });
 

@@ -212,6 +212,7 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/creative-publish-workflow.js");
   const { buildRileyPauseExecutorHandler } = await import("./riley-pause-executor.js");
   const { buildRileyBudgetExecutorHandler } = await import("./riley-budget-executor.js");
+  const { buildRileyResetBudgetExecutorHandler } = await import("./riley-reset-budget-executor.js");
   const { LeadIntakeHandler, buildLeadIntakeWorkflow } = await import("@switchboard/core");
   const {
     PrismaLeadIntakeStore,
@@ -298,6 +299,12 @@ export async function bootstrapContainedWorkflows(
   // write, post-write re-read, ExecutionReceipt). The sink that initiates a reallocation stays
   // flag-gated and unwired until 1B-1.6, so this executes only operator-approved reallocations.
   const rileyBudgetExecutor = await buildRileyBudgetExecutorHandler(prismaClient, workTraceStore);
+
+  // The automated reset-to-prior rollback executor (adoptimizer.campaign.reset_prior_budget). The
+  // guardrail monitor (PR-3) dispatches into it on a breach. Allow-only + PLATFORM_DIRECT + this
+  // handler registration are all three required or it ships prod-inert. It stays unreachable until
+  // the monitor that submits it is wired; registering the handler now makes the dispatch target real.
+  const rileyResetExecutor = await buildRileyResetBudgetExecutorHandler(prismaClient);
 
   // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
   // difference between callers is how the WhatsApp 24h-window timestamp is resolved
@@ -498,6 +505,7 @@ export async function bootstrapContainedWorkflows(
     ["adoptimizer.recommendation.handoff", recommendationHandoffWorkflow],
     [rileyPauseExecutor.intent, rileyPauseExecutor.handler],
     [rileyBudgetExecutor.intent, rileyBudgetExecutor.handler],
+    [rileyResetExecutor.intent, rileyResetExecutor.handler],
     ["creative.job.continue", buildCreativeJobDecisionWorkflow(prismaClient, "continue")],
     ["creative.job.stop", buildCreativeJobDecisionWorkflow(prismaClient, "stop")],
     ["creative.job.publish", creativePublishWorkflow],
@@ -621,6 +629,19 @@ export async function bootstrapContainedWorkflows(
       workflowId: rileyBudgetExecutor.intent,
       budgetClass: "cheap",
       approvalPolicy: "always",
+      allowedTriggers: ["internal"],
+    },
+    {
+      // Automated reset-to-prior budget rollback. AUTO-EXECUTES (approvalPolicy "none"): the real
+      // guarantee is the seeded ALLOW-ONLY policy (db seed riley-reset-budget-governance.ts) + the
+      // PLATFORM_DIRECT resolver carve-out, mirroring Robin's bounded-retry. NOT system_auto_approved
+      // and deliberately absent from the D9-2 FINANCIAL_AUTO_APPROVE_DENYLIST: it must execute without
+      // a human (a safety reversal), and it is structurally bounded (the executor can only write the
+      // captured prior). Internal-trigger-only; the guardrail monitor is the only submitter.
+      intent: rileyResetExecutor.intent,
+      workflowId: rileyResetExecutor.intent,
+      budgetClass: "cheap",
+      approvalPolicy: "none",
       allowedTriggers: ["internal"],
     },
     {
