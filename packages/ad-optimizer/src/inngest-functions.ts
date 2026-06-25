@@ -41,6 +41,12 @@ interface DeploymentInfo {
    * into this deployment's AuditRunner. Default OFF; flips only via the audited
    * scripts/riley-pause-flag.ts toggle. */
   pauseSelfExecutionEnabled?: boolean;
+  /** Spec-1B per-org CANARY flag (governanceSettings.reallocateSelfExecutionEnabled,
+   * mapped by apps/api). Absent/false = the budget reallocate submitter is never
+   * threaded into this deployment's AuditRunner, even when the env kill switch
+   * RILEY_REALLOCATE_SELF_EXECUTION_ENABLED is on. So a flip reaches ONE canary org,
+   * not every org at once (Knight Capital). Default OFF; both gates must be on. */
+  reallocateSelfExecutionEnabled?: boolean;
 }
 
 interface DeploymentCredentials {
@@ -135,10 +141,12 @@ export interface CronDependencies {
   rileyPauseSubmitter?: RileyPauseSubmitter;
   /**
    * Spec-1B 1B-1.6: the reallocate self-submission initiator, present only under the
-   * RILEY_REALLOCATE_SELF_EXECUTION_ENABLED env kill switch (default OFF). Unlike pause, v1 gates at
-   * the env level only (no per-deployment flag); when present it reaches every deployment's
-   * AuditRunner, and every proposed reallocation still parks for mandatory human approval. Absent =
-   * the weekly audit proposes no reallocations.
+   * RILEY_REALLOCATE_SELF_EXECUTION_ENABLED env kill switch (default OFF). Like pause, it is
+   * threaded into a deployment's AuditRunner ONLY when that deployment's
+   * governanceSettings.reallocateSelfExecutionEnabled per-org CANARY flag is true
+   * (capability-passing as enforcement; both default OFF) — so a flip reaches one canary org,
+   * not every org. Every proposed reallocation still parks for mandatory human approval. Absent
+   * (or canary flag off) = the weekly audit proposes no reallocations for that deployment.
    */
   rileyBudgetSubmitter?: RileyBudgetSubmitter;
   /**
@@ -359,10 +367,14 @@ export async function executeWeeklyAudit(step: StepTools, deps: CronDependencies
           ...(deps.rileyPauseSubmitter && deployment.pauseSelfExecutionEnabled
             ? { rileyPauseSubmitter: deps.rileyPauseSubmitter }
             : {}),
-          // Spec-1B 1B-1.6: reallocate self-submission. v1 is env-gated only (the dep exists solely
-          // under RILEY_REALLOCATE_SELF_EXECUTION_ENABLED); no per-deployment flag, so a wired dep
-          // reaches every org's runner. Every proposed move still parks for mandatory approval.
-          ...(deps.rileyBudgetSubmitter ? { rileyBudgetSubmitter: deps.rileyBudgetSubmitter } : {}),
+          // Spec-1B 1B-1.6: reallocate self-submission, now gated like pause — capability-passing
+          // as enforcement. The budget submitter reaches a deployment's runner ONLY when its per-org
+          // CANARY flag is on AND the env kill switch wired the dep. So flipping
+          // RILEY_REALLOCATE_SELF_EXECUTION_ENABLED reaches ONE canary org, not every org at once.
+          // Every proposed move still parks for mandatory approval (and is on the D9-2 denylist).
+          ...(deps.rileyBudgetSubmitter && deployment.reallocateSelfExecutionEnabled
+            ? { rileyBudgetSubmitter: deps.rileyBudgetSubmitter }
+            : {}),
           ...(deps.getLatestOperationalState
             ? { operationalStateProvider: { getLatest: deps.getLatestOperationalState } }
             : {}),

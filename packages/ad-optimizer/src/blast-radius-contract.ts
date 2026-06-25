@@ -19,28 +19,33 @@
  */
 
 /**
- * Honesty marker (A6 / decision D3): the wiring state of this contract's three protections. The
- * ONLY one with a consumer today is the pre-write cap; the forward guardrails and the automated
- * rollback are a FORWARD INTERFACE with ZERO consumer (grep proves no `.guardrails`/`.rollback`/
- * `reset_prior_budget` read outside this module's own test). Recorded intent, not enforcement.
- * Wiring AND exercising end-to-end (at least once) the forward guardrail-evaluation monitor +
- * automated rollback + a genuine kill-switch is a HARD precondition of flipping
- * RILEY_REALLOCATE_SELF_EXECUTION_ENABLED. See docs/runbooks/riley-reallocation-go-live.md.
- * Mirrors the SPEC_1B_PENDING_KINDS idiom (a typed const documenting deferred state). Inaccurate
- * comments are worse than none; an off-flag is not a safety boundary (Knight Capital).
+ * Honesty marker (A6 / decision D3): the wiring state of this contract's three protections.
+ * The pre-write cap is fully WIRED (the executor calls it). The forward guardrails and the
+ * automated rollback now have their DECISION wired — `evaluateBlastRadiusGuardrails`,
+ * `planReallocationRollback`, and `runReallocationGuardrailMonitor`
+ * (reallocation-guardrail-monitor.ts) read `.guardrails`/`.rollback`, are fail-closed, and are
+ * unit-pinned — but the real-dep MONITOR PASS (the Meta-window measurement provider + the governed
+ * reset_prior_budget dispatch through ingress) is the remaining integration, and none of it has
+ * been EXERCISED end-to-end yet. So flipping RILEY_REALLOCATE_SELF_EXECUTION_ENABLED is still
+ * gated: wiring the real-dep monitor pass + a genuine kill-switch + a single end-to-end exercise
+ * remain HARD preconditions. See docs/runbooks/riley-reallocation-go-live.md. Mirrors the
+ * SPEC_1B_PENDING_KINDS idiom. An off-flag is not a safety boundary (Knight Capital).
  */
 export const BLAST_RADIUS_PROTECTIONS = {
   /** assertWithinBlastRadius: WIRED. The reallocate executor calls it before every Meta write. */
   preWriteCap: "wired",
-  /** BlastRadiusContract.guardrails: NOT WIRED. No forward monitor reads them (deferred per D3). */
-  forwardGuardrails: "not_wired",
-  /** BlastRadiusRollback / reset_prior_budget: NOT WIRED. Nothing runs the rollback (deferred D3). */
-  automatedRollback: "not_wired",
+  /** evaluateBlastRadiusGuardrails: DECISION wired (fail-closed, unit-pinned). The real-dep
+   *  monitor pass (Meta-window measurement provider) is the remaining integration. */
+  forwardGuardrails: "decision_wired",
+  /** planReallocationRollback + runReallocationGuardrailMonitor: DECISION wired. The governed
+   *  reset_prior_budget DISPATCH (through ingress) is the remaining integration. */
+  automatedRollback: "decision_wired",
 } as const;
 
 /**
- * NOT WIRED (BLAST_RADIUS_PROTECTIONS.forwardGuardrails): a guardrail metric a FUTURE outcome-
- * attribution monitor would evaluate. Zero consumer today (deferred per D3).
+ * DECISION wired (BLAST_RADIUS_PROTECTIONS.forwardGuardrails): a guardrail metric the forward
+ * monitor's `evaluateBlastRadiusGuardrails` reads and trips on. The real-dep measurement provider
+ * (over a live Meta window) is the remaining integration.
  *
  * A guardrail signal the forward monitor (the slice-3 outcome-attribution cron)
  * evaluates over its window and trips on. Machine-comparable, NOT prose: each
@@ -70,8 +75,9 @@ export interface BlastRadiusGuardrail {
 }
 
 /**
- * NOT WIRED (BLAST_RADIUS_PROTECTIONS.automatedRollback): the automated breach response a FUTURE
- * monitor would run. Zero consumer today (deferred per D3); recorded intent, not enforcement.
+ * DECISION wired (BLAST_RADIUS_PROTECTIONS.automatedRollback): the automated breach response the
+ * monitor runs. `planReallocationRollback` + `runReallocationGuardrailMonitor` compute it from the
+ * captured prior budget; the governed dispatch (through ingress) is the remaining integration.
  *
  * Automated rollback for the reallocate class: on a tripped guardrail the monitor
  * re-sets the campaign's prior daily budget. The executor MUST capture the prior
@@ -104,11 +110,11 @@ export interface BlastRadiusContract {
    * "small account, large relative move" case a flat dollar cap misses.
    */
   maxAccountSpendShare: number;
-  /** NOT WIRED: guardrail thresholds a FUTURE outcome-attribution monitor would evaluate; zero
-   *  consumer today (BLAST_RADIUS_PROTECTIONS.forwardGuardrails). Forward interface, not enforcement. */
+  /** DECISION wired: thresholds the forward monitor's evaluateBlastRadiusGuardrails reads
+   *  (BLAST_RADIUS_PROTECTIONS.forwardGuardrails); real-dep measurement is the remaining integration. */
   guardrails: BlastRadiusGuardrail[];
-  /** NOT WIRED: the automated breach response a FUTURE monitor would run; zero consumer today
-   *  (BLAST_RADIUS_PROTECTIONS.automatedRollback). Forward interface, not enforcement. */
+  /** DECISION wired: the automated breach response runReallocationGuardrailMonitor computes
+   *  (BLAST_RADIUS_PROTECTIONS.automatedRollback); the governed dispatch is the remaining integration. */
   rollback: BlastRadiusRollback;
 }
 

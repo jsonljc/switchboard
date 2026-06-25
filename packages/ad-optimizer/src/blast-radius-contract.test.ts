@@ -178,9 +178,12 @@ describe("DEFAULT_BLAST_RADIUS_CONTRACT — the v1 default the reallocate execut
 });
 
 describe("BLAST_RADIUS_PROTECTIONS — honest wiring state (A6/D3)", () => {
-  it("marks the pre-write cap WIRED and the forward guardrails + rollback NOT WIRED", () => {
+  it("marks the pre-write cap WIRED and the forward guardrails + rollback DECISION-wired", () => {
+    // The decision logic (evaluateBlastRadiusGuardrails / planReallocationRollback /
+    // runReallocationGuardrailMonitor) is now built + fail-closed + unit-pinned; the real-dep
+    // monitor pass (Meta-window measurement + governed reset_prior_budget dispatch) remains.
     expect(BLAST_RADIUS_PROTECTIONS.preWriteCap).toBe("wired");
-    expect(BLAST_RADIUS_PROTECTIONS.forwardGuardrails).toBe("not_wired");
-    expect(BLAST_RADIUS_PROTECTIONS.automatedRollback).toBe("not_wired");
+    expect(BLAST_RADIUS_PROTECTIONS.forwardGuardrails).toBe("decision_wired");
+    expect(BLAST_RADIUS_PROTECTIONS.automatedRollback).toBe("decision_wired");
   });
 });

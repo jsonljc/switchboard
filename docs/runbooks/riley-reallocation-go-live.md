@@ -25,10 +25,18 @@ v1 only scales budgets UP (`REALLOCATE_SCALE_FACTOR = 1.2`, a +20% increase). De
   protection): a per-move dollar ceiling (`maxDeltaCents`, $50 default) plus an account-spend share
   ceiling (`maxAccountSpendShare`, 0.25), fail-closed on a non-finite delta or an unsizable account
   spend.
-- **NOT wired (forward interface, zero consumer):** the contract `guardrails`
-  (`account_booked_conversions_drop_share`, `freed_budget_absorbed_share`) and the
-  `reset_prior_budget` rollback (`BLAST_RADIUS_PROTECTIONS` in
-  `packages/ad-optimizer/src/blast-radius-contract.ts`). No code reads them today.
+- **DECISION wired, integration pending:** the forward guardrail-evaluation monitor +
+  automated `reset_prior_budget` rollback DECISION now exist and are fail-closed + unit-pinned
+  (`reallocation-guardrail-monitor.ts`: `evaluateBlastRadiusGuardrails` reads the contract
+  `guardrails` and trips — fail-closed on a missing/NaN measurement; `planReallocationRollback`
+  computes the restore-to-prior delta; `runReallocationGuardrailMonitor` orchestrates measure →
+  evaluate → roll back). What REMAINS is the real-dep integration: a scheduled monitor pass that
+  injects a live Meta-window measurement provider + a governed rollback dispatch (the
+  `reset_prior_budget` intent through ingress), and a single end-to-end exercise.
+- **Per-deployment CANARY flag (new):** `governanceSettings.reallocateSelfExecutionEnabled` gates
+  the reallocate submitter per org (mirrors `pauseSelfExecutionEnabled`), so the env flip reaches
+  ONE canary org instead of every org's runner at once. Both the env kill switch and the per-org
+  flag must be on. It also doubles as a per-org kill-switch for FUTURE self-execution.
 - **Observability:** `switchboard_riley_reallocation_cap_evaluated_total{orgId,outcome}` (outcome =
   within_cap | delta_cap | share_cap) fires once per cap evaluation INSIDE the executor, so it is
   observable the moment the executor runs. It shares the flag-gated executor's reachability: it is
@@ -58,12 +66,17 @@ intended fail-closed default, not a bug: the gate never fabricates a pass on mis
 
 ## HARD precondition before flipping the flag (do NOT flip until ALL are true)
 
-1. The forward guardrail-evaluation monitor is WIRED (it reads `BlastRadiusContract.guardrails`
-   over a real window and trips on a breach).
-2. Automated rollback is WIRED (it executes `reset_prior_budget` from the persisted
-   `observedPriorCents` on a tripped guardrail).
+1. The forward guardrail-evaluation monitor is WIRED **end-to-end**. The DECISION is done
+   (`evaluateBlastRadiusGuardrails` reads `BlastRadiusContract.guardrails`, fail-closed); what
+   remains is injecting a real Meta-window measurement provider into a scheduled
+   `runReallocationGuardrailMonitor` pass.
+2. Automated rollback is WIRED **end-to-end**. The DECISION is done (`planReallocationRollback` +
+   `runReallocationGuardrailMonitor` compute `reset_prior_budget` from the persisted
+   `observedPriorCents`); what remains is the governed rollback DISPATCH (the `reset_prior_budget`
+   intent through ingress — allow-only governance + PLATFORM_DIRECT entry + handler).
 3. A genuine kill-switch exists (a runtime stop that halts in-flight and future self-execution, not
-   merely the env flag).
+   merely the env flag). The per-deployment `reallocateSelfExecutionEnabled` canary flag now halts
+   FUTURE self-execution per org; an in-flight runtime stop is the remaining piece.
 4. All three have been EXERCISED end-to-end at least once (a real or staged breach tripped the
    monitor, the rollback restored the prior budget, the kill-switch halted execution). An
    unexercised rollback is assumed broken; an off-flag is not a safety boundary (Knight Capital).
@@ -74,7 +87,11 @@ intended fail-closed default, not a bug: the gate never fabricates a pass on mis
    `scale_unproven_paid_value` watch clear for a paying campaign). Without this, the floor abstains by
    holding every scale as a watch: safe, but the reallocation feature stays dark even with the flag on.
 
-Until 1-6 hold, `RILEY_REALLOCATE_SELF_EXECUTION_ENABLED` stays OFF. Wiring 1-4 is explicitly out
-of scope for the contract-honesty slice (deferred per decision D3; NIST AI RMF staged autonomy). A6
-(honest blast-radius contract + cap telemetry) and A12 (this count-vs-value gate) are the two code
-prerequisites that are now COMPLETE; the remaining preconditions are operational.
+Until 1-6 hold, `RILEY_REALLOCATE_SELF_EXECUTION_ENABLED` stays OFF. A6 (honest blast-radius
+contract + cap telemetry), A12 (this count-vs-value gate), and now the forward-monitor + rollback
+DECISION layer + the per-deployment canary are COMPLETE. The remaining work to satisfy 1-3 is the
+real-dep integration (a scheduled monitor pass with a live Meta-window measurement provider, the
+governed `reset_prior_budget` dispatch intent, and an in-flight kill-switch) plus exercising all of
+it end-to-end once (4) and the operational pilot/data preconditions (5-6). Staged autonomy (NIST AI
+RMF): the canary makes a single-org supervised pilot gateable once 1-4 are exercised; a global flip
+still waits on all of 1-6.

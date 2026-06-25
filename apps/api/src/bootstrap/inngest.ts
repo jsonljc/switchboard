@@ -514,6 +514,13 @@ export async function registerInngest(
           ((d.governanceSettings as Record<string, unknown> | null)?.[
             "pauseSelfExecutionEnabled"
           ] ?? false) === true,
+        // Spec-1B per-org CANARY flag for budget reallocate self-execution. Strict === true.
+        // Combined with the env kill switch RILEY_REALLOCATE_SELF_EXECUTION_ENABLED, a flip
+        // reaches ONE canary org rather than every org's runner at once (Knight Capital).
+        reallocateSelfExecutionEnabled:
+          ((d.governanceSettings as Record<string, unknown> | null)?.[
+            "reallocateSelfExecutionEnabled"
+          ] ?? false) === true,
       }));
     },
     getDeploymentCredentials,
@@ -587,15 +594,17 @@ export async function registerInngest(
     ...(process.env["RILEY_PAUSE_SELF_EXECUTION_ENABLED"] === "true"
       ? { rileyPauseSubmitter }
       : {}),
-    // SPEC-1B: RILEY_REALLOCATE_SELF_EXECUTION_ENABLED=true wires the budget
-    // reallocate initiator; default absent = dark. Env-only gate (no per-deployment
-    // field in v1; mirrors RILEY_PAUSE_SELF_EXECUTION_ENABLED pattern).
-    // FLAG-FLIP GATE (A6/D3): flipping this on is a real-money self-execution boundary. The ONLY
-    // active blast-radius protection is the executor's pre-write cap (assertWithinBlastRadius); the
-    // contract's guardrails + reset_prior_budget rollback are NOT WIRED (BLAST_RADIUS_PROTECTIONS,
-    // packages/ad-optimizer). HARD precondition before flipping: wire AND exercise end-to-end the
-    // forward guardrail monitor + automated rollback + a genuine kill-switch. An off-flag is not a
-    // safety boundary (Knight Capital). See docs/runbooks/riley-reallocation-go-live.md.
+    // SPEC-1B: RILEY_REALLOCATE_SELF_EXECUTION_ENABLED=true wires the budget reallocate
+    // initiator; default absent = dark. This env kill switch is now paired with a per-deployment
+    // CANARY flag (governanceSettings.reallocateSelfExecutionEnabled, mapped above + gated in
+    // packages/ad-optimizer inngest-functions), so a flip reaches ONE canary org, not every org.
+    // FLAG-FLIP GATE (A6/D3): flipping this on is a real-money self-execution boundary. Wired now:
+    // the pre-write cap (assertWithinBlastRadius) AND the forward guardrail-evaluation monitor +
+    // automated reset_prior_budget rollback DECISION (reallocation-guardrail-monitor.ts, fail-closed,
+    // unit-pinned). REMAINING before the global flip: inject the real Meta-window measurement provider
+    // + the governed rollback dispatch into a scheduled monitor pass, register the auto-rollback
+    // intent, and EXERCISE all of it end-to-end at least once. An off-flag is not a safety boundary
+    // (Knight Capital). See docs/runbooks/riley-reallocation-go-live.md.
     ...(process.env["RILEY_REALLOCATE_SELF_EXECUTION_ENABLED"] === "true"
       ? { rileyBudgetSubmitter }
       : {}),

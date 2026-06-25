@@ -169,6 +169,23 @@ export type {
   BlastRadiusRollback,
   BlastRadiusVerdict,
 } from "./blast-radius-contract.js";
+// Spec-1B act leg flip-readiness: the forward guardrail-evaluation monitor + automated
+// reset_prior_budget rollback DECISION (runbook §1-2). Pure + injected-deps; apps/api injects
+// the real Meta-window measurement provider and the governed rollback dispatch.
+export {
+  evaluateBlastRadiusGuardrails,
+  planReallocationRollback,
+  runReallocationGuardrailMonitor,
+} from "./reallocation-guardrail-monitor.js";
+export type {
+  GuardrailBreach,
+  GuardrailVerdict,
+  ReallocationRollbackPlan,
+  PendingReallocation,
+  GuardrailMeasurement,
+  ReallocationMonitorOutcome,
+  ReallocationGuardrailMonitorDeps,
+} from "./reallocation-guardrail-monitor.js";
 // Spec-1B act leg: pure fail-closed drift guard the reallocate executor composes
 // with the blast-radius cap before the Meta budget write (read-modify-re-read, spec section 7).
 export {
