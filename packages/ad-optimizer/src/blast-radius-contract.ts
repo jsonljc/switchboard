@@ -42,9 +42,9 @@ export const BLAST_RADIUS_PROTECTIONS = {
 } as const;
 
 /**
- * DECISION wired (BLAST_RADIUS_PROTECTIONS.forwardGuardrails): a guardrail metric the forward
- * monitor's `evaluateBlastRadiusGuardrails` reads and trips on. The real-dep measurement provider
- * (over a live Meta window) is the remaining integration.
+ * WIRED (BLAST_RADIUS_PROTECTIONS.forwardGuardrails): a guardrail metric the forward monitor's
+ * `evaluateBlastRadiusGuardrails` reads and trips on. The real-dep measurement provider runs in the
+ * scheduled monitor pass; the LIVE-Meta exercise is the remaining operational step.
  *
  * A guardrail signal the forward monitor (the slice-3 outcome-attribution cron)
  * evaluates over its window and trips on. Machine-comparable, NOT prose: each
@@ -74,9 +74,10 @@ export interface BlastRadiusGuardrail {
 }
 
 /**
- * DECISION wired (BLAST_RADIUS_PROTECTIONS.automatedRollback): the automated breach response the
- * monitor runs. `planReallocationRollback` + `runReallocationGuardrailMonitor` compute it from the
- * captured prior budget; the governed dispatch (through ingress) is the remaining integration.
+ * WIRED (BLAST_RADIUS_PROTECTIONS.automatedRollback): the automated breach response the monitor runs.
+ * `planReallocationRollback` + `runReallocationGuardrailMonitor` compute it from the captured prior
+ * budget and the governed dispatch (the reset_prior_budget intent through ingress) executes it; the
+ * LIVE-Meta exercise is the remaining operational step.
  *
  * Automated rollback for the reallocate class: on a tripped guardrail the monitor
  * re-sets the campaign's prior daily budget. The executor MUST capture the prior
@@ -109,11 +110,11 @@ export interface BlastRadiusContract {
    * "small account, large relative move" case a flat dollar cap misses.
    */
   maxAccountSpendShare: number;
-  /** DECISION wired: thresholds the forward monitor's evaluateBlastRadiusGuardrails reads
-   *  (BLAST_RADIUS_PROTECTIONS.forwardGuardrails); real-dep measurement is the remaining integration. */
+  /** WIRED: thresholds the forward monitor's evaluateBlastRadiusGuardrails reads
+   *  (BLAST_RADIUS_PROTECTIONS.forwardGuardrails); measured by the scheduled monitor pass. */
   guardrails: BlastRadiusGuardrail[];
-  /** DECISION wired: the automated breach response runReallocationGuardrailMonitor computes
-   *  (BLAST_RADIUS_PROTECTIONS.automatedRollback); the governed dispatch is the remaining integration. */
+  /** WIRED: the automated breach response runReallocationGuardrailMonitor computes
+   *  (BLAST_RADIUS_PROTECTIONS.automatedRollback) + dispatches as the governed reset_prior_budget. */
   rollback: BlastRadiusRollback;
 }
 
