@@ -54,8 +54,6 @@ function draftOk(outputs: Record<string, unknown>, outcome = "completed") {
   } as unknown as SubmitWorkResponse & { ok: true; result: { outcome: string } };
 }
 
-const measuredJob = { performance: { delivery: "measured" } };
-
 function makeDeps(overrides: Partial<MiraSelfBriefWorkerDeps> = {}): MiraSelfBriefWorkerDeps {
   return {
     readEnabledFlag: () => true,
@@ -66,8 +64,7 @@ function makeDeps(overrides: Partial<MiraSelfBriefWorkerDeps> = {}): MiraSelfBri
     })),
     readModel: {
       read: vi.fn(async () => ({
-        jobs: [measuredJob],
-        counts: { inFlight: 0 },
+        counts: { inFlight: 0, measuredCount: 1 },
       })),
     },
     memoryReader: {
@@ -105,8 +102,8 @@ describe("executeMiraSelfBriefScan floor", () => {
     const deps = makeDeps({
       readModel: {
         read: vi.fn(async () => ({
-          jobs: [measuredJob],
-          counts: { inFlight: SELF_BRIEF_BACKLOG_CAP },
+          // measuredCount is irrelevant here: the inFlight cap short-circuits first.
+          counts: { inFlight: SELF_BRIEF_BACKLOG_CAP, measuredCount: 1 },
         })),
       },
     });
@@ -116,7 +113,7 @@ describe("executeMiraSelfBriefScan floor", () => {
 
   it("skips a zero-signal org (no measured performance, no surfaced memory)", async () => {
     const deps = makeDeps({
-      readModel: { read: vi.fn(async () => ({ jobs: [{}], counts: { inFlight: 0 } })) },
+      readModel: { read: vi.fn(async () => ({ counts: { inFlight: 0, measuredCount: 0 } })) },
     });
     expect(await executeMiraSelfBriefScan(deps, "org1")).toEqual({ skipped: "no_signal" });
     expect(deps.submitCompose).not.toHaveBeenCalled();
@@ -124,7 +121,7 @@ describe("executeMiraSelfBriefScan floor", () => {
 
   it("proceeds on surfaced creative memory even with zero jobs", async () => {
     const deps = makeDeps({
-      readModel: { read: vi.fn(async () => ({ jobs: [], counts: { inFlight: 0 } })) },
+      readModel: { read: vi.fn(async () => ({ counts: { inFlight: 0, measuredCount: 0 } })) },
       memoryReader: {
         listHighConfidence: vi.fn(async () => [
           {
@@ -144,6 +141,21 @@ describe("executeMiraSelfBriefScan floor", () => {
   it("skips the memory query when measured performance already satisfies the floor", async () => {
     const deps = makeDeps();
     await executeMiraSelfBriefScan(deps, "org1");
+    expect(deps.memoryReader.listHighConfidence).not.toHaveBeenCalled();
+  });
+
+  it("reads measured signal from the full-cohort count, not the visible jobs slice (P1-8)", async () => {
+    // The measured creative is older than the visible window, so it is ABSENT
+    // from model.jobs but counted in counts.measuredCount (computed over the
+    // whole FETCH_CAP cohort). The floor must honor the cohort count, else a
+    // measured creative outside the newest 5 wrongly reads as no_signal.
+    const deps = makeDeps({
+      readModel: {
+        read: vi.fn(async () => ({ counts: { inFlight: 0, measuredCount: 1 } })),
+      },
+    });
+    expect(await executeMiraSelfBriefScan(deps, "org1")).toEqual({ jobId: "job-9" });
+    // Measured signal satisfied the floor, so the memory fallback is never queried.
     expect(deps.memoryReader.listHighConfidence).not.toHaveBeenCalled();
   });
 });

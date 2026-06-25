@@ -85,6 +85,10 @@ export interface MiraCreativeCounts {
   inFlight: number;
   awaitingReview: number;
   stopped: number;
+  // Jobs with a parseable measured_performance row, over the FULL fetched cohort
+  // (not just the visible slice). The self-brief measured-signal floor reads this
+  // so a measured creative outside the newest `visibleLimit` is not invisible.
+  measuredCount: number;
 }
 
 export interface MiraCreativeReadModel {

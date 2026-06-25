@@ -75,6 +75,10 @@ export function buildMiraCreativeReadModel(
     (s) => s.status === "awaiting_review" || s.status === "in_progress",
   ).length;
   const stopped = summaries.filter((s) => s.status === "stopped").length;
+  // Computed over the full cohort (like inFlight), NOT the visible slice, so the
+  // self-brief floor sees a measured creative even when it is older than the
+  // newest `visibleLimit` rows.
+  const measuredCount = summaries.filter((s) => s.performance?.delivery === "measured").length;
 
   return {
     jobs: summaries.slice(0, opts.visibleLimit ?? DEFAULT_VISIBLE_LIMIT),
@@ -85,6 +89,7 @@ export function buildMiraCreativeReadModel(
       inFlight,
       awaitingReview,
       stopped,
+      measuredCount,
     },
   };
 }

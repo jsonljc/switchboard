@@ -36,6 +36,28 @@ function job(o: Partial<CreativeJob>): CreativeJob {
   } as CreativeJob;
 }
 
+// A valid measured_performance row (mirrors performance-projection.test.ts):
+// derivePerformance() parses this into a `delivery: "measured"` summary.
+const MEASURED_ROW = {
+  kind: "measured_performance",
+  version: 1,
+  asOf: "2026-06-04T06:30:00.000Z",
+  window: { from: "2026-05-05T00:00:00.000Z", to: "2026-06-04T06:30:00.000Z", days: 30 },
+  delivery: "measured",
+  join: { metaCampaignId: "camp-1", metaAdId: "ad-1", metaVideoId: "vid-1" },
+  meta: {
+    spend: 50,
+    impressions: 1000,
+    inlineLinkClicks: 40,
+    inlineLinkClickCtr: 4,
+    conversions: 3,
+    cpm: 50,
+  },
+  booked: { valueCents: 25000, count: 2 },
+  trueRoas: 5,
+  source: { insights: "meta_campaign_insights", conversions: "conversion_records" },
+};
+
 describe("buildMiraCreativeReadModel", () => {
   const opts = { now: NOW, weekStart: WEEK_START, prevWeekStart: PREV_WEEK_START, visibleLimit: 5 };
 
@@ -82,6 +104,7 @@ describe("buildMiraCreativeReadModel", () => {
       inFlight: 0,
       awaitingReview: 0,
       stopped: 0,
+      measuredCount: 0,
     });
   });
 
@@ -113,6 +136,7 @@ describe("buildMiraCreativeReadModel", () => {
       inFlight: 2,
       awaitingReview: 1,
       stopped: 1,
+      measuredCount: 0,
     });
   });
 
@@ -133,6 +157,24 @@ describe("buildMiraCreativeReadModel", () => {
     expect(rm.jobs).toHaveLength(5);
     expect(rm.counts.awaitingReview).toBe(8);
     expect(rm.counts.total).toBe(8); // counts cover ALL fetched jobs, not just the visible slice
+  });
+
+  it("counts measured jobs across the FULL cohort, not just the visible slice (P1-8)", () => {
+    // Input order == display order; the lone measured job is the oldest (index 6),
+    // so it falls OUTSIDE the visible 5. The self-brief measured-signal floor reads
+    // counts.measuredCount, so it must be computed over the whole cohort (like inFlight),
+    // not the sliced jobs — else a measured creative outside the newest 5 is invisible.
+    const base = { currentStage: "complete" as const, stageOutputs: { production: {} } };
+    const jobs = [
+      ...Array.from({ length: 6 }, (_, i) => job({ id: `unmeasured-${i}`, ...base })),
+      job({ id: "measured-tail", ...base, pastPerformance: MEASURED_ROW }),
+    ];
+    const rm = buildMiraCreativeReadModel(jobs, { ...opts, visibleLimit: 5 });
+    // The measured job is NOT in the visible slice...
+    expect(rm.jobs).toHaveLength(5);
+    expect(rm.jobs.some((j) => j.id === "measured-tail")).toBe(false);
+    // ...but the cohort-wide measured count still sees it.
+    expect(rm.counts.measuredCount).toBe(1);
   });
 
   it("maps draft video + reviewAction on awaiting_review", () => {

@@ -21,6 +21,7 @@ const emptyModel: MiraCreativeReadModel = {
     inFlight: 0,
     awaitingReview: 0,
     stopped: 0,
+    measuredCount: 0,
   },
 };
 
