@@ -12,6 +12,7 @@ import {
   type BusinessFactsStatus,
   type KnowledgeEntryReader,
 } from "@switchboard/db";
+import { GovernanceConfigSchema } from "@switchboard/schemas";
 import { describeCalendarReadiness } from "../lib/calendar-readiness.js";
 import { requireOrganizationScope } from "../utils/require-org.js";
 
@@ -82,6 +83,11 @@ export interface ReadinessContext {
   // follow-up / lead-intake intent, so proactive sends ship prod-inert by DENY even though
   // the deployment resolves. Conservatively false on any read error (mirrors the skill-pack gate).
   proactiveGovernanceSeeded: boolean;
+  // True iff the Alex deployment carries a valid governanceConfig (the resolver would
+  // return "resolved", so the five afterSkill gates run as telemetry). When false the
+  // gates resolve "missing" and pass through — the agent still operates, but no
+  // governance signal is recorded. Advisory only; seeded on the next agent-config load.
+  governanceActivated: boolean;
 }
 
 // ── PrismaLike — narrow type for readiness queries ─────────────────────────
@@ -122,6 +128,7 @@ export interface PrismaLike {
         skillSlug: true;
         organizationId: true;
         listingId: true;
+        governanceConfig: true;
       };
     }): Promise<{
       id: string;
@@ -129,6 +136,7 @@ export interface PrismaLike {
       skillSlug: string | null;
       organizationId: string;
       listingId: string;
+      governanceConfig: unknown;
     } | null>;
   };
   organizationConfig: {
@@ -201,6 +209,7 @@ export async function buildReadinessContext(
         skillSlug: true,
         organizationId: true,
         listingId: true,
+        governanceConfig: true,
       },
     }),
     prisma.organizationConfig.findUnique({
@@ -293,6 +302,14 @@ export async function buildReadinessContext(
     );
   }
 
+  // P2-A: the Alex deployment is governance-activated iff it carries a parseable
+  // governanceConfig (the resolver would return "resolved", so the five afterSkill
+  // gates run as telemetry). A null/absent/corrupt config means the gates resolve
+  // "missing" and pass through — safe, but no governance signal is recorded.
+  const governanceActivated = deployment
+    ? GovernanceConfigSchema.safeParse(deployment.governanceConfig).success
+    : false;
+
   return {
     managedChannels,
     connections: mappedConnections,
@@ -311,6 +328,7 @@ export async function buildReadinessContext(
     alexSkillPackDiagnostic,
     businessFactsStatus,
     proactiveGovernanceSeeded,
+    governanceActivated,
   };
 }
 
@@ -360,6 +378,9 @@ export function checkReadiness(ctx: ReadinessContext): ReadinessReport {
 
   // 13. proactive-governance-seeded (blocking)
   checks.push(checkProactiveGovernanceSeeded(ctx));
+
+  // 14. governance-config-seeded (advisory)
+  checks.push(checkGovernanceConfigSeeded(ctx));
 
   const ready = checks.filter((c) => c.blocking).every((c) => c.status === "pass");
 
@@ -675,6 +696,26 @@ function checkProactiveGovernanceSeeded(ctx: ReadinessContext): ReadinessCheck {
     message: ctx.proactiveGovernanceSeeded
       ? "Proactive messaging is enabled — greetings, reminders and follow-ups can send"
       : "Proactive messaging isn't enabled yet — greetings, reminders and follow-ups won't send. Reload your agent configuration, or contact support if this persists.",
+  };
+}
+
+function checkGovernanceConfigSeeded(ctx: ReadinessContext): ReadinessCheck {
+  const id = "governance-config-seeded";
+  const label = "Governance monitoring active";
+  // Advisory: a missing governanceConfig means the afterSkill gates resolve "missing"
+  // and pass through (the agent still operates safely), so this never hard-blocks
+  // go-live. It surfaces that governance telemetry (claim / price / consent / window
+  // checks) is not yet recording. Self-heals on the next agent-config load, which
+  // seeds the observe posture. Message never leaks gate internals.
+  const blocking = false;
+  return {
+    id,
+    label,
+    blocking,
+    status: ctx.governanceActivated ? "pass" : "fail",
+    message: ctx.governanceActivated
+      ? "Governance monitoring is active (observe) — claim, price, consent and messaging checks are logging"
+      : "Governance monitoring isn't active yet — reload your agent configuration to enable claim, price and consent checks.",
   };
 }
 
