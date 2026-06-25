@@ -607,13 +607,14 @@ export async function registerInngest(
     // initiator; default absent = dark. This env kill switch is now paired with a per-deployment
     // CANARY flag (governanceSettings.reallocateSelfExecutionEnabled, mapped above + gated in
     // packages/ad-optimizer inngest-functions), so a flip reaches ONE canary org, not every org.
-    // FLAG-FLIP GATE (A6/D3): flipping this on is a real-money self-execution boundary. Wired now:
-    // the pre-write cap (assertWithinBlastRadius) AND the forward guardrail-evaluation monitor +
-    // automated reset_prior_budget rollback DECISION (reallocation-guardrail-monitor.ts, fail-closed,
-    // unit-pinned). REMAINING before the global flip: inject the real Meta-window measurement provider
-    // + the governed rollback dispatch into a scheduled monitor pass, register the auto-rollback
-    // intent, and EXERCISE all of it end-to-end at least once. An off-flag is not a safety boundary
-    // (Knight Capital). See docs/runbooks/riley-reallocation-go-live.md.
+    // FLAG-FLIP GATE (A6/D3): flipping this on is a real-money self-execution boundary. WIRED now (all
+    // code preconditions): the pre-write cap (assertWithinBlastRadius), the always-on forward
+    // guardrail monitor pass with a real Meta-window + CRM measurement provider, the governed
+    // reset_prior_budget rollback dispatch through ingress, and the in-flight kill-switch
+    // (reallocateKillSwitch) -- all fail-closed + staged-exercised end-to-end
+    // (riley-reallocate-act-leg-e2e.test.ts). REMAINING is OPERATIONAL only: the single LIVE-Meta
+    // exercise, a Tier-0 credentialed pilot org, and real campaign-attributed paid-value data. An
+    // off-flag is not a safety boundary (Knight Capital). See docs/runbooks/riley-reallocation-go-live.md.
     ...(process.env["RILEY_REALLOCATE_SELF_EXECUTION_ENABLED"] === "true"
       ? { rileyBudgetSubmitter }
       : {}),
