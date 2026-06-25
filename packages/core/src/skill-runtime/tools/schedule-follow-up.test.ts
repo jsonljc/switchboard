@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createScheduleFollowUpToolFactory } from "./schedule-follow-up.js";
+import { getToolGovernanceDecision } from "../governance.js";
 import type { SkillRequestContext } from "../types.js";
 
 function makeDeps() {
@@ -32,6 +33,18 @@ describe("schedule-follow-up tool", () => {
     expect(tool.id).toBe("follow-up");
     expect(tool.operations["followup.schedule"]!.effectCategory).toBe("write");
     expect(tool.operations["followup.schedule"]!.idempotent).toBe(true);
+  });
+
+  // P1-A: at the default "supervised" trust a "write" maps to require-approval and
+  // the in-skill GovernanceHook short-circuits before execute(), so Alex would tell
+  // the lead "I'll check in in a couple of days" while no follow-up row is recorded
+  // (the cron never fires). Auto-approve at supervised: this only RECORDS a governed
+  // intent — the actual send stays gated downstream by consent + window + template.
+  it("followup.schedule auto-approves at the default 'supervised' trust so the recorded follow-up is not swallowed", () => {
+    const tool = createScheduleFollowUpToolFactory(deps)(CTX);
+    expect(getToolGovernanceDecision(tool.operations["followup.schedule"]!, "supervised")).toBe(
+      "auto-approve",
+    );
   });
 
   it("fails closed when no contact is bound to the conversation", async () => {

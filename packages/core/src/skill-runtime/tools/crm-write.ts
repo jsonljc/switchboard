@@ -38,6 +38,14 @@ export function createCrmWriteToolFactory(
       "stage.update": {
         description: "Update an opportunity's pipeline stage.",
         effectCategory: "write" as const,
+        // P1-A: Alex is instructed to advance the pipeline stage (SKILL.md Phase 2,
+        // e.g. interested -> qualified). At the default "supervised" trust a "write"
+        // maps to require-approval and the in-skill GovernanceHook short-circuits
+        // before execute(), so the stage silently never moves while Alex tells the
+        // lead they're qualified — the cockpit/pipeline then disagree with the
+        // conversation. Auto-approve at supervised (internal CRM state change; same
+        // class as activity.log). guided/autonomous already auto-approve "write".
+        governanceOverride: { supervised: "auto-approve" as const },
         idempotent: true,
         inputSchema: {
           type: "object",

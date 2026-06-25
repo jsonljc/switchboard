@@ -47,6 +47,16 @@ export function createScheduleFollowUpToolFactory(
           "approved template all allow). Use when a qualified lead has gone quiet or " +
           "hesitant. Do not schedule more than one follow-up per conversation.",
         effectCategory: "write" as const,
+        // P1-A: Alex is instructed to schedule a re-engagement follow-up (SKILL.md
+        // Phase 3 / "Scheduling a follow-up"). At the default "supervised" trust a
+        // "write" maps to require-approval and the in-skill GovernanceHook
+        // short-circuits before execute(), so Alex tells the lead "I'll check in in
+        // a couple of days" but no follow-up row is recorded (the cron never fires).
+        // Auto-approve at supervised: this RECORDS a governed intent only — the
+        // actual send stays gated downstream by consent + window + approved template
+        // (see the description), so the record-vs-told consistency is restored
+        // without bypassing any send-time guard. guided/autonomous already auto.
+        governanceOverride: { supervised: "auto-approve" as const },
         idempotent: true,
         inputSchema: {
           type: "object",
