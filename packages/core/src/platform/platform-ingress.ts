@@ -208,18 +208,18 @@ export class PlatformIngress {
     if (this.config.entitlementResolver) {
       const entitlement = await this.config.entitlementResolver.resolve(request.organizationId);
       if (!entitlement.entitled) {
-        // A22 carve-out: a revenue-recording intent (registration.revenueRecording —
+        // A22 carve-out: a revenue-recording intent (registration.revenueRecording,
         // e.g. the PSP-verified payment.record_verified) records money that has ALREADY
         // moved. Blocking it would discard the receipt + revenue event (corrupting the
         // proof chain) and 500 the PSP webhook into a Stripe redelivery storm.
-        // Entitlement gates outbound consumption, not inbound bookkeeping — so record it
+        // Entitlement gates outbound consumption, not inbound bookkeeping, so record it
         // anyway and emit a reconciliation signal so billing can follow up on a
         // non-entitled org that is still transacting.
         if (registration.revenueRecording) {
           console.warn(
             `[entitlement.carveout] revenue-recording intent "${request.intent}" submitted by ` +
               `non-entitled org ${request.organizationId} (status: ${entitlement.blockedStatus}); ` +
-              `recording settled inbound revenue anyway — reconciliation required.`,
+              `recording settled inbound revenue anyway; reconciliation required.`,
           );
         } else {
           return {

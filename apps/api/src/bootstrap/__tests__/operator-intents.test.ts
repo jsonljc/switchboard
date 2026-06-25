@@ -483,7 +483,7 @@ describe("bootstrapOperatorIntents: ledger.deliver_weekly_report registration", 
 });
 
 // ---------------------------------------------------------------------------
-// A22 — payment.record_verified must be flagged revenueRecording so the entitlement
+// A22: payment.record_verified must be flagged revenueRecording so the entitlement
 // gate in PlatformIngress carves it out: a PSP-verified, already-settled deposit is
 // recorded even for a non-entitled org instead of 500-storming the Stripe webhook
 // and losing the T1 receipt + revenue event. The flag must be SPECIFIC to the
@@ -498,7 +498,7 @@ describe("bootstrapOperatorIntents: payment.record_verified revenue-recording fl
     bootstrapOperatorIntents({
       intentRegistry,
       modeRegistry,
-      // Control intent (operator.transition_opportunity_stage) — gated by opportunityStore.
+      // Control intent (operator.transition_opportunity_stage), gated by opportunityStore.
       opportunityStore: makeStoreStub(),
       // The five deps that gate payment.record_verified registration.
       receiptWriter: { write: vi.fn() } as never,

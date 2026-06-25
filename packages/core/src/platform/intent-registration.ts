@@ -65,7 +65,7 @@ export interface IntentRegistration {
    */
   spendBearing?: boolean;
   /**
-   * Marks an intent that RECORDS already-settled INBOUND revenue — proof that money
+   * Marks an intent that RECORDS already-settled INBOUND revenue: proof that money
    * has already moved (e.g. `payment.record_verified`, whose amount/tier are anchored
    * to a server-side PSP fetch-back), as opposed to committing outbound spend. The
    * inbound counterpart of {@link spendBearing}. Defaults to `false` when omitted.

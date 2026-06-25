@@ -34,7 +34,7 @@ function buildIngress(opts: { resolver?: BillingEntitlementResolver }): Platform
     retryable: false,
   });
   // A22: a revenue-recording intent (records already-settled inbound revenue, e.g.
-  // the PSP-verified payment.record_verified) is carved out of the entitlement gate —
+  // the PSP-verified payment.record_verified) is carved out of the entitlement gate;
   // recording money that already moved is proof, not an outbound paid action.
   intentRegistry.register({
     intent: "revenue.proof",

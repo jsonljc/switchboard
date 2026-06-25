@@ -172,7 +172,7 @@ interface OperatorIntentsBootstrapDeps {
  *
  * `revenueRecording` (A22) defaults to false; pass true only for an intent that
  * records already-settled INBOUND revenue (e.g. payment.record_verified) so the
- * entitlement gate in PlatformIngress carves it out instead of blocking it — the
+ * entitlement gate in PlatformIngress carves it out instead of blocking it: the
  * proof of money that already moved must be recorded even for a non-entitled org.
  */
 function registerOperatorIntent(
@@ -321,7 +321,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     registerOperatorIntent(intentRegistry, RECORD_REVENUE_INTENT);
   }
   if (receiptWriter && revenueStore && outboxWriter && runInTransaction && paymentVerifier) {
-    // A22: revenueRecording=true — a PSP-verified, already-settled deposit is recorded
+    // A22: revenueRecording=true marks a PSP-verified, already-settled deposit recorded
     // even for a non-entitled org (entitlement gates outbound spend, not inbound proof).
     registerOperatorIntent(intentRegistry, RECORD_VERIFIED_PAYMENT_INTENT, ["api"], true);
   }
