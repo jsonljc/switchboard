@@ -30,8 +30,8 @@ function makeTrace(overrides: Partial<WorkTrace> = {}): WorkTrace {
 }
 
 describe("TERMINAL_OUTCOMES", () => {
-  it("contains exactly completed and failed", () => {
-    expect([...TERMINAL_OUTCOMES].sort()).toEqual(["completed", "failed"]);
+  it("contains completed, failed, and the needs_reconciliation dead-letter sink", () => {
+    expect([...TERMINAL_OUTCOMES].sort()).toEqual(["completed", "failed", "needs_reconciliation"]);
   });
 });
 
@@ -50,15 +50,21 @@ describe("ALLOWED_OUTCOME_TRANSITIONS", () => {
     ]);
     // `running` is the D1 claim state and must finalize to ANY dispatch outcome,
     // including the non-terminal `queued`/`pending_approval` a keyed workflow can
-    // resolve to — otherwise the claim wedges at running.
+    // resolve to — otherwise the claim wedges at running. EV-2 adds the
+    // `needs_reconciliation` dead-letter sink: the stranded-claim reaper ages an
+    // orphaned `running` claim there (a terminal, non-resubmittable state).
     expect([...ALLOWED_OUTCOME_TRANSITIONS.running].sort()).toEqual([
       "completed",
       "failed",
+      "needs_reconciliation",
       "pending_approval",
       "queued",
     ]);
     expect(ALLOWED_OUTCOME_TRANSITIONS.completed.size).toBe(0);
     expect(ALLOWED_OUTCOME_TRANSITIONS.failed.size).toBe(0);
+    // needs_reconciliation is terminal: no transition out of it (a reaped claim
+    // is never re-runnable — the key must stay blocked).
+    expect(ALLOWED_OUTCOME_TRANSITIONS.needs_reconciliation?.size ?? -1).toBe(0);
   });
 });
 
@@ -104,6 +110,27 @@ describe("validateUpdate — outcome transitions", () => {
     const result = validateUpdate({ current, update: { outcome: "running" } });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.computedLockedAt).toBeNull();
+  });
+
+  it("allows running -> needs_reconciliation and stamps lockedAt (stranded-claim reaper sink)", () => {
+    // The reaper ages an orphaned `running` ingress claim to this terminal sink.
+    // Entering a terminal outcome seals the row (lockedAt stamped), so a resurrected
+    // original process can never finalize it back to completed/failed.
+    const current = makeTrace({ outcome: "running" });
+    const result = validateUpdate({ current, update: { outcome: "needs_reconciliation" } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(typeof result.computedLockedAt).toBe("string");
+  });
+
+  it("rejects needs_reconciliation -> completed (a reaped claim is never re-runnable)", () => {
+    // Once reaped + sealed, a late finalize from the original (presumed-dead) process
+    // is blanket-rejected by the lock — the key stays blocked, never double-applied.
+    const current = makeTrace({
+      outcome: "needs_reconciliation",
+      lockedAt: "2026-04-28T00:00:05.000Z",
+    });
+    const result = validateUpdate({ current, update: { outcome: "completed" } });
+    expect(result.ok).toBe(false);
   });
 });
 

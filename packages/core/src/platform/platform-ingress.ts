@@ -127,16 +127,32 @@ export class PlatformIngress {
         // which this lookup can never return — so the branch never shadows a
         // legitimate cached result (completed/failed/queued/pending_approval
         // fall through).
-        if (existingTrace.outcome === "running") {
+        //
+        // EV-2 / SPINE-2: `needs_reconciliation` is the SAME fail-closed branch,
+        // one step later — the stranded-claim reaper has aged this orphaned claim
+        // to its terminal dead-letter sink. The replay must STILL be rejected (the
+        // mutation may have committed); falling through here would hand back a
+        // cached `ok:true` carrying outcome `needs_reconciliation`, re-opening a key
+        // that must stay blocked until a human reconciles. Same non-retryable
+        // `idempotency_in_flight` signal (every consumer already treats it as a
+        // non-retryable skip/409); only the operator message differs.
+        if (
+          existingTrace.outcome === "running" ||
+          existingTrace.outcome === "needs_reconciliation"
+        ) {
+          const reaped = existingTrace.outcome === "needs_reconciliation";
           return {
             ok: false,
             error: {
               type: "idempotency_in_flight",
               intent: request.intent,
-              message:
-                `A prior attempt for idempotency key "${request.idempotencyKey}" is unresolved and ` +
-                `may have already committed. Not re-executing to avoid a double-apply; manual ` +
-                `reconciliation required.`,
+              message: reaped
+                ? `A prior attempt for idempotency key "${request.idempotencyKey}" was reaped to ` +
+                  `needs_reconciliation after being stranded and may have already committed. Not ` +
+                  `re-executing to avoid a double-apply; manual reconciliation required.`
+                : `A prior attempt for idempotency key "${request.idempotencyKey}" is unresolved and ` +
+                  `may have already committed. Not re-executing to avoid a double-apply; manual ` +
+                  `reconciliation required.`,
               retryable: false,
             },
           };
