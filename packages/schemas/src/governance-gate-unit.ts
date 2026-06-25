@@ -1,5 +1,13 @@
 import { z } from "zod";
 import type { GovernanceVerdictSource } from "./governance-verdict.js";
+import {
+  resolveGovernanceMode,
+  resolveClaimClassifierConfig,
+  resolveConsentStateConfig,
+  GovernanceModeSchema,
+  type GovernanceConfig,
+  type GovernanceMode,
+} from "./governance-config.js";
 
 /**
  * The four flippable governance "gate units" — one per mode-bearing sub-block of
@@ -39,4 +47,31 @@ export function sourceGuardToGateUnit(
   sourceGuard: GovernanceVerdictSource,
 ): GovernanceGateUnit | null {
   return SOURCE_GUARD_TO_UNIT[sourceGuard] ?? null;
+}
+
+/**
+ * Reads a unit's CURRENT mode from a governanceConfig, via the same resolver each gate
+ * uses (so the displayed mode matches the gate's runtime mode). `null`/absent config or
+ * sub-block resolves to "off". The whatsappWindow sub-block is passthrough (not validated
+ * by the parent schema), so its mode is read defensively and coerced to "off" if unknown.
+ */
+export function readGateMode(
+  config: GovernanceConfig | null,
+  unit: GovernanceGateUnit,
+): GovernanceMode {
+  switch (unit) {
+    case "deterministic":
+      return resolveGovernanceMode(config);
+    case "claims":
+      return resolveClaimClassifierConfig(config).mode;
+    case "consent":
+      return resolveConsentStateConfig(config).mode;
+    case "whatsapp": {
+      const raw = (config as unknown as Record<string, unknown> | null)?.whatsappWindow;
+      const mode =
+        raw && typeof raw === "object" ? (raw as Record<string, unknown>)["mode"] : undefined;
+      const parsed = GovernanceModeSchema.safeParse(mode);
+      return parsed.success ? parsed.data : "off";
+    }
+  }
 }
