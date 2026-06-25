@@ -38,8 +38,10 @@ export function buildGovernanceSetGateModeHandler(
     async execute(workUnit) {
       const params = GovernanceSetGateModeParametersSchema.parse(workUnit.parameters);
 
-      // Readiness REFUSE applies ONLY to an enforce target. Rollback (observe/off) is
-      // unconditional — disarming a gate must always be fast — so we skip the probe entirely.
+      // Readiness REFUSE applies ONLY to an enforce target. Rollback (observe/off) is never
+      // readiness-gated — disarming a gate must always be fast — so we skip the probe entirely.
+      // (The writer separately rejects a CORRUPT stored config for any direction, to avoid a
+      // blind-overwrite; that guard is orthogonal to readiness and only fires in an abnormal state.)
       if (params.mode === "enforce") {
         const signals = await deps.probeProducers(workUnit.organizationId, params.deploymentId);
         const readiness = evaluateGateEnforceReadiness(params.unit, signals);

@@ -19,6 +19,7 @@ export interface GovernanceProducerProbeDeps {
       count: (args: {
         where: {
           deploymentId: string;
+          deployment: { organizationId: string };
           OR: Array<{ validUntil: null } | { validUntil: { gte: Date } }>;
         };
       }) => Promise<number>;
@@ -45,14 +46,18 @@ export function createGovernanceProducerProbe(
     const now = deps.clock();
     const [playbook, approvedClaimCount, orgRow] = await Promise.all([
       deps.playbookReader.readForOrganization(orgId),
-      // Coarser than the gate's per-claim substantiation (which also filters by
-      // jurisdiction + claimType and treats reviewedAt older than the 180-day window as
-      // stale). This count is the readiness FLOOR: zero valid claims always refuses (the
-      // dangerous case), but a non-zero count does not guarantee every claim type/jurisdiction
-      // is covered. Exact per-claim parity is intentionally out of scope.
+      // Org-scoped via the deployment relation (not deploymentId alone): the probe is also
+      // reachable for an arbitrary caller-supplied deploymentId (the flip intent is not
+      // service-only), so we never count another org's claims even though the writer's
+      // locked read would later 404 a cross-org deployment. Coarser than the gate's
+      // per-claim substantiation (which also filters by jurisdiction + claimType and treats
+      // reviewedAt older than the 180-day window as stale): this count is the readiness FLOOR
+      // — zero valid claims always refuses (the dangerous case), but a non-zero count does not
+      // guarantee every claim type/jurisdiction is covered. Exact per-claim parity is out of scope.
       deps.prisma.approvedComplianceClaim.count({
         where: {
           deploymentId,
+          deployment: { organizationId: orgId },
           OR: [{ validUntil: null }, { validUntil: { gte: now } }],
         },
       }),

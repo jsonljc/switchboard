@@ -39,6 +39,7 @@ describe("createGovernanceProducerProbe", () => {
     expect(deps.prisma.approvedComplianceClaim.count).toHaveBeenCalledWith({
       where: {
         deploymentId: "dep-1",
+        deployment: { organizationId: "org-1" }, // org-scoped via the relation (cross-tenant-safe)
         OR: [{ validUntil: null }, { validUntil: { gte: new Date("2026-06-25T00:00:00.000Z") } }],
       },
     });
