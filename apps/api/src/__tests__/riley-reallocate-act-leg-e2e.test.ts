@@ -214,7 +214,11 @@ describe("Riley reallocate act-leg — staged end-to-end exercise (runbook §4)"
     });
 
     // ── dispatchRollback routes the reset submit through the REAL reset executor (in place of
-    //    PlatformIngress, which would do the same synchronous execute + surface the same outcome). ──
+    //    PlatformIngress, which would do the same synchronous execute + surface the same outcome).
+    //    This staged substitution deliberately SKIPS the ingress governance layers ingress adds (the
+    //    allow-only policy resolution + the service-only edge guard); those are covered by the seed
+    //    gate test (riley-reset-budget-gate.test.ts) + the service-only test, and the full
+    //    ingress-through path is the deferred LIVE-Meta exercise (runbook §4's remaining half). ──
     let resetReceipt: unknown;
     const submitReset = async (req: {
       parameters: Record<string, unknown>;
