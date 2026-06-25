@@ -27,6 +27,17 @@ export function createEscalateToolFactory(deps: EscalateToolBaseDeps): EscalateT
         description:
           "Escalate the conversation to a human team member. Use when the customer's question is outside your scope, when business knowledge is missing, when the customer is frustrated, or when a medical red flag is present (reason `medical_safety`).",
         effectCategory: "write" as const,
+        // Escalation is the human SAFETY VALVE — it must never be gated behind
+        // approval. A freshly onboarded real org resolves to "supervised" trust
+        // (ensureAlexListingForOrg seeds trustScore:0, no trustLevelOverride),
+        // where a "write" maps to require-approval and the in-skill GovernanceHook
+        // short-circuits (proceed:false) BEFORE execute() — so handoffStore.save +
+        // notifier.notify never fire and a medical_safety / angry-customer handoff
+        // is silently swallowed while Alex still tells the lead a human will reach
+        // out. Auto-approve the handoff at supervised so the escalation always
+        // assembles + notifies. ("write" already auto-approves at guided/autonomous,
+        // so only supervised needs the override.) Mirrors the booking.create fix.
+        governanceOverride: { supervised: "auto-approve" as const },
         idempotent: false,
         inputSchema: {
           type: "object",

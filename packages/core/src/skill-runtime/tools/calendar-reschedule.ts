@@ -85,10 +85,13 @@ export function buildRescheduleOperations(
       description:
         "Reschedule the contact's upcoming appointment to a new slot. The booking is resolved from the active contact — never pass a contactId.",
       effectCategory: "external_mutation" as const,
-      // See calendar-book booking.create: auto-approve at the default "guided"
-      // trust so Alex can manage bookings on a real org (the in-skill approval
-      // hook cannot park, so a gate here dead-ends); "supervised" still gates.
-      governanceOverride: { guided: "auto-approve" as const },
+      // Reschedule/cancel act on an ALREADY-confirmed booking. Like booking.create,
+      // auto-approve at the DEFAULT real-org "supervised" trust AND at "guided": the
+      // in-skill approval hook cannot park, so a gate here dead-ends — Alex would tell
+      // the lead "I've moved/cancelled your appointment" while the change never
+      // persisted. Scoped to these operations (NOT a blanket external_mutation
+      // relaxation); the deferred park-for-review posture is the F2 work.
+      governanceOverride: { supervised: "auto-approve" as const, guided: "auto-approve" as const },
       idempotent: false,
       inputSchema: {
         type: "object",
@@ -188,10 +191,13 @@ export function buildRescheduleOperations(
       description:
         "Cancel the contact's upcoming appointment. Resolved from the active contact — never pass a contactId.",
       effectCategory: "external_mutation" as const,
-      // See calendar-book booking.create: auto-approve at the default "guided"
-      // trust so Alex can manage bookings on a real org (the in-skill approval
-      // hook cannot park, so a gate here dead-ends); "supervised" still gates.
-      governanceOverride: { guided: "auto-approve" as const },
+      // Reschedule/cancel act on an ALREADY-confirmed booking. Like booking.create,
+      // auto-approve at the DEFAULT real-org "supervised" trust AND at "guided": the
+      // in-skill approval hook cannot park, so a gate here dead-ends — Alex would tell
+      // the lead "I've moved/cancelled your appointment" while the change never
+      // persisted. Scoped to these operations (NOT a blanket external_mutation
+      // relaxation); the deferred park-for-review posture is the F2 work.
+      governanceOverride: { supervised: "auto-approve" as const, guided: "auto-approve" as const },
       idempotent: false,
       inputSchema: {
         type: "object",
