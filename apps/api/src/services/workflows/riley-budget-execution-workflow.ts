@@ -48,13 +48,16 @@ export interface RileyBudgetExecutionDeps {
     workTraceId?: string;
   }>;
   /**
-   * In-flight kill-switch (runbook §3): a runtime, per-deployment stop the executor checks at the
-   * last mile (after replay-first, before credentials + the Meta write). True halts THIS execution
-   * with a clean abort (no marker), so it is re-runnable once cleared. Distinct from the canary
-   * enable flag (which gates the SUBMITTER, so an already-approved-and-dispatched unit would still
-   * execute): this is the EXECUTOR-side stop that halts in-flight + future runs at runtime (a DB flip,
-   * no redeploy). REQUIRED, never optional: an optional dep would let a future bootstrap silently drop
-   * the stop and recreate the hole this closes.
+   * Runtime kill-switch (runbook §3): a per-deployment stop the executor reads ONCE at the last mile
+   * (after replay-first, before credentials + the Meta write). True aborts THIS execution cleanly (no
+   * marker), so it is re-runnable once cleared. Honest scope: the executor body is one uninterrupted
+   * call, so the switch halts every execution that has NOT YET reached this check (nothing new starts
+   * its Meta sequence) plus all FUTURE executions; a unit already past the check completes its bounded
+   * Meta sequence (the dominant exposure is the dispatch surface, which this fully covers). Distinct
+   * from the canary enable flag (which gates the SUBMITTER, so an already-approved-and-dispatched unit
+   * would still reach here): this is the EXECUTOR-side stop, runtime-flippable (a DB flip, no
+   * redeploy). REQUIRED, never optional: an optional dep would let a future bootstrap silently drop the
+   * stop and recreate the hole this closes.
    */
   isReallocateKilled: (args: { organizationId: string; deploymentId: string }) => Promise<boolean>;
   /** Resolve the org's meta-ads credentials by deployment id WITH the org-isolation check inside. */
@@ -221,13 +224,19 @@ export function buildRileyBudgetExecutionWorkflow(deps: RileyBudgetExecutionDeps
         };
       }
 
-      // 2.5. In-flight kill-switch: a runtime per-deployment stop checked at the last mile (AFTER
-      // replay-first, so an already-applied unit still replays its receipt, and BEFORE credentials /
-      // the new Meta write). A killed unit aborts cleanly with NO marker, so it is re-runnable once
-      // the switch clears. Halts both in-flight (an approved, dispatched, not-yet-written unit) and
-      // every future execution, at runtime (no redeploy).
+      // 2.5. Runtime kill-switch: a per-deployment stop read at the last mile (AFTER replay-first, so
+      // an already-applied unit still replays its receipt, and BEFORE credentials / the new Meta
+      // write). A killed unit aborts cleanly with NO marker, so it is re-runnable once the switch
+      // clears. It halts every dispatched unit that has not yet reached this point (nothing new starts
+      // its Meta sequence) + all future executions; a unit already past here completes its bounded
+      // sequence (the executor body is one uninterrupted call). Runtime (no redeploy).
       const deploymentId = workUnit.deployment.deploymentId;
       if (await deps.isReallocateKilled({ organizationId, deploymentId })) {
+        // Observable during an incident: the engage is audited on the setter, and each turned-away
+        // dispatch is warn-logged here (the WorkTrace failure is the system of record).
+        console.warn(
+          `[riley-reallocate] kill-switch engaged: refusing execution org=${organizationId} deployment=${deploymentId} workUnit=${workUnitId}`,
+        );
         return {
           outcome: "failed",
           summary: "Reallocation halted by the runtime kill-switch",
