@@ -218,7 +218,7 @@ describe("POST /api/meta/deletion", () => {
     await app.close();
   });
 
-  it("matches contacts by phone with both with-+ and without-+ shapes", async () => {
+  it("matches contacts by canonical phoneE164 OR raw phone shapes", async () => {
     const sr = makeSignedRequest({ user_id: "6591234567" });
     await app.inject({
       method: "POST",
@@ -227,8 +227,12 @@ describe("POST /api/meta/deletion", () => {
       payload: `signed_request=${encodeURIComponent(sr)}`,
     });
 
+    // The wa-id normalizes to canonical +E.164 (matched on phoneE164) AND the raw
+    // phone shapes are kept as a fallback for legacy/unnormalized rows.
     expect(prisma.contact.findMany).toHaveBeenCalledWith({
-      where: { phone: { in: ["6591234567", "+6591234567"] } },
+      where: {
+        OR: [{ phoneE164: "+6591234567" }, { phone: { in: ["6591234567", "+6591234567"] } }],
+      },
       select: { id: true, organizationId: true },
     });
     await app.close();

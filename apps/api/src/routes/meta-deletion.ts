@@ -15,6 +15,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { PrismaContactStore, type PrismaClient } from "@switchboard/db";
+import { normalizeToE164 } from "@switchboard/schemas";
 import { maskPhone } from "@switchboard/core/audit";
 import { parseAndVerifySignedRequest } from "../lib/meta-signed-request.js";
 import { eraseContactFully } from "../lib/erase-contact.js";
@@ -116,12 +117,19 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
       const userId = verified.payload.user_id;
       const confirmationCode = randomUUID();
 
-      // Phone match: Meta's app-scoped user_id for WhatsApp is typically the
-      // wa-id (digits only). Our Contact.phone column is canonically stored
-      // with a leading "+". Match both shapes to be safe.
+      // Phone match: Meta's app-scoped user_id for WhatsApp is the wa-id (digits
+      // only). Contact identity is canonical on phoneE164, so normalize the wa-id
+      // to +E.164 and match that column FIRST (so a contact whose raw phone is in
+      // any other shape is still found), then fall back to the raw phone shapes for
+      // legacy rows whose phoneE164 was never backfilled. Cross-org by design (Meta
+      // deletion is global per user); each matched contact's cascade is org-scoped.
       const candidateValues = userId.startsWith("+")
         ? [userId, userId.slice(1)]
         : [userId, `+${userId}`];
+      const normalizedE164 = normalizeToE164(userId);
+      const matchWhere = normalizedE164
+        ? { OR: [{ phoneE164: normalizedE164 }, { phone: { in: candidateValues } }] }
+        : { phone: { in: candidateValues } };
 
       const contactStore = new PrismaContactStore(app.prisma);
       const calendarProviderFactory = resolveCalendarFactory(request, app.prisma);
@@ -130,7 +138,7 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
 
       try {
         const matches = await app.prisma.contact.findMany({
-          where: { phone: { in: candidateValues } },
+          where: matchWhere,
           select: { id: true, organizationId: true },
         });
 
