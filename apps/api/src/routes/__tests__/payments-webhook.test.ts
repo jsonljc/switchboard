@@ -602,4 +602,32 @@ describe("Payments webhook ingress-failure handling (A22)", () => {
     expect(res.statusCode).toBe(500);
     await app.close();
   });
+
+  // Defensive: a settled deposit that ingress parks for approval (approvalRequired) is
+  // not durably recorded either — fail closed so Stripe redelivers.
+  it("fails closed with 500 when ingress parks the deposit for approval", async () => {
+    const retrievePayment = vi.fn(async (id: string) => paidCharge(id));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c1", opportunityId: "opp1" }));
+    const submit = vi.fn(async () => ({
+      ok: true as const,
+      result: { outcome: "pending_approval" as const },
+      workUnit: { id: "wu-parked", traceId: "tr-parked" },
+      approvalRequired: true as const,
+    }));
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-parked",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const body = piSucceeded({
+      eventId: "evt_parked",
+      account: "acct_parked",
+      paymentIntentId: "pi_parked",
+    });
+    const res = await post(app, body, sign(body, SECRET));
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
 });
