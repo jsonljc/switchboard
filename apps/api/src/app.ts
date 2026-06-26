@@ -972,6 +972,7 @@ export async function buildServer() {
     // readiness REFUSE (enforce only) is the safety gate.
     const {
       PrismaGovernanceGateModeWriter,
+      PrismaGovernanceMarketWriter,
       createGovernanceProducerProbe,
       PrismaPlaybookReader: PrismaPlaybookReaderForGovernance,
     } = await import("@switchboard/db");
@@ -982,6 +983,11 @@ export async function buildServer() {
         prisma: prismaClient,
         clock: () => new Date(),
       }),
+    };
+    // governance.set_market (P2-B slice 2): the lost-update-safe market writer. No producer
+    // probe — market (jurisdiction + clinicType) is the org's declaration, not a gated capability.
+    const governanceSetMarket = {
+      writer: new PrismaGovernanceMarketWriter(prismaClient),
     };
 
     // operator.erase_contact eraser: wraps the SAME full delete cascade as the Meta data-deletion
@@ -1119,6 +1125,7 @@ export async function buildServer() {
       contactEraser,
       memoryWriteStore,
       governanceSetGateMode,
+      governanceSetMarket,
       logger: app.log,
     });
   }

@@ -37,6 +37,7 @@ import {
   DISMISS_DISQUALIFICATION_INTENT,
   ERASE_CONTACT_INTENT,
   GOVERNANCE_SET_GATE_MODE_INTENT,
+  GOVERNANCE_SET_MARKET_INTENT,
   GRANT_CONSENT_INTENT,
   MEMORY_WRITE_INTENT,
   RECONCILE_BOOKING_INTENT,
@@ -89,6 +90,10 @@ import {
   buildGovernanceSetGateModeHandler,
   type GovernanceSetGateModeDeps,
 } from "./operator-intents/governance-set-gate-mode.js";
+import {
+  buildGovernanceSetMarketHandler,
+  type GovernanceSetMarketDeps,
+} from "./operator-intents/governance-set-market.js";
 
 // Re-export every public symbol the rest of the codebase imports from
 // "../bootstrap/operator-intents.js" so existing import paths stay valid.
@@ -100,6 +105,7 @@ export {
   DISMISS_DISQUALIFICATION_INTENT,
   ERASE_CONTACT_INTENT,
   GOVERNANCE_SET_GATE_MODE_INTENT,
+  GOVERNANCE_SET_MARKET_INTENT,
   GRANT_CONSENT_INTENT,
   MEMORY_WRITE_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
@@ -115,6 +121,8 @@ export { buildMemoryWriteHandler } from "./operator-intents/memory-write.js";
 export type { MemoryWriteStore } from "./operator-intents/memory-write.js";
 export { buildGovernanceSetGateModeHandler } from "./operator-intents/governance-set-gate-mode.js";
 export type { GovernanceSetGateModeDeps } from "./operator-intents/governance-set-gate-mode.js";
+export { buildGovernanceSetMarketHandler } from "./operator-intents/governance-set-market.js";
+export type { GovernanceSetMarketDeps } from "./operator-intents/governance-set-market.js";
 export { buildDeliverWeeklyReportHandler } from "./operator-intents/deliver-weekly-report.js";
 export type { WeeklyReportDeliveryWriter } from "./operator-intents/deliver-weekly-report.js";
 export { buildTransitionOpportunityStageHandler } from "./operator-intents/opportunity.js";
@@ -171,6 +179,9 @@ interface OperatorIntentsBootstrapDeps {
   /** Optional: registers the governance.set_gate_mode intent + handler when provided (enforce-flip
    *  slice 3). The readiness-guarded per-gate observe<->enforce flip. */
   governanceSetGateMode?: GovernanceSetGateModeDeps;
+  /** Optional: registers the governance.set_market intent + handler when provided (P2-B slice 2).
+   *  The org's jurisdiction + clinicType declaration (drives currency); no readiness gate. */
+  governanceSetMarket?: GovernanceSetMarketDeps;
   logger?: { info(msg: string): void };
 }
 
@@ -230,6 +241,7 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     contactEraser,
     memoryWriteStore,
     governanceSetGateMode,
+    governanceSetMarket,
     logger,
   } = deps;
 
@@ -319,6 +331,13 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     );
   }
 
+  if (governanceSetMarket) {
+    handlers.set(
+      GOVERNANCE_SET_MARKET_INTENT,
+      buildGovernanceSetMarketHandler(governanceSetMarket),
+    );
+  }
+
   modeRegistry.register(new OperatorMutationMode({ handlers }));
 
   if (opportunityStore) {
@@ -370,6 +389,11 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     // the handler's server-side readiness REFUSE is the safety gate (not a second approver).
     registerOperatorIntent(intentRegistry, GOVERNANCE_SET_GATE_MODE_INTENT);
   }
+  if (governanceSetMarket) {
+    // api only: an operator sets the org's market at onboarding/settings. system_auto_approved;
+    // market is the org's declaration of its clinic + jurisdiction, so no readiness gate.
+    registerOperatorIntent(intentRegistry, GOVERNANCE_SET_MARKET_INTENT);
+  }
 
   const intentCount =
     (opportunityStore ? 1 : 0) +
@@ -383,7 +407,8 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     (weeklyReportDeliveryWriter ? 1 : 0) +
     (contactEraser ? 1 : 0) +
     (memoryWriteStore ? 1 : 0) +
-    (governanceSetGateMode ? 1 : 0);
+    (governanceSetGateMode ? 1 : 0) +
+    (governanceSetMarket ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );
