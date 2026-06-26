@@ -40,7 +40,6 @@ describe("POST /api/ingress/submit hardening (F3 + F11)", () => {
   it("F3: refuses payment.record_verified on the public edge (403), never submits", async () => {
     const { app, submit } = await buildApp();
     const res = await inject(app, {
-      actor: { id: "attacker", type: "user" },
       intent: "payment.record_verified",
       parameters: { externalReference: "FAKE", provider: "stripe", amountCents: 999999 },
       trigger: "api",
@@ -72,7 +71,6 @@ describe("POST /api/ingress/submit hardening (F3 + F11)", () => {
   it("accepts a well-formed operator submit", async () => {
     const { app, submit } = await buildApp();
     const res = await inject(app, {
-      actor: { id: "u1", type: "user" },
       intent: "operator.transition_opportunity_stage",
       parameters: { id: "opp-1", stage: "won" },
       trigger: "api",
@@ -82,11 +80,13 @@ describe("POST /api/ingress/submit hardening (F3 + F11)", () => {
     await app.close();
   });
 
-  it("accepts the CTWA shape (system actor, trigger internal, targetHint, parentWorkUnitId)", async () => {
+  // The non-actor parts of the legacy CTWA shape (targetHint, parentWorkUnitId,
+  // trigger internal) are still accepted; the actor is bound from the principal, not
+  // the body. (The real CTWA path uses the INTERNAL_API_SECRET /internal edge.)
+  it("accepts the CTWA-adjacent shape minus actor (targetHint, parentWorkUnitId, trigger internal)", async () => {
     const { app, submit } = await buildApp();
     const res = await inject(app, {
       organizationId: "org-1",
-      actor: { id: "system", type: "system" },
       intent: "ctwa.lead_intake",
       parameters: { organizationId: "org-1", deploymentId: "dep-1" },
       trigger: "internal",
@@ -102,9 +102,49 @@ describe("POST /api/ingress/submit hardening (F3 + F11)", () => {
   it("F11: an over-long parameter key (beyond boundedParameters) is 400, never submits", async () => {
     const { app, submit } = await buildApp();
     const res = await inject(app, {
-      actor: { id: "u1", type: "user" },
       intent: "operator.transition_opportunity_stage",
       parameters: { ["k".repeat(201)]: 1 },
+      trigger: "api",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(submit).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  // Audit (autoexec-ingress): the public operator edge must NEVER let the request
+  // body choose the actor identity. The actor is bound from the authenticated
+  // principal (request.actorId); the body field is rejected by the strict schema so
+  // a caller cannot silently spoof `system`/another principal for audit + governance.
+  it("binds the authenticated principal as the actor, not a placeholder", async () => {
+    const { app, submit } = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/ingress/submit",
+      headers: {
+        "content-type": "application/json",
+        "x-org-id": "org-1",
+        "x-principal-id": "op-7",
+        "idempotency-key": "k1",
+      },
+      payload: {
+        intent: "operator.transition_opportunity_stage",
+        parameters: { id: "opp-1", stage: "won" },
+        trigger: "api",
+      } as never,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(submit).toHaveBeenCalledTimes(1);
+    const args = submit.mock.calls[0] as unknown as [{ actor: { id: string; type: string } }];
+    expect(args[0].actor).toEqual({ id: "op-7", type: "user" });
+    await app.close();
+  });
+
+  it("rejects a body that carries an actor identity (no caller-supplied actor) -> 400, never submits", async () => {
+    const { app, submit } = await buildApp();
+    const res = await inject(app, {
+      actor: { id: "system", type: "system" },
+      intent: "operator.transition_opportunity_stage",
+      parameters: { id: "opp-1", stage: "won" },
       trigger: "api",
     });
     expect(res.statusCode).toBe(400);

@@ -15,9 +15,9 @@ import { isServiceOnlyIngressIntent } from "./service-only-intents.js";
 const IngressSubmitBodySchema = z
   .object({
     organizationId: z.string().optional(),
-    actor: z
-      .object({ id: z.string().min(1), type: z.enum(["user", "agent", "system", "service"]) })
-      .optional(),
+    // No `actor` field: the actor identity is bound from the authenticated principal
+    // (request.actorId), never the request body. A body carrying `actor` is rejected by
+    // `.strict()` rather than silently honored — see the submit() call below.
     intent: z.string().min(1),
     parameters: boundedParameters.optional(),
     trigger: z.enum(["chat", "api", "schedule", "internal"]).optional(),
@@ -82,7 +82,11 @@ export const ingressRoutes: FastifyPluginAsync = async (app) => {
     try {
       const response = await app.platformIngress.submit({
         organizationId: request.orgId,
-        actor: { id: body.actor?.id ?? "anonymous", type: body.actor?.type ?? "user" },
+        // Bound from the authenticated principal (requireOrgForMutation sets
+        // request.actorId from principalIdFromAuth), NEVER the request body. This is
+        // the canonical WorkTrace actor and the identity GovernanceGate resolves, so a
+        // body-supplied actor would be audit forgery + a governance trust-level spoof.
+        actor: { id: request.actorId, type: "user" },
         intent: body.intent,
         parameters: body.parameters ?? {},
         trigger: body.trigger ?? "api",
