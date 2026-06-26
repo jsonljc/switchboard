@@ -41,9 +41,7 @@ function makeRunTransaction() {
   return vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       booking: {
-        update: vi
-          .fn()
-          .mockResolvedValue({ id: "bk_1", status: "confirmed", calendarEventId: "gcal_1" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       outboxEvent: {
         create: vi.fn().mockResolvedValue({ id: "ob_1" }),
@@ -443,15 +441,69 @@ describe("createCalendarBookToolFactory", () => {
     );
   });
 
+  it("does not resurrect a booking the reaper terminalized mid-confirm (status-guarded confirm)", async () => {
+    bookingStore.create.mockResolvedValue({ id: "bk_1", status: "pending_confirmation" });
+    opportunityStore.findActiveByContact.mockResolvedValue({ id: "opp_1" });
+    calendarProvider.createBooking.mockResolvedValue({ calendarEventId: "gcal_reaped" });
+    failureHandler.handle.mockResolvedValue({
+      bookingId: "bk_1",
+      status: "failed",
+      failureType: "confirmation_failed",
+      retryable: true,
+      escalationId: "esc_reaped",
+      message:
+        "I couldn't complete the booking just now. I've flagged this for a human to follow up.",
+    });
+
+    // The stalled-booking reaper flipped this row pending_confirmation -> failed while the provider
+    // call was in flight (a stall past the reaper TTL). The status-guarded confirm write must then
+    // match 0 rows and refuse to resurrect the booking, which would re-occupy a slot another lead may
+    // now hold and mint a phantom booked conversion. `update` is also provided so the PRE-guard code
+    // path (unconditional update) would wrongly confirm, proving the guard is what makes this safe.
+    const outboxCreate = vi.fn().mockResolvedValue({ id: "ob_1" });
+    const receiptCreate = vi.fn().mockResolvedValue({ id: "rcpt_1" });
+    runTransaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) =>
+      cb({
+        booking: {
+          update: vi.fn().mockResolvedValue({ id: "bk_1", status: "confirmed" }),
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        },
+        outboxEvent: { create: outboxCreate },
+        opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        receipt: { create: receiptCreate },
+        receiptedBooking: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
+        contact: { findFirst: vi.fn().mockResolvedValue(null) },
+      }),
+    );
+
+    const result = await tool.operations["booking.create"]!.execute({
+      service: "consultation",
+      slotStart: "2026-04-20T10:00:00+08:00",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    });
+
+    // Aborted to the failure path, not confirmed.
+    expect(result.status).toBe("error");
+    expect(result.data?.failureType).toBe("confirmation_failed");
+    // No phantom booked conversion / receipt minted for the terminalized row.
+    expect(outboxCreate).not.toHaveBeenCalled();
+    expect(receiptCreate).not.toHaveBeenCalled();
+    // The calendar event the (stalled-then-succeeded) provider created is compensated so the freed
+    // slot is not silently double-held.
+    expect(calendarProvider.cancelBooking).toHaveBeenCalledWith("gcal_reaped");
+    expect(failureHandler.handle).toHaveBeenCalledWith(
+      expect.objectContaining({ bookingId: "bk_1", failureType: "confirmation_failed" }),
+    );
+  });
+
   it("mints a booked CalendarReceipt in the confirm transaction", async () => {
     const receiptCreateSpy = vi.fn().mockResolvedValue({ id: "rcpt_1" });
     let capturedTx: { receipt: { create: typeof receiptCreateSpy } } | undefined;
     const capturingRunTx = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = {
         booking: {
-          update: vi
-            .fn()
-            .mockResolvedValue({ id: "bk_1", status: "confirmed", calendarEventId: "gcal_1" }),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
         outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
         opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
@@ -510,9 +562,7 @@ describe("createCalendarBookToolFactory", () => {
       const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
         cb({
           booking: {
-            update: vi
-              .fn()
-              .mockResolvedValue({ id: "bk_1", status: "confirmed", calendarEventId: "gcal_1" }),
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
           },
           outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
           opportunity: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
@@ -616,7 +666,7 @@ describe("createCalendarBookToolFactory", () => {
       const updateManySpy = vi.fn().mockResolvedValue(updateManyResult);
       const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
         cb({
-          booking: { update: vi.fn().mockResolvedValue({}) },
+          booking: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
           outboxEvent: { create: vi.fn().mockResolvedValue({ id: "ob_1" }) },
           opportunity: { updateMany: updateManySpy },
           receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
@@ -718,7 +768,7 @@ describe("createCalendarBookToolFactory", () => {
       const updateManySpy = vi.fn().mockResolvedValue({ count: 1 });
       const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
         cb({
-          booking: { update: vi.fn().mockResolvedValue({}) },
+          booking: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
           outboxEvent: { create: outboxCreate },
           opportunity: { updateMany: updateManySpy },
           receipt: { create: vi.fn().mockResolvedValue({ id: "rcpt_1" }) },
@@ -1089,7 +1139,7 @@ describe("createCalendarBookToolFactory", () => {
       const captured: { payload?: Record<string, unknown>; eventId?: unknown } = {};
       const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
         cb({
-          booking: { update: vi.fn().mockResolvedValue({}) },
+          booking: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
           outboxEvent: {
             create: vi.fn(
               async (args: { data: { eventId: unknown; payload: Record<string, unknown> } }) => {

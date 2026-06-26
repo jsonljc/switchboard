@@ -402,7 +402,10 @@ export async function bootstrapSkillMode(
     runTransaction: (
       fn: (tx: {
         booking: {
-          update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+          updateMany(args: {
+            where: Record<string, unknown>;
+            data: Record<string, unknown>;
+          }): Promise<{ count: number }>;
         };
         outboxEvent: {
           create(args: { data: Record<string, unknown> }): Promise<unknown>;

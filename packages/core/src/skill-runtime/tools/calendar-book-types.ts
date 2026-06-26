@@ -67,7 +67,12 @@ export interface OpportunityStoreSubset {
 export type TransactionFn = (
   fn: (tx: {
     booking: {
-      update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
+      // Status-guarded confirm CAS (see calendar-book.ts): updateMany so the WHERE can require
+      // status: "pending_confirmation", and count===0 signals the row was terminalized mid-confirm.
+      updateMany(args: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }): Promise<{ count: number }>;
     };
     outboxEvent: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
     opportunity: {

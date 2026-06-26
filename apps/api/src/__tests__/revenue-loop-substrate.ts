@@ -317,6 +317,19 @@ export class InMemoryRevenueDb {
           if (row) Object.assign(row, args.data);
           return row ?? {};
         },
+        // Status-guarded confirm CAS (calendar-book.ts): matches the full where (id +
+        // organizationId + status: "pending_confirmation") so the happy path returns count 1 and a
+        // terminalized row returns count 0 (the reaper-resurrection guard).
+        updateMany: async (args: { where?: Row; data: Row }): Promise<{ count: number }> => {
+          let count = 0;
+          for (const r of values(this.bookings)) {
+            if (matchWhere(r, args.where)) {
+              Object.assign(r, args.data);
+              count += 1;
+            }
+          }
+          return { count };
+        },
       }),
       receipt: guardModel("receipt", {
         findFirst: async (args: { where?: Row }): Promise<Row | null> =>

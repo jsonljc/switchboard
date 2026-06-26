@@ -10,7 +10,11 @@ export type InfrastructureErrorType =
   // EV-2 / SPINE-2: the stranded-claim reaper aged ≥1 orphaned `running` idempotency
   // claim to the `needs_reconciliation` dead-letter sink. Always surfaced (never a
   // silent block); severity escalates to critical when a reap-write itself failed.
-  | "stranded_claim_reaped";
+  | "stranded_claim_reaped"
+  // A8b-2 / rank-18: the stalled-booking reaper aged >=1 booking stranded in
+  // `pending_confirmation` to `failed`, releasing the slot it blocked. Always surfaced;
+  // severity escalates to critical when a reap-write itself failed.
+  | "stalled_booking_reaped";
 
 export interface InfrastructureFailureAlert {
   errorType: InfrastructureErrorType;

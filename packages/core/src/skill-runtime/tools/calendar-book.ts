@@ -318,13 +318,32 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           try {
             const eventId = `evt_booked_${booking.id}`;
             await deps.runTransaction(async (tx) => {
-              await tx.booking.update({
-                where: { id: booking.id },
+              // Status-guarded confirm (compare-and-set on pending_confirmation). If the
+              // stalled-booking reaper (or any terminalizer) flipped this row OUT of
+              // pending_confirmation while the provider call was in flight (a stall past the reaper
+              // TTL), count === 0: do NOT resurrect it to confirmed. Resurrecting would re-occupy a
+              // slot another lead may now hold (a double-book) and mint a phantom booked conversion.
+              // Abort the tx; the catch below runs orphan-event compensation + the failure handler.
+              // Mirrors the store create/reschedule CAS; also org-scopes the write (was id-only).
+              // The reaper terminalizes to "failed", on which booking-failure-handler early-returns,
+              // so routing an already-reaped row here does NOT double-escalate (keep that status in
+              // sync if a future terminalizer uses a different one).
+              const confirmed = await tx.booking.updateMany({
+                where: {
+                  id: booking.id,
+                  organizationId: orgId,
+                  status: "pending_confirmation",
+                },
                 data: {
                   status: "confirmed",
                   calendarEventId: calendarResult.calendarEventId,
                 },
               });
+              if (confirmed.count === 0) {
+                throw new Error(
+                  "booking is no longer pending_confirmation (terminalized during the provider call); not resurrecting to confirmed",
+                );
+              }
               const conversion = buildBookedConversionPayload(contactRecord);
               await tx.outboxEvent.create({
                 data: {

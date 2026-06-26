@@ -393,4 +393,36 @@ export class PrismaBookingStore {
     });
     return new Set(rows.map((r) => r.contactId));
   }
+
+  // Cross-org system sweep (like findUpcomingConfirmed): the bookings the stalled-pending reaper
+  // ages to `failed`. A booking is created `pending_confirmation` BEFORE the external calendar
+  // mutation; if the terminalizing write (confirm / markFailed / the failure-handler tx) is lost
+  // to a thrown tx or a process death, the row is stranded pending_confirmation and the overlap
+  // predicate (notIn [failed, cancelled]) blocks its slot forever. `createdAt` is the age axis: a
+  // legitimate pending resolves within one synchronous tool call, so anything older than the
+  // reaper TTL is stranded. Bounded by `take` and narrowed by the `status` index (@@index([status]));
+  // the pending_confirmation set is normally near-empty (only stranded rows accumulate), so the
+  // status-filter-then-sort stays cheap and a backlog cannot blow up the scan.
+  async findStalledPending(
+    olderThan: Date,
+    limit: number,
+  ): Promise<Array<{ id: string; organizationId: string; createdAt: Date }>> {
+    return this.prisma.booking.findMany({
+      where: { status: "pending_confirmation", createdAt: { lt: olderThan } },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+      select: { id: true, organizationId: true, createdAt: true },
+    });
+  }
+
+  // Race-safe compare-and-set: the `status: "pending_confirmation"` predicate is the guard. If a
+  // concurrent confirm()/markFailed() moved the row between the reaper's scan and here, count===0
+  // (a benign race) and we never overwrite a now-confirmed booking. Org + booking scoped (F12 / IDOR).
+  async reapStalledPending(organizationId: string, bookingId: string): Promise<{ count: number }> {
+    const result = await this.prisma.booking.updateMany({
+      where: { id: bookingId, organizationId, status: "pending_confirmation" },
+      data: { status: "failed" },
+    });
+    return { count: result.count };
+  }
 }

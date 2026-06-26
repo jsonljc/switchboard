@@ -194,6 +194,11 @@ export function createPromMetrics(): SwitchboardMetrics {
     bookingCancel: new PromCounter("switchboard_booking_cancel_total", "Bookings cancelled", [
       "orgId",
     ]),
+    bookingStalledReaped: new PromCounter(
+      "switchboard_booking_stalled_reaped_total",
+      "Stalled pending_confirmation bookings aged to failed by the reaper (slot released)",
+      ["orgId"],
+    ),
     bookingConsentBlocked: new PromCounter(
       "switchboard_booking_consent_blocked_total",
       "Booking attempts blocked by the flag-gated consent precondition (enforce mode)",
