@@ -20,11 +20,19 @@ describe("agent profiles", () => {
     }
   });
 
-  it("Riley and Mira allowlists are explicitly provisional (null), never fabricated", () => {
-    // Their live lanes (EV-3b Riley / EV-3c Mira) enumerate the real tool ids.
-    // Until then `null` disables the unexpected-tool check for those seams rather
-    // than asserting against a made-up list.
+  it("Riley's allowlist stays provisional (null) until its live lane (EV-3b), never fabricated", () => {
+    // `null` disables the unexpected-tool check for the Riley seam rather than
+    // asserting against a made-up list, until EV-3b enumerates the real tool ids.
     expect(RILEY_PROFILE.allowedToolIds).toBeNull();
-    expect(MIRA_PROFILE.allowedToolIds).toBeNull();
+  });
+
+  it("Mira's allowlist is the real EMPTY set (EV-3c live lane), so any tool call is unexpected", () => {
+    // skills/mira/SKILL.md declares `tools: []`, so the honest enumeration is `[]`,
+    // not `null` — the unexpected-tool check is active (a tripwire), not skipped.
+    expect(MIRA_PROFILE.allowedToolIds).toEqual([]);
+  });
+
+  it("Mira carries prompt-leak canaries (EV-3c populated), so the leak check has teeth", () => {
+    expect(MIRA_PROFILE.promptLeakCanaries.length).toBeGreaterThan(0);
   });
 });
