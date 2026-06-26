@@ -1253,7 +1253,14 @@ describe("createCalendarBookToolFactory", () => {
       expect(captured.eventId).toBe("evt_booked_bk_1");
     });
 
-    it("stamps booked occurredAt from the external slotStart, not the in-app write clock (clock-game defense)", async () => {
+    it("stamps booked occurredAt at commit time (conversion time), not the future appointment slot", async () => {
+      // The booked outbox event drives Meta CAPI's event_time (meta-capi-dispatcher
+      // maps occurredAt -> event_time). event_time must be WHEN the conversion
+      // happened (the booking, now), never the future appointment slot: Meta rejects
+      // a future event_time and silently drops the booked conversion, losing Riley's
+      // booked-stage attribution. Dedup is keyed on the deterministic eventId
+      // (evt_booked_<id>), NOT event_time, so occurredAt need not be a stable anchor.
+      // The appointment time is preserved separately in metadata.slotStart below.
       const { tool: t, captured } = buildToolWithCapture({
         contact: {
           id: "ct_1",
@@ -1264,14 +1271,23 @@ describe("createCalendarBookToolFactory", () => {
         },
         opportunity: { id: "opp_1", estimatedValue: 1000 },
       });
-      const slotStart = "2026-06-01T10:00:00.000Z";
+      // A clearly-future appointment slot, well past any plausible test-run clock.
+      const slotStart = "2027-01-01T10:00:00.000Z";
+      const before = Date.now();
       await t.operations["booking.create"]!.execute({
         service: "botox",
         slotStart,
-        slotEnd: "2026-06-01T10:30:00Z",
+        slotEnd: "2027-01-01T10:30:00Z",
         calendarId: "primary",
       });
-      expect(captured.payload?.occurredAt).toBe(slotStart);
+      const after = Date.now();
+      // occurredAt is commit-time (inside the execute() window), NOT the future slot.
+      const occurredAtMs = new Date(captured.payload?.occurredAt as string).getTime();
+      expect(occurredAtMs).toBeGreaterThanOrEqual(before);
+      expect(occurredAtMs).toBeLessThanOrEqual(after);
+      expect(captured.payload?.occurredAt).not.toBe(slotStart);
+      // The appointment time stays available for downstream consumers (reporting, etc.).
+      expect((captured.payload?.metadata as { slotStart: string }).slotStart).toBe(slotStart);
     });
   });
 

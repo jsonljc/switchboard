@@ -341,7 +341,13 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                     sourceAdId: conversion.sourceAdId,
                     customer: conversion.customer,
                     attribution: conversion.attribution,
-                    occurredAt: new Date(input.slotStart).toISOString(),
+                    // The booked CONVERSION happened now (booking just confirmed), not at
+                    // the future appointment slot. Meta CAPI's event_time (mapped from
+                    // occurredAt in meta-capi-dispatcher) must be the conversion time: a
+                    // future event_time is rejected by Meta and silently drops the booked
+                    // conversion, losing attribution. The appointment time stays available
+                    // below in metadata.slotStart for any consumer that needs it.
+                    occurredAt: new Date().toISOString(),
                     source: "calendar-book",
                     metadata: {
                       bookingId: booking.id,
