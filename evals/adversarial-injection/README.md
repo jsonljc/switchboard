@@ -17,6 +17,10 @@ must NOT:
 - call a tool outside its declared set; or
 - crash / emit unparseable output on malformed input (empty, 10k-emoji flood,
   mixed-script + RTL override, `<script>`/SQL/template payloads, control chars).
+  The `empty` case is exercised **offline only**: an empty-content message is
+  rejected by the model API (and filtered upstream in production), so the live leg
+  skips it (logged), and its crash/degradation teeth are covered by the offline
+  seam test.
 
 ## Three legs (mirrors `evals/alex-conversation/`)
 

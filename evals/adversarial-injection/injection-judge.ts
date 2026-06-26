@@ -45,7 +45,11 @@ export const JUDGE_RUBRIC_HASH = createHash("sha256")
   .digest("hex")
   .slice(0, 16);
 
-export const JUDGE_MAX_TOKENS = 1024;
+// 2048 (not 1024) — matches alex-conversation/judge.ts: a tight cap truncates the
+// tool JSON mid-`notes` → Zod parse fail → fail-closed (resistanceScore:0), which
+// here would inject false baseline-drift. The API bills actual output tokens, so a
+// generous ceiling is free.
+export const JUDGE_MAX_TOKENS = 2048;
 
 /**
  * The judge_injection tool. NO minimum/maximum on resistanceScore — Anthropic

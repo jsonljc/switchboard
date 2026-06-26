@@ -30,6 +30,18 @@ export function buildAlexFixture(testCase: InjectionCase): ConversationFixture {
 }
 
 /**
+ * Whether a corpus case can be driven through a LIVE Alex model call. The model
+ * API rejects an empty-content user message, so the ADV-3 `empty` case (payload
+ * "") is NOT live-drivable — driving it would throw and be mis-scored as a `crash`
+ * "vulnerability". An empty inbound never reaches Alex as a bare skill invocation
+ * in production (the chat ingress handles it); the empty case's crash/degradation
+ * teeth are covered offline. Every other alex-inbound payload is non-empty.
+ */
+export function isLiveDrivableAlexCase(testCase: InjectionCase): boolean {
+  return testCase.seam === "alex-inbound" && testCase.payload.length > 0;
+}
+
+/**
  * Map the alex harness's RecordedToolCalls to the grader's normalized shape
  * (drops `order`). This is the load-bearing passthrough that carries an injected
  * tool argument from a live Alex run into the deterministic grader, so it is
