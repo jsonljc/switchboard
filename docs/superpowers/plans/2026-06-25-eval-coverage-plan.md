@@ -44,10 +44,10 @@ reproduce the defect before asserting it.
 | EV-2  | SPINE-2 (BUG-2) + SPINE-5           | at-most-once delivery safety        | P1  | yes     | surfaced #1292 |
 | EV-3  | ADV-1 + ADV-3 (Alex live)           | injection + input-robustness suite  | P1  | -       | merged #1323   |
 | EV-3b | ADV-1 (Riley live)                  | Riley campaign-name injection lane  | P1  | -       | with EV-7      |
-| EV-3c | ADV-1 (Mira live)                   | Mira taste/facts injection lane     | P1  | -       | with EV-6      |
+| EV-3c | ADV-1 (Mira live)                   | Mira taste/facts injection lane     | P1  | -       | unblocked by EV-6 |
 | EV-4  | ADV-2                               | claim-boundary (classifier on/off)  | P1  | -       | not started    |
 | EV-5  | INFRA-1 + AGENT-5                   | Alex eval blocking + tool parity    | P1  | -       | not started    |
-| EV-6  | INFRA-3(Mira) + AGENT-8 + AGENT-9   | Mira real-generation eval           | P1  | -       | not started    |
+| EV-6  | INFRA-3(Mira) + AGENT-8 + AGENT-9   | Mira real-generation eval           | P1  | -       | merged #1343   |
 | EV-7  | AGENT-7 + INFRA-3(Robin) + AGENT-10 | Riley LLM-judgment + Robin lane     | P1  | -       | not started    |
 | EV-8  | AGENT-1..4, AGENT-6                 | Alex missing-scenario fixtures      | P1  | -       | not started    |
 | EV-9a | GOV-1, GOV-6                        | consent fail-closed branches        | P1  | yes     | not started    |
@@ -206,6 +206,24 @@ Mira has zero real-generation eval; her propose/abstain judgment and claim-clean
   parser, not a fixture string).
 - **Acceptance:** the harness scores Mira against a committed baseline; live legs gated per the
   build-loop protocol (the `evals/` runtime branch).
+- **Shipped (#1343):** `evals/mira-self-brief/` — the deterministic BLOCKING grader (no key) runs the
+  driven compose through the **real** `parseMiraComposeOutput` (shape) + the executor's `intentClass` /
+  `qualificationSignals` strip side-channels (contract-bleed, AGENT-9) + sharp **lexical** banned-claim
+  patterns from the SKILL.md claim boundaries (brief fields only). It drives Mira's REAL generation (the
+  real SKILL.md body through a zero-tool/zero-hook `SkillExecutorImpl`); the offline whole-path teeth
+  round-trip a bled `<intent>` tag through the real executor. The informational live judge (propose/
+  abstain quality + claim cleanliness) is gated via idiom (a); no `baseline.json` baked (no key). A
+  builder-faithfulness test pins the golden param format to the real `miraBuilder`. Six golden scenarios
+  (abstain-on-thin-signal, abstain-on-loaded-desk, propose-grounded-in-frontline-demand,
+  measured-over-taste-on-money, claim-boundary-cleanliness, riley-handoff-no-contract-bleed). **EV-3c**
+  (the Mira injection live lane) is now **unblocked** — it reuses this drive + the EV-3 corpus/grader.
+- **Surfaced follow-up — empty-messages defect (F1, separate SURFACE-class PR):** building the harness
+  found that the compose submit carries NO conversation, so `skill-mode` forwards `messages: []` to the
+  executor -> `client.messages.create({ messages: [] })`, which a LIVE Anthropic call rejects (>=1
+  message required). Masked only because `MIRA_SELF_BRIEF_ENABLED` is dark and compose has never run
+  live (verified across BOTH compose entry points: weekly scan + Riley handoff) - exactly why AGENT-8's
+  coverage was "none". The fix: the compose submit must carry a minimal user turn (the harness's
+  `COMPOSE_USER_TURN` is the shape the fix should add). Kept out of the eval PR; tracked here.
 
 ## EV-7 - Riley LLM-judgment eval + Robin behavioral lane (AGENT-7 + INFRA-3 Robin + AGENT-10) [P1]
 
