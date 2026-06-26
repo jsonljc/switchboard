@@ -270,6 +270,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       ["model"],
       FILL_RATIO_BUCKETS,
     ),
+    mutatedThenEscalated: new PromCounter(
+      "switchboard_mutated_then_escalated_total",
+      "A skill turn committed a write-effect tool call (booking=external_mutation, or write/external_send) and then an afterSkill governance gate altered the reply (enforce block/escalate/rewrite); the mutation could not be retracted (P2-3 fail-closed-on-safety blind spot). Labeled by deployment_id + effect_category",
+      ["deployment_id", "effect_category"],
+    ),
   };
 }
 

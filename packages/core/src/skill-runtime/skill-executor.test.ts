@@ -4,8 +4,17 @@
 // execution-trace recorder) exceeds 600 lines. Splitting would fragment the
 // shared mock-adapter/mock-skill scaffold across files; the codebase convention
 // is the eslint-disable marker over an awkward split (see calendar-book.test.ts).
-import { describe, it, expect, vi } from "vitest";
-import { SkillExecutorImpl, parseIntentTag } from "./skill-executor.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  SkillExecutorImpl,
+  parseIntentTag,
+  strongestCommittedWriteEffect,
+} from "./skill-executor.js";
+import {
+  createInMemoryMetrics,
+  setMetrics,
+  type SwitchboardMetrics,
+} from "../telemetry/metrics.js";
 import type { ToolCallingLLMAdapter } from "./llm-types.js";
 import type {
   SkillDefinition,
@@ -21,7 +30,9 @@ import {
 import { GovernanceHook } from "./hooks/governance-hook.js";
 import type { ExecutionTracePartial } from "./hooks/trace-persistence-hook.js";
 import { ModelRouter } from "../model-router.js";
-import { ok } from "./tool-result.js";
+import { ok, fail, denied } from "./tool-result.js";
+import type { ToolResult } from "./tool-result.js";
+import type { ToolCallRecord } from "./types.js";
 
 const mockSkill: SkillDefinition = {
   name: "test",
@@ -1225,5 +1236,290 @@ describe("SkillExecutorImpl — afterSkill governance seam", () => {
 
     expect(result.response).toBe("[blocked: connecting you with our team]");
     expect(result.trace.responseSummary).toBe("[blocked: connecting you with our team]");
+  });
+});
+
+describe("SkillExecutorImpl — mutatedThenEscalated metric (P2-3 afterSkill ordering)", () => {
+  let metrics: SwitchboardMetrics;
+  beforeEach(() => {
+    metrics = createInMemoryMetrics();
+    vi.spyOn(metrics.mutatedThenEscalated, "inc");
+    setMetrics(metrics);
+  });
+  afterEach(() => {
+    setMetrics(createInMemoryMetrics());
+  });
+
+  const execParams = {
+    skill: { ...mockSkill, parameters: [], tools: ["calendar-book", "crm-write", "crm-query"] },
+    parameters: {},
+    messages: [{ role: "user" as const, content: "book me in" }],
+    deploymentId: "d1",
+    orgId: "org1",
+    trustScore: 50,
+    trustLevel: "guided" as const,
+    sessionId: "s1",
+  };
+
+  // Tool map: a booking tool (external_mutation), a CRM stage write (write), and a
+  // read tool — so a turn can commit different write-effect categories.
+  const arcTools = (): Map<string, SkillTool> =>
+    new Map<string, SkillTool>([
+      [
+        "calendar-book",
+        {
+          id: "calendar-book",
+          operations: {
+            "booking.create": {
+              description: "Book an appointment.",
+              effectCategory: "external_mutation" as const,
+              idempotent: false,
+              inputSchema: { type: "object", properties: {} },
+              execute: vi.fn().mockResolvedValue(ok({ bookingId: "b1" })),
+            },
+          },
+        },
+      ],
+      [
+        "crm-write",
+        {
+          id: "crm-write",
+          operations: {
+            "stage.update": {
+              description: "Advance the contact's stage.",
+              effectCategory: "write" as const,
+              inputSchema: { type: "object", properties: {} },
+              execute: vi.fn().mockResolvedValue(ok({ stage: "qualified" })),
+            },
+          },
+        },
+      ],
+      [
+        "crm-query",
+        {
+          id: "crm-query",
+          operations: {
+            "contact.get": {
+              description: "Look up a contact.",
+              effectCategory: "read" as const,
+              inputSchema: { type: "object", properties: {} },
+              execute: vi.fn().mockResolvedValue(ok({ contactId: "c1" })),
+            },
+          },
+        },
+      ],
+    ]);
+
+  // afterSkill gate that simulates an ENFORCE block: it replaces the outbound
+  // reply with a handoff (exactly what deterministic-safety / claim / consent
+  // gates do downstream of the already-committed mutation).
+  const blockingHook = {
+    name: "blocking",
+    afterSkill: async (_ctx: SkillHookContext, result: SkillExecutionResult) => {
+      result.response = "[blocked: connecting you with our team]";
+    },
+  };
+
+  it("fires when a same-turn external_mutation (booking) commits and a gate then blocks the reply", async () => {
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "calendar-book.booking.create", input: {} }],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "All booked!" }], stop_reason: "end_turn" },
+    ]);
+    const executor = new SkillExecutorImpl(adapter, arcTools(), undefined, [blockingHook]);
+
+    await executor.execute(execParams);
+
+    expect(metrics.mutatedThenEscalated.inc).toHaveBeenCalledTimes(1);
+    expect(metrics.mutatedThenEscalated.inc).toHaveBeenCalledWith({
+      deployment_id: "d1",
+      effect_category: "external_mutation",
+    });
+  });
+
+  it("labels effect_category with the STRONGEST committed write-effect (external_mutation > write)", async () => {
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "crm-write.stage.update", input: {} }],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [{ type: "tool_use", id: "t2", name: "calendar-book.booking.create", input: {} }],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "done" }], stop_reason: "end_turn" },
+    ]);
+    const executor = new SkillExecutorImpl(adapter, arcTools(), undefined, [blockingHook]);
+
+    await executor.execute(execParams);
+
+    expect(metrics.mutatedThenEscalated.inc).toHaveBeenCalledWith({
+      deployment_id: "d1",
+      effect_category: "external_mutation",
+    });
+  });
+
+  it("labels effect_category=write when only a write-effect (no external) committed", async () => {
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "crm-write.stage.update", input: {} }],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "stage advanced" }], stop_reason: "end_turn" },
+    ]);
+    const executor = new SkillExecutorImpl(adapter, arcTools(), undefined, [blockingHook]);
+
+    await executor.execute(execParams);
+
+    expect(metrics.mutatedThenEscalated.inc).toHaveBeenCalledWith({
+      deployment_id: "d1",
+      effect_category: "write",
+    });
+  });
+
+  it("fires on an INLINE rewrite alteration too (claim-classifier rewrite, not only a full block)", async () => {
+    // The claim-classifier REWRITE path edits the reply in place (not a full
+    // handoff replace). The metric intentionally counts that: the mutation still
+    // committed in a turn the gate had to alter for safety. "escalated" is the
+    // gap's shorthand for any such reply alteration.
+    const rewriteHook = {
+      name: "rewrite",
+      afterSkill: async (_ctx: SkillHookContext, result: SkillExecutionResult) => {
+        result.response = result.response.replace("guaranteed", "[claim removed]");
+      },
+    };
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "calendar-book.booking.create", input: {} }],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [{ type: "text", text: "Booked! Results are guaranteed." }],
+        stop_reason: "end_turn",
+      },
+    ]);
+    const executor = new SkillExecutorImpl(adapter, arcTools(), undefined, [rewriteHook]);
+
+    await executor.execute(execParams);
+
+    expect(metrics.mutatedThenEscalated.inc).toHaveBeenCalledWith({
+      deployment_id: "d1",
+      effect_category: "external_mutation",
+    });
+  });
+
+  it("does NOT fire when a mutation commits but no gate alters the reply (clean turn)", async () => {
+    const passthroughHook = {
+      name: "passthrough",
+      afterSkill: async (_ctx: SkillHookContext, _result: SkillExecutionResult) => {
+        // observe / clean: reads but never mutates result.response
+      },
+    };
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "calendar-book.booking.create", input: {} }],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "All booked!" }], stop_reason: "end_turn" },
+    ]);
+    const executor = new SkillExecutorImpl(adapter, arcTools(), undefined, [passthroughHook]);
+
+    await executor.execute(execParams);
+
+    expect(metrics.mutatedThenEscalated.inc).not.toHaveBeenCalled();
+  });
+
+  it("does NOT fire when a gate blocks the reply but no write-effect tool committed (read-only turn)", async () => {
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "crm-query.contact.get", input: {} }],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "Here is the info" }], stop_reason: "end_turn" },
+    ]);
+    const executor = new SkillExecutorImpl(adapter, arcTools(), undefined, [blockingHook]);
+
+    await executor.execute(execParams);
+
+    expect(metrics.mutatedThenEscalated.inc).not.toHaveBeenCalled();
+  });
+
+  it("does NOT fire when there are no afterSkill hooks at all (control)", async () => {
+    const adapter = createMockAdapter([
+      {
+        content: [{ type: "tool_use", id: "t1", name: "calendar-book.booking.create", input: {} }],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "All booked!" }], stop_reason: "end_turn" },
+    ]);
+    const executor = new SkillExecutorImpl(adapter, arcTools(), undefined, []);
+
+    await executor.execute(execParams);
+
+    expect(metrics.mutatedThenEscalated.inc).not.toHaveBeenCalled();
+  });
+});
+
+describe("strongestCommittedWriteEffect (P2-3 helper)", () => {
+  function opOf(effectCategory: "read" | "write" | "external_send" | "external_mutation") {
+    return {
+      description: "",
+      inputSchema: { type: "object", properties: {} },
+      effectCategory,
+      execute: async () => ok({}),
+    } as const;
+  }
+  const tools = (): Map<string, SkillTool> =>
+    new Map<string, SkillTool>([
+      ["book", { id: "book", operations: { create: opOf("external_mutation") } }],
+      ["msg", { id: "msg", operations: { send: opOf("external_send") } }],
+      ["crm", { id: "crm", operations: { upd: opOf("write") } }],
+      ["q", { id: "q", operations: { get: opOf("read") } }],
+    ]);
+  const rec = (toolId: string, operation: string, result: ToolResult): ToolCallRecord => ({
+    toolId,
+    operation,
+    params: {},
+    result,
+    durationMs: 1,
+    governanceDecision: "auto-approved",
+  });
+
+  it("returns the strongest committed effect (external_mutation outranks write)", () => {
+    expect(
+      strongestCommittedWriteEffect(
+        [rec("crm", "upd", ok({})), rec("book", "create", ok({}))],
+        tools(),
+      ),
+    ).toBe("external_mutation");
+  });
+
+  it("returns write when only a write committed", () => {
+    expect(strongestCommittedWriteEffect([rec("crm", "upd", ok({}))], tools())).toBe("write");
+  });
+
+  it("returns external_send for a committed send", () => {
+    expect(strongestCommittedWriteEffect([rec("msg", "send", ok({}))], tools())).toBe(
+      "external_send",
+    );
+  });
+
+  it("EXCLUDES a failed write-effect call — it never committed", () => {
+    expect(
+      strongestCommittedWriteEffect([rec("book", "create", fail("BOOM", "boom"))], tools()),
+    ).toBeUndefined();
+  });
+
+  it("EXCLUDES a denied write-effect call — it never committed", () => {
+    expect(
+      strongestCommittedWriteEffect([rec("book", "create", denied("nope"))], tools()),
+    ).toBeUndefined();
+  });
+
+  it("returns undefined for read-only or empty turns", () => {
+    expect(strongestCommittedWriteEffect([rec("q", "get", ok({}))], tools())).toBeUndefined();
+    expect(strongestCommittedWriteEffect([], tools())).toBeUndefined();
   });
 });
