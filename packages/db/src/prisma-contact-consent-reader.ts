@@ -1,6 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
-import type { ContactConsentState, PdpaJurisdiction, ConsentSource } from "@switchboard/schemas";
-import { ContactNotFound, type ContactConsentReader } from "@switchboard/core";
+import type { PdpaJurisdiction, ConsentSource } from "@switchboard/schemas";
+import {
+  ContactNotFound,
+  type ContactConsentReader,
+  type ContactConsentRead,
+} from "@switchboard/core";
 
 interface Deps {
   prisma: PrismaClient;
@@ -8,11 +12,12 @@ interface Deps {
 
 export function createPrismaContactConsentReader(deps: Deps): ContactConsentReader {
   return {
-    async read(organizationId: string, contactId: string): Promise<ContactConsentState> {
+    async read(organizationId: string, contactId: string): Promise<ContactConsentRead> {
       const row = await deps.prisma.contact.findFirst({
         where: { id: contactId, organizationId },
         select: {
           pdpaJurisdiction: true,
+          phoneE164: true,
           consentGrantedAt: true,
           consentRevokedAt: true,
           consentSource: true,
@@ -26,6 +31,7 @@ export function createPrismaContactConsentReader(deps: Deps): ContactConsentRead
 
       return {
         pdpaJurisdiction: row.pdpaJurisdiction as PdpaJurisdiction | null,
+        phoneE164: row.phoneE164 ?? null,
         consentGrantedAt: row.consentGrantedAt ? row.consentGrantedAt.toISOString() : null,
         consentRevokedAt: row.consentRevokedAt ? row.consentRevokedAt.toISOString() : null,
         consentSource: row.consentSource as ConsentSource | null,

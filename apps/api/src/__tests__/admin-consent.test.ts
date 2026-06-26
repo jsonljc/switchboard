@@ -73,6 +73,23 @@ describe("GET /api/admin/consent/:contactId", () => {
     expect(json).toHaveProperty("pdpaJurisdiction");
   });
 
+  it("does not leak the contact's phoneE164 into the response", async () => {
+    // The reader carries phoneE164 (for per-lead jurisdiction resolution at the
+    // consent gate), but it must NOT surface on the admin consent response.
+    const { app } = await buildApp({
+      consentReader: {
+        read: vi.fn().mockResolvedValue({ ...emptyState, phoneE164: "+60123456789" }),
+      },
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/consent/c1",
+    });
+    expect(res.statusCode).toBe(200);
+    const json = JSON.parse(res.payload);
+    expect(json).not.toHaveProperty("phoneE164");
+  });
+
   it("scopes the read to the authenticated org (no cross-tenant consent read)", async () => {
     // Regression pin for the org-scoping fix: the route MUST pass the caller's
     // org to the reader, so an operator cannot read another tenant's consent

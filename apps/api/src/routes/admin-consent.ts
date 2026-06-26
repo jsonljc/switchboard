@@ -78,7 +78,12 @@ export function registerAdminConsentRoutes(
   app.addHook("preHandler", buildDevAuthFallback(app));
 
   const respondWithState = async (organizationId: string, contactId: string) => {
-    const state = await deps.consentReader.read(organizationId, contactId);
+    // phoneE164 rides on the reader result only so the consent gate can resolve
+    // per-lead jurisdiction; strip it here so it never surfaces on the admin response.
+    const { phoneE164: _phoneE164, ...state } = await deps.consentReader.read(
+      organizationId,
+      contactId,
+    );
     return {
       ...state,
       status: deriveConsentStatus({
