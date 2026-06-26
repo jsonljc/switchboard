@@ -10,8 +10,8 @@ interface ActivityStoreSubset {
   listByDeployment(orgId: string, deploymentId: string, opts: { limit: number }): Promise<unknown>;
 }
 
-/** Factory-with-context: trust-bound ids (orgId, contactId) are closed in from
- * the SkillRequestContext, never accepted from LLM tool input. */
+/** Factory-with-context: trust-bound ids (orgId, contactId, deploymentId) are
+ * closed in from the SkillRequestContext, never accepted from LLM tool input. */
 export function createCrmQueryToolFactory(
   contactStore: ContactStoreSubset,
   activityStore: ActivityStoreSubset,
@@ -50,14 +50,17 @@ export function createCrmQueryToolFactory(
         inputSchema: {
           type: "object",
           properties: {
-            deploymentId: { type: "string" },
             limit: { type: "number", description: "Max results (default 20)" },
           },
-          required: ["deploymentId"],
+          required: [],
         },
         execute: async (params: unknown) => {
-          const { deploymentId, limit } = params as { deploymentId: string; limit?: number };
-          const rows = (await activityStore.listByDeployment(ctx.orgId, deploymentId, {
+          const { limit } = params as { limit?: number };
+          // Trust-bound: read THIS deployment's activity only. deploymentId is
+          // closed in from ctx, never from LLM tool input — an LLM-supplied
+          // deploymentId would otherwise read a sibling deployment's log within
+          // the org (same-org cross-deployment leak). Mirrors crm-write.ts.
+          const rows = (await activityStore.listByDeployment(ctx.orgId, ctx.deploymentId, {
             limit: limit ?? 20,
           })) as Array<Record<string, unknown>>;
           // Drop the free-text `description` (may carry PII a producer logged).

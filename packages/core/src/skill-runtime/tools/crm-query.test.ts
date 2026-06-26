@@ -83,16 +83,41 @@ describe("crm-query ctx-factory", () => {
     expect(result.status).not.toBe("success");
   });
 
-  it("activity.list uses ctx.orgId and drops the free-text description", async () => {
+  it("activity.list uses ctx.orgId/ctx.deploymentId and drops the free-text description", async () => {
     const stores = makeStores();
     const tool = createCrmQueryToolFactory(stores.contactStore, stores.activityStore)(CTX);
-    const result = await tool.operations["activity.list"]!.execute({
-      deploymentId: "d1",
-      limit: 5,
-    });
+    const result = await tool.operations["activity.list"]!.execute({ limit: 5 });
     expect(stores.activityStore.listByDeployment).toHaveBeenCalledWith("org1", "d1", { limit: 5 });
     const activities = (result.data as { activities: Array<Record<string, unknown>> }).activities;
     expect(activities[0]).not.toHaveProperty("description");
     expect(JSON.stringify(result.data)).not.toContain("+1234");
+  });
+
+  it("activity.list ignores an LLM-supplied deploymentId and reads ONLY ctx.deploymentId", async () => {
+    const stores = makeStores();
+    const tool = createCrmQueryToolFactory(stores.contactStore, stores.activityStore)(CTX);
+    // The model tries to read a SIBLING deployment's activity log within the org.
+    await tool.operations["activity.list"]!.execute({
+      deploymentId: "SIBLING_DEPLOYMENT",
+      limit: 5,
+    });
+    // Must be scoped to the trust-bound ctx.deploymentId ("d1"), never the input.
+    expect(stores.activityStore.listByDeployment).toHaveBeenCalledWith("org1", "d1", { limit: 5 });
+    expect(stores.activityStore.listByDeployment).not.toHaveBeenCalledWith(
+      "org1",
+      "SIBLING_DEPLOYMENT",
+      expect.anything(),
+    );
+  });
+
+  it("activity.list inputSchema omits deploymentId (trust-bound, not LLM-supplied)", () => {
+    const stores = makeStores();
+    const tool = createCrmQueryToolFactory(stores.contactStore, stores.activityStore)(CTX);
+    const schema = tool.operations["activity.list"]!.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.properties).not.toHaveProperty("deploymentId");
+    expect(schema.required).not.toContain("deploymentId");
   });
 });
