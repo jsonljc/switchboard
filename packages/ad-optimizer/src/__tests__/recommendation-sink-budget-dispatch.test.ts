@@ -27,7 +27,7 @@ const baseRec = (overrides: Partial<RecommendationOutput> = {}): RecommendationO
   };
 };
 
-describe("runRecommendationSink — Spec-1B reallocate dispatch (not primary-gated)", () => {
+describe("runRecommendationSink: Spec-1B reallocate dispatch (not primary-gated)", () => {
   const scaleRec = (campaignId: string) =>
     baseRec({ action: "scale", campaignId, campaignName: `Campaign ${campaignId}` });
   const pauseRec = (campaignId: string) =>
