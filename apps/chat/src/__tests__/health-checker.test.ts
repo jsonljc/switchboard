@@ -42,7 +42,23 @@ describe("runHealthCheck — transition matrix", () => {
     vi.restoreAllMocks();
     vi.doUnmock("@switchboard/db");
     delete process.env["ALERT_WEBHOOK_URL"];
+    delete process.env["META_SYSTEM_USER_TOKEN"];
   });
+
+  function graphFetchCalls(): Array<[string, RequestInit]> {
+    return fetchMock.mock.calls
+      .filter(([url]) => String(url ?? "").startsWith("https://graph.facebook.com/"))
+      .map(([url, init]) => [String(url), init as RequestInit]);
+  }
+
+  function channelUpdates(prisma: ReturnType<typeof makePrisma>): Array<{
+    status: string;
+    statusDetail: string | null;
+  }> {
+    return prisma.managedChannel.update.mock.calls.map(
+      ([args]) => (args as { data: { status: string; statusDetail: string | null } }).data,
+    );
+  }
 
   function mockTelegramHealth(ok: boolean) {
     fetchMock.mockImplementation(async (url: string) => {
@@ -188,5 +204,105 @@ describe("runHealthCheck — transition matrix", () => {
       .filter((url) => url.startsWith("https://graph.facebook.com/"));
     expect(graphCalls.length).toBeGreaterThan(0);
     expect(graphCalls[0]).toContain("/v21.0/");
+  });
+
+  it("whatsapp with no creds.token but META_SYSTEM_USER_TOKEN set is probed (not dropped)", async () => {
+    // Runtime (runtime-registry.ts) loads this channel via resolveWhatsAppRuntimeToken's
+    // system-token fallback; the health checker must mirror it instead of flipping the
+    // channel to `error` (which the registry then drops on its status:"active" reload).
+    process.env["META_SYSTEM_USER_TOKEN"] = "SYSTEM_TOKEN";
+    vi.doMock("@switchboard/db", () => ({
+      PrismaConnectionStore: vi.fn().mockImplementation(() => ({
+        getById: vi.fn().mockResolvedValue({
+          credentials: { phoneNumberId: "pn-123" }, // no per-connection token
+        }),
+      })),
+    }));
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({ ok: true }),
+    }));
+
+    const prisma = makePrisma([
+      { id: "ch-wa-sys", channel: "whatsapp", status: "active", connectionId: "c-wa" },
+    ]);
+
+    const { runHealthCheck } = await import("../managed/health-checker.js");
+    await runHealthCheck(prisma as never);
+
+    // It must actually probe Graph with the system-user token (proving the fallback ran).
+    const calls = graphFetchCalls();
+    expect(calls.length).toBe(1);
+    expect(calls[0]?.[0]).toContain("/v21.0/pn-123");
+    expect((calls[0]?.[1].headers as Record<string, string>)["Authorization"]).toBe(
+      "Bearer SYSTEM_TOKEN",
+    );
+
+    // And it must NOT have been flipped to error / "Missing WhatsApp credentials".
+    const updates = channelUpdates(prisma);
+    expect(updates.some((d) => d.status === "error")).toBe(false);
+    expect(updates.some((d) => d.statusDetail === "Missing WhatsApp credentials")).toBe(false);
+    expect(updates.at(-1)?.status).toBe("active");
+  });
+
+  it("whatsapp with no token anywhere still flips to error (fallback masks nothing)", async () => {
+    delete process.env["META_SYSTEM_USER_TOKEN"];
+    vi.doMock("@switchboard/db", () => ({
+      PrismaConnectionStore: vi.fn().mockImplementation(() => ({
+        getById: vi.fn().mockResolvedValue({
+          credentials: { phoneNumberId: "pn-123" }, // no token, no system token
+        }),
+      })),
+    }));
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({ ok: true }),
+    }));
+
+    const prisma = makePrisma([
+      { id: "ch-wa-bare", channel: "whatsapp", status: "active", connectionId: "c-wa" },
+    ]);
+
+    const { runHealthCheck } = await import("../managed/health-checker.js");
+    await runHealthCheck(prisma as never);
+
+    // Genuinely unconfigured: no Graph probe, honest error surfaced.
+    expect(graphFetchCalls().length).toBe(0);
+    const last = channelUpdates(prisma).at(-1);
+    expect(last?.status).toBe("error");
+    expect(last?.statusDetail).toBe("Missing WhatsApp credentials");
+  });
+
+  it("whatsapp with a system token but no phoneNumberId still flips to error (isolation boundary kept)", async () => {
+    // phoneNumberId is the tenant FROM-identity / isolation boundary and stays required even
+    // when the token resolves via the shared system-user fallback.
+    process.env["META_SYSTEM_USER_TOKEN"] = "SYSTEM_TOKEN";
+    vi.doMock("@switchboard/db", () => ({
+      PrismaConnectionStore: vi.fn().mockImplementation(() => ({
+        getById: vi.fn().mockResolvedValue({ credentials: {} }), // no phoneNumberId
+      })),
+    }));
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({ ok: true }),
+    }));
+
+    const prisma = makePrisma([
+      { id: "ch-wa-nophone", channel: "whatsapp", status: "active", connectionId: "c-wa" },
+    ]);
+
+    const { runHealthCheck } = await import("../managed/health-checker.js");
+    await runHealthCheck(prisma as never);
+
+    expect(graphFetchCalls().length).toBe(0);
+    const last = channelUpdates(prisma).at(-1);
+    expect(last?.status).toBe("error");
+    expect(last?.statusDetail).toBe("Missing WhatsApp credentials");
   });
 });
