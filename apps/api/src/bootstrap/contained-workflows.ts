@@ -19,7 +19,8 @@ import {
 import { resolveOrgWhatsAppSendCreds } from "../lib/whatsapp-send-creds.js";
 import type { PlatformIngress, SubmitWorkResponse } from "@switchboard/core/platform";
 import type { ChildWorkRequest } from "@switchboard/core/platform";
-import type { InstantFormAdapter } from "@switchboard/ad-optimizer";
+import { getMetrics } from "@switchboard/core";
+import type { InstantFormAdapter, IngressLike } from "@switchboard/ad-optimizer";
 import { resolveDeploymentForIntent } from "../utils/resolve-deployment.js";
 import { buildFollowUpSendSubmitRequest } from "../services/workflows/followup-send-request.js";
 import { buildLeadIntakeIngressSubmitRequest } from "../services/workflows/lead-intake-request.js";
@@ -176,6 +177,86 @@ export function createSubmitChildWork(deps: {
   };
 }
 
+/**
+ * Record + log a dropped Meta Instant Form paid lead (Gap B). Never-silent: a durable
+ * counter (instantFormLeadIntakeFailed, all 3 registries) plus a structured warn. The
+ * counter increment is fail-quiet — a prom label hiccup must never throw and fail an
+ * otherwise in-flight lead turn (same posture as recordMutatedThenEscalated). Logs ONLY
+ * the org / deployment correlation ids + reason/type — NEVER the lead's contact fields
+ * (phone / email / name), which would leak PII into logs.
+ */
+function recordInstantFormLeadIntakeDrop(
+  reason: "ingress_rejected" | "approval_required" | "execution_failed",
+  type: string,
+  ids: { organizationId?: string; deploymentId?: string },
+): void {
+  try {
+    getMetrics().instantFormLeadIntakeFailed.inc({ reason, type });
+  } catch (err) {
+    console.error(
+      "[instant-form] lead-intake drop counter increment failed (observability-only)",
+      err,
+    );
+  }
+  console.warn(
+    "[instant-form] lead.intake did not create a Contact (paid lead dropped): " +
+      `reason=${reason} type=${type} ` +
+      `organizationId=${ids.organizationId ?? "unknown"} ` +
+      `deploymentId=${ids.deploymentId ?? "unknown"}`,
+  );
+}
+
+/**
+ * Build the IngressLike shim the InstantFormAdapter calls to submit a Meta Instant Form
+ * `lead.intake` through PlatformIngress. It inspects the FULL SubmitWorkResponse
+ * discriminated union so a failed / parked submit is OBSERVABLE and correctly bucketed
+ * rather than swallowed into a bare `{ ok:false }` (Gap B, the sibling of the CTWA P2-4
+ * not-swallow fix). Three failure legs, mirroring the CTWA adapter:
+ *  - ingress_rejected: PlatformIngress returned ok:false (an infra / entitlement /
+ *    validation rejection BEFORE execution); the IngressError type/message are threaded
+ *    onto the returned IngressSubmitError.
+ *  - approval_required: ingress accepted but the work PARKED for human approval. lead.intake
+ *    is approvalPolicy:"none", so a park is anomalous — and it is NOT a completed Contact
+ *    creation, so it must never read as success (the full-union check, not a bare `.ok`).
+ *  - execution_failed: ingress accepted (ok:true) but the execution outcome was the EXPLICIT
+ *    "failed" (gate on the explicit value, not absence — a "completed" / minimal / unknown
+ *    shape stays on the happy path, matching the CTWA adapter).
+ * Each failure leg returns a non-ok shape; the InstantFormAdapter reads only response.result,
+ * so it still fail-closes to a null ingest — the win is the never-silent counter + warn, and
+ * a parked / failed response is no longer mis-bucketed as a created Contact. The happy path
+ * returns `{ ok:true, result }` unchanged so the adapter extracts contactId / duplicate / outcome.
+ */
+export function buildLeadIntakeIngressAdapter(
+  platformIngress: Pick<PlatformIngress, "submit">,
+): IngressLike {
+  return {
+    submit: async (req) => {
+      // Non-PII correlation ids for the drop log (payload contact fields are never logged).
+      const ids = req.payload as { organizationId?: string; deploymentId?: string };
+      // Seeded `system` principal (not a bespoke system:* id) so governance can
+      // resolve the actor's IdentitySpec — see lead-intake-request.ts.
+      const response = await platformIngress.submit(buildLeadIntakeIngressSubmitRequest(req));
+      if (!response.ok) {
+        recordInstantFormLeadIntakeDrop("ingress_rejected", response.error.type, ids);
+        return {
+          ok: false,
+          error: { type: response.error.type, message: response.error.message },
+        };
+      }
+      if ("approvalRequired" in response && response.approvalRequired === true) {
+        recordInstantFormLeadIntakeDrop("approval_required", "approval_required", ids);
+        return { ok: false, error: { type: "approval_required" } };
+      }
+      const outcome = (response.result as { outcome?: unknown }).outcome;
+      if (outcome === "failed") {
+        recordInstantFormLeadIntakeDrop("execution_failed", "failed", ids);
+        return { ok: false, error: { type: "execution_failed" } };
+      }
+      return { ok: true, result: response.result };
+    },
+  };
+}
+
 export async function bootstrapContainedWorkflows(
   deps: ContainedWorkflowBootstrapDeps,
 ): Promise<ContainedWorkflowBootstrapResult> {
@@ -239,17 +320,9 @@ export async function bootstrapContainedWorkflows(
   );
   const leadIntakeHandler = new LeadIntakeHandler({ store: leadIntakeStore });
   const instantFormAdapter = new InstantFormAdapter({
-    ingress: {
-      submit: async (req) => {
-        // Seeded `system` principal (not a bespoke system:* id) so governance can
-        // resolve the actor's IdentitySpec — see lead-intake-request.ts.
-        const response = await platformIngress.submit(buildLeadIntakeIngressSubmitRequest(req));
-        if (!response.ok) {
-          return { ok: false };
-        }
-        return { ok: true, result: response.result };
-      },
-    },
+    // Gap B: the shim inspects the FULL SubmitWorkResponse so a failed / parked
+    // lead.intake is observable + correctly bucketed, never swallowed into `{ ok:false }`.
+    ingress: buildLeadIntakeIngressAdapter(platformIngress),
     now: () => new Date(),
   });
 
