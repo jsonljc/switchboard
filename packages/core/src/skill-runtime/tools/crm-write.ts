@@ -1,5 +1,6 @@
 import type { SkillTool, SkillRequestContext } from "../types.js";
-import { ok } from "../tool-result.js";
+import { ok, fail } from "../tool-result.js";
+import { StaleVersionError } from "../../approval/state-machine.js";
 
 interface OpportunityStoreSubset {
   updateStage(
@@ -72,7 +73,29 @@ export function createCrmWriteToolFactory(
             opportunityId: string;
             stage: string;
           };
-          const result = await opportunityStore.updateStage(ctx.orgId, opportunityId, stage);
+          let result: unknown;
+          try {
+            result = await opportunityStore.updateStage(ctx.orgId, opportunityId, stage);
+          } catch (err) {
+            // A deleted or foreign opportunityId makes the store's org-scoped
+            // updateMany match zero rows and throw StaleVersionError (the Prisma
+            // store throws the parent on count===0; an in-memory store may throw
+            // the TenantMismatchError subclass). Both are the same recoverable
+            // bad-input case: the LLM named an opportunity that is gone or not in
+            // this conversation's scope. Returning structured guidance keeps the
+            // Alex turn alive instead of letting the throw kill it. Any OTHER
+            // error is a genuine store/infra failure and MUST propagate so it
+            // still escalates (do not swallow a real outage).
+            if (err instanceof StaleVersionError) {
+              return fail("OPPORTUNITY_NOT_FOUND", "That opportunity could not be found.", {
+                retryable: false,
+                data: { opportunityId, failureType: "opportunity_not_found" },
+                modelRemediation:
+                  "The opportunity may have been removed or is not in this conversation's scope. Do not tell the lead their status changed; continue the conversation or escalate to a human.",
+              });
+            }
+            throw err;
+          }
           return ok(result as Record<string, unknown>, {
             entityState: { opportunityId, stage },
           });
