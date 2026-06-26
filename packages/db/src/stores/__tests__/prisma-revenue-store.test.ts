@@ -386,8 +386,8 @@ describe("PrismaRevenueStore", () => {
         paidEvent({ id: "r2", bookingId: "bk-2", amount: 12000 }),
       ]);
       prisma.conversionRecord.findMany.mockResolvedValue([
-        { bookingId: "bk-1", sourceCampaignId: "camp-1" },
-        { bookingId: "bk-2", sourceCampaignId: "camp-2" },
+        { bookingId: "bk-1", sourceCampaignId: "camp-1", createdAt: now, id: "cr-1" },
+        { bookingId: "bk-2", sourceCampaignId: "camp-2", createdAt: now, id: "cr-2" },
       ]);
       prisma.receipt.findMany.mockResolvedValue([
         { bookingId: "bk-1", provider: "stripe", tier: "T1_FETCH_BACK" },
@@ -412,7 +412,7 @@ describe("PrismaRevenueStore", () => {
         paidEvent({ id: "r1", amount: 50000 }),
       ]);
       prisma.conversionRecord.findMany.mockResolvedValue([
-        { bookingId: "bk-1", sourceCampaignId: "camp-1" },
+        { bookingId: "bk-1", sourceCampaignId: "camp-1", createdAt: now, id: "cr-1" },
       ]);
       prisma.receipt.findMany.mockResolvedValue([
         { bookingId: "bk-1", provider: "stripe", tier: "T1_FETCH_BACK" },
@@ -434,9 +434,9 @@ describe("PrismaRevenueStore", () => {
         paidEvent({ id: "seed", bookingId: "bk-seed", origin: "seed" }),
       ]);
       prisma.conversionRecord.findMany.mockResolvedValue([
-        { bookingId: "bk-good", sourceCampaignId: "camp-1" },
-        { bookingId: "bk-noop", sourceCampaignId: "camp-1" },
-        { bookingId: "bk-seed", sourceCampaignId: "camp-1" },
+        { bookingId: "bk-good", sourceCampaignId: "camp-1", createdAt: now, id: "cr-good" },
+        { bookingId: "bk-noop", sourceCampaignId: "camp-1", createdAt: now, id: "cr-noop" },
+        { bookingId: "bk-seed", sourceCampaignId: "camp-1", createdAt: now, id: "cr-seed" },
       ]);
       prisma.receipt.findMany.mockResolvedValue([
         { bookingId: "bk-good", provider: "stripe", tier: "T1_FETCH_BACK" },
@@ -462,7 +462,7 @@ describe("PrismaRevenueStore", () => {
         paidEvent({ id: "noop", bookingId: "bk-noop", origin: "demo" }),
       ]);
       prisma.conversionRecord.findMany.mockResolvedValue([
-        { bookingId: "bk-noop", sourceCampaignId: "camp-1" },
+        { bookingId: "bk-noop", sourceCampaignId: "camp-1", createdAt: now, id: "cr-noop" },
       ]);
       prisma.receipt.findMany.mockResolvedValue([
         { bookingId: "bk-noop", provider: "noop", tier: "T3_ADMIN_AUDIT" },
@@ -485,8 +485,8 @@ describe("PrismaRevenueStore", () => {
         paidEvent({ id: "r2", bookingId: "bk-2" }),
       ]);
       prisma.conversionRecord.findMany.mockResolvedValue([
-        { bookingId: "bk-1", sourceCampaignId: "camp-1" },
-        { bookingId: "bk-2", sourceCampaignId: null },
+        { bookingId: "bk-1", sourceCampaignId: "camp-1", createdAt: now, id: "cr-1" },
+        { bookingId: "bk-2", sourceCampaignId: null, createdAt: now, id: "cr-2" },
       ]);
       prisma.receipt.findMany.mockResolvedValue([
         { bookingId: "bk-1", provider: "stripe", tier: "T1_FETCH_BACK" },
@@ -511,7 +511,7 @@ describe("PrismaRevenueStore", () => {
         paidEvent({ id: "r1", bookingId: "bk-1" }),
       ]);
       prisma.conversionRecord.findMany.mockResolvedValue([
-        { bookingId: "bk-1", sourceCampaignId: "camp-1" },
+        { bookingId: "bk-1", sourceCampaignId: "camp-1", createdAt: now, id: "cr-1" },
       ]);
       prisma.receipt.findMany.mockResolvedValue([
         { bookingId: "bk-1", provider: "stripe", tier: "T1_FETCH_BACK" },
@@ -521,6 +521,9 @@ describe("PrismaRevenueStore", () => {
       expect(prisma.conversionRecord.findMany.mock.calls[0]![0].where.organizationId).toBe("org-1");
       expect(prisma.receipt.findMany.mock.calls[0]![0].where.organizationId).toBe("org-1");
     });
+
+    // P3-7 determinism (a booking's receipt-gate + campaign pick must be reproducible regardless of
+    // DB row order) is exercised in prisma-revenue-store-paid-visits.test.ts.
   });
 
   describe("sumByCampaign", () => {
