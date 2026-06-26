@@ -51,21 +51,33 @@ export async function setRileyPauseSelfExecution(
     where: {
       organizationId_listingId: { organizationId: args.organizationId, listingId: listing.id },
     },
-    select: { id: true, governanceSettings: true },
+    select: { id: true },
   });
   if (!deployment) {
     throw new Error(
       `no riley deployment for org ${args.organizationId} - seed it first (seedRileyAdOptimizerDeployment)`,
     );
   }
-  const settings = (deployment.governanceSettings as Record<string, unknown> | null) ?? {};
-  const previous = settings["pauseSelfExecutionEnabled"] === true;
-  // Flip + audit row commit or roll back together: the audit chain-append joins
-  // this transaction (ledger.record({ tx }) -> appendAtomic({ externalTx })), so
-  // a ledger failure can never leave a money-move capability armed or disarmed
-  // with no audit row. Mirrors provisionOrgAgentDeployments + the platform's
-  // WorkTrace + AuditEntry binding.
-  await prisma.$transaction(async (tx) => {
+  // Flip + audit row commit or roll back together: the audit chain-append joins this
+  // transaction (ledger.record({ tx }) -> appendAtomic({ externalTx })), so a ledger
+  // failure can never leave a money-move capability armed or disarmed with no audit row.
+  //
+  // The governanceSettings read-modify-write happens INSIDE the transaction over a
+  // row-locked read (SELECT ... FOR UPDATE). Reading the JSON outside the tx let two
+  // concurrent toggles of DIFFERENT keys both merge onto the same pre-tx snapshot, so
+  // the second commit silently clobbered the first key's flip (a lost update). The lock
+  // serializes the RMW. Mirrors PrismaGovernanceMarketWriter (same FOR UPDATE shape).
+  const { previous } = await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ governanceSettings: unknown }>>`
+      SELECT "governanceSettings" FROM "AgentDeployment"
+      WHERE "id" = ${deployment.id}
+      FOR UPDATE`;
+    const [row] = rows;
+    if (!row) {
+      throw new Error(`riley deployment ${deployment.id} vanished mid-transaction`);
+    }
+    const settings = (row.governanceSettings as Record<string, unknown> | null) ?? {};
+    const previousValue = settings["pauseSelfExecutionEnabled"] === true;
     await tx.agentDeployment.update({
       where: { id: deployment.id },
       data: {
@@ -82,10 +94,10 @@ export async function setRileyPauseSelfExecution(
         entityType: "deployment",
         entityId: deployment.id,
         riskCategory: "high",
-        summary: `riley pauseSelfExecutionEnabled: ${previous} -> ${args.enabled} (org ${args.organizationId}, by ${args.actor})`,
+        summary: `riley pauseSelfExecutionEnabled: ${previousValue} -> ${args.enabled} (org ${args.organizationId}, by ${args.actor})`,
         snapshot: {
           flag: "pauseSelfExecutionEnabled",
-          previous,
+          previous: previousValue,
           current: args.enabled,
           organizationId: args.organizationId,
           deploymentId: deployment.id,
@@ -93,6 +105,7 @@ export async function setRileyPauseSelfExecution(
       },
       { tx },
     );
+    return { previous: previousValue };
   });
   return { previous, current: args.enabled };
 }

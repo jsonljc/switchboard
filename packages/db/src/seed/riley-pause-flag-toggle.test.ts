@@ -4,11 +4,23 @@ import { setRileyPauseSelfExecution } from "./riley-pause-flag-toggle.js";
 function harness(opts?: {
   listing?: { id: string } | null;
   deployment?: { id: string; governanceSettings: Record<string, unknown> | null } | null;
+  // The value the FOR UPDATE locked read returns INSIDE the tx. Defaults to the
+  // deployment's settings; a distinct value models a concurrent sibling flip.
+  lockedSettings?: Record<string, unknown> | null;
 }) {
+  const deployment =
+    opts?.deployment === undefined
+      ? { id: "dep_1", governanceSettings: { trustLevelOverride: "autonomous" } }
+      : opts.deployment;
+  const lockedSettings =
+    opts?.lockedSettings === undefined
+      ? (deployment?.governanceSettings ?? null)
+      : opts.lockedSettings;
   const update = vi.fn(
     async (_args: { where: { id: string }; data: Record<string, unknown> }) => ({}),
   );
-  const tx = { agentDeployment: { update } };
+  const queryRaw = vi.fn(async () => [{ governanceSettings: lockedSettings }]);
+  const tx = { agentDeployment: { update }, $queryRaw: queryRaw };
   const prisma = {
     agentListing: {
       findUnique: vi.fn(async () =>
@@ -16,18 +28,14 @@ function harness(opts?: {
       ),
     },
     agentDeployment: {
-      findUnique: vi.fn(async () =>
-        opts?.deployment === undefined
-          ? { id: "dep_1", governanceSettings: { trustLevelOverride: "autonomous" } }
-          : opts.deployment,
-      ),
+      findUnique: vi.fn(async () => deployment),
     },
     $transaction: vi.fn(async (cb: (txc: typeof tx) => Promise<unknown>) => cb(tx)),
   };
   const record = vi.fn(
     async (_params: Record<string, unknown>, _options?: { tx?: unknown }) => ({}),
   );
-  return { prisma, update, tx, ledger: { record } };
+  return { prisma, update, queryRaw, tx, ledger: { record } };
 }
 
 describe("setRileyPauseSelfExecution (audited capability toggle)", () => {
@@ -109,6 +117,30 @@ describe("setRileyPauseSelfExecution (audited capability toggle)", () => {
     expect(h.update).toHaveBeenCalledTimes(1);
     expect(h.ledger.record).toHaveBeenCalledTimes(1);
     expect(h.ledger.record.mock.calls[0]![1]?.tx).toBe(h.tx);
+  });
+
+  it("merges onto the FOR UPDATE locked read inside the tx, not a stale pre-tx snapshot", async () => {
+    // Outer snapshot lacks the sibling flag; a concurrent flip committed it before our
+    // lock. The locked in-tx read sees it, so the read-modify-write must preserve it.
+    const h = harness({
+      deployment: { id: "dep_1", governanceSettings: { trustLevelOverride: "autonomous" } },
+      lockedSettings: { trustLevelOverride: "autonomous", reallocateKillSwitch: true },
+    });
+    const result = await setRileyPauseSelfExecution(h.prisma as never, h.ledger, {
+      organizationId: "org_1",
+      enabled: true,
+      actor: "jason",
+    });
+    expect(h.queryRaw).toHaveBeenCalledTimes(1); // the FOR UPDATE locked read
+    const data = h.update.mock.calls[0]![0].data as {
+      governanceSettings: Record<string, unknown>;
+    };
+    expect(data.governanceSettings).toEqual({
+      trustLevelOverride: "autonomous",
+      reallocateKillSwitch: true, // sibling concurrent flip PRESERVED
+      pauseSelfExecutionEnabled: true, // our flip
+    });
+    expect(result.previous).toBe(false);
   });
 
   it("rejects out of the transaction when the audit write fails (flip rolls back, never armed without an audit row)", async () => {
