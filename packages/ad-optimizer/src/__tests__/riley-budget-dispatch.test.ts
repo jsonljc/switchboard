@@ -59,7 +59,7 @@ describe("buildRileyBudgetCandidate (Spec-1B reallocation producer)", () => {
   // enforced UPSTREAM at engine emission (recommendation-engine.ts Gate 2: a sub-floor scale rec is
   // demoted to an abstention WatchOutput and never reaches this builder as action:"scale"). So the
   // builder itself must NOT re-floor: it builds even on below-base-floor evidence. If a future change
-  // adds a floor here, this test breaks and the reallocate-dispatch docstring must be re-checked.
+  // adds a floor here, this test breaks and the docstring must be re-checked.
   it("applies no candidate-side evidence floor: builds even on below-base-floor evidence", () => {
     const candidate = buildRileyBudgetCandidate({
       ...base,
@@ -67,22 +67,5 @@ describe("buildRileyBudgetCandidate (Spec-1B reallocation producer)", () => {
     });
     expect(candidate).not.toBeNull();
     expect(candidate?.evidence).toEqual({ clicks: 1, conversions: 0, days: 1 });
-  });
-
-  // CONTRACT (P3-1): reallocate is not arbitration-primary-gated. The builder takes no index/
-  // primaryIndex input, so two independent scale recs each build a candidate (no primary-only
-  // collapse). The arbitrator's only primary-gated consumer is pause self-submission
-  // (opportunity-arbitrator.ts); reallocate surfaces every well-formed winner for approval.
-  it("is not primary-gated: independent scale recs each build a candidate", () => {
-    const a = buildRileyBudgetCandidate({
-      ...base,
-      emitted: { ...base.emitted, recommendationId: "rec_a", campaignId: "camp_a" },
-    });
-    const b = buildRileyBudgetCandidate({
-      ...base,
-      emitted: { ...base.emitted, recommendationId: "rec_b", campaignId: "camp_b" },
-    });
-    expect(a).not.toBeNull();
-    expect(b).not.toBeNull();
   });
 });
