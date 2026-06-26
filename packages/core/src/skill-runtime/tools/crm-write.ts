@@ -78,9 +78,11 @@ export function createCrmWriteToolFactory(
             result = await opportunityStore.updateStage(ctx.orgId, opportunityId, stage);
           } catch (err) {
             // A deleted or foreign opportunityId makes the store's org-scoped
-            // updateMany match zero rows and throw StaleVersionError (the Prisma
-            // store throws the parent on count===0; an in-memory store may throw
-            // the TenantMismatchError subclass). Both are the same recoverable
+            // updateMany match zero rows and throw StaleVersionError. updateStage's
+            // WHERE carries no version predicate (just id + organizationId), so
+            // count===0 is strictly a not-found, never a real optimistic-version
+            // conflict; an in-memory store may throw the TenantMismatchError
+            // subclass for the same foreign-id case. Both are the same recoverable
             // bad-input case: the LLM named an opportunity that is gone or not in
             // this conversation's scope. Returning structured guidance keeps the
             // Alex turn alive instead of letting the throw kill it. Any OTHER

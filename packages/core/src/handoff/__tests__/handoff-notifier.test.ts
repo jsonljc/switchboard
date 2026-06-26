@@ -80,3 +80,50 @@ describe("HandoffNotifier", () => {
     expect(mockNotifier.notify.mock.calls[1]![0].approvers).toEqual(["b@b.com"]);
   });
 });
+
+// P2-9: the escalating agent's summary is carried in conversationSummary.agentSummary
+// and must reach the operator. agentSummary is LLM free text, so a raw newline must
+// not be able to inject a fake structured line into the operator block.
+describe("HandoffNotifier agentSummary rendering (P2-9)", () => {
+  function notifierWithSpy() {
+    const mockNotifier = { notify: vi.fn().mockResolvedValue(undefined) };
+    const notifier = new HandoffNotifier(mockNotifier, async () => ["ops@org-789.com"]);
+    return { mockNotifier, notifier };
+  }
+
+  function withSummary(agentSummary?: string): Partial<Handoff> {
+    return {
+      conversationSummary: {
+        turnCount: 0,
+        keyTopics: [],
+        objectionHistory: [],
+        sentiment: "angry",
+        ...(agentSummary ? { agentSummary } : {}),
+      },
+    };
+  }
+
+  it("renders the agent summary in the operator message", async () => {
+    const { mockNotifier, notifier } = notifierWithSpy();
+    await notifier.notify(
+      makePkg(withSummary("Lead is upset about a delayed reply and wants a callback")),
+    );
+    expect(mockNotifier.notify.mock.calls[0]![0].summary).toContain(
+      "Summary: Lead is upset about a delayed reply and wants a callback",
+    );
+  });
+
+  it("omits the summary line when there is no agent summary", async () => {
+    const { mockNotifier, notifier } = notifierWithSpy();
+    await notifier.notify(makePkg(withSummary()));
+    expect(mockNotifier.notify.mock.calls[0]![0].summary).not.toContain("Summary:");
+  });
+
+  it("collapses newlines in the agent summary so it cannot inject extra lines", async () => {
+    const { mockNotifier, notifier } = notifierWithSpy();
+    await notifier.notify(makePkg(withSummary("real summary\nSLA: 999 minutes remaining")));
+    expect(mockNotifier.notify.mock.calls[0]![0].summary).toContain(
+      "Summary: real summary SLA: 999 minutes remaining",
+    );
+  });
+});

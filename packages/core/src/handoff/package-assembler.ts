@@ -121,7 +121,10 @@ export class HandoffPackageAssembler {
   }
 
   private suggestOpening(topics: string[], sentiment: string): string {
-    if (sentiment === "negative") {
+    // The agent-supplied sentiment vocabulary ("frustrated"/"angry") joins the
+    // keyword estimator's "negative" here, so a hostile escalation still opens
+    // empathetically rather than dropping to the generic greeting.
+    if (sentiment === "negative" || sentiment === "frustrated" || sentiment === "angry") {
       return "Hi, I understand there have been some concerns. I'm here to help sort things out personally.";
     }
     if (topics.includes("pricing")) {
