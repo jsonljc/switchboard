@@ -10,6 +10,7 @@
     "governance-decision/**/*.ts",
     "riley-recommendation/**/*.ts",
     "trajectory-grading/**/*.ts",
-    "adversarial-injection/**/*.ts"
+    "adversarial-injection/**/*.ts",
+    "mira-self-brief/**/*.ts"
   ]
 }
