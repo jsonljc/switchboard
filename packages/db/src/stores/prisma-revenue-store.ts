@@ -244,29 +244,22 @@ export class PrismaRevenueStore implements RevenueStore {
       ...new Set(events.map((e) => e.bookingId).filter((b): b is string => b !== null)),
     ];
 
-    // Campaign attribution comes from the booked ConversionRecord (org-scoped).
+    // Campaign attribution comes from the booked ConversionRecord (org-scoped). bookingId is NOT
+    // unique there, so a booking can carry >1 record with differing sourceCampaignId; the
+    // earliest-touch record wins deterministically (see firstTouchCampaignByBooking) — P3-7.
     const conversions = await this.prisma.conversionRecord.findMany({
       where: { organizationId: input.orgId, bookingId: { in: bookingIds } },
-      select: { bookingId: true, sourceCampaignId: true },
+      select: { bookingId: true, sourceCampaignId: true, createdAt: true, id: true },
     });
-    const campaignByBooking = new Map<string, string | null>();
-    for (const c of conversions) {
-      if (c.bookingId && !campaignByBooking.has(c.bookingId)) {
-        campaignByBooking.set(c.bookingId, c.sourceCampaignId);
-      }
-    }
+    const campaignByBooking = firstTouchCampaignByBooking(conversions);
 
-    // Payment-receipt provenance (org-scoped) — drives the Noop/degraded exclusion.
+    // Payment-receipt provenance (org-scoped) drives the Noop/degraded exclusion: a booking counts
+    // iff it has at least one real T1 fetch-back receipt (see countablePaidBookingIds) — P3-7.
     const receipts = await this.prisma.receipt.findMany({
       where: { organizationId: input.orgId, kind: "payment", bookingId: { in: bookingIds } },
       select: { bookingId: true, provider: true, tier: true },
     });
-    const receiptByBooking = new Map<string, { provider: string | null; tier: string }>();
-    for (const r of receipts) {
-      if (r.bookingId && !receiptByBooking.has(r.bookingId)) {
-        receiptByBooking.set(r.bookingId, { provider: r.provider, tier: r.tier });
-      }
-    }
+    const countableBookingIds = countablePaidBookingIds(receipts);
 
     const rows: Array<{
       bookingId: string;
@@ -283,12 +276,9 @@ export class PrismaRevenueStore implements RevenueStore {
         // Defensive post-join guard: origin must be "live" (the WHERE already
         // constrains this in DB; this guard ensures correctness in tests/mocks).
         if (e.origin !== "live") continue;
-        const receipt = receiptByBooking.get(bookingId);
-        // Production-countable paid visit requires a real T1 fetch-back receipt
-        // from a non-Noop provider. Anything else is degraded and excluded.
-        if (!receipt || receipt.provider === "noop" || receipt.tier !== "T1_FETCH_BACK") {
-          continue;
-        }
+        // Production-countable paid visit requires a real T1 fetch-back receipt from a non-Noop
+        // provider (existential over the booking's receipts; see countableBookingIds above).
+        if (!countableBookingIds.has(bookingId)) continue;
       }
       const campaign = campaignByBooking.get(bookingId) ?? null;
       rows.push({
@@ -407,4 +397,53 @@ function mapRowToRevenueEvent(row: {
     recordedAt: row.recordedAt,
     createdAt: row.createdAt,
   };
+}
+
+// ---------------------------------------------------------------------------
+// paidVisitsByCampaign attribution helpers (deterministic — P3-7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic first-touch campaign per booking. ConversionRecord.bookingId is NOT unique, so a
+ * booking can carry more than one record with differing sourceCampaignId. Rows are totally ordered
+ * by (createdAt asc, then id asc) and the earliest-touch record wins, so the same input always
+ * yields the same attribution — the previous "first row of an unordered findMany wins" did not.
+ */
+function firstTouchCampaignByBooking(
+  conversions: Array<{
+    bookingId: string | null;
+    sourceCampaignId: string | null;
+    createdAt: Date;
+    id: string;
+  }>,
+): Map<string, string | null> {
+  const ordered = [...conversions].sort(
+    (a, b) =>
+      a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  const byBooking = new Map<string, string | null>();
+  for (const c of ordered) {
+    if (c.bookingId && !byBooking.has(c.bookingId)) byBooking.set(c.bookingId, c.sourceCampaignId);
+  }
+  return byBooking;
+}
+
+/**
+ * Bookings with AT LEAST ONE non-Noop T1 fetch-back payment receipt. This applies THIS read path's
+ * existing countable predicate (provider != "noop", tier "T1_FETCH_BACK") EXISTENTIALLY across a
+ * booking's receipts, so a co-present degraded/Noop receipt can no longer mask and
+ * non-deterministically drop a booking that also has a real T1 receipt — the previous
+ * first-receipt-of-an-unordered-findMany pick could. It mirrors the existential SHAPE of the sibling
+ * computeBookingPaidValue (any qualifying receipt -> paid), but — like the prior code here, and
+ * unchanged by this determinism fix — it does NOT additionally gate on receipt.status the way
+ * isPaidVisit does; tightening that would change which visits count as paid and is a separate concern.
+ */
+function countablePaidBookingIds(
+  receipts: Array<{ bookingId: string | null; provider: string | null; tier: string }>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const r of receipts) {
+    if (r.bookingId && r.provider !== "noop" && r.tier === "T1_FETCH_BACK") ids.add(r.bookingId);
+  }
+  return ids;
 }
