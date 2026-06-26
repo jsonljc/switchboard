@@ -5,16 +5,22 @@ import { AD_OPTIMIZER_LISTING_SLUG } from "./seed-riley-ad-optimizer-deployment.
  * not import core; the CLI composes the REAL AuditLedger over PrismaLedgerStorage
  * so the hash chain stays intact — never write AuditEntry rows raw). */
 export interface CapabilityAuditRecorder {
-  record(params: {
-    eventType: "policy.updated";
-    actorType: "user";
-    actorId: string;
-    entityType: string;
-    entityId: string;
-    riskCategory: "high";
-    summary: string;
-    snapshot: Record<string, unknown>;
-  }): Promise<unknown>;
+  record(
+    params: {
+      eventType: "policy.updated";
+      actorType: "user";
+      actorId: string;
+      entityType: string;
+      entityId: string;
+      riskCategory: "high";
+      summary: string;
+      snapshot: Record<string, unknown>;
+    },
+    // When set, the audit chain-append joins the caller's transaction
+    // (AuditLedger.record -> appendAtomic({ externalTx })), binding the audit
+    // row to the capability flip so neither can commit without the other.
+    options?: { tx?: unknown },
+  ): Promise<unknown>;
 }
 
 /**
@@ -54,29 +60,39 @@ export async function setRileyPauseSelfExecution(
   }
   const settings = (deployment.governanceSettings as Record<string, unknown> | null) ?? {};
   const previous = settings["pauseSelfExecutionEnabled"] === true;
-  await prisma.agentDeployment.update({
-    where: { id: deployment.id },
-    data: {
-      // Read-modify-write preserving every other governanceSettings key
-      // (trustLevelOverride, spendAutonomy, ...).
-      governanceSettings: { ...settings, pauseSelfExecutionEnabled: args.enabled },
-    },
-  });
-  await ledger.record({
-    eventType: "policy.updated",
-    actorType: "user",
-    actorId: args.actor,
-    entityType: "deployment",
-    entityId: deployment.id,
-    riskCategory: "high",
-    summary: `riley pauseSelfExecutionEnabled: ${previous} -> ${args.enabled} (org ${args.organizationId}, by ${args.actor})`,
-    snapshot: {
-      flag: "pauseSelfExecutionEnabled",
-      previous,
-      current: args.enabled,
-      organizationId: args.organizationId,
-      deploymentId: deployment.id,
-    },
+  // Flip + audit row commit or roll back together: the audit chain-append joins
+  // this transaction (ledger.record({ tx }) -> appendAtomic({ externalTx })), so
+  // a ledger failure can never leave a money-move capability armed or disarmed
+  // with no audit row. Mirrors provisionOrgAgentDeployments + the platform's
+  // WorkTrace + AuditEntry binding.
+  await prisma.$transaction(async (tx) => {
+    await tx.agentDeployment.update({
+      where: { id: deployment.id },
+      data: {
+        // Read-modify-write preserving every other governanceSettings key
+        // (trustLevelOverride, spendAutonomy, ...).
+        governanceSettings: { ...settings, pauseSelfExecutionEnabled: args.enabled },
+      },
+    });
+    await ledger.record(
+      {
+        eventType: "policy.updated",
+        actorType: "user",
+        actorId: args.actor,
+        entityType: "deployment",
+        entityId: deployment.id,
+        riskCategory: "high",
+        summary: `riley pauseSelfExecutionEnabled: ${previous} -> ${args.enabled} (org ${args.organizationId}, by ${args.actor})`,
+        snapshot: {
+          flag: "pauseSelfExecutionEnabled",
+          previous,
+          current: args.enabled,
+          organizationId: args.organizationId,
+          deploymentId: deployment.id,
+        },
+      },
+      { tx },
+    );
   });
   return { previous, current: args.enabled };
 }
