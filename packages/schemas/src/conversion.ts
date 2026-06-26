@@ -52,6 +52,17 @@ export interface ConversionEvent {
 
   sourceAdId?: string;
   sourceCampaignId?: string;
+
+  /**
+   * The originating agent deployment (Alex / Riley / Mira / ...) that produced
+   * this conversion, when one is known at the producer (e.g. the booking tool's
+   * trust-bound `ctx.deploymentId`). Persisted onto `ConversionRecord.agentDeploymentId`
+   * and read back by the ROI `breakdown=agent` funnel (`funnelByAgent`). Producers
+   * with no agent in scope (an inbound Meta lead, a system payment-verification)
+   * leave it undefined — honest absence, never an inferred agent.
+   */
+  agentDeploymentId?: string;
+
   occurredAt: Date;
 
   source: string;

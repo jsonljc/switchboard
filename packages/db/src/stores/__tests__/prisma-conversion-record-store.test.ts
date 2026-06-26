@@ -513,4 +513,101 @@ describe("PrismaConversionRecordStore", () => {
       });
     });
   });
+
+  describe("agent attribution (P2-19: ROI breakdown-by-agent)", () => {
+    it("persists agentDeploymentId from the event onto the create row", async () => {
+      const upsertMock = prisma.conversionRecord.upsert as ReturnType<typeof vi.fn>;
+      upsertMock.mockResolvedValue({ id: "cr_agent" });
+
+      await store.record({
+        eventId: "evt-agent",
+        organizationId: "org-1",
+        contactId: "ct-1",
+        type: "booked",
+        value: 30000,
+        occurredAt: new Date("2026-05-14T10:00:00Z"),
+        source: "calendar-book",
+        agentDeploymentId: "dep_alex_1",
+        metadata: {},
+      });
+
+      expect(upsertMock.mock.calls[0]![0].create.agentDeploymentId).toBe("dep_alex_1");
+    });
+
+    it("leaves agentDeploymentId null when the event carries no agent (honest absence)", async () => {
+      const upsertMock = prisma.conversionRecord.upsert as ReturnType<typeof vi.fn>;
+      upsertMock.mockResolvedValue({ id: "cr_no_agent" });
+
+      await store.record({
+        eventId: "evt-no-agent",
+        organizationId: "org-1",
+        contactId: "ct-1",
+        type: "inquiry",
+        value: 0,
+        occurredAt: new Date("2026-05-14T10:00:00Z"),
+        source: "meta-webhook",
+        metadata: {},
+      });
+
+      expect(upsertMock.mock.calls[0]![0].create.agentDeploymentId).toBeNull();
+    });
+
+    describe("funnelByAgent", () => {
+      const dateRange = { from: new Date("2026-04-01"), to: new Date("2026-04-30") };
+
+      it("returns a non-empty per-agent breakdown grouped by agentDeploymentId", async () => {
+        (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([
+          {
+            agentDeploymentId: "dep_alex_1",
+            type: "booked",
+            _count: { _all: 3 },
+            _sum: { value: 900 },
+          },
+          {
+            agentDeploymentId: "dep_alex_1",
+            type: "purchased",
+            _count: { _all: 1 },
+            _sum: { value: 500 },
+          },
+          {
+            agentDeploymentId: "dep_riley_2",
+            type: "booked",
+            _count: { _all: 2 },
+            _sum: { value: 400 },
+          },
+        ]);
+
+        const result = await store.funnelByAgent("org_1", dateRange);
+
+        expect(result).toHaveLength(2);
+        const alex = result.find((r) => r.deploymentId === "dep_alex_1");
+        expect(alex).toBeDefined();
+        expect(alex!.deploymentName).toBe("dep_alex_1");
+        expect(alex!.booked).toBe(3);
+        expect(alex!.purchased).toBe(1);
+        expect(alex!.totalRevenue).toBe(1400);
+        const riley = result.find((r) => r.deploymentId === "dep_riley_2");
+        expect(riley!.booked).toBe(2);
+      });
+
+      it("excludes null-agent rows from the group-by so unattributed conversions never appear", async () => {
+        const groupBy = prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>;
+        groupBy.mockResolvedValue([]);
+
+        await store.funnelByAgent("org_1", dateRange);
+
+        const where = groupBy.mock.calls[0]![0].where;
+        expect(where.agentDeploymentId).toEqual({ not: null });
+        expect(where.organizationId).toBe("org_1");
+        expect(where.occurredAt.gte).toBeInstanceOf(Date);
+        expect(where.occurredAt.lte).toBeInstanceOf(Date);
+      });
+
+      it("returns an empty breakdown when no agent-stamped records exist (honest empty, not an error)", async () => {
+        (prisma.conversionRecord.groupBy as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+        const result = await store.funnelByAgent("org_1", dateRange);
+        expect(result).toEqual([]);
+      });
+    });
+  });
 });

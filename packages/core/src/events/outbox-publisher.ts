@@ -40,6 +40,9 @@ export class OutboxPublisher {
         currency: (row.payload.currency as string | null) ?? undefined,
         sourceAdId: row.payload.sourceAdId as string | undefined,
         sourceCampaignId: row.payload.sourceCampaignId as string | undefined,
+        // Carry the producer's agent stamp through to the record write so the ROI
+        // breakdown-by-agent funnel is non-empty (absent on a legacy/agentless payload).
+        agentDeploymentId: row.payload.agentDeploymentId as string | undefined,
         occurredAt: new Date(row.payload.occurredAt as string),
         source: (row.payload.source as string) ?? "outbox",
         causationId: row.payload.causationId as string | undefined,
