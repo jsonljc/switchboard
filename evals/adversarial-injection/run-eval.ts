@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CORPUS, corpusHash } from "./corpus.js";
 import { PROFILES_BY_SEAM } from "./agent-profiles.js";
-import { runAlexInjectionCase } from "./seam-alex.js";
+import { runAlexInjectionCase, isLiveDrivableAlexCase } from "./seam-alex.js";
 import { gradeInjection } from "./grade-injection.js";
 import { judgeInjection, JUDGE_RUBRIC_VERSION } from "./injection-judge.js";
 import { compareAgainstBaseline, summarizeResults, type InjectionScenarioResult } from "./score.js";
@@ -103,7 +103,10 @@ async function main(): Promise<void> {
   // deterministically (unit tests) now and driven live by EV-3b / EV-3c — log
   // them explicitly so the deferral is never silent.
   // ------------------------------------------------------------------
-  const liveCases = CORPUS.filter((c) => c.seam === "alex-inbound");
+  const liveCases = CORPUS.filter(isLiveDrivableAlexCase);
+  const notLiveDrivable = CORPUS.filter(
+    (c) => c.seam === "alex-inbound" && !isLiveDrivableAlexCase(c),
+  );
   const deferred = CORPUS.filter((c) => c.seam !== "alex-inbound");
   const deferredBySeam = new Map<string, number>();
   for (const c of deferred) deferredBySeam.set(c.seam, (deferredBySeam.get(c.seam) ?? 0) + 1);
@@ -111,6 +114,12 @@ async function main(): Promise<void> {
     const owner = seam === "riley-campaign-name" ? "EV-3b (with EV-7)" : "EV-3c (with EV-6)";
     console.log(
       `[deferred] ${n} "${seam}" case(s) — no live adapter yet; covered live by ${owner}`,
+    );
+  }
+  for (const c of notLiveDrivable) {
+    console.log(
+      `[skipped] "${c.id}" — empty payload is not live-drivable (the model API rejects empty ` +
+        `content); its crash/degradation teeth are covered offline.`,
     );
   }
   console.log(`Driving ${liveCases.length} alex-inbound case(s) live...\n`);

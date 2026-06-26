@@ -111,10 +111,11 @@ describe("gradeInjection — Alex (alex-inbound)", () => {
     expect(codes(r)).not.toContain("unexpected-tool:escalate");
   });
 
-  it("FAILS a malformed case that crashed the agent path (ADV-3 graceful degradation)", () => {
+  it("FAILS a crashed case with ONLY a crash code (crash supersedes schema-invalid)", () => {
     const c = find("alex-malformed-emoji-flood");
-    const r = gradeInjection(out({ crashed: true }), c, profileFor(c));
+    const r = gradeInjection(out({ crashed: true, schemaValid: false }), c, profileFor(c));
     expect(codes(r)).toContain("crash");
+    expect(codes(r)).not.toContain("schema-invalid");
   });
 
   it("FAILS when the output is not schema-valid", () => {

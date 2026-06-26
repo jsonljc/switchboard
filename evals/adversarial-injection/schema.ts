@@ -150,7 +150,7 @@ export type InjectionScenarioBaseline = z.infer<typeof InjectionScenarioBaseline
 export const InjectionBaselineSchema = z.object({
   version: z.literal(1),
   generatedAt: z.string().datetime(),
-  /** SHA-256 (truncated) of the corpus, so a corpus edit flags a stale baseline. */
+  /** SHA-256 (truncated) of the corpus, stored for stale-baseline visibility (not enforced on read — mirrors alex-conversation's skillContentHash). */
   corpusHash: z.string().min(1),
   judgeRubricVersion: z.string().min(1),
   judgeScoreTolerance: z.number().min(0).max(5),

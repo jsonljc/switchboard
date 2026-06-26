@@ -1,12 +1,18 @@
 import { describe, it, expect } from "vitest";
 import type { SkillExecutionResult } from "@switchboard/core/skill-runtime";
-import { runAlexInjectionCase, buildAlexFixture, toNormalizedToolCalls } from "../seam-alex.js";
+import {
+  runAlexInjectionCase,
+  buildAlexFixture,
+  toNormalizedToolCalls,
+  isLiveDrivableAlexCase,
+} from "../seam-alex.js";
 import { gradeInjection } from "../grade-injection.js";
 import { ALEX_PROFILE, PROFILES_BY_SEAM } from "../agent-profiles.js";
 import { CORPUS } from "../corpus.js";
 import type { InjectionCase } from "../schema.js";
 import type { ExecutorLike } from "../../alex-conversation/run-conversation.js";
 import type { RecordedToolCall } from "../../alex-conversation/mock-tools.js";
+import { ConversationFixtureSchema } from "../../alex-conversation/schema.js";
 
 const find = (id: string): InjectionCase => {
   const c = CORPUS.find((x) => x.id === id);
@@ -60,6 +66,32 @@ describe("buildAlexFixture", () => {
     const f = buildAlexFixture(find("alex-malformed-empty"));
     expect(f.turns[0]).toEqual({ role: "lead", content: "" });
   });
+
+  it("builds a ConversationFixtureSchema-valid fixture for every live-drivable Alex case", () => {
+    for (const c of CORPUS.filter(isLiveDrivableAlexCase)) {
+      const parsed = ConversationFixtureSchema.safeParse(buildAlexFixture(c));
+      expect(parsed.success, `fixture for "${c.id}" must be schema-valid`).toBe(true);
+    }
+  });
+
+  it("yields a schema-INVALID fixture for the empty case (why it is excluded from the live drive)", () => {
+    const parsed = ConversationFixtureSchema.safeParse(
+      buildAlexFixture(find("alex-malformed-empty")),
+    );
+    expect(parsed.success).toBe(false); // LeadTurnSchema requires content.min(1)
+  });
+});
+
+describe("isLiveDrivableAlexCase", () => {
+  it("is true for a non-empty Alex inbound case", () => {
+    expect(isLiveDrivableAlexCase(find("alex-ignore-jailbreak"))).toBe(true);
+  });
+  it("is false for the empty Alex case (the model API rejects empty content)", () => {
+    expect(isLiveDrivableAlexCase(find("alex-malformed-empty"))).toBe(false);
+  });
+  it("is false for a non-Alex seam case", () => {
+    expect(isLiveDrivableAlexCase(find("riley-set-budget-maxout"))).toBe(false);
+  });
 });
 
 describe("runAlexInjectionCase (offline, injected executor) → gradeInjection", () => {
@@ -105,6 +137,15 @@ describe("runAlexInjectionCase (offline, injected executor) → gradeInjection",
     expect(output.schemaValid).toBe(false);
     const r = gradeInjection(output, c, ALEX_PROFILE);
     expect(r.violations.map((v) => v.code)).toContain("crash");
+  });
+
+  it("handles the empty-payload case gracefully offline (seam does not choke on empty input)", async () => {
+    const c = find("alex-malformed-empty");
+    const output = await runAlexInjectionCase(c, {
+      executor: cannedExecutor("Hi! What treatment brings you in?"),
+    });
+    expect(output.crashed).toBe(false);
+    expect(gradeInjection(output, c, ALEX_PROFILE).pass).toBe(true);
   });
 });
 
