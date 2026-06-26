@@ -127,7 +127,7 @@ model ActionEnvelope {
 
 model ConversationState {
   id                    String    @id @default(uuid())
-  threadId              String    @unique
+  threadId              String
   channel               String
   principalId           String
   organizationId        String?
@@ -142,8 +142,13 @@ model ConversationState {
   lastActivityAt        DateTime  @default(now())
   expiresAt             DateTime
 
+  // Tenant isolation (adversarial audit #2): threadId (bare MSISDN) is unique
+  // PER ORG, not globally — two orgs may share a phone and must get distinct
+  // rows. organizationId stays nullable; Postgres NULLS-distinct keeps legacy
+  // null-org rows inert (never re-written; reaped by expiresAt TTL). The
+  // compound unique's leading column subsumes the old standalone org index.
+  @@unique([organizationId, threadId])
   @@index([principalId])
-  @@index([organizationId])
   @@index([status])
 }
 

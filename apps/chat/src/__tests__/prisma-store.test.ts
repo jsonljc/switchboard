@@ -69,8 +69,7 @@ describe("PrismaConversationStore integration", () => {
         upsert: async (args: unknown) => {
           upsertArgs.push(args);
         },
-        // findUnique required by sticky human_override guard in save()
-        findUnique: async () => null,
+        // findFirst backs the org-scoped sticky human_override guard read in save()
         findFirst: async () => null,
         findMany: async () => [],
         deleteMany: async () => ({ count: 0 }),
@@ -110,9 +109,14 @@ describe("PrismaConversationStore integration", () => {
 
     expect(upsertArgs).toHaveLength(1);
     const arg = upsertArgs[0] as {
+      where: { organizationId_threadId: { organizationId: string; threadId: string } };
       create: { messages: string };
       update: { messages: string };
     };
+    // audit #2: upsert keys on the per-org compound unique, populated with the row's org.
+    expect(arg.where).toEqual({
+      organizationId_threadId: { organizationId: "org_a", threadId: "thread_1" },
+    });
     const createMessages = JSON.parse(arg.create.messages);
     const updateMessages = JSON.parse(arg.update.messages);
     expect(createMessages).toHaveLength(2);
@@ -187,11 +191,11 @@ describe("PrismaConversationStore integration", () => {
 // ---------------------------------------------------------------------------
 // Cross-tenant defense — TI-5/TI-6
 //
-// threadId is @unique at the schema level, so the failure mode is not
-// "two orgs share a threadId" but rather "a stale row's organizationId differs
-// from (or is null relative to) the requesting org's". These tests assert that
-// PrismaConversationStore.get / delete / listActive each pass the requesting
-// orgId through to Prisma, so a stale cross-tenant row cannot leak.
+// threadId is unique PER ORG (audit #2 — @@unique([organizationId, threadId])),
+// so two orgs CAN share a threadId (the same phone) and each tenant gets its own
+// row. These tests assert that PrismaConversationStore.get / delete / listActive
+// each pass the requesting orgId through to Prisma, so one tenant's row never
+// leaks into another's read/delete.
 // ---------------------------------------------------------------------------
 
 describe("PrismaConversationStore cross-tenant scoping (TI-5/TI-6)", () => {
@@ -369,13 +373,14 @@ describe("PrismaConversationStore — sticky human_override guard", () => {
   function makeState(
     status: string,
     threadId = "thread-override",
+    organizationId: string | null = "org-1",
   ): Parameters<
     (typeof import("../conversation/prisma-store.js"))["PrismaConversationStore"]["prototype"]["save"]
   >[0] {
     return {
       id: "conv-override",
       threadId,
-      organizationId: "org-1",
+      organizationId,
       channel: "web_widget",
       principalId: "visitor-abc",
       status: status as "active" | "human_override",
@@ -400,7 +405,7 @@ describe("PrismaConversationStore — sticky human_override guard", () => {
 
     const mockPrisma = {
       conversationState: {
-        findUnique: async (_args: unknown) =>
+        findFirst: async (_args: unknown) =>
           // Simulate existing row with human_override
           ({ status: "human_override" }),
         upsert: async (args: unknown) => {
@@ -426,7 +431,7 @@ describe("PrismaConversationStore — sticky human_override guard", () => {
 
     const mockPrisma = {
       conversationState: {
-        findUnique: async (_args: unknown) =>
+        findFirst: async (_args: unknown) =>
           // Existing row already has human_override
           ({ status: "human_override" }),
         upsert: async (args: unknown) => {
@@ -451,7 +456,7 @@ describe("PrismaConversationStore — sticky human_override guard", () => {
 
     const mockPrisma = {
       conversationState: {
-        findUnique: async (_args: unknown) =>
+        findFirst: async (_args: unknown) =>
           // Existing row has normal active status
           ({ status: "active" }),
         upsert: async (args: unknown) => {
@@ -476,7 +481,7 @@ describe("PrismaConversationStore — sticky human_override guard", () => {
 
     const mockPrisma = {
       conversationState: {
-        findUnique: async (_args: unknown) =>
+        findFirst: async (_args: unknown) =>
           // No existing row
           null,
         upsert: async (args: unknown) => {
@@ -493,5 +498,24 @@ describe("PrismaConversationStore — sticky human_override guard", () => {
     expect(upsertArgs).toHaveLength(1);
     const arg = upsertArgs[0] as { update: { status: string } };
     expect(arg.update.status).toBe("active");
+  });
+
+  it("save rejects a null organizationId (audit #2 — org-scoped store contract)", async () => {
+    // The per-org compound unique cannot key on a null org; the store fails closed
+    // rather than emit an unkeyable write or a duplicate inert row.
+    const mockPrisma = {
+      conversationState: {
+        findFirst: async () => null,
+        upsert: async () => {
+          throw new Error("upsert must not be reached for a null-org save");
+        },
+      },
+    };
+    const { PrismaConversationStore } = await import("../conversation/prisma-store.js");
+    const store = new PrismaConversationStore(mockPrisma as never);
+
+    await expect(store.save(makeState("active", "thread-null", null))).rejects.toThrow(
+      /non-null organizationId/,
+    );
   });
 });

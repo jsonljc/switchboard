@@ -52,6 +52,8 @@ export type { DerivedAgentState } from "./storage/agent-state-deriver.js";
 export { PrismaHandoffStore } from "./stores/handoff-store.js";
 export { PrismaConversationStore } from "./stores/prisma-conversation-store.js";
 export { PrismaConversationStateStore } from "./stores/prisma-conversation-state-store.js";
+export { setConversationStatusScoped } from "./stores/set-conversation-status-scoped.js";
+export type { SetConversationStatusScopedParams } from "./stores/set-conversation-status-scoped.js";
 export { PrismaDeploymentLifecycleStore } from "./stores/prisma-deployment-lifecycle-store.js";
 export { PrismaKnowledgeStore } from "./stores/prisma-knowledge-store.js";
 export {

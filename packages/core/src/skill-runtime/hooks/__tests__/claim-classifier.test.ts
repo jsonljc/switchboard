@@ -157,7 +157,7 @@ function fakeHandoffStore() {
 function fakeConversationStore() {
   const statuses: Record<string, string> = {};
   return {
-    setConversationStatus: async (id: string, s: string) => {
+    setConversationStatus: async (id: string, _organizationId: string, s: string) => {
       statuses[id] = s;
     },
     getStatus: (id: string) => statuses[id],

@@ -366,7 +366,11 @@ export class ClaimClassifierHook implements SkillHook {
     } catch (err) {
       console.error("[claim-classifier] handoffStore.save threw on fail-closed", err);
     }
-    await this.deps.conversationStore.setConversationStatus(ctx.sessionId, "human_override");
+    await this.deps.conversationStore.setConversationStatus(
+      ctx.sessionId,
+      ctx.orgId,
+      "human_override",
+    );
     result.response = handoff;
   }
 
@@ -416,7 +420,11 @@ export class ClaimClassifierHook implements SkillHook {
     } catch (err) {
       console.error("[claim-classifier] handoffStore.save threw on escalate", err);
     }
-    await this.deps.conversationStore.setConversationStatus(ctx.sessionId, "human_override");
+    await this.deps.conversationStore.setConversationStatus(
+      ctx.sessionId,
+      ctx.orgId,
+      "human_override",
+    );
     result.response = handoff;
   }
 

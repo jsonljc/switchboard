@@ -48,7 +48,10 @@ async function dispatchResponse(params: {
 
   // Re-check override status — operator may have toggled during skill execution
   if (conversationStore.getConversationStatus) {
-    const postStatus = await conversationStore.getConversationStatus(sessionId);
+    const postStatus = await conversationStore.getConversationStatus(
+      sessionId,
+      resolved.organizationId,
+    );
     if (postStatus === "human_override") {
       // Operator took over mid-flight — discard AI response, persist it silently
       if (response.ok) {
@@ -245,7 +248,10 @@ export class ChannelGateway {
 
     // 4b. Check for human override — skip skill dispatch if owner has taken over
     if (this.config.conversationStore.getConversationStatus) {
-      const status = await this.config.conversationStore.getConversationStatus(message.sessionId);
+      const status = await this.config.conversationStore.getConversationStatus(
+        message.sessionId,
+        resolved.organizationId,
+      );
       if (status === "human_override") {
         return;
       }

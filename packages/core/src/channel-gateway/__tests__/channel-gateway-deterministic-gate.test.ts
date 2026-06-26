@@ -141,6 +141,20 @@ function makeStatusSetter(): StatusSetterSpy {
 }
 
 /**
+ * Asserts the gate flipped the session to human_override — org-scoped (audit #2,
+ * arg 2 = organizationId) — with the bare-sessionId upsertContext the gateway
+ * adapter upserts the row with. principalId is the bare sessionId (deliverable
+ * address), matching the normal inbound path, NOT a "visitor-" prefix (not a
+ * valid WhatsApp Graph `to`, would silently fail operator sends).
+ */
+function expectOverrideFlip(spy: Spy): void {
+  expect(spy).toHaveBeenCalledWith("sess-1", "org-1", "human_override", {
+    channel: "web_widget",
+    principalId: "sess-1",
+  });
+}
+
+/**
  * Builds a minimal ChannelGatewayConfig with:
  * - governance deps wired (resolver, triggerLoader, verdictStore, postureCache)
  * - handoffStore and conversationStatusSetter wired via overrides
@@ -370,10 +384,7 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     // Status flipped. principalId is the bare sessionId (deliverable address),
     // matching the normal inbound path, NOT a "visitor-" prefixed value, which
     // is not a valid WhatsApp Graph `to` and would silently fail operator sends.
-    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
-      channel: "web_widget",
-      principalId: "sess-1",
-    });
+    expectOverrideFlip(statusSetter.setConversationStatus);
 
     // Handoff saved. pregnancy_breastfeeding is a medical category: handoff
     // reason routes to medical_safety (slice 2); non-medical categories keep
@@ -478,10 +489,7 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
 
     // Status flipped. principalId is the bare sessionId (deliverable address)
     // on the fail-closed cached-enforce path too.
-    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
-      channel: "web_widget",
-      principalId: "sess-1",
-    });
+    expectOverrideFlip(statusSetter.setConversationStatus);
 
     // SG handoff text sent
     expect(sendSpy).toHaveBeenCalledOnce();
@@ -645,10 +653,7 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     const sentText: string = sendSpy.mock.calls[0]![0];
     expect(sentText).toContain(SG_HANDOFF_SUBSTRING);
     // Status still flipped, with the bare deliverable principalId
-    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
-      channel: "web_widget",
-      principalId: "sess-1",
-    });
+    expectOverrideFlip(statusSetter.setConversationStatus);
     // Handoff still saved
     expect(handoffStore.save).toHaveBeenCalledOnce();
   });
@@ -680,22 +685,12 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     // Submit must NOT be called (gate blocked)
     expect(submitSpy).not.toHaveBeenCalled();
 
-    // setConversationStatus must be called with 3 arguments:
-    //   sessionId, "human_override", { channel, principalId }
-    // This is the contract the gateway adapter uses to upsert the row.
+    // setConversationStatus must be called once with the 4-arg org-scoped contract:
+    //   (sessionId, organizationId, "human_override", { channel, principalId })
+    // the gateway adapter uses to upsert the row. See expectOverrideFlip for the
+    // bare-sessionId principalId rationale.
     expect(statusSetter.setConversationStatus).toHaveBeenCalledOnce();
-    const [calledSessionId, calledStatus, calledCtx] = statusSetter.setConversationStatus.mock
-      .calls[0] as [string, string, { channel: string; principalId: string } | undefined];
-    expect(calledSessionId).toBe("sess-1");
-    expect(calledStatus).toBe("human_override");
-    // upsertContext must be present and correctly derived
-    expect(calledCtx).not.toBeUndefined();
-    expect(calledCtx!.channel).toBe("web_widget");
-    // principalId must be the bare sessionId: it is delivery data read back as
-    // destinationPrincipalId and POSTed to the channel `to`. A "visitor-" prefix
-    // is not a valid WhatsApp Graph address and would silently fail. This aligns
-    // the gate path with the normal inbound path (managed-webhook mints bare E.164).
-    expect(calledCtx!.principalId).toBe("sess-1");
+    expectOverrideFlip(statusSetter.setConversationStatus);
   });
 
   // -------------------------------------------------------------------------
@@ -721,9 +716,11 @@ describe("ChannelGateway — pre-input deterministic gate", () => {
     // Track which status is "stored" so the second-message check reflects the flip.
     let storedStatus: string | null = null;
     const trackingStatusSetter: StatusSetterSpy = {
-      setConversationStatus: vi.fn().mockImplementation(async (_sid: string, status: string) => {
-        storedStatus = status;
-      }),
+      setConversationStatus: vi
+        .fn()
+        .mockImplementation(async (_sid: string, _org: string, status: string) => {
+          storedStatus = status;
+        }),
     };
 
     // conversationStore.getConversationStatus returns storedStatus after the flip.
@@ -827,10 +824,7 @@ describe("ChannelGateway — freeze-gate live path (real triggers)", () => {
     const v = verdictStore.save.mock.calls[0]![0] as SaveGovernanceVerdictInput;
     expect(v.action).toBe("escalate");
     expect(v.reasonCode).toBe("sensitive_inbound");
-    expect(statusSetter.setConversationStatus).toHaveBeenCalledWith("sess-1", "human_override", {
-      channel: "web_widget",
-      principalId: "sess-1",
-    });
+    expectOverrideFlip(statusSetter.setConversationStatus);
     expect(handoffStore.save).toHaveBeenCalledOnce();
     expect(sendSpy.mock.calls[0]![0]).toContain(SG_HANDOFF_SUBSTRING);
   });

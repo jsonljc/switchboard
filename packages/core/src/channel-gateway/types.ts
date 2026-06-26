@@ -47,6 +47,7 @@ export type { ConversationStatusUpsertContext };
 export interface GatewayConversationStatusSetter {
   setConversationStatus(
     sessionId: string,
+    organizationId: string,
     status: string,
     upsertContext?: ConversationStatusUpsertContext,
   ): Promise<void>;
@@ -192,7 +193,8 @@ export interface GatewayConversationStore {
     messages: Array<{ role: string; content: string }>;
   }>;
   addMessage(conversationId: string, role: string, content: string): Promise<void>;
-  getConversationStatus?(sessionId: string): Promise<string | null>;
+  /** Org-scoped (audit #2): a phone shared across orgs must read only its own row. */
+  getConversationStatus?(sessionId: string, organizationId: string): Promise<string | null>;
 }
 
 export interface IncomingChannelMessage {
