@@ -6,7 +6,7 @@
 import type { SkillTool, SkillRequestContext } from "../types.js";
 import type { ToolResult } from "../tool-result.js";
 import { ok, fail } from "../tool-result.js";
-import type { PaymentPort } from "@switchboard/schemas";
+import type { PaymentPort, SupportedCurrency } from "@switchboard/schemas";
 
 /** Per-org PaymentPort resolver. Typed here (not imported from apps/api) so
  *  core stays at L3 — it depends only on the L1 PaymentPort type. The concrete
@@ -26,10 +26,17 @@ interface DepositLinkToolDeps {
   paymentPortFactory: PaymentPortFactory;
   findById: BookingLookup["findById"];
   /** Deposit amount in minor units (cents). Injected dep until per-org deposit
-   *  pricing is wired (mirrors calendar-book.ts defaultCurrency convention). */
+   *  pricing is wired. */
   depositAmountCents: number;
-  /** ISO-4217 currency for the deposit link. */
-  defaultCurrency: string;
+  /**
+   * Resolves the clinic's settlement currency from its market, keyed by the trusted
+   * `ctx.deploymentId` (never LLM input). Returns null when the market cannot be
+   * resolved (no/corrupt governanceConfig). The tool fails CLOSED on null: a deposit
+   * is never charged in a guessed currency. apps/api wires this to the same
+   * governanceConfigResolver the gates use, so the charge currency and the gate
+   * jurisdiction can never disagree.
+   */
+  resolveCurrency: (deploymentId: string) => Promise<SupportedCurrency | null>;
 }
 
 export type DepositLinkToolFactory = (ctx: SkillRequestContext) => SkillTool;
@@ -111,12 +118,30 @@ export function createDepositLinkToolFactory(deps: DepositLinkToolDeps): Deposit
             );
           }
 
+          // Resolve the clinic's currency from its market BEFORE touching the
+          // payment port. Fail closed: a null currency means the market is unknown,
+          // and no charge is strictly safer than a wrong-currency charge. For a
+          // P2-A-seeded org this branch is unreachable (a config always resolves);
+          // it is the defence-in-depth guarantee that money never moves blind.
+          const currency = await deps.resolveCurrency(ctx.deploymentId);
+          if (!currency) {
+            return fail(
+              "CURRENCY_UNRESOLVED",
+              "The clinic's billing currency is not configured, so a deposit cannot be issued.",
+              {
+                retryable: false,
+                modelRemediation:
+                  "Do not ask the customer to pay. Hand off so an operator can finish billing setup.",
+              },
+            );
+          }
+
           const port = await deps.paymentPortFactory(orgId);
           const link = await port.createDepositLink({
             bookingId,
             organizationId: orgId,
             amountCents: deps.depositAmountCents,
-            currency: deps.defaultCurrency,
+            currency,
           });
 
           return ok({

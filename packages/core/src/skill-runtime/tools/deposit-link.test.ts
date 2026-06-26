@@ -29,7 +29,7 @@ function makeDeps(booking: { id: string; organizationId: string; status: string 
     paymentPortFactory: vi.fn(async (_orgId: string) => paymentPort),
     findById,
     depositAmountCents: 5000,
-    defaultCurrency: "SGD",
+    resolveCurrency: async (_deploymentId: string): Promise<"SGD" | "MYR" | null> => "SGD",
     _createDepositLink: createDepositLink,
   };
 }
@@ -54,6 +54,29 @@ describe("deposit-link tool factory", () => {
       externalReference: "noop_pay_bk_1",
       amountCents: 5000,
     });
+    // The default SG deployment charges SGD (behaviour unchanged for existing orgs).
+    expect(deps._createDepositLink).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: "SGD" }),
+    );
+  });
+
+  it("charges in the currency derived from the deployment jurisdiction (MY -> MYR)", async () => {
+    const d = { ...deps, resolveCurrency: async () => "MYR" as const };
+    const tool = createDepositLinkToolFactory(d)(TEST_CONTEXT);
+    const result = await tool.operations["deposit.issue"]!.execute({ bookingId: "bk_1" });
+    expect(result.status).toBe("success");
+    expect(d._createDepositLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "MYR" }));
+  });
+
+  it("fails closed and does NOT call the payment port when currency cannot be resolved", async () => {
+    const d = { ...deps, resolveCurrency: async () => null };
+    const tool = createDepositLinkToolFactory(d)(TEST_CONTEXT);
+    const result = await tool.operations["deposit.issue"]!.execute({ bookingId: "bk_1" });
+    expect(result.status).toBe("error");
+    expect(result.error!.code).toBe("CURRENCY_UNRESOLVED");
+    // The safety invariant: no charge is issued in any currency when the market is unknown.
+    expect(d._createDepositLink).not.toHaveBeenCalled();
+    expect(d.paymentPortFactory).not.toHaveBeenCalled();
   });
 
   it("fails MISSING_BOOKING when the booking does not exist", async () => {
