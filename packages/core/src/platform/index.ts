@@ -64,6 +64,19 @@ export type {
   ReapStrandedClaimsConfig,
   ReapStrandedClaimsResult,
 } from "./stranded-claim-reaper.js";
+// A8b-2 / rank-18: stalled pending_confirmation booking reaper (orchestrator + constants).
+export {
+  reapStalledBookings,
+  STALLED_BOOKING_MAX_AGE_MS,
+  STALLED_BOOKING_REAP_LIMIT,
+} from "./stalled-booking-reaper.js";
+export type {
+  StalledBookingReaperStore,
+  StalledPendingBooking,
+  ReapStalledBookingsDeps,
+  ReapStalledBookingsConfig,
+  ReapStalledBookingsResult,
+} from "./stalled-booking-reaper.js";
 export {
   WorkTraceIntegrityError,
   assertExecutionAdmissible,
