@@ -56,13 +56,6 @@ export interface RecommendationInput {
    * (signal/CAPI) carry a 0/0/0 floor and pass regardless.
    */
   evidence: { clicks: number; conversions: number; days: number };
-  /**
-   * Optional flag set externally (e.g. by CAPI dispatch tracker) when no
-   * Schedule events have been received in 7+ days for a CTWA campaign.
-   * The recommendation engine itself does not have visibility into CAPI
-   * dispatch state, so this is a heuristic input rather than computed.
-   */
-  capiAttributionStale?: boolean;
   /** D7-2 (first learning wire): a bounded, abstaining per-kind confidence modifier from
    * the org's operator approve/reject history (confidence-modifier.ts), applied once per
    * rec, scaling the hardcoded base prior. Absent ⇒ no adjustment (back-compat). */
@@ -423,24 +416,6 @@ export function generateRecommendations(
     );
   }
 
-  // CAPI attribution stale — externally flagged, no internal computation
-  if (input.capiAttributionStale) {
-    results.push(
-      makeRec(
-        base,
-        "harden_capi_attribution",
-        0.7,
-        "this_week",
-        "No CAPI Schedule events received in 7+ days — Meta cannot optimize without signal",
-        [
-          "Verify CAPI access token and Pixel ID configuration",
-          "Re-run a Schedule test event from the booking system",
-          "Confirm event_id deduplication matches browser pixel",
-        ],
-      ),
-    );
-  }
-
   // Hold: landing_page_drop
   if (hasDiagnosis(diagnoses, "landing_page_drop")) {
     results.push(
@@ -484,6 +459,45 @@ export function generateRecommendations(
   // is empty, so it never changes an existing rec/watch/insight outcome.
   const audienceOfferMismatch = audienceOfferMismatchIfSilent(diagnoses, base, withBreach);
   return audienceOfferMismatch ? [...withBreach, audienceOfferMismatch] : withBreach;
+}
+
+// ── CAPI Attribution Recommendation ──
+
+/**
+ * Account-level campaignId for the CAPI-attribution-stale advisory. CAPI is account-level,
+ * not campaign-level. This is the same literal the source-reallocation analyzer uses for its
+ * account-scope recs, so the emission/report/arbitration pipeline already handles it; it is
+ * duplicated here (not imported) to keep the one-way import graph intact: analyzers depend on
+ * this engine, never the reverse.
+ */
+const CAPI_ATTRIBUTION_CAMPAIGN_ID = "account";
+
+/**
+ * Account-level "CAPI attribution stale" advisory (Riley). Fires when the weekly audit's
+ * denominator step-change detector reports the "zero attributed conversions despite sustained
+ * real traffic" signature, i.e. a suspected account-wide pixel/CAPI conversion outage: Meta is
+ * receiving ad traffic but no attributed conversions, so it cannot optimize. Produced ONCE per
+ * account (mirroring generateSignalHealthRecommendations), never per-campaign. Returns null when
+ * attribution is not stale, so the caller appends nothing. Non-mutating and measurement-family,
+ * so it survives the measurement_untrusted demotion the same outage triggers and is the
+ * actionable fix paired with that hold.
+ */
+export function generateCapiAttributionStaleRecommendation(
+  capiAttributionStale: boolean,
+): RecommendationOutput | null {
+  if (!capiAttributionStale) return null;
+  return makeRec(
+    { campaignId: CAPI_ATTRIBUTION_CAMPAIGN_ID, campaignName: "the ad account" },
+    "harden_capi_attribution",
+    0.7,
+    "this_week",
+    "No attributed conversions are reaching Meta despite sustained ad traffic. The pixel/CAPI conversion signal appears stale, so Meta cannot optimize",
+    [
+      "Verify the CAPI access token and Pixel ID configuration",
+      "Re-run a test conversion event from the booking system and confirm it lands in Events Manager",
+      "Confirm event_id deduplication matches the browser pixel",
+    ],
+  );
 }
 
 // ── Signal Health Recommendations ──

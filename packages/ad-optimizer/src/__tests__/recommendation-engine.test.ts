@@ -1,6 +1,9 @@
 // packages/ad-optimizer/src/__tests__/recommendation-engine.test.ts
 import { describe, it, expect } from "vitest";
-import { generateRecommendations } from "../recommendation-engine.js";
+import {
+  generateRecommendations,
+  generateCapiAttributionStaleRecommendation,
+} from "../recommendation-engine.js";
 import type { RecommendationInput } from "../recommendation-engine.js";
 import type { Diagnosis } from "../metric-diagnostician.js";
 import type {
@@ -366,29 +369,10 @@ describe("generateRecommendations", () => {
     expect(recs(result).some((r) => r.action === "switch_optimization_event")).toBe(true);
   });
 
-  it("emits harden_capi_attribution when capiAttributionStale flag is true", () => {
+  it("does NOT emit harden_capi_attribution from the per-campaign engine (it is account-level)", () => {
     const input: RecommendationInput = {
-      campaignId: "camp-capi-stale",
-      campaignName: "Stale CAPI",
-      diagnoses: [],
-      deltas: [],
-      targetCPA: 100,
-      targetROAS: 3,
-      currentSpend: 5000,
-      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
-      evidence: { clicks: 1000, conversions: 100, days: 7 },
-      capiAttributionStale: true,
-    };
-
-    const result = generateRecommendations(input);
-
-    expect(recs(result).find((r) => r.action === "harden_capi_attribution")).toBeDefined();
-  });
-
-  it("does NOT emit harden_capi_attribution when capiAttributionStale is unset", () => {
-    const input: RecommendationInput = {
-      campaignId: "camp-capi-fresh",
-      campaignName: "Fresh CAPI",
+      campaignId: "camp-capi",
+      campaignName: "Any campaign",
       diagnoses: [],
       deltas: [],
       targetCPA: 100,
@@ -401,6 +385,20 @@ describe("generateRecommendations", () => {
     const result = generateRecommendations(input);
 
     expect(recs(result).find((r) => r.action === "harden_capi_attribution")).toBeUndefined();
+  });
+
+  describe("generateCapiAttributionStaleRecommendation", () => {
+    it("emits one account-level harden_capi_attribution rec when attribution is stale", () => {
+      const rec = generateCapiAttributionStaleRecommendation(true);
+      expect(rec).not.toBeNull();
+      expect(rec?.action).toBe("harden_capi_attribution");
+      expect(rec?.campaignId).toBe("account");
+      expect(rec?.urgency).toBe("this_week");
+    });
+
+    it("returns null when attribution is not stale", () => {
+      expect(generateCapiAttributionStaleRecommendation(false)).toBeNull();
+    });
   });
 
   it("adds learning phase reset warning to restructure recommendations", () => {
