@@ -25,6 +25,7 @@ export const DELIVER_WEEKLY_REPORT_INTENT = "ledger.deliver_weekly_report";
 export const ERASE_CONTACT_INTENT = "operator.erase_contact";
 export const MEMORY_WRITE_INTENT = "memory.write";
 export const GOVERNANCE_SET_GATE_MODE_INTENT = "governance.set_gate_mode";
+export const GOVERNANCE_SET_MARKET_INTENT = "governance.set_market";
 
 /**
  * Sentinel deployment ID used for admin-consent verdict context. The admin

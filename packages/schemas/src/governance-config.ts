@@ -11,10 +11,18 @@ export type GovernanceMode = z.infer<typeof GovernanceModeSchema>;
 export const JURISDICTIONS = ["SG", "MY"] as const;
 export type Jurisdiction = (typeof JURISDICTIONS)[number];
 
+/** Clinic regulatory type. Single source for the enum AND type, mirroring JURISDICTIONS. */
+export const CLINIC_TYPES = ["medical", "nonMedical"] as const;
+export type ClinicType = (typeof CLINIC_TYPES)[number];
+
+/** Zod enums reused by the market-update params schema so config + params share one source. */
+export const JurisdictionSchema = z.enum(JURISDICTIONS);
+export const ClinicTypeSchema = z.enum(CLINIC_TYPES);
+
 export const GovernanceConfigSchema = z
   .object({
-    jurisdiction: z.enum(JURISDICTIONS),
-    clinicType: z.enum(["medical", "nonMedical"]),
+    jurisdiction: JurisdictionSchema,
+    clinicType: ClinicTypeSchema,
     deterministicGate: z
       .object({
         mode: GovernanceModeSchema.default("off"),

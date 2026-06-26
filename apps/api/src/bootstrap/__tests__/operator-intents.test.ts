@@ -19,6 +19,7 @@ import {
   DELIVER_WEEKLY_REPORT_INTENT,
   OPERATOR_INTENT_ERROR_CODES,
   GOVERNANCE_SET_GATE_MODE_INTENT,
+  GOVERNANCE_SET_MARKET_INTENT,
   type WeeklyReportDeliveryWriter,
 } from "../operator-intents.js";
 import { SERVICE_ONLY_INGRESS_INTENTS } from "../../routes/service-only-intents.js";
@@ -562,5 +563,43 @@ describe("bootstrapOperatorIntents: governance.set_gate_mode (enforce-flip slice
 
   it("is NOT a service-only intent (an operator submits it on the public edge)", () => {
     expect(SERVICE_ONLY_INGRESS_INTENTS.has(GOVERNANCE_SET_GATE_MODE_INTENT)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-B slice 2: governance.set_market registers as an operator_mutation,
+// system_auto_approved, api-only intent (an operator sets the org's market from
+// onboarding/settings). No readiness gate — market is a declaration of fact.
+// ---------------------------------------------------------------------------
+describe("bootstrapOperatorIntents: governance.set_market (P2-B slice 2)", () => {
+  const governanceSetMarket = {
+    writer: { setMarket: vi.fn().mockResolvedValue({ id: "dep-1" }) },
+  };
+
+  it("registers system_auto_approved + operator_mutation + api-only when the dep is provided", () => {
+    const intentRegistry = new IntentRegistry();
+    const modeRegistry = new ExecutionModeRegistry();
+
+    bootstrapOperatorIntents({ intentRegistry, modeRegistry, governanceSetMarket });
+
+    const registration = intentRegistry.lookup(GOVERNANCE_SET_MARKET_INTENT);
+    expect(registration).toBeDefined();
+    expect(registration?.approvalMode).toBe("system_auto_approved");
+    expect(registration?.executor).toEqual({ mode: "operator_mutation" });
+    expect(registration?.spendBearing ?? false).toBe(false);
+    expect(intentRegistry.validateTrigger(GOVERNANCE_SET_MARKET_INTENT, "api")).toBe(true);
+    expect(intentRegistry.validateTrigger(GOVERNANCE_SET_MARKET_INTENT, "chat")).toBe(false);
+    expect(modeRegistry.hasMode("operator_mutation")).toBe(true);
+  });
+
+  it("does NOT register the intent when the dep is absent (default-off wiring)", () => {
+    const intentRegistry = new IntentRegistry();
+    const modeRegistry = new ExecutionModeRegistry();
+    bootstrapOperatorIntents({ intentRegistry, modeRegistry });
+    expect(intentRegistry.lookup(GOVERNANCE_SET_MARKET_INTENT)).toBeUndefined();
+  });
+
+  it("is NOT a service-only intent (an operator submits it on the public edge)", () => {
+    expect(SERVICE_ONLY_INGRESS_INTENTS.has(GOVERNANCE_SET_MARKET_INTENT)).toBe(false);
   });
 });
