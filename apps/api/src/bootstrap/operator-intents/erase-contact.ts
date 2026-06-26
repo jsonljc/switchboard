@@ -73,7 +73,7 @@ export function buildEraseContactHandler(eraser: OperatorContactEraser): Operato
       }
 
       // Run the full delete cascade. On a thrown cascade, still persist a "failed" audit row (the
-      // request was received and attempted — the legal record must reflect that) then re-throw so
+      // request was received and attempted; the legal record must reflect that) then re-throw so
       // the operator sees a 500 and ops can reconcile from the logs.
       let eraseResult: { calendarFullyErased: boolean };
       try {
@@ -90,7 +90,7 @@ export function buildEraseContactHandler(eraser: OperatorContactEraser): Operato
       }
 
       // The DB PII is erased. If the external calendar could not be fully cleared, the durable
-      // audit row is honest ("partial") and names the caveat — but the operator still gets a 200
+      // audit row is honest ("partial") and names the caveat, but the operator still gets a 200
       // (the contact IS gone from Switchboard; the lingering external event is reconciled manually).
       const status: EraseRequestStatus = eraseResult.calendarFullyErased ? "completed" : "partial";
       await eraser.recordRequest({

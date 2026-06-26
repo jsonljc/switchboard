@@ -166,7 +166,7 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
 
       // Honest outcome: a thrown DB cascade is "failed"; a clean DB erasure whose
       // external calendar cancel was incomplete is "partial" (our data is gone, the
-      // external event may linger) — never "completed" on a partial.
+      // external event may linger); never "completed" on a partial.
       let status: string;
       if (failureReason !== null) {
         status = "failed";

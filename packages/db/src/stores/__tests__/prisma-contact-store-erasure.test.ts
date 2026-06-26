@@ -252,7 +252,7 @@ describe("PrismaContactStore.delete — PDPA erasure (F5)", () => {
 
     await store.delete("org-1", "contact-1");
 
-    // recipient_id/wa_id arrive digits-only, principalId/toNumber may be +E.164 —
+    // recipient_id/wa_id arrive digits-only, principalId/toNumber may be +E.164;
     // the candidate set must cover both so no channel row escapes.
     const assertCandidateMatch = (
       deleteMany: { mock: { calls: unknown[][] } },

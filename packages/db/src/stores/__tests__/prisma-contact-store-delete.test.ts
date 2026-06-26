@@ -71,7 +71,7 @@ function mockPrismaWithCascade() {
   });
 }
 
-describe("PrismaContactStore.delete — cascade mechanics", () => {
+describe("PrismaContactStore.delete cascade mechanics", () => {
   it("throws when contact not found or wrong org (tenant isolation)", async () => {
     const px = mockPrismaWithCascade();
     px.contact.findFirst.mockResolvedValue(null);

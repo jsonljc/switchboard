@@ -540,7 +540,7 @@ function digitsOnly(value: string): string {
  * on phoneE164, but WhatsApp recipient_id/wa_id is digits-only (no +) while other
  * rows carry +E.164, so match raw phone, phoneE164, AND the digits-only form. Digit
  * forms shorter than MIN_PHONE_DIGITS are dropped (junk-collision guard); the raw
- * value is always kept. Exact equality only (never substring) — no over-deletion.
+ * value is always kept. Exact equality only (never substring); no over-deletion.
  */
 export function buildPhoneMatchCandidates(
   phone: string | null | undefined,
