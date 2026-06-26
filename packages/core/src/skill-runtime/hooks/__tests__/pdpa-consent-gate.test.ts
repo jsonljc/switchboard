@@ -5,9 +5,12 @@ import type { GovernanceConfigResolver } from "../../../governance/governance-co
 import type { GovernanceVerdictStore } from "../../../governance/governance-verdict-store/types.js";
 import type { HandoffStore } from "../../../handoff/types.js";
 import type { ConsentService } from "../../../consent/consent-service.js";
-import type { ContactConsentReader } from "../../../consent/contact-consent-reader.js";
+import type {
+  ContactConsentReader,
+  ContactConsentRead,
+} from "../../../consent/contact-consent-reader.js";
+import { DISCLOSURE_COPY } from "../../../consent/disclosure-copy.js";
 import type { ConversationStatusSetter } from "../deterministic-safety-gate.js";
-import type { ContactConsentState } from "@switchboard/schemas";
 
 const SG_CFG = {
   jurisdiction: "SG" as const,
@@ -19,13 +22,14 @@ const SG_CFG = {
 const buildDeps = (
   overrides: Partial<{
     resolution: Awaited<ReturnType<GovernanceConfigResolver>>;
-    consent: ContactConsentState;
+    consent: ContactConsentRead;
     contactId: string | null;
   }> = {},
 ) => {
   const resolution = overrides.resolution ?? ({ status: "resolved", config: SG_CFG } as const);
-  const consent: ContactConsentState = overrides.consent ?? {
+  const consent: ContactConsentRead = overrides.consent ?? {
     pdpaJurisdiction: "SG",
+    phoneE164: null,
     consentGrantedAt: null,
     consentRevokedAt: null,
     consentSource: null,
@@ -146,6 +150,85 @@ describe("PdpaConsentGateHook", () => {
     expect(consentService.attachToGovernedInteraction).toHaveBeenCalledWith("c1", "SG", "org1");
   });
 
+  it("stamps the per-lead jurisdiction from a +60 phone (MY) at an SG-default org", async () => {
+    const { deps, consentService } = buildDeps({
+      consent: {
+        pdpaJurisdiction: null,
+        phoneE164: "+60123456789",
+        consentGrantedAt: null,
+        consentRevokedAt: null,
+        consentSource: null,
+        aiDisclosureVersionShown: null,
+        aiDisclosureShownAt: null,
+        consentUpdatedBy: null,
+        consentNotes: null,
+      },
+    });
+    const hook = new PdpaConsentGateHook(deps);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = { response: "x", toolCalls: [], tokenUsage: {}, trace: [] } as any;
+    await hook.afterSkill(ctx, result);
+    // The lead's own +60 phone governs their PDPA regime, not the SG org default.
+    expect(consentService.attachToGovernedInteraction).toHaveBeenCalledWith("c1", "MY", "org1");
+  });
+
+  it("re-stamps an already-MY contact as MY (precedence) — never a spurious mismatch at an SG org", async () => {
+    const { deps, consentService } = buildDeps({
+      consent: {
+        pdpaJurisdiction: "MY",
+        phoneE164: "+60123456789",
+        consentGrantedAt: null,
+        consentRevokedAt: null,
+        consentSource: null,
+        aiDisclosureVersionShown: null,
+        aiDisclosureShownAt: null,
+        consentUpdatedBy: null,
+        consentNotes: null,
+      },
+    });
+    const hook = new PdpaConsentGateHook(deps);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = { response: "x", toolCalls: [], tokenUsage: {}, trace: [] } as any;
+    await hook.afterSkill(ctx, result);
+    // The stamped value wins over the SG org default, so the re-stamp is a no-op
+    // and ConsentService never sees a mismatching SG write.
+    expect(consentService.attachToGovernedInteraction).toHaveBeenCalledWith("c1", "MY", "org1");
+  });
+
+  it("records the disclosure under the per-lead jurisdiction (MY) for a +60 lead", async () => {
+    const { deps, consentService } = buildDeps({
+      consent: {
+        pdpaJurisdiction: null,
+        phoneE164: "+60123456789",
+        consentGrantedAt: null,
+        consentRevokedAt: null,
+        consentSource: null,
+        aiDisclosureVersionShown: null,
+        aiDisclosureShownAt: null,
+        consentUpdatedBy: null,
+        consentNotes: null,
+      },
+    });
+    const hook = new PdpaConsentGateHook(deps);
+    const result = {
+      response: DISCLOSURE_COPY.MY.text + " How can I help?",
+      toolCalls: [],
+      tokenUsage: {},
+      trace: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    await hook.afterSkill(ctx, result);
+    // Disclosure recording must match the stamped (per-lead) jurisdiction, else
+    // ConsentService.recordDisclosureShown throws ConsentJurisdictionMismatch.
+    expect(consentService.recordDisclosureShown).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contactId: "c1",
+        jurisdiction: "MY",
+        version: DISCLOSURE_COPY.MY.version,
+      }),
+    );
+  });
+
   it("emits jurisdiction_mismatch critical verdict but does NOT block", async () => {
     const { deps, verdictStore } = buildDeps();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -173,6 +256,7 @@ describe("PdpaConsentGateHook", () => {
     const { deps, conversationStore, handoffStore, verdictStore } = buildDeps({
       consent: {
         pdpaJurisdiction: "SG",
+        phoneE164: null,
         consentGrantedAt: null,
         consentRevokedAt: "2026-05-10T00:00:00.000Z",
         consentSource: "inbound_keyword_revocation",
@@ -248,6 +332,7 @@ describe("PdpaConsentGateHook", () => {
     const { deps, consentService, verdictStore } = buildDeps({
       consent: {
         pdpaJurisdiction: "SG",
+        phoneE164: null,
         consentGrantedAt: null,
         consentRevokedAt: null,
         consentSource: null,
@@ -274,6 +359,7 @@ describe("PdpaConsentGateHook", () => {
     const { deps, verdictStore } = buildDeps({
       consent: {
         pdpaJurisdiction: "SG",
+        phoneE164: null,
         consentGrantedAt: null,
         consentRevokedAt: null,
         consentSource: null,
@@ -341,6 +427,7 @@ describe("PdpaConsentGateHook", () => {
       },
       consent: {
         pdpaJurisdiction: "SG",
+        phoneE164: null,
         consentGrantedAt: null,
         consentRevokedAt: "2026-05-10T00:00:00.000Z",
         consentSource: "inbound_keyword_revocation",
@@ -411,6 +498,7 @@ describe("PdpaConsentGateHook", () => {
       },
       consent: {
         pdpaJurisdiction: "SG",
+        phoneE164: null,
         consentGrantedAt: null,
         consentRevokedAt: null,
         consentSource: null,

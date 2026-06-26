@@ -4,6 +4,7 @@ import { ContactNotFound } from "@switchboard/core";
 
 const ROW = {
   pdpaJurisdiction: "MY",
+  phoneE164: "+60123456789",
   consentGrantedAt: new Date("2026-05-01T00:00:00Z"),
   consentRevokedAt: null,
   consentSource: "whatsapp_quick_reply",
@@ -38,6 +39,17 @@ describe("createPrismaContactConsentReader", () => {
     expect(state.pdpaJurisdiction).toBe("MY");
     expect(state.consentGrantedAt).toBe("2026-05-01T00:00:00.000Z");
     expect(state.consentRevokedAt).toBeNull();
+  });
+
+  it("returns and selects the contact's phoneE164 (for per-lead jurisdiction resolution)", async () => {
+    const { prisma, findFirst } = makeScopingPrisma("org_a", "c1");
+    const reader = createPrismaContactConsentReader({ prisma });
+    const state = await reader.read("org_a", "c1");
+    expect(state.phoneE164).toBe("+60123456789");
+    // The column must be projected, not accidentally surfaced by the mock.
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ phoneE164: true }) }),
+    );
   });
 
   it("throws ContactNotFound when row is missing", async () => {

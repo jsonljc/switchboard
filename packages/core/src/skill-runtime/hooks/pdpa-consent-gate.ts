@@ -13,6 +13,7 @@ import { buildHandoffPackage } from "../../handoff/build-handoff-package.js";
 import { renderHandoffTemplate } from "../../governance/handoff-template.js";
 import type { ConsentService } from "../../consent/consent-service.js";
 import type { ContactConsentReader } from "../../consent/contact-consent-reader.js";
+import { resolveContactJurisdiction } from "../../consent/resolve-contact-jurisdiction.js";
 import { ConsentJurisdictionMismatch } from "../../consent/errors.js";
 import { DISCLOSURE_COPY } from "../../consent/disclosure-copy.js";
 import type { ConversationStatusSetter } from "./deterministic-safety-gate.js";
@@ -84,13 +85,25 @@ export class PdpaConsentGateHook implements SkillHook {
     const contactId = await sessionContactResolver(ctx.sessionId);
     if (!contactId) return;
 
-    // 3. Stamp jurisdiction intentionally (NOT via disclosure path).
+    // 3. Read consent state (org-scoped: never read another tenant's contact). Read
+    //    BEFORE stamping so the per-lead jurisdiction — which needs the contact's
+    //    phone — drives the stamp and every contact-data decision below.
+    const consent = await contactConsentReader.read(ctx.orgId, contactId);
+
+    // 4. Resolve the PER-LEAD jurisdiction: the lead's own market (stamped value, else
+    //    their +60/+65 phone) governs how we treat THIS person's PDPA data, falling
+    //    back to the org market. One chokepoint so the same contact always resolves the
+    //    same way — the stamped value wins, so a re-stamp is a no-op and never a
+    //    spurious ConsentJurisdictionMismatch. (config.jurisdiction, the ORG market,
+    //    still governs the output-claim gates elsewhere — deliberately unchanged.)
+    const leadJurisdiction = resolveContactJurisdiction(
+      consent,
+      config.jurisdiction as PdpaJurisdiction,
+    );
+
+    // 5. Stamp jurisdiction intentionally (NOT via disclosure path).
     try {
-      await consentService.attachToGovernedInteraction(
-        contactId,
-        config.jurisdiction as PdpaJurisdiction,
-        ctx.orgId,
-      );
+      await consentService.attachToGovernedInteraction(contactId, leadJurisdiction, ctx.orgId);
     } catch (err) {
       if (
         err instanceof ConsentJurisdictionMismatch ||
@@ -101,7 +114,7 @@ export class PdpaConsentGateHook implements SkillHook {
           reasonCode: "jurisdiction_mismatch",
           action: "allow",
           auditLevel: "critical",
-          jurisdiction: config.jurisdiction,
+          jurisdiction: leadJurisdiction,
           clinicType: config.clinicType,
           conversationId: ctx.sessionId,
           originalText: result.response,
@@ -118,10 +131,7 @@ export class PdpaConsentGateHook implements SkillHook {
       throw err;
     }
 
-    // 4. Read consent state (org-scoped: never read another tenant's contact).
-    const consent = await contactConsentReader.read(ctx.orgId, contactId);
-
-    // 5. Evaluate gate (operational class always in 1c; proactive uses separate call site in 1d).
+    // 6. Evaluate gate (operational class always in 1c; proactive uses separate call site in 1d).
     const decision = evaluateConsentGate({
       contact: {
         pdpaJurisdiction: consent.pdpaJurisdiction,
@@ -140,7 +150,7 @@ export class PdpaConsentGateHook implements SkillHook {
           reasonCode: "consent_revoked",
           action: "allow",
           auditLevel: "warning",
-          jurisdiction: config.jurisdiction,
+          jurisdiction: leadJurisdiction,
           clinicType: config.clinicType,
           conversationId: ctx.sessionId,
           originalText: result.response,
@@ -151,14 +161,14 @@ export class PdpaConsentGateHook implements SkillHook {
       }
       const originalText = result.response;
       result.response = renderHandoffTemplate({
-        jurisdiction: config.jurisdiction as "SG" | "MY",
+        jurisdiction: leadJurisdiction,
         reasonCode: "consent_revoked",
       });
       await this.saveVerdict({
         reasonCode: "consent_revoked",
         action: "block",
         auditLevel: "critical",
-        jurisdiction: config.jurisdiction,
+        jurisdiction: leadJurisdiction,
         clinicType: config.clinicType,
         conversationId: ctx.sessionId,
         originalText,
@@ -177,8 +187,10 @@ export class PdpaConsentGateHook implements SkillHook {
       return;
     }
 
-    // 6. Allow path — disclosure detection. Observe-only: never blocks result.response.
-    const expected = DISCLOSURE_COPY[config.jurisdiction as PdpaJurisdiction];
+    // 7. Allow path — disclosure detection. Observe-only: never blocks result.response.
+    //    Keyed to the per-lead jurisdiction so the recorded disclosure version matches
+    //    the stamped jurisdiction (recordDisclosureShown throws on a mismatch).
+    const expected = DISCLOSURE_COPY[leadJurisdiction];
     // v1 deterministic heuristic: substring match. Punctuation/whitespace drift will break.
     const includesDisclosure = result.response.includes(expected.text);
 
@@ -187,7 +199,7 @@ export class PdpaConsentGateHook implements SkillHook {
         try {
           await this.deps.consentService.recordDisclosureShown({
             contactId,
-            jurisdiction: config.jurisdiction as PdpaJurisdiction,
+            jurisdiction: leadJurisdiction,
             version: expected.version,
             shownAt: this.deps.clock(),
             actor: "system:skill_runtime",
@@ -206,7 +218,7 @@ export class PdpaConsentGateHook implements SkillHook {
           reasonCode: "disclosure_not_shown",
           action: "allow",
           auditLevel: "warning",
-          jurisdiction: config.jurisdiction,
+          jurisdiction: leadJurisdiction,
           clinicType: config.clinicType,
           conversationId: ctx.sessionId,
           originalText: result.response,
@@ -219,7 +231,7 @@ export class PdpaConsentGateHook implements SkillHook {
         try {
           await this.deps.consentService.recordDisclosureShown({
             contactId,
-            jurisdiction: config.jurisdiction as PdpaJurisdiction,
+            jurisdiction: leadJurisdiction,
             version: expected.version,
             shownAt: this.deps.clock(),
             actor: "system:skill_runtime",
@@ -237,7 +249,7 @@ export class PdpaConsentGateHook implements SkillHook {
           reasonCode: "disclosure_version_outdated",
           action: "allow",
           auditLevel: "warning",
-          jurisdiction: config.jurisdiction,
+          jurisdiction: leadJurisdiction,
           clinicType: config.clinicType,
           conversationId: ctx.sessionId,
           originalText: result.response,
