@@ -105,8 +105,9 @@ Three layers, mirroring the stranded-claim reaper:
    `high`, `alert: true` - a reaper that stops running means slots silently re-block). A null
    store (no Postgres wired) → no-op, never fabricating a run. Wired in
    `apps/api/src/bootstrap/inngest.ts` alongside `createStrandedClaimReaperCron`, injecting
-   `getMetrics().bookingStalledReaped`, the `operatorAlerter`, and `app.bookingStore` (the real
-   `PrismaBookingStore`), and added to the served `functions` list.
+   `getMetrics().bookingStalledReaped`, the `operatorAlerter`, and a store constructed as
+   `app.prisma ? new PrismaBookingStore(app.prisma) : null` (the concrete store carries the
+   reaper methods; a null prisma yields the no-op path), and added to the served `functions` list.
 
 4. **metrics - `bookingStalledReaped` counter** added to all 3 registries:
    `packages/core/src/telemetry/metrics.ts` (`SwitchboardMetrics` interface + `InMemoryCounter`
