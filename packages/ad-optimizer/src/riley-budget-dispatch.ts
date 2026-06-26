@@ -51,8 +51,9 @@ export type RileyBudgetSubmitter = (
  * upstream at engine emission (recommendation-engine.ts Gate 2, which demotes a sub-floor scale rec
  * to an abstention watch before it can reach this builder), and there is no raised execution floor
  * for reallocate (the pause path's meetsRileyPauseExecutionFloor has no reallocate analogue). The
- * reallocate safety envelope is the mandatory human gate plus the executor-side blast-radius cap,
- * guardrail monitor, automated rollback and kill-switch, not candidate-side gating.
+ * reallocate safety envelope is the mandatory human gate plus execution-time guardrails (the
+ * blast-radius cap and kill-switch) and the post-execution guardrail monitor with automated
+ * rollback, not candidate-side gating.
  */
 export function buildRileyBudgetCandidate(args: {
   emitted: {
