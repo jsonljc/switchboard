@@ -61,7 +61,8 @@ export interface CampaignDecisionInput {
    *    step-change is suspected (an attribution-window/action-type reporting shift, not a real
    *    performance drop), so Riley DEMOTES every cost-number-driven or learning-resetting rec to
    *    a `measurement_untrusted` watch this cycle and only lets measurement/diagnostic-and-non-
-   *    resetting recs (fix_signal_health, harden_capi_attribution, hold) keep flowing.
+   *    resetting recs (fix_signal_health, hold) keep flowing. (harden_capi_attribution is the
+   *    sibling CAPI fix, produced account-level in audit-runner, not on this per-campaign path.)
    *  - `marginBasis` (producer 3): feeds applyTier (currently always "unavailable").
    * The per-campaign `economicTier`/`effectiveTarget`/`targetSource` above are resolved
    * per-campaign and are NOT taken from RevenueState (which carries the ACCOUNT-level tier for
@@ -230,8 +231,9 @@ export function decideForCampaign(input: CampaignDecisionInput): CampaignDecisio
     // is suspected, the cost signal is untrustworthy this cycle. DEMOTE any
     // cost-number-driven (destructive/scale/structural) or learning-resetting rec
     // to a measurement_untrusted watch BEFORE applyTier. Measurement + diagnostic-
-    // and-non-resetting recs (fix_signal_health, harden_capi_attribution, hold)
-    // keep flowing so the user still gets the "fix your signal" path.
+    // and-non-resetting recs (fix_signal_health, hold) keep flowing so the user still
+    // gets the "fix your signal" path. (harden_capi_attribution is the account-level
+    // CAPI sibling, emitted once in audit-runner, never on this per-campaign path.)
     const family = evidenceFamilyFor(item.action);
     const costDriven = family === "destructive" || family === "scale" || family === "structural";
     if (

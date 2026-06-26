@@ -131,8 +131,20 @@ function hardenCount(recs: { action: string }[]): number {
 }
 
 describe("AuditRunner CAPI-attribution-stale advisory", () => {
-  it("fires exactly one account-level harden rec on a stale account (zero conv, real traffic)", async () => {
-    const stale = [insight({ conversions: 0, inlineLinkClicks: 60, revenue: 0 })];
+  it("fires exactly ONE account-level harden rec on a stale account, even with multiple campaigns", async () => {
+    // Two campaigns BOTH showing the outage signature. The rec must be emitted once
+    // account-level (campaignId "account"), not once per campaign — a regression that
+    // moved the producer back inside the per-campaign loop would emit two and fail here.
+    const stale = [
+      insight({ campaignId: "camp-1", conversions: 0, inlineLinkClicks: 60, revenue: 0 }),
+      insight({
+        campaignId: "camp-2",
+        campaignName: "Test Campaign 2",
+        conversions: 0,
+        inlineLinkClicks: 60,
+        revenue: 0,
+      }),
+    ];
     const report = await new AuditRunner(deps(stale, stale)).run(RANGE);
     const harden = report.recommendations.filter((r) => r.action === "harden_capi_attribution");
     expect(harden).toHaveLength(1);
