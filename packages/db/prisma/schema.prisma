@@ -2528,14 +2528,15 @@ model PreSwitchboardBaseline {
 //   - "operator_erasure": an operator fulfilling a PDPA right-to-erasure /
 //     stop-contacting request for ONE contact in their own org. Carries the
 //     organizationId and the authenticated operator in requestedByActorId.
-// Deletion runs synchronously, so `status` is "completed" on success; "failed"
-// rows are kept for ops triage.
+// Deletion runs synchronously: `status` is "completed" on full success, "partial"
+// when the DB PII was erased but an external calendar cancel was incomplete, and
+// "failed" when the cascade threw. "failed" rows are kept for ops triage.
 model DataDeletionRequest {
   id                 String    @id @default(uuid())
   userId             String // Meta app-scoped user_id, or "operator:<actorId>" for operator erasures
   confirmationCode   String    @unique
   deletedContactIds  String[]  @default([])
-  status             String    @default("completed") // "completed" | "failed"
+  status             String    @default("completed") // "completed" | "partial" | "failed"
   failureReason      String?
   completedAt        DateTime?
   createdAt          DateTime  @default(now())
