@@ -153,6 +153,7 @@ import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-bac
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
 import { createLifecycleStalledSweepCron } from "../services/cron/lifecycle-stalled-sweep.js";
 import { createStrandedClaimReaperCron } from "../services/cron/stranded-claim-reaper.js";
+import { createStalledBookingReaperCron } from "../services/cron/stalled-booking-reaper.js";
 import {
   createRileyOutcomeAttributionWorker,
   bindRileyOutcomeOrchestrator,
@@ -1633,6 +1634,16 @@ export async function registerInngest(
             : null,
         alerter: operatorAlerter,
         counter: getMetrics().strandedClaimReaped,
+      }),
+      // A8b-2 / rank-18: age bookings stranded in `pending_confirmation` (a lost terminal write)
+      // to `failed`, releasing the slot they block forever (counter + operator alert). Constructs
+      // the concrete PrismaBookingStore (which carries the reaper methods); a null prisma -> the
+      // cron no-ops rather than fabricating a run.
+      createStalledBookingReaperCron({
+        failure: asyncFailure,
+        store: app.prisma ? new PrismaBookingStore(app.prisma) : null,
+        alerter: operatorAlerter,
+        counter: getMetrics().bookingStalledReaped,
       }),
       rileyOutcomeDispatch,
       rileyOutcomeWorker,
