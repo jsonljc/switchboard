@@ -158,6 +158,28 @@ export const paymentsWebhookRoutes: FastifyPluginAsync = async (app) => {
       app.log.error({ error: result.error }, "payment.record_verified submission failed");
       return reply.code(500).send({ error: result.error.message, statusCode: 500 });
     }
+    // ok:true is NOT proof the deposit was durably recorded. The handler can return
+    // outcome "failed" (a domain return) or surface EXECUTION_EXCEPTION as
+    // ok:true/outcome:"failed" when the receipt/revenue/outbox write throws on a transient
+    // DB error; a defensive approval-park or async "queued" outcome is likewise not durable.
+    // Only outcome "completed" means the receipt + LifecycleRevenueEvent + conversion were
+    // written. Anything else must 500 so Stripe redelivers (safe at-least-once direction) —
+    // 200-acking here permanently loses proof of money that already moved.
+    const parked = "approvalRequired" in result && result.approvalRequired === true;
+    if (parked || result.result.outcome !== "completed") {
+      app.log.error(
+        {
+          organizationId,
+          chargeId,
+          bookingId: charge.bookingId,
+          workUnitId: result.workUnit.id,
+          outcome: result.result.outcome,
+          parked,
+        },
+        "payment.record_verified did not complete; returning 500 so Stripe redelivers the settled deposit",
+      );
+      return reply.code(500).send({ error: "Payment not durably recorded", statusCode: 500 });
+    }
     return reply.code(200).send({
       received: true,
       workUnitId: result.workUnit.id,
