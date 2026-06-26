@@ -56,7 +56,7 @@ reproduce the defect before asserting it.
 | EV-13 | MONEY-7 (BUG-8)                     | creative medical-claim judge        | P1  | yes     | not started    |
 | EV-14 | CHAN-1, 2, 3, 7, 8                  | cross-tenant route sweep            | P1  | yes     | not started    |
 | EV-15 | CHAN-4..6, 9, 10 (BUG-4, BUG-5)     | channel delivery fixes + evals      | P2  | -       | not started    |
-| EV-16 | INFRA-2 + SPINE-6                   | real-Postgres integration tier      | P1  | -       | merged #1305   |
+| EV-16 | INFRA-2 + SPINE-6                   | real-Postgres integration tier      | P1  | -       | surfaced #1305 |
 | EV-17 | SPINE-7..12 (BUG-6, BUG-7, BUG-11)  | spine async-correctness             | P2  | -       | not started    |
 | EV-18 | APP-1, APP-2, APP-3                 | dashboard/app state evals           | P2  | -       | not started    |
 | EV-19 | INFRA-4, INFRA-5, GOV-9, GOV-10     | eval-infra housekeeping             | P3  | -       | not started    |
