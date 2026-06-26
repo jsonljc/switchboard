@@ -35,7 +35,9 @@ export class OutboxPublisher {
         contactId: row.payload.contactId as string,
         organizationId: row.payload.organizationId as string,
         value: (row.payload.value as number) ?? 0,
-        currency: row.payload.currency as string | undefined,
+        // Payload currency may now be null (calendar-book abstains when the market is
+        // unresolvable); normalize to undefined to match ConversionEvent.currency.
+        currency: (row.payload.currency as string | null) ?? undefined,
         sourceAdId: row.payload.sourceAdId as string | undefined,
         sourceCampaignId: row.payload.sourceCampaignId as string | undefined,
         occurredAt: new Date(row.payload.occurredAt as string),

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   GovernanceConfigSchema,
+  JURISDICTIONS,
   buildObserveGovernanceConfig,
   currencyForJurisdiction,
   resolveGovernanceMode,
@@ -75,9 +76,10 @@ describe("currencyForJurisdiction", () => {
     expect(currencyForJurisdiction("MY")).toBe("MYR");
   });
 
-  it("is total over the jurisdiction enum (every value yields a currency)", () => {
-    const jurisdictions: Array<"SG" | "MY"> = ["SG", "MY"];
-    for (const j of jurisdictions) {
+  it("maps every jurisdiction in JURISDICTIONS to a supported currency (no gap)", () => {
+    // Driven from the canonical list, so a new market added to JURISDICTIONS is
+    // exercised here too (and would compile-error in currencyForJurisdiction first).
+    for (const j of JURISDICTIONS) {
       expect(["SGD", "MYR"]).toContain(currencyForJurisdiction(j));
     }
   });

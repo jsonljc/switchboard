@@ -81,8 +81,8 @@ import type { EmailMessage, EmailSendResult } from "../services/notifications/se
  * Figures are RE-DERIVED from the seeded journey, not fixtured: cohort 1; expected (booked) value 45000c
  * (the opportunity snapshot at issuance); proven-paid 30000c (the PSP fetch-back, deliberately != the
  * expected value); 0 bookings needing attention (a clean lead). currency "SGD" is snapshotted at
- * issuance from the tool's defaultCurrency, so the money renders "SGD 450.00" / "SGD 300.00" (Intl,
- * en-US). completedWeekRange(T_DELIVER) = [2026-06-15, 2026-06-22) so the period label is
+ * issuance from the deployment's resolved market currency (currencyForJurisdiction, SG -> SGD), so
+ * the money renders "SGD 450.00" / "SGD 300.00" (Intl, en-US). completedWeekRange(T_DELIVER) = [2026-06-15, 2026-06-22) so the period label is
  * "Jun 15 to Jun 21".
  */
 

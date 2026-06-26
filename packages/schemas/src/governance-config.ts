@@ -3,9 +3,17 @@ import { z } from "zod";
 export const GovernanceModeSchema = z.enum(["off", "observe", "enforce"]);
 export type GovernanceMode = z.infer<typeof GovernanceModeSchema>;
 
+/**
+ * The markets Alex serves. Single source for the jurisdiction enum AND type, so the
+ * currency mapping (`currencyForJurisdiction`) is exhaustive by construction: adding a
+ * market here without a currency case is a compile error at the function definition.
+ */
+export const JURISDICTIONS = ["SG", "MY"] as const;
+export type Jurisdiction = (typeof JURISDICTIONS)[number];
+
 export const GovernanceConfigSchema = z
   .object({
-    jurisdiction: z.enum(["SG", "MY"]),
+    jurisdiction: z.enum(JURISDICTIONS),
     clinicType: z.enum(["medical", "nonMedical"]),
     deterministicGate: z
       .object({
@@ -203,7 +211,7 @@ export function resolveLifecycleQualificationConfig(
 }
 
 export interface ObserveGovernanceConfigInput {
-  jurisdiction: "SG" | "MY";
+  jurisdiction: Jurisdiction;
   clinicType: "medical" | "nonMedical";
 }
 
@@ -216,17 +224,23 @@ export type SupportedCurrency = "SGD" | "MYR";
  * settles one Stripe currency, so currency is a pure function of jurisdiction rather
  * than a second stored field that could drift out of sync with the market.
  *
- * Total over the jurisdiction enum with NO default branch: adding a jurisdiction
- * without a currency is a compile error, so a new market can never silently charge or
- * quote the wrong currency. This is the single chokepoint every money surface resolves
- * through (deposit charge, booked-value stamp, quoted price, dashboard display).
+ * The parameter is the schema-derived `Jurisdiction`, and the switch carries an
+ * `assertNever` default: adding a market to `JURISDICTIONS` without a currency case is
+ * a compile error AT THIS DEFINITION (not merely at call sites), so a new market can
+ * never silently charge or quote the wrong currency. This is the single chokepoint
+ * every money surface resolves through (deposit charge, booked-value stamp, quoted
+ * price, dashboard display).
  */
-export function currencyForJurisdiction(jurisdiction: "SG" | "MY"): SupportedCurrency {
+export function currencyForJurisdiction(jurisdiction: Jurisdiction): SupportedCurrency {
   switch (jurisdiction) {
     case "SG":
       return "SGD";
     case "MY":
       return "MYR";
+    default: {
+      const _exhaustive: never = jurisdiction;
+      throw new Error(`Unsupported jurisdiction: ${String(_exhaustive)}`);
+    }
   }
 }
 
