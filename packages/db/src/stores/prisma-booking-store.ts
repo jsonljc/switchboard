@@ -173,13 +173,40 @@ export class PrismaBookingStore {
   }
 
   async cancel(orgId: string, bookingId: string) {
-    const result = await this.prisma.booking.updateMany({
-      where: { id: bookingId, organizationId: orgId },
-      data: { status: "cancelled" },
-    });
-    if (result.count === 0) throw new StaleVersionError(bookingId, -1, -1);
-    return this.prisma.booking.findFirstOrThrow({
-      where: { id: bookingId, organizationId: orgId },
+    // P2-18 proof-chain retraction: a cancelled booking did not happen, so its proof artifacts
+    // must stop counting toward the receipted cohort / proven-paid revenue. Flip the canonical
+    // booking AND retract its receipts AND reverse its confirmed deposit revenue in ONE
+    // transaction. The booking flip runs FIRST so a missing / cross-org id fails closed
+    // (count === 0) BEFORE any cascade. Both cascade writes filter on current state, so a
+    // double-cancel matches 0 rows and is a safe no-op. Every leg is org + booking scoped.
+    // Scope: this governs the owner-report proof chain (receipts + revenue events). The already
+    // emitted `purchased` outbox / ad-attribution conversion is NOT reversed here (a separate
+    // CAPI-reversal concern).
+    return this.prisma.$transaction(async (tx) => {
+      const result = await tx.booking.updateMany({
+        where: { id: bookingId, organizationId: orgId },
+        data: { status: "cancelled" },
+      });
+      if (result.count === 0) throw new StaleVersionError(bookingId, -1, -1);
+
+      // Receipts -> void (calendar + payment). The read side already excludes status "void"
+      // (is-paid-visit.ts, and the booked|held cohort/count filters), so this is the missing
+      // writer, not a read change.
+      await tx.receipt.updateMany({
+        where: { organizationId: orgId, bookingId, status: { not: "void" } },
+        data: { status: "void" },
+      });
+
+      // Confirmed deposit revenue -> refunded + unverified. "refunded" is the model's existing
+      // reversal status (the schema default-lifecycle anticipates pending -> confirmed ->
+      // refunded); verified:false drops it from paidVisitsByCampaign (which filters verified, not
+      // status). We transition, never delete (append-only money trail); no partial-refund netting.
+      await tx.lifecycleRevenueEvent.updateMany({
+        where: { organizationId: orgId, bookingId, status: "confirmed" },
+        data: { status: "refunded", verified: false },
+      });
+
+      return tx.booking.findFirstOrThrow({ where: { id: bookingId, organizationId: orgId } });
     });
   }
 
