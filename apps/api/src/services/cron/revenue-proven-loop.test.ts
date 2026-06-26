@@ -162,7 +162,9 @@ describe("Riley revenue_proven write surfaces in Mira's brief (F4 loop closed)",
     const deps: RevenueProvenPromotionDeps = {
       failure: {} as RevenueProvenPromotionDeps["failure"],
       jobStore: {
-        listRevenueProvenCandidates: async () => [makeJob("j1"), makeJob("j2"), makeJob("j3")],
+        listRevenueProvenCandidateOrgIds: async (_maxOrgs: number) => [ORG],
+        listRevenueProvenCandidates: async (organizationId: string, _limit: number) =>
+          organizationId === ORG ? [makeJob("j1"), makeJob("j2"), makeJob("j3")] : [],
         setRevenueProvenPromotedAt: async () => {},
       },
       memoryStore: mem,
