@@ -179,6 +179,9 @@ export class PrismaBookingStore {
     // transaction. The booking flip runs FIRST so a missing / cross-org id fails closed
     // (count === 0) BEFORE any cascade. Both cascade writes filter on current state, so a
     // double-cancel matches 0 rows and is a safe no-op. Every leg is org + booking scoped.
+    // Scope: this governs the owner-report proof chain (receipts + revenue events). The already
+    // emitted `purchased` outbox / ad-attribution conversion is NOT reversed here (a separate
+    // CAPI-reversal concern).
     return this.prisma.$transaction(async (tx) => {
       const result = await tx.booking.updateMany({
         where: { id: bookingId, organizationId: orgId },
