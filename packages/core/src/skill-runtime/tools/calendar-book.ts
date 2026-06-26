@@ -325,6 +325,9 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               // slot another lead may now hold (a double-book) and mint a phantom booked conversion.
               // Abort the tx; the catch below runs orphan-event compensation + the failure handler.
               // Mirrors the store create/reschedule CAS; also org-scopes the write (was id-only).
+              // The reaper terminalizes to "failed", on which booking-failure-handler early-returns,
+              // so routing an already-reaped row here does NOT double-escalate (keep that status in
+              // sync if a future terminalizer uses a different one).
               const confirmed = await tx.booking.updateMany({
                 where: {
                   id: booking.id,
