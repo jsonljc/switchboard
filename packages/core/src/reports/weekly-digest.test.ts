@@ -380,3 +380,15 @@ describe("buildWeeklyDigest", () => {
     expect(text).not.toContain("NaN");
   });
 });
+
+describe("renderWeeklyDigestText report link (P3-8)", () => {
+  it("includes the Full report line when the dashboard URL is present", () => {
+    const d = buildWeeklyDigest(makeReport(), opts);
+    expect(renderWeeklyDigestText(d)).toContain("Full report: https://app.example/reports");
+  });
+
+  it("omits the Full report line entirely when the dashboard URL is empty", () => {
+    const d = buildWeeklyDigest(makeReport(), { ...opts, dashboardUrl: "" });
+    expect(renderWeeklyDigestText(d)).not.toContain("Full report:");
+  });
+});

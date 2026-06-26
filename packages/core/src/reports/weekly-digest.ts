@@ -257,6 +257,6 @@ export function renderWeeklyDigestText(digest: WeeklyDigest): string {
   if (digest.attentionNote) {
     lines.push("", digest.attentionNote);
   }
-  lines.push("", `Full report: ${digest.dashboardUrl}`);
+  if (digest.dashboardUrl) lines.push("", `Full report: ${digest.dashboardUrl}`);
   return lines.join("\n");
 }

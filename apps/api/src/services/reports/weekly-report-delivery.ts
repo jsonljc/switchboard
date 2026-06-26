@@ -51,6 +51,19 @@ function esc(value: string): string {
 }
 
 /**
+ * The "view report" link is only useful in an email as an ABSOLUTE url: a relative
+ * `/reports` (what an empty base produces) has no origin in a mail client, so the
+ * link is dead. Return `${base}/reports` when `base` is a usable http(s) origin,
+ * otherwise "" so both renderers omit the link entirely (P3-8). A misconfigured
+ * absolute base (e.g. localhost in prod) is a deployment-config concern, not handled here.
+ */
+export function resolveReportLink(base: string): string {
+  const trimmed = base.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return "";
+  return `${trimmed.replace(/\/+$/, "")}/reports`;
+}
+
+/**
  * Render a WeeklyDigest as a minimal inline-styled HTML email body. Pure: it does
  * no math and reads only display-ready digest fields, so it can never leak a raw
  * NaN. Contains the headline, the metric list (label + value + optional detail),
@@ -89,14 +102,19 @@ export function renderWeeklyDigestHtml(digest: WeeklyDigest): string {
     ? `<p style="color:#6B6560;font-size:13px;">${esc(digest.attentionNote)}</p>`
     : "";
 
+  // Omit the report CTA entirely when there is no usable absolute URL, rather than
+  // emit a dead/relative link in a real owner email (P3-8).
+  const reportLink = digest.dashboardUrl
+    ? `<p style="margin-top:28px;"><a href="${esc(digest.dashboardUrl)}" ` +
+      `style="color:#1A1714;font-weight:600;">View the full report</a></p>`
+    : "";
+
   return (
     `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:600px;` +
     `margin:0 auto;padding:32px 20px;">` +
     `<p style="color:#1A1714;font-size:16px;">${esc(digest.headline)}</p>` +
     `<table style="width:100%;border-collapse:collapse;margin-top:16px;">${metricRows}</table>` +
-    `${attentionBlock}${note}` +
-    `<p style="margin-top:28px;"><a href="${esc(digest.dashboardUrl)}" ` +
-    `style="color:#1A1714;font-weight:600;">View the full report</a></p>` +
+    `${attentionBlock}${note}${reportLink}` +
     `</div>`
   );
 }
@@ -105,7 +123,10 @@ export interface WeeklyReportDeliveryDeps {
   resolveRecipients: (orgId: string) => Promise<string[]>;
   assembleReport: (orgId: string, now: Date) => Promise<ReportDataV1>;
   sendEmail: EmailSender;
-  /** Dashboard base URL; the digest link is `${dashboardUrl}/reports`. */
+  /**
+   * Dashboard base URL. When it is a usable absolute http(s) origin the digest
+   * links to `${dashboardUrl}/reports`; otherwise the link is omitted (P3-8).
+   */
   dashboardUrl: string;
   /** Injectable clock for deterministic tests; defaults to wall-clock. */
   now?: () => Date;
@@ -131,7 +152,7 @@ export function createWeeklyReportDeliveryService(
       const periodLabel = weekPeriodLabel(now);
       const digest = buildWeeklyDigest(report, {
         periodLabel,
-        dashboardUrl: `${deps.dashboardUrl}/reports`,
+        dashboardUrl: resolveReportLink(deps.dashboardUrl),
         maxAttentionItems: MAX_ATTENTION_ITEMS,
       });
 
