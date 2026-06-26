@@ -10,6 +10,7 @@ import { requireIdempotencyKey } from "../utils/idempotency-key.js";
 import { buildDevAuthFallback } from "../utils/auth-fallback.js";
 import { requireOrgForMutation } from "../decorators/org.js";
 import { createApprovalForWorkUnit } from "./approval-factory.js";
+import { classifySuccessOutcome } from "./action-outcome.js";
 
 const proposeJsonSchema = zodToJsonSchema(ProposeBodySchema, { target: "openApi3" });
 const batchJsonSchema = zodToJsonSchema(BatchProposeBodySchema, { target: "openApi3" });
@@ -156,6 +157,25 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
             traceId: workUnit.traceId,
             denied: true,
             explanation: result.summary,
+          });
+        }
+
+        // Assert success explicitly. A "queued" outcome (workflow-mode defers to async)
+        // is NOT a completed synchronous mutation, so it must not read as EXECUTED.
+        const successLabel = classifySuccessOutcome(result.outcome);
+        if (successLabel === "QUEUED") {
+          return reply.code(202).send({
+            outcome: "QUEUED",
+            workUnitId: workUnit.id,
+            traceId: workUnit.traceId,
+          });
+        }
+        if (successLabel === "ERROR") {
+          return reply.code(500).send({
+            outcome: "ERROR",
+            workUnitId: workUnit.id,
+            traceId: workUnit.traceId,
+            error: { code: "UNEXPECTED_OUTCOME", message: `Unexpected outcome: ${result.outcome}` },
           });
         }
 
@@ -315,9 +335,13 @@ export const actionsRoutes: FastifyPluginAsync = async (app) => {
             continue;
           }
 
+          // Assert success explicitly (see classifySuccessOutcome): "failed" -> DENIED,
+          // "completed" -> EXECUTED, "queued" -> QUEUED, anything else -> ERROR. Never
+          // let a deferred "queued" job read as a completed synchronous EXECUTED.
           results.push({
             index: i,
-            outcome: result.outcome === "failed" ? "DENIED" : "EXECUTED",
+            outcome:
+              result.outcome === "failed" ? "DENIED" : classifySuccessOutcome(result.outcome),
             envelopeId: workUnit.id,
             traceId: workUnit.traceId,
             summary: result.summary,

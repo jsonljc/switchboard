@@ -312,6 +312,26 @@ export class PlatformLifecycle {
       return { undoSubmitted: false, error: response.error.message };
     }
 
+    // ok:true is NOT proof the reverse action took effect. A parked (approvalRequired)
+    // or non-"completed" outcome (failed / queued / ...) must surface as
+    // undoSubmitted:false, so the operator is never told a harmful action was reversed
+    // while it remains fully in effect. This is the same outcome==="completed" contract
+    // enforced by delegation-submitter, riley-pause/budget-submitter, and dispatchRollback.
+    if ("approvalRequired" in response && response.approvalRequired) {
+      return {
+        undoSubmitted: false,
+        error: "undo_parked_for_approval",
+        undoWorkUnitId: response.workUnit.id,
+      };
+    }
+    if (response.result.outcome !== "completed") {
+      return {
+        undoSubmitted: false,
+        error: response.result.error?.code ?? response.result.outcome,
+        undoWorkUnitId: response.workUnit.id,
+      };
+    }
+
     return { undoSubmitted: true, undoWorkUnitId: response.workUnit.id };
   }
 
