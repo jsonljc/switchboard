@@ -80,6 +80,32 @@ describe("computeManagedComparison", () => {
     expect(result!.ads!.unmanaged.spend).toBe(800);
   });
 
+  it("normalizes cents revenue to major units for ads managed revenue + ROAS", async () => {
+    // sumByOrg.totalAmount is MINOR units (cents); provider spend is MAJOR (dollars).
+    // 200000 cents = $2000 revenue against $1000 spend => 2.0x ROAS; managed.revenue
+    // must render in major units (not 200000, not 200x).
+    const baseline = createInMemoryBaselineStore();
+    await baseline.insertMany([
+      {
+        organizationId: "org-1",
+        dimension: "ads",
+        metric: "spend",
+        value: 800,
+        periodStart: new Date("2026-01-01"),
+        periodEnd: new Date("2026-02-01"),
+        capturedAt: new Date(),
+      },
+    ]);
+    const result = await computeManagedComparison(
+      ctx,
+      stubProvider(1000),
+      baseline,
+      stubStores({ revenueTotal: 200000 }),
+    );
+    expect(result!.ads!.managed.revenue).toBe(2000);
+    expect(result!.ads!.managed.roas).toBe(2);
+  });
+
   it("triggers lazy-pull and returns ads=null when no baseline", async () => {
     const baseline = createInMemoryBaselineStore();
     const result = await computeManagedComparison(ctx, stubProvider(1000), baseline, stubStores());

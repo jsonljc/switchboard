@@ -1,6 +1,7 @@
 import type { CampaignRow, ReportInsightsProvider } from "@switchboard/schemas";
 import type { RollupContext } from "./types.js";
 import type { ReportStores } from "./interfaces.js";
+import { centsToMajorUnits } from "./money-units.js";
 
 function formatDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -33,7 +34,9 @@ export async function computeCampaignRollup(
   }
 
   const rows: CampaignRow[] = campaigns.map((c) => {
-    const revenue = revenueMap.get(c.campaignId) ?? 0;
+    // Revenue store returns cents; spend is dollars. Normalize to major units ONCE so
+    // both the revenue field and ROAS share spend's unit (else both inflate 100x).
+    const revenue = centsToMajorUnits(revenueMap.get(c.campaignId) ?? 0);
     return {
       name: c.campaignName,
       spend: c.spend,
