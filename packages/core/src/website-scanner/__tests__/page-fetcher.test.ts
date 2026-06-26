@@ -59,4 +59,75 @@ describe("fetchPages", () => {
     const results = await fetchPages("https://example.com", ["/slow"]);
     expect(results).toHaveLength(0);
   });
+
+  it("never issues a request to a private/loopback base URL (SSRF guard)", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => "<html><body><p>internal secret data behind the firewall</p></body></html>",
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const results = await fetchPages("http://127.0.0.1", ["/"]);
+
+    expect(results).toHaveLength(0);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("manually follows a redirect to another public URL", async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === "https://example.com/") {
+        return {
+          ok: false,
+          status: 302,
+          headers: new Headers({ location: "https://www.example.com/home" }),
+          text: async () => "",
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        text: async () =>
+          "<html><body><h1>Landing</h1><p>Welcome to the real homepage.</p></body></html>",
+      };
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const results = await fetchPages("https://example.com", ["/"]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.text).toContain("Landing");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledWith("https://www.example.com/home", expect.anything());
+  });
+
+  it("does not follow a redirect that points at a private/metadata address", async () => {
+    const internalUrl = "http://169.254.169.254/latest/meta-data/";
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === "https://example.com/") {
+        return {
+          ok: false,
+          status: 302,
+          headers: new Headers({ location: internalUrl }),
+          text: async () => "",
+        };
+      }
+      // Must never be reached for the internal target.
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        text: async () =>
+          "<html><body><p>cloud credentials leaked from metadata service</p></body></html>",
+      };
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const results = await fetchPages("https://example.com", ["/"]);
+
+    expect(results).toHaveLength(0);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).not.toHaveBeenCalledWith(internalUrl, expect.anything());
+  });
 });

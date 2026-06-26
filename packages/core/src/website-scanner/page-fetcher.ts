@@ -1,6 +1,38 @@
+import { assertSafeFetchUrl } from "./url-validator.js";
+
 const DEFAULT_PAGE_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_TEXT_LENGTH = 8_000;
 const USER_AGENT = "SwitchboardScanner/1.0";
+const MAX_REDIRECTS = 5;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * Fetch `initialUrl`, following up to MAX_REDIRECTS redirects MANUALLY so the SSRF guard
+ * re-validates every hop. A public origin must not be able to redirect the scanner to a
+ * private / loopback / link-local / cloud-metadata address. Throws when any hop fails the
+ * guard or the redirect chain runs too long; the caller treats a throw as "skip this page".
+ */
+async function fetchGuardedWithRedirects(
+  initialUrl: string,
+  signal: AbortSignal,
+): Promise<Response> {
+  let currentUrl = initialUrl;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    await assertSafeFetchUrl(currentUrl);
+    const response = await fetch(currentUrl, {
+      signal,
+      headers: { "User-Agent": USER_AGENT },
+      redirect: "manual",
+    });
+    if (!REDIRECT_STATUSES.has(response.status)) {
+      return response;
+    }
+    const location = response.headers.get("location");
+    if (!location) return response;
+    currentUrl = new URL(location, currentUrl).toString();
+  }
+  throw new Error(`Too many redirects fetching ${initialUrl}`);
+}
 
 export interface FetchedPage {
   path: string;
@@ -40,22 +72,16 @@ export async function fetchPages(
   for (const path of paths) {
     if (options.signal?.aborted) break;
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    if (options.signal) {
+      options.signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+
     try {
       const url = new URL(path, baseUrl).toString();
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-      if (options.signal) {
-        options.signal.addEventListener("abort", () => controller.abort(), { once: true });
-      }
-
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: { "User-Agent": USER_AGENT },
-        redirect: "follow",
-      });
-
-      clearTimeout(timeout);
+      const response = await fetchGuardedWithRedirects(url, controller.signal);
 
       if (!response.ok) continue;
 
@@ -67,6 +93,8 @@ export async function fetchPages(
       }
     } catch {
       continue;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

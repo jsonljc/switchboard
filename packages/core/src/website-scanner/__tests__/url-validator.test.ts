@@ -36,6 +36,36 @@ describe("validateScanUrl", () => {
     );
   });
 
+  it("rejects the cloud-metadata hostname", () => {
+    expect(() => validateScanUrl("http://metadata.google.internal/computeMetadata/v1/")).toThrow();
+  });
+
+  it("rejects private IPv6 literals (loopback, link-local, ULA)", () => {
+    expect(() => validateScanUrl("http://[::1]/")).toThrow();
+    expect(() => validateScanUrl("http://[fe80::1]/")).toThrow();
+    expect(() => validateScanUrl("http://[fc00::1]/")).toThrow();
+  });
+
+  it("rejects IPv4-mapped IPv6 pointing at loopback", () => {
+    expect(() => validateScanUrl("http://[::ffff:127.0.0.1]/")).toThrow();
+  });
+
+  it("rejects IPv4-compatible and NAT64-embedded IPv6 pointing at internal IPs", () => {
+    expect(() => validateScanUrl("http://[::127.0.0.1]/")).toThrow(); // ::-compatible loopback
+    expect(() => validateScanUrl("http://[::169.254.169.254]/")).toThrow(); // ::-compatible metadata
+    expect(() => validateScanUrl("http://[64:ff9b::169.254.169.254]/")).toThrow(); // NAT64 metadata
+  });
+
+  it("allows a genuinely public IPv6 literal", () => {
+    expect(() => validateScanUrl("http://[2606:4700:4700::1111]/")).not.toThrow();
+  });
+
+  it("rejects integer-encoded IPv4 (decimal, octal, hex) hostnames", () => {
+    expect(() => validateScanUrl("http://2130706433/")).toThrow(); // 127.0.0.1 as decimal
+    expect(() => validateScanUrl("http://0177.0.0.1/")).toThrow(); // octal first octet
+    expect(() => validateScanUrl("http://0x7f.0.0.1/")).toThrow(); // hex first octet
+  });
+
   it("rejects empty string", () => {
     expect(() => validateScanUrl("")).toThrow();
   });
@@ -75,8 +105,29 @@ describe("isPrivateIp", () => {
     expect(isPrivateIp("::1")).toBe(true);
   });
 
+  it("identifies link-local IPv6 (fe80::/10) as private", () => {
+    expect(isPrivateIp("fe80::1")).toBe(true);
+  });
+
+  it("identifies IPv4-mapped IPv6 of a private address as private", () => {
+    expect(isPrivateIp("::ffff:127.0.0.1")).toBe(true);
+    expect(isPrivateIp("::ffff:169.254.169.254")).toBe(true);
+  });
+
+  it("identifies IPv4-compatible and NAT64-embedded IPv6 (hextet form) as private", () => {
+    expect(isPrivateIp("::7f00:1")).toBe(true); // ::127.0.0.1 normalized
+    expect(isPrivateIp("::a9fe:a9fe")).toBe(true); // ::169.254.169.254 normalized
+    expect(isPrivateIp("64:ff9b::a9fe:a9fe")).toBe(true); // NAT64 169.254.169.254 normalized
+  });
+
+  it("identifies link-local / cloud-metadata IPv4 as private", () => {
+    expect(isPrivateIp("169.254.169.254")).toBe(true);
+    expect(isPrivateIp("0.0.0.0")).toBe(true);
+  });
+
   it("allows public IPs", () => {
     expect(isPrivateIp("8.8.8.8")).toBe(false);
     expect(isPrivateIp("93.184.216.34")).toBe(false);
+    expect(isPrivateIp("2606:4700:4700::1111")).toBe(false);
   });
 });
