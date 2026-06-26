@@ -47,30 +47,40 @@ async function setRileyReallocateFlag(
   }
   const settings = (deployment.governanceSettings as Record<string, unknown> | null) ?? {};
   const previous = settings[args.key] === true;
-  await prisma.agentDeployment.update({
-    where: { id: deployment.id },
-    // Read-modify-write preserving every other governanceSettings key. The computed-key spread widens
-    // to Record<string, unknown>; the stored governanceSettings is already JSON, so the cast to the
-    // Prisma JSON input is sound (a literal-key spread would not need it, but the shared helper does).
-    data: {
-      governanceSettings: { ...settings, [args.key]: args.enabled } as Prisma.InputJsonValue,
-    },
-  });
-  await ledger.record({
-    eventType: "policy.updated",
-    actorType: "user",
-    actorId: args.actor,
-    entityType: "deployment",
-    entityId: deployment.id,
-    riskCategory: "high",
-    summary: `riley ${args.key}: ${previous} -> ${args.enabled} (org ${args.organizationId}, by ${args.actor})`,
-    snapshot: {
-      flag: args.key,
-      previous,
-      current: args.enabled,
-      organizationId: args.organizationId,
-      deploymentId: deployment.id,
-    },
+  // Flip + audit row commit or roll back together: the audit chain-append joins
+  // this transaction (ledger.record({ tx }) -> appendAtomic({ externalTx })), so
+  // a ledger failure can never leave a money-move capability armed or disarmed
+  // with no audit row. Mirrors provisionOrgAgentDeployments + the platform's
+  // WorkTrace + AuditEntry binding.
+  await prisma.$transaction(async (tx) => {
+    await tx.agentDeployment.update({
+      where: { id: deployment.id },
+      // Read-modify-write preserving every other governanceSettings key. The computed-key spread widens
+      // to Record<string, unknown>; the stored governanceSettings is already JSON, so the cast to the
+      // Prisma JSON input is sound (a literal-key spread would not need it, but the shared helper does).
+      data: {
+        governanceSettings: { ...settings, [args.key]: args.enabled } as Prisma.InputJsonValue,
+      },
+    });
+    await ledger.record(
+      {
+        eventType: "policy.updated",
+        actorType: "user",
+        actorId: args.actor,
+        entityType: "deployment",
+        entityId: deployment.id,
+        riskCategory: "high",
+        summary: `riley ${args.key}: ${previous} -> ${args.enabled} (org ${args.organizationId}, by ${args.actor})`,
+        snapshot: {
+          flag: args.key,
+          previous,
+          current: args.enabled,
+          organizationId: args.organizationId,
+          deploymentId: deployment.id,
+        },
+      },
+      { tx },
+    );
   });
   return { previous, current: args.enabled };
 }
