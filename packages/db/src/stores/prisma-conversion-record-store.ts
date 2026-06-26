@@ -367,10 +367,12 @@ export class PrismaConversionRecordStore {
   /**
    * Org-level windowed booked stats for the outcome ledger's corroboration
    * predicate (Riley v3 slice 4d). Sum and count aggregate over the SAME
-   * predicate (`type:"booked"` AND `value > 0`), org-wide: campaign
-   * attribution is deliberately NOT required, because the CRM-side second
-   * estimate must be independent of Meta attribution and
-   * partially-attributed orgs still book real revenue.
+   * predicate (`type:"booked"` AND `origin:"live"` AND `value > 0`), org-wide:
+   * campaign attribution is deliberately NOT required, because the CRM-side
+   * second estimate must be independent of Meta attribution and
+   * partially-attributed orgs still book real revenue. `origin:"live"` excludes
+   * seed/demo fixtures (matching every sibling booked query), so a non-live row
+   * can never fabricate a corroborated outcome.
    *
    * The window is HALF-OPEN [startInclusive, endExclusive), mirroring the
    * attribution engine's Meta window queries so an instant-of-anchor booking
@@ -390,6 +392,7 @@ export class PrismaConversionRecordStore {
       where: {
         organizationId: args.organizationId,
         type: "booked",
+        origin: "live",
         value: { gt: 0 },
         occurredAt: { gte: args.startInclusive, lt: args.endExclusive },
       },
