@@ -22,6 +22,8 @@ export interface ConversionStreamDrainerOptions {
   consumerName?: string;
   count?: number;
   blockMs?: number;
+  /** Backoff after a REJECTED readGroup (outage). Defaults to {@link DEFAULT_READ_ERROR_BACKOFF_MS}. */
+  readErrorBackoffMs?: number;
 }
 
 const DEFAULT_GROUP_NAME = "switchboard-conversion-consumers";
@@ -30,6 +32,12 @@ const DEFAULT_COUNT = 16;
 // reads, so this also bounds worst-case `stop()` latency. Modest by design:
 // short enough to shut down promptly, long enough to avoid busy-looping Redis.
 const DEFAULT_BLOCK_MS = 2000;
+// Backoff applied after a readGroup that REJECTS (Redis down / connection
+// refused), as opposed to an empty success. BLOCK only paces the empty-success
+// path; a rejected command returns immediately, so without this explicit pause
+// the loop would hot-spin at 100% CPU and flood logs for the whole outage.
+// Overridable via options for tests; 1s is a deliberately modest default.
+const DEFAULT_READ_ERROR_BACKOFF_MS = 1000;
 
 /**
  * Background consumer for the Redis conversion stream.
@@ -38,18 +46,26 @@ const DEFAULT_BLOCK_MS = 2000;
  * consumer the registered handlers (conversion record write, Meta CAPI delivery)
  * never run, so with `REDIS_URL` set those deliveries go dark. This drain loop is
  * that consumer: `ensureConsumerGroup` at start, then repeatedly `readGroup` →
- * `dispatch` each message to the registered handler(s) → `ack`.
+ * `dispatch` each message to the registered handler(s) → `ack`. The structural
+ * fix this lands is closing that dark-delivery gap: the stream is now consumed.
  *
- * Delivery is AT-LEAST-ONCE: a message is acked only AFTER its dispatch resolves
- * successfully. If dispatch (or the ack) throws, the message is left in the
- * pending-entries list (PEL) — never silently dropped. Downstream dedups on
- * `event_id`, so redelivery is safe whereas at-most-once would risk losing a
- * conversion.
+ * Delivery semantics, stated precisely (this is narrower than blanket
+ * "at-least-once"): a message is acked only AFTER `dispatch` resolves, and is
+ * left unacked in the pending-entries list (PEL) if `dispatch` (or the ack)
+ * REJECTS. So ack-after-success yields at-least-once ONLY for handlers that
+ * PROPAGATE their failure. Today's subscribers (conversion record write + Meta
+ * CAPI, in conversion-bus-bootstrap.ts) SWALLOW their own errors and resolve, so
+ * a per-message handler failure is still acked: parity with the prior in-memory
+ * bus, NOT redelivery. The unacked branch exists for future propagating handlers.
+ * Downstream dedups on `event_id`, so redelivery, when it does occur, is safe
+ * rather than double-counting.
  *
- * NOTE: `readGroup` uses `>` (never-delivered entries only), so an unacked entry
- * is recovered on consumer restart / via XAUTOCLAIM rather than re-read by the
- * same live consumer. A future enhancement should add PEL recovery PLUS a
- * max-deliveries / dead-letter guard so a poison message can't redeliver forever.
+ * Full at-least-once + poison handling is a documented FOLLOW-UP. `readGroup` uses
+ * `>` (never-delivered entries only), so an unacked entry is NOT re-read by this
+ * live consumer, and is NOT recovered on restart either: a restart gets a fresh
+ * consumer name and `>` never re-reads a defunct consumer's PEL. Recovery needs an
+ * explicit XAUTOCLAIM pass (deferred), PLUS a max-deliveries / dead-letter guard
+ * so a poison message can't redeliver forever.
  */
 export class ConversionStreamDrainer {
   private readonly bus: DrainableConversionBus;
@@ -57,6 +73,7 @@ export class ConversionStreamDrainer {
   private readonly consumerName: string;
   private readonly count: number;
   private readonly blockMs: number;
+  private readonly readErrorBackoffMs: number;
 
   private running = false;
   private loop: Promise<void> | null = null;
@@ -67,6 +84,7 @@ export class ConversionStreamDrainer {
     this.consumerName = options.consumerName ?? `consumer-${process.pid}`;
     this.count = options.count ?? DEFAULT_COUNT;
     this.blockMs = options.blockMs ?? DEFAULT_BLOCK_MS;
+    this.readErrorBackoffMs = options.readErrorBackoffMs ?? DEFAULT_READ_ERROR_BACKOFF_MS;
   }
 
   /**
@@ -105,10 +123,15 @@ export class ConversionStreamDrainer {
           this.blockMs,
         );
       } catch (err) {
-        // Transient read failure (e.g. a Redis blip). Log and retry; the BLOCK
-        // window on the next read provides natural backoff. Never throw out of
-        // the loop — that would silently stop draining.
-        console.error("[ConversionStreamDrainer] readGroup failed:", err);
+        // Read REJECTED (e.g. Redis down / connection refused), not an empty
+        // success. XREADGROUP BLOCK does NOT apply to a rejected command (it
+        // returns immediately), so the explicit backoff below, not BLOCK, is what
+        // covers the reject/outage path (BLOCK still paces the empty-success
+        // path). Without it the loop would spin at 100% CPU and flood logs for the
+        // whole outage. Never throw out of the loop, which would silently stop
+        // draining.
+        console.error("[ConversionStreamDrainer] readGroup failed; backing off:", err);
+        await new Promise((resolve) => setTimeout(resolve, this.readErrorBackoffMs));
         continue;
       }
 
@@ -118,11 +141,14 @@ export class ConversionStreamDrainer {
           await this.bus.dispatch(event);
           await this.bus.ack(this.groupName, id);
         } catch (err) {
-          // At-least-once: a handler (or the ack) failed. Do NOT ack — leave the
-          // entry in the PEL for redelivery. Downstream dedups on event_id, so
-          // re-delivery is safe; dropping would lose a conversion.
+          // `dispatch` (or the ack) REJECTED. Do NOT ack; leave the entry in the
+          // PEL. NOTE: today's record + CAPI subscribers swallow their own errors,
+          // so this branch only fires for handlers that propagate; a PEL entry is
+          // recovered via a deferred XAUTOCLAIM pass, NOT on restart (a restart
+          // gets a fresh consumer name and `>` never re-reads a defunct consumer's
+          // PEL). Downstream dedups on event_id, so redelivery is safe.
           console.error(
-            `[ConversionStreamDrainer] dispatch failed for message ${id}; leaving unacked for redelivery:`,
+            `[ConversionStreamDrainer] dispatch failed for message ${id}; left unacked (PEL), recover via XAUTOCLAIM:`,
             err,
           );
         }

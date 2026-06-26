@@ -121,9 +121,11 @@ export class RedisStreamConversionBus implements ConversionBus {
    * dispatches in-process: type-specific handlers first, then wildcard ("*").
    *
    * Unlike `InMemoryConversionBus.safeInvoke`, errors PROPAGATE here. Handlers are
-   * awaited and a rejection bubbles so the drainer can leave the message unacked
-   * (at-least-once redelivery). Downstream dedups on `event_id`, so re-running a
-   * partially-applied batch is safe; dropping a conversion is not.
+   * awaited and a rejection bubbles so the drainer can leave the message unacked.
+   * That enables at-least-once redelivery ONLY for handlers that propagate; today's
+   * bootstrap subscribers swallow their own errors, so this propagation is latent
+   * until they (or future handlers) opt to rethrow. Downstream dedups on `event_id`,
+   * so re-running a partially-applied batch is safe; dropping a conversion is not.
    */
   async dispatch(event: ConversionEvent): Promise<void> {
     const typeHandlers = this.handlers.get(event.type);

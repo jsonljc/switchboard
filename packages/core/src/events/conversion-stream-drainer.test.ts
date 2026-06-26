@@ -133,6 +133,34 @@ describe("ConversionStreamDrainer", () => {
     errSpy.mockRestore();
   });
 
+  it("backs off after a readGroup rejection instead of hot-spinning the loop", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // readGroup REJECTS every time (e.g. Redis down / connection refused). The
+    // XREADGROUP BLOCK window does NOT apply to a rejected command, so only the
+    // drainer's explicit backoff paces the retries here.
+    redis.xreadgroup.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    drainer = new ConversionStreamDrainer(bus, {
+      groupName: GROUP,
+      consumerName: "consumer-test",
+      count: 8,
+      blockMs: 1,
+      readErrorBackoffMs: 25,
+    });
+    await drainer.start();
+
+    // Over ~130ms with a 25ms backoff we expect a small handful of reads (~5),
+    // NOT the thousands a microtask hot-spin would issue. The loose upper bound
+    // keeps this non-flaky while still failing loudly if the backoff is removed
+    // (removing it makes the loop starve this very macrotask timer -> a hang).
+    await new Promise((r) => setTimeout(r, 130));
+    const calls = redis.xreadgroup.mock.calls.length;
+    expect(calls).toBeGreaterThan(0);
+    expect(calls).toBeLessThan(15);
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
   it("acks every drained message in a batch", async () => {
     const handler = vi.fn().mockResolvedValue(undefined);
     bus.subscribe("*", handler);

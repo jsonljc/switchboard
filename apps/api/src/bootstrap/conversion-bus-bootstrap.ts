@@ -67,17 +67,29 @@ export async function bootstrapConversionBus(opts: {
         accessToken: metaCapiToken,
       });
 
+      // Like the record-write subscriber above, this handler SWALLOWS its failures
+      // and resolves, so the drainer acks the message even when CAPI delivery
+      // actually failed: parity with the prior in-memory bus, NOT redelivery.
+      // Two honesty gaps, both tracked by the at-least-once follow-up (XAUTOCLAIM
+      // PEL recovery + dead-letter + max-deliveries):
+      //   1. CAPI failure is currently only LOGGED, not metered; there is no
+      //      capiDispatchFailure counter yet. TODO: add one with the follow-up
+      //      (a new counter touches all 3 metric registries, so out of scope here).
+      //   2. Real redelivery would require this handler to PROPAGATE instead of
+      //      swallow, which is only safe once PEL recovery + poison handling land.
       bus.subscribe("*", async (event: ConversionEvent) => {
         if (!capiDispatcher.canDispatch(event)) return;
         try {
           const result = await capiDispatcher.dispatch(event);
           if (!result.accepted) {
+            // TODO(at-least-once follow-up): meter this rejection (capiDispatchFailure).
             console.warn(
               `[ConversionBus] MetaCAPI dispatch rejected: ${result.errorMessage}`,
               event.eventId,
             );
           }
         } catch (err) {
+          // TODO(at-least-once follow-up): meter this failure (capiDispatchFailure).
           console.error("[ConversionBus] MetaCAPI dispatch failed:", err);
         }
       });
