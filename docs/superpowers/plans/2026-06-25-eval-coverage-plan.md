@@ -38,30 +38,30 @@ reproduce the defect before asserting it.
 
 ## Slice ledger
 
-| Slice | Closes                              | Theme                               | Sev | SURFACE | Status         |
-| ----- | ----------------------------------- | ----------------------------------- | --- | ------- | -------------- |
-| EV-1  | SPINE-1                             | proof-chain join regression (#1269) | P2  | -       | not started    |
-| EV-2  | SPINE-2 (BUG-2) + SPINE-5           | at-most-once delivery safety        | P1  | yes     | surfaced #1292 |
-| EV-3  | ADV-1 + ADV-3 (Alex live)           | injection + input-robustness suite  | P1  | -       | merged #1323   |
-| EV-3b | ADV-1 (Riley live)                  | Riley campaign-name injection lane  | P1  | -       | with EV-7      |
+| Slice | Closes                              | Theme                               | Sev | SURFACE | Status            |
+| ----- | ----------------------------------- | ----------------------------------- | --- | ------- | ----------------- |
+| EV-1  | SPINE-1                             | proof-chain join regression (#1269) | P2  | -       | not started       |
+| EV-2  | SPINE-2 (BUG-2) + SPINE-5           | at-most-once delivery safety        | P1  | yes     | surfaced #1292    |
+| EV-3  | ADV-1 + ADV-3 (Alex live)           | injection + input-robustness suite  | P1  | -       | merged #1323      |
+| EV-3b | ADV-1 (Riley live)                  | Riley campaign-name injection lane  | P1  | -       | with EV-7         |
 | EV-3c | ADV-1 (Mira live)                   | Mira taste/facts injection lane     | P1  | -       | unblocked by EV-6 |
-| EV-4  | ADV-2                               | claim-boundary (classifier on/off)  | P1  | -       | not started    |
-| EV-5  | INFRA-1 + AGENT-5                   | Alex eval blocking + tool parity    | P1  | -       | not started    |
-| EV-6  | INFRA-3(Mira) + AGENT-8 + AGENT-9   | Mira real-generation eval           | P1  | -       | merged #1343   |
-| EV-7  | AGENT-7 + INFRA-3(Robin) + AGENT-10 | Riley LLM-judgment + Robin lane     | P1  | -       | not started    |
-| EV-8  | AGENT-1..4, AGENT-6                 | Alex missing-scenario fixtures      | P1  | -       | not started    |
-| EV-9a | GOV-1, GOV-6                        | consent fail-closed branches        | P1  | yes     | not started    |
-| EV-9b | GOV-3, GOV-4, GOV-5, GOV-7, GOV-8   | approval + operator-binding iso     | P1  | yes     | not started    |
-| EV-10 | SPINE-3 (BUG-3), SPINE-4            | skill-runtime constraints / inert   | P1  | -       | not started    |
-| EV-11 | MONEY-1, 3, 8, 9, 10                | pre-real-money-flip gate            | P1  | yes     | not started    |
-| EV-12 | MONEY-4 (BUG-10), MONEY-5, MONEY-6  | attribution chain                   | P1  | yes     | not started    |
-| EV-13 | MONEY-7 (BUG-8)                     | creative medical-claim judge        | P1  | yes     | not started    |
-| EV-14 | CHAN-1, 2, 3, 7, 8                  | cross-tenant route sweep            | P1  | yes     | not started    |
-| EV-15 | CHAN-4..6, 9, 10 (BUG-4, BUG-5)     | channel delivery fixes + evals      | P2  | -       | not started    |
-| EV-16 | INFRA-2 + SPINE-6                   | real-Postgres integration tier      | P1  | -       | merged #1305   |
-| EV-17 | SPINE-7..12 (BUG-6, BUG-7, BUG-11)  | spine async-correctness             | P2  | -       | not started    |
-| EV-18 | APP-1, APP-2, APP-3                 | dashboard/app state evals           | P2  | -       | not started    |
-| EV-19 | INFRA-4, INFRA-5, GOV-9, GOV-10     | eval-infra housekeeping             | P3  | -       | not started    |
+| EV-4  | ADV-2                               | claim-boundary (classifier on/off)  | P1  | -       | not started       |
+| EV-5  | INFRA-1 + AGENT-5                   | Alex eval blocking + tool parity    | P1  | -       | not started       |
+| EV-6  | INFRA-3(Mira) + AGENT-8 + AGENT-9   | Mira real-generation eval           | P1  | -       | merged #1343      |
+| EV-7  | AGENT-7 + INFRA-3(Robin) + AGENT-10 | Riley LLM-judgment + Robin lane     | P1  | -       | not started       |
+| EV-8  | AGENT-1..4, AGENT-6                 | Alex missing-scenario fixtures      | P1  | -       | not started       |
+| EV-9a | GOV-1, GOV-6                        | consent fail-closed branches        | P1  | yes     | not started       |
+| EV-9b | GOV-3, GOV-4, GOV-5, GOV-7, GOV-8   | approval + operator-binding iso     | P1  | yes     | not started       |
+| EV-10 | SPINE-3 (BUG-3), SPINE-4            | skill-runtime constraints / inert   | P1  | -       | not started       |
+| EV-11 | MONEY-1, 3, 8, 9, 10                | pre-real-money-flip gate            | P1  | yes     | not started       |
+| EV-12 | MONEY-4 (BUG-10), MONEY-5, MONEY-6  | attribution chain                   | P1  | yes     | not started       |
+| EV-13 | MONEY-7 (BUG-8)                     | creative medical-claim judge        | P1  | yes     | not started       |
+| EV-14 | CHAN-1, 2, 3, 7, 8                  | cross-tenant route sweep            | P1  | yes     | not started       |
+| EV-15 | CHAN-4..6, 9, 10 (BUG-4, BUG-5)     | channel delivery fixes + evals      | P2  | -       | not started       |
+| EV-16 | INFRA-2 + SPINE-6                   | real-Postgres integration tier      | P1  | -       | merged #1305      |
+| EV-17 | SPINE-7..12 (BUG-6, BUG-7, BUG-11)  | spine async-correctness             | P2  | -       | not started       |
+| EV-18 | APP-1, APP-2, APP-3                 | dashboard/app state evals           | P2  | -       | not started       |
+| EV-19 | INFRA-4, INFRA-5, GOV-9, GOV-10     | eval-infra housekeeping             | P3  | -       | not started       |
 
 **Recommended order:** EV-2 (the one still-open P0/P1 correctness gap - the stranded-claim
 dead-letter) -> EV-16 (CI job over the existing `DATABASE_URL` PG tier; unblocks EV-1 + the real-PG
