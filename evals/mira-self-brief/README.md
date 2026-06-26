@@ -26,8 +26,13 @@ The deterministic grader is the deliverable. For a driven compose result it chec
 - **contract-bleed (AGENT-9)** — no `<intent>` / `<qualification_signals>` in the raw output, AND the
   executor's `intentClass` / `qualificationSignals` strip side-channels are unset (a set value means
   Mira emitted a cross-agent tag the executor stripped);
-- **banned claims** — sharp medical/guarantee/regulatory phrases from the SKILL.md claim boundaries in
-  the **brief** fields (soft superlatives are left to the judge to avoid false-positive blocks);
+- **banned claims** — sharp **lexical** bans from the SKILL.md claim boundaries (the words the skill
+  forbids outright: `removes`, `permanent`, `guaranteed`, … plus regulated/safety absolutes like
+  `FDA-approved`, `risk-free`, `cure`) in the **brief** fields. The match is lexical by design: a
+  collocation like "semi-permanent" still fires, which is contract-faithful (a disciplined brief
+  avoids the word). **The deterministic claim teeth are lexical only** — soft superlatives and the
+  skill's _phrasal_ bans (before/after-photo PROMISES, outcome TIMELINES) are left to the judge, which
+  reads phrasing in context, so the blocking leg is not the full claim-safety surface;
 - **graceful degradation** — a crashed drive is a violation, not an unhandled throw.
 
 The live judge (`compose-judge.ts`, key-gated, fail-closed) scores propose/abstain appropriateness,

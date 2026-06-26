@@ -28,8 +28,10 @@ export interface MiraComposeGradeResult {
  * Cross-agent contract-bleed tags (AGENT-9). Mira's SKILL.md forbids emitting these
  * — they belong to Alex's intent classifier / qualification sidecar and would corrupt
  * a brief if they reached a downstream consumer. The executor STRIPS them from the
- * visible response, so the raw-text scan catches a pre-strip / unstripped variant and
- * the `intentClass` / `qualificationSignals` side-channels catch a stripped one.
+ * visible response, so the raw-text scan catches a pre-strip / unstripped / malformed
+ * variant, and the `intentClass` / `qualificationSignals` side-channels catch a stripped,
+ * RECOGNIZED one. (A stripped tag with an unknown value, or 2+ tags, surfaces via neither
+ * channel — but the strip already neutralized it, so nothing can bleed to a consumer.)
  */
 export const CONTRACT_BLEED_PATTERNS: ReadonlyArray<{ label: string; re: RegExp }> = [
   { label: "intent-tag", re: /<\/?intent\s*>/i },
@@ -37,11 +39,19 @@ export const CONTRACT_BLEED_PATTERNS: ReadonlyArray<{ label: string; re: RegExp 
 ];
 
 /**
- * Sharp, unambiguous banned claims from skills/mira/SKILL.md "Claim boundaries
- * (non-negotiable)". Only claims that are virtually always a real violation in a
- * brief are blocked deterministically; soft superlatives ("best", "leading",
- * "top-rated") are nuanced and left to the informational judge to avoid
- * false-positive BLOCKS on a live run.
+ * Sharp, LEXICAL banned claims from skills/mira/SKILL.md "Claim boundaries
+ * (non-negotiable)" — the words the skill bans outright ("no 'removes', no 'erases',
+ * no 'guaranteed', no 'permanent'") plus the regulated / safety / efficacy absolutes
+ * ("FDA-approved", "risk-free", "pain-free", "clinically proven", "cure", "100%"). The
+ * match is intentionally lexical, mirroring the skill's WORD-level ban: a collocation
+ * like "semi-permanent" or "removes dead skin" still fires, which is contract-faithful —
+ * a disciplined brief avoids the banned word entirely.
+ *
+ * Deliberately NOT blocked here (left to the informational judge, which reads phrasing in
+ * context): soft superlatives ("best", "leading", "top-rated"), and the skill's PHRASAL
+ * bans — before/after-photo PROMISES and outcome TIMELINES ("clear skin in two weeks") —
+ * which a bare regex cannot separate from benign mentions ("before and after your visit")
+ * without false-positive BLOCKS on a live brief.
  */
 export const BANNED_CLAIM_PATTERNS: ReadonlyArray<{ label: string; re: RegExp }> = [
   { label: "guarantee", re: /\bguarantee[ds]?\b/i },
@@ -54,7 +64,6 @@ export const BANNED_CLAIM_PATTERNS: ReadonlyArray<{ label: string; re: RegExp }>
   { label: "clinically-proven", re: /\bclinically[\s-]?proven\b/i },
   { label: "cure", re: /\bcures?\b/i },
   { label: "hundred-percent", re: /\b100\s*%/ },
-  { label: "before-after", re: /\bbefore[\s-]*(?:and|&)?[\s-]*after\b/i },
 ];
 
 /**
