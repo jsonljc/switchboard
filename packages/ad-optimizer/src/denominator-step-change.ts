@@ -7,6 +7,15 @@ export interface AccountWindowTotals {
 export interface StepChangeResult {
   suspected: boolean;
   reason: string;
+  /**
+   * Which signature fired (set only when `suspected`). "zero_despite_traffic" is the
+   * suspected account-wide pixel/CAPI conversion outage: zero attributed conversions across
+   * both windows despite sustained real traffic. It is the signal Riley's
+   * harden_capi_attribution advisory keys on. "rate_collapse" is a conversion-rate drop with
+   * flat clicks (an attribution-window/reporting shift) whose remediation is to re-check the
+   * window, NOT to harden CAPI, so it must NOT trigger that advisory.
+   */
+  signature?: "rate_collapse" | "zero_despite_traffic";
 }
 
 const DROP_RATIO = 0.5; // conversion-rate fell to <=50% of prior
@@ -67,6 +76,7 @@ export function detectDenominatorStepChange(input: {
     if (sustainedZeroDespiteTraffic) {
       return {
         suspected: true,
+        signature: "zero_despite_traffic",
         reason:
           "zero attributed conversions across both windows despite sustained real traffic — suspected account-wide conversion-tracking outage (verify pixel/CAPI)",
       };
@@ -82,6 +92,7 @@ export function detectDenominatorStepChange(input: {
   const suspected = clicksFlat && rateCollapsed;
   return {
     suspected,
+    ...(suspected ? { signature: "rate_collapse" as const } : {}),
     reason: suspected
       ? `conversion rate fell ${(prevRate ? (1 - curRate / prevRate) * 100 : 0).toFixed(0)}% with flat clicks — suspected denominator/window shift`
       : "no step-change",
