@@ -49,8 +49,21 @@ export type {
   WorkTraceUpdateResult,
   WorkTraceReadResult,
   WorkTraceClaimResult,
+  StrandedRunningClaim,
 } from "./work-trace-recorder.js";
 export * from "./work-trace-lock.js";
+// EV-2 / SPINE-2: stranded idempotency-claim reaper (orchestrator + constants).
+export {
+  reapStrandedClaims,
+  STRANDED_CLAIM_MAX_AGE_MS,
+  STRANDED_CLAIM_REAP_LIMIT,
+} from "./stranded-claim-reaper.js";
+export type {
+  StrandedClaimReaperStore,
+  ReapStrandedClaimsDeps,
+  ReapStrandedClaimsConfig,
+  ReapStrandedClaimsResult,
+} from "./stranded-claim-reaper.js";
 export {
   WorkTraceIntegrityError,
   assertExecutionAdmissible,

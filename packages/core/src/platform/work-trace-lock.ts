@@ -1,7 +1,14 @@
 import type { WorkTrace } from "./work-trace.js";
 import type { WorkOutcome } from "./types.js";
 
-export const TERMINAL_OUTCOMES: ReadonlySet<WorkOutcome> = new Set(["completed", "failed"]);
+export const TERMINAL_OUTCOMES: ReadonlySet<WorkOutcome> = new Set([
+  "completed",
+  "failed",
+  // EV-2 / SPINE-2: the stranded-claim dead-letter sink is terminal — entering it
+  // seals the trace (lockedAt stamped) so a reaped claim can never be finalized back
+  // to a live outcome.
+  "needs_reconciliation",
+]);
 
 export const ALLOWED_OUTCOME_TRANSITIONS: Readonly<Record<WorkOutcome, ReadonlySet<WorkOutcome>>> =
   {
@@ -13,9 +20,21 @@ export const ALLOWED_OUTCOME_TRANSITIONS: Readonly<Record<WorkOutcome, ReadonlyS
     // can legitimately resolve to a NON-terminal outcome (queued async child
     // work, or pending_approval) — finalize must be able to record those, or
     // the claim wedges at `running` and a legitimate replay fails closed.
-    running: new Set<WorkOutcome>(["queued", "pending_approval", "completed", "failed"]),
+    // EV-2: the stranded-claim reaper ages an ORPHANED `running` claim (one whose
+    // finalize never arrived) to `needs_reconciliation` — the only writer of that
+    // edge; a live finalize never targets it.
+    running: new Set<WorkOutcome>([
+      "queued",
+      "pending_approval",
+      "completed",
+      "failed",
+      "needs_reconciliation",
+    ]),
     completed: new Set<WorkOutcome>(),
     failed: new Set<WorkOutcome>(),
+    // Terminal: a reaped claim is never re-runnable (no transition out). The
+    // idempotency key stays blocked until a human reconciles.
+    needs_reconciliation: new Set<WorkOutcome>(),
   };
 
 const ALWAYS_IMMUTABLE_FIELDS: ReadonlySet<keyof WorkTrace> = new Set([

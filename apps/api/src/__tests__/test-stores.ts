@@ -34,6 +34,7 @@ import type {
   WorkTraceUpdateResult,
   WorkTraceReadResult,
   WorkTraceClaimResult,
+  StrandedRunningClaim,
 } from "@switchboard/core/platform";
 import type {
   Contact,
@@ -95,6 +96,29 @@ export class InMemoryWorkTraceStore implements WorkTraceStore {
       }
     }
     return null;
+  }
+
+  async findStuckRunning(olderThan: Date, limit: number): Promise<StrandedRunningClaim[]> {
+    // Only KEYED `running` claims older than the threshold (keyless conversation /
+    // lifecycle running rows are never reaped), oldest-first, bounded by limit.
+    return [...this.traces.values()]
+      .filter(
+        (t) =>
+          t.outcome === "running" &&
+          t.idempotencyKey != null &&
+          t.executionStartedAt != null &&
+          new Date(t.executionStartedAt) < olderThan,
+      )
+      .sort((a, b) => (a.executionStartedAt! < b.executionStartedAt! ? -1 : 1))
+      .slice(0, limit)
+      .map((t) => ({
+        workUnitId: t.workUnitId,
+        organizationId: t.organizationId,
+        idempotencyKey: t.idempotencyKey ?? null,
+        intent: t.intent,
+        traceId: t.traceId,
+        executionStartedAt: t.executionStartedAt ?? null,
+      }));
   }
 }
 

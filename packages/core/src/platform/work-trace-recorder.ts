@@ -34,6 +34,22 @@ export interface WorkTraceReadResult {
 
 export type WorkTraceClaimResult = { claimed: true } | { claimed: false };
 
+/**
+ * Minimal read-projection of an orphaned `running` idempotency CLAIM, returned by
+ * `findStuckRunning` for the EV-2 stranded-claim reaper. Only the fields the reaper
+ * needs to age the row out, label its metric, and surface it to an operator —
+ * NOT the full WorkTrace.
+ */
+export interface StrandedRunningClaim {
+  workUnitId: string;
+  organizationId: string;
+  idempotencyKey: string | null;
+  intent: string;
+  traceId: string;
+  /** When the claim was written (just before dispatch). Null only for legacy rows. */
+  executionStartedAt: string | null;
+}
+
 export interface WorkTraceStore {
   persist(trace: WorkTrace): Promise<void>;
   /**

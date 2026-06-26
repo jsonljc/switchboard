@@ -6,7 +6,11 @@ export type InfrastructureErrorType =
   | "work_trace_integrity_mismatch"
   | "work_trace_integrity_missing_anchor"
   | "integrity_check_unavailable"
-  | "async_job_retry_exhausted";
+  | "async_job_retry_exhausted"
+  // EV-2 / SPINE-2: the stranded-claim reaper aged ≥1 orphaned `running` idempotency
+  // claim to the `needs_reconciliation` dead-letter sink. Always surfaced (never a
+  // silent block); severity escalates to critical when a reap-write itself failed.
+  | "stranded_claim_reaped";
 
 export interface InfrastructureFailureAlert {
   errorType: InfrastructureErrorType;

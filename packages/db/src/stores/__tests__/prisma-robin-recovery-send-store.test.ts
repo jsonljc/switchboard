@@ -107,6 +107,33 @@ describe("PrismaRobinRecoverySendStore", () => {
     });
   });
 
+  it("SPINE-5 at-most-once invariant: a markSendInFlight-claimed row (nextRetryAt=null) is structurally excluded from findDue's due-set", async () => {
+    // The two store predicates that COMPOSE the pre-send-claim ordering guarantee,
+    // pinned together as one named invariant:
+    //   (1) markSendInFlight clears nextRetryAt -> the row is no longer "due".
+    //   (2) findDue selects ONLY rows with nextRetryAt <= now. In SQL a `lte`
+    //       comparison against NULL is UNKNOWN, so a null-nextRetryAt (claimed) row
+    //       is NEVER returned — and findDue must NOT carry the prior-art
+    //       `OR nextRetryAt: null` leg that dispatchRecoveryRow deliberately dropped
+    //       (re-introducing it would re-queue claimed rows -> double-send).
+    // Because the claim is made BEFORE the network send, a crashed or failed
+    // post-send write can never re-queue the row -> at-most-once. (The composed
+    // guarantee is proven end-to-end against real Postgres in EV-16; here we pin
+    // the two store predicates that compose to it.)
+    prisma.robinRecoverySend.update.mockResolvedValue({});
+    prisma.robinRecoverySend.findMany.mockResolvedValue([]);
+    const now = new Date("2026-06-21T20:00:00.000Z");
+
+    await store.markSendInFlight("rs_claim");
+    expect(prisma.robinRecoverySend.update.mock.calls[0]![0].data.nextRetryAt).toBeNull(); // (1)
+
+    await store.findDue(now, 100);
+    const dueWhere = prisma.robinRecoverySend.findMany.mock.calls[0]![0].where;
+    expect(dueWhere.nextRetryAt).toEqual({ lte: now }); // (2) bounded; no `null` leg
+    expect(dueWhere.nextRetryAt).not.toHaveProperty("OR");
+    expect(JSON.stringify(dueWhere.nextRetryAt)).not.toContain("null");
+  });
+
   it("markFailed re-queues (pending + nextRetryAt) when nextRetryAt is provided", async () => {
     prisma.robinRecoverySend.update.mockResolvedValue({});
     const next = new Date("2026-06-21T20:15:00.000Z");

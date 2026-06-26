@@ -9,6 +9,7 @@ import type {
   WorkTraceReadResult,
   WorkTraceClaimResult,
   WorkTraceUpdateResult,
+  StrandedRunningClaim,
 } from "../work-trace-recorder.js";
 import { validateUpdate } from "../work-trace-lock.js";
 import type { IntentRegistration } from "../intent-registration.js";
@@ -182,6 +183,30 @@ class InMemoryTraceStore implements WorkTraceStore {
     const trace = this.byKey.get(this.idemKey(organizationId, key));
     return trace ? ({ trace } as WorkTraceReadResult) : null;
   }
+
+  // Faithful mirror of the Prisma findStuckRunning: only KEYED `running` claims older
+  // than the threshold (keyless conversation/lifecycle running rows are excluded),
+  // oldest-first, bounded by limit.
+  async findStuckRunning(olderThan: Date, limit: number): Promise<StrandedRunningClaim[]> {
+    return [...this.byWorkUnit.values()]
+      .filter(
+        (t) =>
+          t.outcome === "running" &&
+          t.idempotencyKey != null &&
+          t.executionStartedAt != null &&
+          new Date(t.executionStartedAt) < olderThan,
+      )
+      .sort((a, b) => (a.executionStartedAt! < b.executionStartedAt! ? -1 : 1))
+      .slice(0, limit)
+      .map((t) => ({
+        workUnitId: t.workUnitId,
+        organizationId: t.organizationId,
+        idempotencyKey: t.idempotencyKey ?? null,
+        intent: t.intent,
+        traceId: t.traceId,
+        executionStartedAt: t.executionStartedAt ?? null,
+      }));
+  }
 }
 
 interface RevenueRow {
@@ -284,6 +309,50 @@ describe("PlatformIngress D1 — trace-atomicity double-spend window", () => {
     }
 
     // The money handler ran exactly ONCE across both submissions — no double spend.
+    expect(ledger).toHaveLength(1);
+    expect(vi.mocked(mode.execute)).toHaveBeenCalledTimes(1);
+  });
+
+  // EV-2 / SPINE-2: the stranded-claim reaper ages an orphaned `running` claim to
+  // the `needs_reconciliation` dead-letter sink. A replay of that key must STILL
+  // fail closed — never fall through to a cached `ok:true` (the prior mutation may
+  // have committed, so the key must stay blocked until a human reconciles).
+  it("a reaped (needs_reconciliation) claim STILL fails closed on replay — never a cached success", async () => {
+    const ledger: RevenueRow[] = [];
+    const mode = makeRevenueMode(ledger);
+    const traceStore = new InMemoryTraceStore();
+    const ingress = new PlatformIngress(buildConfig(traceStore, mode));
+    const request = { ...baseRequest, idempotencyKey: "pay-key-reap" };
+
+    // 1) Stranded claim: the domain write commits but finalize blips -> left `running`.
+    traceStore.failFinalizeCount = 3;
+    const first = await ingress.submit(request);
+    expect(first.ok).toBe(true);
+    expect(ledger).toHaveLength(1);
+    const claim = await traceStore.getByIdempotencyKey("org-1", "pay-key-reap");
+    expect(claim?.trace.outcome).toBe("running");
+
+    // 2) The reaper ages the orphan to the non-resubmittable terminal sink (this is
+    //    the only writer of running -> needs_reconciliation; it seals the row).
+    const reap = await traceStore.update(claim!.trace.workUnitId, {
+      outcome: "needs_reconciliation",
+      completedAt: "2026-06-25T00:00:00.000Z",
+    });
+    expect(reap.ok).toBe(true);
+    const reaped = await traceStore.getByIdempotencyKey("org-1", "pay-key-reap");
+    expect(reaped?.trace.outcome).toBe("needs_reconciliation");
+
+    // 3) Replay of the reaped key STILL fails closed (NOT cached ok:true, NOT a
+    //    re-dispatch), and the operator message names reconciliation (not "in-flight").
+    const replay = await ingress.submit(request);
+    expect(replay.ok).toBe(false);
+    if (!replay.ok) {
+      expect(replay.error.type).toBe("idempotency_in_flight");
+      expect(replay.error.retryable).toBe(false);
+      expect(replay.error.message.toLowerCase()).toContain("reconcil");
+    }
+
+    // No second money mutation; the handler still ran exactly ONCE.
     expect(ledger).toHaveLength(1);
     expect(vi.mocked(mode.execute)).toHaveBeenCalledTimes(1);
   });
