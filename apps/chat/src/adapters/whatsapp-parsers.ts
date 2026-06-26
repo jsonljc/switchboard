@@ -174,6 +174,11 @@ export function parseUnsupportedMessage(
   const metadata: Record<string, unknown> = { unsupported: true, originalType: msgType };
   if (contactName) metadata["contactName"] = contactName;
 
+  // CTWA attribution must survive even when the lead's first inbound is an
+  // unsupported type, exactly like the text/media/interactive paths (P3-4).
+  const referralData = extractReferralData(msg);
+  Object.assign(metadata, referralData);
+
   return {
     id: msgId ?? `wa_${Date.now()}`,
     channel: "whatsapp",
