@@ -7,7 +7,12 @@ import {
   STAGES_AT_OR_BEYOND_BOOKED,
   isBookingSlotConflictError,
 } from "@switchboard/schemas";
-import type { CalendarProvider, AttributionChain, PlaybookService } from "@switchboard/schemas";
+import type {
+  CalendarProvider,
+  AttributionChain,
+  PlaybookService,
+  SupportedCurrency,
+} from "@switchboard/schemas";
 import { enforceConsentPrecondition } from "./calendar-book-consent.js";
 import type { ConsentPrecondition } from "./calendar-book-consent.js";
 import type { BookingFailureHandler } from "./booking-failure-handler.js";
@@ -133,9 +138,15 @@ interface CalendarBookToolDeps {
       attribution?: AttributionChain | null;
     } | null>;
   };
-  /** ISO-4217 default currency for booked-conversion value (cents). Temporary
-   *  injected dep until per-org currency is wired. */
-  defaultCurrency: string;
+  /**
+   * Resolves the clinic's settlement currency from its market, keyed by the trusted
+   * `ctx.deploymentId`. Returns null when the market cannot be resolved; the booked
+   * value then abstains to a null currency (the booking still confirms). Currency is
+   * a property of the market, independent of whether the service is priced, so a null
+   * here means "market unknown," never "service unpriced." apps/api wires this to the
+   * same governanceConfigResolver the deposit tool and the gates use.
+   */
+  resolveCurrency: (deploymentId: string) => Promise<SupportedCurrency | null>;
   /**
    * Maps a resolved CalendarProvider to the receipt tier that should be
    * minted for this booking. Injected by apps/api — core must not read
@@ -440,7 +451,11 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
             });
           }
 
-          // 3. On success: confirm booking + write outbox in one transaction
+          // 3. On success: confirm booking + write outbox in one transaction.
+          // Resolve the clinic's currency from its market once, up front. A null
+          // (unresolvable market) abstains to a null currency stamp; it never blocks
+          // the booking, mirroring the value-abstain on an unpriced service.
+          const currency = await deps.resolveCurrency(ctx.deploymentId);
           let stageAdvanced = false;
           try {
             const eventId = `evt_booked_${booking.id}`;
@@ -463,7 +478,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                     contactId,
                     organizationId: orgId,
                     value: estimatedValue ?? 0,
-                    currency: deps.defaultCurrency,
+                    currency,
                     sourceCampaignId: conversion.sourceCampaignId,
                     sourceAdId: conversion.sourceAdId,
                     customer: conversion.customer,
@@ -527,7 +542,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                 sourceAdId: conversion.sourceAdId,
                 sourceCampaignId: conversion.sourceCampaignId,
                 estimatedValueCents: estimatedValue,
-                currency: deps.defaultCurrency,
+                currency,
                 now: new Date(),
               });
             });

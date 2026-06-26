@@ -113,7 +113,7 @@ describe("Executor + factory trust contract (AI-1)", () => {
       runTransaction: vi.fn() as never,
       failureHandler: { handle: vi.fn() } as never,
       contactStore: { findById: vi.fn().mockResolvedValue(null) } as never,
-      defaultCurrency: "SGD",
+      resolveCurrency: async () => "SGD",
       receiptTierForProvider: () => "T1_FETCH_BACK",
       isProduction: false,
     });
