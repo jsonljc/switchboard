@@ -25,6 +25,18 @@ export class PrismaConversationStore implements ConversationStore {
   }
 
   async save(state: ConversationState): Promise<void> {
+    // Tenant isolation (audit #2): this store is org-scoped by contract (TI-5/TI-6)
+    // and the write keys on the per-org compound unique (organizationId, threadId),
+    // which cannot take a null org. Reject a null org rather than emit an unkeyable
+    // write (Prisma rejects null in a compound-unique WHERE) or a duplicate inert
+    // row. The `upsert as Function` cast below (needed for the pre-migration
+    // lastInboundAt column) would otherwise hide this at compile time.
+    if (state.organizationId === null) {
+      throw new Error(
+        "PrismaConversationStore.save requires a non-null organizationId (tenant isolation)",
+      );
+    }
+
     // Use raw upsert to handle lastInboundAt column which may not yet exist
     // in the generated Prisma client (added via migration).
     const data = {

@@ -64,5 +64,44 @@ describe.skipIf(!process.env["DATABASE_URL"])(
         await prisma.$disconnect();
       }
     });
+
+    // The api afterSkill hook adapter (skill-mode.ts) calls the helper WITHOUT an
+    // upsertContext → org-scoped updateMany. Prove it lands only on its own org's
+    // pre-existing row and never touches another tenant sharing the phone.
+    it("update-only path (no upsertContext) is org-scoped — lands for its org, no-ops for another", async () => {
+      const prisma = new PrismaClient();
+      const phone = `+6590001${Math.floor(Math.random() * 1e6)}`;
+      const orgA = `orgA-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const orgB = `orgB-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      try {
+        // Both orgs already have a row for the shared phone (as the chat lifecycle writes).
+        for (const org of [orgA, orgB]) {
+          await prisma.conversationState.create({
+            data: {
+              threadId: phone,
+              organizationId: org,
+              channel: "whatsapp",
+              principalId: phone,
+              status: "active",
+              messages: [],
+              lastActivityAt: new Date(),
+              expiresAt: new Date(Date.now() + 86400000),
+            },
+          });
+        }
+
+        await setConversationStatusScoped(prisma, {
+          sessionId: phone,
+          organizationId: orgA,
+          status: "human_override",
+        });
+
+        expect(await readStatus(prisma, phone, orgA)).toBe("human_override"); // landed for A
+        expect(await readStatus(prisma, phone, orgB)).toBe("active"); // untouched for B
+      } finally {
+        await prisma.conversationState.deleteMany({ where: { threadId: phone } }).catch(() => {});
+        await prisma.$disconnect();
+      }
+    });
   },
 );

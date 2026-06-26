@@ -25,7 +25,9 @@
 
 **Files:**
 
-- Create: `apps/api/src/__tests__/conversation-state-isolation.integration.test.ts`
+- Create: `packages/db/src/stores/__tests__/conversation-state-isolation.integration.test.ts`
+  (moved from `apps/api` during execution — importing the chat read class across apps
+  violates `rootDir`; the test exercises the helper + replicates the gateway `findFirst`)
 
 **Interfaces:**
 
@@ -132,7 +134,7 @@ export DATABASE_URL="$(awk -F= '/^DATABASE_URL=/ { sub(/^DATABASE_URL=/, ""); pr
 cd packages/db && pnpm exec prisma migrate dev --name conversationstate_per_org_unique && cd ../..
 ```
 
-Then prepend a comment to the generated `migration.sql` documenting the leave-inert null-org decision (legacy `organizationId IS NULL` rows are not backfilled — org is un-inferable; NULLS-distinct keeps them harmless; TTL reaps them).
+Then edit `migration.sql` to add the single-org backfill (Fork 2, REVISED post-review): derive `organizationId` for legacy null-org rows from the gateway's org-stamped `ConversationThread` (same `sessionId`), single-org-only so it never misassigns; un-derivable rows stay null (NULLS-distinct harmless; TTL reaps). Document it in the SQL.
 
 - [ ] **Step 3: Helper** — create `set-conversation-status-scoped.ts` (compound upsert when `upsertContext`, else org-scoped `updateMany`); export from `index.ts`. 30-day TTL on create.
 
@@ -216,7 +218,7 @@ git commit -m "fix(db,core,chat,api): scope ConversationState by org (per-org un
 ### Task 4: Review, PR, merge, prune
 
 - [ ] Dispatch reviewer(s) via superpowers:requesting-code-review; fix Critical/Important before merge.
-- [ ] Push branch; open PR to `main` with a body explaining the constraint swap + null-org leave-inert decision.
+- [ ] Push branch; open PR to `main` with a body explaining the constraint swap + the single-org null-org backfill (Fork 2).
 - [ ] Verify required CI checks (typecheck/lint/test/security) green via `gh pr checks`.
 - [ ] Squash-merge; `git worktree remove` + branch prune.
 - [ ] Mark `project_adversarial_audit_2026_06_26` memory note COMPLETE.

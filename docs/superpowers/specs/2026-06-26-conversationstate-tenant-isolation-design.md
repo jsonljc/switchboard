@@ -48,18 +48,29 @@ unique's leading column is `organizationId`, so org-prefix lookups
 (`listActive`, `buildConversationList`) use it. Keeping both is write-amplifying
 dead weight. Documented in the migration.
 
-### Fork 2 — Backfill of existing null-org rows: leave-inert (documented in migration)
+### Fork 2 — Backfill of existing null-org rows: derive org where unambiguous (else leave inert)
 
-A null-org row's org cannot be reliably derived: `principalId` phone shape varies
-(erasure needs `buildPhoneMatchCandidates` to match digits-vs-`+E.164`), and shared
-phones are genuinely multi-org. A wrong derivation would itself introduce a
-cross-tenant misassignment — worse than the disease. Deleting risks dropping a live
-`human_override` (silent un-pause = safety regression).
+REVISED after code review. The original "leave-inert" reasoning was self-
+contradictory: it rejected deleting null-org rows because that "drops a live
+`human_override` (silent un-pause)" — but leaving them inert causes the **same**
+silent un-pause via the now org-scoped read. The org column was added nullable with
+no backfill and the old gateway write never set org, so existing rows — including
+active safety-gate `human_override` escalations — are predominantly null-org; an
+org-scoped read would stop honoring those pauses (the bot resumes mid-takeover).
 
-Leave-inert is safe: org-scoped reads no longer match null-org rows; the
-nullable-compound unique permits a fresh `(org, phone)` row beside them; and the
-`expiresAt` TTL reaps them. No data loss, no fresh bug. The migration SQL carries a
-comment recording this.
+Resolution: the migration backfills `organizationId` from the gateway's own
+org-stamped `ConversationThread` (correlated on the same `sessionId`, which IS the
+`ConversationState.threadId`), **single-org only**. This preserves the pause for the
+common case (a phone used by one org) and can NEVER misassign: a sessionId mapping
+to two+ orgs, or only to the identity-unresolved `"gateway"` literal, is left null.
+A buggy/empty match degrades to leave-inert (null), never to a wrong tenant.
+
+Correlating on the gateway's stored `sessionId` string (not a re-normalized phone)
+sidesteps the phone-shape ambiguity entirely — no `buildPhoneMatchCandidates`-style
+matching is needed. Genuinely multi-org-shared or un-derivable rows remain null and
+un-pause (no org can be correctly inferred — an operator re-engages; unavoidable
+without an org); nullable-compound + NULLS-distinct lets such a row coexist with a
+fresh `(org, phone)` row, and the `expiresAt` TTL reaps it.
 
 ### Fork 3 — Writer consistency: required `organizationId` param + one shared write helper
 
@@ -81,9 +92,11 @@ The read path keeps its single inline implementation (one reader, no dedup benef
 
 - `prisma/schema.prisma` `ConversationState`: drop `@unique` on `threadId`, add
   `@@unique([organizationId, threadId])`, drop `@@index([organizationId])`.
-- Generated migration applied via `prisma migrate dev`; the SQL gets a leading
-  comment documenting the leave-inert null-org decision. Migration ships in the same
-  commit as the schema change (CLAUDE.md). `pnpm db:check-drift` must be clean.
+- Migration generated via `prisma migrate diff` and applied surgically (the shared
+  dev DB carried pre-existing unrelated drift that would have made `migrate dev`
+  reset it). The SQL documents the single-org backfill (Fork 2) and the null-org
+  handling. Migration ships in the same commit as the schema change (CLAUDE.md).
+  `pnpm db:check-drift` must be clean.
 
 ### Shared write helper (`packages/db`, new file)
 
@@ -139,11 +152,15 @@ These use a generic `where` with `organizationId`, unaffected by the constraint 
 
 ## Test plan (TDD)
 
-1. **Headline real-PG integration test** (new, `apps/api/src/__tests__`,
-   `describe.skipIf(!DATABASE_URL)`): two orgs A/B share phone P.
+1. **Headline real-PG integration test** (new, `packages/db/src/stores/__tests__`,
+   `describe.skipIf(!DATABASE_URL)`): two orgs A/B share phone P. (Placed in `db`,
+   not `apps/api`: importing the chat read class across apps violates `rootDir`, so
+   the test exercises the helper + replicates the exact gateway `findFirst` read,
+   whose query shape is pinned separately by the chat unit test.)
    - A writes `human_override` (helper + upsertContext) → row `(A, P)`.
-   - B reads status via `PrismaGatewayConversationStore.getConversationStatus(P, B)`
-     → `null` (A's pause does **not** suppress B's bot).
+   - B reads status `findFirst({ threadId: P, organizationId: B })` (the query
+     `PrismaGatewayConversationStore.getConversationStatus` issues) → `null` (A's
+     pause does **not** suppress B's bot).
    - B writes `active` (helper) → creates `(B, P)`, does **not** clobber `(A, P)`.
    - A reads `(P, A)` → still `human_override`.
    - Two distinct rows exist. RED on old code (global unique → 2nd write throws /
@@ -165,5 +182,6 @@ These use a generic `where` with `organizationId`, unaffected by the constraint 
 
 ## Out of scope
 
-No backfill job; no change to already-org-scoped operator/erasure/route paths beyond
-verification; no consolidation of the read path into the helper.
+No standalone backfill job (the single-org backfill rides inside the migration, Fork
+2); no change to already-org-scoped operator/erasure/route paths beyond verification;
+no consolidation of the read path into the helper.
