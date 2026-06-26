@@ -1,6 +1,7 @@
 import type { AttributionData, Delta } from "@switchboard/schemas";
 import type { RollupContext } from "./types.js";
 import type { ReportStores } from "./interfaces.js";
+import { centsToMajorUnits } from "./money-units.js";
 
 function isRiley(row: {
   firstTouchSourceAdId: string | null;
@@ -40,20 +41,28 @@ export async function computeAttribution(
     }),
   ]);
 
-  let rileyRevenue = 0;
-  let alexRevenue = 0;
+  // revenueWithFirstTouch.amount is in MINOR units (cents); the digest renders these
+  // via formatMoneyMajor and the dashboard via fmtSGD, both MAJOR-unit. Normalize to
+  // major ONCE at this boundary (matching campaign/managed rollups) so the owner-facing
+  // attributed-revenue figures aren't inflated 100x.
+  let rileyRevenueCents = 0;
+  let alexRevenueCents = 0;
   for (const e of currentRevenue) {
     if (isRiley(e)) {
-      rileyRevenue += e.amount;
+      rileyRevenueCents += e.amount;
     } else {
-      alexRevenue += e.amount;
+      alexRevenueCents += e.amount;
     }
   }
 
-  let priorTotal = 0;
+  let priorTotalCents = 0;
   for (const e of priorRevenue) {
-    priorTotal += e.amount;
+    priorTotalCents += e.amount;
   }
+
+  const rileyRevenue = centsToMajorUnits(rileyRevenueCents);
+  const alexRevenue = centsToMajorUnits(alexRevenueCents);
+  const priorTotal = centsToMajorUnits(priorTotalCents);
 
   const total = rileyRevenue + alexRevenue;
   const delta = computeDelta(total, priorTotal);

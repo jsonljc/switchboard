@@ -62,6 +62,7 @@ describe("computeCampaignRollup", () => {
         conversions: 8,
       },
     ]);
+    // 3000 cents = $30.00 revenue (major units, matching the dollar spend).
     const revenue = stubRevenue([{ sourceCampaignId: "c1", totalAmount: 3000 }]);
 
     const result = await computeCampaignRollup(ctx, provider, revenue);
@@ -75,8 +76,8 @@ describe("computeCampaignRollup", () => {
       costPerInlineLinkClick: 1.2,
       inlineLinkClickCtr: 1.25,
       leads: 12,
-      revenue: 3000,
-      roas: 5,
+      revenue: 30,
+      roas: 0.05,
     });
     expect(result[0]!.cpl).toBeCloseTo(50);
     expect(result[0]!.clickToLeadRate).toBeCloseTo(0.024);
@@ -88,6 +89,28 @@ describe("computeCampaignRollup", () => {
       roas: 0,
     });
     expect(result[1]!.cpl).toBeCloseTo(25);
+  });
+
+  it("normalizes cents revenue to major units (matching spend) for revenue + ROAS", async () => {
+    // Revenue store returns MINOR units (cents); Meta spend is MAJOR units (dollars).
+    // 60000 cents = $600 revenue against $300 spend => 2.0x ROAS, and the revenue
+    // field must render in major units like spend (not 60000, not 200x).
+    const provider = stubProvider([
+      {
+        campaignId: "c1",
+        campaignName: "Spring",
+        spend: 300,
+        impressions: 1000,
+        inlineLinkClicks: 100,
+        costPerInlineLinkClick: 3,
+        inlineLinkClickCtr: 10,
+        conversions: 5,
+      },
+    ]);
+    const revenue = stubRevenue([{ sourceCampaignId: "c1", totalAmount: 60000 }]);
+    const result = await computeCampaignRollup(ctx, provider, revenue);
+    expect(result[0]!.revenue).toBe(600);
+    expect(result[0]!.roas).toBe(2);
   });
 
   it("returns empty array when provider is null", async () => {

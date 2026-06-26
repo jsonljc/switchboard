@@ -7,6 +7,7 @@ import type {
 import type { RollupContext } from "./types.js";
 import type { BaselineStore, ReportStores } from "./interfaces.js";
 import { captureAdsBaseline } from "./baseline-capture.js";
+import { centsToMajorUnits } from "./money-units.js";
 
 function formatDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -43,10 +44,13 @@ async function buildAdsComparison(
   const baselineSpend =
     baselineRows.filter((r) => r.metric === "spend").reduce((sum, r) => sum + r.value, 0) /
     Math.max(baselineRows.filter((r) => r.metric === "spend").length, 1);
+  // currentRevenue.totalAmount is cents; spend is dollars. Normalize to major units
+  // ONCE so revenue and ROAS share spend's unit (else both inflate 100x).
+  const revenueMajor = centsToMajorUnits(currentRevenue.totalAmount);
   const managed = {
     spend: currentMetrics.spend,
-    revenue: currentRevenue.totalAmount,
-    roas: currentMetrics.spend > 0 ? currentRevenue.totalAmount / currentMetrics.spend : undefined,
+    revenue: revenueMajor,
+    roas: currentMetrics.spend > 0 ? revenueMajor / currentMetrics.spend : undefined,
   };
   const unmanaged = { spend: baselineSpend };
   const delta = computeDelta(managed.spend, unmanaged.spend);
