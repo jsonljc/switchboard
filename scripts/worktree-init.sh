@@ -43,7 +43,12 @@ done
 db_reachable=false
 if [[ -f "$worktree_root/.env" ]] && command -v pg_isready >/dev/null 2>&1; then
   db_url="$(awk -F= '/^DATABASE_URL=/ { sub(/^DATABASE_URL=/, ""); print; exit }' "$worktree_root/.env" | tr -d '"' | tr -d "'")"
-  if [[ -n "$db_url" ]] && pg_isready -d "$db_url" >/dev/null 2>&1; then
+  # Strip the query string before probing: our DATABASE_URL carries Prisma-only params
+  # (?connection_limit=...&pool_timeout=...) that pg_isready rejects ("invalid URI query
+  # parameter"), which made the probe ALWAYS fail and silently skip migrate/build/seed
+  # even with Postgres up. Prisma still gets the full URL; only the probe is trimmed.
+  db_probe_url="${db_url%%\?*}"
+  if [[ -n "$db_probe_url" ]] && pg_isready -d "$db_probe_url" >/dev/null 2>&1; then
     db_reachable=true
   fi
 fi
