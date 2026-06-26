@@ -9,6 +9,7 @@
     "alex-conversation/**/*.ts",
     "governance-decision/**/*.ts",
     "riley-recommendation/**/*.ts",
-    "trajectory-grading/**/*.ts"
+    "trajectory-grading/**/*.ts",
+    "adversarial-injection/**/*.ts"
   ]
 }

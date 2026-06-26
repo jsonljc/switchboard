@@ -13,6 +13,7 @@ export default defineConfig({
       "governance-decision/__tests__/**/*.test.ts",
       "riley-recommendation/__tests__/**/*.test.ts",
       "trajectory-grading/__tests__/**/*.test.ts",
+      "adversarial-injection/__tests__/**/*.test.ts",
     ],
     environment: "node",
   },

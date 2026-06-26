@@ -555,6 +555,71 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm eval:alex-conversation
 
+  eval-adversarial-injection:
+    name: Eval — Adversarial Injection
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Filter adversarial-injection-relevant paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # Empty token forces a local `git diff` against the base instead of the
+          # GitHub REST API (the default token's API access returns 401 in CI here).
+          token: ""
+          filters: |
+            adversarial:
+              - '.github/workflows/ci.yml'
+              - 'skills/alex/**'
+              - 'evals/adversarial-injection/**'
+              - 'evals/alex-conversation/**'
+              - 'packages/core/src/skill-runtime/**'
+
+      - name: Skip notice (no adversarial-injection-relevant changes)
+        if: steps.filter.outputs.adversarial != 'true' && github.ref != 'refs/heads/main'
+        run: 'echo "Eval — Adversarial Injection skipped: no adversarial-injection-relevant paths changed."'
+
+      - uses: pnpm/action-setup@v5
+        if: steps.filter.outputs.adversarial == 'true' || github.ref == 'refs/heads/main'
+
+      - uses: actions/setup-node@v6
+        if: steps.filter.outputs.adversarial == 'true' || github.ref == 'refs/heads/main'
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.adversarial == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages required by the harness
+        if: steps.filter.outputs.adversarial == 'true' || github.ref == 'refs/heads/main'
+        # The adversarial-injection eval reuses the alex-conversation harness (the
+        # real Alex skill-runtime over @switchboard/core + @switchboard/db), and the
+        # shared evals/vitest.config.ts runs every eval suite's unit tests (incl.
+        # riley-recommendation → @switchboard/ad-optimizer) — so build the same chain
+        # the alex job builds.
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
+
+      - name: Run eval unit tests
+        if: steps.filter.outputs.adversarial == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm exec vitest run --config evals/vitest.config.ts
+
+      - name: Run adversarial-injection eval
+        # Informational (live-LLM scored) — non-blocking until ANTHROPIC_API_KEY is
+        # restored (INFRA-1) and the baseline bakes. The deterministic grader + the
+        # offline seam teeth in "Run eval unit tests" above ARE blocking; only the
+        # live conversation drive + judge is informational here. NOTE: a deterministic
+        # violation on a LIVE run still fails this step (a real vulnerability), even
+        # while the step is non-blocking overall.
+        continue-on-error: true
+        if: steps.filter.outputs.adversarial == 'true' || github.ref == 'refs/heads/main'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: pnpm eval:adversarial-injection
+
   eval-governance-decision:
     name: Eval — Governance Decision
     runs-on: ubuntu-latest
