@@ -15,10 +15,16 @@ async function buildApp(opts: {
   trace?: { organizationId: string } | null;
   principalId?: string;
   roles?: string[];
-}): Promise<{ app: FastifyInstance; executeApproved: ReturnType<typeof vi.fn> }> {
+  requestUndo?: ReturnType<typeof vi.fn>;
+}): Promise<{
+  app: FastifyInstance;
+  executeApproved: ReturnType<typeof vi.fn>;
+  requestUndo: ReturnType<typeof vi.fn>;
+}> {
   const app = Fastify({ logger: false });
   app.decorate("authDisabled", opts.authDisabled);
   const executeApproved = vi.fn().mockResolvedValue({ workUnitId: "wu_1", success: true });
+  const requestUndo = opts.requestUndo ?? vi.fn();
   const getById = vi.fn().mockResolvedValue(opts.envelope ?? null);
   const getByWorkUnitId = vi
     .fn()
@@ -32,7 +38,7 @@ async function buildApp(opts: {
   const getPrincipal = vi.fn(async (id: string) =>
     id ? { id, type: "user", name: "P", organizationId: opts.authOrgId ?? null, roles } : null,
   );
-  app.decorate("platformLifecycle", { executeApproved, requestUndo: vi.fn() } as unknown as never);
+  app.decorate("platformLifecycle", { executeApproved, requestUndo } as unknown as never);
   app.decorate("storageContext", {
     envelopes: { getById },
     identity: { getPrincipal },
@@ -47,7 +53,7 @@ async function buildApp(opts: {
     request.principalIdFromAuth = principalId;
   });
   await app.register(actionLifecycleRoutes, { prefix: "/api/actions" });
-  return { app, executeApproved };
+  return { app, executeApproved, requestUndo };
 }
 
 describe("POST /api/actions/:id/execute — tenant isolation", () => {
@@ -174,6 +180,53 @@ describe("POST /api/actions/:id/execute — approver-role floor (A16)", () => {
     const res = await app.inject({ method: "POST", url: "/api/actions/wt_1/execute" });
     expect(res.statusCode).toBe(200);
     expect(executeApproved).toHaveBeenCalledWith("wt_1");
+    await app.close();
+  });
+});
+
+describe("POST /api/actions/:id/undo — non-completed undo surfaces a handle", () => {
+  // requestUndo now fails closed (undoSubmitted:false) for a parked / failed reverse
+  // action but still returns undoWorkUnitId. The route must surface that handle in the
+  // 400 so the operator can track a parked-for-approval undo, not just see a bare error.
+  it("returns 400 with undoWorkUnitId when the reverse action parks for approval", async () => {
+    const requestUndo = vi.fn().mockResolvedValue({
+      undoSubmitted: false,
+      error: "undo_parked_for_approval",
+      undoWorkUnitId: "wu_undo_1",
+    });
+    const { app } = await buildApp({
+      authDisabled: false,
+      authOrgId: "org_a",
+      principalId: "op_1",
+      roles: ["operator"],
+      envelope: envOwnedBy("org_a"),
+      requestUndo,
+    });
+    const res = await app.inject({ method: "POST", url: "/api/actions/env_1/undo" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: "undo_parked_for_approval",
+      undoWorkUnitId: "wu_undo_1",
+    });
+    await app.close();
+  });
+
+  it("omits undoWorkUnitId when the reverse action produced none", async () => {
+    const requestUndo = vi.fn().mockResolvedValue({
+      undoSubmitted: false,
+      error: "Undo submission failed",
+    });
+    const { app } = await buildApp({
+      authDisabled: false,
+      authOrgId: "org_a",
+      principalId: "op_1",
+      roles: ["operator"],
+      envelope: envOwnedBy("org_a"),
+      requestUndo,
+    });
+    const res = await app.inject({ method: "POST", url: "/api/actions/env_1/undo" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).not.toHaveProperty("undoWorkUnitId");
     await app.close();
   });
 });

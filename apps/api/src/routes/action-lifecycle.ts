@@ -97,8 +97,12 @@ export const actionLifecycleRoutes: FastifyPluginAsync = async (app) => {
       try {
         const result = await app.platformLifecycle.requestUndo(id, app.platformIngress);
         if (!result.undoSubmitted) {
+          // The reverse action did not complete. Surface undoWorkUnitId when present
+          // (e.g. undo_parked_for_approval: a reverse work unit DOES exist, pending
+          // approval) so the operator has a handle to track it rather than a bare 400.
           return reply.code(400).send({
             error: result.error ?? "Undo submission failed",
+            ...(result.undoWorkUnitId ? { undoWorkUnitId: result.undoWorkUnitId } : {}),
             statusCode: 400,
           });
         }

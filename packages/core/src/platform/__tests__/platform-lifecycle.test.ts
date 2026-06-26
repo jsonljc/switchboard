@@ -336,6 +336,88 @@ describe("PlatformLifecycle", () => {
   });
 
   // -----------------------------------------------------------------------
+  // requestUndo phantom-success guard: a reverse action that executed-but-failed
+  // (ok:true/outcome!=="completed") or parked for approval must NOT report a
+  // successful undo. Found by the 2026-06-26 adversarial audit (fail-open-dispatch).
+  // -----------------------------------------------------------------------
+  describe("requestUndo() phantom-success guard", () => {
+    function seedUndoable(): string {
+      const envelopeId = `env-undo-${randomUUID()}`;
+      const envelope = makeEnvelope(envelopeId, {
+        proposals: [
+          {
+            id: `prop-${randomUUID()}`,
+            actionType: "campaign.pause",
+            parameters: {
+              campaignId: "camp-1",
+              _principalId: "originator-user",
+              _organizationId: ORG_ID,
+            },
+            evidence: "test",
+            confidence: 0.9,
+            originatingMessageId: "msg-1",
+          },
+        ],
+      });
+      // One execution result carrying a live undo recipe.
+      (envelope as { executionResults: unknown[] }).executionResults = [
+        {
+          undoRecipe: {
+            reverseActionType: "campaign.resume",
+            reverseParameters: { campaignId: "camp-1" },
+            undoExpiresAt: new Date(Date.now() + 3_600_000),
+          },
+        },
+      ];
+      stores._envelopes.set(envelopeId, envelope);
+      return envelopeId;
+    }
+
+    function mkIngress(response: unknown) {
+      return { submit: vi.fn(async () => response) } as never;
+    }
+
+    it("reports undoSubmitted:false when the reverse action executed but failed", async () => {
+      const envelopeId = seedUndoable();
+      const ingress = mkIngress({
+        ok: true,
+        result: { outcome: "failed", error: { code: "DOWNSTREAM_FLAKY", message: "boom" } },
+        workUnit: { id: "undo-wu-1", traceId: "t-undo-1" },
+      });
+      const result = await lifecycle.requestUndo(envelopeId, ingress);
+      expect(result.undoSubmitted).toBe(false);
+      expect(result.undoWorkUnitId).toBe("undo-wu-1");
+      expect(result.error).toBeTruthy();
+    });
+
+    it("reports undoSubmitted:false when the reverse action parks for approval", async () => {
+      const envelopeId = seedUndoable();
+      const ingress = mkIngress({
+        ok: true,
+        result: { outcome: "pending_approval" },
+        workUnit: { id: "undo-wu-2", traceId: "t-undo-2" },
+        approvalRequired: true,
+      });
+      const result = await lifecycle.requestUndo(envelopeId, ingress);
+      expect(result.undoSubmitted).toBe(false);
+      expect(result.error).toBe("undo_parked_for_approval");
+      expect(result.undoWorkUnitId).toBe("undo-wu-2");
+    });
+
+    it("reports undoSubmitted:true only when the reverse action completes", async () => {
+      const envelopeId = seedUndoable();
+      const ingress = mkIngress({
+        ok: true,
+        result: { outcome: "completed" },
+        workUnit: { id: "undo-wu-3", traceId: "t-undo-3" },
+      });
+      const result = await lifecycle.requestUndo(envelopeId, ingress);
+      expect(result.undoSubmitted).toBe(true);
+      expect(result.undoWorkUnitId).toBe("undo-wu-3");
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // F8 (security audit): delegation rules must be org-scoped, fail closed
   // -----------------------------------------------------------------------
   describe("authorizeResponder org-scoped delegation (audit F8)", () => {
