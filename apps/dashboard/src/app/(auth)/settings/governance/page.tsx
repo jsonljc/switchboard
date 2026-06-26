@@ -4,12 +4,20 @@ import { PageTitle } from "@/components/layout/page-title";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import { GovernanceGates, type GateCardModel } from "@/components/settings/governance-gates";
+import { GovernanceMarket } from "@/components/settings/governance-market";
 import {
   useGovernanceObserveReview,
   useGovernanceEnforceReadiness,
+  useGovernanceMarket,
   useSetGovernanceGateMode,
+  useSetGovernanceMarket,
 } from "@/hooks/use-governance-gates";
-import type { GovernanceGateUnit, GovernanceMode } from "@switchboard/schemas";
+import type {
+  GovernanceGateUnit,
+  GovernanceMode,
+  Jurisdiction,
+  ClinicType,
+} from "@switchboard/schemas";
 
 const ZERO_REVIEW = {
   wouldBlock: 0,
@@ -22,13 +30,16 @@ const ZERO_REVIEW = {
 export default function GovernancePage() {
   const review = useGovernanceObserveReview("alex");
   const readiness = useGovernanceEnforceReadiness("alex");
+  const market = useGovernanceMarket("alex");
   const setMode = useSetGovernanceGateMode("alex");
+  const setMarket = useSetGovernanceMarket("alex");
   const { toast } = useToast();
 
   // Gate loading on !data && !error (a disabled/in-flight query is pending+idle, not isLoading).
   const reviewSettled = !!review.data || !!review.error;
   const readinessSettled = !!readiness.data || !!readiness.error;
-  if (!reviewSettled || !readinessSettled) {
+  const marketSettled = !!market.data || !!market.error;
+  if (!reviewSettled || !readinessSettled || !marketSettled) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
@@ -82,6 +93,20 @@ export default function GovernancePage() {
     );
   }
 
+  function onSaveMarket(jurisdiction: Jurisdiction, clinicType: ClinicType) {
+    setMarket.mutate(
+      { jurisdiction, clinicType },
+      {
+        onSuccess: () => toast({ title: `Market set to ${jurisdiction} / ${clinicType}` }),
+        onError: (e) =>
+          toast({
+            title: "Couldn't update market",
+            description: e instanceof Error ? e.message : undefined,
+          }),
+      },
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageTitle
@@ -90,6 +115,11 @@ export default function GovernancePage() {
       >
         Governance gates
       </PageTitle>
+      <GovernanceMarket
+        current={market.data ?? { jurisdiction: null, clinicType: null }}
+        pending={setMarket.isPending}
+        onSave={onSaveMarket}
+      />
       <GovernanceGates gates={gates} pendingUnit={pendingUnit} onFlip={onFlip} />
     </div>
   );
