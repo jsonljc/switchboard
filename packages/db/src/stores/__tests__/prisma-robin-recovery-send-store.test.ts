@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PrismaRobinRecoverySendStore } from "../prisma-robin-recovery-send-store.js";
 
 function makePrisma() {
-  return { robinRecoverySend: { create: vi.fn(), update: vi.fn(), findMany: vi.fn() } };
+  return {
+    robinRecoverySend: {
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      findMany: vi.fn(),
+    },
+  };
 }
 
 describe("PrismaRobinRecoverySendStore", () => {
@@ -155,6 +162,67 @@ describe("PrismaRobinRecoverySendStore", () => {
         nextRetryAt: null,
         lastError: "boom",
       },
+    });
+  });
+
+  describe("crash-orphaned claim reaper (P2-13)", () => {
+    it("findOrphanedClaims selects the orphan shape: pending + nextRetryAt NULL + stale updatedAt", async () => {
+      // The orphan is pending + nextRetryAt NULL (markSendInFlight ran, no terminal write followed).
+      // updatedAt < olderThan is the staleness signal that excludes a freshly-claimed in-flight row.
+      prisma.robinRecoverySend.findMany.mockResolvedValue([]);
+      const olderThan = new Date("2026-06-26T11:30:00.000Z");
+      await store.findOrphanedClaims(olderThan, 500);
+      expect(prisma.robinRecoverySend.findMany).toHaveBeenCalledWith({
+        where: {
+          status: "pending",
+          nextRetryAt: null,
+          updatedAt: { lt: olderThan },
+        },
+        orderBy: { updatedAt: "asc" },
+        take: 500,
+        select: {
+          id: true,
+          organizationId: true,
+          contactId: true,
+          bookingId: true,
+          updatedAt: true,
+        },
+      });
+    });
+
+    it("reapOrphanedClaim is a status-CAS updateMany that dead-letters ONLY a still-orphaned row", async () => {
+      // Guarded compare-and-set: the WHERE re-asserts the full orphan shape (id + pending + nextRetryAt
+      // NULL + stale), so a concurrent live sender (markSent/markFailed/markSkipped) that already moved
+      // the row makes this match 0 rows. The write is a terminal dead-letter (status=failed); it NEVER
+      // re-queues (nextRetryAt stays NULL) and NEVER triggers a send -> double-send-safe.
+      prisma.robinRecoverySend.updateMany.mockResolvedValue({ count: 1 });
+      const olderThan = new Date("2026-06-26T11:30:00.000Z");
+      const out = await store.reapOrphanedClaim("rs_orphan", "org_1", olderThan);
+      expect(prisma.robinRecoverySend.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: "rs_orphan",
+          organizationId: "org_1",
+          status: "pending",
+          nextRetryAt: null,
+          updatedAt: { lt: olderThan },
+        },
+        data: {
+          status: "failed",
+          lastError: "reaped_orphaned_claim",
+          nextRetryAt: null,
+        },
+      });
+      expect(out).toEqual({ count: 1 });
+    });
+
+    it("reapOrphanedClaim passes through count===0 (a concurrent writer won the row -> benign race)", async () => {
+      prisma.robinRecoverySend.updateMany.mockResolvedValue({ count: 0 });
+      const out = await store.reapOrphanedClaim(
+        "rs_raced",
+        "org_1",
+        new Date("2026-06-26T11:30:00.000Z"),
+      );
+      expect(out).toEqual({ count: 0 });
     });
   });
 });

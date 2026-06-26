@@ -8,6 +8,10 @@ import type {
   StepTools,
 } from "../robin-recovery-retry-dispatch.js";
 import type { AsyncFailureContext } from "@switchboard/core";
+import {
+  ROBIN_RECOVERY_ORPHAN_MAX_AGE_MS,
+  ROBIN_RECOVERY_ORPHAN_REAP_LIMIT,
+} from "@switchboard/core";
 
 const { createFunctionSpy } = vi.hoisted(() => ({
   createFunctionSpy: vi.fn().mockReturnValue({}),
@@ -53,7 +57,21 @@ function deps(over: Partial<RobinRecoveryRetryDispatchDeps> = {}): RobinRecovery
       result: { outputs: { outcome: "sent" } },
       workUnit: {},
     }),
+    // P2-13 orphan reaper deps (default: nothing orphaned).
+    findOrphanedClaims: vi.fn().mockResolvedValue([]),
+    reapOrphanedClaim: vi.fn().mockResolvedValue({ count: 1 }),
     now: () => new Date("2026-06-21T15:00:00.000Z"),
+    ...over,
+  };
+}
+
+function makeOrphanRow(over: Record<string, unknown> = {}) {
+  return {
+    id: "orphan_1",
+    organizationId: "org_1",
+    contactId: "ct_9",
+    bookingId: "bk_9",
+    updatedAt: new Date("2026-06-21T14:00:00.000Z"), // 1h before the cron `now`: stale
     ...over,
   };
 }
@@ -219,6 +237,63 @@ describe("executeRobinRecoveryRetryDispatch", () => {
     const d = deps({ findDueRetries: vi.fn().mockResolvedValue([]) });
     const r = await executeRobinRecoveryRetryDispatch(makeStep(), d);
     expect(r).toMatchObject({ processed: 0, sent: 0, skipped: 0, failed: 0, deadLettered: 0 });
+  });
+
+  describe("P2-13 crash-orphaned claim sweep", () => {
+    it("sweeps orphaned claims with the 30-min staleness floor + bounded cap and reports them", async () => {
+      const d = deps({
+        findDueRetries: vi.fn().mockResolvedValue([]),
+        findOrphanedClaims: vi.fn().mockResolvedValue([makeOrphanRow()]),
+        reapOrphanedClaim: vi.fn().mockResolvedValue({ count: 1 }),
+      });
+      const r = await executeRobinRecoveryRetryDispatch(makeStep(), d);
+      // Staleness floor = now - ORPHAN_MAX_AGE_MS; cap = ORPHAN_REAP_LIMIT (both code constants).
+      const expectedOlderThan = new Date(
+        new Date("2026-06-21T15:00:00.000Z").getTime() - ROBIN_RECOVERY_ORPHAN_MAX_AGE_MS,
+      );
+      expect(d.findOrphanedClaims).toHaveBeenCalledWith(
+        expectedOlderThan,
+        ROBIN_RECOVERY_ORPHAN_REAP_LIMIT,
+      );
+      expect(r.orphans).toEqual({ scanned: 1, reaped: 1, raced: 0, failed: 0 });
+    });
+
+    it("dead-letters via the CAS and NEVER submits a recovery send for an orphan (no double-send)", async () => {
+      const submit = vi.fn();
+      const d = deps({
+        findDueRetries: vi.fn().mockResolvedValue([]),
+        submitRecoveryRetry: submit,
+        findOrphanedClaims: vi.fn().mockResolvedValue([makeOrphanRow()]),
+        reapOrphanedClaim: vi.fn().mockResolvedValue({ count: 1 }),
+      });
+      const r = await executeRobinRecoveryRetryDispatch(makeStep(), d);
+      expect(d.reapOrphanedClaim).toHaveBeenCalledWith("orphan_1", "org_1", expect.any(Date));
+      expect(submit).not.toHaveBeenCalled();
+      expect(r.orphans.reaped).toBe(1);
+    });
+
+    it("CAS count===0 (a concurrent live sender or reaper won the row) is counted raced, never re-sent", async () => {
+      const submit = vi.fn();
+      const d = deps({
+        findDueRetries: vi.fn().mockResolvedValue([]),
+        submitRecoveryRetry: submit,
+        findOrphanedClaims: vi.fn().mockResolvedValue([makeOrphanRow()]),
+        reapOrphanedClaim: vi.fn().mockResolvedValue({ count: 0 }),
+      });
+      const r = await executeRobinRecoveryRetryDispatch(makeStep(), d);
+      expect(r.orphans).toEqual({ scanned: 1, reaped: 0, raced: 1, failed: 0 });
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it("runs the orphan sweep even when due retries were also processed (disjoint sets)", async () => {
+      const d = deps({
+        findDueRetries: vi.fn().mockResolvedValue([makeDueRow()]),
+        findOrphanedClaims: vi.fn().mockResolvedValue([makeOrphanRow()]),
+      });
+      const r = await executeRobinRecoveryRetryDispatch(makeStep(), d);
+      expect(r).toMatchObject({ processed: 1, sent: 1 });
+      expect(r.orphans).toEqual({ scanned: 1, reaped: 1, raced: 0, failed: 0 });
+    });
   });
 });
 
