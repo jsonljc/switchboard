@@ -173,8 +173,35 @@ export class PrismaContactStore implements ContactStore {
       throw new Error(`Contact not found or does not belong to organization: ${id}`);
     }
     const phone = existing.phone;
+    const phoneE164 = existing.phoneE164;
 
     const cascade = async (tx: PrismaDbClient): Promise<void> => {
+      // PII-bearing children keyed by a PARENT id (booking/opportunity/revenue), not
+      // by contactId. Collect those ids BEFORE the parents are deleted below, so the
+      // receipts/proofs (transactional PII: evidence, externalRef, exceptions, amounts)
+      // are purged like the sibling revenue tables (conversionRecord/lifecycleRevenueEvent).
+      const bookingIds = (
+        await tx.booking.findMany({ where: { contactId: id }, select: { id: true } })
+      ).map((b) => b.id);
+      const opportunityIds = (
+        await tx.opportunity.findMany({ where: { contactId: id }, select: { id: true } })
+      ).map((o) => o.id);
+      const revenueEventIds = (
+        await tx.lifecycleRevenueEvent.findMany({ where: { contactId: id }, select: { id: true } })
+      ).map((r) => r.id);
+      const receiptOr: Array<Record<string, unknown>> = [];
+      if (bookingIds.length > 0) receiptOr.push({ bookingId: { in: bookingIds } });
+      if (opportunityIds.length > 0) receiptOr.push({ opportunityId: { in: opportunityIds } });
+      if (revenueEventIds.length > 0) receiptOr.push({ revenueEventId: { in: revenueEventIds } });
+      if (receiptOr.length > 0) {
+        await tx.receipt.deleteMany({ where: { organizationId: orgId, OR: receiptOr } });
+      }
+      if (bookingIds.length > 0) {
+        await tx.receiptedBooking.deleteMany({
+          where: { bookingId: { in: bookingIds }, organizationId: orgId },
+        });
+      }
+
       // contactId-keyed children. None of these FKs cascade at the DB level,
       // so we delete every dependent row manually. These cascade children FK to
       // the parent contact, which is org-guarded at the top of delete() and by
@@ -212,13 +239,33 @@ export class PrismaContactStore implements ContactStore {
       // [organizationId, contactId] composite index is used (and tenant-safe).
       await tx.workTrace.deleteMany({ where: { contactId: id, organizationId: orgId } });
 
-      // phone-keyed children — only if we have a phone to match on
-      if (phone) {
+      // PDPA erasure completeness (2026-06-26): contactId-keyed tables the original
+      // F5 cascade omitted. None FK-cascade from Contact, so each is deleted here.
+      // Org-scoped like workTrace above (every one carries organizationId).
+      await tx.conversationLifecycleSnapshot.deleteMany({
+        where: { contactId: id, organizationId: orgId },
+      });
+      await tx.conversationLifecycleTransition.deleteMany({
+        where: { contactId: id, organizationId: orgId },
+      });
+      await tx.scheduledFollowUp.deleteMany({ where: { contactId: id, organizationId: orgId } });
+      await tx.scheduledReminder.deleteMany({ where: { contactId: id, organizationId: orgId } });
+      await tx.robinRecoverySend.deleteMany({ where: { contactId: id, organizationId: orgId } });
+
+      // phone-keyed children. Identity is canonical on phoneE164, but channel tables
+      // store whatever shape the channel delivered: WhatsApp recipient_id/wa_id is
+      // digits-only (no +), while principalId/toNumber may carry +E.164. Match every
+      // stored shape (exact `in`, org-scoped) so none escape on a shape mismatch.
+      const phoneCandidates = buildPhoneMatchCandidates(phone, phoneE164);
+      if (phoneCandidates.length > 0) {
         await tx.whatsAppMessageStatus.deleteMany({
-          where: { recipientId: phone, organizationId: orgId },
+          where: { recipientId: { in: phoneCandidates }, organizationId: orgId },
         });
         await tx.conversationState.deleteMany({
-          where: { principalId: phone, organizationId: orgId },
+          where: { principalId: { in: phoneCandidates }, organizationId: orgId },
+        });
+        await tx.whatsAppTestSend.deleteMany({
+          where: { toNumber: { in: phoneCandidates }, organizationId: orgId },
         });
 
         // F5 (PDPA right-to-erasure): the dead-letter queue stores the entire
@@ -226,21 +273,25 @@ export class PrismaContactStore implements ContactStore {
         // by organizationId — there is no phone/contactId column to filter on, so
         // it was never reached. Load this org's candidates and purge the rows
         // whose payload carries this contact's phone (the WhatsApp sender key,
-        // messages[].from / contacts[].wa_id). No take cap: erasure must be
+        // messages[].from / contacts[].wa_id). payloadMentionsPhone digit-normalizes
+        // both sides, so any stored shape matches. No take cap: erasure must be
         // complete, and a SQL take-before-JS-filter would silently starve matches.
         // The candidate set stays small in practice (DLQ holds only failed
         // webhooks); its growth is bounded separately by the F6 retention purge.
-        const dlqCandidates = await tx.failedMessage.findMany({
-          where: { organizationId: orgId },
-          select: { id: true, rawPayload: true },
-        });
-        const dlqMatchedIds = dlqCandidates
-          .filter((row) => payloadMentionsPhone(row.rawPayload, phone))
-          .map((row) => row.id);
-        if (dlqMatchedIds.length > 0) {
-          await tx.failedMessage.deleteMany({
-            where: { id: { in: dlqMatchedIds }, organizationId: orgId },
+        const scanPhone = phone ?? phoneE164;
+        if (scanPhone) {
+          const dlqCandidates = await tx.failedMessage.findMany({
+            where: { organizationId: orgId },
+            select: { id: true, rawPayload: true },
           });
+          const dlqMatchedIds = dlqCandidates
+            .filter((row) => payloadMentionsPhone(row.rawPayload, scanPhone))
+            .map((row) => row.id);
+          if (dlqMatchedIds.length > 0) {
+            await tx.failedMessage.deleteMany({
+              where: { id: { in: dlqMatchedIds }, organizationId: orgId },
+            });
+          }
         }
       }
 
@@ -481,6 +532,29 @@ const MIN_PHONE_DIGITS = 7;
 
 function digitsOnly(value: string): string {
   return value.replace(/\D+/g, "");
+}
+
+/**
+ * The distinct non-empty phone shapes a contact's number may be stored under in
+ * channel tables, for an exact-match (`in`) erasure delete. Identity is canonical
+ * on phoneE164, but WhatsApp recipient_id/wa_id is digits-only (no +) while other
+ * rows carry +E.164, so match raw phone, phoneE164, AND the digits-only form. Digit
+ * forms shorter than MIN_PHONE_DIGITS are dropped (junk-collision guard); the raw
+ * value is always kept. Exact equality only (never substring); no over-deletion.
+ */
+export function buildPhoneMatchCandidates(
+  phone: string | null | undefined,
+  phoneE164: string | null | undefined,
+): string[] {
+  const out = new Set<string>();
+  for (const value of [phone, phoneE164]) {
+    if (value && value.length > 0) {
+      out.add(value);
+      const digits = digitsOnly(value);
+      if (digits.length >= MIN_PHONE_DIGITS) out.add(digits);
+    }
+  }
+  return [...out];
 }
 
 /**

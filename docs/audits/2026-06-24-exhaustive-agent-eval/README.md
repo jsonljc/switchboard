@@ -184,3 +184,28 @@ The consent P1 candidate's opt-in-over-grant half (finding 4, "Permanent opt-in 
 Corroborated by existing tests (`pdpa-consent.test.ts` 25 cases, `proactive-eligibility.test.ts` 15 cases, green on main) and two independent reviews (adversarial refutation plus integration/accuracy, both CONFIRM, zero Critical/Important). Latent defense-in-depth note: the greeting reads the `messagingOptIn` boolean, not `messagingOptInSource`, so its safety is trigger-coupled (disjoint spawn paths); any future change that routes an organic or aged contact into `buildMetaLeadGreetingWorkflow` should additionally assert `messagingOptInSource` is `web_form` or `ctwa`.
 
 Scope: this closes ONLY the opt-in over-grant. The separate clause bundled into finding 4, "outbound gate fails open on resolver error" (`consent-enforcement-gate.ts`, the Consent/PDPA P2 item), is NOT covered here; its booking-consent variant was closed by A19 (#1265).
+
+### Closure update (2026-06-26): gap #8 (PDPA erasure completeness) — FIX IN FLIGHT (PR #1303)
+
+Finding 8 / "PDPA erasure P1" (line 142) re-verified still-open on `main` (b05076c8b) and fixed in
+**PR #1303** (`fix/pdpa-erasure-completeness`, surfaced for human review, not self-merged — compliance
+stop-glob). All three named sub-gaps were confirmed open against live code and closed TDD:
+
+- **Cascade omissions** (`prisma-contact-store.ts`): added the 5 missing contactId tables
+  (`ConversationLifecycleSnapshot`/`Transition`, `ScheduledFollowUp`, `ScheduledReminder`,
+  `RobinRecoverySend`) + the phone-bearing `WhatsAppTestSend`. The phone-keyed children
+  (`recipientId`/`principalId`) were matched with exact `= phone` (+E.164) but WhatsApp wa-id is
+  digits-only, so they escaped; now matched across shapes via `buildPhoneMatchCandidates`.
+- **Meta-deletion key** (`meta-deletion.ts`): finds by canonical `phoneE164` (normalized wa-id) OR
+  the raw shapes, so shape-variant / phoneE164-only contacts no longer escape.
+- **Honest outcome** (`erase-contact.ts` + both entrypoints): `eraseContactFully` returns
+  `completed | partial | failed | skipped`; a swallowed external-calendar cancel now records
+  `partial` (DB erased, event may linger), never `completed`. DB erasure is still never blocked.
+
+Adversarial + data-lineage review (3 read-only agents) additionally found **Receipt** and
+**ReceiptedBooking** (keyed by the contact's bookingId/opportunityId/revenueEventId, carrying
+transactional PII) surviving the cascade; both are now purged like the sibling revenue tables. Two
+review claims were verified-and-rejected: `ConversationState` for non-WhatsApp channels (only
+WhatsApp creates erasable contacts, which are phone-keyed and already matched; its `threadId` is the
+gateway sessionId, not `ConversationThread.id`) and `DeploymentMemoryEvidence` (opaque dangling ids,
+no PII). No schema migration. `WaitlistEntry` / `ConsentRecord` remain out of scope (documented).

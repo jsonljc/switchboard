@@ -15,6 +15,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { PrismaContactStore, type PrismaClient } from "@switchboard/db";
+import { normalizeToE164 } from "@switchboard/schemas";
 import { maskPhone } from "@switchboard/core/audit";
 import { parseAndVerifySignedRequest } from "../lib/meta-signed-request.js";
 import { eraseContactFully } from "../lib/erase-contact.js";
@@ -116,31 +117,44 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
       const userId = verified.payload.user_id;
       const confirmationCode = randomUUID();
 
-      // Phone match: Meta's app-scoped user_id for WhatsApp is typically the
-      // wa-id (digits only). Our Contact.phone column is canonically stored
-      // with a leading "+". Match both shapes to be safe.
+      // Phone match: Meta's app-scoped user_id for WhatsApp is the wa-id (digits
+      // only). Contact identity is canonical on phoneE164, so normalize the wa-id
+      // to +E.164 and match that column FIRST (so a contact whose raw phone is in
+      // any other shape is still found), then fall back to the raw phone shapes for
+      // legacy rows whose phoneE164 was never backfilled. Cross-org by design (Meta
+      // deletion is global per user); each matched contact's cascade is org-scoped.
       const candidateValues = userId.startsWith("+")
         ? [userId, userId.slice(1)]
         : [userId, `+${userId}`];
+      const normalizedE164 = normalizeToE164(userId);
+      const matchWhere = normalizedE164
+        ? { OR: [{ phoneE164: normalizedE164 }, { phone: { in: candidateValues } }] }
+        : { phone: { in: candidateValues } };
 
       const contactStore = new PrismaContactStore(app.prisma);
       const calendarProviderFactory = resolveCalendarFactory(request, app.prisma);
       const deletedIds: string[] = [];
       let failureReason: string | null = null;
+      let calendarIncomplete = false;
 
       try {
         const matches = await app.prisma.contact.findMany({
-          where: { phone: { in: candidateValues } },
+          where: matchWhere,
           select: { id: true, organizationId: true },
         });
 
         for (const match of matches) {
-          await eraseContactFully(
+          const result = await eraseContactFully(
             { prisma: app.prisma, contactStore, calendarProviderFactory, logger: request.log },
             match.organizationId,
             match.id,
           );
           deletedIds.push(match.id);
+          // "completed"/"skipped" = the external calendar is clean; anything else
+          // means an event may linger, so the overall request is only "partial".
+          if (result.calendar !== "completed" && result.calendar !== "skipped") {
+            calendarIncomplete = true;
+          }
         }
       } catch (err) {
         request.log.error(
@@ -150,8 +164,20 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
         failureReason = err instanceof Error ? err.message : "unknown_error";
       }
 
-      const status = failureReason === null ? "completed" : "failed";
-      const completedAt = failureReason === null ? new Date() : null;
+      // Honest outcome: a thrown DB cascade is "failed"; a clean DB erasure whose
+      // external calendar cancel was incomplete is "partial" (our data is gone, the
+      // external event may linger); never "completed" on a partial.
+      let status: string;
+      if (failureReason !== null) {
+        status = "failed";
+      } else if (calendarIncomplete) {
+        status = "partial";
+        failureReason =
+          "external calendar cancellation incomplete (event(s) may linger; reconcile from logs)";
+      } else {
+        status = "completed";
+      }
+      const completedAt = status === "failed" ? null : new Date();
 
       // Persist the request record. If this insert itself fails we still
       // owe Meta a response — log and proceed; ops can reconcile via logs.

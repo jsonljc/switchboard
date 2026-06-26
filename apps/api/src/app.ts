@@ -1010,8 +1010,8 @@ export async function buildServer() {
         });
         return row !== null;
       },
-      erase: (orgId: string, contactId: string) =>
-        eraseContactFully(
+      erase: async (orgId: string, contactId: string) => {
+        const result = await eraseContactFully(
           {
             prisma: prismaClient,
             contactStore: erasureContactStore,
@@ -1020,8 +1020,17 @@ export async function buildServer() {
           },
           orgId,
           contactId,
-        ),
+        );
+        // "completed"/"skipped" = the external calendar is clean; anything else means
+        // an event may linger, so the handler records the audit row as "partial".
+        return {
+          calendarFullyErased: result.calendar === "completed" || result.calendar === "skipped",
+        };
+      },
       recordRequest: async ({ orgId, contactId, actorId, status, failureReason }) => {
+        // "completed" and "partial" both mean the contact's DB PII was erased; only a
+        // hard "failed" (the cascade threw) leaves the contact unrecorded as deleted.
+        const dbErased = status !== "failed";
         await prismaClient.dataDeletionRequest.create({
           data: {
             userId: `operator:${actorId}`,
@@ -1029,10 +1038,10 @@ export async function buildServer() {
             requestType: "operator_erasure",
             organizationId: orgId,
             requestedByActorId: actorId,
-            deletedContactIds: status === "completed" ? [contactId] : [],
+            deletedContactIds: dbErased ? [contactId] : [],
             status,
             failureReason: failureReason ?? null,
-            completedAt: status === "completed" ? new Date() : null,
+            completedAt: dbErased ? new Date() : null,
           },
         });
       },

@@ -27,8 +27,11 @@ interface MockPrisma {
     deleteMany: ReturnType<typeof vi.fn>;
   };
   conversationThread: { deleteMany: ReturnType<typeof vi.fn> };
-  opportunity: { deleteMany: ReturnType<typeof vi.fn> };
-  lifecycleRevenueEvent: { deleteMany: ReturnType<typeof vi.fn> };
+  opportunity: { deleteMany: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
+  lifecycleRevenueEvent: {
+    deleteMany: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+  };
   ownerTask: { deleteMany: ReturnType<typeof vi.fn> };
   contactLifecycle: { deleteMany: ReturnType<typeof vi.fn> };
   conversationMessage: { deleteMany: ReturnType<typeof vi.fn> };
@@ -40,7 +43,15 @@ interface MockPrisma {
   booking: { deleteMany: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
   conversionRecord: { deleteMany: ReturnType<typeof vi.fn> };
   pendingLeadRetry: { deleteMany: ReturnType<typeof vi.fn> };
+  receipt: { deleteMany: ReturnType<typeof vi.fn> };
+  receiptedBooking: { deleteMany: ReturnType<typeof vi.fn> };
   workTrace: { deleteMany: ReturnType<typeof vi.fn> };
+  conversationLifecycleSnapshot: { deleteMany: ReturnType<typeof vi.fn> };
+  conversationLifecycleTransition: { deleteMany: ReturnType<typeof vi.fn> };
+  scheduledFollowUp: { deleteMany: ReturnType<typeof vi.fn> };
+  scheduledReminder: { deleteMany: ReturnType<typeof vi.fn> };
+  robinRecoverySend: { deleteMany: ReturnType<typeof vi.fn> };
+  whatsAppTestSend: { deleteMany: ReturnType<typeof vi.fn> };
   failedMessage: {
     findMany: ReturnType<typeof vi.fn>;
     deleteMany: ReturnType<typeof vi.fn>;
@@ -61,8 +72,14 @@ function makePrisma(): MockPrisma {
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     conversationThread: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    opportunity: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    lifecycleRevenueEvent: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    opportunity: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    lifecycleRevenueEvent: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     ownerTask: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     contactLifecycle: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     conversationMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -77,7 +94,15 @@ function makePrisma(): MockPrisma {
     },
     conversionRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     pendingLeadRetry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    receipt: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    receiptedBooking: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     workTrace: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    conversationLifecycleSnapshot: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    conversationLifecycleTransition: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    scheduledFollowUp: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    scheduledReminder: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    robinRecoverySend: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    whatsAppTestSend: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     failedMessage: {
       findMany: vi.fn().mockResolvedValue([]),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -206,7 +231,7 @@ describe("POST /api/meta/deletion", () => {
     await app.close();
   });
 
-  it("matches contacts by phone with both with-+ and without-+ shapes", async () => {
+  it("matches contacts by canonical phoneE164 OR raw phone shapes", async () => {
     const sr = makeSignedRequest({ user_id: "6591234567" });
     await app.inject({
       method: "POST",
@@ -215,8 +240,12 @@ describe("POST /api/meta/deletion", () => {
       payload: `signed_request=${encodeURIComponent(sr)}`,
     });
 
+    // The wa-id normalizes to canonical +E.164 (matched on phoneE164) AND the raw
+    // phone shapes are kept as a fallback for legacy/unnormalized rows.
     expect(prisma.contact.findMany).toHaveBeenCalledWith({
-      where: { phone: { in: ["6591234567", "+6591234567"] } },
+      where: {
+        OR: [{ phoneE164: "+6591234567" }, { phone: { in: ["6591234567", "+6591234567"] } }],
+      },
       select: { id: true, organizationId: true },
     });
     await app.close();
@@ -304,6 +333,39 @@ describe("POST /api/meta/deletion", () => {
     expect(prisma.contact.deleteMany).toHaveBeenCalled();
     expect(prisma.dataDeletionRequest.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ deletedContactIds: ["c-1"], status: "completed" }),
+    });
+    await calApp.close();
+  });
+
+  it("records status=partial when an external calendar cancel is swallowed (F5)", async () => {
+    await app.close(); // discard the default app; use one with an injected calendar factory
+    prisma.contact.findMany.mockResolvedValue([{ id: "c-1", organizationId: "org-1" }]);
+    prisma.contact.findFirst.mockResolvedValue({ id: "c-1", phone: "+6591234567" });
+    prisma.booking.findMany.mockResolvedValue([{ calendarEventId: "evt-google-1" }]);
+
+    const cancelBooking = vi.fn(async () => {
+      throw new Error("google calendar down");
+    });
+    const calendarProviderFactory = vi.fn(
+      async () => ({ cancelBooking }) as unknown as CalendarProvider,
+    );
+    const calApp = await buildApp(prisma, { calendarProviderFactory });
+
+    const sr = makeSignedRequest({ user_id: "6591234567" });
+    const res = await calApp.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: `signed_request=${encodeURIComponent(sr)}`,
+    });
+
+    // The contact IS erased from the DB (200, recorded deleted), but the outcome is
+    // honest: the external event lingered, so status is "partial", never "completed".
+    expect(res.statusCode).toBe(200);
+    expect(cancelBooking).toHaveBeenCalled();
+    expect(prisma.contact.deleteMany).toHaveBeenCalled();
+    expect(prisma.dataDeletionRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ deletedContactIds: ["c-1"], status: "partial" }),
     });
     await calApp.close();
   });

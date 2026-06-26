@@ -19,8 +19,10 @@ export const EraseContactParametersSchema = z.object({
 });
 export type EraseContactParameters = z.infer<typeof EraseContactParametersSchema>;
 
-/** Outcome status persisted to the DataDeletionRequest audit row. */
-export type EraseRequestStatus = "completed" | "failed";
+/** Outcome status persisted to the DataDeletionRequest audit row. "partial" = the
+ *  contact's DB PII was erased but an external calendar event could not be fully
+ *  cancelled (it may linger and needs manual reconciliation). */
+export type EraseRequestStatus = "completed" | "partial" | "failed";
 
 /**
  * The seam the handler drives. A Prisma-backed adapter (see app.ts) satisfies it: it wraps the
@@ -33,8 +35,9 @@ export interface OperatorContactEraser {
    *  This is the fail-closed cross-tenant guard: a contact owned by another org reads false. */
   findContactForOrg(orgId: string, contactId: string): Promise<boolean>;
   /** Run the full PII delete cascade for this contact (eraseContactFully): cancel external
-   *  calendar events, then delete the contact graph + WorkTrace + DLQ rows. */
-  erase(orgId: string, contactId: string): Promise<void>;
+   *  calendar events, then delete the contact graph + WorkTrace + DLQ rows. Returns whether
+   *  the external calendar was fully cleared, so the audit row stays honest about a linger. */
+  erase(orgId: string, contactId: string): Promise<{ calendarFullyErased: boolean }>;
   /** Persist the durable audit record of the erasure request (a DataDeletionRequest row tagged as
    *  operator-initiated). */
   recordRequest(input: {
@@ -69,11 +72,12 @@ export function buildEraseContactHandler(eraser: OperatorContactEraser): Operato
         };
       }
 
-      // Run the full delete cascade. On failure, still persist a "failed" audit row (the request
-      // was received and attempted — the legal record must reflect that) and then re-throw so the
-      // operator sees a 500 and ops can reconcile a partial erasure from the logs.
+      // Run the full delete cascade. On a thrown cascade, still persist a "failed" audit row (the
+      // request was received and attempted; the legal record must reflect that) then re-throw so
+      // the operator sees a 500 and ops can reconcile from the logs.
+      let eraseResult: { calendarFullyErased: boolean };
       try {
-        await eraser.erase(orgId, params.contactId);
+        eraseResult = await eraser.erase(orgId, params.contactId);
       } catch (err) {
         await eraser.recordRequest({
           orgId,
@@ -85,17 +89,30 @@ export function buildEraseContactHandler(eraser: OperatorContactEraser): Operato
         throw err;
       }
 
+      // The DB PII is erased. If the external calendar could not be fully cleared, the durable
+      // audit row is honest ("partial") and names the caveat, but the operator still gets a 200
+      // (the contact IS gone from Switchboard; the lingering external event is reconciled manually).
+      const status: EraseRequestStatus = eraseResult.calendarFullyErased ? "completed" : "partial";
       await eraser.recordRequest({
         orgId,
         contactId: params.contactId,
         actorId,
-        status: "completed",
+        status,
+        ...(status === "partial"
+          ? {
+              failureReason:
+                "external calendar cancellation incomplete (event(s) may linger; reconcile from logs)",
+            }
+          : {}),
       });
 
       return {
         outcome: "completed" as const,
-        summary: `Erased contact ${params.contactId} (PDPA operator request)`,
-        outputs: { contactId: params.contactId, status: "erased" },
+        summary:
+          status === "partial"
+            ? `Erased contact ${params.contactId} from Switchboard (PDPA); external calendar event may linger, reconcile manually`
+            : `Erased contact ${params.contactId} (PDPA operator request)`,
+        outputs: { contactId: params.contactId, status: "erased", calendarErasure: status },
       };
     },
   };
