@@ -128,6 +128,23 @@ export interface SwitchboardMetrics {
    *  the "long loops are filling the window" signal (context-rot risk, f9/f10).
    *  Labeled by model. Emitted per turn by recordSkillContextFill. */
   skillContextFillRatio: Histogram;
+  /**
+   * P2-3 (afterSkill gate-ordering): a skill turn committed a write-effect tool
+   * call (booking create/reschedule/cancel = external_mutation, or any write /
+   * external_send) and THEN an afterSkill governance gate altered the outbound
+   * reply — the deterministic-safety / claim-classifier / consent / whatsapp-
+   * window gate blocked, escalated, or rewrote the turn AFTER the mutation had
+   * already committed (the executor runs the gates at the success-return seam,
+   * downstream of the mid-loop op.execute()). The mutation cannot be retracted,
+   * so this is the detective signal that a same-turn mutation committed in a turn
+   * the gate then had to ALTER for safety. "Escalated" here is shorthand for any
+   * such reply alteration — an enforce block / escalate handoff OR an inline claim
+   * rewrite — not only a human handoff (the fail-closed-on-safety blind spot). Fires in ENFORCE
+   * posture only — an observe-mode gate records a verdict but does not alter the
+   * reply; a true pre-mutation gate / compensating retraction is the open design
+   * question. Labeled by deployment_id + effect_category (the strongest committed
+   * write-effect: write | external_send | external_mutation). */
+  mutatedThenEscalated: Counter;
 }
 
 export interface Counter {
@@ -217,6 +234,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     rileyReallocationGuardrailOutcome: new InMemoryCounter(),
     llmCacheCallsTotal: new InMemoryCounter(),
     skillContextFillRatio: new InMemoryHistogram(),
+    mutatedThenEscalated: new InMemoryCounter(),
   };
 }
 
@@ -274,4 +292,28 @@ export function recordSkillContextFill(input: {
   const ratio = input.billableTokens / input.maxTokens;
   getMetrics().skillContextFillRatio.observe({ model: input.model }, ratio);
   return ratio;
+}
+
+/**
+ * Record a "mutated-then-escalated" turn (P2-3 afterSkill gate-ordering): a
+ * write-effect tool call committed earlier in the skill loop and then an
+ * afterSkill governance gate altered the outbound reply (enforce-posture block /
+ * escalate / rewrite), which cannot retract the already-committed mutation.
+ * Observability-only and FAIL-QUIET: this is called on the executor's
+ * fail-closed afterSkill success seam, so a counter hiccup (e.g. a prom label
+ * mismatch) must never be able to throw and fail an otherwise-successful lead
+ * turn — the increment is swallowed on error, matching recordGovernanceVerdictMetric.
+ */
+export function recordMutatedThenEscalated(input: {
+  deploymentId: string;
+  effectCategory: "write" | "external_send" | "external_mutation";
+}): void {
+  try {
+    getMetrics().mutatedThenEscalated.inc({
+      deployment_id: input.deploymentId,
+      effect_category: input.effectCategory,
+    });
+  } catch (err) {
+    console.error("[mutated-then-escalated] counter increment failed (observability-only)", err);
+  }
 }

@@ -24,7 +24,7 @@ import { SkillExecutionBudgetError, DEFAULT_SKILL_RUNTIME_POLICY } from "./types
 import type { GovernanceLogEntry } from "./governance.js";
 import { interpolate } from "./template-engine.js";
 import { getGovernanceConstraints, getSafetyRecencyReminder } from "./governance-injector.js";
-import { recordSkillContextFill } from "../telemetry/metrics.js";
+import { recordSkillContextFill, recordMutatedThenEscalated } from "../telemetry/metrics.js";
 import { composeSkillRequestContext } from "./skill-request-context.js";
 import { denied, pendingApproval, fail, ok } from "./tool-result.js";
 import type { ToolResult } from "./tool-result.js";
@@ -104,6 +104,31 @@ const FALLBACK_READ_OP: SkillToolOperation = {
   effectCategory: "read",
   execute: async () => ok(),
 };
+
+const WRITE_EFFECT_RANK = { write: 1, external_send: 2, external_mutation: 3 } as const;
+type CommittedWriteEffect = keyof typeof WRITE_EFFECT_RANK;
+
+/**
+ * P2-3 (afterSkill gate-ordering): the strongest write-effect category among the
+ * SUCCESSFUL tool calls of a turn (external_mutation > external_send > write), or
+ * undefined if none committed. Only `status === "success"` calls count, so a
+ * denied / failed / pending tool call that never reached op.execute() is not
+ * mistaken for a committed mutation.
+ */
+export function strongestCommittedWriteEffect(
+  toolCallRecords: ReadonlyArray<ToolCallRecord>,
+  runtimeTools: ReadonlyMap<string, SkillTool>,
+): CommittedWriteEffect | undefined {
+  let strongest: CommittedWriteEffect | undefined;
+  for (const tc of toolCallRecords) {
+    if (tc.result.status !== "success") continue;
+    const ec = runtimeTools.get(tc.toolId)?.operations[tc.operation]?.effectCategory;
+    if (ec === "write" || ec === "external_send" || ec === "external_mutation") {
+      if (!strongest || WRITE_EFFECT_RANK[ec] > WRITE_EFFECT_RANK[strongest]) strongest = ec;
+    }
+  }
+  return strongest;
+}
 
 // Generic name check (NOT an SDK-type import — core must not depend on the
 // Anthropic SDK). Covers the race where the SDK's own per-request `timeout`
@@ -490,6 +515,9 @@ export class SkillExecutorImpl implements SkillExecutor {
           // for the resolver-unavailable case, so an escaping throw is a genuine logic bug and
           // failing the turn is the safe response. With no governanceConfig seeded today every
           // gate early-returns → inert in prod (byte-identical).
+          // P2-3: snapshot the assembled reply BEFORE the gates so a gate that
+          // alters it (enforce block / escalate / rewrite) is detectable below.
+          const responseBeforeGates = result.response;
           await runAfterSkillHooks(this.hooks, hookCtx, result);
 
           // Keep the canonical WorkTrace summary consistent with any in-place gate mutation:
@@ -497,6 +525,28 @@ export class SkillExecutorImpl implements SkillExecutor {
           // blocked/rewritten turn must refresh it or the canonical trace records pre-block text.
           // No-op when no gate mutated (it already equals result.response.slice(0, 500)).
           result.trace.responseSummary = result.response.slice(0, 500);
+
+          // P2-3 (afterSkill gate-ordering blind spot): the governance gates run
+          // at THIS success-return seam, downstream of the mid-loop op.execute().
+          // A write-effect tool call (a booking = external_mutation, a CRM write,
+          // an external send) that succeeded EARLIER in the loop has therefore
+          // already committed by the time a gate decides to block / escalate /
+          // rewrite the reply — and the mutation cannot be retracted. When both
+          // happened this turn, emit the detective metric so a same-turn mutation
+          // committed in a turn the gate then had to ALTER for safety (block,
+          // escalate, OR inline rewrite) is observable. We count only
+          // SUCCESSFUL write-effect calls (status === "success"), so a denied /
+          // failed / pending tool call that never committed is not miscounted.
+          // Observability-only — never alters control flow or the reply.
+          if (result.response !== responseBeforeGates) {
+            const committed = strongestCommittedWriteEffect(toolCallRecords, runtimeTools);
+            if (committed) {
+              recordMutatedThenEscalated({
+                deploymentId: params.deploymentId,
+                effectCategory: committed,
+              });
+            }
+          }
 
           // Isolated telemetry recorder — a SEPARATE arg (not in the `hooks` array), invoked
           // directly AFTER the governance gates above so it records the post-gate result.
