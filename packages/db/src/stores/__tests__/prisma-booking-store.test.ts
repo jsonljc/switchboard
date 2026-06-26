@@ -612,4 +612,51 @@ describe("PrismaBookingStore reschedule/cancel/find", () => {
       );
     });
   });
+
+  describe("stalled-pending reaper helpers", () => {
+    let prisma: ReturnType<typeof makePrisma>;
+    let store: PrismaBookingStore;
+
+    beforeEach(() => {
+      prisma = makePrisma();
+      store = new PrismaBookingStore(prisma as never);
+    });
+
+    it("findStalledPending queries pending_confirmation rows older than the cutoff, bounded + ordered", async () => {
+      const cutoff = new Date("2026-06-26T12:00:00Z");
+      const rows = [
+        { id: "bk_1", organizationId: "org_1", createdAt: new Date("2026-06-26T10:00:00Z") },
+      ];
+      (prisma.booking.findMany as ReturnType<typeof vi.fn>).mockResolvedValue(rows);
+
+      const result = await store.findStalledPending(cutoff, 500);
+
+      expect(result).toEqual(rows);
+      const arg = (prisma.booking.findMany as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+      expect(arg.where).toEqual({ status: "pending_confirmation", createdAt: { lt: cutoff } });
+      expect(arg.take).toBe(500);
+      expect(arg.orderBy).toEqual({ createdAt: "asc" });
+      expect(arg.select).toEqual({ id: true, organizationId: true, createdAt: true });
+    });
+
+    it("reapStalledPending issues a status-guarded updateMany and returns the count (1 = reaped)", async () => {
+      (prisma.booking.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+
+      const result = await store.reapStalledPending("org_1", "bk_1");
+
+      expect(result).toEqual({ count: 1 });
+      expect(prisma.booking.updateMany).toHaveBeenCalledWith({
+        where: { id: "bk_1", organizationId: "org_1", status: "pending_confirmation" },
+        data: { status: "failed" },
+      });
+    });
+
+    it("reapStalledPending returns count 0 when a concurrent confirm/fail already moved the row (benign race)", async () => {
+      (prisma.booking.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
+
+      const result = await store.reapStalledPending("org_1", "bk_1");
+
+      expect(result).toEqual({ count: 0 });
+    });
+  });
 });
