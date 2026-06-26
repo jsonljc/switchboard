@@ -219,7 +219,13 @@ async function main() {
         // resolve the actor's IdentitySpec — see gateway/ctwa-ingress-request.ts.
         const response = await platformIngressAdapter.submit(buildCtwaIngressSubmitRequest(req));
         if (!response.ok) {
-          return { ok: false };
+          // P2-4: thread the IngressError type/message through (instead of
+          // stripping it to a bare `{ok:false}`) so the adapter and the route's
+          // fire-and-forget `.catch` can surface WHY a paid CTWA lead was dropped.
+          return {
+            ok: false,
+            error: { type: response.error.type, message: response.error.message },
+          };
         }
         return { ok: true, result: response.result };
       },

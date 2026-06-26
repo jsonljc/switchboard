@@ -239,6 +239,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "Robin recovery sends that exhausted bounded retries and dead-lettered (terminal failed); labeled by intent + reason",
       ["intent", "reason"],
     ),
+    ctwaLeadIntakeFailed: new PromCounter(
+      "switchboard_ctwa_lead_intake_failed_total",
+      "CTWA paid-lead fire-and-forget lead.intake that failed to create a Contact (P2-4, previously triple-swallowed); labeled by reason (ingress_rejected/execution_failed/unexpected) + type",
+      ["reason", "type"],
+    ),
     strandedClaimReaped: new PromCounter(
       "switchboard_stranded_claim_reaped_total",
       "Orphaned `running` idempotency claims aged by the reaper to the needs_reconciliation dead-letter sink (EV-2/SPINE-2); one per reaped row, labeled by intent. Any nonzero value is a key awaiting manual reconciliation",

@@ -179,4 +179,48 @@ describe("CtwaAdapter", () => {
     );
     expect(submit).toHaveBeenCalled();
   });
+
+  // P2-4: the adapter must NOT swallow a failed lead.intake. A dropped paid CTWA
+  // lead is invisible today (the submit return is discarded). ingest() now rejects
+  // on both failure legs so the route's fire-and-forget .catch surfaces it.
+  it("surfaces (throws) when ingress returns ok:false — the infra/entitlement leg", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: false,
+      error: { type: "entitlement_required", message: "org not entitled" },
+    } as unknown);
+    const adapter = new CtwaAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+    });
+    await expect(adapter.ingest(makeMessage())).rejects.toMatchObject({
+      reason: "ingress_rejected",
+      detail: { type: "entitlement_required" },
+    });
+  });
+
+  it("surfaces (throws) when ingress returns ok:true but the execution outcome is failed", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outcome: "failed", summary: "intake handler threw" },
+    } as unknown);
+    const adapter = new CtwaAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+    });
+    await expect(adapter.ingest(makeMessage())).rejects.toMatchObject({
+      reason: "execution_failed",
+    });
+  });
+
+  it("resolves without throwing on a completed intake (does not over-surface success)", async () => {
+    const submit = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { outcome: "completed", outputs: { contactId: "c1" } },
+    } as unknown);
+    const adapter = new CtwaAdapter({
+      ingress: { submit },
+      now: () => new Date("2026-04-26T00:00:00Z"),
+    });
+    await expect(adapter.ingest(makeMessage())).resolves.toBeUndefined();
+  });
 });

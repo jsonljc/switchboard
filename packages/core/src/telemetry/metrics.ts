@@ -83,6 +83,17 @@ export interface SwitchboardMetrics {
    *  org_phone_missing | context_resolve_failed). permanent_send_error is a 4xx Graph failure that
    *  dead-lettered immediately without consuming the retry budget (D4: retry transient only). */
   robinRecoverySendFailed: Counter;
+  /** P2-4: a CTWA (Click-to-WhatsApp) inbound was tagged as a paid lead but its
+   *  fire-and-forget `lead.intake` submission FAILED to create a Contact, so the
+   *  paid lead was dropped. The never-silent dropped-paid-lead signal — the failure
+   *  was previously triple-swallowed (shim stripped the error, adapter discarded the
+   *  return, route `.catch` was throw-only). Labeled by reason (ingress_rejected =
+   *  PlatformIngress ok:false, an infra/entitlement/validation rejection;
+   *  execution_failed = ok:true but the execution outcome was "failed"; unexpected =
+   *  a non-ingest throw) + type (the IngressError.type, the "failed" outcome, or
+   *  "unknown"). Any sustained rate is a lead-intake outage on the highest-intent
+   *  inbound. Observability-only; never gates the message-handling flow. */
+  ctwaLeadIntakeFailed: Counter;
   /** EV-2 / SPINE-2: an orphaned `running` idempotency CLAIM (process death between
    *  PlatformIngress.claim() and finalizeTrace) was aged by the stranded-claim reaper to the
    *  terminal `needs_reconciliation` dead-letter sink. Incremented ONCE per row actually reaped,
@@ -198,6 +209,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     governanceVerdictsRecorded: new InMemoryCounter(),
     whatsappProactiveSendSkipped: new InMemoryCounter(),
     robinRecoverySendFailed: new InMemoryCounter(),
+    ctwaLeadIntakeFailed: new InMemoryCounter(),
     strandedClaimReaped: new InMemoryCounter(),
     rileyReallocationCapEvaluated: new InMemoryCounter(),
     rileyReallocationGuardrailOutcome: new InMemoryCounter(),
