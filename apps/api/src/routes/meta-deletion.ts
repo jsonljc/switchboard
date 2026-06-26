@@ -135,6 +135,7 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
       const calendarProviderFactory = resolveCalendarFactory(request, app.prisma);
       const deletedIds: string[] = [];
       let failureReason: string | null = null;
+      let calendarIncomplete = false;
 
       try {
         const matches = await app.prisma.contact.findMany({
@@ -143,12 +144,17 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
         });
 
         for (const match of matches) {
-          await eraseContactFully(
+          const result = await eraseContactFully(
             { prisma: app.prisma, contactStore, calendarProviderFactory, logger: request.log },
             match.organizationId,
             match.id,
           );
           deletedIds.push(match.id);
+          // "completed"/"skipped" = the external calendar is clean; anything else
+          // means an event may linger, so the overall request is only "partial".
+          if (result.calendar !== "completed" && result.calendar !== "skipped") {
+            calendarIncomplete = true;
+          }
         }
       } catch (err) {
         request.log.error(
@@ -158,8 +164,20 @@ export const metaDeletionRoutes: FastifyPluginAsync<MetaDeletionDeps> = async (a
         failureReason = err instanceof Error ? err.message : "unknown_error";
       }
 
-      const status = failureReason === null ? "completed" : "failed";
-      const completedAt = failureReason === null ? new Date() : null;
+      // Honest outcome: a thrown DB cascade is "failed"; a clean DB erasure whose
+      // external calendar cancel was incomplete is "partial" (our data is gone, the
+      // external event may linger) — never "completed" on a partial.
+      let status: string;
+      if (failureReason !== null) {
+        status = "failed";
+      } else if (calendarIncomplete) {
+        status = "partial";
+        failureReason =
+          "external calendar cancellation incomplete (event(s) may linger; reconcile from logs)";
+      } else {
+        status = "completed";
+      }
+      const completedAt = status === "failed" ? null : new Date();
 
       // Persist the request record. If this insert itself fails we still
       // owe Meta a response — log and proceed; ops can reconcile via logs.

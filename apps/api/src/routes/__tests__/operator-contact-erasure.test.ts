@@ -24,7 +24,7 @@ function makeEraser(existsForOrg = true): {
     findContactForOrg: vi
       .fn<OperatorContactEraser["findContactForOrg"]>()
       .mockResolvedValue(existsForOrg),
-    erase: vi.fn<OperatorContactEraser["erase"]>().mockResolvedValue(undefined),
+    erase: vi.fn<OperatorContactEraser["erase"]>().mockResolvedValue({ calendarFullyErased: true }),
     recordRequest: vi.fn<OperatorContactEraser["recordRequest"]>().mockResolvedValue(undefined),
   };
 }
@@ -72,6 +72,33 @@ describe("POST /api/:orgId/contacts/:contactId/erase - operator PDPA erasure via
     expect(app.lastIngressTrace!.mode).toBe("operator_mutation");
     expect(app.lastIngressTrace!.outcome).toBe("completed");
     expect(app.lastIngressTrace!.organizationId).toBe("org_a");
+
+    await app.close();
+  });
+
+  it("records status=partial when the external calendar could not be fully cleared (DB erased, 200)", async () => {
+    const eraseContactWriter = makeEraser();
+    eraseContactWriter.erase.mockResolvedValue({ calendarFullyErased: false });
+    const { app } = await buildTestServer({ eraseContactWriter });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/org_a/contacts/contact_1/erase",
+      headers: hdr,
+    });
+
+    // DB erasure succeeded, so the operator still gets 200; the audit row is honest.
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: "erased", contactId: "contact_1" });
+    expect(eraseContactWriter.erase).toHaveBeenCalledWith("org_a", "contact_1");
+    expect(eraseContactWriter.recordRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "org_a",
+        contactId: "contact_1",
+        actorId: "operator_1",
+        status: "partial",
+      }),
+    );
 
     await app.close();
   });

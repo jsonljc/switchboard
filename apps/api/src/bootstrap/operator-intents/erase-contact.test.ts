@@ -16,7 +16,7 @@ function makeEraser(existsForOrg = true): {
     findContactForOrg: vi
       .fn<OperatorContactEraser["findContactForOrg"]>()
       .mockResolvedValue(existsForOrg),
-    erase: vi.fn<OperatorContactEraser["erase"]>().mockResolvedValue(undefined),
+    erase: vi.fn<OperatorContactEraser["erase"]>().mockResolvedValue({ calendarFullyErased: true }),
     recordRequest: vi.fn<OperatorContactEraser["recordRequest"]>().mockResolvedValue(undefined),
   };
 }
@@ -55,6 +55,24 @@ describe("buildEraseContactHandler", () => {
       actorId: "operator-1",
       status: "completed",
     });
+  });
+
+  it("records a partial audit row when the DB erased but the external calendar lingered", async () => {
+    const eraser = makeEraser(true);
+    eraser.erase.mockResolvedValue({ calendarFullyErased: false });
+    const handler = buildEraseContactHandler(eraser);
+
+    const result = await handler.execute(makeWorkUnit());
+
+    // The governed action completed (the contact IS erased from our DB)...
+    expect(result.outcome).toBe("completed");
+    expect(result.outputs).toMatchObject({ status: "erased", calendarErasure: "partial" });
+    // ...but the durable audit row is honest about the lingering external event.
+    expect(eraser.recordRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ contactId: "contact-1", status: "partial" }),
+    );
+    const call = eraser.recordRequest.mock.calls[0]![0] as { failureReason?: string };
+    expect(call.failureReason).toMatch(/calendar/i);
   });
 
   it("fail-closed: a contact not in the org is not erased and returns CONTACT_NOT_FOUND", async () => {

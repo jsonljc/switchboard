@@ -323,6 +323,39 @@ describe("POST /api/meta/deletion", () => {
     });
     await calApp.close();
   });
+
+  it("records status=partial when an external calendar cancel is swallowed (F5)", async () => {
+    await app.close(); // discard the default app; use one with an injected calendar factory
+    prisma.contact.findMany.mockResolvedValue([{ id: "c-1", organizationId: "org-1" }]);
+    prisma.contact.findFirst.mockResolvedValue({ id: "c-1", phone: "+6591234567" });
+    prisma.booking.findMany.mockResolvedValue([{ calendarEventId: "evt-google-1" }]);
+
+    const cancelBooking = vi.fn(async () => {
+      throw new Error("google calendar down");
+    });
+    const calendarProviderFactory = vi.fn(
+      async () => ({ cancelBooking }) as unknown as CalendarProvider,
+    );
+    const calApp = await buildApp(prisma, { calendarProviderFactory });
+
+    const sr = makeSignedRequest({ user_id: "6591234567" });
+    const res = await calApp.inject({
+      method: "POST",
+      url: "/api/meta/deletion",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: `signed_request=${encodeURIComponent(sr)}`,
+    });
+
+    // The contact IS erased from the DB (200, recorded deleted), but the outcome is
+    // honest: the external event lingered, so status is "partial", never "completed".
+    expect(res.statusCode).toBe(200);
+    expect(cancelBooking).toHaveBeenCalled();
+    expect(prisma.contact.deleteMany).toHaveBeenCalled();
+    expect(prisma.dataDeletionRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ deletedContactIds: ["c-1"], status: "partial" }),
+    });
+    await calApp.close();
+  });
 });
 
 describe("POST /api/meta/deletion — error-path logging (F10/PDPA)", () => {
