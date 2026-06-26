@@ -3,6 +3,7 @@ import {
   HandoffSchema,
   HandoffReasonSchema,
   HandoffStatusSchema,
+  HandoffConversationSummarySchema,
   type Handoff,
 } from "../handoff.js";
 
@@ -91,5 +92,40 @@ describe("HandoffSchema", () => {
   it("rejects missing required leadSnapshot.channel", () => {
     const broken = { ...baseHandoff, leadSnapshot: {} };
     expect(HandoffSchema.safeParse(broken).success).toBe(false);
+  });
+});
+
+// P2-9: the escalate tool supplies a free-text summary of why the handoff is
+// needed. There is no existing free-text field for it, so the summary is carried
+// in an additive optional agentSummary. The Handoff.conversationSummary Prisma
+// column is Json, so an optional property is migration-free and backwards
+// compatible (legacy rows simply omit it).
+describe("HandoffConversationSummarySchema agentSummary (P2-9)", () => {
+  const base = {
+    turnCount: 0,
+    keyTopics: [],
+    objectionHistory: [],
+    sentiment: "angry",
+  };
+
+  it("accepts and preserves an optional agentSummary", () => {
+    const parsed = HandoffConversationSummarySchema.safeParse({
+      ...base,
+      agentSummary: "Lead wants laser for a changing mole; anxious about cost",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.agentSummary).toBe(
+        "Lead wants laser for a changing mole; anxious about cost",
+      );
+    }
+  });
+
+  it("parses without agentSummary (optional, backwards compatible)", () => {
+    const parsed = HandoffConversationSummarySchema.safeParse(base);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.agentSummary).toBeUndefined();
+    }
   });
 });

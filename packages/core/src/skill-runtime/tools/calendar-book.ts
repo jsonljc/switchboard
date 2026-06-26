@@ -9,6 +9,7 @@ import {
 } from "@switchboard/schemas";
 import type { CalendarProvider } from "@switchboard/schemas";
 import { enforceConsentPrecondition } from "./calendar-book-consent.js";
+import { parseSlotWindowOrFail } from "./slot-window.js";
 import { buildBookedConversionPayload } from "./booked-conversion-payload.js";
 import { resolveBookedValueForBooking } from "./booking-value.js";
 import { buildRescheduleOperations } from "./calendar-reschedule.js";
@@ -159,6 +160,14 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
               retryable: false,
             });
           }
+
+          // P2-2: validate the LLM-supplied slot window BEFORE the consent read,
+          // the opportunity resolve, and the durable write. An unparseable date
+          // would otherwise reach `new Date(...)` -> Invalid Date and throw at the
+          // Prisma booking write (or at .toISOString()), killing the whole turn.
+          // A recoverable, retryable fail lets Alex re-offer a valid slot instead.
+          const parsedWindow = parseSlotWindowOrFail(input.slotStart, input.slotEnd);
+          if ("failure" in parsedWindow) return parsedWindow.failure;
 
           // F15 — flag-gated consent precondition (INERT BY DEFAULT). Runs AFTER
           // contactId is resolved and BEFORE any write (no opportunity, no

@@ -49,6 +49,16 @@ export class HandoffNotifier {
       lines.push(`Interest: ${pkg.leadSnapshot.serviceInterest}`);
     }
 
+    // P2-9: the escalating agent's own summary of why this handoff is needed.
+    // Rendered prominently (before the keyword-derived turn/topic lines) so the
+    // operator opens with real context instead of a context-free package. Collapse
+    // whitespace: agentSummary is LLM free text and a raw newline would inject a
+    // fake structured line into this operator block.
+    if (pkg.conversationSummary.agentSummary) {
+      const summary = pkg.conversationSummary.agentSummary.replace(/\s+/g, " ").trim();
+      lines.push(`Summary: ${summary}`);
+    }
+
     lines.push(`Turns: ${pkg.conversationSummary.turnCount}`);
     lines.push(`Sentiment: ${pkg.conversationSummary.sentiment}`);
 
