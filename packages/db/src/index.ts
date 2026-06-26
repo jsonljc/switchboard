@@ -178,6 +178,10 @@ export {
   GovernanceConfigInvalidError,
   type SetGateModeInput,
 } from "./stores/prisma-governance-gate-mode-writer.js";
+export {
+  PrismaGovernanceMarketWriter,
+  type SetMarketInput,
+} from "./stores/prisma-governance-market-writer.js";
 export { createPrismaConsentStore } from "./prisma-consent-store.js";
 export { createPrismaContactConsentReader } from "./prisma-contact-consent-reader.js";
 export { PrismaScheduledFollowUpStore } from "./stores/prisma-scheduled-follow-up-store.js";
