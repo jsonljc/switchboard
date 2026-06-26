@@ -45,7 +45,8 @@
     "eval:governance": "tsx evals/governance-decision/run-eval.ts",
     "eval:riley": "tsx evals/riley-recommendation/run-eval.ts",
     "eval:trajectory": "tsx evals/trajectory-grading/run-eval.ts",
-    "eval:adversarial-injection": "tsx evals/adversarial-injection/run-eval.ts"
+    "eval:adversarial-injection": "tsx evals/adversarial-injection/run-eval.ts",
+    "eval:claim-boundary": "tsx evals/claim-boundary/run-eval.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

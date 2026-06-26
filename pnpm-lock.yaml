@@ -487,6 +487,31 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@25.6.0)(jiti@2.6.1)(jsdom@29.1.0(@noble/hashes@2.2.0))(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
 
+  evals/claim-boundary:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: 0.91.1
+        version: 0.91.1(zod@3.25.76)
+      '@switchboard/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@switchboard/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@switchboard/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.6.0
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.6.0)(jiti@2.6.1)(jsdom@29.1.0(@noble/hashes@2.2.0))(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
+
   evals/claim-classifier:
     dependencies:
       '@anthropic-ai/sdk':

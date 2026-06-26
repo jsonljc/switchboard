@@ -508,6 +508,7 @@ jobs:
               - '.github/workflows/ci.yml'
               - 'skills/alex/**'
               - 'evals/alex-conversation/**'
+              - 'evals/claim-boundary/**'
               - 'packages/core/src/skill-runtime/**'
 
       - name: Skip notice (no alex-conversation-relevant changes)
@@ -619,6 +620,71 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm eval:adversarial-injection
+
+  eval-claim-boundary:
+    name: Eval — Claim Boundary
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Filter claim-boundary-relevant paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # Empty token forces a local `git diff` against the base instead of the
+          # GitHub REST API (the default token's API access returns 401 in CI here).
+          token: ""
+          filters: |
+            claim:
+              - '.github/workflows/ci.yml'
+              - 'skills/alex/**'
+              - 'evals/claim-boundary/**'
+              - 'evals/alex-conversation/**'
+              - 'packages/core/src/skill-runtime/**'
+
+      - name: Skip notice (no claim-boundary-relevant changes)
+        if: steps.filter.outputs.claim != 'true' && github.ref != 'refs/heads/main'
+        run: 'echo "Eval — Claim Boundary skipped: no claim-boundary-relevant paths changed."'
+
+      - uses: pnpm/action-setup@v5
+        if: steps.filter.outputs.claim == 'true' || github.ref == 'refs/heads/main'
+
+      - uses: actions/setup-node@v6
+        if: steps.filter.outputs.claim == 'true' || github.ref == 'refs/heads/main'
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.claim == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build packages required by the harness
+        if: steps.filter.outputs.claim == 'true' || github.ref == 'refs/heads/main'
+        # The claim-boundary eval reuses the alex-conversation harness (the real Alex
+        # skill-runtime over @switchboard/core + @switchboard/db) and the real
+        # ClaimClassifierHook, and the shared evals/vitest.config.ts runs every eval
+        # suite's unit tests (incl. riley-recommendation → @switchboard/ad-optimizer)
+        # — so build the same chain the alex job builds.
+        run: pnpm --filter @switchboard/core^... build && pnpm --filter @switchboard/core build && pnpm --filter @switchboard/ad-optimizer build && pnpm --filter @switchboard/db build
+
+      - name: Run eval unit tests
+        if: steps.filter.outputs.claim == 'true' || github.ref == 'refs/heads/main'
+        run: pnpm exec vitest run --config evals/vitest.config.ts
+
+      - name: Run claim-boundary eval
+        # Informational (live-LLM scored) — non-blocking until ANTHROPIC_API_KEY is
+        # restored (INFRA-1). The deterministic grader + the offline two-mode teeth in
+        # "Run eval unit tests" above ARE blocking; only the live Alex drive + the live
+        # enforce-gate drive are informational here. NOTE: a deterministic violation on a
+        # LIVE run still fails this step (a real claim-boundary finding), even while the
+        # step is non-blocking overall.
+        continue-on-error: true
+        if: steps.filter.outputs.claim == 'true' || github.ref == 'refs/heads/main'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: pnpm eval:claim-boundary
 
   eval-governance-decision:
     name: Eval — Governance Decision
