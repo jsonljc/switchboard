@@ -400,8 +400,9 @@ export class PrismaBookingStore {
   // to a thrown tx or a process death, the row is stranded pending_confirmation and the overlap
   // predicate (notIn [failed, cancelled]) blocks its slot forever. `createdAt` is the age axis: a
   // legitimate pending resolves within one synchronous tool call, so anything older than the
-  // reaper TTL is stranded. Bounded (runs on @@index([status]) / @@index([organizationId,
-  // createdAt])) so a backlog cannot blow up the scan.
+  // reaper TTL is stranded. Bounded by `take` and narrowed by the `status` index (@@index([status]));
+  // the pending_confirmation set is normally near-empty (only stranded rows accumulate), so the
+  // status-filter-then-sort stays cheap and a backlog cannot blow up the scan.
   async findStalledPending(
     olderThan: Date,
     limit: number,

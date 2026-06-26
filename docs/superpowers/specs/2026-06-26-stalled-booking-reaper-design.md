@@ -126,6 +126,25 @@ slow confirm resolves in the **safe direction** (slot released; the row terminal
 `failed`). The compare-and-set on `status` guarantees at-most-one writer wins the
 reaper-vs-confirm race.
 
+## Confirm-side resurrection guard (review-driven addition)
+
+Freeing the slot introduces a _new_ worst-case the original block did not have: if a provider
+call stalled past the TTL, the reaper freed the slot, another lead booked it, and the stalled
+confirm _then_ succeeded, the calendar-book confirm transaction (`calendar-book.ts`) would
+`update` the row `id`-only back to `confirmed` and **double-book** the physical slot (plus mint a
+phantom booked conversion). Both adversarial reviews flagged this. The fix makes the confirm
+write a status-guarded compare-and-set, symmetric with the reaper and the store's
+create/reschedule guards:
+
+```
+updateMany where { id, organizationId, status: "pending_confirmation" } data { status: "confirmed", calendarEventId }
+```
+
+On `count === 0` (the row was terminalized mid-confirm) the transaction throws, which routes into
+the existing orphan-event compensation + failure-handler path (`calendar-book.ts:413`) instead of
+resurrecting the booking. This closes the window definitively rather than relying on the
+provider never stalling, and future-proofs the TTL argument against confirm ever becoming async.
+
 ## Non-goals / explicitly out of scope
 
 - **External calendar-event cleanup.** A `pending_confirmation` row has `calendarEventId = null`
@@ -135,11 +154,12 @@ reaper-vs-confirm race.
 - **No per-row escalation.** A reaped stranded pending gets the counter + forensic log + the
   one-per-run summary alert - not an `escalationRecord` per row (that would be an alert storm on
   a mass-strand event; the stranded-claim reaper deliberately does the same).
-- **No `confirm()` status guard.** `confirm()`'s unconditional `updateMany` could in theory
-  resurrect a reaped row to `confirmed`, but only if a confirm runs >30 min after create -
-  unreachable in the synchronous create→confirm flow. Out of scope; the large TTL is the
-  mitigation.
 - **No failure-handler hardening** (option c) in this PR - noted as deferred defense-in-depth.
+  Unnecessary for correctness once the reaper backstop + confirm-side guard exist; it would only
+  shrink the ≤(TTL + cron-interval) stranding window for the handler-throw case.
+- The bare `PrismaBookingStore.confirm()` method (a separate code path not used by the
+  calendar-book tool) keeps its id+org `updateMany`; the resurrection risk lives only on the
+  calendar-book confirm transaction, which is the path guarded above.
 
 ## Testing (TDD)
 
@@ -152,7 +172,12 @@ reaper-vs-confirm race.
   alert to `critical`; bounded scan emits the CAPPED note; empty scan does nothing (no alert).
 - **apps/api** (`stalled-booking-reaper.test.ts`, mirrors the cron test): null store no-ops;
   a wired store runs the orchestrator under the Inngest `step`.
+- **confirm-side guard** (`calendar-book.test.ts`): a confirm whose status-guarded `updateMany`
+  matches 0 rows (row reaped mid-confirm) does NOT confirm or mint a booked outbox/receipt, runs
+  orphan-event compensation, and routes to the `confirmation_failed` failure path. All 65
+  pre-existing calendar-book tests stay green (happy path unchanged).
 
 Acceptance (fix-plan rank-18): a stalled pending row is handled (aged to `failed`, slot
-released) and a metric is emitted. `eval:alex-conversation` is unaffected (no booking-tool
-change); the booking-tool change is covered by the unit tests above.
+released) and a metric is emitted. The booking-tool change (the confirm-side guard) is covered by
+the unit test above; `eval:alex-conversation` uses mock tools and is blind to booking-tool logic,
+so unit coverage is the regression net for it (per the documented eval-blindness rule).
