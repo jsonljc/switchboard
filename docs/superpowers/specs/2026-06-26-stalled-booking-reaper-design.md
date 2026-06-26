@@ -22,8 +22,8 @@ error paths, the single thing that writes a terminal `failed` status is
 `calendar-book.ts:299` (provider error) and `:423` (confirm-tx failure).
 
 **The gap:** if that failure-handler transaction itself throws (DB hiccup, escalation/outbox
-write error, connection drop) — or the process dies anywhere between `create()` and a terminal
-write — the row is stranded `pending_confirmation` with **no terminal status, no metric, and no
+write error, connection drop) - or the process dies anywhere between `create()` and a terminal
+write - the row is stranded `pending_confirmation` with **no terminal status, no metric, and no
 reaper**. Because `pending_confirmation` is in the "occupying" set, that stranded row
 **permanently blocks its physical slot**: every future `create()` for the slot throws
 `BookingSlotConflictError`, and the lead is told "that time was just taken" forever. The
@@ -42,7 +42,7 @@ stranding cause (handler throw, process death, anything), terminalizes the row (
 reporting), and releases the slot (`failed` is already excluded from every active/overlap
 predicate). Cost: a core orchestrator + a db store method + a thin Inngest cron in apps/api +
 one counter across the 3 metrics registries + tests. It is a **direct row-mutation cron, not a
-governed auto-exec intent** — reapers (`stranded-claim-reaper`, `lifecycle-stalled-sweep`)
+governed auto-exec intent** - reapers (`stranded-claim-reaper`, `lifecycle-stalled-sweep`)
 mutate infrastructure rows directly and do not pass through `PlatformIngress.submit()`.
 
 **(b) DB overlap-TTL.** Exclude `pending_confirmation` older than N minutes from the overlap
@@ -60,12 +60,12 @@ mock tools). Insufficient alone.
 
 Implement **(a)**, reaping to the existing terminal **`failed`** status. Rationale:
 
-- It is the _complete_ backstop — it catches every stranding cause, which (c) cannot.
+- It is the _complete_ backstop - it catches every stranding cause, which (c) cannot.
 - Reaping to `failed` (not a new `expired`/`abandoned` status) gives slot-release and clean
   reporting for free with **zero cross-slice seam risk**: `failed` is already excluded from
   every active/overlap predicate (`:59/:126/:154/:247/:388`) and understood by all
   reporting/counts. A new status would force touching all five predicates, the `BookingStatus`
-  enum, and reporting — the exact cross-slice trap to avoid — for no benefit. The new
+  enum, and reporting - the exact cross-slice trap to avoid - for no benefit. The new
   `bookingStalledReaped` counter + per-row forensic log + per-run operator alert supply the
   distinct "reaped-by-timeout vs explicitly-failed" observability.
 - No hot-path edit (calendar-book / booking-failure-handler untouched) → no eval-blindness
@@ -77,7 +77,7 @@ Implement **(a)**, reaping to the existing terminal **`failed`** status. Rationa
 
 Three layers, mirroring the stranded-claim reaper:
 
-1. **db — `PrismaBookingStore` (new methods).**
+1. **db - `PrismaBookingStore` (new methods).**
    - `findStalledPending(olderThan: Date, limit: number)` → bounded, cross-org scan of
      `status = "pending_confirmation" AND createdAt < olderThan`, ordered `createdAt asc`,
      `take: limit`, selecting `{ id, organizationId, createdAt }`. Runs on `@@index([status])`
@@ -89,7 +89,7 @@ Three layers, mirroring the stranded-claim reaper:
      `confirm()`/`markFailed()` already moved the row, `count === 0` (a benign race), never a
      wrong overwrite. Org + booking scoped (F12 / IDOR rule).
 
-2. **core — `reapStalledBookings` orchestrator** (`packages/core/src/platform/stalled-booking-reaper.ts`).
+2. **core - `reapStalledBookings` orchestrator** (`packages/core/src/platform/stalled-booking-reaper.ts`).
    Defines a narrow `StalledBookingReaperStore` interface (the two methods above; satisfied
    structurally by `PrismaBookingStore`, kept off any broad store interface so existing mocks
    need not stub it). Loop: scan → for each, `reapStalledPending`; `count === 1` →
@@ -100,15 +100,15 @@ Three layers, mirroring the stranded-claim reaper:
    Constants: `STALLED_BOOKING_MAX_AGE_MS = 30 * 60 * 1000`, `STALLED_BOOKING_REAP_LIMIT = 500`
    (mirrors the stranded-claim values).
 
-3. **apps/api — `stalled-booking-reaper` Inngest cron** (`apps/api/src/services/cron/stalled-booking-reaper.ts`).
+3. **apps/api - `stalled-booking-reaper` Inngest cron** (`apps/api/src/services/cron/stalled-booking-reaper.ts`).
    Thin wiring: hourly trigger (`0 * * * *`), `retries: 2`, `makeOnFailureHandler` (riskCategory
-   `high`, `alert: true` — a reaper that stops running means slots silently re-block). A null
+   `high`, `alert: true` - a reaper that stops running means slots silently re-block). A null
    store (no Postgres wired) → no-op, never fabricating a run. Wired in
    `apps/api/src/bootstrap/inngest.ts` alongside `createStrandedClaimReaperCron`, injecting
    `getMetrics().bookingStalledReaped`, the `operatorAlerter`, and `app.bookingStore` (the real
    `PrismaBookingStore`), and added to the served `functions` list.
 
-4. **metrics — `bookingStalledReaped` counter** added to all 3 registries:
+4. **metrics - `bookingStalledReaped` counter** added to all 3 registries:
    `packages/core/src/telemetry/metrics.ts` (`SwitchboardMetrics` interface + `InMemoryCounter`
    default), `apps/api/src/metrics.ts` (`PromCounter`), `apps/chat/src/bootstrap/metrics.ts`
    (`PromCounter`). Metric name `switchboard_booking_stalled_reaped_total`, label `["orgId"]`,
@@ -132,13 +132,13 @@ reaper-vs-confirm race.
   handle and operates purely DB-side. Orphan-event compensation already exists best-effort at
   `calendar-book.ts:416`.
 - **No per-row escalation.** A reaped stranded pending gets the counter + forensic log + the
-  one-per-run summary alert — not an `escalationRecord` per row (that would be an alert storm on
+  one-per-run summary alert - not an `escalationRecord` per row (that would be an alert storm on
   a mass-strand event; the stranded-claim reaper deliberately does the same).
 - **No `confirm()` status guard.** `confirm()`'s unconditional `updateMany` could in theory
-  resurrect a reaped row to `confirmed`, but only if a confirm runs >30 min after create —
+  resurrect a reaped row to `confirmed`, but only if a confirm runs >30 min after create -
   unreachable in the synchronous create→confirm flow. Out of scope; the large TTL is the
   mitigation.
-- **No failure-handler hardening** (option c) in this PR — noted as deferred defense-in-depth.
+- **No failure-handler hardening** (option c) in this PR - noted as deferred defense-in-depth.
 
 ## Testing (TDD)
 

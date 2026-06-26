@@ -1,13 +1,13 @@
 // apps/api/src/services/cron/stalled-booking-reaper.ts
 // ---------------------------------------------------------------------------
-// A8b-2 / rank-18 — stalled pending_confirmation booking reaper (Inngest cron)
+// A8b-2 / rank-18 - stalled pending_confirmation booking reaper (Inngest cron)
 // ---------------------------------------------------------------------------
 // Hourly sweep that ages bookings stranded in `pending_confirmation` (a thrown
 // failure-handler tx or a process death between create() and a terminal write)
 // to the terminal `failed` status, releasing the physical slot they otherwise
 // block forever. Emits a per-row counter and ONE operator alert per run. The
 // aging logic lives in the core `reapStalledBookings` orchestrator; this file is
-// the thin Inngest wiring. Idempotent across retries — an already-reaped row is
+// the thin Inngest wiring. Idempotent across retries - an already-reaped row is
 // `failed`, not `pending_confirmation`, so findStalledPending will not return it.
 // ---------------------------------------------------------------------------
 
@@ -30,7 +30,7 @@ export interface StalledBookingReaperCronDeps {
   failure: AsyncFailureContext;
   /**
    * The booking store (PrismaBookingStore satisfies the narrow reaper slice). Null when no
-   * Postgres-backed store is wired — the cron then no-ops, never fabricating a reaper run.
+   * Postgres-backed store is wired - the cron then no-ops, never fabricating a reaper run.
    */
   store: StalledBookingReaperStore | null;
   alerter: OperatorAlerter;
@@ -56,7 +56,7 @@ export async function executeStalledBookingReaper(
 ): Promise<StalledBookingReaperResult> {
   const store = deps.store;
   if (!store) {
-    // No store wired (no Postgres) — nothing to reap. Never alert.
+    // No store wired (no Postgres) - nothing to reap. Never alert.
     return { scanned: 0, reaped: 0, raced: 0, failed: 0, skipped: true };
   }
   return step.run("reap-stalled-bookings", () =>
@@ -81,7 +81,7 @@ export function createStalledBookingReaperCron(deps: StalledBookingReaperCronDep
         {
           functionId: "stalled-booking-reaper-hourly",
           eventDomain: "stalled-booking-reaper",
-          // A reaper run failing means stalled bookings keep blocking slots silently — alert.
+          // A reaper run failing means stalled bookings keep blocking slots silently - alert.
           riskCategory: "high",
           alert: true,
         },

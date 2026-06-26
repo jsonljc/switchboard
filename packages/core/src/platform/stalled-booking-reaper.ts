@@ -6,14 +6,14 @@ import type {
 import { safeAlert } from "../observability/operator-alerter.js";
 
 /**
- * A8b-2 / rank-18 — Stalled `pending_confirmation` booking reaper.
+ * A8b-2 / rank-18 - Stalled `pending_confirmation` booking reaper.
  *
  * `PrismaBookingStore.create` persists a booking as `pending_confirmation` BEFORE the external
  * calendar mutation, and the slot-overlap predicate counts that row as occupying (status notIn
  * [failed, cancelled]). The only writers that terminalize the row are confirm() -> confirmed,
  * markFailed() -> failed, and the calendar-book failure handler. If that terminalizing write is
- * lost — the failure-handler tx throws, or the process dies between create() and a terminal
- * write — the row is stranded `pending_confirmation` and PERMANENTLY blocks its physical slot
+ * lost - the failure-handler tx throws, or the process dies between create() and a terminal
+ * write - the row is stranded `pending_confirmation` and PERMANENTLY blocks its physical slot
  * (every future create() throws BookingSlotConflictError), silently (no metric, no reaper).
  *
  * This bounded sweep ages such a row to the existing terminal `failed` (already excluded from
@@ -41,9 +41,9 @@ export interface StalledPendingBooking {
 
 export interface ReapStalledBookingsDeps {
   store: StalledBookingReaperStore;
-  /** `bookingStalledReaped` — incremented once per row actually aged to failed, labeled by orgId. */
+  /** `bookingStalledReaped` - incremented once per row actually aged to failed, labeled by orgId. */
   counter: Counter;
-  /** Fired ONCE per run (when >=1 stale booking is found) — no per-row alert storm. */
+  /** Fired ONCE per run (when >=1 stale booking is found) - no per-row alert storm. */
   alerter: OperatorAlerter;
   /** Injectable clock for tests; defaults to wall clock. */
   now?: () => Date;
@@ -63,12 +63,12 @@ export interface ReapStalledBookingsResult {
   reaped: number;
   /** Bookings a concurrent confirm/fail terminalized between scan and our CAS (count 0). Benign. */
   raced: number;
-  /** Bookings whose reap-write THREW (a hard store error) — left for the next run; the alarm case. */
+  /** Bookings whose reap-write THREW (a hard store error) - left for the next run; the alarm case. */
   failed: number;
 }
 
 /**
- * 30 minutes — far above any legitimate pending window. A booking resolves
+ * 30 minutes - far above any legitimate pending window. A booking resolves
  * pending_confirmation -> confirmed/failed within ONE synchronous tool invocation (the provider
  * call is seconds); there is no async-park path that legitimately holds a booking pending. A
  * row still pending after this is stranded. Even a falsely-reaped slow confirm resolves in the
@@ -76,7 +76,7 @@ export interface ReapStalledBookingsResult {
  */
 export const STALLED_BOOKING_MAX_AGE_MS = 30 * 60 * 1000;
 
-/** Bounded batch per run — the reaper never fans out unbounded on a mass strand. */
+/** Bounded batch per run - the reaper never fans out unbounded on a mass strand. */
 export const STALLED_BOOKING_REAP_LIMIT = 500;
 
 export async function reapStalledBookings(
@@ -121,7 +121,7 @@ export async function reapStalledBookings(
     }
   }
 
-  // ONE summary alert per run when ANY stale booking was found — never silent, never a per-row
+  // ONE summary alert per run when ANY stale booking was found - never silent, never a per-row
   // storm. Only a HARD reap-write error (a throw) escalates to critical; a benign concurrent-seal
   // race does not (the row resolved).
   if (stuck.length > 0) {

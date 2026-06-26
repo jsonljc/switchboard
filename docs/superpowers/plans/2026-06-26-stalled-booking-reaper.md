@@ -4,7 +4,7 @@
 
 **Goal:** Add a bounded hourly reaper that ages stranded `pending_confirmation` bookings (older than a 30-minute TTL) to `failed`, releasing the slot they permanently block, with a per-row counter and one operator alert per run.
 
-**Architecture:** Mirror the EV-2 stranded-claim reaper across three layers — a db store method pair (`PrismaBookingStore.findStalledPending` + `reapStalledPending`), a core orchestrator (`reapStalledBookings` over a narrow `StalledBookingReaperStore` interface), and a thin Inngest cron in apps/api wired in `inngest.ts`. A new `bookingStalledReaped` counter is added to all three metrics registries. Direct row-mutation cron, not a governed ingress intent.
+**Architecture:** Mirror the EV-2 stranded-claim reaper across three layers - a db store method pair (`PrismaBookingStore.findStalledPending` + `reapStalledPending`), a core orchestrator (`reapStalledBookings` over a narrow `StalledBookingReaperStore` interface), and a thin Inngest cron in apps/api wired in `inngest.ts`. A new `bookingStalledReaped` counter is added to all three metrics registries. Direct row-mutation cron, not a governed ingress intent.
 
 **Tech Stack:** TypeScript (ESM, `.js` relative imports), Prisma, Inngest, Vitest, prom-client.
 
@@ -12,14 +12,14 @@
 
 - ESM only, `.js` extensions in relative imports. No `any`. No `console.log` (use `console.warn`/`console.error`).
 - Prettier: semi, double quotes, 2-space indent, trailing commas, 100 char width. Lowercase conventional-commit subject. No em-dashes in code/comments/commits.
-- Reap target is the existing `failed` status — NO new `BookingStatus` enum value, NO schema migration.
+- Reap target is the existing `failed` status - NO new `BookingStatus` enum value, NO schema migration.
 - New `SwitchboardMetrics` counter MUST be added to all 3 registries: `packages/core/src/telemetry/metrics.ts` (interface + InMemory default), `apps/api/src/metrics.ts` (PromCounter), `apps/chat/src/bootstrap/metrics.ts` (PromCounter).
 - Per-touched-package `pnpm --filter <pkg> exec tsc --noEmit` before each commit; rebuild a lower package's `dist` after editing it so consumers typecheck.
 - TTL = 30 min (`STALLED_BOOKING_MAX_AGE_MS`), scan limit 500 (`STALLED_BOOKING_REAP_LIMIT`).
 
 ---
 
-### Task 1: db store methods — `findStalledPending` + `reapStalledPending`
+### Task 1: db store methods - `findStalledPending` + `reapStalledPending`
 
 **Files:**
 
@@ -76,7 +76,7 @@ it("reapStalledPending returns count 0 when a concurrent confirm/fail already mo
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `pnpm --filter @switchboard/db exec vitest run src/stores/__tests__/prisma-booking-store.test.ts`
-Expected: FAIL — `store.findStalledPending is not a function` / `store.reapStalledPending is not a function`.
+Expected: FAIL - `store.findStalledPending is not a function` / `store.reapStalledPending is not a function`.
 
 - [ ] **Step 3: Implement the two methods** (add before the closing `}` of `class PrismaBookingStore`, after `findFutureBookingContactIds`)
 
@@ -132,7 +132,7 @@ git commit -m "feat(db): stalled pending_confirmation booking find + status-guar
 
 ---
 
-### Task 2: core orchestrator — `reapStalledBookings`
+### Task 2: core orchestrator - `reapStalledBookings`
 
 **Files:**
 
@@ -142,14 +142,14 @@ git commit -m "feat(db): stalled pending_confirmation booking find + status-guar
 
 **Files (also):**
 
-- Modify: `packages/core/src/observability/operator-alerter.ts` (add the `InfrastructureErrorType` union member — `errorType` is a CLOSED union, so the alert won't typecheck without it).
+- Modify: `packages/core/src/observability/operator-alerter.ts` (add the `InfrastructureErrorType` union member - `errorType` is a CLOSED union, so the alert won't typecheck without it).
 
 **Interfaces:**
 
 - Consumes: `Counter` (`../../telemetry/metrics.js`); `OperatorAlerter`, `InfrastructureFailureAlert`, `safeAlert` (`../../observability/operator-alerter.js`).
 - Produces: `reapStalledBookings(deps, config): Promise<ReapStalledBookingsResult>`; `STALLED_BOOKING_MAX_AGE_MS`; `STALLED_BOOKING_REAP_LIMIT`; types `StalledBookingReaperStore`, `StalledPendingBooking`, `ReapStalledBookingsDeps`, `ReapStalledBookingsConfig`, `ReapStalledBookingsResult`. Adds `"stalled_booking_reaped"` to `InfrastructureErrorType`.
 
-- [ ] **Step 1: Write the failing test** — create `packages/core/src/platform/__tests__/stalled-booking-reaper.test.ts`
+- [ ] **Step 1: Write the failing test** - create `packages/core/src/platform/__tests__/stalled-booking-reaper.test.ts`
 
 ```ts
 import { describe, it, expect, vi } from "vitest";
@@ -302,9 +302,9 @@ describe("reapStalledBookings", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @switchboard/core exec vitest run src/platform/__tests__/stalled-booking-reaper.test.ts`
-Expected: FAIL — cannot find module `../stalled-booking-reaper.js`.
+Expected: FAIL - cannot find module `../stalled-booking-reaper.js`.
 
-- [ ] **Step 3: Implement the orchestrator** — create `packages/core/src/platform/stalled-booking-reaper.ts`
+- [ ] **Step 3: Implement the orchestrator** - create `packages/core/src/platform/stalled-booking-reaper.ts`
 
 ```ts
 import type { Counter } from "../telemetry/metrics.js";
@@ -315,14 +315,14 @@ import type {
 import { safeAlert } from "../observability/operator-alerter.js";
 
 /**
- * A8b-2 / rank-18 — Stalled `pending_confirmation` booking reaper.
+ * A8b-2 / rank-18 - Stalled `pending_confirmation` booking reaper.
  *
  * `PrismaBookingStore.create` persists a booking as `pending_confirmation` BEFORE the external
  * calendar mutation, and the slot-overlap predicate counts that row as occupying (status notIn
  * [failed, cancelled]). The only writers that terminalize the row are confirm() -> confirmed,
  * markFailed() -> failed, and the calendar-book failure handler. If that terminalizing write is
- * lost — the failure-handler tx throws, or the process dies between create() and a terminal
- * write — the row is stranded `pending_confirmation` and PERMANENTLY blocks its physical slot
+ * lost - the failure-handler tx throws, or the process dies between create() and a terminal
+ * write - the row is stranded `pending_confirmation` and PERMANENTLY blocks its physical slot
  * (every future create() throws BookingSlotConflictError), silently (no metric, no reaper).
  *
  * This bounded sweep ages such a row to the existing terminal `failed` (already excluded from
@@ -350,9 +350,9 @@ export interface StalledPendingBooking {
 
 export interface ReapStalledBookingsDeps {
   store: StalledBookingReaperStore;
-  /** `bookingStalledReaped` — incremented once per row actually aged to failed, labeled by orgId. */
+  /** `bookingStalledReaped` - incremented once per row actually aged to failed, labeled by orgId. */
   counter: Counter;
-  /** Fired ONCE per run (when >=1 stale booking is found) — no per-row alert storm. */
+  /** Fired ONCE per run (when >=1 stale booking is found) - no per-row alert storm. */
   alerter: OperatorAlerter;
   /** Injectable clock for tests; defaults to wall clock. */
   now?: () => Date;
@@ -372,12 +372,12 @@ export interface ReapStalledBookingsResult {
   reaped: number;
   /** Bookings a concurrent confirm/fail terminalized between scan and our CAS (count 0). Benign. */
   raced: number;
-  /** Bookings whose reap-write THREW (a hard store error) — left for the next run; the alarm case. */
+  /** Bookings whose reap-write THREW (a hard store error) - left for the next run; the alarm case. */
   failed: number;
 }
 
 /**
- * 30 minutes — far above any legitimate pending window. A booking resolves
+ * 30 minutes - far above any legitimate pending window. A booking resolves
  * pending_confirmation -> confirmed/failed within ONE synchronous tool invocation (the provider
  * call is seconds); there is no async-park path that legitimately holds a booking pending. A
  * row still pending after this is stranded. Even a falsely-reaped slow confirm resolves in the
@@ -385,7 +385,7 @@ export interface ReapStalledBookingsResult {
  */
 export const STALLED_BOOKING_MAX_AGE_MS = 30 * 60 * 1000;
 
-/** Bounded batch per run — the reaper never fans out unbounded on a mass strand. */
+/** Bounded batch per run - the reaper never fans out unbounded on a mass strand. */
 export const STALLED_BOOKING_REAP_LIMIT = 500;
 
 export async function reapStalledBookings(
@@ -430,7 +430,7 @@ export async function reapStalledBookings(
     }
   }
 
-  // ONE summary alert per run when ANY stale booking was found — never silent, never a per-row
+  // ONE summary alert per run when ANY stale booking was found - never silent, never a per-row
   // storm. Only a HARD reap-write error (a throw) escalates to critical; a benign concurrent-seal
   // race does not (the row resolved).
   if (stuck.length > 0) {
@@ -456,7 +456,7 @@ export async function reapStalledBookings(
 }
 ```
 
-- [ ] **Step 3b: Add the errorType union member** — in `packages/core/src/observability/operator-alerter.ts`, change the closing member of the `InfrastructureErrorType` union (`| "stranded_claim_reaped";`) to:
+- [ ] **Step 3b: Add the errorType union member** - in `packages/core/src/observability/operator-alerter.ts`, change the closing member of the `InfrastructureErrorType` union (`| "stranded_claim_reaped";`) to:
 
 ```ts
   | "stranded_claim_reaped"
@@ -466,7 +466,7 @@ export async function reapStalledBookings(
   | "stalled_booking_reaped";
 ```
 
-- [ ] **Step 4: Re-export from the platform barrel** — in `packages/core/src/platform/index.ts`, after the stranded-claim-reaper block (the `} from "./stranded-claim-reaper.js";` type re-export ending ~line 66):
+- [ ] **Step 4: Re-export from the platform barrel** - in `packages/core/src/platform/index.ts`, after the stranded-claim-reaper block (the `} from "./stranded-claim-reaper.js";` type re-export ending ~line 66):
 
 ```ts
 // A8b-2 / rank-18: stalled pending_confirmation booking reaper (orchestrator + constants).
@@ -510,19 +510,19 @@ git commit -m "feat(core): stalled-booking reaper orchestrator + barrel export (
 
 - Produces: `SwitchboardMetrics.bookingStalledReaped: Counter`.
 
-- [ ] **Step 1: core interface** — in `packages/core/src/telemetry/metrics.ts`, after `bookingCancel: Counter;`:
+- [ ] **Step 1: core interface** - in `packages/core/src/telemetry/metrics.ts`, after `bookingCancel: Counter;`:
 
 ```ts
 bookingStalledReaped: Counter;
 ```
 
-- [ ] **Step 2: core InMemory default** — in the same file, after `bookingCancel: new InMemoryCounter(),`:
+- [ ] **Step 2: core InMemory default** - in the same file, after `bookingCancel: new InMemoryCounter(),`:
 
 ```ts
     bookingStalledReaped: new InMemoryCounter(),
 ```
 
-- [ ] **Step 3: api PromCounter** — in `apps/api/src/metrics.ts`, after the `bookingCancel: new PromCounter(...)` block:
+- [ ] **Step 3: api PromCounter** - in `apps/api/src/metrics.ts`, after the `bookingCancel: new PromCounter(...)` block:
 
 ```ts
     bookingStalledReaped: new PromCounter(
@@ -532,7 +532,7 @@ bookingStalledReaped: Counter;
     ),
 ```
 
-- [ ] **Step 4: chat PromCounter** — in `apps/chat/src/bootstrap/metrics.ts`, after the `bookingCancel: new PromCounter(...)` block, add the identical block as Step 3.
+- [ ] **Step 4: chat PromCounter** - in `apps/chat/src/bootstrap/metrics.ts`, after the `bookingCancel: new PromCounter(...)` block, add the identical block as Step 3.
 
 - [ ] **Step 5: Typecheck core + rebuild core dist (registries reference the interface)**
 
@@ -561,7 +561,7 @@ git commit -m "feat(metrics): bookingStalledReaped counter in all 3 registries (
 - Consumes: `reapStalledBookings`, `STALLED_BOOKING_MAX_AGE_MS`, `STALLED_BOOKING_REAP_LIMIT`, `StalledBookingReaperStore`, `ReapStalledBookingsResult` (`@switchboard/core/platform`); `makeOnFailureHandler`, `AsyncFailureContext`, `OperatorAlerter`, `Counter` (`@switchboard/core`); `inngestClient` (`@switchboard/creative-pipeline`); `PrismaBookingStore` (already imported in inngest.ts).
 - Produces: `createStalledBookingReaperCron(deps)`, `executeStalledBookingReaper(step, deps)`.
 
-- [ ] **Step 1: Write the failing test** — create `apps/api/src/services/cron/__tests__/stalled-booking-reaper.test.ts`
+- [ ] **Step 1: Write the failing test** - create `apps/api/src/services/cron/__tests__/stalled-booking-reaper.test.ts`
 
 ```ts
 import { describe, it, expect, vi } from "vitest";
@@ -606,21 +606,21 @@ describe("executeStalledBookingReaper", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @switchboard/api exec vitest run src/services/cron/__tests__/stalled-booking-reaper.test.ts`
-Expected: FAIL — cannot find module `../stalled-booking-reaper.js`.
+Expected: FAIL - cannot find module `../stalled-booking-reaper.js`.
 
-- [ ] **Step 3: Implement the cron** — create `apps/api/src/services/cron/stalled-booking-reaper.ts`
+- [ ] **Step 3: Implement the cron** - create `apps/api/src/services/cron/stalled-booking-reaper.ts`
 
 ```ts
 // apps/api/src/services/cron/stalled-booking-reaper.ts
 // ---------------------------------------------------------------------------
-// A8b-2 / rank-18 — stalled pending_confirmation booking reaper (Inngest cron)
+// A8b-2 / rank-18 - stalled pending_confirmation booking reaper (Inngest cron)
 // ---------------------------------------------------------------------------
 // Hourly sweep that ages bookings stranded in `pending_confirmation` (a thrown
 // failure-handler tx or a process death between create() and a terminal write)
 // to the terminal `failed` status, releasing the physical slot they otherwise
 // block forever. Emits a per-row counter and ONE operator alert per run. The
 // aging logic lives in the core `reapStalledBookings` orchestrator; this file is
-// the thin Inngest wiring. Idempotent across retries — an already-reaped row is
+// the thin Inngest wiring. Idempotent across retries - an already-reaped row is
 // `failed`, not `pending_confirmation`, so findStalledPending will not return it.
 // ---------------------------------------------------------------------------
 
@@ -643,7 +643,7 @@ export interface StalledBookingReaperCronDeps {
   failure: AsyncFailureContext;
   /**
    * The booking store (PrismaBookingStore satisfies the narrow reaper slice). Null when no
-   * Postgres-backed store is wired — the cron then no-ops, never fabricating a reaper run.
+   * Postgres-backed store is wired - the cron then no-ops, never fabricating a reaper run.
    */
   store: StalledBookingReaperStore | null;
   alerter: OperatorAlerter;
@@ -669,7 +669,7 @@ export async function executeStalledBookingReaper(
 ): Promise<StalledBookingReaperResult> {
   const store = deps.store;
   if (!store) {
-    // No store wired (no Postgres) — nothing to reap. Never alert.
+    // No store wired (no Postgres) - nothing to reap. Never alert.
     return { scanned: 0, reaped: 0, raced: 0, failed: 0, skipped: true };
   }
   return step.run("reap-stalled-bookings", () =>
@@ -694,7 +694,7 @@ export function createStalledBookingReaperCron(deps: StalledBookingReaperCronDep
         {
           functionId: "stalled-booking-reaper-hourly",
           eventDomain: "stalled-booking-reaper",
-          // A reaper run failing means stalled bookings keep blocking slots silently — alert.
+          // A reaper run failing means stalled bookings keep blocking slots silently - alert.
           riskCategory: "high",
           alert: true,
         },
@@ -750,8 +750,8 @@ git commit -m "feat(api): wire stalled-booking reaper Inngest cron (A8b-2)"
 
 ## Final verification (before surfacing the PR)
 
-- [ ] `pnpm --filter @switchboard/db --filter @switchboard/core --filter @switchboard/api exec tsc --noEmit` — all green.
-- [ ] `pnpm --filter @switchboard/db --filter @switchboard/core --filter @switchboard/api test` — touched-package suites green.
-- [ ] `pnpm lint` (or per-package eslint) + `pnpm format` — clean, no em-dashes.
-- [ ] `pnpm --filter @switchboard/chat exec tsc --noEmit` — the chat metrics registry still satisfies `SwitchboardMetrics`.
+- [ ] `pnpm --filter @switchboard/db --filter @switchboard/core --filter @switchboard/api exec tsc --noEmit` - all green.
+- [ ] `pnpm --filter @switchboard/db --filter @switchboard/core --filter @switchboard/api test` - touched-package suites green.
+- [ ] `pnpm lint` (or per-package eslint) + `pnpm format` - clean, no em-dashes.
+- [ ] `pnpm --filter @switchboard/chat exec tsc --noEmit` - the chat metrics registry still satisfies `SwitchboardMetrics`.
 - [ ] Confirm no migration was needed (reap target is the existing `failed` status).
