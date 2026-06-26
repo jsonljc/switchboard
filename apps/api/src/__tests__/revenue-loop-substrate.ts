@@ -446,7 +446,7 @@ export class InMemoryRevenueDb {
           throw new Error("failureHandler must not run on the booking happy path");
         },
       },
-      defaultCurrency: "SGD",
+      resolveCurrency: async () => "SGD",
       receiptTierForProvider: () => "T1_FETCH_BACK",
       isProduction: false,
     } as never);

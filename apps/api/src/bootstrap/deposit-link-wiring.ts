@@ -2,19 +2,20 @@ import {
   createDepositLinkToolFactory,
   type DepositLinkToolFactory,
 } from "@switchboard/core/skill-runtime";
+import type { SupportedCurrency } from "@switchboard/schemas";
 import type { PaymentPortFactory } from "./payment-port-factory.js";
 
 /**
- * Pilot deposit: a fixed nominal SGD 50 hold. The pilot (SG/MY medspa, 10 to 15
- * clinics, the willingness-to-pay demo) uses a uniform nominal deposit, so a
- * constant is the lowest-friction honest choice. OrganizationConfig carries NO
- * deposit field today; per-org or per-service pricing is the documented
- * evolution and, because the tool takes the amount as an injected dep, is a
- * one-line change here with no tool edit. Mirrors calendar-book's injected
- * `defaultCurrency: "SGD"` (skill-mode.ts).
+ * Pilot deposit: a fixed nominal hold (50 in the clinic's currency). The pilot
+ * (SG/MY medspa, 10 to 15 clinics, the willingness-to-pay demo) uses a uniform
+ * nominal deposit, so a constant is the lowest-friction honest choice.
+ * OrganizationConfig carries NO deposit field today; per-org or per-service
+ * pricing is the documented evolution and, because the tool takes the amount as an
+ * injected dep, is a one-line change here with no tool edit. The CURRENCY is no
+ * longer a constant: it is resolved per-request from the clinic's market (see
+ * `resolveCurrency` below), so a MY clinic charges MYR and an SG clinic SGD.
  */
 export const PILOT_DEPOSIT_AMOUNT_CENTS = 5000;
-export const PILOT_DEPOSIT_CURRENCY = "SGD";
 
 /** The minimal booking row the org-isolation adapter reads. */
 interface BookingRow {
@@ -38,8 +39,12 @@ export interface DepositLinkWiringDeps {
   findBookingById: (orgId: string, bookingId: string) => Promise<BookingRow | null>;
   /** Test override; defaults to the pilot constant. */
   depositAmountCents?: number;
-  /** Test override; defaults to the pilot currency. */
-  defaultCurrency?: string;
+  /**
+   * Resolves the clinic's settlement currency from its market, keyed by deploymentId.
+   * Wired to the governanceConfigResolver in skill-mode.ts; the tool fails closed when
+   * this returns null (unknown market -> no charge).
+   */
+  resolveCurrency: (deploymentId: string) => Promise<SupportedCurrency | null>;
 }
 
 /**
@@ -60,6 +65,6 @@ export function buildDepositLinkToolFactory(deps: DepositLinkWiringDeps): Deposi
       return { id: booking.id, organizationId: booking.organizationId, status: booking.status };
     },
     depositAmountCents: deps.depositAmountCents ?? PILOT_DEPOSIT_AMOUNT_CENTS,
-    defaultCurrency: deps.defaultCurrency ?? PILOT_DEPOSIT_CURRENCY,
+    resolveCurrency: deps.resolveCurrency,
   });
 }

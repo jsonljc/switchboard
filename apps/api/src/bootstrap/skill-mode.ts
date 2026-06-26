@@ -20,6 +20,7 @@ import { createCalendarProviderFactory } from "./calendar-provider-factory.js";
 import { isNoopCalendarProvider } from "./noop-calendar-provider.js";
 import { receiptTierForCalendarProvider } from "./receipt-tier.js";
 import { resolveModelRouter } from "./model-router-factory.js";
+import { buildResolveCurrency } from "./resolve-currency.js";
 
 export interface SkillModeBootstrapResult {
   simulationExecutor: SkillExecutor;
@@ -184,6 +185,10 @@ export async function bootstrapSkillMode(
   // ---------------------------------------------------------------------------
   const deploymentStore = new PrismaDeploymentStore(prismaClient);
   const governanceConfigResolver = createAgentDeploymentGovernanceResolver(deploymentStore);
+  // Per-request currency resolver shared by the money tools (deposit-link, calendar-book).
+  // Derives the clinic's currency from the SAME governanceConfig the gates read, so the
+  // charge currency and the gate jurisdiction can never disagree; fails closed to null.
+  const resolveCurrency = buildResolveCurrency(governanceConfigResolver);
   // Constructed here (ahead of the Phase 1c hook block below) so the F15 booking
   // consent precondition can close over the SAME reader + posture-cache instances
   // the PdpaConsentGateHook uses.
@@ -435,7 +440,7 @@ export async function bootstrapSkillMode(
         }),
       ),
     failureHandler,
-    defaultCurrency: "SGD",
+    resolveCurrency,
     receiptTierForProvider: receiptTierForCalendarProvider,
     isProduction: process.env["NODE_ENV"] === "production",
     consentPrecondition: bookingConsentPrecondition,
@@ -460,6 +465,7 @@ export async function bootstrapSkillMode(
     const { buildDepositLinkToolFactory } = await import("./deposit-link-wiring.js");
     depositLinkFactory = buildDepositLinkToolFactory({
       paymentPortFactory: deps.paymentPortFactory,
+      resolveCurrency,
       findBookingById: (orgId: string, bookingId: string) =>
         bookingStore.findById(orgId, bookingId),
     });
