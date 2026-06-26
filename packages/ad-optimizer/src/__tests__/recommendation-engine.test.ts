@@ -458,6 +458,38 @@ describe("generateRecommendations", () => {
       );
       expect(destructiveRec).toBeUndefined();
     });
+
+    // Scale family (P3-1 guard): the reallocate/budget self-submission path applies NO candidate-side
+    // evidence floor (see riley-budget-dispatch.ts); it relies on Gate 2 here demoting a sub-floor
+    // scale rec to a watch BEFORE emission, so a thin-evidence scale can never reach the reallocate
+    // builder as action:"scale". The block above covers only the destructive family.
+    const scaleTrigger = (evidence: RecommendationInput["evidence"]): RecommendationInput => ({
+      campaignId: "camp-scale-floor",
+      campaignName: "Thin Scale Campaign",
+      diagnoses: [],
+      deltas: [makeDelta("cpa", 50, 80, "down", true)],
+      targetCPA: 80,
+      targetROAS: 3,
+      currentSpend: 1000,
+      targetBreach: { periodsAboveTarget: 0, granularity: "daily", isApproximate: false },
+      evidence,
+    });
+
+    it("control: emits a scale rec when scale evidence meets the floor", () => {
+      const result = generateRecommendations(
+        scaleTrigger({ clicks: 1000, conversions: 100, days: 7 }),
+      );
+      expect(recs(result).find((r) => r.action === "scale")).toBeDefined();
+    });
+
+    it("demotes a sub-floor scale rec to an insufficient_evidence watch", () => {
+      // {clicks:20, conversions:2, days:7}: below the scale floor {30,3,7} on clicks AND conversions;
+      // conversions>0 keeps a finite CPA, so this is a real scale path, not a zero-conversion burn.
+      const result = generateRecommendations(scaleTrigger({ clicks: 20, conversions: 2, days: 7 }));
+      expect(recs(result).find((r) => r.action === "scale")).toBeUndefined();
+      const watches = result.filter((r): r is WatchOutput => r.type === "watch");
+      expect(watches.find((w) => w.pattern === "insufficient_evidence")).toBeDefined();
+    });
   });
 
   describe("zero-conversion burn (D1-1)", () => {
