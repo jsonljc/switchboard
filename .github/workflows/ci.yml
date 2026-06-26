@@ -227,6 +227,84 @@ jobs:
           NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET || 'ci-test-nextauth-secret' }}
         run: pnpm --filter @switchboard/dashboard build
 
+  # Real-Postgres integration tier (INFRA-2 / EV-16). The DATABASE_URL-gated
+  # suites in packages/db (describe.skipIf(!process.env.DATABASE_URL)) prove
+  # invariants that mocked Prisma cannot — referential integrity, transaction
+  # rollback atomicity, real read paths — so they no-op in every unit lane and
+  # run only here, against a real Postgres. This job is additive and isolated:
+  # the unit lanes (test/typecheck/lint) stay Postgres-free. GH Actions service
+  # containers are per-job and torn down at job end, so this declares its OWN
+  # postgres (the setup job's is not reusable). It reuses the existing
+  # DATABASE_URL skip-gate — no INTEGRATION_DB_URL — and runs the suites as a
+  # standalone `vitest --config` invocation (vitest.integration.config.ts).
+  integration-postgres:
+    name: Integration — Real Postgres
+    needs: setup
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: switchboard
+          POSTGRES_PASSWORD: switchboard
+          POSTGRES_DB: switchboard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U switchboard"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://switchboard:switchboard@localhost:5432/switchboard
+      CREDENTIALS_ENCRYPTION_KEY: ${{ secrets.CI_CREDENTIALS_ENCRYPTION_KEY || 'ci-test-encryption-secret-32chr' }}
+      NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET || 'ci-test-nextauth-secret' }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Restore build artifacts
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            node_modules
+            pnpm-lock.yaml
+            packages/*/dist
+            packages/*/node_modules
+            cartridges/*/dist
+            cartridges/*/node_modules
+            apps/*/dist
+            apps/*/.next
+            apps/*/node_modules
+            evals/*/node_modules
+            packages/db/node_modules/.prisma
+            .agent/tools/node_modules
+          key: build-${{ github.sha }}
+
+      # Insurance against the silent-skip failure mode: if DATABASE_URL were ever
+      # dropped from this job's env, the skipIf gate would skip every integration
+      # test and the job would pass green having proven nothing. Fail fast instead.
+      - name: Confirm DATABASE_URL is set
+        run: test -n "$DATABASE_URL"
+
+      - name: Run database migrations
+        run: pnpm --filter @switchboard/db exec prisma migrate deploy
+
+      - name: Seed development data
+        run: pnpm db:seed
+
+      - name: Real-Postgres integration suites
+        run: pnpm exec vitest run --config vitest.integration.config.ts
+
   secrets:
     runs-on: ubuntu-latest
 
