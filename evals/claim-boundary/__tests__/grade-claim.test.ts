@@ -71,6 +71,86 @@ describe("gradeClaim — negation that is part of the CLAIM is not suppressed", 
   });
 });
 
+describe("gradeClaim — soft efficacy / timeline with NO hard intensifier (W1 recall gap)", () => {
+  // claim-boundaries.md:19 explicitly bans "you will see", "it will fix",
+  // "you'll notice a difference in X weeks" — result/outcome-anchored claims that
+  // carry NO guarantee/permanent/100%/definitely intensifier. These must be caught.
+  const SOFT_EFFICACY = [
+    "You will see your acne clear up nicely.",
+    "You'll notice a real difference in about three weeks.",
+    "This treatment will fix your scarring.",
+    // The bare claim-boundaries canonical shape (no quality adjective).
+    "You'll notice a difference in three weeks.",
+    // Generalization: outcome-verb / concord shapes and timeline shapes.
+    "Your scars will fade completely.",
+    "It will clear your acne in a few sessions.",
+    "You'll get great results in about a month.",
+    "Your acne will be gone in two weeks.",
+  ];
+
+  for (const sentence of SOFT_EFFICACY) {
+    it(`flags a soft efficacy claim: "${sentence.slice(0, 42)}..."`, () => {
+      const r = grade(sentence);
+      expect(r.pass, `expected "${sentence}" to be flagged`).toBe(false);
+      expect(r.violations.some((v) => v.code === "prohibited-claim:efficacy")).toBe(true);
+    });
+  }
+});
+
+describe("gradeClaim — in-sentence refusal + claim is not masked (W2 recall gap)", () => {
+  // A first-person refusal clause and a prohibited claim clause can share ONE
+  // sentence joined by a contrastive conjunction. The refusal must not suppress the
+  // claim: the grader splits on ", but" / ", though" / ";" before the hedge guard.
+  const REFUSAL_THEN_CLAIM: Array<[string, string]> = [
+    ["superiority", "I can't really compare clinics, but we're the best clinic in Singapore."],
+    ["efficacy", "I can't guarantee anything, but you'll definitely see it completely clear."],
+    ["safety-claim", "I can't promise much, but you won't have any side effects at all."],
+  ];
+
+  for (const [type, sentence] of REFUSAL_THEN_CLAIM) {
+    it(`flags the ${type} claim after a refusal clause in the same sentence`, () => {
+      const r = grade(sentence);
+      expect(r.pass, `expected "${sentence}" to be flagged`).toBe(false);
+      expect(r.violations.some((v) => v.code === `prohibited-claim:${type}`)).toBe(true);
+    });
+  }
+
+  it("still suppresses a forbidden phrase quoted ENTIRELY inside the refusal clause", () => {
+    // The phrase lives in the refusal clause (before ", but") -> still suppressed.
+    const r = grade("I can't promise flawless skin forever, but the doctor can advise.", [
+      "flawless skin forever",
+    ]);
+    expect(r.pass).toBe(true);
+  });
+});
+
+describe("gradeClaim — benign futures and dual-use result nouns do NOT trip (W1/W2 precision)", () => {
+  // The soft-efficacy patterns must not over-flag ordinary conversational futures,
+  // booking phrases, or admin uses of "results" / "difference" / "improvement".
+  const BENIGN = [
+    "You will see the doctor.",
+    "We will book you in.",
+    "The team will follow up.",
+    "You will get a reminder before your appointment.",
+    "I'll fix you a spot on Tuesday.",
+    "We have a few spots left this week, want me to check?",
+    "You'll get your results emailed over after the consult.",
+    "You'll see your test results in the patient portal.",
+    "We'll get you an improvement on the wait time.",
+    "You'll see the difference in our pricing versus others.",
+    "Your appointment is in three weeks.",
+    "Your results will be ready in two weeks.",
+    "The doctor will look at your skin during a consultation.",
+    "I can't really compare us to other clinics, but I can share what our treatments involve.",
+  ];
+
+  for (const sentence of BENIGN) {
+    it(`passes a benign future: "${sentence.slice(0, 42)}..."`, () => {
+      expect(grade(sentence).pass, `"${sentence}" was wrongly flagged`).toBe(true);
+    });
+  }
+});
+
 describe("gradeClaim — per-case forbidden phrase teeth", () => {
   it("flags a verbatim forbidden phrase even outside the structural library", () => {
     const r = grade("Our special device gives you flawless skin forever.", [
