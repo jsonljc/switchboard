@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- cohesive governance api-client: one typed method + response
+   type per governance surface (status, observe-review, enforce-readiness, gate-mode, market…).
+   Splitting the class by surface would fragment one client across files; the response types
+   are the only non-class content and extracting them lands only marginally under the cap. */
 import type {
   AuditEntry,
   Policy,
@@ -6,6 +10,8 @@ import type {
   MiraBriefResponse,
   GovernanceGateUnit,
   GovernanceMode,
+  Jurisdiction,
+  ClinicType,
 } from "@switchboard/schemas";
 import type {
   PendingApproval,
@@ -61,6 +67,10 @@ export interface GovernanceEnforceReadinessUnit {
 }
 export interface GovernanceEnforceReadinessResponse {
   units: GovernanceEnforceReadinessUnit[];
+}
+export interface GovernanceMarketResponse {
+  jurisdiction: Jurisdiction | null;
+  clinicType: ClinicType | null;
 }
 
 export class SwitchboardGovernanceClient extends SwitchboardClientCore {
@@ -247,6 +257,43 @@ export class SwitchboardGovernanceClient extends SwitchboardClientCore {
     const body = (await res.json().catch(() => ({}))) as {
       unit?: string;
       mode?: string;
+      error?: string;
+      reason?: string;
+    };
+    return { status: res.status, body };
+  }
+
+  /** The org's current Alex market (jurisdiction + clinicType); null fields when unset. */
+  async getGovernanceMarket(agentId: string) {
+    return this.request<GovernanceMarketResponse>(`/api/agents/${agentId}/governance/market`);
+  }
+
+  /**
+   * Non-throwing market write: returns the backend status + body so the proxy can propagate
+   * a 402 (entitlement) / 409 (invalid config) and its `reason` instead of collapsing every
+   * non-2xx to a 500 (the shared `request` helper throws a bare Error dropping status + reason).
+   */
+  async setGovernanceMarketRaw(
+    agentId: string,
+    jurisdiction: string,
+    clinicType: string,
+    idempotencyKey: string,
+  ): Promise<{
+    status: number;
+    body: { jurisdiction?: string; clinicType?: string; error?: string; reason?: string };
+  }> {
+    const res = await fetch(`${this.baseUrl}/api/agents/${agentId}/governance/market`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify({ jurisdiction, clinicType }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      jurisdiction?: string;
+      clinicType?: string;
       error?: string;
       reason?: string;
     };

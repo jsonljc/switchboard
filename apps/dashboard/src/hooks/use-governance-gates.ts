@@ -2,10 +2,16 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useScopedQueryKeys } from "@/hooks/use-query-keys";
-import type { GovernanceGateUnit, GovernanceMode } from "@switchboard/schemas";
+import type {
+  GovernanceGateUnit,
+  GovernanceMode,
+  Jurisdiction,
+  ClinicType,
+} from "@switchboard/schemas";
 import type {
   GovernanceObserveReviewResponse,
   GovernanceEnforceReadinessResponse,
+  GovernanceMarketResponse,
 } from "@/lib/api-client/governance";
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -37,6 +43,50 @@ export function useGovernanceEnforceReadiness(agentId = "alex") {
         `/api/dashboard/agents/${agentId}/governance/enforce-readiness`,
       ),
     enabled: !!keys,
+  });
+}
+
+/** The org's current Alex market (jurisdiction + clinicType) for prefilling the control. */
+export function useGovernanceMarket(agentId = "alex") {
+  const keys = useScopedQueryKeys();
+  return useQuery({
+    queryKey: keys ? keys.governance.market(agentId) : ["__disabled_market__"],
+    queryFn: () =>
+      fetchJson<GovernanceMarketResponse>(`/api/dashboard/agents/${agentId}/governance/market`),
+    enabled: !!keys,
+  });
+}
+
+/** Set the org's market. The server resolves the Alex deployment + records the change. */
+export function useSetGovernanceMarket(agentId = "alex") {
+  const queryClient = useQueryClient();
+  const keys = useScopedQueryKeys();
+  return useMutation({
+    mutationFn: async ({
+      jurisdiction,
+      clinicType,
+    }: {
+      jurisdiction: Jurisdiction;
+      clinicType: ClinicType;
+    }) => {
+      const res = await fetch(`/api/dashboard/agents/${agentId}/governance/market`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jurisdiction, clinicType }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string; reason?: string };
+        // Prefer the human message (409 invalid config carries `reason`; 402 entitlement
+        // carries `error`).
+        throw new Error(body.reason || body.error || `Failed to set market: ${res.status}`);
+      }
+      return res.json() as Promise<{ jurisdiction: string; clinicType: string }>;
+    },
+    // Refresh the market prefill; currency + gate jurisdiction now derive from the new market.
+    onSettled: () => {
+      if (!keys) return;
+      queryClient.invalidateQueries({ queryKey: keys.governance.market(agentId) });
+    },
   });
 }
 

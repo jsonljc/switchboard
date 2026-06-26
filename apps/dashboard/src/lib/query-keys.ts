@@ -93,6 +93,7 @@ export const scopedKeys = (orgId: string) => ({
     observeReview: (agentId: string) => [orgId, "governance", "observe-review", agentId] as const,
     enforceReadiness: (agentId: string) =>
       [orgId, "governance", "enforce-readiness", agentId] as const,
+    market: (agentId: string) => [orgId, "governance", "market", agentId] as const,
   },
   readiness: {
     all: () => [orgId, "readiness"] as const,
