@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@switchboard/db";
 import { PrismaConnectionStore } from "@switchboard/db";
 import { sendHealthCheckAlert } from "./alert-webhook.js";
+import { resolveWhatsAppRuntimeToken } from "./whatsapp-runtime-token.js";
 
 const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -94,7 +95,17 @@ export async function runHealthCheck(prisma: PrismaClient): Promise<void> {
           }
           healthy = await checkSlack(botToken);
         } else if (channel.channel === "whatsapp") {
-          const token = connection.credentials["token"] as string;
+          // Mirror the runtime adapter's token resolution (runtime-registry.ts): prefer a
+          // per-connection (BYOT) token, else fall back to the central Tech-Provider
+          // `META_SYSTEM_USER_TOKEN`. Reading `creds.token` directly here wrongly flips a
+          // token-less-but-system-token-covered channel to `error`, which the registry then
+          // drops on its `status:"active"` reload. The phoneNumberId stays org-only/required
+          // (the tenant FROM-identity / isolation boundary), so the global token cannot mask a
+          // missing per-org phone.
+          const token = resolveWhatsAppRuntimeToken(
+            connection.credentials,
+            process.env["META_SYSTEM_USER_TOKEN"],
+          );
           const phoneNumberId = connection.credentials["phoneNumberId"] as string;
           if (!token || !phoneNumberId) {
             await updateAndAlert(
