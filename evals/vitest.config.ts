@@ -16,6 +16,7 @@ export default defineConfig({
       "adversarial-injection/__tests__/**/*.test.ts",
       "claim-boundary/__tests__/**/*.test.ts",
       "mira-self-brief/__tests__/**/*.test.ts",
+      "mira-injection/__tests__/**/*.test.ts",
     ],
     environment: "node",
   },

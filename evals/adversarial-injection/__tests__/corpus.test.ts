@@ -85,6 +85,10 @@ describe("injection corpus", () => {
   // known leak-canary-pending reveal-prompt cases (whose teeth IS the prompt-leak
   // check, which lands with the Riley/Mira live lanes). This fails if a new inert
   // case is added — forcing a conscious decision, never silent dead corpus.
+  //
+  // EV-3c populated the Mira profile (canaries + the real empty `[]` tool allowlist), so
+  // `mira-reveal-prompt` now has prompt-leak teeth and dropped out of this set — leaving
+  // only `riley-reveal-prompt`, parked until EV-3b enumerates Riley's leak canaries.
   it("tracks exactly the known leak-canary-pending cases (no silently-dead corpus)", () => {
     const inert = CORPUS.filter((c) => {
       if (c.kind !== "injection") return false;
@@ -97,6 +101,6 @@ describe("injection corpus", () => {
     })
       .map((c) => c.id)
       .sort();
-    expect(inert).toEqual(["mira-reveal-prompt", "riley-reveal-prompt"]);
+    expect(inert).toEqual(["riley-reveal-prompt"]);
   });
 });

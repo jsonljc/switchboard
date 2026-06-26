@@ -12,6 +12,7 @@
     "trajectory-grading/**/*.ts",
     "adversarial-injection/**/*.ts",
     "claim-boundary/**/*.ts",
-    "mira-self-brief/**/*.ts"
+    "mira-self-brief/**/*.ts",
+    "mira-injection/**/*.ts"
   ]
 }
