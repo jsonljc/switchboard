@@ -114,6 +114,33 @@ export class RedisStreamConversionBus implements ConversionBus {
     await this.redis.xack(STREAM_KEY, groupName, messageId);
   }
 
+  /**
+   * Invoke the registered handlers for an event — the CONSUME side, symmetric to
+   * `emit` (the PRODUCE side, which only XADDs). The drain loop calls this after
+   * reading a message back off the stream, mirroring how `InMemoryConversionBus`
+   * dispatches in-process: type-specific handlers first, then wildcard ("*").
+   *
+   * Unlike `InMemoryConversionBus.safeInvoke`, errors PROPAGATE here. Handlers are
+   * awaited and a rejection bubbles so the drainer can leave the message unacked
+   * (at-least-once redelivery). Downstream dedups on `event_id`, so re-running a
+   * partially-applied batch is safe; dropping a conversion is not.
+   */
+  async dispatch(event: ConversionEvent): Promise<void> {
+    const typeHandlers = this.handlers.get(event.type);
+    if (typeHandlers) {
+      for (const handler of typeHandlers) {
+        await handler(event);
+      }
+    }
+
+    const wildcardHandlers = this.handlers.get("*");
+    if (wildcardHandlers) {
+      for (const handler of wildcardHandlers) {
+        await handler(event);
+      }
+    }
+  }
+
   handlerCount(): number {
     let count = 0;
     for (const set of this.handlers.values()) {

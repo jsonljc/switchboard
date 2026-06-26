@@ -89,4 +89,31 @@ describe("RedisStreamConversionBus", () => {
     redis.xgroup.mockRejectedValue(new Error("BUSYGROUP Consumer Group name already exists"));
     await expect(bus.ensureConsumerGroup("test-group")).resolves.not.toThrow();
   });
+
+  it("dispatch invokes type-specific and wildcard handlers (consume side)", async () => {
+    const typed = vi.fn().mockResolvedValue(undefined);
+    const wildcard = vi.fn().mockResolvedValue(undefined);
+    bus.subscribe("booked", typed);
+    bus.subscribe("*", wildcard);
+
+    const event = makeEvent({ type: "booked" });
+    await bus.dispatch(event);
+
+    expect(typed).toHaveBeenCalledWith(event);
+    expect(wildcard).toHaveBeenCalledWith(event);
+  });
+
+  it("dispatch does NOT invoke handlers for a different type", async () => {
+    const typed = vi.fn().mockResolvedValue(undefined);
+    bus.subscribe("inquiry", typed);
+
+    await bus.dispatch(makeEvent({ type: "booked" }));
+
+    expect(typed).not.toHaveBeenCalled();
+  });
+
+  it("dispatch propagates a handler rejection (so the drainer can leave it unacked)", async () => {
+    bus.subscribe("*", vi.fn().mockRejectedValue(new Error("handler down")));
+    await expect(bus.dispatch(makeEvent())).rejects.toThrow("handler down");
+  });
 });

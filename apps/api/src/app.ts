@@ -1166,7 +1166,9 @@ export async function buildServer() {
 
   // Resource cleanup on close — order: outbox → scheduler → Redis → Prisma
   app.addHook("onClose", async () => {
-    conversionBusHandle.stop();
+    // Await: stops the OutboxPublisher and drains-loop exit before Redis closes,
+    // so an in-flight readGroup never races a closing connection.
+    await conversionBusHandle.stop();
 
     if (redis) {
       await redis.quit();

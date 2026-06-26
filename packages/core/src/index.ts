@@ -128,6 +128,13 @@ export type {
 // Outbox Publisher (outbox → bus relay)
 export { OutboxPublisher } from "./events/outbox-publisher.js";
 
+// Conversion Stream Drainer (Redis stream → handler dispatch; CONSUME side)
+export { ConversionStreamDrainer } from "./events/conversion-stream-drainer.js";
+export type {
+  ConversionStreamDrainerOptions,
+  DrainableConversionBus,
+} from "./events/conversion-stream-drainer.js";
+
 // Reconciliation Runner (CRM↔Meta drift; consumed by the api reconciliation cron)
 export { ReconciliationRunner } from "./attribution/reconciliation-runner.js";
 export type {
