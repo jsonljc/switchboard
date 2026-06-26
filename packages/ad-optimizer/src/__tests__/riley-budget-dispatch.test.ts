@@ -54,4 +54,18 @@ describe("buildRileyBudgetCandidate (Spec-1B reallocation producer)", () => {
   it("abstains on a zero-delta no-op (current == proposed)", () => {
     expect(buildRileyBudgetCandidate({ ...base, proposedDailyBudgetCents: 5000 })).toBeNull();
   });
+
+  // CONTRACT (P3-1): no candidate-side evidence floor. The base scale-family floor (30/3/7) is
+  // enforced UPSTREAM at engine emission (recommendation-engine.ts Gate 2: a sub-floor scale rec is
+  // demoted to an abstention WatchOutput and never reaches this builder as action:"scale"). So the
+  // builder itself must NOT re-floor: it builds even on below-base-floor evidence. If a future change
+  // adds a floor here, this test breaks and the docstring must be re-checked.
+  it("applies no candidate-side evidence floor: builds even on below-base-floor evidence", () => {
+    const candidate = buildRileyBudgetCandidate({
+      ...base,
+      context: { evidence: { clicks: 1, conversions: 0, days: 1 }, learningPhaseActive: false },
+    });
+    expect(candidate).not.toBeNull();
+    expect(candidate?.evidence).toEqual({ clicks: 1, conversions: 0, days: 1 });
+  });
 });

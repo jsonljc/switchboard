@@ -41,9 +41,19 @@ export type RileyBudgetSubmitter = (
  * The trigger is the `scale` recommendation (Riley's "scale the daily budget up ~20%" semantics); the
  * proposed budget is current x REALLOCATE_SCALE_FACTOR, sized by the sink. Abstains (returns null) for
  * any action other than `scale`, a dropped router surface, missing per-campaign context or ids, an
- * unknown (null) current/proposed budget, or a zero-magnitude no-op. The seeded require_approval(mandatory) policy is the real human gate; this only decides
- * whether there is a well-formed money move to surface. Arbitration ("which reallocation is the
- * primary") and the evidence floor are applied at the sink wiring (PR 1B-1.3), not here.
+ * unknown (null) current/proposed budget, or a zero-magnitude no-op. Those well-formedness checks are
+ * the builder's ONLY gates; the seeded require_approval(mandatory) policy is the real human gate.
+ *
+ * Unlike the pause path, reallocate is NOT arbitration-primary-gated: the arbitrator's only
+ * primary-gated consumer is pause self-submission (opportunity-arbitrator.ts), so multiple `scale`
+ * reallocations may each surface for approval (the value-capture move pushes budget toward several
+ * proven winners). And no evidence floor is applied HERE: the base scale-family floor is enforced
+ * upstream at engine emission (recommendation-engine.ts Gate 2, which demotes a sub-floor scale rec
+ * to an abstention watch before it can reach this builder), and there is no raised execution floor
+ * for reallocate (the pause path's meetsRileyPauseExecutionFloor has no reallocate analogue). The
+ * reallocate safety envelope is the mandatory human gate plus execution-time guardrails (the
+ * blast-radius cap and kill-switch) and the post-execution guardrail monitor with automated
+ * rollback, not candidate-side gating.
  */
 export function buildRileyBudgetCandidate(args: {
   emitted: {
