@@ -362,6 +362,7 @@ describe("PrismaConversionRecordStore", () => {
         where: {
           organizationId: "org-1",
           type: "booked",
+          origin: "live",
           value: { gt: 0 },
           occurredAt: {
             gte: new Date("2026-04-24T12:00:00Z"),
@@ -373,6 +374,29 @@ describe("PrismaConversionRecordStore", () => {
       });
       // CENTS passthrough: the stored value is already cents; no conversion here.
       expect(result).toEqual({ bookedValueCents: 45000, bookedCount: 5 });
+    });
+
+    it("filters to origin:live so seed/demo fixtures cannot fabricate CRM corroboration", async () => {
+      // This aggregate is the independent CRM-side estimate behind the outcome
+      // corroboration multiplier; a non-live (seed/demo) booked row must never
+      // inflate it. Every sibling booked query in this store enforces
+      // origin:"live"; this one must too. Pins the where shape against regression.
+      (prisma.conversionRecord.aggregate as ReturnType<typeof vi.fn>).mockResolvedValue({
+        _sum: { value: 12000 },
+        _count: { _all: 2 },
+      });
+
+      await store.getBookedStatsForOrgWindow({
+        organizationId: "org-7",
+        startInclusive: new Date("2026-05-01T00:00:00Z"),
+        endExclusive: new Date("2026-05-08T00:00:00Z"),
+      });
+
+      expect(prisma.conversionRecord.aggregate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ origin: "live" }),
+        }),
+      );
     });
 
     it("returns honest zeros for an org with no valued bookings in the window (fails the floors, never an error)", async () => {
