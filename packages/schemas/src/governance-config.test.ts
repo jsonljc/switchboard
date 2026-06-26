@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   GovernanceConfigSchema,
   buildObserveGovernanceConfig,
+  currencyForJurisdiction,
   resolveGovernanceMode,
   resolveClaimClassifierConfig,
   resolveConsentStateConfig,
@@ -62,5 +63,22 @@ describe("buildObserveGovernanceConfig", () => {
     expect(cfg.whatsappWindow.mode).not.toBe("enforce");
     // Structural sweep: no "enforce" string anywhere in the serialized config.
     expect(JSON.stringify(cfg)).not.toContain("enforce");
+  });
+});
+
+describe("currencyForJurisdiction", () => {
+  it("maps SG to SGD", () => {
+    expect(currencyForJurisdiction("SG")).toBe("SGD");
+  });
+
+  it("maps MY to MYR", () => {
+    expect(currencyForJurisdiction("MY")).toBe("MYR");
+  });
+
+  it("is total over the jurisdiction enum (every value yields a currency)", () => {
+    const jurisdictions: Array<"SG" | "MY"> = ["SG", "MY"];
+    for (const j of jurisdictions) {
+      expect(["SGD", "MYR"]).toContain(currencyForJurisdiction(j));
+    }
   });
 });

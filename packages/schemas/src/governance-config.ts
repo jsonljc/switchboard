@@ -207,6 +207,29 @@ export interface ObserveGovernanceConfigInput {
   clinicType: "medical" | "nonMedical";
 }
 
+/** ISO-4217 settlement currencies Alex supports, one per market. */
+export type SupportedCurrency = "SGD" | "MYR";
+
+/**
+ * The clinic's settlement currency, derived from its single market. The mapping is
+ * 1:1 by product definition (SG -> SGD, MY -> MYR): a clinic occupies one market and
+ * settles one Stripe currency, so currency is a pure function of jurisdiction rather
+ * than a second stored field that could drift out of sync with the market.
+ *
+ * Total over the jurisdiction enum with NO default branch: adding a jurisdiction
+ * without a currency is a compile error, so a new market can never silently charge or
+ * quote the wrong currency. This is the single chokepoint every money surface resolves
+ * through (deposit charge, booked-value stamp, quoted price, dashboard display).
+ */
+export function currencyForJurisdiction(jurisdiction: "SG" | "MY"): SupportedCurrency {
+  switch (jurisdiction) {
+    case "SG":
+      return "SGD";
+    case "MY":
+      return "MYR";
+  }
+}
+
 // A type alias (not an interface) so the value stays assignable to JSON-column
 // input types that use index signatures (e.g. Prisma's InputJsonValue).
 export type ObserveGovernanceConfig = {
