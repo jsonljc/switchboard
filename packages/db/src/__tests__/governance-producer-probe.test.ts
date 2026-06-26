@@ -36,11 +36,14 @@ describe("createGovernanceProducerProbe", () => {
       approvedClaimCount: 2,
       approvedTemplateCount: 2, // tmpl_a + tmpl_c; draft excluded
     });
+    const now = new Date("2026-06-25T00:00:00.000Z");
+    const stalenessFloor = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
     expect(deps.prisma.approvedComplianceClaim.count).toHaveBeenCalledWith({
       where: {
         deploymentId: "dep-1",
         deployment: { organizationId: "org-1" }, // org-scoped via the relation (cross-tenant-safe)
-        OR: [{ validUntil: null }, { validUntil: { gte: new Date("2026-06-25T00:00:00.000Z") } }],
+        reviewedAt: { gte: stalenessFloor }, // matches the gate's 180-day reviewedAt staleness window
+        OR: [{ validUntil: null }, { validUntil: { gte: now } }],
       },
     });
     expect(deps.playbookReader.readForOrganization).toHaveBeenCalledWith("org-1");

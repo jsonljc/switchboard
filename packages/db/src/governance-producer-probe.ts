@@ -1,4 +1,8 @@
-import { parseTemplateApprovalOverlay, type GateProducerSignals } from "@switchboard/core";
+import {
+  parseTemplateApprovalOverlay,
+  CLAIM_SUBSTANTIATION_STALENESS_WINDOW_MS,
+  type GateProducerSignals,
+} from "@switchboard/core";
 
 /**
  * Minimal reader surfaces the probe needs. They mirror the EXACT sources the live
@@ -20,6 +24,7 @@ export interface GovernanceProducerProbeDeps {
         where: {
           deploymentId: string;
           deployment: { organizationId: string };
+          reviewedAt: { gte: Date };
           OR: Array<{ validUntil: null } | { validUntil: { gte: Date } }>;
         };
       }) => Promise<number>;
@@ -49,15 +54,17 @@ export function createGovernanceProducerProbe(
       // Org-scoped via the deployment relation (not deploymentId alone): the probe is also
       // reachable for an arbitrary caller-supplied deploymentId (the flip intent is not
       // service-only), so we never count another org's claims even though the writer's
-      // locked read would later 404 a cross-org deployment. Coarser than the gate's
-      // per-claim substantiation (which also filters by jurisdiction + claimType and treats
-      // reviewedAt older than the 180-day window as stale): this count is the readiness FLOOR
-      // — zero valid claims always refuses (the dangerous case), but a non-zero count does not
-      // guarantee every claim type/jurisdiction is covered. Exact per-claim parity is out of scope.
+      // locked read would later 404 a cross-org deployment. Matches BOTH staleness axes the
+      // gate's substantiation resolver applies: validUntil not-passed AND reviewedAt within the
+      // shared 180-day window (a non-stale claim) — otherwise an org whose only approved claims
+      // are reviewedAt-stale would read ready and then over-escalate every efficacy claim under
+      // enforce. Still coarser than the gate on jurisdiction + claimType (acceptable: zero valid
+      // claims always refuses, the dangerous case; the residual is a less-dangerous false-green).
       deps.prisma.approvedComplianceClaim.count({
         where: {
           deploymentId,
           deployment: { organizationId: orgId },
+          reviewedAt: { gte: new Date(now.getTime() - CLAIM_SUBSTANTIATION_STALENESS_WINDOW_MS) },
           OR: [{ validUntil: null }, { validUntil: { gte: now } }],
         },
       }),

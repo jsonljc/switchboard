@@ -11,7 +11,13 @@ import type {
 import type { RegulatoryPublicSourceEntry } from "./regulatory-sources/index.js";
 import type { SubstantiationCache } from "./substantiation-cache.js";
 
-const STALENESS_WINDOW_MS = 180 * 24 * 60 * 60 * 1000;
+/**
+ * A claim reviewed longer ago than this is treated as `stale` (re-review required) even if
+ * `validUntil` has not passed. Exported so the enforce-readiness producer probe can apply the
+ * SAME floor — otherwise readiness could green-light a claims enforce on claims this gate would
+ * reject as stale, over-escalating every efficacy claim.
+ */
+export const CLAIM_SUBSTANTIATION_STALENESS_WINDOW_MS = 180 * 24 * 60 * 60 * 1000;
 
 const SOURCE_TIERS_BY_CLAIM_TYPE: Record<ClaimType, ReadonlyArray<SubstantiationSourceType>> = {
   efficacy: ["approved_compliance_claim"],
@@ -115,7 +121,11 @@ function paraphraseMatches(sentenceLower: string, claimLower: string): boolean {
 
 function isStale(claim: ApprovedComplianceClaimRecord, now: Date): boolean {
   if (claim.validUntil && new Date(claim.validUntil).getTime() < now.getTime()) return true;
-  if (new Date(claim.reviewedAt).getTime() < now.getTime() - STALENESS_WINDOW_MS) return true;
+  if (
+    new Date(claim.reviewedAt).getTime() <
+    now.getTime() - CLAIM_SUBSTANTIATION_STALENESS_WINDOW_MS
+  )
+    return true;
   return false;
 }
 

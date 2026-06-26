@@ -382,7 +382,8 @@ export function bootstrapOperatorIntents(deps: OperatorIntentsBootstrapDeps): vo
     (reconcileBookingWriter ? 1 : 0) +
     (weeklyReportDeliveryWriter ? 1 : 0) +
     (contactEraser ? 1 : 0) +
-    (memoryWriteStore ? 1 : 0);
+    (memoryWriteStore ? 1 : 0) +
+    (governanceSetGateMode ? 1 : 0);
   logger?.info(
     `Operator mutation mode registered with ${intentCount} operator intent${intentCount === 1 ? "" : "s"}`,
   );

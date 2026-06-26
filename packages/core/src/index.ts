@@ -77,6 +77,10 @@ export * from "./governance/enforce-readiness/evaluate-gate-enforce-readiness.js
 // Approved Compliance Claim Store (interface + types)
 export * from "./governance/classifier/approved-compliance-claim-store/index.js";
 
+// Claim substantiation staleness window — shared so the enforce-readiness producer probe
+// applies the SAME reviewedAt floor the gate's substantiation resolver uses.
+export { CLAIM_SUBSTANTIATION_STALENESS_WINDOW_MS } from "./governance/classifier/substantiation-resolver.js";
+
 // Claim Classifier (Anthropic wrapper + types)
 export { createAnthropicClaimClassifier } from "./governance/classifier/anthropic-classifier.js";
 export type {
