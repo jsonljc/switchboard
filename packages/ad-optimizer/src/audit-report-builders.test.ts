@@ -86,6 +86,36 @@ describe("evaluateDenominatorStepChange", () => {
     expect(r.measurementTrusted).toBe(false);
     expect(r.accountWatch?.pattern).toBe("conversion_denominator_step_change");
   });
+
+  it("reports capiAttributionStale on the zero-conversions-despite-traffic outage signature", () => {
+    const r = evaluateDenominatorStepChange({
+      currentInsights: [ci({ inlineLinkClicks: 300, conversions: 0, spend: 900 })],
+      previousInsights: [ci({ inlineLinkClicks: 310, conversions: 0, spend: 930 })],
+      nextCycleDate: "2026-05-21",
+    });
+    expect(r.measurementTrusted).toBe(false);
+    expect(r.capiAttributionStale).toBe(true);
+  });
+
+  it("does NOT report capiAttributionStale on a rate-collapse window shift (different remediation)", () => {
+    const r = evaluateDenominatorStepChange({
+      currentInsights: [ci({ inlineLinkClicks: 1000, conversions: 12, spend: 1000 })],
+      previousInsights: [ci({ inlineLinkClicks: 1000, conversions: 60, spend: 1000 })],
+      nextCycleDate: "2026-05-21",
+    });
+    expect(r.measurementTrusted).toBe(false);
+    expect(r.capiAttributionStale).toBe(false);
+  });
+
+  it("does NOT report capiAttributionStale when measurement is trusted", () => {
+    const r = evaluateDenominatorStepChange({
+      currentInsights: [ci({ inlineLinkClicks: 1000, conversions: 55, spend: 1000 })],
+      previousInsights: [ci({ inlineLinkClicks: 1000, conversions: 60, spend: 1000 })],
+      nextCycleDate: "2026-05-21",
+    });
+    expect(r.measurementTrusted).toBe(true);
+    expect(r.capiAttributionStale).toBe(false);
+  });
 });
 
 describe("buildSignalHealthCriticalReport", () => {
