@@ -132,9 +132,13 @@ export class PdpaConsentGateHook implements SkillHook {
     }
 
     // 6. Evaluate gate (operational class always in 1c; proactive uses separate call site in 1d).
+    //    Use the resolved (post-stamp, never-null) leadJurisdiction, NOT the pre-stamp
+    //    stored value: a revoked-but-unstamped contact (a first inbound STOP sets
+    //    consentRevokedAt without stamping pdpaJurisdiction) would otherwise derive
+    //    "not_applicable" and escape the defense-in-depth revoked-race block.
     const decision = evaluateConsentGate({
       contact: {
-        pdpaJurisdiction: consent.pdpaJurisdiction,
+        pdpaJurisdiction: leadJurisdiction,
         consentGrantedAt: consent.consentGrantedAt,
         consentRevokedAt: consent.consentRevokedAt,
       },

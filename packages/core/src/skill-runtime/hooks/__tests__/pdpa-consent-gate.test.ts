@@ -229,6 +229,46 @@ describe("PdpaConsentGateHook", () => {
     );
   });
 
+  it("blocks a revoked-but-unstamped contact (revoked-race) — the per-lead jurisdiction makes the revoked state visible", async () => {
+    // A first inbound "STOP" revokes via recordRevocation, which sets consentRevokedAt
+    // WITHOUT stamping pdpaJurisdiction. If an in-flight skill turn's afterSkill then
+    // evaluated the gate with the still-null stored pdpaJurisdiction, deriveConsentStatus
+    // would short-circuit to "not_applicable" and the defense-in-depth block would not fire.
+    const { deps, conversationStore, handoffStore, verdictStore } = buildDeps({
+      consent: {
+        pdpaJurisdiction: null,
+        phoneE164: "+60123456789",
+        consentGrantedAt: null,
+        consentRevokedAt: "2026-05-10T00:00:00.000Z",
+        consentSource: "inbound_keyword_revocation",
+        aiDisclosureVersionShown: null,
+        aiDisclosureShownAt: null,
+        consentUpdatedBy: null,
+        consentNotes: null,
+      },
+    });
+    const hook = new PdpaConsentGateHook(deps);
+    const result = {
+      response: "would have replied",
+      toolCalls: [],
+      tokenUsage: {},
+      trace: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    await hook.afterSkill(ctx, result);
+    expect(result.response).not.toBe("would have replied");
+    expect(conversationStore.setConversationStatus).toHaveBeenCalledWith("sess1", "human_override");
+    expect(handoffStore.save).toHaveBeenCalled();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const saved = (verdictStore.save as any).mock.calls.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (c: any[]) => c[0].reasonCode === "consent_revoked",
+    );
+    expect(saved).toBeDefined();
+    expect(saved![0].action).toBe("block");
+    expect(saved![0].jurisdiction).toBe("MY");
+  });
+
   it("emits jurisdiction_mismatch critical verdict but does NOT block", async () => {
     const { deps, verdictStore } = buildDeps();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

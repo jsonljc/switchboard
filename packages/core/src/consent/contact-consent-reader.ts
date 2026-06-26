@@ -5,10 +5,12 @@ import { ContactNotFound } from "./errors.js";
  * A contact's consent state plus the E.164 phone the consent gate needs to
  * resolve per-lead jurisdiction (`resolveContactJurisdiction`) at the stamp site.
  *
- * `phoneE164` lives on THIS read result rather than on `ContactConsentState`
- * itself so the phone (PII) stays confined to the one reader that needs it and
- * does not flow through every consent-state surface (the send-time enforcement
- * gate, admin reads, etc.).
+ * `phoneE164` lives on THIS read result rather than on the shared
+ * `ContactConsentState`, so the phone (PII) never reaches the consent-state
+ * surfaces that read `ContactConsentState` via `ConsentStateStore.readOrNull`
+ * (the send-time enforcement gate, proactive eligibility) — those stay phone-free.
+ * Consumers of THIS reader that do not need the phone (e.g. the admin consent
+ * response) must not propagate it onward.
  */
 export type ContactConsentRead = ContactConsentState & {
   /**
