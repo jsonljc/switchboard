@@ -115,11 +115,19 @@ export default function GovernancePage() {
       >
         Governance gates
       </PageTitle>
-      <GovernanceMarket
-        current={market.data ?? { jurisdiction: null, clinicType: null }}
-        pending={setMarket.isPending}
-        onSave={onSaveMarket}
-      />
+      {market.data ? (
+        <GovernanceMarket
+          current={market.data}
+          pending={setMarket.isPending}
+          onSave={onSaveMarket}
+        />
+      ) : (
+        // Read failed (rare; a seeded deployment always carries a market). Show a notice
+        // rather than silently prefilling SG/medical, which would misrepresent the market.
+        <div className="rounded-lg border border-border bg-surface p-4 text-sm text-caution">
+          Couldn&apos;t load the current market. Reload the page to set it.
+        </div>
+      )}
       <GovernanceGates gates={gates} pendingUnit={pendingUnit} onFlip={onFlip} />
     </div>
   );

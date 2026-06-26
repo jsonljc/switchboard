@@ -76,7 +76,8 @@ export function useSetGovernanceMarket(agentId = "alex") {
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string; reason?: string };
-        // Prefer the human `reason` (402 entitlement / 409 invalid config carry it).
+        // Prefer the human message (409 invalid config carries `reason`; 402 entitlement
+        // carries `error`).
         throw new Error(body.reason || body.error || `Failed to set market: ${res.status}`);
       }
       return res.json() as Promise<{ jurisdiction: string; clinicType: string }>;

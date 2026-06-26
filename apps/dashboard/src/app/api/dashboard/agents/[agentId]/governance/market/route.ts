@@ -28,8 +28,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ age
       jurisdiction?: string;
       clinicType?: string;
     };
-    // Propagate the backend status + body (402 entitlement / 409 invalid config carry a
-    // human `reason`) instead of collapsing every non-2xx to a 500.
+    // Propagate the backend status + body (409 invalid config carries `reason`, 402
+    // entitlement carries `error`) instead of collapsing every non-2xx to a 500.
     const { status, body } = await client.setGovernanceMarketRaw(
       agentId,
       payload.jurisdiction ?? "",
