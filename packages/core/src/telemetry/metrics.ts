@@ -95,6 +95,19 @@ export interface SwitchboardMetrics {
    *  "unknown"). Any sustained rate is a lead-intake outage on the highest-intent
    *  inbound. Observability-only; never gates the message-handling flow. */
   ctwaLeadIntakeFailed: Counter;
+  /** Gap B (sibling of the CTWA P2-4 not-swallow fix): a Meta Instant Form paid lead's
+   *  `lead.intake` submission did NOT create a Contact, so the lead was dropped. The
+   *  app-layer InstantFormAdapter ingress shim previously swallowed any non-ok submit
+   *  into a bare `{ ok:false }` — no reason, log, audit, or metric — and only branched
+   *  on `.ok`, mis-bucketing a parked / failed-outcome response. The never-silent
+   *  dropped-paid-lead signal: labeled by reason (ingress_rejected = PlatformIngress
+   *  ok:false, an infra/entitlement/validation rejection BEFORE execution;
+   *  approval_required = ingress accepted but the work PARKED for human approval, not a
+   *  completed Contact creation — anomalous since lead.intake is approvalPolicy:"none";
+   *  execution_failed = ok:true but the execution outcome was the explicit "failed") +
+   *  type (the IngressError.type, or the reason literal). Any sustained rate is a
+   *  lead-intake outage on a paid inbound. Observability-only; never gates the workflow. */
+  instantFormLeadIntakeFailed: Counter;
   /** EV-2 / SPINE-2: an orphaned `running` idempotency CLAIM (process death between
    *  PlatformIngress.claim() and finalizeTrace) was aged by the stranded-claim reaper to the
    *  terminal `needs_reconciliation` dead-letter sink. Incremented ONCE per row actually reaped,
@@ -229,6 +242,7 @@ export function createInMemoryMetrics(): SwitchboardMetrics {
     whatsappProactiveSendSkipped: new InMemoryCounter(),
     robinRecoverySendFailed: new InMemoryCounter(),
     ctwaLeadIntakeFailed: new InMemoryCounter(),
+    instantFormLeadIntakeFailed: new InMemoryCounter(),
     strandedClaimReaped: new InMemoryCounter(),
     rileyReallocationCapEvaluated: new InMemoryCounter(),
     rileyReallocationGuardrailOutcome: new InMemoryCounter(),

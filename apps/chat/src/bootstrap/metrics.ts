@@ -249,6 +249,11 @@ export function createPromMetrics(): SwitchboardMetrics {
       "CTWA paid-lead fire-and-forget lead.intake that failed to create a Contact (P2-4, previously triple-swallowed); labeled by reason (ingress_rejected/execution_failed/unexpected) + type",
       ["reason", "type"],
     ),
+    instantFormLeadIntakeFailed: new PromCounter(
+      "switchboard_instant_form_lead_intake_failed_total",
+      "Meta Instant Form paid-lead lead.intake that did NOT create a Contact (Gap B, previously swallowed into a bare {ok:false} by the ingress shim); labeled by reason (ingress_rejected/approval_required/execution_failed) + type",
+      ["reason", "type"],
+    ),
     strandedClaimReaped: new PromCounter(
       "switchboard_stranded_claim_reaped_total",
       "Orphaned `running` idempotency claims aged by the reaper to the needs_reconciliation dead-letter sink (EV-2/SPINE-2); one per reaped row, labeled by intent. Any nonzero value is a key awaiting manual reconciliation",
