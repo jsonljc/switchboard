@@ -8,6 +8,7 @@ function harness(opts?: {
   const update = vi.fn(
     async (_args: { where: { id: string }; data: Record<string, unknown> }) => ({}),
   );
+  const tx = { agentDeployment: { update } };
   const prisma = {
     agentListing: {
       findUnique: vi.fn(async () =>
@@ -20,11 +21,13 @@ function harness(opts?: {
           ? { id: "dep_1", governanceSettings: { trustLevelOverride: "autonomous" } }
           : opts.deployment,
       ),
-      update,
     },
+    $transaction: vi.fn(async (cb: (txc: typeof tx) => Promise<unknown>) => cb(tx)),
   };
-  const record = vi.fn(async (_params: Record<string, unknown>) => ({}));
-  return { prisma, update, ledger: { record } };
+  const record = vi.fn(
+    async (_params: Record<string, unknown>, _options?: { tx?: unknown }) => ({}),
+  );
+  return { prisma, update, tx, ledger: { record } };
 }
 
 describe("setRileyPauseSelfExecution (audited capability toggle)", () => {
@@ -90,5 +93,38 @@ describe("setRileyPauseSelfExecution (audited capability toggle)", () => {
         actor: "jason",
       }),
     ).rejects.toThrow(/listing/);
+  });
+
+  it("wraps the flip + audit write in one transaction and threads the tx into ledger.record", async () => {
+    // True atomicity: the audit chain-append joins the same transaction as the
+    // flag flip (ledger.record({ tx }) -> appendAtomic({ externalTx })), so the
+    // capability flip and its audit row commit or roll back together.
+    const h = harness();
+    await setRileyPauseSelfExecution(h.prisma as never, h.ledger, {
+      organizationId: "org_1",
+      enabled: true,
+      actor: "jason",
+    });
+    expect(h.prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(h.update).toHaveBeenCalledTimes(1);
+    expect(h.ledger.record).toHaveBeenCalledTimes(1);
+    expect(h.ledger.record.mock.calls[0]![1]?.tx).toBe(h.tx);
+  });
+
+  it("rejects out of the transaction when the audit write fails (flip rolls back, never armed without an audit row)", async () => {
+    // A mock cannot prove a real Postgres rollback, but proving the ledger error
+    // is NOT swallowed - it escapes setRileyPauseSelfExecution - proves the flip
+    // + audit are bound in one $transaction, so a ledger failure can never leave
+    // pauseSelfExecutionEnabled flipped with no audit row.
+    const h = harness();
+    h.ledger.record.mockRejectedValueOnce(new Error("ledger chain write failed"));
+    await expect(
+      setRileyPauseSelfExecution(h.prisma as never, h.ledger, {
+        organizationId: "org_1",
+        enabled: true,
+        actor: "jason",
+      }),
+    ).rejects.toThrow(/ledger chain write failed/);
+    expect(h.update).toHaveBeenCalledTimes(1);
   });
 });

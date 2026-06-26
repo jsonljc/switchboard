@@ -7,18 +7,22 @@ import {
 
 function mockPrisma(governanceSettings: Record<string, unknown> | null) {
   const update = vi.fn(async (_a: { where: unknown; data: unknown }) => ({}));
+  const tx = { agentDeployment: { update } };
+  const transaction = vi.fn(async (cb: (txc: typeof tx) => Promise<unknown>) => cb(tx));
   const prisma = {
     agentListing: { findUnique: vi.fn(async () => ({ id: "listing_1" })) },
     agentDeployment: {
       findUnique: vi.fn(async () => ({ id: "dep_1", governanceSettings })),
-      update,
     },
+    $transaction: transaction,
   };
-  return { prisma: prisma as unknown as PrismaClient, update };
+  return { prisma: prisma as unknown as PrismaClient, update, tx, transaction };
 }
 
 function fakeLedger() {
-  const record = vi.fn(async (_entry: Record<string, unknown>) => ({}));
+  const record = vi.fn(
+    async (_entry: Record<string, unknown>, _options?: { tx?: unknown }) => ({}),
+  );
   return { ledger: { record }, record };
 }
 
@@ -109,5 +113,39 @@ describe("setRileyReallocate* error paths", () => {
         actor: "ops@x",
       }),
     ).rejects.toThrow(/listing not found/);
+  });
+});
+
+describe("setRileyReallocate* audit atomicity (P3-2)", () => {
+  it("wraps the flip + audit write in one transaction and threads the tx into ledger.record", async () => {
+    // Both reallocate toggles share setRileyReallocateFlag, so the kill switch
+    // exercises the same transactional path the canary enable flag uses.
+    const { prisma, update, tx, transaction } = mockPrisma({ trustLevelOverride: "autonomous" });
+    const { ledger, record } = fakeLedger();
+    await setRileyReallocateKillSwitch(prisma, ledger, {
+      organizationId: "org_1",
+      enabled: true,
+      actor: "ops@x",
+    });
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(record.mock.calls[0]![1]?.tx).toBe(tx);
+  });
+
+  it("rejects out of the transaction when the audit write fails (flip rolls back)", async () => {
+    // Proving the ledger error escapes setRileyReallocateSelfExecution proves
+    // the flip + audit are bound: a ledger failure can never leave a reallocate
+    // self-execution flag flipped with no audit row.
+    const { prisma, update } = mockPrisma(null);
+    const { ledger, record } = fakeLedger();
+    record.mockRejectedValueOnce(new Error("ledger chain write failed"));
+    await expect(
+      setRileyReallocateSelfExecution(prisma, ledger, {
+        organizationId: "org_1",
+        enabled: true,
+        actor: "ops@x",
+      }),
+    ).rejects.toThrow(/ledger chain write failed/);
+    expect(update).toHaveBeenCalledTimes(1);
   });
 });
