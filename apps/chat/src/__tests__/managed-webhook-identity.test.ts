@@ -9,6 +9,8 @@ import type { GatewayEntry } from "../managed/runtime-registry.js";
 import { SlackAdapter } from "../adapters/slack.js";
 import { registerSlackFormEncodedParser } from "../routes/slack-form-parser.js";
 import { createHmac } from "node:crypto";
+import { CtwaIngestError } from "@switchboard/ad-optimizer";
+import { setMetrics, createInMemoryMetrics } from "@switchboard/core";
 
 // The gateway binds approval responses on the stable channel USER id
 // (OperatorChannelBinding doctrine; bridge spec section 5). The route must
@@ -386,6 +388,101 @@ describe("managed webhook identity forwarding", () => {
     const input = handleIncoming.mock.calls[0]![0];
     expect(input.principalId).toBe("+6591234567");
     expect(input.sessionId).toBe("+6591234567");
+    await app.close();
+  });
+});
+
+// P2-4: the CTWA fire-and-forget intake previously triple-swallowed an ingress
+// failure. The adapter now rejects on failure; the route's .catch must SURFACE it
+// (metric + log) without blocking the inbound message flow (still returns 200).
+describe("managed webhook CTWA intake failure surfacing (P2-4)", () => {
+  function ctwaWhatsappEntry(): GatewayEntry {
+    const adapter = {
+      channel: "whatsapp",
+      verifyRequest: () => true,
+      parseIncomingMessage: () => ({
+        id: "wa_1",
+        channel: "whatsapp" as const,
+        channelMessageId: "wamid.1",
+        threadId: "+6591234567",
+        principalId: "+6591234567",
+        organizationId: null,
+        text: "hi",
+        attachments: [],
+        timestamp: new Date(),
+        metadata: { ctwaClid: "clid_abc" },
+      }),
+      extractMessageId: () => null,
+      sendTextReply: vi.fn(async () => {}),
+    } as unknown as GatewayEntry["adapter"];
+    return {
+      ...makeEntry(adapter, gatewaySpy()),
+      channel: "whatsapp",
+      deploymentConnectionId: "conn_1",
+      orgId: "org-1",
+    };
+  }
+
+  it("records the ctwaLeadIntakeFailed metric and still returns 200 when the intake rejects", async () => {
+    const metrics = createInMemoryMetrics();
+    const incSpy = vi.spyOn(metrics.ctwaLeadIntakeFailed, "inc");
+    setMetrics(metrics);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const ingest = vi.fn(async () => {
+      throw new CtwaIngestError("ingress_rejected", {
+        type: "entitlement_required",
+        message: "org not entitled",
+      });
+    });
+
+    const app = await buildApp(ctwaWhatsappEntry(), { ctwaAdapter: { ingest } });
+    const res = await app.inject({
+      method: "POST",
+      url: "/webhook/managed/abc",
+      headers: { "content-type": "application/json" },
+      payload: { any: "thing" },
+    });
+
+    // Non-blocking: the dropped paid lead never breaks inbound handling.
+    expect(res.statusCode).toBe(200);
+    expect(ingest).toHaveBeenCalledTimes(1);
+    // Flush the fire-and-forget .catch microtask before asserting it surfaced.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(incSpy).toHaveBeenCalledWith({
+      reason: "ingress_rejected",
+      type: "entitlement_required",
+    });
+
+    warnSpy.mockRestore();
+    incSpy.mockRestore();
+    await app.close();
+  });
+
+  it("labels an ok:true+failed execution leg as execution_failed", async () => {
+    const metrics = createInMemoryMetrics();
+    const incSpy = vi.spyOn(metrics.ctwaLeadIntakeFailed, "inc");
+    setMetrics(metrics);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const ingest = vi.fn(async () => {
+      throw new CtwaIngestError("execution_failed", { outcome: "failed" });
+    });
+
+    const app = await buildApp(ctwaWhatsappEntry(), { ctwaAdapter: { ingest } });
+    const res = await app.inject({
+      method: "POST",
+      url: "/webhook/managed/abc",
+      headers: { "content-type": "application/json" },
+      payload: { any: "thing" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(incSpy).toHaveBeenCalledWith({ reason: "execution_failed", type: "failed" });
+
+    warnSpy.mockRestore();
+    incSpy.mockRestore();
     await app.close();
   });
 });

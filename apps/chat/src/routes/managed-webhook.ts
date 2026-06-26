@@ -1,6 +1,8 @@
 // @route-class: ingress-receiver
 import type { FastifyInstance } from "fastify";
 import type { ReplySink } from "@switchboard/core";
+import { getMetrics } from "@switchboard/core";
+import { isCtwaIngestError } from "@switchboard/ad-optimizer";
 import type { GatewayEntry } from "../managed/runtime-registry.js";
 import type { FailedMessageStore } from "../dlq/failed-message-store.js";
 
@@ -192,12 +194,24 @@ export function registerManagedWebhookRoutes(app: FastifyInstance, deps: Managed
           organizationId: orgId,
           deploymentId: leadDeploymentId,
         })
-        .catch((err: unknown) =>
-          console.warn("[managed-webhook] CTWA intake failed", {
-            err,
-            from: incoming.principalId,
-          }),
-        );
+        .catch((err: unknown) => {
+          // P2-4: SURFACE the dropped paid lead instead of swallowing it. The
+          // adapter now rejects on both failure legs it previously discarded
+          // (ok:false infra/entitlement, and ok:true + outcome "failed"), so this
+          // .catch is no longer throw-only dead code. Record a metric (durable,
+          // alertable) + a structured warn. Still fire-and-forget: the 200 reply
+          // below is unaffected, so a lead-intake outage never blocks inbound
+          // message handling.
+          const reason = isCtwaIngestError(err) ? err.reason : "unexpected";
+          const type = isCtwaIngestError(err)
+            ? (err.detail.type ?? err.detail.outcome ?? "unknown")
+            : "unknown";
+          getMetrics().ctwaLeadIntakeFailed.inc({ reason, type });
+          app.log.warn(
+            { err, reason, type, organizationId: orgId, from: incoming.principalId },
+            "[managed-webhook] CTWA lead.intake failed (paid lead dropped)",
+          );
+        });
     }
 
     const rawMessageId = gatewayEntry.adapter.extractMessageId(request.body);

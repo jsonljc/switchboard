@@ -23,13 +23,65 @@ export interface ParsedWhatsappMessage {
  * real `CanonicalSubmitRequest` when wiring the adapter into the WhatsApp
  * gateway in `apps/chat/`.
  */
+/**
+ * The reason an ingress submission failed, threaded from the app-layer shim that
+ * adapts the real `PlatformIngress.submit()` to this Layer-2 contract. The shim
+ * maps `SubmitWorkResponse.error` (an `IngressError`) onto these plain fields so
+ * the adapter can surface *why* a CTWA lead was dropped without importing core.
+ */
+export interface IngressSubmitError {
+  type?: string;
+  message?: string;
+}
+
 export interface IngressLike {
   submit(req: {
     intent: string;
     payload: unknown;
     idempotencyKey: string;
     parentWorkUnitId?: string;
-  }): Promise<{ ok: boolean; result?: unknown }>;
+  }): Promise<{ ok: boolean; result?: unknown; error?: IngressSubmitError }>;
+}
+
+/** Which leg of a CTWA lead.intake failed (P2-4). */
+export type CtwaIngestFailureReason = "ingress_rejected" | "execution_failed";
+
+export interface CtwaIngestFailureDetail {
+  /** The `IngressError.type` for an `ingress_rejected` leg (e.g. `entitlement_required`). */
+  type?: string;
+  message?: string;
+  /** The execution `outcome` for an `execution_failed` leg (always `"failed"`). */
+  outcome?: string;
+}
+
+/**
+ * Thrown by `CtwaAdapter.ingest` when a CTWA lead.intake did NOT create a Contact,
+ * so the route's fire-and-forget `.catch` can SURFACE it (log + metric) instead of
+ * the dropped paid lead vanishing silently (P2-4). Two legs:
+ *  - `ingress_rejected`: `PlatformIngress` returned `ok:false` — an infra /
+ *    entitlement / validation rejection BEFORE execution.
+ *  - `execution_failed`: ingress accepted the work (`ok:true`) but the execution
+ *    `outcome` was `"failed"`.
+ */
+export class CtwaIngestError extends Error {
+  readonly reason: CtwaIngestFailureReason;
+  readonly detail: CtwaIngestFailureDetail;
+
+  constructor(reason: CtwaIngestFailureReason, detail: CtwaIngestFailureDetail = {}) {
+    super(
+      `CTWA lead.intake ${reason}: ${detail.type ?? detail.outcome ?? detail.message ?? "unknown"}`,
+    );
+    this.name = "CtwaIngestError";
+    this.reason = reason;
+    this.detail = detail;
+  }
+}
+
+/** Type guard for the route's `.catch`: an expected CTWA intake failure vs an
+ *  unexpected programming error. Same package as the throw site, so `instanceof`
+ *  is safe (no cross-dist duplication of the class). */
+export function isCtwaIngestError(value: unknown): value is CtwaIngestError {
+  return value instanceof CtwaIngestError;
 }
 
 export interface CtwaAdapterDeps {
@@ -113,11 +165,36 @@ export class CtwaAdapter {
       }
     }
 
-    await this.deps.ingress.submit({
+    const response = await this.deps.ingress.submit({
       intent: "lead.intake",
       payload: intake,
       idempotencyKey: intake.idempotencyKey,
       ...(opts.parentWorkUnitId ? { parentWorkUnitId: opts.parentWorkUnitId } : {}),
     });
+
+    // P2-4: do NOT swallow a failed lead.intake. A CTWA lead is a paid lead; a
+    // silently-dropped intake is invisible today (the submit return was
+    // discarded). Throw on both failure legs so the caller's fire-and-forget
+    // `.catch` surfaces the drop (log + metric). Throwing keeps the intake
+    // non-blocking — the caller already `void`s this promise.
+    if (!response.ok) {
+      // ok:false — PlatformIngress rejected the work BEFORE execution (infra /
+      // entitlement / validation). The app-layer shim threads the IngressError
+      // type/message onto `response.error`.
+      throw new CtwaIngestError("ingress_rejected", {
+        ...(response.error?.type ? { type: response.error.type } : {}),
+        ...(response.error?.message ? { message: response.error.message } : {}),
+      });
+    }
+
+    // ok:true — ingress accepted the work. Surface only an EXPLICIT "failed"
+    // execution outcome (gate on the explicit value, not absence): a real
+    // "completed", the minimal `{}` result shapes, and any unknown/stale shape
+    // stay quiet, because ok:true already means ingress accepted the submission
+    // and the dominant failure mode (ok:false) is caught above regardless.
+    const outcome = (response.result as { outcome?: unknown } | undefined)?.outcome;
+    if (outcome === "failed") {
+      throw new CtwaIngestError("execution_failed", { outcome: "failed" });
+    }
   }
 }
