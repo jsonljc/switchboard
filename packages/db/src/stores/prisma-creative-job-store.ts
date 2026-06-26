@@ -303,18 +303,23 @@ export class PrismaCreativeJobStore {
   }
 
   /**
-   * F4 revenue-proven promotion candidates: published jobs not yet promoted. The
-   * `revenueProvenPromotedAt: null` predicate makes the FETCH cap bound PENDING
-   * work, never history (promoted jobs drop out). Measured-state and the economic
-   * floors are applied in JS by the sweep (pastPerformance is JSON). Cross-org
-   * read (system cron); every WRITE stays org-scoped. Scale note: at pilot volume
-   * the published-job set per org is far under the cap; revisit (a measured-only
-   * index / per-org dispatch) only if a single org accumulates more
-   * measured-but-non-qualifying published jobs than the cap.
+   * F4 revenue-proven promotion candidates for ONE org: published jobs not yet
+   * promoted. The `revenueProvenPromotedAt: null` predicate makes the FETCH cap
+   * bound PENDING work, never history (promoted jobs drop out). The
+   * `organizationId` predicate makes the cap PER-ORG: the daily sweep fetches a
+   * bounded fair slice per org (enumerated by listRevenueProvenCandidateOrgIds),
+   * so one high-volume org's never-qualifying backlog can no longer fill a single
+   * global cap and starve lower-volume orgs fleet-wide (P2-11). Measured-state and
+   * the economic floors are applied in JS by the sweep (pastPerformance is JSON);
+   * every WRITE stays org-scoped. An org whose pending set exceeds the per-org cap
+   * has its tail re-fetched next run (the sweep warns on saturation).
    */
-  async listRevenueProvenCandidates(limit: number): Promise<RevenueProvenCandidate[]> {
+  async listRevenueProvenCandidates(
+    organizationId: string,
+    limit: number,
+  ): Promise<RevenueProvenCandidate[]> {
     return this.prisma.creativeJob.findMany({
-      where: { metaCampaignId: { not: null }, revenueProvenPromotedAt: null },
+      where: { organizationId, metaCampaignId: { not: null }, revenueProvenPromotedAt: null },
       select: {
         id: true,
         organizationId: true,
@@ -329,6 +334,26 @@ export class PrismaCreativeJobStore {
       orderBy: { createdAt: "asc" },
       take: limit,
     }) as unknown as RevenueProvenCandidate[];
+  }
+
+  /**
+   * F4 fairness: the DISTINCT orgs with at least one pending revenue-proven
+   * candidate (published + not-yet-promoted). The daily sweep visits each and
+   * fetches a bounded PER-ORG slice (listRevenueProvenCandidates) instead of a
+   * single global cap a high-volume org's backlog could monopolize (P2-11).
+   * `take: maxOrgs` is a defensive bound on the distinct set; at pilot scale the
+   * org count is far under it (the sweep warns if it is hit, signalling a future
+   * round-robin across runs). Cross-org read (system cron).
+   */
+  async listRevenueProvenCandidateOrgIds(maxOrgs: number): Promise<string[]> {
+    const rows = (await this.prisma.creativeJob.findMany({
+      where: { metaCampaignId: { not: null }, revenueProvenPromotedAt: null },
+      select: { organizationId: true },
+      distinct: ["organizationId"],
+      orderBy: { organizationId: "asc" },
+      take: maxOrgs,
+    })) as unknown as Array<{ organizationId: string }>;
+    return rows.map((r) => r.organizationId);
   }
 
   /**
