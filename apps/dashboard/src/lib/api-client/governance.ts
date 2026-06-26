@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- cohesive governance api-client: one typed method + response
+   type per governance surface (status, observe-review, enforce-readiness, gate-mode, market…).
+   Splitting the class by surface would fragment one client across files; the response types
+   are the only non-class content and extracting them lands only marginally under the cap. */
 import type {
   AuditEntry,
   Policy,
