@@ -24,6 +24,7 @@ import type { ExecuteResult, ExecutableWorkUnit } from "@switchboard/schemas";
 import type { ApprovalLifecycleService } from "./lifecycle-service.js";
 import type { LifecycleRecord } from "./lifecycle-types.js";
 import type { WorkTraceStore } from "../platform/work-trace-recorder.js";
+import type { AuditLedger } from "../audit/ledger.js";
 
 export interface ExecuteApprovedLike {
   executeApproved(workUnitId: string): Promise<ExecuteResult>;
@@ -78,6 +79,97 @@ export async function writeApprovedPayloadToTrace(args: {
   );
   if (!traceUpdate.ok) {
     throw new Error(`WorkTrace update rejected before dispatch: ${traceUpdate.reason}`);
+  }
+}
+
+/**
+ * Resilient payload-commit (P2-16): the ONLY way the approve paths should commit
+ * the frozen payload to the trace. Approval-is-lifecycle-state is a core invariant
+ * — a lifecycle that is already "approved" must NEVER be left stranded with no
+ * committed payload and no dispatch. writeApprovedPayloadToTrace throws on a
+ * rejected/integrity-locked trace; if it does, this compensates symmetrically with
+ * the dispatch-failure path (runDispatch -> markRecoveryRequired):
+ *   1. transition approved -> recovery_required (operator Retry card; sweep-visible),
+ *   2. write an operator-visible action.failed audit so the failure is on the record,
+ *   3. rethrow so the respond reports failure honestly (route returns an error, not a
+ *      false success).
+ * The happy path is a pass-through and reaches dispatch unchanged.
+ */
+export async function commitApprovedPayloadOrRecover(args: {
+  deps: {
+    workTraceStore: WorkTraceStore;
+    lifecycleService: ApprovalLifecycleService;
+    auditLedger?: AuditLedger;
+    logger: LifecycleDispatchDeps["logger"];
+  };
+  lifecycle: LifecycleRecord;
+  executableWorkUnit: ExecutableWorkUnit;
+  fallbackParameters: Record<string, unknown>;
+  approvalOutcome: "approved" | "patched";
+  respondedBy: string;
+  respondedAt: string;
+  caller: string;
+}): Promise<void> {
+  try {
+    await writeApprovedPayloadToTrace({
+      deps: { workTraceStore: args.deps.workTraceStore },
+      lifecycle: args.lifecycle,
+      executableWorkUnit: args.executableWorkUnit,
+      fallbackParameters: args.fallbackParameters,
+      approvalOutcome: args.approvalOutcome,
+      respondedBy: args.respondedBy,
+      respondedAt: args.respondedAt,
+      caller: args.caller,
+    });
+  } catch (err) {
+    await markRecoveryRequired(
+      { lifecycleService: args.deps.lifecycleService, logger: args.deps.logger },
+      args.lifecycle.id,
+    );
+    await recordPayloadCommitFailureAudit(args.deps, args.lifecycle, args.respondedBy, err);
+    throw err;
+  }
+}
+
+/**
+ * Best-effort operator-visible record of a payload-commit failure. action.failed is
+ * in OPERATIONAL_AUDIT_EVENT_TYPES, so it surfaces on the /activity feed. An audit
+ * write failure must never mask the original payload-commit error, so it is logged
+ * and swallowed here (the caller rethrows the original error).
+ */
+async function recordPayloadCommitFailureAudit(
+  deps: { auditLedger?: AuditLedger; logger: LifecycleDispatchDeps["logger"] },
+  lifecycle: LifecycleRecord,
+  respondedBy: string,
+  err: unknown,
+): Promise<void> {
+  if (!deps.auditLedger) return;
+  try {
+    await deps.auditLedger.record({
+      eventType: "action.failed",
+      actorType: "user",
+      actorId: respondedBy,
+      entityType: "action",
+      entityId: lifecycle.actionEnvelopeId,
+      riskCategory: "medium",
+      summary:
+        "Approved payload commit to WorkTrace failed before dispatch; routed to recovery_required",
+      snapshot: {
+        lifecycleId: lifecycle.id,
+        stage: "write_approved_payload_to_trace",
+        reason: err instanceof Error ? err.message : String(err),
+      },
+      envelopeId: lifecycle.actionEnvelopeId,
+      organizationId: lifecycle.organizationId ?? undefined,
+    });
+  } catch (auditErr) {
+    deps.logger.error(
+      {
+        lifecycleId: lifecycle.id,
+        auditErr: auditErr instanceof Error ? auditErr.message : String(auditErr),
+      },
+      "Failed to write payload-commit-failure audit",
+    );
   }
 }
 

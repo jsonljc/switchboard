@@ -297,6 +297,64 @@ describe("respondToParkedLifecycle", () => {
     expect(store.listDispatchRecords()[0]?.state).toBe("failed");
   });
 
+  it("payload-commit failure -> recovery_required + action.failed audit, never stranded in approved (P2-16)", async () => {
+    // The trace store REJECTS the pre-dispatch payload write (e.g. integrity-locked
+    // trace). approveLifecycle has already transitioned the lifecycle to "approved";
+    // the write failure must NOT leave it stranded there with no dispatch, no recovery
+    // and no audit. It must compensate to recovery_required (operator Retry card), write
+    // an operator-visible action.failed audit, and rethrow so the route reports failure.
+    const lc = await park();
+    const base = makeTraceStore(traces);
+    traceStore = {
+      ...base,
+      update: vi.fn(async () => ({ ok: false as const, reason: "trace integrity locked" })),
+    } as unknown as WorkTraceStore;
+
+    await expect(
+      respondToParkedLifecycle(deps(), {
+        lifecycleId: lc.id,
+        action: "approve",
+        respondedBy: "operator_jane",
+        bindingHash: "h1",
+      }),
+    ).rejects.toThrow(/worktrace update rejected/i);
+
+    // The invariant: an approved lifecycle is NEVER left in bare "approved" with no
+    // committed payload and no dispatch path.
+    expect((await store.getLifecycleById(lc.id))?.status).toBe("recovery_required");
+    expect(executeApproved).not.toHaveBeenCalled();
+    expect(store.listDispatchRecords()).toHaveLength(0);
+    expect(ledger.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "action.failed" }),
+    );
+  });
+
+  it("payload-commit failure: an audit-write failure does NOT mask the original error (P2-16 hardening)", async () => {
+    // Observability is best-effort: if the action.failed audit write ALSO fails, the
+    // compensation (recovery_required) must still hold and the ORIGINAL payload-commit
+    // error must surface — never the audit error.
+    const lc = await park();
+    const base = makeTraceStore(traces);
+    traceStore = {
+      ...base,
+      update: vi.fn(async () => ({ ok: false as const, reason: "trace integrity locked" })),
+    } as unknown as WorkTraceStore;
+    ledger.record.mockRejectedValueOnce(new Error("ledger down"));
+    logger.error.mockClear();
+
+    await expect(
+      respondToParkedLifecycle(deps(), {
+        lifecycleId: lc.id,
+        action: "approve",
+        respondedBy: "operator_jane",
+        bindingHash: "h1",
+      }),
+    ).rejects.toThrow(/worktrace update rejected/i); // the original error, not "ledger down"
+
+    expect((await store.getLifecycleById(lc.id))?.status).toBe("recovery_required");
+    expect(logger.error).toHaveBeenCalled();
+  });
+
   it("transitions to recovery_required when dispatch returns success:false (review 14B)", async () => {
     executeApproved.mockResolvedValueOnce({
       ...okResult(),

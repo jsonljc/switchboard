@@ -34,7 +34,7 @@ import type { WorkUnit } from "../platform/work-unit.js";
 import type { AuditLedger } from "../audit/ledger.js";
 import {
   runDispatch,
-  writeApprovedPayloadToTrace,
+  commitApprovedPayloadOrRecover,
   type ExecuteApprovedLike,
 } from "./lifecycle-dispatch.js";
 
@@ -184,8 +184,10 @@ export async function respondToParkedLifecycle(
 
   // Payload authority (spec 4.1): the trace MUST carry the approved frozen
   // payload before dispatch — executeAfterApproval dispatches from the trace.
-  await writeApprovedPayloadToTrace({
-    deps: { workTraceStore },
+  // P2-16: a rejected write must not strand the now-"approved" lifecycle; this
+  // compensates to recovery_required + action.failed audit, then rethrows.
+  await commitApprovedPayloadOrRecover({
+    deps: { workTraceStore, lifecycleService, auditLedger, logger: deps.logger },
     lifecycle: approved,
     executableWorkUnit,
     fallbackParameters: workUnit.parameters,

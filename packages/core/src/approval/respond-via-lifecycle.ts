@@ -25,7 +25,7 @@ import { transitionApproval } from "./state-machine.js";
 import { computeBindingHash, hashObject } from "./binding.js";
 import {
   runDispatch,
-  writeApprovedPayloadToTrace,
+  commitApprovedPayloadOrRecover,
   type ExecuteApprovedLike,
 } from "./lifecycle-dispatch.js";
 import type {
@@ -135,10 +135,17 @@ export async function respondViaLifecycle(args: {
 
   // Payload authority (parked spec 4.1): the trace carries the frozen payload
   // before dispatch. Tolerates a missing trace store (legacy units dispatch
-  // from the envelope payload) but never a rejected write.
+  // from the envelope payload) but never a rejected write. P2-16: a rejected
+  // write must not strand the now-"approved" lifecycle; commitApprovedPayloadOrRecover
+  // compensates to recovery_required + action.failed audit, then rethrows.
   if (deps.workTraceStore) {
-    await writeApprovedPayloadToTrace({
-      deps: { workTraceStore: deps.workTraceStore },
+    await commitApprovedPayloadOrRecover({
+      deps: {
+        workTraceStore: deps.workTraceStore,
+        lifecycleService: deps.lifecycleService,
+        auditLedger: deps.auditLedger,
+        logger: deps.logger,
+      },
       lifecycle: approvedLifecycle,
       executableWorkUnit,
       fallbackParameters: workUnit.parameters,
