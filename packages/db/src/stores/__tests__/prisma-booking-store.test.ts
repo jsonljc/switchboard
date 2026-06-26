@@ -427,16 +427,72 @@ describe("PrismaBookingStore reschedule/cancel/find", () => {
     expect(new BookingSlotConflictError("zz").conflictingBookingId).toBe("zz");
   });
 
-  it("cancel sets status cancelled; throws if no row", async () => {
-    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
-    const findFirstOrThrow = vi.fn().mockResolvedValue({ id: "b1", status: "cancelled" });
-    const store = new PrismaBookingStore({
-      booking: { updateMany, findFirstOrThrow },
-    } as never);
-    await store.cancel("org-1", "b1");
-    expect(updateMany).toHaveBeenCalledWith({
-      where: { id: "b1", organizationId: "org-1" },
-      data: { status: "cancelled" },
+  // cancel now serializes the proof-chain retraction in one $transaction (P2-18): flip the
+  // booking, void its receipts, and reverse its confirmed deposit revenue. Mock the tx surface
+  // it touches (booking + receipt + lifecycleRevenueEvent), mirroring makeRescheduleTx.
+  function makeCancelTx(opts: {
+    bookingCount?: number;
+    receiptCount?: number;
+    revenueCount?: number;
+    row?: Record<string, unknown>;
+  }) {
+    const tx = {
+      booking: {
+        updateMany: vi.fn().mockResolvedValue({ count: opts.bookingCount ?? 1 }),
+        findFirstOrThrow: vi.fn().mockResolvedValue(opts.row ?? { id: "b1", status: "cancelled" }),
+      },
+      receipt: { updateMany: vi.fn().mockResolvedValue({ count: opts.receiptCount ?? 2 }) },
+      lifecycleRevenueEvent: {
+        updateMany: vi.fn().mockResolvedValue({ count: opts.revenueCount ?? 1 }),
+      },
+    };
+    const prisma = { $transaction: vi.fn((fn: (t: typeof tx) => unknown) => fn(tx)) };
+    return { prisma, tx };
+  }
+
+  describe("cancel (proof-chain retraction, P2-18)", () => {
+    it("flips the booking, voids its receipts, and reverses confirmed deposit revenue (atomic)", async () => {
+      const { prisma, tx } = makeCancelTx({});
+      const store = new PrismaBookingStore(prisma as never);
+
+      const row = await store.cancel("org-1", "b1");
+
+      expect(tx.booking.updateMany).toHaveBeenCalledWith({
+        where: { id: "b1", organizationId: "org-1" },
+        data: { status: "cancelled" },
+      });
+      // Receipts -> void (calendar + payment). The read side (isPaidVisit / booked|held cohort)
+      // already excludes status "void", so this is the missing writer, not a read change.
+      expect(tx.receipt.updateMany).toHaveBeenCalledWith({
+        where: { organizationId: "org-1", bookingId: "b1", status: { not: "void" } },
+        data: { status: "void" },
+      });
+      // Confirmed deposit revenue -> refunded + unverified: drops it from sumByOrg (status) and
+      // paidVisitsByCampaign (verified), keeping the proof chain self-consistent.
+      expect(tx.lifecycleRevenueEvent.updateMany).toHaveBeenCalledWith({
+        where: { organizationId: "org-1", bookingId: "b1", status: "confirmed" },
+        data: { status: "refunded", verified: false },
+      });
+      expect(row).toEqual({ id: "b1", status: "cancelled" });
+    });
+
+    it("is idempotent: a double-cancel voids 0 already-void receipts / 0 confirmed events and does not throw", async () => {
+      const { prisma, tx } = makeCancelTx({ bookingCount: 1, receiptCount: 0, revenueCount: 0 });
+      const store = new PrismaBookingStore(prisma as never);
+
+      await expect(store.cancel("org-1", "b1")).resolves.toEqual({ id: "b1", status: "cancelled" });
+      expect(tx.receipt.updateMany).toHaveBeenCalledTimes(1);
+      expect(tx.lifecycleRevenueEvent.updateMany).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws StaleVersionError and runs NO cascade when the id/org does not match (fail closed first)", async () => {
+      const { prisma, tx } = makeCancelTx({ bookingCount: 0 });
+      const store = new PrismaBookingStore(prisma as never);
+
+      await expect(store.cancel("org-other", "b1")).rejects.toBeInstanceOf(StaleVersionError);
+      expect(tx.receipt.updateMany).not.toHaveBeenCalled();
+      expect(tx.lifecycleRevenueEvent.updateMany).not.toHaveBeenCalled();
+      expect(tx.booking.findFirstOrThrow).not.toHaveBeenCalled();
     });
   });
 
