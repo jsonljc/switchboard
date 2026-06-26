@@ -51,7 +51,7 @@ export class PrismaLedgerStorage implements LedgerStorage {
       tx: Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">,
     ) => {
       // Acquire advisory lock — blocks other writers until this transaction commits
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY})`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY})`;
 
       // Get latest within the lock
       const latest = await tx.auditEntry.findFirst({

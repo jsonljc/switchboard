@@ -407,7 +407,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PrismaGreetingSignalStore", () => {
       expect(topItem?.ageLabel).toBe("about an hour");
     });
 
-    it("falls back to first 20 chars when name extraction fails", async () => {
+    it("returns null when no name can be extracted from the summary", async () => {
       await prisma.pendingActionRecord.create({
         data: {
           idempotencyKey: `generic-${Date.now()}`,
@@ -429,8 +429,12 @@ describe.skipIf(!process.env.DATABASE_URL)("PrismaGreetingSignalStore", () => {
 
       const topItem = await store.getTopItem(ORG_ID, "alex");
 
-      expect(topItem).not.toBeNull();
-      expect(topItem?.name).toBe("This is a very long ");
+      // extractName yields nothing here (no quoted name; the only capitalized
+      // word, "This", is a SKIP_WORD), so getTopItem returns null. The consumer
+      // (core greeting.ts) handles null with its own "leads lined up" copy and
+      // never renders a raw truncated summary as a lead name — there is no
+      // 20-char fallback.
+      expect(topItem).toBeNull();
     });
   });
 });
