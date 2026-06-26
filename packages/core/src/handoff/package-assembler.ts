@@ -19,11 +19,25 @@ export interface AssemblerInput {
   qualificationSnapshot: QualificationSnapshot;
   messages: Array<{ role: string; text: string }>;
   slaMinutes?: number;
+  /**
+   * The escalating agent's own free-text summary of why the handoff is needed.
+   * Carried verbatim into `conversationSummary.agentSummary`. Used when the tool
+   * escalates from a summary alone (empty `messages`), so the operator gets real
+   * context instead of a keyword-derived blank.
+   */
+  agentSummary?: string;
+  /**
+   * The agent's direct read of the customer's sentiment. When present it is
+   * preferred over the keyword estimate (which sees an empty transcript on a
+   * summary-only escalation), so the operator sees "angry"/"frustrated" rather
+   * than a default "neutral".
+   */
+  customerSentiment?: string;
 }
 
 export class HandoffPackageAssembler {
   assemble(input: AssemblerInput): Handoff {
-    const summary = this.buildSummary(input.messages);
+    const summary = this.buildSummary(input.messages, input.agentSummary, input.customerSentiment);
     const slaMinutes = input.slaMinutes ?? 30;
 
     return {
@@ -42,11 +56,15 @@ export class HandoffPackageAssembler {
 
   private buildSummary(
     messages: Array<{ role: string; text: string }>,
+    agentSummary?: string,
+    customerSentiment?: string,
   ): HandoffConversationSummary {
     const userMessages = messages.filter((m) => m.role === "user");
     const keyTopics = this.extractKeyTopics(userMessages.map((m) => m.text));
     const objectionHistory = this.extractObjections(userMessages.map((m) => m.text));
-    const sentiment = this.estimateSentiment(userMessages.map((m) => m.text));
+    // Prefer the agent's direct read of sentiment; fall back to the keyword
+    // estimate (which sees an empty transcript on a summary-only escalation).
+    const sentiment = customerSentiment ?? this.estimateSentiment(userMessages.map((m) => m.text));
 
     return {
       turnCount: userMessages.length,
@@ -54,6 +72,7 @@ export class HandoffPackageAssembler {
       objectionHistory,
       sentiment,
       suggestedOpening: this.suggestOpening(keyTopics, sentiment),
+      ...(agentSummary ? { agentSummary } : {}),
     };
   }
 

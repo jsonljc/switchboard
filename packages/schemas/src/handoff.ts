@@ -47,6 +47,15 @@ export const HandoffConversationSummarySchema = z.object({
   objectionHistory: z.array(z.string()),
   sentiment: z.string(),
   suggestedOpening: z.string().optional(),
+  /**
+   * Free-text summary supplied by the escalating agent (why the handoff is
+   * needed and what the customer wants). Distinct from the keyword-derived
+   * `keyTopics`/`suggestedOpening`: it is the agent's own read of the live
+   * conversation, which the deterministic message-parser cannot reconstruct
+   * when the tool escalates from a summary alone. Optional + additive over a
+   * Json column, so legacy rows omit it (no migration).
+   */
+  agentSummary: z.string().optional(),
 });
 export type HandoffConversationSummary = z.infer<typeof HandoffConversationSummarySchema>;
 

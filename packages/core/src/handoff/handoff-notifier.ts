@@ -49,6 +49,13 @@ export class HandoffNotifier {
       lines.push(`Interest: ${pkg.leadSnapshot.serviceInterest}`);
     }
 
+    // P2-9 — the escalating agent's own summary of why this handoff is needed.
+    // Rendered prominently (before the keyword-derived turn/topic lines) so the
+    // operator opens with real context instead of a context-free package.
+    if (pkg.conversationSummary.agentSummary) {
+      lines.push(`Summary: ${pkg.conversationSummary.agentSummary}`);
+    }
+
     lines.push(`Turns: ${pkg.conversationSummary.turnCount}`);
     lines.push(`Sentiment: ${pkg.conversationSummary.sentiment}`);
 

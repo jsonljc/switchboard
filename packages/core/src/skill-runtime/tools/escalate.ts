@@ -81,6 +81,10 @@ export function createEscalateToolFactory(deps: EscalateToolBaseDeps): EscalateT
             leadSnapshot: { channel: "whatsapp" },
             qualificationSnapshot: { signalsCaptured: {}, qualificationStage: "unknown" },
             messages: [],
+            // P2-9 — the tool has no transcript here, so carry the model's own
+            // summary + sentiment into the handoff instead of an empty package.
+            agentSummary: input.summary,
+            customerSentiment: input.customerSentiment,
           });
 
           await deps.handoffStore.save(pkg);

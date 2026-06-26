@@ -91,6 +91,26 @@ describe("escalate tool factory", () => {
     );
   });
 
+  // P2-9: the LLM supplies a summary (why escalation is needed + what the customer
+  // wants) and a customerSentiment. They were dropped (assemble was called with
+  // empty messages and no summary), so the operator got a context-free package.
+  // They must be threaded into the handoff.
+  it("threads the LLM-supplied summary + sentiment into the handoff (P2-9)", async () => {
+    const factory = createEscalateToolFactory(baseDeps);
+    const tool = factory(TEST_CONTEXT);
+    await tool.operations["handoff.create"]!.execute({
+      reason: "negative_sentiment",
+      summary: "Lead is upset about a delayed reply and wants a callback today",
+      customerSentiment: "angry",
+    });
+    expect(baseDeps.assembler.assemble).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentSummary: "Lead is upset about a delayed reply and wants a callback today",
+        customerSentiment: "angry",
+      }),
+    );
+  });
+
   it("uses different IDs for different request contexts", async () => {
     const factory = createEscalateToolFactory(baseDeps);
 
