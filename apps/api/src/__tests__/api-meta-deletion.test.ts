@@ -27,8 +27,11 @@ interface MockPrisma {
     deleteMany: ReturnType<typeof vi.fn>;
   };
   conversationThread: { deleteMany: ReturnType<typeof vi.fn> };
-  opportunity: { deleteMany: ReturnType<typeof vi.fn> };
-  lifecycleRevenueEvent: { deleteMany: ReturnType<typeof vi.fn> };
+  opportunity: { deleteMany: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
+  lifecycleRevenueEvent: {
+    deleteMany: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+  };
   ownerTask: { deleteMany: ReturnType<typeof vi.fn> };
   contactLifecycle: { deleteMany: ReturnType<typeof vi.fn> };
   conversationMessage: { deleteMany: ReturnType<typeof vi.fn> };
@@ -40,6 +43,8 @@ interface MockPrisma {
   booking: { deleteMany: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
   conversionRecord: { deleteMany: ReturnType<typeof vi.fn> };
   pendingLeadRetry: { deleteMany: ReturnType<typeof vi.fn> };
+  receipt: { deleteMany: ReturnType<typeof vi.fn> };
+  receiptedBooking: { deleteMany: ReturnType<typeof vi.fn> };
   workTrace: { deleteMany: ReturnType<typeof vi.fn> };
   conversationLifecycleSnapshot: { deleteMany: ReturnType<typeof vi.fn> };
   conversationLifecycleTransition: { deleteMany: ReturnType<typeof vi.fn> };
@@ -67,8 +72,14 @@ function makePrisma(): MockPrisma {
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     conversationThread: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    opportunity: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    lifecycleRevenueEvent: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    opportunity: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    lifecycleRevenueEvent: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     ownerTask: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     contactLifecycle: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     conversationMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -83,6 +94,8 @@ function makePrisma(): MockPrisma {
     },
     conversionRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     pendingLeadRetry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    receipt: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    receiptedBooking: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     workTrace: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     conversationLifecycleSnapshot: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     conversationLifecycleTransition: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },

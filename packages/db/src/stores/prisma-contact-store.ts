@@ -176,6 +176,32 @@ export class PrismaContactStore implements ContactStore {
     const phoneE164 = existing.phoneE164;
 
     const cascade = async (tx: PrismaDbClient): Promise<void> => {
+      // PII-bearing children keyed by a PARENT id (booking/opportunity/revenue), not
+      // by contactId. Collect those ids BEFORE the parents are deleted below, so the
+      // receipts/proofs (transactional PII: evidence, externalRef, exceptions, amounts)
+      // are purged like the sibling revenue tables (conversionRecord/lifecycleRevenueEvent).
+      const bookingIds = (
+        await tx.booking.findMany({ where: { contactId: id }, select: { id: true } })
+      ).map((b) => b.id);
+      const opportunityIds = (
+        await tx.opportunity.findMany({ where: { contactId: id }, select: { id: true } })
+      ).map((o) => o.id);
+      const revenueEventIds = (
+        await tx.lifecycleRevenueEvent.findMany({ where: { contactId: id }, select: { id: true } })
+      ).map((r) => r.id);
+      const receiptOr: Array<Record<string, unknown>> = [];
+      if (bookingIds.length > 0) receiptOr.push({ bookingId: { in: bookingIds } });
+      if (opportunityIds.length > 0) receiptOr.push({ opportunityId: { in: opportunityIds } });
+      if (revenueEventIds.length > 0) receiptOr.push({ revenueEventId: { in: revenueEventIds } });
+      if (receiptOr.length > 0) {
+        await tx.receipt.deleteMany({ where: { organizationId: orgId, OR: receiptOr } });
+      }
+      if (bookingIds.length > 0) {
+        await tx.receiptedBooking.deleteMany({
+          where: { bookingId: { in: bookingIds }, organizationId: orgId },
+        });
+      }
+
       // contactId-keyed children. None of these FKs cascade at the DB level,
       // so we delete every dependent row manually. These cascade children FK to
       // the parent contact, which is org-guarded at the top of delete() and by

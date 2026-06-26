@@ -45,8 +45,14 @@ function mockPrismaWithCascade() {
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     conversationThread: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    opportunity: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    lifecycleRevenueEvent: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    opportunity: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    lifecycleRevenueEvent: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     ownerTask: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     contactLifecycle: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     conversationMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -55,9 +61,14 @@ function mockPrismaWithCascade() {
     escalationRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     handoff: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     interactionSummary: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    booking: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    booking: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     conversionRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     pendingLeadRetry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    receipt: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    receiptedBooking: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     workTrace: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     conversationLifecycleSnapshot: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     conversationLifecycleTransition: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -193,6 +204,43 @@ describe("PrismaContactStore.delete — PDPA erasure (F5)", () => {
         where: { contactId: "contact-1", organizationId: "org-1" },
       });
     }
+  });
+
+  it("purges Receipt + ReceiptedBooking keyed by the contact's booking/opportunity/revenue ids", async () => {
+    const px = mockPrismaWithCascade();
+    px.booking.findMany.mockResolvedValue([{ id: "bk-1" }]);
+    px.opportunity.findMany.mockResolvedValue([{ id: "op-1" }]);
+    px.lifecycleRevenueEvent.findMany.mockResolvedValue([{ id: "rev-1" }]);
+    const store = new PrismaContactStore(px as never);
+
+    await store.delete("org-1", "contact-1");
+
+    // Receipt/ReceiptedBooking are keyed by the parent ids (not contactId) and carry
+    // transactional PII; they are purged like the sibling revenue tables.
+    expect(px.receipt.deleteMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        OR: [
+          { bookingId: { in: ["bk-1"] } },
+          { opportunityId: { in: ["op-1"] } },
+          { revenueEventId: { in: ["rev-1"] } },
+        ],
+      },
+    });
+    expect(px.receiptedBooking.deleteMany).toHaveBeenCalledWith({
+      where: { bookingId: { in: ["bk-1"] }, organizationId: "org-1" },
+    });
+  });
+
+  it("skips Receipt/ReceiptedBooking purge when the contact has no bookings/opportunities/revenue", async () => {
+    const px = mockPrismaWithCascade();
+    // findMany defaults to [] for booking/opportunity/lifecycleRevenueEvent
+    const store = new PrismaContactStore(px as never);
+
+    await store.delete("org-1", "contact-1");
+
+    expect(px.receipt.deleteMany).not.toHaveBeenCalled();
+    expect(px.receiptedBooking.deleteMany).not.toHaveBeenCalled();
   });
 
   it("matches phone-keyed children across +E.164 and digits-only shapes", async () => {

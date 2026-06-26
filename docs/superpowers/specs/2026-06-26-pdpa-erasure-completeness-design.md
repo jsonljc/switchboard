@@ -91,6 +91,7 @@ value of the existing free-`String` `DataDeletionRequest.status` (no DB enum, no
 ### Change A (commit 1, `packages/db`) — complete + shape-robust cascade
 
 In `PrismaContactStore.delete()`:
+
 - Add `deleteMany` for the 5 missing contactId tables (each `{ contactId: id, organizationId: orgId }`,
   each annotated `// route-governance: store-mutation-global`, mirroring the existing siblings).
 - Add `whatsAppTestSend.deleteMany` to the phone-keyed branch.
@@ -111,7 +112,7 @@ In `meta-deletion.ts`, build the find clause as a union of the canonical column 
 shapes:
 
 ```ts
-const normalizedE164 = normalizeToE164(userId);           // "6591234567" -> "+6591234567"
+const normalizedE164 = normalizeToE164(userId); // "6591234567" -> "+6591234567"
 const where = normalizedE164
   ? { OR: [{ phoneE164: normalizedE164 }, { phone: { in: candidateValues } }] }
   : { phone: { in: candidateValues } };
@@ -128,8 +129,8 @@ the FIND stays cross-org by design (Meta deletion is global per user; the cascad
 ```ts
 export type CalendarErasureOutcome = "completed" | "partial" | "failed" | "skipped";
 export interface EraseContactResult {
-  contactErased: true;                 // resolves only if the DB cascade succeeded (else it throws)
-  calendar: CalendarErasureOutcome;    // skipped = nothing to cancel; failed = events existed, none cancelled
+  contactErased: true; // resolves only if the DB cascade succeeded (else it throws)
+  calendar: CalendarErasureOutcome; // skipped = nothing to cancel; failed = events existed, none cancelled
   calendarEventsFound: number;
   calendarEventsCancelled: number;
 }
@@ -180,3 +181,29 @@ populate for both `completed` and `partial` (DB done), empty/null only for `fail
   the 3-registry burden and scope creep).
 - Compliance-sensitive surface → SURFACE the PR for human review; do NOT self-merge; gate on real
   `gh pr checks`.
+
+## Code-review addendum (2026-06-26)
+
+Three adversarial/compliance review agents ran against the committed branch. Acted-on findings:
+
+- **Added `Receipt` + `ReceiptedBooking` to the cascade.** Both are keyed by the contact's
+  `bookingId` / `opportunityId` / `revenueEventId` (not `contactId`) and carry transactional PII
+  (`evidence`, `externalRef`, `exceptions`, amounts). The cascade already deletes the sibling
+  revenue tables (`conversionRecord`, `lifecycleRevenueEvent`), so leaving these was inconsistent.
+  `delete()` now collects the contact's booking/opportunity/revenue ids first, then purges Receipt
+  (by any of the three) and ReceiptedBooking (by bookingId), org-scoped.
+
+Considered and **not** acted on (with reason):
+
+- **`ConversationState` for non-WhatsApp channels.** Flagged as a possible escape (its `principalId`
+  is a phone for WhatsApp but a channel id for Telegram/Slack). Verified false in practice:
+  `resolveContactIdentity` only creates a `Contact` for `channel === "whatsapp"`, so every erasable
+  patient contact is phone-keyed and IS matched by `buildPhoneMatchCandidates`. Its `threadId` is the
+  gateway `sessionId` (`gateway-bridge.ts`), NOT `ConversationThread.id`, so a thread-id match would
+  be a no-op — deliberately avoided rather than ship false confidence.
+- **`DeploymentMemoryEvidence`.** Carries only opaque ids (`bookingId`/`conversionRecordId`/
+  `workTraceId`) + an attribution tier + timestamp — no PII content. Once the booking is deleted the
+  ids are dangling uuids (not personal data). Deleting it would corrupt org-level ML aggregates with
+  no PDPA basis.
+- **`failureReason` stored unmasked / multi-contact "failed" labelling.** Both pre-existing and
+  deliberately scoped out by audit F10 (DB columns are audit storage, not logs); not regressed here.
