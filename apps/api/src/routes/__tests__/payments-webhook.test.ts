@@ -172,11 +172,11 @@ function makeSubmitSpy() {
     const key = String(req["idempotencyKey"]);
     const existing = seen.get(key);
     if (existing) {
-      return { ok: true as const, result: {}, workUnit: existing };
+      return { ok: true as const, result: { outcome: "completed" as const }, workUnit: existing };
     }
     const wu = { id: `wu-${seen.size + 1}`, traceId: `tr-${seen.size + 1}` };
     seen.set(key, wu);
-    return { ok: true as const, result: {}, workUnit: wu };
+    return { ok: true as const, result: { outcome: "completed" as const }, workUnit: wu };
   });
   return { submit, calls };
 }
@@ -541,6 +541,90 @@ describe("Payments webhook ingress-failure handling (A22)", () => {
       bookingFindFirst,
     });
     const body = piSucceeded({ eventId: "evt_up", account: "acct_up", paymentIntentId: "pi_up" });
+    const res = await post(app, body, sign(body, SECRET));
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+
+  // A successful envelope (ok:true) whose handler did NOT complete — outcome "failed"
+  // (a domain return, or EXECUTION_EXCEPTION when the receipt/revenue write throws on a
+  // transient DB error) — must 500 so Stripe redelivers. Acking 200 here permanently
+  // loses the receipt/revenue/conversion for money that already moved.
+  it("fails closed with 500 when ingress returns ok:true but outcome is 'failed'", async () => {
+    const retrievePayment = vi.fn(async (id: string) => paidCharge(id));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c1", opportunityId: "opp1" }));
+    const submit = vi.fn(async () => ({
+      ok: true as const,
+      result: { outcome: "failed" as const },
+      workUnit: { id: "wu-failed", traceId: "tr-failed" },
+    }));
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-failed",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const body = piSucceeded({
+      eventId: "evt_failed",
+      account: "acct_failed",
+      paymentIntentId: "pi_failed",
+    });
+    const res = await post(app, body, sign(body, SECRET));
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+
+  // A parked/deferred outcome (approvalRequired, or outcome "queued") is likewise NOT a
+  // durable record — fail closed so the settled deposit is redelivered, not silently 200'd.
+  it("fails closed with 500 when ingress parks/queues instead of completing", async () => {
+    const retrievePayment = vi.fn(async (id: string) => paidCharge(id));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c1", opportunityId: "opp1" }));
+    const submit = vi.fn(async () => ({
+      ok: true as const,
+      result: { outcome: "queued" as const },
+      workUnit: { id: "wu-queued", traceId: "tr-queued" },
+    }));
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-queued",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const body = piSucceeded({
+      eventId: "evt_queued",
+      account: "acct_queued",
+      paymentIntentId: "pi_queued",
+    });
+    const res = await post(app, body, sign(body, SECRET));
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+
+  // Defensive: a settled deposit that ingress parks for approval (approvalRequired) is
+  // not durably recorded either — fail closed so Stripe redelivers.
+  it("fails closed with 500 when ingress parks the deposit for approval", async () => {
+    const retrievePayment = vi.fn(async (id: string) => paidCharge(id));
+    const bookingFindFirst = vi.fn(async () => ({ contactId: "c1", opportunityId: "opp1" }));
+    const submit = vi.fn(async () => ({
+      ok: true as const,
+      result: { outcome: "pending_approval" as const },
+      workUnit: { id: "wu-parked", traceId: "tr-parked" },
+      approvalRequired: true as const,
+    }));
+    const app = await buildResolvingApp({
+      connectionOrgId: "org-parked",
+      retrievePayment,
+      submit,
+      bookingFindFirst,
+    });
+    const body = piSucceeded({
+      eventId: "evt_parked",
+      account: "acct_parked",
+      paymentIntentId: "pi_parked",
+    });
     const res = await post(app, body, sign(body, SECRET));
     expect(submit).toHaveBeenCalledTimes(1);
     expect(res.statusCode).toBe(500);
