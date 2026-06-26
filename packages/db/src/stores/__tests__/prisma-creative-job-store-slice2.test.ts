@@ -201,13 +201,19 @@ describe("PrismaCreativeJobStore (slice-2 attribution + taste)", () => {
   });
 
   describe("listRevenueProvenCandidates", () => {
-    it("filters published-and-not-yet-promoted (the NULL watermark bounds PENDING work in SQL), oldest first", async () => {
+    it("filters published-and-not-yet-promoted FOR THE ORG (per-org cap, P2-11), oldest first", async () => {
       prisma.creativeJob.findMany.mockResolvedValue([]);
 
-      await store.listRevenueProvenCandidates(500);
+      await store.listRevenueProvenCandidates("org_x", 500);
 
       expect(prisma.creativeJob.findMany).toHaveBeenCalledWith({
-        where: { metaCampaignId: { not: null }, revenueProvenPromotedAt: null },
+        // organizationId in the WHERE makes the fetch cap PER-ORG, so one
+        // high-volume org's never-qualifying backlog cannot starve the fleet.
+        where: {
+          organizationId: "org_x",
+          metaCampaignId: { not: null },
+          revenueProvenPromotedAt: null,
+        },
         select: {
           id: true,
           organizationId: true,
@@ -221,6 +227,26 @@ describe("PrismaCreativeJobStore (slice-2 attribution + taste)", () => {
         },
         orderBy: { createdAt: "asc" },
         take: 500,
+      });
+    });
+  });
+
+  describe("listRevenueProvenCandidateOrgIds", () => {
+    it("returns the DISTINCT orgs with pending candidates, capped, for per-org fair dispatch", async () => {
+      prisma.creativeJob.findMany.mockResolvedValue([
+        { organizationId: "org_a" },
+        { organizationId: "org_b" },
+      ]);
+
+      const orgIds = await store.listRevenueProvenCandidateOrgIds(1000);
+
+      expect(orgIds).toEqual(["org_a", "org_b"]);
+      expect(prisma.creativeJob.findMany).toHaveBeenCalledWith({
+        where: { metaCampaignId: { not: null }, revenueProvenPromotedAt: null },
+        select: { organizationId: true },
+        distinct: ["organizationId"],
+        orderBy: { organizationId: "asc" },
+        take: 1000,
       });
     });
   });

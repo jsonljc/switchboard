@@ -9,6 +9,8 @@ import {
   revenueProvenCanonicalKey,
   revenueProvenBucketContent,
   executeRevenueProvenPromotion,
+  REVENUE_PROVEN_PER_ORG_CAP,
+  REVENUE_PROVEN_MAX_ORGS,
   type RevenueProvenPromotionDeps,
 } from "./revenue-proven-promotion.js";
 
@@ -247,6 +249,34 @@ function candidate(over: Partial<RevenueProvenCandidate> & { id: string }): Reve
   };
 }
 
+/**
+ * A FAIR per-org fake jobStore over a flat candidate list: it enumerates the
+ * distinct pending orgs and serves a bounded slice PER ORG, faithfully modelling
+ * the post-fix store. `setRevenueProvenPromotedAt` pushes the watermark, and the
+ * pending view excludes watermarked rows, so a second run never re-fetches a
+ * promoted candidate (idempotency). Mirrors the real fetch the promoter relies on.
+ * Candidate ARRAY ORDER stands in for the store's `orderBy: createdAt asc`
+ * (RevenueProvenCandidate carries no createdAt): list earliest-first to model it.
+ */
+function fairJobStore(
+  candidates: RevenueProvenCandidate[],
+  opts: { watermarked?: string[] } = {},
+): RevenueProvenPromotionDeps["jobStore"] {
+  const watermarked = opts.watermarked ?? [];
+  const pending = () => candidates.filter((c) => !watermarked.includes(c.id));
+  return {
+    listRevenueProvenCandidateOrgIds: async (maxOrgs: number) =>
+      [...new Set(pending().map((c) => c.organizationId))].sort().slice(0, maxOrgs),
+    listRevenueProvenCandidates: async (organizationId: string, limit: number) =>
+      pending()
+        .filter((c) => c.organizationId === organizationId)
+        .slice(0, limit),
+    setRevenueProvenPromotedAt: async (_o: string, id: string) => {
+      watermarked.push(id);
+    },
+  };
+}
+
 function makeDeps(
   jobStore: RevenueProvenPromotionDeps["jobStore"],
   memoryStore: RevenueProvenPromotionDeps["memoryStore"],
@@ -264,15 +294,7 @@ describe("executeRevenueProvenPromotion", () => {
   it("promotes a qualifying creative onto its deployment and watermarks it", async () => {
     const mem = new InMemoryMemoryStore();
     const watermarked: string[] = [];
-    const deps = makeDeps(
-      {
-        listRevenueProvenCandidates: async () => [candidate({ id: "j1" })],
-        setRevenueProvenPromotedAt: async (_o: string, id: string) => {
-          watermarked.push(id);
-        },
-      },
-      mem,
-    );
+    const deps = makeDeps(fairJobStore([candidate({ id: "j1" })], { watermarked }), mem);
     const summary = await executeRevenueProvenPromotion(deps);
     expect(summary.promoted).toBe(1);
     expect(mem.rows).toHaveLength(1);
@@ -284,13 +306,7 @@ describe("executeRevenueProvenPromotion", () => {
 
   it("increments the same bucket for a second distinct qualifying creative", async () => {
     const mem = new InMemoryMemoryStore();
-    const deps = makeDeps(
-      {
-        listRevenueProvenCandidates: async () => [candidate({ id: "j1" }), candidate({ id: "j2" })],
-        setRevenueProvenPromotedAt: async () => {},
-      },
-      mem,
-    );
+    const deps = makeDeps(fairJobStore([candidate({ id: "j1" }), candidate({ id: "j2" })]), mem);
     await executeRevenueProvenPromotion(deps);
     expect(mem.rows).toHaveLength(1);
     expect(mem.rows[0]!.sourceCount).toBe(2);
@@ -300,17 +316,15 @@ describe("executeRevenueProvenPromotion", () => {
     const mem = new InMemoryMemoryStore();
     const watermarked: string[] = [];
     const deps = makeDeps(
-      {
-        listRevenueProvenCandidates: async () => [
+      fairJobStore(
+        [
           candidate({
             id: "j1",
             pastPerformance: measured({ spend: 40, valueCents: 30000, count: 3 }),
           }),
         ],
-        setRevenueProvenPromotedAt: async (_o: string, id: string) => {
-          watermarked.push(id);
-        },
-      },
+        { watermarked },
+      ),
       mem,
     );
     const summary = await executeRevenueProvenPromotion(deps);
@@ -323,12 +337,7 @@ describe("executeRevenueProvenPromotion", () => {
   it("skips a not-yet-measured creative without counting it as failed", async () => {
     const mem = new InMemoryMemoryStore();
     const deps = makeDeps(
-      {
-        listRevenueProvenCandidates: async () => [
-          candidate({ id: "j1", pastPerformance: { kind: "garbage" } }),
-        ],
-        setRevenueProvenPromotedAt: async () => {},
-      },
+      fairJobStore([candidate({ id: "j1", pastPerformance: { kind: "garbage" } })]),
       mem,
     );
     const summary = await executeRevenueProvenPromotion(deps);
@@ -340,13 +349,7 @@ describe("executeRevenueProvenPromotion", () => {
   it("re-finds and increments on a P2002 race instead of throwing", async () => {
     const mem = new InMemoryMemoryStore();
     mem.throwP2002Once = true; // a concurrent writer creates the bucket between our find and create
-    const deps = makeDeps(
-      {
-        listRevenueProvenCandidates: async () => [candidate({ id: "j1" })],
-        setRevenueProvenPromotedAt: async () => {},
-      },
-      mem,
-    );
+    const deps = makeDeps(fairJobStore([candidate({ id: "j1" })]), mem);
     const summary = await executeRevenueProvenPromotion(deps);
     expect(summary.promoted).toBe(1);
     expect(mem.rows).toHaveLength(1);
@@ -358,8 +361,8 @@ describe("executeRevenueProvenPromotion", () => {
     mem.throwGenericOnce = true; // first create throws a non-P2002 error
     const watermarked: string[] = [];
     const deps = makeDeps(
-      {
-        listRevenueProvenCandidates: async () => [
+      fairJobStore(
+        [
           candidate({ id: "bad" }),
           candidate({
             id: "ok",
@@ -379,10 +382,8 @@ describe("executeRevenueProvenPromotion", () => {
             },
           }),
         ],
-        setRevenueProvenPromotedAt: async (_o: string, id: string) => {
-          watermarked.push(id);
-        },
-      },
+        { watermarked },
+      ),
       mem,
     );
     const summary = await executeRevenueProvenPromotion(deps);
@@ -406,13 +407,7 @@ describe("executeRevenueProvenPromotion", () => {
         confidence: 0.1, // weaker than the 0.5 newcomer
       });
     }
-    const deps = makeDeps(
-      {
-        listRevenueProvenCandidates: async () => [candidate({ id: "j1" })],
-        setRevenueProvenPromotedAt: async () => {},
-      },
-      mem,
-    );
+    const deps = makeDeps(fairJobStore([candidate({ id: "j1" })]), mem);
     const summary = await executeRevenueProvenPromotion(deps);
     expect(summary.evictions).toBe(1);
     expect(summary.bucketsCreated).toBe(1);
@@ -435,15 +430,7 @@ describe("executeRevenueProvenPromotion", () => {
       });
     }
     const watermarked: string[] = [];
-    const deps = makeDeps(
-      {
-        listRevenueProvenCandidates: async () => [candidate({ id: "j1" })],
-        setRevenueProvenPromotedAt: async (_o: string, id: string) => {
-          watermarked.push(id);
-        },
-      },
-      mem,
-    );
+    const deps = makeDeps(fairJobStore([candidate({ id: "j1" })], { watermarked }), mem);
     const summary = await executeRevenueProvenPromotion(deps);
     expect(summary.drops).toBe(1);
     expect(mem.rows.some((r) => r.category === "revenue_proven")).toBe(false);
@@ -453,18 +440,97 @@ describe("executeRevenueProvenPromotion", () => {
   it("scopes writes per org (cross-org candidate read, org-scoped writes)", async () => {
     const mem = new InMemoryMemoryStore();
     const deps = makeDeps(
-      {
-        listRevenueProvenCandidates: async () => [
-          candidate({ id: "j1", organizationId: "orgA", deploymentId: "depA" }),
-          candidate({ id: "j2", organizationId: "orgB", deploymentId: "depB" }),
-        ],
-        setRevenueProvenPromotedAt: async () => {},
-      },
+      fairJobStore([
+        candidate({ id: "j1", organizationId: "orgA", deploymentId: "depA" }),
+        candidate({ id: "j2", organizationId: "orgB", deploymentId: "depB" }),
+      ]),
       mem,
     );
     await executeRevenueProvenPromotion(deps);
     expect(mem.rows).toHaveLength(2);
     expect(mem.rows.find((r) => r.organizationId === "orgA")!.deploymentId).toBe("depA");
     expect(mem.rows.find((r) => r.organizationId === "orgB")!.deploymentId).toBe("depB");
+  });
+
+  // ── P2-11 per-org promotion fairness ──
+
+  it("per-org fair-share: a high-volume org's over-cap never-qualifying backlog does NOT starve a low-volume org's qualifying candidate (P2-11)", async () => {
+    const mem = new InMemoryMemoryStore();
+    const watermarked: string[] = [];
+    // orgA: more below-floor (never-watermarked) pending jobs than the per-org cap.
+    // A global cap would be entirely consumed by this backlog every run.
+    const belowFloor = measured({ spend: 40, valueCents: 30000, count: 3 });
+    const orgABacklog = Array.from({ length: REVENUE_PROVEN_PER_ORG_CAP + 5 }, (_, i) =>
+      candidate({
+        id: `A${i}`,
+        organizationId: "orgA",
+        deploymentId: "depA",
+        pastPerformance: belowFloor,
+      }),
+    );
+    // orgB: a single qualifying candidate that a global cap would never reach.
+    const orgBWinner = candidate({ id: "B1", organizationId: "orgB", deploymentId: "depB" });
+    const deps = makeDeps(fairJobStore([...orgABacklog, orgBWinner], { watermarked }), mem);
+
+    const summary = await executeRevenueProvenPromotion(deps);
+
+    // orgB is reached and promoted despite orgA's cap-exceeding backlog.
+    expect(summary.promoted).toBe(1);
+    expect(watermarked).toEqual(["B1"]);
+    expect(mem.rows).toHaveLength(1);
+    expect(mem.rows[0]!.organizationId).toBe("orgB");
+    // Both orgs visited; orgA saturated its per-org cap (tail deferred, NOT starving orgB).
+    expect(summary.orgsProcessed).toBe(2);
+    expect(summary.orgsSaturated).toBe(1);
+    // orgA's below-floor rows are left un-watermarked for re-evaluation (unchanged).
+    expect(summary.belowFloor).toBe(REVENUE_PROVEN_PER_ORG_CAP);
+  });
+
+  it("warns on per-org cap saturation (the missing telemetry, log-only)", async () => {
+    const mem = new InMemoryMemoryStore();
+    const belowFloor = measured({ spend: 40, valueCents: 30000, count: 3 });
+    const backlog = Array.from({ length: REVENUE_PROVEN_PER_ORG_CAP }, (_, i) =>
+      candidate({ id: `j${i}`, pastPerformance: belowFloor }),
+    );
+    const warnings: unknown[] = [];
+    const deps = makeDeps(fairJobStore(backlog), mem);
+    deps.logger.warn = (...args: unknown[]) => warnings.push(args[0]);
+
+    const summary = await executeRevenueProvenPromotion(deps);
+
+    expect(summary.orgsSaturated).toBe(1);
+    expect(
+      warnings.some(
+        (w) =>
+          typeof w === "object" &&
+          w !== null &&
+          (w as { msg?: string }).msg ===
+            "revenue-proven-promotion: per-org cap saturated; org tail deferred to next run",
+      ),
+    ).toBe(true);
+  });
+
+  it("watermark idempotency holds under per-org fetch: a promoted candidate is never double-promoted across runs", async () => {
+    const mem = new InMemoryMemoryStore();
+    const watermarked: string[] = [];
+    const store = fairJobStore([candidate({ id: "j1" })], { watermarked });
+    const deps = makeDeps(store, mem);
+
+    const run1 = await executeRevenueProvenPromotion(deps);
+    expect(run1.promoted).toBe(1);
+    expect(watermarked).toEqual(["j1"]);
+
+    // Second run: the watermarked candidate has dropped out of the pending set,
+    // so it is neither enumerated as a pending org nor re-fetched -> never re-promoted.
+    const run2 = await executeRevenueProvenPromotion(deps);
+    expect(run2.promoted).toBe(0);
+    expect(run2.orgsProcessed).toBe(0);
+    expect(watermarked).toEqual(["j1"]); // still counted exactly once
+    expect(mem.rows[0]!.sourceCount).toBe(1); // no second increment
+  });
+
+  it("pins the fairness caps (per-org budget + org guard)", () => {
+    expect(REVENUE_PROVEN_PER_ORG_CAP).toBe(500);
+    expect(REVENUE_PROVEN_MAX_ORGS).toBe(1000);
   });
 });

@@ -233,6 +233,7 @@ describe("DeterministicSafetyGateHook.afterSkill", () => {
     expect(spies.handoffStore.save).toHaveBeenCalledTimes(1);
     expect(spies.conversationStore.setConversationStatus).toHaveBeenCalledWith(
       "sess-1",
+      "org-1",
       "human_override",
     );
   });

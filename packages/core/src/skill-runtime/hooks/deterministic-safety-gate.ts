@@ -36,6 +36,7 @@ export type { ConversationStatusUpsertContext };
 export interface ConversationStatusSetter {
   setConversationStatus(
     sessionId: string,
+    organizationId: string,
     status: string,
     upsertContext?: ConversationStatusUpsertContext,
   ): Promise<void>;
@@ -183,7 +184,7 @@ export class DeterministicSafetyGateHook implements SkillHook {
     });
 
     try {
-      await conversationStore.setConversationStatus(sessionId, "human_override");
+      await conversationStore.setConversationStatus(sessionId, orgId, "human_override");
     } catch (err) {
       console.error(
         `[DeterministicSafetyGateHook] setConversationStatus failed (block still applied):`,
@@ -281,7 +282,7 @@ export class DeterministicSafetyGateHook implements SkillHook {
     });
 
     try {
-      await conversationStore.setConversationStatus(sessionId, "human_override");
+      await conversationStore.setConversationStatus(sessionId, orgId, "human_override");
     } catch (err) {
       console.error(
         `[DeterministicSafetyGateHook] setConversationStatus failed (block still applied):`,

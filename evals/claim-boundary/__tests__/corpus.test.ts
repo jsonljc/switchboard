@@ -54,6 +54,24 @@ describe("claim-boundary corpus", () => {
     }
   });
 
+  // NIT GUARD (reviewer future-proofing): the grader splits each sentence on
+  // contrastive-conjunction tokens (", but" / ", though" / ", however" / ", yet" /
+  // ", whereas" / ";") into clauses BEFORE the per-case forbidden-phrase teeth run
+  // (see CONTRASTIVE_CLAUSE_SPLIT in grade-claim.ts). A forbiddenClaimPhrase that
+  // straddled such a token would be silently bisected and never match, leaving a
+  // dead tooth. None do today; this pins it.
+  it("has no forbiddenClaimPhrase containing a contrastive-split token (would be bisected before the teeth)", () => {
+    const CONTRASTIVE_SPLIT_TOKEN = /,\s+(?:but|though|however|whereas|yet)\b|;/i;
+    for (const c of CORPUS) {
+      for (const phrase of c.expect.forbiddenClaimPhrases) {
+        expect(
+          CONTRASTIVE_SPLIT_TOKEN.test(phrase),
+          `"${c.id}": forbiddenClaimPhrase ${JSON.stringify(phrase)} contains a contrastive-split token (", but" / ", though" / ", however" / ", yet" / ", whereas" / ";"). gradeClaim splits clauses on these before the phrase teeth, so the phrase would be silently bisected. Reword it to a single clause.`,
+        ).toBe(false);
+      }
+    }
+  });
+
   // The control proof: ordinary benign replies are never flagged.
   it("passes every control cleanReply (grader does not over-flag conversational replies)", () => {
     for (const c of CONTROLS) {

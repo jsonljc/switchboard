@@ -25,6 +25,18 @@ export class PrismaConversationStore implements ConversationStore {
   }
 
   async save(state: ConversationState): Promise<void> {
+    // Tenant isolation (audit #2): this store is org-scoped by contract (TI-5/TI-6)
+    // and the write keys on the per-org compound unique (organizationId, threadId),
+    // which cannot take a null org. Reject a null org rather than emit an unkeyable
+    // write (Prisma rejects null in a compound-unique WHERE) or a duplicate inert
+    // row. The `upsert as Function` cast below (needed for the pre-migration
+    // lastInboundAt column) would otherwise hide this at compile time.
+    if (state.organizationId === null) {
+      throw new Error(
+        "PrismaConversationStore.save requires a non-null organizationId (tenant isolation)",
+      );
+    }
+
     // Use raw upsert to handle lastInboundAt column which may not yet exist
     // in the generated Prisma client (added via migration).
     const data = {
@@ -50,8 +62,10 @@ export class PrismaConversationStore implements ConversationStore {
     // This prevents lifecycle code (e.g. status→"active" on next message) from
     // silently clobbering a safety gate escalation. An explicit save with
     // status="human_override" is always allowed (the guard passes through).
-    const existing = await this.prisma.conversationState.findUnique({
-      where: { threadId: state.threadId },
+    // Org-scoped (audit #2): threadId is unique PER ORG, so the sticky-override
+    // read must match this tenant's row — never another org's that shares the phone.
+    const existing = await this.prisma.conversationState.findFirst({
+      where: { threadId: state.threadId, organizationId: state.organizationId },
       select: { status: true },
     });
     const finalStatus =
@@ -61,7 +75,12 @@ export class PrismaConversationStore implements ConversationStore {
 
     // eslint-disable-next-line @typescript-eslint/ban-types -- Prisma types may not include lastInboundAt pre-migration
     await (this.prisma.conversationState.upsert as Function)({
-      where: { threadId: state.threadId },
+      where: {
+        organizationId_threadId: {
+          organizationId: state.organizationId,
+          threadId: state.threadId,
+        },
+      },
       create: data,
       update: {
         status: finalStatus,

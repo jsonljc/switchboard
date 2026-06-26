@@ -138,6 +138,7 @@ vi.mock("../../services/notifications/email-escalation-notifier.js", () => ({
 }));
 
 vi.mock("@switchboard/db", () => ({
+  setConversationStatusScoped: vi.fn(async () => {}),
   PrismaContactStore: vi.fn().mockImplementation(() => ({})),
   PrismaOpportunityStore: vi.fn().mockImplementation(() => ({
     findActiveByContact: vi.fn(async () => []),

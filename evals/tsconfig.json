@@ -11,6 +11,7 @@
     "riley-recommendation/**/*.ts",
     "trajectory-grading/**/*.ts",
     "adversarial-injection/**/*.ts",
-    "claim-boundary/**/*.ts"
+    "claim-boundary/**/*.ts",
+    "mira-self-brief/**/*.ts"
   ]
 }

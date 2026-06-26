@@ -150,7 +150,11 @@ export class PriceClaimGateHook implements SkillHook {
     const handoffText = this.deps.renderHandoff({ jurisdiction, reasonCode });
 
     try {
-      await this.deps.conversationStore.setConversationStatus(ctx.sessionId, "human_override");
+      await this.deps.conversationStore.setConversationStatus(
+        ctx.sessionId,
+        ctx.orgId,
+        "human_override",
+      );
     } catch (err) {
       console.error(`[price-claim-gate] setConversationStatus failed (block still applied):`, err);
     }

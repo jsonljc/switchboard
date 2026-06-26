@@ -16,8 +16,21 @@ import type { RevenueProvenCandidate } from "@switchboard/db";
 // Local Inngest client (shared switchboard id; fans out to the single serve handler).
 const inngestClient = new Inngest({ id: "switchboard" });
 
-/** FETCH cap on the candidate query (the published-and-pending set is small at pilot scale). */
-export const CANDIDATE_FETCH_CAP = 500;
+/**
+ * PER-ORG fetch cap on the candidate query (P2-11). A single global cap let one
+ * org's never-qualifying (below-floor / not-yet-measured, hence never-watermarked)
+ * backlog fill the whole budget every run, starving lower-volume orgs fleet-wide.
+ * The published-and-pending set per org is small at pilot scale; an org that
+ * exceeds this has its tail re-fetched next run and is flagged via a saturation warn.
+ */
+export const REVENUE_PROVEN_PER_ORG_CAP = 500;
+
+/**
+ * Defensive bound on the number of orgs visited per run (the distinct pending-org
+ * set). Far above pilot org counts; if hit, the sweep warns - a signal to add
+ * round-robin across runs so the alphabetical tail is not deferred indefinitely.
+ */
+export const REVENUE_PROVEN_MAX_ORGS = 1000;
 
 // Promotion floors (spec §3.3). USD major units; reviewed when the first real cohort exists.
 export const REVENUE_PROVEN_MIN_SPEND = 50;
@@ -111,7 +124,11 @@ export interface RevenueProvenMemoryStore {
 export interface RevenueProvenPromotionDeps {
   failure: AsyncFailureContext;
   jobStore: {
-    listRevenueProvenCandidates(limit: number): Promise<RevenueProvenCandidate[]>;
+    listRevenueProvenCandidateOrgIds(maxOrgs: number): Promise<string[]>;
+    listRevenueProvenCandidates(
+      organizationId: string,
+      limit: number,
+    ): Promise<RevenueProvenCandidate[]>;
     setRevenueProvenPromotedAt(organizationId: string, id: string, promotedAt: Date): Promise<void>;
   };
   memoryStore: RevenueProvenMemoryStore;
@@ -124,6 +141,10 @@ export interface RevenueProvenPromotionDeps {
 }
 
 export interface RevenueProvenPromotionSummary {
+  /** Orgs visited this run (each got a fair per-org slice). */
+  orgsProcessed: number;
+  /** Orgs whose pending set hit the per-org cap (tail deferred to next run). */
+  orgsSaturated: number;
   candidates: number;
   promoted: number;
   belowFloor: number;
@@ -236,9 +257,10 @@ async function upsertRevenueProvenBucket(
 export async function executeRevenueProvenPromotion(
   deps: RevenueProvenPromotionDeps,
 ): Promise<RevenueProvenPromotionSummary> {
-  const candidates = await deps.jobStore.listRevenueProvenCandidates(CANDIDATE_FETCH_CAP);
   const summary: RevenueProvenPromotionSummary = {
-    candidates: candidates.length,
+    orgsProcessed: 0,
+    orgsSaturated: 0,
+    candidates: 0,
     promoted: 0,
     belowFloor: 0,
     notMeasured: 0,
@@ -249,62 +271,92 @@ export async function executeRevenueProvenPromotion(
     drops: 0,
   };
 
-  for (const job of candidates) {
-    try {
-      const parsed = CreativePastPerformanceSchema.safeParse(job.pastPerformance);
-      if (!parsed.success || parsed.data.delivery !== "measured") {
-        summary.notMeasured += 1;
-        continue; // attribution not yet measured -> re-evaluate next run (no watermark)
-      }
-      if (!passesRevenueProvenFloors(parsed.data)) {
-        summary.belowFloor += 1;
-        continue; // below floors now; performance may still grow (no watermark)
-      }
+  // Per-org fair-share (P2-11): visit every org with pending candidates and fetch
+  // a bounded PER-ORG slice, so one high-volume org's never-qualifying (and thus
+  // never-watermarked) backlog can never fill a single global cap and starve
+  // lower-volume orgs fleet-wide. The watermark idempotency is unchanged: a
+  // promoted creative drops out of the pending predicate and is never re-counted.
+  const orgIds = await deps.jobStore.listRevenueProvenCandidateOrgIds(REVENUE_PROVEN_MAX_ORGS);
+  if (orgIds.length >= REVENUE_PROVEN_MAX_ORGS) {
+    deps.logger.warn({
+      msg: "revenue-proven-promotion: org cap reached; alphabetical tail deferred to next run",
+      maxOrgs: REVENUE_PROVEN_MAX_ORGS,
+    });
+  }
 
-      const mode = job.mode === "ugc" ? "ugc" : "polished";
-      const descriptor = extractCreativeDescriptor(
-        mode === "ugc" ? job.ugcPhaseOutputs : job.stageOutputs,
-        mode,
-      );
-      const canonicalKey = revenueProvenCanonicalKey(descriptor);
-      const content = revenueProvenBucketContent(
-        descriptor.mode,
-        descriptor.hookType,
-        descriptor.structureId,
-      );
-
-      const outcome = await upsertRevenueProvenBucket(deps, job, canonicalKey, content);
-      if (outcome === "created" || outcome === "created_with_eviction") {
-        summary.bucketsCreated += 1;
-        if (outcome === "created_with_eviction") summary.evictions += 1;
-      } else if (outcome === "incremented") {
-        summary.bucketsIncremented += 1;
-      } else {
-        summary.drops += 1;
-      }
-
-      // Watermark once promoted (any non-error outcome): the creative has been
-      // counted into its bucket; never re-count it on a later daily run.
-      await deps.jobStore.setRevenueProvenPromotedAt(job.organizationId, job.id, deps.now());
-      summary.promoted += 1;
-      // Provenance to the structured log (NOT into content -- the dedup axis): a
-      // revenue_proven memory is traceable to the rows that earned it here.
-      deps.logger.info({
-        msg: "revenue-proven-promotion: promoted",
-        jobId: job.id,
-        deploymentId: job.deploymentId,
-        canonicalKey,
-        campaignId: parsed.data.join.metaCampaignId,
-        videoId: parsed.data.join.metaVideoId,
-        spend: parsed.data.meta.spend,
-        bookedValueCents: parsed.data.booked.valueCents,
-        bookedCount: parsed.data.booked.count,
-        trueRoas: parsed.data.trueRoas,
-        outcome,
+  for (const organizationId of orgIds) {
+    const candidates = await deps.jobStore.listRevenueProvenCandidates(
+      organizationId,
+      REVENUE_PROVEN_PER_ORG_CAP,
+    );
+    summary.orgsProcessed += 1;
+    summary.candidates += candidates.length;
+    if (candidates.length >= REVENUE_PROVEN_PER_ORG_CAP) {
+      summary.orgsSaturated += 1;
+      deps.logger.warn({
+        msg: "revenue-proven-promotion: per-org cap saturated; org tail deferred to next run",
+        organizationId,
+        perOrgCap: REVENUE_PROVEN_PER_ORG_CAP,
       });
-    } catch (err) {
-      summary.skippedFailures += 1;
-      deps.logger.warn({ msg: "revenue-proven-promotion: job skipped", jobId: job.id, err });
+    }
+
+    for (const job of candidates) {
+      try {
+        const parsed = CreativePastPerformanceSchema.safeParse(job.pastPerformance);
+        if (!parsed.success || parsed.data.delivery !== "measured") {
+          summary.notMeasured += 1;
+          continue; // attribution not yet measured -> re-evaluate next run (no watermark)
+        }
+        if (!passesRevenueProvenFloors(parsed.data)) {
+          summary.belowFloor += 1;
+          continue; // below floors now; performance may still grow (no watermark)
+        }
+
+        const mode = job.mode === "ugc" ? "ugc" : "polished";
+        const descriptor = extractCreativeDescriptor(
+          mode === "ugc" ? job.ugcPhaseOutputs : job.stageOutputs,
+          mode,
+        );
+        const canonicalKey = revenueProvenCanonicalKey(descriptor);
+        const content = revenueProvenBucketContent(
+          descriptor.mode,
+          descriptor.hookType,
+          descriptor.structureId,
+        );
+
+        const outcome = await upsertRevenueProvenBucket(deps, job, canonicalKey, content);
+        if (outcome === "created" || outcome === "created_with_eviction") {
+          summary.bucketsCreated += 1;
+          if (outcome === "created_with_eviction") summary.evictions += 1;
+        } else if (outcome === "incremented") {
+          summary.bucketsIncremented += 1;
+        } else {
+          summary.drops += 1;
+        }
+
+        // Watermark once promoted (any non-error outcome): the creative has been
+        // counted into its bucket; never re-count it on a later daily run.
+        await deps.jobStore.setRevenueProvenPromotedAt(job.organizationId, job.id, deps.now());
+        summary.promoted += 1;
+        // Provenance to the structured log (NOT into content -- the dedup axis): a
+        // revenue_proven memory is traceable to the rows that earned it here.
+        deps.logger.info({
+          msg: "revenue-proven-promotion: promoted",
+          jobId: job.id,
+          deploymentId: job.deploymentId,
+          canonicalKey,
+          campaignId: parsed.data.join.metaCampaignId,
+          videoId: parsed.data.join.metaVideoId,
+          spend: parsed.data.meta.spend,
+          bookedValueCents: parsed.data.booked.valueCents,
+          bookedCount: parsed.data.booked.count,
+          trueRoas: parsed.data.trueRoas,
+          outcome,
+        });
+      } catch (err) {
+        summary.skippedFailures += 1;
+        deps.logger.warn({ msg: "revenue-proven-promotion: job skipped", jobId: job.id, err });
+      }
     }
   }
 

@@ -10,9 +10,10 @@ import { defineConfig } from "vitest/config";
 // so they no-op when DATABASE_URL is unset (every other lane) and execute only
 // here. We reuse that existing DATABASE_URL skip-gate — no INTEGRATION_DB_URL.
 //
-// Future real-Postgres suites (SPINE-1 booking-join regression, SPINE-6 outbox
-// unique-constraint races, SPINE-8 listTasteCandidates starvation, CHAN-2
-// deferred-store org-scope) add themselves to the `include` list below.
+// Future real-Postgres suites (SPINE-6 outbox unique-constraint races, SPINE-8
+// listTasteCandidates starvation, CHAN-2 deferred-store org-scope) add themselves
+// to the `include` list below. SPINE-1 (booking→WorkTrace join regression, #1269)
+// has landed: prisma-receipted-booking-store-join.test.ts.
 export default defineConfig({
   test: {
     globals: true,
@@ -30,6 +31,7 @@ export default defineConfig({
       "packages/db/src/stores/__tests__/prisma-work-trace-store-integrity.test.ts",
       "packages/db/src/stores/__tests__/prisma-greeting-signal-store.test.ts",
       "packages/db/src/stores/__tests__/lead-intake-store.test.ts",
+      "packages/db/src/stores/__tests__/prisma-receipted-booking-store-join.test.ts",
       "packages/db/src/storage/__tests__/prisma-ledger-storage.test.ts",
     ],
   },
