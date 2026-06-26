@@ -422,6 +422,46 @@ describe("WhatsAppAdapter", () => {
       expect(msg!.metadata).not.toHaveProperty("sourceAdId");
       expect(msg!.metadata).not.toHaveProperty("adSourceType");
     });
+
+    it("should extract referral data from an unsupported message type (P3-4)", () => {
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  contacts: [{ profile: { name: "Reaction User" }, wa_id: "15553334444" }],
+                  messages: [
+                    {
+                      from: "15553334444",
+                      id: "wamid.ref_reaction",
+                      timestamp: "1700000000",
+                      type: "reaction",
+                      reaction: { message_id: "wamid.prev", emoji: "+1" },
+                      referral: {
+                        source_id: "ad_unsupported_1",
+                        source_type: "ad",
+                        ctwa_clid: "ARxx_unsupported_clid",
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      // A CTWA lead whose FIRST inbound is an unsupported type must still carry the
+      // ad attribution, exactly like the text/media/interactive paths (P3-4).
+      const msg = adapter.parseIncomingMessage(payload);
+      expect(msg).not.toBeNull();
+      expect(msg!.metadata).toHaveProperty("unsupported", true);
+      expect(msg!.metadata).toHaveProperty("originalType", "reaction");
+      expect(msg!.metadata).toHaveProperty("sourceAdId", "ad_unsupported_1");
+      expect(msg!.metadata).toHaveProperty("ctwaClid", "ARxx_unsupported_clid");
+    });
   });
 
   describe("markAsRead", () => {
