@@ -4,6 +4,7 @@ import type { EmailMessage, EmailSendResult } from "../notifications/send-email.
 import {
   createWeeklyReportDeliveryService,
   renderWeeklyDigestHtml,
+  resolveReportLink,
   weekPeriodLabel,
 } from "./weekly-report-delivery.js";
 
@@ -200,5 +201,47 @@ describe("createWeeklyReportDeliveryService", () => {
     const result = await service.deliverReport({ orgId: "org_1", actorId: "system" });
 
     expect(result).toEqual({ status: "not_configured" });
+  });
+});
+
+describe("report link omission (P3-8)", () => {
+  it("renderWeeklyDigestHtml omits the link when the dashboard URL is empty", () => {
+    const html = renderWeeklyDigestHtml(mkDigest({ dashboardUrl: "" }));
+    expect(html).not.toContain("View the full report");
+    expect(html).not.toContain("<a href");
+  });
+
+  it("renderWeeklyDigestHtml keeps the link when the dashboard URL is present", () => {
+    const html = renderWeeklyDigestHtml(mkDigest({ dashboardUrl: "https://app.test/reports" }));
+    expect(html).toContain('<a href="https://app.test/reports"');
+  });
+
+  it("resolveReportLink appends /reports to a usable absolute base, else returns empty", () => {
+    expect(resolveReportLink("https://app.test")).toBe("https://app.test/reports");
+    expect(resolveReportLink("http://app.test/")).toBe("http://app.test/reports");
+    expect(resolveReportLink("")).toBe("");
+    expect(resolveReportLink("   ")).toBe("");
+    expect(resolveReportLink("/reports")).toBe("");
+    expect(resolveReportLink("app.test")).toBe("");
+  });
+
+  it("sends no dead /reports link in the html when DASHBOARD_URL is unset", async () => {
+    const sent: EmailMessage[] = [];
+    const service = createWeeklyReportDeliveryService({
+      resolveRecipients: () => Promise.resolve(["owner@clinic.test"]),
+      assembleReport: () => Promise.resolve(fakeReport),
+      sendEmail: (msg) => {
+        sent.push(msg);
+        return Promise.resolve({ ok: true });
+      },
+      dashboardUrl: "",
+      now: () => new Date("2026-06-17T12:00:00.000Z"),
+    });
+
+    const result = await service.deliverReport({ orgId: "org_1", actorId: "system" });
+
+    expect(result).toEqual({ status: "delivered", recipientCount: 1 });
+    expect(sent[0]!.html).not.toContain("<a href");
+    expect(sent[0]!.html).not.toContain("/reports");
   });
 });
