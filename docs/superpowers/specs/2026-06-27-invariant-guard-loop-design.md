@@ -1,6 +1,7 @@
 # Invariant-Guard Loop (the guard ratchet)
 
 Status: design approved (brainstormed with the user 2026-06-27; SURFACE-before-merge for the driver+spec PR)
+Direction confirmed 2026-06-27 by a read-only 3-agent fan-out (premise/value, code-grounded feasibility, doctrine fit): SOUND / FEASIBLE / FITS, each with refinements, all folded in below (G5 reclassified guarded, G8 reclassified operational-skip, living-backlog ledger flow, strengthened already-guarded bar, auto-merge hardening).
 Date: 2026-06-27
 Workstream: agent operating layer / build-loop family (companion to `.claude/build-loop.md` and `.claude/second-wave-slice-driver.md`)
 
@@ -88,18 +89,26 @@ The loop mirrors the second-wave pattern of a durable plan plus an ephemeral per
    across sessions. Row schema:
 
    ```
-   | id | lesson (feedback_*.md) | invariant predicate (1 line) | blast-radius | guard-type | status | guard location | siblings |
+   | id | lesson (feedback_*.md) | invariant predicate (1 line) | blast-radius | guard-type | status | guard location | guard-covers (sites + known gaps) | siblings |
    ```
 
    - `blast-radius`: Crit | High | Med | Low (see the rubric below).
    - `guard-type`: arch | lint | test | ci | type | n-a.
    - `status`: unguarded | guarded | sibling-open | operational-skip.
-   - `guard location`: the path of the guard once written (e.g. `packages/core/src/...test.ts`).
-   - `siblings`: ids of any filed sibling-fix rows this lesson spawned.
+   - `guard location`: the path of the guard once written (e.g. `packages/core/src/...test.ts`); for
+     an `already-guarded` row, the existing guard plus the test `file:line` that covers the SPECIFIC
+     regression case (not merely that some test exists - see the strengthened bar in slice 0).
+   - `guard-covers`: the sites the guard actually covers and any known-uncovered sibling sites, so
+     the "all future sites" aspiration stays honest and gaps stay follow-updable (review-driven field).
+   - `siblings`: ids of any sibling-fix rows this lesson spawned (new rows in this same ledger, each
+     linking back to the parent id; the parent holds `sibling-open` until they land).
 
-   The ledger is produced by slice 0 (below) and committed to `main` as its own focused PR, per the
-   "plans land on main" doctrine. This spec seeds a starter set of rows so the format is concrete
-   and the loop is immediately runnable.
+   The ledger is a LIVING backlog, not a frozen design doc (this spec is the frozen part). Slice 0
+   lands the initial classification as its own focused PR on `main`. After that, each guard slice
+   flips its own row to `guarded` (with the guard path + coverage) INSIDE the same PR that adds the
+   guard, so the row-flip is atomic with the guard that justifies it and `main` always reflects
+   reality - there is no separate per-run ledger-churn commit. This spec seeds a starter set of rows
+   so the format is concrete and the loop is immediately runnable.
 
 2. **Per-run loop-state** (ephemeral scratch, uncommitted, the `.claude/` convention):
    `.claude/invariant-guard-<lesson-id>-loop-state.md`, using the `build-loop.md` STATE_LEDGER
@@ -113,11 +122,15 @@ and commit even from a "review only" prompt) over all 112 `feedback_*.md` plus t
 Invariants and `docs/DOCTRINE.md`. Each lesson is classified into exactly one bucket:
 
 - **already-guarded.** An existing test, lint rule, `arch-check` assertion, `local-verify-fast`
-  check, or commitlint rule already fails on a regression. Recorded with the existing guard's path,
-  status `guarded`. Examples: "no em-dashes" is a lint/format concern; layer boundaries are enforced
-  by `scripts/arch-check.ts`; "new mutating route needs the route allowlist" is enforced by
-  `scripts/local-verify-fast.ts` against `.agent/tools/route-allowlist.yaml`; "commitlint lowercase
-  subject" is enforced by commitlint.
+  check, or commitlint rule already fails on a regression of THIS SPECIFIC invariant. The bar is
+  coverage of the specific case, not mere test existence: a file having tests does not mean the
+  revoked-but-unstamped null-jurisdiction case is exercised. Slice 0 reads the candidate guard and
+  confirms it would go red on the lesson's bad state, then records the guard path + the covering test
+  `file:line`. Verified examples: the dynamic `NEXT_PUBLIC_*` env read is guarded by `.eslintrc.json`
+  (`no-restricted-syntax`) + `scripts/check-no-dynamic-public-env.ts` (this is the real status of the
+  G5 seed row); layer boundaries by `scripts/arch-check.ts`; "new mutating route needs the route
+  allowlist" by `scripts/local-verify-fast.ts` -> `.agent/tools/check-routes` against
+  `.agent/tools/route-allowlist.yaml`; "commitlint lowercase subject" by commitlint.
 - **guardable-but-unguarded.** A real code invariant with no mechanical guard. This is the
   work-list. Status `unguarded`.
 - **operational/process-only.** An agent-behavior lesson, not a code invariant, so not
@@ -125,10 +138,11 @@ Invariants and `docs/DOCTRINE.md`. Each lesson is classified into exactly one bu
   list` for concurrent sessions"). Status `operational-skip` with a one-line reason.
 
 No silent cap: the ledger header records the count in each bucket, so coverage is honest and the
-"operational-skip" set is auditable rather than quietly dropped. Realistic expectation: of 112,
-only a subset (rough order 25 to 40) are genuine code-invariants enforced only by recall; the rest
-are already-guarded or operational. Slice 0's value is as much in proving what is *already* covered
-(so the loop never writes a redundant guard) as in naming what is not.
+"operational-skip" set is auditable rather than quietly dropped. Realistic expectation (a read-only
+sample of ~18% of the corpus during direction-confirmation put it here): of 112, roughly 40 to 55
+are genuine code-invariants enforced only by recall, with the rest already-guarded or operational.
+Slice 0's value is as much in proving what is *already* covered (so the loop never writes a redundant
+guard, as the G5 seed row demonstrates) as in naming what is not.
 
 ### Per-run pipeline (deltas over build-loop.md, which stays canonical)
 
@@ -140,9 +154,11 @@ restates only what is loop-specific:
    `git worktree list` and skip any lesson already in flight in another session (never fork a
    rival). Take the top `unguarded` row by the rubric. Confirm the gap is real on `origin/main`
    with tools: the lesson's original fix still exists at the cited `file:line`, and no existing
-   test/lint/arch already covers it. If a guard already exists, flip the row to `guarded` and take
-   the next row. This is the analog of build-loop's "is this already done?" check, retargeted to
-   "is this already guarded?".
+   test/lint/arch already covers THIS SPECIFIC regression case (open the candidate test and confirm
+   it exercises the bad state - test existence is not coverage). If a real guard already covers it,
+   flip the row to `guarded` (record the covering test `file:line`) and take the next row. This is
+   the analog of build-loop's "is this already done?" check, retargeted to "is this already
+   guarded?", and the G5 seed row is a live example where the honest answer is yes.
 
 2. **CHARACTERIZE.** Turn the prose lesson into a precise, testable predicate over a named set of
    code sites. Example: "governed dispatch must check the full `SubmitWorkResponse`" becomes "every
@@ -152,8 +168,13 @@ restates only what is loop-specific:
    over, are the output.
 
 3. **SIBLING HUNT** (read-only Explore). Grep / AST-search for every site matching the predicate's
-   shape (all callers, all sibling gates of the same kind). Classify each site holds vs violates.
-   This is the latent-bug list, and historically the highest-value output of the loop.
+   shape (all callers, all sibling gates of the same kind), then classify each site holds vs
+   violates. This is the latent-bug list, and historically the highest-value output of the loop.
+   Caveat (review-driven): many siblings are SEMANTIC, not syntactic. "Every consumer of the
+   lifecycle columns must be mode-aware", or "the safety gate's producer must actually populate the
+   value in live code", cannot be found by grep alone; they need code archaeology and adversarial
+   reading. Treat the hunt as a lower bound: if it finds N violations, assume an N+1 may exist, and
+   give the siblings their own review lens rather than folding them into the guard's review.
 
 4. **CHOOSE GUARD TYPE** (taxonomy below). Prefer the strongest guard that mechanically covers all
    in-scope sites, including future ones.
@@ -171,21 +192,25 @@ restates only what is loop-specific:
    new guard is in the executed set. Independent fresh-context review is read-only, handed only the
    three-dot diff + acceptance + relevant `feedback_*.md`.
 
-7. **CONVERGE** (per autonomy). On done: update the ledger row to `guarded` with the guard's path;
-   file any sibling rows; and append a `Guarded by: <path>` line to the lesson's own
-   `feedback_*.md` so future sessions know it is locked (closing the loop on the recall-only
-   problem). Update the MEMORY.md pointer if the lesson's index line should now read "guarded".
+7. **CONVERGE** (per autonomy). On done: flip the ledger row to `guarded` with the guard's path +
+   `guard-covers` INSIDE the guard PR itself (atomic, no separate churn commit); file any sibling
+   rows in the same ledger, linked to the parent. Separately, on the harness-memory side (NOT part
+   of the repo PR - these files live at `~/.claude/.../memory/` outside the repo), append a
+   `Guarded by: <path>` line to the lesson's own `feedback_*.md` and update its `MEMORY.md` pointer
+   so future sessions know it is locked. This closes the loop on the recall-only problem.
 
 ### Guard taxonomy (mapped to real infrastructure, strongest first)
 
 The loop prefers structural guards (1, 4) over targeted ones (2, 3) because structural guards cover
 future sites, which is what makes the loop a true ratchet rather than a one-time fix.
 
-1. **Lint rule** in `.eslintrc.json`, usually `no-restricted-syntax` with an AST selector (or a
-   per-package `overrides` entry). Catches the whole class at every current and future site with no
-   new plugin. Fits invariants expressible as a syntactic shape: "no computed-member `process.env`
-   access in dashboard client code" (`feedback_next_public_dynamic_env_not_inlined`), "no
-   `console.log`".
+1. **Lint rule** in `.eslintrc.json` (a legacy JSON config, scoped via `overrides`), usually
+   `no-restricted-syntax` with an AST selector. Catches the whole class at every current and future
+   site with no new plugin. The reference example is already shipped in the repo: the ban on
+   computed-member `process.env` access in dashboard client code
+   (`feedback_next_public_dynamic_env_not_inlined`, via `.eslintrc.json` `overrides` +
+   `scripts/check-no-dynamic-public-env.ts`). That is what a finished lint guard looks like, and it
+   is why the G5 seed row is already `guarded`. "No `console.log`" is the same shape.
 
 2. **Regression test**, co-located `*.test.ts`. For behavioral invariants not expressible
    syntactically: "the reaper re-claim is a status compare-and-set"
@@ -219,10 +244,20 @@ Rank by **blast-radius x regression-likelihood x not-already-guarded**.
 
 ### Autonomy and merge mapping
 
-Inherits the build-loop merge-stop globs verbatim. The decision table:
+Inherits the build-loop merge-stop globs verbatim, and is deliberately STRICTER than build-loop's
+general config/docs/test auto-merge: a guard must be structurally pure to auto-merge, because a guard
+PR that also changes behavior is no longer "just a guard". The decision table:
 
 - **Guard-only diff** (new `*.test.ts`, new `.eslintrc.json` rule, new `arch-check` assertion) that
-  touches no merge-stop glob, with a clean independent review and green checks -> **auto-merge**.
+  touches no merge-stop glob, with a clean independent review and green checks -> **auto-merge**, but
+  only after these review-driven hardening checks also pass:
+  - the RED proof was exercised against the REAL sibling paths, not just a synthetic happy case (a
+    guard that goes red only on a fixture while a live sibling violates it is incomplete);
+  - a new lint rule reds ONLY the intended sites: run full `pnpm lint` and confirm it does not red
+    unrelated existing files (a rule that reds unrelated code fails auto-merge and surfaces);
+  - if the guard gates a safety control (consent / auth / approval / money / governance), the
+    PRODUCER that populates the gated value is verified live in code, not merely seeded in the test
+    fixture (a guard over an inert gate is theater).
 - **Any slice that fixes product code** (every regulated sibling fix, since those live on consent /
   auth / governance / money paths) -> **surface** the PR with the evidence summary and a
   human-verify note, and move on. This is expected and correct: hardening regulated paths is exactly
@@ -260,8 +295,11 @@ autonomous session that drives ONE guard slice per run. Sections:
   (`writing-plans`, `test-driven-development`, `requesting-code-review`,
   `receiving-code-review`, `verification-before-completion`).
 - **DOCTRINE + GOTCHAS**: inherits the build-loop list; adds the loop-specific ones (RED-proof for
-  guards = break-it-and-watch-it-fail; the guard must run in CI; read-only fan-out for the sibling
-  hunt; append `Guarded by:` to the lesson file on converge).
+  guards = break-it-and-watch-it-fail, exercised against the REAL sibling paths; the guard must run
+  in CI; a new lint rule must red only the intended sites, not unrelated files; for a safety-control
+  guard verify the live PRODUCER, not just the test fixture; siblings are often semantic not
+  syntactic, so the read-only sibling hunt is a lower bound; flip the ledger row inside the guard PR
+  and append `Guarded by:` to the harness-memory lesson file on converge).
 - **REPORT**: per run - lesson id; guard type + path; merged-or-surfaced (+ PR#); sibling findings
   and their disposition; one line per gate; the next `unguarded` row.
 
@@ -277,15 +315,19 @@ building (some may already be partially guarded).
 | G2 | `feedback_governed_dispatch_check_full_submit_response` | every governed-dispatch caller treats `outcome !== "completed"` as failure, never `approvalRequired` alone | Crit | test | unguarded (type-level exhaustiveness a stretch goal) |
 | G3 | `feedback_reaper_freeing_slot_needs_guarded_claimant` | every re-claim path for a freed resource is a status compare-and-set (`updateMany` with a status predicate), not an id-only update | High | test | unguarded |
 | G4 | `feedback_messaging_optin_is_platform_not_marketing_consent` | proactive sends gate via `evaluateProactiveSendEligibility` (PDPA-first), never on `messagingOptIn` | Crit | test | unguarded |
-| G5 | `feedback_next_public_dynamic_env_not_inlined` | no computed-member `process.env[var]` read in dashboard client code (browser bundle) | Med | lint | unguarded |
+| G5 | `feedback_next_public_dynamic_env_not_inlined` | no computed-member `process.env[var]` read in dashboard client code (browser bundle) | Med | lint | guarded (`.eslintrc.json` overrides + `scripts/check-no-dynamic-public-env.ts`, PR #1003) |
 | G6 | `feedback_allowed_triggers_not_a_public_edge_gate` | auto-exec-only intents are gated by `SERVICE_ONLY_INGRESS_INTENTS`, not by `allowedTriggers` | Crit | test | unguarded |
 | G7 | `feedback_new_mutating_route_needs_route_allowlist` | a new mutating route must appear in `.agent/tools/route-allowlist.yaml` | High | ci | guarded (`scripts/local-verify-fast.ts`) |
-| G8 | `feedback_no_em_dashes` | no em-dash characters in source/docs | Low | ci | unguarded (confirm no existing coverage first) |
+| G8 | `feedback_no_em_dashes` | avoid em-dashes (an agent writing-style preference, not a code invariant) | Low | n-a | operational-skip (style/agent-behavior, not code-guardable) |
 
-G7 is included deliberately as an *already-guarded* example: the loop's first action on it is to
-confirm `local-verify-fast.ts` covers it and mark it `guarded`, not to build a redundant guard. G1
-carries a known regulated sibling, so under the severity tier it will fix the calendar-book consent
-gate (or open a tight sibling-fix slice) and surface.
+G5 and G7 are included deliberately as *already-guarded* examples, both surfaced during
+direction-confirmation: the loop's first action on each is to open the existing guard
+(`.eslintrc.json` + `scripts/check-no-dynamic-public-env.ts` for G5; `local-verify-fast.ts` ->
+`.agent/tools/check-routes` for G7), confirm it covers the specific case, and mark the row
+`guarded`, never building a redundant guard. G8 is included as an *operational-skip* example (a
+writing-style preference, not a code invariant). G1 carries a known regulated sibling, so under the
+severity tier it will fix the calendar-book consent gate (or open a tight sibling-fix slice) and
+surface.
 
 ## Composition with the existing loops (non-duplication)
 
