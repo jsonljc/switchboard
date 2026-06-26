@@ -165,6 +165,7 @@ export async function runPreInputGate(
       };
       await conversationStatusSetter.setConversationStatus(
         sessionId,
+        organizationId,
         "human_override",
         upsertContext,
       );
@@ -325,6 +326,7 @@ async function handleInputGateResolverError(
       };
       await conversationStatusSetter.setConversationStatus(
         sessionId,
+        organizationId,
         "human_override",
         upsertContext,
       );

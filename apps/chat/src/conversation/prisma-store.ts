@@ -50,8 +50,10 @@ export class PrismaConversationStore implements ConversationStore {
     // This prevents lifecycle code (e.g. status→"active" on next message) from
     // silently clobbering a safety gate escalation. An explicit save with
     // status="human_override" is always allowed (the guard passes through).
-    const existing = await this.prisma.conversationState.findUnique({
-      where: { threadId: state.threadId },
+    // Org-scoped (audit #2): threadId is unique PER ORG, so the sticky-override
+    // read must match this tenant's row — never another org's that shares the phone.
+    const existing = await this.prisma.conversationState.findFirst({
+      where: { threadId: state.threadId, organizationId: state.organizationId },
       select: { status: true },
     });
     const finalStatus =
@@ -61,7 +63,12 @@ export class PrismaConversationStore implements ConversationStore {
 
     // eslint-disable-next-line @typescript-eslint/ban-types -- Prisma types may not include lastInboundAt pre-migration
     await (this.prisma.conversationState.upsert as Function)({
-      where: { threadId: state.threadId },
+      where: {
+        organizationId_threadId: {
+          organizationId: state.organizationId,
+          threadId: state.threadId,
+        },
+      },
       create: data,
       update: {
         status: finalStatus,

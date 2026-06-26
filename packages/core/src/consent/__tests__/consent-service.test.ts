@@ -303,8 +303,12 @@ describe("ConsentService.recordRevocation", () => {
       actor: "system:inbound_keyword_revocation",
       openConversationSessionId: "sess1",
     });
-    // Option (b): only 2 args — no upsertContext
-    expect(conversationStore.setConversationStatus).toHaveBeenCalledWith("sess1", "human_override");
+    // Option (b): no upsertContext — org-scoped (audit #2): effectiveOrgId threads through.
+    expect(conversationStore.setConversationStatus).toHaveBeenCalledWith(
+      "sess1",
+      "org1",
+      "human_override",
+    );
   });
 
   it("per-call organizationId override is used in handoff package (not constructor orgId)", async () => {

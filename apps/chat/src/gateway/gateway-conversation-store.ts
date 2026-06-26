@@ -107,9 +107,12 @@ export class PrismaGatewayConversationStore implements GatewayConversationStore 
     });
   }
 
-  async getConversationStatus(sessionId: string): Promise<string | null> {
-    const row = await this.prisma.conversationState.findUnique({
-      where: { threadId: sessionId },
+  async getConversationStatus(sessionId: string, organizationId: string): Promise<string | null> {
+    // findFirst (not findUnique) scoped by (threadId, organizationId): threadId is
+    // unique PER ORG now (audit #2), so a phone shared across orgs must read only
+    // its own tenant's row — never another org's human_override.
+    const row = await this.prisma.conversationState.findFirst({
+      where: { threadId: sessionId, organizationId },
       select: { status: true },
     });
     return row?.status ?? null;

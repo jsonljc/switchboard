@@ -129,6 +129,7 @@ export async function bootstrapSkillMode(
     createPrismaApprovedComplianceClaimStore,
     createPrismaConsentStore,
     createPrismaContactConsentReader,
+    setConversationStatusScoped,
   } = await import("@switchboard/db");
   const { NoopNotifier, TelegramApprovalNotifier, CompositeNotifier } =
     await import("@switchboard/core/notifications");
@@ -208,37 +209,23 @@ export async function bootstrapSkillMode(
   });
   // Single shared posture cache — warm on first resolve, reused across both gates.
   const governancePostureCache = new InMemoryGovernancePostureCache();
-  // Adapter: ConversationStatusSetter → direct conversationState updateMany.
+  // Adapter: ConversationStatusSetter → org-scoped write helper.
   //
-  // WHY updateMany (not upsert):
-  // ConversationState has required non-nullable fields (channel, principalId,
-  // expiresAt) that this gate adapter does not possess — they are set upstream
-  // in the chat conversation lifecycle (PrismaConversationStore.save) before
-  // any message reaches the skill executor.  Upsert would require manufacturing
-  // sentinel values for those fields, which defeats their purpose.
-  //
-  // Safety of updateMany here:
-  // The DeterministicSafetyGateHook runs as an afterSkill hook inside the
-  // SkillExecutorImpl.  By the time a session reaches the executor, the
-  // conversation lifecycle (PrismaConversationStore) has already persisted a
-  // ConversationState row for that threadId during session initialisation
-  // (apps/chat/src/conversation/prisma-store.ts → save).  An updateMany with
-  // no matching row is therefore a reachable-but-safe no-op only in edge cases
-  // (e.g. brand-new session whose first-ever message triggered a banned phrase
-  // before the lifecycle store wrote the row).  In that case the block is still
-  // applied — the response is replaced and handoff is saved — only the status
-  // flip is skipped.  The block still holds.
-  //
-  // Invariant: ConversationState rows are always written by the chat
-  // conversation lifecycle before a session enters the skill executor.
-  // Verified: apps/chat/src/conversation/prisma-store.ts save() is called by
-  // the chat orchestrator prior to submitting to PlatformIngress.
+  // setConversationStatusScoped (audit #2) keys the write on the per-org compound
+  // unique (organizationId, threadId), so a phone shared across orgs never touches
+  // another tenant's row. No upsertContext is passed: this gate runs as an
+  // afterSkill hook, by which point the chat conversation lifecycle
+  // (apps/chat/src/conversation/prisma-store.ts → save) has already persisted the
+  // ConversationState row, so an org-scoped updateMany is sufficient. A no-match
+  // updateMany (brand-new session whose first message tripped a banned phrase
+  // before the lifecycle wrote the row) is a safe no-op — the block still holds.
   const conversationStatusSetter = {
-    async setConversationStatus(sessionId: string, status: string): Promise<void> {
-      await prismaClient.conversationState.updateMany({
-        where: { threadId: sessionId },
-        data: { status },
-      });
+    async setConversationStatus(
+      sessionId: string,
+      organizationId: string,
+      status: string,
+    ): Promise<void> {
+      await setConversationStatusScoped(prismaClient, { sessionId, organizationId, status });
     },
   };
 

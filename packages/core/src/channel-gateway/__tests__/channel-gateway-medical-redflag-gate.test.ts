@@ -213,6 +213,7 @@ describe("medical red-flag triggers through the real gate (future enforce postur
       // normal inbound path, not a "visitor-" prefix that would fail channel sends.
       expect(deps.statusSetter.setConversationStatus).toHaveBeenCalledWith(
         "sess-1",
+        "org-1",
         "human_override",
         { channel: "web_widget", principalId: "sess-1" },
       );

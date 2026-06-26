@@ -166,6 +166,7 @@ describe("PriceClaimGateHook.afterSkill", () => {
     expect(spies.handoffStore.save).toHaveBeenCalledTimes(1);
     expect(spies.conversationStore.setConversationStatus).toHaveBeenCalledWith(
       "sess-1",
+      "org-1",
       "human_override",
     );
   });
@@ -251,6 +252,7 @@ describe("PriceClaimGateHook — setGateModeInConfig flip changes behaviour end-
     expect(result.response).toBe(HANDOFF_TEXT); // reply replaced -> blocked
     expect(spies.conversationStore.setConversationStatus).toHaveBeenCalledWith(
       "sess-1",
+      "org-1",
       "human_override",
     );
     expect(spies.verdictStore.save).toHaveBeenCalledWith(

@@ -13,7 +13,7 @@ describe("PrismaGatewayConversationStore", () => {
       create: vi.fn(),
     },
     conversationState: {
-      findUnique: vi.fn(),
+      findFirst: vi.fn(),
     },
   };
 
@@ -144,30 +144,31 @@ describe("PrismaGatewayConversationStore", () => {
   });
 
   describe("getConversationStatus", () => {
-    it("returns status from ConversationState when it exists", async () => {
-      mockPrisma.conversationState.findUnique.mockResolvedValue({
+    it("reads status org-scoped via findFirst on (threadId, organizationId)", async () => {
+      mockPrisma.conversationState.findFirst.mockResolvedValue({
         status: "human_override",
       });
 
       const store = new PrismaGatewayConversationStore(mockPrisma as never);
-      const result = await store.getConversationStatus("session-1");
+      const result = await store.getConversationStatus("session-1", "org-1");
 
       expect(result).toBe("human_override");
-      expect(mockPrisma.conversationState.findUnique).toHaveBeenCalledWith({
-        where: { threadId: "session-1" },
+      // audit #2: scoped by org so a shared phone never reads another tenant's row.
+      expect(mockPrisma.conversationState.findFirst).toHaveBeenCalledWith({
+        where: { threadId: "session-1", organizationId: "org-1" },
         select: { status: true },
       });
     });
 
-    it("returns null when no ConversationState exists for sessionId", async () => {
-      mockPrisma.conversationState.findUnique.mockResolvedValue(null);
+    it("returns null when no ConversationState exists for (sessionId, org)", async () => {
+      mockPrisma.conversationState.findFirst.mockResolvedValue(null);
 
       const store = new PrismaGatewayConversationStore(mockPrisma as never);
-      const result = await store.getConversationStatus("nonexistent");
+      const result = await store.getConversationStatus("nonexistent", "org-1");
 
       expect(result).toBe(null);
-      expect(mockPrisma.conversationState.findUnique).toHaveBeenCalledWith({
-        where: { threadId: "nonexistent" },
+      expect(mockPrisma.conversationState.findFirst).toHaveBeenCalledWith({
+        where: { threadId: "nonexistent", organizationId: "org-1" },
         select: { status: true },
       });
     });
@@ -185,7 +186,7 @@ function makePrisma(createSpy: ReturnType<typeof vi.fn>) {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({}),
     },
-    conversationState: { findUnique: vi.fn().mockResolvedValue(null) },
+    conversationState: { findFirst: vi.fn().mockResolvedValue(null) },
   } as unknown as import("@switchboard/db").PrismaClient;
 }
 

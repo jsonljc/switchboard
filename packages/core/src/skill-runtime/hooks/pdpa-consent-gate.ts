@@ -181,7 +181,11 @@ export class PdpaConsentGateHook implements SkillHook {
         deploymentId: ctx.deploymentId,
       });
       try {
-        await this.deps.conversationStore.setConversationStatus(ctx.sessionId, "human_override");
+        await this.deps.conversationStore.setConversationStatus(
+          ctx.sessionId,
+          ctx.orgId,
+          "human_override",
+        );
         await this.deps.handoffStore.save(
           buildHandoffPackage(ctx.sessionId, ctx.orgId, 0, this.deps.clock),
         );

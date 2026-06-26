@@ -280,6 +280,7 @@ export function createConsentService(deps: ConsentServiceDeps): ConsentService {
         try {
           await conversationStore.setConversationStatus(
             openConversationSessionId,
+            effectiveOrgId,
             "human_override",
           );
           await handoffStore.save(

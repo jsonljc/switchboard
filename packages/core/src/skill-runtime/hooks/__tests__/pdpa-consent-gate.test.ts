@@ -257,7 +257,11 @@ describe("PdpaConsentGateHook", () => {
     } as any;
     await hook.afterSkill(ctx, result);
     expect(result.response).not.toBe("would have replied");
-    expect(conversationStore.setConversationStatus).toHaveBeenCalledWith("sess1", "human_override");
+    expect(conversationStore.setConversationStatus).toHaveBeenCalledWith(
+      "sess1",
+      "org1",
+      "human_override",
+    );
     expect(handoffStore.save).toHaveBeenCalled();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const saved = (verdictStore.save as any).mock.calls.find(
@@ -317,7 +321,11 @@ describe("PdpaConsentGateHook", () => {
     await hook.afterSkill(ctx, result);
     expect(result.response).not.toBe("would have replied");
     // Correction C: 2-arg call (upsertContext is optional)
-    expect(conversationStore.setConversationStatus).toHaveBeenCalledWith("sess1", "human_override");
+    expect(conversationStore.setConversationStatus).toHaveBeenCalledWith(
+      "sess1",
+      "org1",
+      "human_override",
+    );
     expect(handoffStore.save).toHaveBeenCalled();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const saved = (verdictStore.save as any).mock.calls.find(

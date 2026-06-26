@@ -12,6 +12,7 @@ import {
   PrismaDeploymentStore,
   PrismaBookingAttributionStore,
   createPrismaConsentStore,
+  setConversationStatusScoped,
 } from "@switchboard/db";
 import {
   ChannelGateway,
@@ -172,50 +173,26 @@ export function createGatewayBridge(
   });
   const gatewayPostureCache = new InMemoryGovernancePostureCache();
   const gatewayHandoffStore = new PrismaHandoffStore(prisma);
-  // Adapter: GatewayConversationStatusSetter → upsert when context available,
-  // update-only fallback otherwise.
+  // Adapter: GatewayConversationStatusSetter → org-scoped write helper.
   //
-  // When upsertContext is provided (gateway path, which has channel+principalId
-  // in scope), perform a true upsert: create the ConversationState row if it
-  // does not yet exist so that brand-new sessions (first-message path) get the
-  // human_override status immediately. This closes the silent no-op window that
-  // existed when only updateMany was used.
-  //
-  // When upsertContext is omitted (api-side hook path), fall back to updateMany
-  // because the row is guaranteed to exist before skill execution (the chat
-  // lifecycle PrismaConversationStore.save writes it first).
-  //
-  // expiresAt for upserted rows: 30 days from now, matching the outer
-  // conversation TTL convention. The exact value is not meaningful here —
-  // the row exists only to carry human_override status until the human
-  // operator clears it.
-  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  // All writes key on the per-org compound unique (organizationId, threadId) via
+  // setConversationStatusScoped (audit #2), so a phone shared across orgs never
+  // collides on a single global row. With upsertContext (gateway path, which has
+  // channel+principalId in scope) a brand-new session's row is created immediately;
+  // without it (api-side hook path) the write is an org-scoped update-only, since
+  // the row is guaranteed to exist before skill execution.
   const gatewayConversationStatusSetter = {
     async setConversationStatus(
       sessionId: string,
+      organizationId: string,
       status: string,
       upsertContext?: ConversationStatusUpsertContext,
     ): Promise<void> {
-      if (upsertContext) {
-        await prisma.conversationState.upsert({
-          where: { threadId: sessionId },
-          update: { status },
-          create: {
-            threadId: sessionId,
-            channel: upsertContext.channel,
-            principalId: upsertContext.principalId,
-            status,
-            expiresAt: new Date(Date.now() + thirtyDaysMs),
-          },
-        });
-        return;
-      }
-      // Fallback: update-only (used by the api-side hook adapter where the
-      // ConversationState row is presumed to exist downstream of conversation
-      // lifecycle code).
-      await prisma.conversationState.updateMany({
-        where: { threadId: sessionId },
-        data: { status },
+      await setConversationStatusScoped(prisma, {
+        sessionId,
+        organizationId,
+        status,
+        upsertContext,
       });
     },
   };
