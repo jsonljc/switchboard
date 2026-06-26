@@ -161,7 +161,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
             });
           }
 
-          // P2-2 — validate the LLM-supplied slot window BEFORE the consent read,
+          // P2-2: validate the LLM-supplied slot window BEFORE the consent read,
           // the opportunity resolve, and the durable write. An unparseable date
           // would otherwise reach `new Date(...)` -> Invalid Date and throw at the
           // Prisma booking write (or at .toISOString()), killing the whole turn.

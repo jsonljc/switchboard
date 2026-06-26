@@ -116,7 +116,7 @@ export function buildRescheduleOperations(
           calendarId: string;
           service?: string;
         };
-        // P2-2 — validate the LLM-supplied slot window BEFORE resolving the target
+        // P2-2: validate the LLM-supplied slot window BEFORE resolving the target
         // or touching the provider/store. An unparseable date would otherwise reach
         // provider.rescheduleBooking (a spurious calendar move) and the durable
         // reschedule (Invalid Date), where the throw is mis-classified as a
