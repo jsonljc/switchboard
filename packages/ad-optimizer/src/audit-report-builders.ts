@@ -57,7 +57,7 @@ export function evaluateDenominatorStepChange(args: {
   currentInsights: CampaignInsight[];
   previousInsights: CampaignInsight[];
   nextCycleDate: string;
-}): { measurementTrusted: boolean; accountWatch?: WatchOutput } {
+}): { measurementTrusted: boolean; accountWatch?: WatchOutput; capiAttributionStale: boolean } {
   const sumTotals = (rows: CampaignInsight[]) => ({
     clicks: rows.reduce((s, r) => s + r.inlineLinkClicks, 0),
     conversions: rows.reduce((s, r) => s + r.conversions, 0),
@@ -68,10 +68,15 @@ export function evaluateDenominatorStepChange(args: {
     previous: sumTotals(args.previousInsights),
   });
   if (!stepChange.suspected) {
-    return { measurementTrusted: true };
+    return { measurementTrusted: true, capiAttributionStale: false };
   }
   return {
     measurementTrusted: false,
+    // Riley's harden_capi_attribution advisory keys on the zero-conversions-despite-traffic
+    // signature ONLY (a suspected account-wide pixel/CAPI conversion outage). A rate-collapse
+    // window shift is also "untrusted" but its remediation is to re-check the attribution
+    // window, not to harden CAPI, so it must NOT set this flag.
+    capiAttributionStale: stepChange.signature === "zero_despite_traffic",
     accountWatch: {
       type: "watch",
       campaignId: "account",

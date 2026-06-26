@@ -75,3 +75,41 @@ describe("conversion-denominator step-change guard", () => {
     expect(r.suspected).toBe(false);
   });
 });
+
+describe("detectDenominatorStepChange signature", () => {
+  it("tags the zero-conversions-despite-traffic outage as zero_despite_traffic", () => {
+    const result = detectDenominatorStepChange({
+      current: { clicks: 60, conversions: 0, spend: 500 },
+      previous: { clicks: 60, conversions: 0, spend: 500 },
+    });
+    expect(result.suspected).toBe(true);
+    expect(result.signature).toBe("zero_despite_traffic");
+  });
+
+  it("tags a rate collapse with flat clicks as rate_collapse (not the CAPI outage)", () => {
+    const result = detectDenominatorStepChange({
+      current: { clicks: 1000, conversions: 5, spend: 500 },
+      previous: { clicks: 1000, conversions: 50, spend: 500 },
+    });
+    expect(result.suspected).toBe(true);
+    expect(result.signature).toBe("rate_collapse");
+  });
+
+  it("leaves signature undefined when nothing is suspected", () => {
+    const result = detectDenominatorStepChange({
+      current: { clicks: 1000, conversions: 50, spend: 500 },
+      previous: { clicks: 1000, conversions: 50, spend: 500 },
+    });
+    expect(result.suspected).toBe(false);
+    expect(result.signature).toBeUndefined();
+  });
+
+  it("abstains (no signature) when zero conversions but traffic is below the floor", () => {
+    const result = detectDenominatorStepChange({
+      current: { clicks: 10, conversions: 0, spend: 500 },
+      previous: { clicks: 10, conversions: 0, spend: 500 },
+    });
+    expect(result.suspected).toBe(false);
+    expect(result.signature).toBeUndefined();
+  });
+});

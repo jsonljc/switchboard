@@ -23,7 +23,10 @@ import { analyzeFunnel } from "./funnel-analyzer.js";
 import { comparePeriods, type MetricSet } from "./period-comparator.js";
 import { LearningPhaseGuard, LearningPhaseGuardV2 } from "./learning-phase-guard.js";
 import { analyzeV2Sections } from "./audit-v2-sections.js";
-import { generateSignalHealthRecommendations } from "./recommendation-engine.js";
+import {
+  generateSignalHealthRecommendations,
+  generateCapiAttributionStaleRecommendation,
+} from "./recommendation-engine.js";
 import {
   runRecommendationSink,
   type EmissionContext,
@@ -527,11 +530,12 @@ export class AuditRunner {
     // and learning-resetting actions; accountWatch (when present) is the single
     // account-level signal watch to surface. fix_signal_health recs (appended
     // later) are not gated by this — the user is still pointed at the fix.
-    const { measurementTrusted, accountWatch } = evaluateDenominatorStepChange({
-      currentInsights,
-      previousInsights,
-      nextCycleDate,
-    });
+    const { measurementTrusted, accountWatch, capiAttributionStale } =
+      evaluateDenominatorStepChange({
+        currentInsights,
+        previousInsights,
+        nextCycleDate,
+      });
 
     // Step 4b: Resolve the account-level economic tier + booking-calibrated target
     // ONCE for this audit (calibrate-first invariant lives in resolveEconomicTarget).
@@ -752,6 +756,17 @@ export class AuditRunner {
     // critical case short-circuited above before per-campaign work began).
     if (signalHealthRecs.length > 0) {
       recommendations.push(...signalHealthRecs);
+    }
+
+    // Step 8c-bis: account-level CAPI-attribution-stale advisory. Fires when the denominator
+    // step-change detector reported the zero-conversions-despite-traffic signature (a suspected
+    // account-wide pixel/CAPI conversion outage). Produced ONCE here (CAPI is account-level),
+    // mirroring signalHealthRecs; the same outage set measurementTrusted=false above (demoting
+    // cost recs to measurement_untrusted watches), and this is the paired actionable fix. Placed
+    // before arbitration so it is ranked as the single measurement fix.
+    const capiAttributionRec = generateCapiAttributionStaleRecommendation(capiAttributionStale);
+    if (capiAttributionRec) {
+      recommendations.push(capiAttributionRec);
     }
 
     // Step 8d (Riley v3 slice 2): cross-campaign arbitration, ADDITIVE ranking
