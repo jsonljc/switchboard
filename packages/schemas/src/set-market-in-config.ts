@@ -21,11 +21,13 @@ export function setMarketInConfig(
   config: GovernanceConfig,
   market: { jurisdiction: Jurisdiction; clinicType: ClinicType },
 ): GovernanceConfig {
+  // Static-key spread (unlike setGateModeInConfig's computed key), so no cast is needed:
+  // the result is structurally a GovernanceConfig and every passthrough sub-block is kept.
   return {
-    ...(config as unknown as Record<string, unknown>),
+    ...config,
     jurisdiction: market.jurisdiction,
     clinicType: market.clinicType,
-  } as unknown as GovernanceConfig;
+  };
 }
 
 /** Parameters for the `governance.set_market` operator-mutation intent (P2-B slice 2). */
