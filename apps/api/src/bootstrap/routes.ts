@@ -65,6 +65,7 @@ import { readinessRoutes } from "../routes/readiness.js";
 import { observeReviewRoutes } from "../routes/governance-observe-review.js";
 import { enforceReadinessRoutes } from "../routes/governance-enforce-readiness.js";
 import { governanceFlipRoutes } from "../routes/governance-set-gate-mode.js";
+import { governanceMarketRoutes } from "../routes/governance-set-market.js";
 import { billingRoutes } from "../routes/billing.js";
 import { metaDeletionRoutes } from "../routes/meta-deletion.js";
 import { googleCalendarOAuthRoutes } from "../routes/google-calendar-oauth.js";
@@ -244,6 +245,7 @@ export async function registerRoutes(
   await app.register(observeReviewRoutes, { prefix: "/api/agents" });
   await app.register(enforceReadinessRoutes, { prefix: "/api/agents" });
   await app.register(governanceFlipRoutes, { prefix: "/api/agents" });
+  await app.register(governanceMarketRoutes, { prefix: "/api/agents" });
   await app.register(knowledgeRoutes, { prefix: "/api/knowledge" });
   await app.register(knowledgeEntryRoutes, { prefix: "/api/knowledge-entries" });
   await app.register(escalationsRoutes, { prefix: "/api/escalations" });
