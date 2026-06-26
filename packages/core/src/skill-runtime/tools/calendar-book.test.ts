@@ -229,6 +229,25 @@ describe("createCalendarBookToolFactory", () => {
     });
   });
 
+  // P2-2: the coarse runtime input guard only checks string/min-length, so a
+  // non-empty but unparseable LLM date reaches execute(), becomes an Invalid Date,
+  // and would throw at the Prisma booking write (or .toISOString()) and kill the
+  // whole turn. Validate the window first and return a recoverable fail instead.
+  it("booking.create returns a recoverable fail and never touches the store when slotStart is malformed", async () => {
+    const result = await tool.operations["booking.create"]!.execute({
+      service: "consultation",
+      slotStart: "not-a-date",
+      slotEnd: "2026-04-20T10:30:00+08:00",
+      calendarId: "primary",
+    });
+    expect(result.status).toBe("error");
+    expect(result.error?.code).toBe("INVALID_SLOT");
+    expect(result.error?.retryable).toBe(true);
+    expect(result.error?.modelRemediation).toBeTruthy();
+    // short-circuits BEFORE the durable write that would throw on the Invalid Date
+    expect(bookingStore.create).not.toHaveBeenCalled();
+  });
+
   it("slots.query is idempotent", () => {
     expect(tool.operations["slots.query"]!.idempotent).toBe(true);
   });

@@ -5,6 +5,7 @@ import { getMetrics } from "../../telemetry/metrics.js";
 import { isBookingSlotConflictError } from "@switchboard/schemas";
 import type { CalendarProvider } from "@switchboard/schemas";
 import { resolveProviderOrFail } from "./calendar-book.js";
+import { parseSlotWindowOrFail } from "./slot-window.js";
 
 type UpcomingBooking = {
   id: string;
@@ -115,6 +116,14 @@ export function buildRescheduleOperations(
           calendarId: string;
           service?: string;
         };
+        // P2-2 — validate the LLM-supplied slot window BEFORE resolving the target
+        // or touching the provider/store. An unparseable date would otherwise reach
+        // provider.rescheduleBooking (a spurious calendar move) and the durable
+        // reschedule (Invalid Date), where the throw is mis-classified as a
+        // human-escalate RESCHEDULE_FAILURE. A recoverable, retryable fail steers
+        // the model to re-issue a valid slot with no side effect.
+        const parsedWindow = parseSlotWindowOrFail(input.slotStart, input.slotEnd);
+        if ("failure" in parsedWindow) return parsedWindow.failure;
         const upcoming = await deps.bookingStore.findUpcomingByContact(orgId, contactId);
         const resolution = resolveTarget(upcoming, input.service);
         if (resolution.kind === "none") {

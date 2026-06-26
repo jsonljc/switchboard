@@ -328,3 +328,30 @@ it("cancel fails closed for a whitespace-only service rather than acting on a bo
   expect(res.error?.code).toBe("NO_MATCHING_BOOKING");
   expect(d.bookingStore.cancel).not.toHaveBeenCalled();
 });
+
+// P2-2: a malformed LLM slotStart on a reschedule previously reached
+// provider.rescheduleBooking (a spurious calendar move) and bookingStore.reschedule
+// (an Invalid Date), where the Prisma throw was mis-classified as RESCHEDULE_FAILURE
+// (retryable:false, "escalate to a human") AFTER moving the live event. Validate the
+// window first and return a recoverable, retryable fail with no side effect.
+it("reschedule returns a recoverable fail and performs no calendar or store mutation when slotStart is malformed", async () => {
+  const rescheduleBooking = vi.fn().mockResolvedValue({});
+  const d = deps({
+    calendarProviderFactory: vi.fn().mockResolvedValue({
+      rescheduleBooking,
+      cancelBooking: vi.fn().mockResolvedValue(undefined),
+    }),
+  });
+  const res = await buildRescheduleOperations(ctx, d as never)["booking.reschedule"]!.execute({
+    slotStart: "not-a-date",
+    slotEnd: "2026-06-13T03:00:00Z",
+    calendarId: "primary",
+  });
+  expect(res.status).toBe("error");
+  expect(res.error?.code).toBe("INVALID_SLOT");
+  expect(res.error?.retryable).toBe(true);
+  expect(res.error?.modelRemediation).toBeTruthy();
+  // no spurious calendar move and no mis-classified human-escalate
+  expect(rescheduleBooking).not.toHaveBeenCalled();
+  expect(d.bookingStore.reschedule).not.toHaveBeenCalled();
+});
