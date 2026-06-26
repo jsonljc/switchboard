@@ -4,6 +4,38 @@ import { ScanRequestSchema, ScanResultSchema } from "@switchboard/schemas";
 import Anthropic from "@anthropic-ai/sdk";
 import { assertSafeUrl, SSRFError } from "../utils/ssrf-guard.js";
 
+const MAX_REDIRECTS = 5;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * Fetch `initialUrl`, following up to MAX_REDIRECTS redirects MANUALLY so the SSRF guard
+ * re-validates EVERY hop. undici's default `redirect: "follow"` would let a public origin
+ * 30x-redirect the scanner to a private / loopback / link-local / cloud-metadata address
+ * WITHOUT re-validation, which is a live SSRF. Every hop's URL is re-checked with
+ * assertSafeUrl before the request (defense in depth, including the first hop), a blocked
+ * hop throws SSRFError, and an over-long chain throws too. The caller turns any throw into a
+ * safe generic error and never surfaces the internal response body. Mirrors the manual
+ * redirect handling in packages/core/src/website-scanner/page-fetcher.ts.
+ */
+async function fetchFollowingRedirects(initialUrl: string, signal: AbortSignal): Promise<Response> {
+  let currentUrl = initialUrl;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    await assertSafeUrl(currentUrl);
+    const response = await fetch(currentUrl, {
+      headers: { "User-Agent": "SwitchboardBot/1.0" },
+      signal,
+      redirect: "manual",
+    });
+    if (!REDIRECT_STATUSES.has(response.status)) {
+      return response;
+    }
+    const location = response.headers.get("location");
+    if (!location) return response;
+    currentUrl = new URL(location, currentUrl).toString();
+  }
+  throw new SSRFError("Too many redirects");
+}
+
 const EXTRACTION_PROMPT = `You are extracting structured business information from a website page.
 Return a JSON object with these fields (omit any you can't determine):
 - businessName: { value: string, confidence: "high"|"medium"|"low" }
@@ -41,10 +73,7 @@ const websiteScanRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      const response = await fetch(url, {
-        headers: { "User-Agent": "SwitchboardBot/1.0" },
-        signal: AbortSignal.timeout(10000),
-      });
+      const response = await fetchFollowingRedirects(url, AbortSignal.timeout(10000));
 
       if (!response.ok) {
         return reply.send({
