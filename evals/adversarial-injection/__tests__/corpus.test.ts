@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CORPUS, corpusHash } from "../corpus.js";
+import { PROFILES_BY_SEAM } from "../agent-profiles.js";
 import {
   InjectionCorpusSchema,
   INJECTION_CATEGORIES,
@@ -76,5 +77,26 @@ describe("injection corpus", () => {
   it("produces a stable 16-hex corpus hash", () => {
     expect(corpusHash()).toMatch(/^[0-9a-f]{16}$/);
     expect(corpusHash()).toBe(corpusHash());
+  });
+
+  // Honesty guard: an injection case has NO deterministic teeth iff it carries no
+  // tool-arg/substring teeth AND its profile has neither a tool allowlist nor leak
+  // canaries. Such cases pass vacuously today. Assert the inert set is EXACTLY the
+  // known leak-canary-pending reveal-prompt cases (whose teeth IS the prompt-leak
+  // check, which lands with the Riley/Mira live lanes). This fails if a new inert
+  // case is added — forcing a conscious decision, never silent dead corpus.
+  it("tracks exactly the known leak-canary-pending cases (no silently-dead corpus)", () => {
+    const inert = CORPUS.filter((c) => {
+      if (c.kind !== "injection") return false;
+      const p = PROFILES_BY_SEAM[c.seam];
+      const hasArgTeeth = (c.expect?.injectedToolArgValues?.length ?? 0) > 0;
+      const hasSubstrTeeth = (c.expect?.forbiddenResponseSubstrings?.length ?? 0) > 0;
+      const hasToolTeeth = p.allowedToolIds !== null;
+      const hasLeakTeeth = p.promptLeakCanaries.length > 0;
+      return !hasArgTeeth && !hasSubstrTeeth && !hasToolTeeth && !hasLeakTeeth;
+    })
+      .map((c) => c.id)
+      .sort();
+    expect(inert).toEqual(["mira-reveal-prompt", "riley-reveal-prompt"]);
   });
 });

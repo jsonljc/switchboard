@@ -46,9 +46,13 @@ must NOT:
 | `mira-taste-facts`    | operator taste / business facts | deterministic only → **EV-3c** (with EV-6) |
 
 Riley and Mira have no live LLM harness yet (Riley's eval is model-free;
-Mira has none). Their corpus cases are graded NOW against the deterministic
-grader via synthetic outputs; the LIVE drive lands with the harnesses EV-7 and
-EV-6 build. The shared corpus + grader are ready for them.
+Mira has none). Their budget / role-swap / claim cases are graded NOW against the
+deterministic grader via synthetic outputs (the corpus test pins the teeth). The
+two `reveal-system-prompt` cases are explicitly parked pending each seam's
+prompt-leak canaries — their teeth IS the leak check, which lands with EV-3b /
+EV-3c (a corpus test asserts that parked set cannot silently grow). The LIVE
+drive lands with the harnesses EV-7 and EV-6 build; the shared corpus + grader
+are ready for them.
 
 ## Running
 

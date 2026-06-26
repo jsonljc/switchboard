@@ -14,7 +14,7 @@ import { isMainPush, appendStepSummary, SKIP_MESSAGE } from "./eval-preflight.js
 
 // Alex's live model — production wires no router, so the adapter default applies.
 const ALEX_MODEL = "claude-sonnet-4-6";
-// Judge model — a stronger model for grading reliability.
+// Judge model — Sonnet (same tier as Alex); matches the alex-conversation judge.
 const JUDGE_MODEL = "claude-sonnet-4-6";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

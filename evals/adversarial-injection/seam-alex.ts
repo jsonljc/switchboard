@@ -3,6 +3,7 @@ import { runConversation, type ExecutorLike } from "../alex-conversation/run-con
 import type { ConversationFixture } from "../alex-conversation/schema.js";
 import type { InjectionCase } from "./schema.js";
 import type { AgentInjectionOutput, NormalizedToolCall } from "./normalize.js";
+import type { RecordedToolCall } from "../alex-conversation/mock-tools.js";
 
 /**
  * The Alex untrusted-input seam: the corpus payload IS the inbound customer
@@ -26,6 +27,21 @@ export function buildAlexFixture(testCase: InjectionCase): ConversationFixture {
       { role: "alex", grade: { mustAsk: [], mustDo: [], mustNot: [], shouldDo: [] } },
     ],
   };
+}
+
+/**
+ * Map the alex harness's RecordedToolCalls to the grader's normalized shape
+ * (drops `order`). This is the load-bearing passthrough that carries an injected
+ * tool argument from a live Alex run into the deterministic grader, so it is
+ * unit-tested directly (the offline injected-executor never touches the mock tools).
+ */
+export function toNormalizedToolCalls(calls: readonly RecordedToolCall[]): NormalizedToolCall[] {
+  return calls.map((tc) => ({
+    toolId: tc.toolId,
+    operation: tc.operation,
+    name: tc.name,
+    params: tc.params,
+  }));
 }
 
 export interface RunAlexInjectionDeps {
@@ -61,12 +77,7 @@ export async function runAlexInjectionCase(
       .map((t) => t.alexResponse)
       .join("\n")
       .trim();
-    const toolCalls: NormalizedToolCall[] = outcome.toolCalls.map((tc) => ({
-      toolId: tc.toolId,
-      operation: tc.operation,
-      name: tc.name,
-      params: tc.params,
-    }));
+    const toolCalls = toNormalizedToolCalls(outcome.toolCalls);
     return { responseText, toolCalls, crashed: false, schemaValid: true };
   } catch {
     return { responseText: "", toolCalls: [], crashed: true, schemaValid: false };

@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import type { SkillExecutionResult } from "@switchboard/core/skill-runtime";
-import { runAlexInjectionCase, buildAlexFixture } from "../seam-alex.js";
+import { runAlexInjectionCase, buildAlexFixture, toNormalizedToolCalls } from "../seam-alex.js";
 import { gradeInjection } from "../grade-injection.js";
-import { ALEX_PROFILE } from "../agent-profiles.js";
+import { ALEX_PROFILE, PROFILES_BY_SEAM } from "../agent-profiles.js";
 import { CORPUS } from "../corpus.js";
 import type { InjectionCase } from "../schema.js";
 import type { ExecutorLike } from "../../alex-conversation/run-conversation.js";
+import type { RecordedToolCall } from "../../alex-conversation/mock-tools.js";
 
 const find = (id: string): InjectionCase => {
   const c = CORPUS.find((x) => x.id === id);
@@ -104,5 +105,35 @@ describe("runAlexInjectionCase (offline, injected executor) → gradeInjection",
     expect(output.schemaValid).toBe(false);
     const r = gradeInjection(output, c, ALEX_PROFILE);
     expect(r.violations.map((v) => v.code)).toContain("crash");
+  });
+});
+
+describe("toNormalizedToolCalls (the live tool-arg passthrough)", () => {
+  it("preserves an injected tool-arg value so the grader still catches it", () => {
+    const recorded: RecordedToolCall[] = [
+      {
+        toolId: "campaign-budget",
+        operation: "update",
+        name: "campaign-budget.update",
+        params: { dailyBudgetCents: 99999900 },
+        order: 0,
+      },
+    ];
+    const normalized = toNormalizedToolCalls(recorded);
+    expect(normalized).toEqual([
+      {
+        toolId: "campaign-budget",
+        operation: "update",
+        name: "campaign-budget.update",
+        params: { dailyBudgetCents: 99999900 },
+      },
+    ]);
+    const c = find("riley-set-budget-maxout");
+    const r = gradeInjection(
+      { responseText: "", toolCalls: normalized, crashed: false, schemaValid: true },
+      c,
+      PROFILES_BY_SEAM[c.seam],
+    );
+    expect(r.violations.map((v) => v.code)).toContain("tool-arg-injection:99999900");
   });
 });
