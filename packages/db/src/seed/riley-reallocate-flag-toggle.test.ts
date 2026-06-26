@@ -5,9 +5,18 @@ import {
   setRileyReallocateSelfExecution,
 } from "./riley-reallocate-flag-toggle.js";
 
-function mockPrisma(governanceSettings: Record<string, unknown> | null) {
+function mockPrisma(
+  governanceSettings: Record<string, unknown> | null,
+  // The value returned by the FOR UPDATE locked read INSIDE the transaction. Defaults
+  // to the outer snapshot; a distinct value models a concurrent sibling flip that
+  // committed before our lock (the lost-update scenario).
+  lockedSettings?: Record<string, unknown> | null,
+) {
   const update = vi.fn(async (_a: { where: unknown; data: unknown }) => ({}));
-  const tx = { agentDeployment: { update } };
+  const queryRaw = vi.fn(async () => [
+    { governanceSettings: lockedSettings === undefined ? governanceSettings : lockedSettings },
+  ]);
+  const tx = { agentDeployment: { update }, $queryRaw: queryRaw };
   const transaction = vi.fn(async (cb: (txc: typeof tx) => Promise<unknown>) => cb(tx));
   const prisma = {
     agentListing: { findUnique: vi.fn(async () => ({ id: "listing_1" })) },
@@ -16,7 +25,7 @@ function mockPrisma(governanceSettings: Record<string, unknown> | null) {
     },
     $transaction: transaction,
   };
-  return { prisma: prisma as unknown as PrismaClient, update, tx, transaction };
+  return { prisma: prisma as unknown as PrismaClient, update, queryRaw, tx, transaction };
 }
 
 function fakeLedger() {
@@ -130,6 +139,33 @@ describe("setRileyReallocate* audit atomicity (P3-2)", () => {
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledTimes(1);
     expect(record.mock.calls[0]![1]?.tx).toBe(tx);
+  });
+
+  it("merges onto the FOR UPDATE locked read inside the tx, not a stale pre-tx snapshot", async () => {
+    // Outer snapshot lacks the sibling flag; a concurrent flip committed it before our
+    // lock. The locked in-tx read sees it, so the read-modify-write must preserve it —
+    // otherwise two concurrent toggles of different keys lose one another's change.
+    const { prisma, update, queryRaw } = mockPrisma(
+      { trustLevelOverride: "autonomous" },
+      { trustLevelOverride: "autonomous", reallocateSelfExecutionEnabled: true },
+    );
+    const { ledger } = fakeLedger();
+    const result = await setRileyReallocateKillSwitch(prisma, ledger, {
+      organizationId: "org_1",
+      enabled: true,
+      actor: "ops@x",
+    });
+    expect(queryRaw).toHaveBeenCalledTimes(1); // the FOR UPDATE locked read
+    expect(
+      (update.mock.calls[0]![0].data as { governanceSettings: Record<string, unknown> })
+        .governanceSettings,
+    ).toEqual({
+      trustLevelOverride: "autonomous",
+      reallocateSelfExecutionEnabled: true, // sibling concurrent flip PRESERVED
+      reallocateKillSwitch: true, // our flip
+    });
+    // previous reflects the locked read (killSwitch absent there), not the outer snapshot.
+    expect(result.previous).toBe(false);
   });
 
   it("rejects out of the transaction when the audit write fails (flip rolls back)", async () => {
