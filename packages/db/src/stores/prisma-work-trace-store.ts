@@ -435,8 +435,10 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
   private parseQualificationSignals(
     raw: string | null,
     workUnitId: string,
-  ): WorkTraceQualificationSignals | null {
-    if (!raw) return null;
+  ): WorkTraceQualificationSignals | null | undefined {
+    // Absent → undefined (faithful round-trip of an optional that was never set).
+    // Present-but-corrupt → null below (a surfaced data-integrity signal).
+    if (!raw) return undefined;
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
@@ -487,7 +489,11 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
         : undefined,
 
       approvalId: row.approvalId ?? undefined,
-      approvalOutcome: row.approvalOutcome as WorkTrace["approvalOutcome"],
+      // `?? undefined` (not the bare cast) so a null column reconstructs as the
+      // absent/undefined form the trace was persisted with. canonical-json keeps
+      // null but drops undefined, so a leaked `null` here breaks contentHash
+      // verification for every trace that never went through approval.
+      approvalOutcome: (row.approvalOutcome ?? undefined) as WorkTrace["approvalOutcome"],
       approvalRespondedBy: row.approvalRespondedBy ?? undefined,
       approvalRespondedAt: row.approvalRespondedAt?.toISOString(),
 
@@ -521,6 +527,11 @@ export class PrismaWorkTraceStore implements WorkTraceStore {
       // (LATEST) and break round-trip integrity for those rows.
       ingressPath: (row.ingressPath ?? "platform_ingress") as WorkTrace["ingressPath"],
       hashInputVersion: row.hashInputVersion ?? 1,
+      // Absent reconstructs as undefined (NOT null): canonical-json drops
+      // undefined but keeps null, so a leaked null here breaks contentHash
+      // verification for every trace persisted without qualification signals.
+      // parseQualificationSignals returns undefined for absent and null only for
+      // present-but-corrupt JSON (a data-integrity signal the read path surfaces).
       qualificationSignals: this.parseQualificationSignals(
         row.qualificationSignals ?? null,
         row.workUnitId,

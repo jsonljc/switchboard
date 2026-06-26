@@ -187,7 +187,7 @@ describe("PrismaLedgerStorage", () => {
   describe("appendAtomic", () => {
     it("executes within a transaction with advisory lock", async () => {
       const mockTx = {
-        $queryRaw: vi.fn().mockResolvedValue([]),
+        $executeRaw: vi.fn().mockResolvedValue(1),
         auditEntry: {
           findFirst: vi.fn().mockResolvedValue({ entryHash: "prev_hash" }),
           create: vi.fn().mockResolvedValue({}),
@@ -204,7 +204,7 @@ describe("PrismaLedgerStorage", () => {
       const result = await storage.appendAtomic(buildEntry);
 
       expect(prisma.$transaction).toHaveBeenCalled();
-      expect(mockTx.$queryRaw).toHaveBeenCalled();
+      expect(mockTx.$executeRaw).toHaveBeenCalled();
       expect(mockTx.auditEntry.findFirst).toHaveBeenCalledWith({
         orderBy: { timestamp: "desc" },
       });
@@ -215,7 +215,7 @@ describe("PrismaLedgerStorage", () => {
 
     it("passes null previousEntryHash when no latest entry", async () => {
       const mockTx = {
-        $queryRaw: vi.fn().mockResolvedValue([]),
+        $executeRaw: vi.fn().mockResolvedValue(1),
         auditEntry: {
           findFirst: vi.fn().mockResolvedValue(null),
           create: vi.fn().mockResolvedValue({}),
@@ -236,7 +236,7 @@ describe("PrismaLedgerStorage", () => {
 
     it("calls writeWithTx directly when externalTx is provided (no nested $transaction)", async () => {
       const mockTx = {
-        $queryRaw: vi.fn().mockResolvedValue([]),
+        $executeRaw: vi.fn().mockResolvedValue(1),
         auditEntry: {
           findFirst: vi.fn().mockResolvedValue({ entryHash: "ext_prev_hash" }),
           create: vi.fn().mockResolvedValue({}),
@@ -251,7 +251,7 @@ describe("PrismaLedgerStorage", () => {
       // Must NOT open its own transaction
       expect(prisma.$transaction).not.toHaveBeenCalled();
       // Must use the provided tx for advisory lock + write
-      expect(mockTx.$queryRaw).toHaveBeenCalled();
+      expect(mockTx.$executeRaw).toHaveBeenCalled();
       expect(mockTx.auditEntry.findFirst).toHaveBeenCalledWith({
         orderBy: { timestamp: "desc" },
       });
