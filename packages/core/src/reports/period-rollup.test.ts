@@ -108,7 +108,8 @@ describe("createPeriodRollup", () => {
 
     expect(result.label).toBe("THIS MONTH");
     expect(result.funnel).toHaveLength(6);
-    expect(result.attribution.total).toBe(5000);
+    // 5000c revenue normalized to $50 major (attribution is major-unit, matching the digest).
+    expect(result.attribution.total).toBe(50);
     expect(result.cost.paid).toBeGreaterThan(0);
     expect(result.campaigns).toBeDefined();
     expect(result.managedComparison).toBeDefined();
@@ -241,7 +242,8 @@ describe("createPeriodRollup", () => {
     };
     expect(input.ctx.orgId).toBe("org-1");
     expect(input.ctx.current.window).toBe("THIS MONTH");
-    expect(input.attribution.total).toBe(5000);
+    // 5000c revenue normalized to $50 major (attribution is major-unit).
+    expect(input.attribution.total).toBe(50);
     expect(input.cost.paid).toBeGreaterThan(0);
     expect(input.funnelNarrative).toBeDefined();
 

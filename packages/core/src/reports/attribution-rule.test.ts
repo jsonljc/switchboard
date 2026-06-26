@@ -60,9 +60,37 @@ describe("computeAttribution", () => {
     );
 
     const result = await computeAttribution(makeCtx(), stores);
-    expect(result.riley.value).toBe(5000);
+    expect(result.riley.value).toBe(50);
     expect(result.alex.value).toBe(0);
-    expect(result.total).toBe(5000);
+    expect(result.total).toBe(50);
+  });
+
+  it("normalizes cents revenue to major units in riley/alex/total (matches the digest's formatMoneyMajor)", async () => {
+    // revenueWithFirstTouch.amount is MINOR units (cents); the digest renders these via
+    // formatMoneyMajor and the dashboard via fmtSGD, both major-unit. 5000c=$50, 3000c=$30.
+    const stores = makeStores(
+      [
+        {
+          amount: 5000,
+          firstTouchSourceAdId: "ad-1",
+          firstTouchSourceCampaignId: "camp-1",
+          firstTouchSourceChannel: null,
+        },
+        {
+          amount: 3000,
+          firstTouchSourceAdId: null,
+          firstTouchSourceCampaignId: null,
+          firstTouchSourceChannel: "whatsapp",
+        },
+      ],
+      [],
+      [],
+    );
+
+    const result = await computeAttribution(makeCtx(), stores);
+    expect(result.riley.value).toBe(50);
+    expect(result.alex.value).toBe(30);
+    expect(result.total).toBe(80);
   });
 
   it("buckets chat-sourced revenue to Alex", async () => {
@@ -81,7 +109,7 @@ describe("computeAttribution", () => {
 
     const result = await computeAttribution(makeCtx(), stores);
     expect(result.riley.value).toBe(0);
-    expect(result.alex.value).toBe(2000);
+    expect(result.alex.value).toBe(20);
   });
 
   it("buckets manual-entry revenue (no ConversionRecord) to Alex", async () => {
@@ -99,7 +127,7 @@ describe("computeAttribution", () => {
     );
 
     const result = await computeAttribution(makeCtx(), stores);
-    expect(result.alex.value).toBe(1000);
+    expect(result.alex.value).toBe(10);
     expect(result.riley.value).toBe(0);
   });
 
