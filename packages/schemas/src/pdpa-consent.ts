@@ -49,7 +49,16 @@ export type ConsentGateDecision =
 
 /**
  * Single source of truth: revocation precedence enforced by construction.
- * Revoked short-circuits before granted is consulted.
+ * Revoked short-circuits before EVERYTHING, including the null-jurisdiction
+ * not_applicable branch and the granted branch.
+ *
+ * Why revoked is checked before jurisdiction: a revoked-but-unstamped contact is
+ * a real state. ConsentService.recordRevocation (a first inbound "STOP") sets
+ * consentRevokedAt WITHOUT stamping pdpaJurisdiction, because revocation can land
+ * before any governed outbound stamps the lead. If the null-jurisdiction
+ * short-circuit ran first, that contact would derive "not_applicable" and every
+ * consent gate (incl. the F15 booking precondition, which does NOT pre-resolve
+ * jurisdiction) would read it as ALLOW. Revocation must win regardless of stamp.
  *
  * Re-grant after revocation is NOT supported by this function — admin
  * clearConsent must explicitly null both timestamps to start a fresh cycle.
@@ -59,8 +68,8 @@ export function deriveConsentStatus(c: {
   consentGrantedAt: Date | string | null;
   consentRevokedAt: Date | string | null;
 }): ConsentStatus {
-  if (!c.pdpaJurisdiction) return "not_applicable";
   if (c.consentRevokedAt) return "revoked";
+  if (!c.pdpaJurisdiction) return "not_applicable";
   if (c.consentGrantedAt) return "granted";
   return "pending";
 }

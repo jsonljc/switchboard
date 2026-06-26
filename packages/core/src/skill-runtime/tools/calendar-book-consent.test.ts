@@ -27,6 +27,16 @@ const NOT_APPLICABLE: BookingConsentState = {
   consentGrantedAt: null,
   consentRevokedAt: null,
 };
+// Revoked-but-unstamped: a first inbound "STOP" sets consentRevokedAt WITHOUT stamping
+// pdpaJurisdiction. This precondition does NOT pre-resolve jurisdiction, so it relies on
+// deriveConsentStatus checking revoked BEFORE the null-jurisdiction short-circuit. If it
+// did not, this contact would mask as not_applicable and the booking would proceed despite
+// revocation. That is the F15 hole this fix closes.
+const REVOKED_UNSTAMPED: BookingConsentState = {
+  pdpaJurisdiction: null,
+  consentGrantedAt: null,
+  consentRevokedAt: "2026-04-02T00:00:00.000Z",
+};
 
 describe("enforceConsentPrecondition", () => {
   let resolveMode: ReturnType<typeof vi.fn<(deploymentId: string) => Promise<GovernanceMode>>>;
@@ -90,6 +100,22 @@ describe("enforceConsentPrecondition", () => {
     const result = await enforceConsentPrecondition(precondition, IDS);
 
     expect(result).toBeNull();
+  });
+
+  // Headline regression guard: a revoked-but-unstamped contact (null jurisdiction +
+  // consentRevokedAt set) MUST block under enforce. Before the deriveConsentStatus
+  // revoked-first reorder it masked as not_applicable → allowed, so a booking proceeded
+  // despite revocation. This precondition does not pre-resolve jurisdiction, so it is the
+  // path the root fix closes.
+  it("mode 'enforce' + revoked-but-unstamped (null jurisdiction): blocks with CONSENT_REQUIRED", async () => {
+    resolveMode.mockResolvedValue("enforce");
+    read.mockResolvedValue(REVOKED_UNSTAMPED);
+
+    const result = await enforceConsentPrecondition(precondition, IDS);
+
+    expect(result?.status).toBe("error");
+    expect(result?.error?.code).toBe("CONSENT_REQUIRED");
+    expect(result?.error?.retryable).toBe(false);
   });
 
   it("mode 'observe' + pending consent: returns null (telemetry-only, never blocks)", async () => {
