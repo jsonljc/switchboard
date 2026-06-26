@@ -1079,6 +1079,12 @@ export async function registerInngest(
       }
       return options.submitRecoveryRetry(input);
     },
+    // P2-13: the same retry cron sweeps crash-orphaned claims (pending + nextRetryAt NULL + stale)
+    // via the store's guarded CAS dead-letter; same Prisma-backed store as findDue.
+    findOrphanedClaims: (olderThan, limit) =>
+      robinRecoverySendStore.findOrphanedClaims(olderThan, limit),
+    reapOrphanedClaim: (id, organizationId, olderThan) =>
+      robinRecoverySendStore.reapOrphanedClaim(id, organizationId, olderThan),
   };
 
   // PCD Registry backfill cron dependencies

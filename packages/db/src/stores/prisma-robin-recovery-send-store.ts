@@ -3,13 +3,17 @@ import type {
   CreateRobinRecoverySendInput,
   RobinRecoverySendStore,
   DueRobinRecoverySend,
+  OrphanedClaimReaperStore,
+  OrphanedRobinRecoverySend,
 } from "@switchboard/core";
 import {
   ROBIN_RECOVERY_MAX_SEND_ATTEMPTS,
   ROBIN_RECOVERY_RETRY_MAX_AGE_MS,
 } from "@switchboard/core";
 
-export class PrismaRobinRecoverySendStore implements RobinRecoverySendStore {
+export class PrismaRobinRecoverySendStore
+  implements RobinRecoverySendStore, OrphanedClaimReaperStore
+{
   constructor(private readonly prisma: PrismaClient) {}
 
   async create(input: CreateRobinRecoverySendInput): Promise<{ id: string }> {
@@ -99,5 +103,60 @@ export class PrismaRobinRecoverySendStore implements RobinRecoverySendStore {
         ? { status: "pending", attempts: { increment: 1 }, nextRetryAt, lastError: error }
         : { status: "failed", attempts: { increment: 1 }, nextRetryAt: null, lastError: error },
     });
+  }
+
+  // --- P2-13 crash-orphaned claim reaper (OrphanedClaimReaperStore) -----------------------------
+
+  async findOrphanedClaims(olderThan: Date, limit: number): Promise<OrphanedRobinRecoverySend[]> {
+    // Crash-orphaned shape: markSendInFlight cleared nextRetryAt to NULL while status stayed "pending",
+    // then the process died before a terminal write. findDue (nextRetryAt lte now) excludes NULL, so
+    // these are invisible to the retry cron. `updatedAt < olderThan` is the staleness signal (@updatedAt
+    // was last bumped by the claim); a freshly-claimed in-flight row has a recent updatedAt and is
+    // excluded. Oldest-first so a capped batch drains the longest-stranded rows first.
+    const rows = await this.prisma.robinRecoverySend.findMany({
+      where: {
+        status: "pending",
+        nextRetryAt: null,
+        updatedAt: { lt: olderThan },
+      },
+      orderBy: { updatedAt: "asc" },
+      take: limit,
+      select: {
+        id: true,
+        organizationId: true,
+        contactId: true,
+        bookingId: true,
+        updatedAt: true,
+      },
+    });
+    return rows;
+  }
+
+  async reapOrphanedClaim(
+    id: string,
+    organizationId: string,
+    olderThan: Date,
+  ): Promise<{ count: number }> {
+    // Status-guarded CAS dead-letter, org-scoped (audit §10). The WHERE re-asserts the FULL orphan
+    // shape (still pending, still nextRetryAt NULL, still stale) AND the owning organizationId, so if a
+    // concurrent live sender (markSent/markFailed/markSkipped) or another reaper already moved the row,
+    // this matches 0 rows (the caller treats count===0 as a benign race). The write is terminal-failed
+    // and NEVER re-queues (nextRetryAt stays NULL) and never triggers a send, so the reaper can never
+    // cause a double WhatsApp send: stranded-sent is the safe direction.
+    const { count } = await this.prisma.robinRecoverySend.updateMany({
+      where: {
+        id,
+        organizationId,
+        status: "pending",
+        nextRetryAt: null,
+        updatedAt: { lt: olderThan },
+      },
+      data: {
+        status: "failed",
+        lastError: "reaped_orphaned_claim",
+        nextRetryAt: null,
+      },
+    });
+    return { count };
   }
 }
