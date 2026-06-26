@@ -89,6 +89,18 @@ describe("governanceMarketRoutes (integration)", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it("ok:false entitlement_required -> 402 via ingressErrorToReply (entitlement surfaces, never 200)", async () => {
+    // set_market is revenueRecording:false, so a non-entitled org is blocked at ingress.
+    // The route must surface that (402), not swallow it.
+    const submit = vi.fn().mockResolvedValue({
+      ok: false,
+      error: { type: "entitlement_required", message: "not entitled", blockedStatus: "expired" },
+    });
+    const { app } = await buildApp({ submit });
+    const res = await app.inject({ method: "POST", url, headers, payload: body });
+    expect(res.statusCode).toBe(402);
+  });
+
   it("no Alex deployment -> 404 and submit is never called (org scope)", async () => {
     const { app, submit } = await buildApp({ deployment: null });
     const res = await app.inject({ method: "POST", url, headers, payload: body });
