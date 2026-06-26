@@ -327,6 +327,12 @@ describe("PrismaContactStore", () => {
         // F5 erasure cascade additions (assertions live in the dedicated
         // prisma-contact-store-erasure.test.ts); mocked here so delete() runs.
         workTrace: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        conversationLifecycleSnapshot: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        conversationLifecycleTransition: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        scheduledFollowUp: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        scheduledReminder: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        robinRecoverySend: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        whatsAppTestSend: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
         failedMessage: {
           findMany: vi.fn().mockResolvedValue([]),
           deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -412,7 +418,9 @@ describe("PrismaContactStore", () => {
       });
     });
 
-    it("deletes phone-keyed records (WhatsAppMessageStatus, ConversationState) when contact has a phone", async () => {
+    it("deletes phone-keyed records (WhatsAppMessageStatus, ConversationState) org-scoped, across phone shapes", async () => {
+      // The exact `where` asserted here (recipientId/principalId `in` + organizationId)
+      // also guards #643 cross-org data loss: the deletes are org-scoped.
       const px = mockPrismaWithCascade();
       px.contact.findFirst.mockResolvedValue(makeContact({ phone: "+6591234567" }));
       const cascadeStore = new PrismaContactStore(px as never);
@@ -420,31 +428,16 @@ describe("PrismaContactStore", () => {
       await cascadeStore.delete("org-1", "contact-1");
 
       expect(px.whatsAppMessageStatus.deleteMany).toHaveBeenCalledWith({
-        where: { recipientId: "+6591234567", organizationId: "org-1" },
+        where: { recipientId: { in: ["+6591234567", "6591234567"] }, organizationId: "org-1" },
       });
       expect(px.conversationState.deleteMany).toHaveBeenCalledWith({
-        where: { principalId: "+6591234567", organizationId: "org-1" },
-      });
-    });
-
-    it("scopes phone-keyed deletes (WhatsAppMessageStatus, ConversationState) by organizationId to prevent cross-org data loss", async () => {
-      const px = mockPrismaWithCascade();
-      px.contact.findFirst.mockResolvedValue(makeContact({ phone: "+6591234567" }));
-      const cascadeStore = new PrismaContactStore(px as never);
-
-      await cascadeStore.delete("org-1", "contact-1");
-
-      expect(px.whatsAppMessageStatus.deleteMany).toHaveBeenCalledWith({
-        where: expect.objectContaining({ organizationId: "org-1" }),
-      });
-      expect(px.conversationState.deleteMany).toHaveBeenCalledWith({
-        where: expect.objectContaining({ organizationId: "org-1" }),
+        where: { principalId: { in: ["+6591234567", "6591234567"] }, organizationId: "org-1" },
       });
     });
 
     it("skips phone-keyed records when contact has no phone", async () => {
       const px = mockPrismaWithCascade();
-      px.contact.findFirst.mockResolvedValue(makeContact({ phone: null }));
+      px.contact.findFirst.mockResolvedValue(makeContact({ phone: null, phoneE164: null }));
       const cascadeStore = new PrismaContactStore(px as never);
 
       await cascadeStore.delete("org-1", "contact-1");

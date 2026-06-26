@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { PrismaContactStore, payloadMentionsPhone } from "../prisma-contact-store.js";
+import {
+  PrismaContactStore,
+  payloadMentionsPhone,
+  buildPhoneMatchCandidates,
+} from "../prisma-contact-store.js";
 
 // F5 (PDPA right-to-erasure): the Contact deletion cascade must also purge the
 // audit log (WorkTrace) and the dead-letter queue (FailedMessage), which key PII
@@ -55,6 +59,12 @@ function mockPrismaWithCascade() {
     conversionRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     pendingLeadRetry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     workTrace: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    conversationLifecycleSnapshot: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    conversationLifecycleTransition: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    scheduledFollowUp: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    scheduledReminder: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    robinRecoverySend: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    whatsAppTestSend: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     failedMessage: {
       findMany: vi.fn().mockResolvedValue([]),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -137,13 +147,16 @@ describe("PrismaContactStore.delete — PDPA erasure (F5)", () => {
     expect(px.failedMessage.deleteMany).not.toHaveBeenCalled();
   });
 
-  it("skips the FailedMessage purge entirely when the contact has no phone", async () => {
+  it("skips the phone-keyed branch entirely when the contact has no phone at all", async () => {
     const px = mockPrismaWithCascade();
-    px.contact.findFirst.mockResolvedValue(makeContact({ phone: null }));
+    px.contact.findFirst.mockResolvedValue(makeContact({ phone: null, phoneE164: null }));
     const store = new PrismaContactStore(px as never);
 
     await store.delete("org-1", "contact-1");
 
+    expect(px.whatsAppMessageStatus.deleteMany).not.toHaveBeenCalled();
+    expect(px.conversationState.deleteMany).not.toHaveBeenCalled();
+    expect(px.whatsAppTestSend.deleteMany).not.toHaveBeenCalled();
     expect(px.failedMessage.findMany).not.toHaveBeenCalled();
     expect(px.failedMessage.deleteMany).not.toHaveBeenCalled();
   });
@@ -161,6 +174,92 @@ describe("PrismaContactStore.delete — PDPA erasure (F5)", () => {
     expect(px.$transaction).toHaveBeenCalledTimes(1);
     expect(px.workTrace.deleteMany).toHaveBeenCalled();
     expect(px.failedMessage.deleteMany).toHaveBeenCalled();
+  });
+
+  it("purges all contactId-keyed lifecycle/follow-up/recovery tables, org-scoped", async () => {
+    const px = mockPrismaWithCascade();
+    const store = new PrismaContactStore(px as never);
+
+    await store.delete("org-1", "contact-1");
+
+    for (const table of [
+      px.conversationLifecycleSnapshot,
+      px.conversationLifecycleTransition,
+      px.scheduledFollowUp,
+      px.scheduledReminder,
+      px.robinRecoverySend,
+    ]) {
+      expect(table.deleteMany).toHaveBeenCalledWith({
+        where: { contactId: "contact-1", organizationId: "org-1" },
+      });
+    }
+  });
+
+  it("matches phone-keyed children across +E.164 and digits-only shapes", async () => {
+    const px = mockPrismaWithCascade();
+    px.contact.findFirst.mockResolvedValue(
+      makeContact({ phone: "+6591234567", phoneE164: "+6591234567" }),
+    );
+    const store = new PrismaContactStore(px as never);
+
+    await store.delete("org-1", "contact-1");
+
+    // recipient_id/wa_id arrive digits-only, principalId/toNumber may be +E.164 —
+    // the candidate set must cover both so no channel row escapes.
+    const assertCandidateMatch = (
+      deleteMany: { mock: { calls: unknown[][] } },
+      field: string,
+    ): void => {
+      const arg = deleteMany.mock.calls[0]![0] as {
+        where: Record<string, unknown> & { organizationId: string };
+      };
+      expect((arg.where[field] as { in: string[] }).in.slice().sort()).toEqual([
+        "+6591234567",
+        "6591234567",
+      ]);
+      expect(arg.where.organizationId).toBe("org-1");
+    };
+    assertCandidateMatch(px.whatsAppMessageStatus.deleteMany, "recipientId");
+    assertCandidateMatch(px.conversationState.deleteMany, "principalId");
+    assertCandidateMatch(px.whatsAppTestSend.deleteMany, "toNumber");
+  });
+
+  it("purges phone-keyed rows for a phoneE164-only contact (raw phone null)", async () => {
+    const px = mockPrismaWithCascade();
+    px.contact.findFirst.mockResolvedValue(makeContact({ phone: null, phoneE164: "+6591234567" }));
+    px.failedMessage.findMany.mockResolvedValue([{ id: "fm", rawPayload: { from: "6591234567" } }]);
+    const store = new PrismaContactStore(px as never);
+
+    await store.delete("org-1", "contact-1");
+
+    expect(px.whatsAppMessageStatus.deleteMany).toHaveBeenCalled();
+    expect(px.conversationState.deleteMany).toHaveBeenCalled();
+    // The DLQ scan still runs off phoneE164 when the raw phone is null.
+    expect(px.failedMessage.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ["fm"] }, organizationId: "org-1" },
+    });
+  });
+});
+
+describe("buildPhoneMatchCandidates", () => {
+  it("yields the raw + digits-only forms, deduped", () => {
+    expect(buildPhoneMatchCandidates("+6591234567", "+6591234567").slice().sort()).toEqual([
+      "+6591234567",
+      "6591234567",
+    ]);
+  });
+
+  it("includes a digits-only contact phone as-is", () => {
+    expect(buildPhoneMatchCandidates("6591234567", null)).toContain("6591234567");
+  });
+
+  it("keeps the raw value but drops a junk-short digit form", () => {
+    expect(buildPhoneMatchCandidates("123", null)).toEqual(["123"]);
+  });
+
+  it("returns [] when there is no phone", () => {
+    expect(buildPhoneMatchCandidates(null, null)).toEqual([]);
+    expect(buildPhoneMatchCandidates(null, undefined)).toEqual([]);
   });
 });
 

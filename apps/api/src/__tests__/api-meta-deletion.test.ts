@@ -41,6 +41,12 @@ interface MockPrisma {
   conversionRecord: { deleteMany: ReturnType<typeof vi.fn> };
   pendingLeadRetry: { deleteMany: ReturnType<typeof vi.fn> };
   workTrace: { deleteMany: ReturnType<typeof vi.fn> };
+  conversationLifecycleSnapshot: { deleteMany: ReturnType<typeof vi.fn> };
+  conversationLifecycleTransition: { deleteMany: ReturnType<typeof vi.fn> };
+  scheduledFollowUp: { deleteMany: ReturnType<typeof vi.fn> };
+  scheduledReminder: { deleteMany: ReturnType<typeof vi.fn> };
+  robinRecoverySend: { deleteMany: ReturnType<typeof vi.fn> };
+  whatsAppTestSend: { deleteMany: ReturnType<typeof vi.fn> };
   failedMessage: {
     findMany: ReturnType<typeof vi.fn>;
     deleteMany: ReturnType<typeof vi.fn>;
@@ -78,6 +84,12 @@ function makePrisma(): MockPrisma {
     conversionRecord: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     pendingLeadRetry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     workTrace: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    conversationLifecycleSnapshot: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    conversationLifecycleTransition: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    scheduledFollowUp: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    scheduledReminder: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    robinRecoverySend: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    whatsAppTestSend: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     failedMessage: {
       findMany: vi.fn().mockResolvedValue([]),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
