@@ -42,7 +42,9 @@ reproduce the defect before asserting it.
 | ----- | ----------------------------------- | ----------------------------------- | --- | ------- | -------------- |
 | EV-1  | SPINE-1                             | proof-chain join regression (#1269) | P2  | -       | not started    |
 | EV-2  | SPINE-2 (BUG-2) + SPINE-5           | at-most-once delivery safety        | P1  | yes     | surfaced #1292 |
-| EV-3  | ADV-1 + ADV-3                       | injection + input-robustness suite  | P1  | -       | not started    |
+| EV-3  | ADV-1 + ADV-3 (Alex live)           | injection + input-robustness suite  | P1  | -       | merged #1323   |
+| EV-3b | ADV-1 (Riley live)                  | Riley campaign-name injection lane  | P1  | -       | with EV-7      |
+| EV-3c | ADV-1 (Mira live)                   | Mira taste/facts injection lane     | P1  | -       | with EV-6      |
 | EV-4  | ADV-2                               | claim-boundary (classifier on/off)  | P1  | -       | not started    |
 | EV-5  | INFRA-1 + AGENT-5                   | Alex eval blocking + tool parity    | P1  | -       | not started    |
 | EV-6  | INFRA-3(Mira) + AGENT-8 + AGENT-9   | Mira real-generation eval           | P1  | -       | not started    |
@@ -149,6 +151,19 @@ Zero injection or malformed-input coverage exists for any LLM agent today.
 - **Acceptance:** each agent passes both corpora; a deliberately weakened prompt fails the injection
   set (the eval has teeth). Live-model legs gated per the build-loop protocol (the `evals/` runtime
   branch, not a `skipIf + EVAL=1` combo).
+- **Shipped (#1323):** `evals/adversarial-injection/` - the shared corpus (all three seams, full
+  ADV-1 + ADV-3 taxonomy) + an **agent-agnostic deterministic grader** (BLOCKING, no key:
+  unexpected-tool, tool-arg injection, forbidden-response-substring, prompt-leak canary,
+  schema-invalid, crash) + an offline injected-executor teeth test that drives the **real**
+  `runConversation` (proves teeth with no key) + an informational live judge gated via idiom (a).
+  **Scope cut:** Alex is the only agent with a live LLM harness today (Riley's eval is model-free;
+  Mira has none), so **Alex is driven live now**; the Riley/Mira corpus cases are graded
+  deterministically via synthetic outputs (the two `reveal-system-prompt` cases are explicitly
+  parked pending each seam's leak canaries - a corpus test stops that parked set growing silently).
+  Their **live** legs are **EV-3b** (Riley, rides with EV-7) and **EV-3c** (Mira, rides with EV-6),
+  which consume this corpus + grader. New path-filtered CI job mirrors `eval-alex-conversation`
+  (unit tests blocking, live leg key-gated). Non-SURFACE: no live agent was probed (no key), so no
+  vulnerability was found; a live deterministic violation hard-fails and SURFACEs.
 
 ## EV-4 - Claim-boundary suite, classifier ON and OFF (ADV-2) [P1]
 
