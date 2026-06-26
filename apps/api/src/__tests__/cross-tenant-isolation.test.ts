@@ -252,7 +252,6 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
         headers: { ...HEADERS_A, "Idempotency-Key": "ingress-mismatch" },
         payload: {
           organizationId: ORG_B,
-          actor: { id: "u", type: "user" },
           intent: "x.y.z",
           parameters: {},
           trigger: "api",
@@ -269,7 +268,6 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
         url: "/api/ingress/submit",
         headers: { ...HEADERS_A, "Idempotency-Key": "ingress-noorg" },
         payload: {
-          actor: { id: "u", type: "user" },
           intent: "x.y.z",
           parameters: {},
           trigger: "api",
@@ -286,7 +284,6 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
         url: "/api/ingress/submit",
         headers: HEADERS_A,
         payload: {
-          actor: { id: "u", type: "user" },
           intent: "x.y.z",
           parameters: {},
           trigger: "api",
@@ -303,7 +300,6 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
         headers: { ...HEADERS_UNSCOPED, "Idempotency-Key": "ingress-unscoped" },
         payload: {
           organizationId: ORG_A,
-          actor: { id: "u", type: "user" },
           intent: "x.y.z",
           parameters: {},
           trigger: "api",
@@ -622,7 +618,6 @@ describe("Cross-tenant isolation (TI-1..4)", () => {
         url: "/api/ingress/submit",
         payload: {
           organizationId: ORG_A,
-          actor: { id: "u", type: "user" },
           intent: "x.y.z",
           parameters: {},
           trigger: "api",
