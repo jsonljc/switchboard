@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   GovernanceConfigSchema,
+  JURISDICTIONS,
   buildObserveGovernanceConfig,
+  currencyForJurisdiction,
   resolveGovernanceMode,
   resolveClaimClassifierConfig,
   resolveConsentStateConfig,
@@ -62,5 +64,23 @@ describe("buildObserveGovernanceConfig", () => {
     expect(cfg.whatsappWindow.mode).not.toBe("enforce");
     // Structural sweep: no "enforce" string anywhere in the serialized config.
     expect(JSON.stringify(cfg)).not.toContain("enforce");
+  });
+});
+
+describe("currencyForJurisdiction", () => {
+  it("maps SG to SGD", () => {
+    expect(currencyForJurisdiction("SG")).toBe("SGD");
+  });
+
+  it("maps MY to MYR", () => {
+    expect(currencyForJurisdiction("MY")).toBe("MYR");
+  });
+
+  it("maps every jurisdiction in JURISDICTIONS to a supported currency (no gap)", () => {
+    // Driven from the canonical list, so a new market added to JURISDICTIONS is
+    // exercised here too (and would compile-error in currencyForJurisdiction first).
+    for (const j of JURISDICTIONS) {
+      expect(["SGD", "MYR"]).toContain(currencyForJurisdiction(j));
+    }
   });
 });

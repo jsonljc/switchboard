@@ -17,7 +17,12 @@ export function wireCAPIDispatcher(
         eventName,
         eventTime: Math.floor(event.occurredAt.getTime() / 1000),
         userData: { fbclid: (event.metadata["fbclid"] as string) ?? null },
-        customData: event.value ? { value: event.value, currency: "SGD" } : undefined,
+        // Currency comes from the event (market-derived upstream), never hardcoded.
+        // Include it only when present, matching the live MetaCAPIDispatcher's handling
+        // of a value with no currency (omit rather than guess).
+        customData: event.value
+          ? { value: event.value, ...(event.currency ? { currency: event.currency } : {}) }
+          : undefined,
       });
     } catch (err) {
       console.error("[CAPIWiring] Failed to dispatch event:", err);

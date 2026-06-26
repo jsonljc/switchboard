@@ -396,7 +396,7 @@ describe.skipIf(!DB_INTEGRATION_ENABLED)(
             throw new Error("failureHandler must not be called on the create happy/clash path");
           },
         } as never,
-        defaultCurrency: "SGD",
+        resolveCurrency: async () => "SGD",
         receiptTierForProvider: receiptTierForCalendarProvider,
         isProduction: false,
       });

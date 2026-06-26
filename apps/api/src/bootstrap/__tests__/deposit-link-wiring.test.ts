@@ -1,9 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import {
-  buildDepositLinkToolFactory,
-  PILOT_DEPOSIT_AMOUNT_CENTS,
-  PILOT_DEPOSIT_CURRENCY,
-} from "../deposit-link-wiring.js";
+import { buildDepositLinkToolFactory, PILOT_DEPOSIT_AMOUNT_CENTS } from "../deposit-link-wiring.js";
 import { NoopPaymentAdapter } from "../noop-payment-adapter.js";
 import { GovernanceHook } from "@switchboard/core/skill-runtime";
 import type { PaymentPort, DepositLinkInput } from "@switchboard/schemas";
@@ -30,10 +26,11 @@ function fakePort() {
 const confirmed = { id: "bk_1", organizationId: "org_1", status: "confirmed" };
 
 describe("buildDepositLinkToolFactory", () => {
-  it("resolves the pilot amount/currency server-side and passes them to the injected factory", async () => {
+  it("resolves the pilot amount + the market currency server-side and passes them to the injected factory", async () => {
     const { port, createDepositLink } = fakePort();
     const factory = buildDepositLinkToolFactory({
       paymentPortFactory: vi.fn(async () => port),
+      resolveCurrency: async () => "SGD",
       findBookingById: vi.fn(async () => confirmed),
     });
     const result = await factory(CTX).operations["deposit.issue"]!.execute({ bookingId: "bk_1" });
@@ -42,8 +39,35 @@ describe("buildDepositLinkToolFactory", () => {
       bookingId: "bk_1",
       organizationId: "org_1",
       amountCents: PILOT_DEPOSIT_AMOUNT_CENTS,
-      currency: PILOT_DEPOSIT_CURRENCY,
+      currency: "SGD",
     });
+  });
+
+  it("charges MYR for a Malaysian-market deployment", async () => {
+    const { port, createDepositLink } = fakePort();
+    const factory = buildDepositLinkToolFactory({
+      paymentPortFactory: vi.fn(async () => port),
+      resolveCurrency: async () => "MYR",
+      findBookingById: vi.fn(async () => confirmed),
+    });
+    const result = await factory(CTX).operations["deposit.issue"]!.execute({ bookingId: "bk_1" });
+    expect(result.status).toBe("success");
+    expect(createDepositLink).toHaveBeenCalledWith(expect.objectContaining({ currency: "MYR" }));
+  });
+
+  it("fails closed (no charge) when the market currency cannot be resolved", async () => {
+    const { port, createDepositLink } = fakePort();
+    const paymentPortFactory = vi.fn(async () => port);
+    const factory = buildDepositLinkToolFactory({
+      paymentPortFactory,
+      resolveCurrency: async () => null,
+      findBookingById: vi.fn(async () => confirmed),
+    });
+    const result = await factory(CTX).operations["deposit.issue"]!.execute({ bookingId: "bk_1" });
+    expect(result.status).toBe("error");
+    expect(result.error!.code).toBe("CURRENCY_UNRESOLVED");
+    expect(createDepositLink).not.toHaveBeenCalled();
+    expect(paymentPortFactory).not.toHaveBeenCalled();
   });
 
   it("enforces org-isolation: a booking in another org surfaces as MISSING_BOOKING", async () => {
@@ -55,6 +79,7 @@ describe("buildDepositLinkToolFactory", () => {
     }));
     const factory = buildDepositLinkToolFactory({
       paymentPortFactory: vi.fn(async () => port),
+      resolveCurrency: async () => "SGD",
       findBookingById,
     });
     const result = await factory(CTX).operations["deposit.issue"]!.execute({ bookingId: "bk_1" });
@@ -68,6 +93,7 @@ describe("buildDepositLinkToolFactory", () => {
     const { port } = fakePort();
     const factory = buildDepositLinkToolFactory({
       paymentPortFactory: vi.fn(async () => port),
+      resolveCurrency: async () => "SGD",
       findBookingById: vi.fn(async () => confirmed),
     });
     const result = await factory(CTX).operations["deposit.issue"]!.execute({
@@ -81,6 +107,7 @@ describe("buildDepositLinkToolFactory", () => {
     const { port } = fakePort();
     const factory = buildDepositLinkToolFactory({
       paymentPortFactory: vi.fn(async () => port),
+      resolveCurrency: async () => "SGD",
       findBookingById: vi.fn(async () => ({
         id: "bk_1",
         organizationId: "org_1",
@@ -96,6 +123,7 @@ describe("buildDepositLinkToolFactory", () => {
     const { port } = fakePort();
     const factory = buildDepositLinkToolFactory({
       paymentPortFactory: vi.fn(async () => port),
+      resolveCurrency: async () => "SGD",
       findBookingById: vi.fn(async () => null),
     });
     const result = await factory(CTX).operations["deposit.issue"]!.execute({ bookingId: "nope" });
@@ -107,6 +135,7 @@ describe("buildDepositLinkToolFactory", () => {
     const noop = new NoopPaymentAdapter();
     const factory = buildDepositLinkToolFactory({
       paymentPortFactory: vi.fn(async () => noop),
+      resolveCurrency: async () => "SGD",
       findBookingById: vi.fn(async () => ({
         id: "bk_42",
         organizationId: "org_1",
@@ -134,6 +163,7 @@ describe("buildDepositLinkToolFactory", () => {
     const { port } = fakePort();
     const tool = buildDepositLinkToolFactory({
       paymentPortFactory: vi.fn(async () => port),
+      resolveCurrency: async () => "SGD",
       findBookingById: vi.fn(async () => confirmed),
     })(CTX);
     const hook = new GovernanceHook(new Map([["deposit-link", tool]]));

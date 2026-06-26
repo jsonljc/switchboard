@@ -125,7 +125,7 @@ describe("createCalendarBookToolFactory", () => {
       runTransaction: runTransaction as never,
       failureHandler: failureHandler as never,
       contactStore: contactStore as never,
-      defaultCurrency: "SGD",
+      resolveCurrency: async () => "SGD",
       receiptTierForProvider: () => "T1_FETCH_BACK",
       isProduction: false,
     });
@@ -454,7 +454,7 @@ describe("createCalendarBookToolFactory", () => {
       runTransaction: capturingRunTx as never,
       failureHandler: failureHandler as never,
       contactStore: contactStore as never,
-      defaultCurrency: "SGD",
+      resolveCurrency: async () => "SGD",
       receiptTierForProvider: () => "T1_FETCH_BACK",
       isProduction: false,
     })({ ...TRUSTED_CTX, contactId: "ct_1" });
@@ -510,7 +510,7 @@ describe("createCalendarBookToolFactory", () => {
         runTransaction: runTx as never,
         failureHandler: failureHandler as never,
         contactStore: contactStore as never,
-        defaultCurrency: "SGD",
+        resolveCurrency: async () => "SGD",
         receiptTierForProvider: () => "T1_FETCH_BACK",
         isProduction: false,
       })({ ...TRUSTED_CTX, contactId: "ct_1" });
@@ -623,7 +623,7 @@ describe("createCalendarBookToolFactory", () => {
         runTransaction: runTx as never,
         failureHandler: failureHandler as never,
         contactStore: contactStore as never,
-        defaultCurrency: "SGD",
+        resolveCurrency: async () => "SGD",
         receiptTierForProvider: () => "T1_FETCH_BACK",
         isProduction: false,
       })({ ...TRUSTED_CTX, contactId: "ct_1" });
@@ -724,7 +724,7 @@ describe("createCalendarBookToolFactory", () => {
         runTransaction: runTx as never,
         failureHandler: failureHandler as never,
         contactStore: contactStore as never,
-        defaultCurrency: "SGD",
+        resolveCurrency: async () => "SGD",
         receiptTierForProvider: () => "T1_FETCH_BACK",
         isProduction: false,
         getServicesForOrg: opts.getServicesForOrg,
@@ -1065,6 +1065,7 @@ describe("createCalendarBookToolFactory", () => {
     function buildToolWithCapture(setup: {
       contact: Record<string, unknown> | null;
       opportunity: { id: string; estimatedValue?: number | null } | null;
+      resolveCurrency?: (deploymentId: string) => Promise<"SGD" | "MYR" | null>;
     }) {
       const captured: { payload?: Record<string, unknown>; eventId?: unknown } = {};
       const runTx = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
@@ -1101,7 +1102,7 @@ describe("createCalendarBookToolFactory", () => {
         runTransaction: runTx as never,
         failureHandler: failureHandler as never,
         contactStore: { findById: vi.fn().mockResolvedValue(setup.contact) } as never,
-        defaultCurrency: "SGD",
+        resolveCurrency: setup.resolveCurrency ?? (async () => "SGD"),
         receiptTierForProvider: () => "T1_FETCH_BACK",
         isProduction: false,
       })({ ...TRUSTED_CTX, contactId: "ct_1" });
@@ -1144,6 +1145,43 @@ describe("createCalendarBookToolFactory", () => {
       // No PII leaks into metadata
       expect(captured.payload?.metadata).not.toHaveProperty("email");
       expect(captured.payload?.metadata).not.toHaveProperty("phone");
+    });
+
+    it("stamps the currency derived from the deployment jurisdiction (MY -> MYR)", async () => {
+      const { tool: t, captured } = buildToolWithCapture({
+        contact: { id: "ct_1", name: "Siti", email: "siti@example.com", phone: "+60123456789" },
+        opportunity: { id: "opp_my", estimatedValue: 50000 },
+        resolveCurrency: async () => "MYR",
+      });
+
+      await t.operations["booking.create"]!.execute({
+        service: "botox",
+        slotStart: "2026-06-01T10:00:00Z",
+        slotEnd: "2026-06-01T10:30:00Z",
+        calendarId: "primary",
+      });
+
+      expect(captured.payload).toMatchObject({ type: "booked", currency: "MYR" });
+    });
+
+    it("abstains to a null currency (booking still confirmed) when the market is unresolvable", async () => {
+      const { tool: t, captured } = buildToolWithCapture({
+        contact: { id: "ct_1", name: "Jane", email: "jane@example.com", phone: "+6591234567" },
+        opportunity: { id: "opp_x", estimatedValue: 320000 },
+        resolveCurrency: async () => null,
+      });
+
+      const result = await t.operations["booking.create"]!.execute({
+        service: "botox",
+        slotStart: "2026-06-01T10:00:00Z",
+        slotEnd: "2026-06-01T10:30:00Z",
+        calendarId: "primary",
+      });
+
+      // The booking is NOT blocked by an unresolvable currency (currency != value);
+      // the value is still stamped, only the currency abstains to null.
+      expect(result.status).toBe("success");
+      expect(captured.payload).toMatchObject({ value: 320000, currency: null });
     });
 
     it("degrades to explicit nulls + value 0 for an organic contact", async () => {
@@ -1444,7 +1482,7 @@ describe("createCalendarBookToolFactory", () => {
         runTransaction: runTransaction as never,
         failureHandler: failureHandler as never,
         contactStore: contactStore as never,
-        defaultCurrency: "SGD",
+        resolveCurrency: async () => "SGD",
         receiptTierForProvider: () => "T1_FETCH_BACK",
         isProduction: false,
         consentPrecondition,
