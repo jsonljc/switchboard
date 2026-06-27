@@ -46,6 +46,20 @@ export const ConversationOracleSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * When true, every `deposit-link.deposit.issue` call MUST be preceded (by
+     * call order) by at least one `calendar-book.booking.create` call. Encodes
+     * the "deposit only after a booking" rule: a deposit link issued before, or
+     * entirely without, any booking is a violation (`deposit-before-booking`).
+     *
+     * This is the ordering half of "deposit only after a CONFIRMED booking". The
+     * complementary half (no deposit on a pending / unconfirmed booking) is a
+     * `forbiddenTools:["deposit-link"]` oracle on a `mockBooking:"pending"`
+     * fixture (a pending booking still records a `booking.create`, so ordering
+     * alone cannot tell pending from confirmed). The two together pin the full
+     * rule. See skills/alex/SKILL.md "Issuing a deposit link".
+     */
+    depositAfterBooking: z.boolean().optional(),
   })
   .strict()
   .superRefine((oracle, ctx) => {
@@ -93,6 +107,12 @@ export const ConversationOracleSchema = z
         message: "bookingWithinWindow.earliestIso must not be after latestIso",
       });
     }
+    if (oracle.depositAfterBooking === true && forbidden.includes("deposit-link")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "depositAfterBooking is true but `deposit-link` is listed in forbiddenTools",
+      });
+    }
   });
 
 export type ConversationOracle = z.infer<typeof ConversationOracleSchema>;
@@ -108,6 +128,36 @@ export interface OracleResult {
   /** True iff no oracle violations. */
   pass: boolean;
   violations: OracleViolation[];
+}
+
+/**
+ * Deposit-only-after-a-booking: walk the calls in order. A `deposit-link.deposit.issue`
+ * that appears before any `calendar-book.booking.create` (or with none at all) is a
+ * `deposit-before-booking` violation. The "confirmed" half is enforced separately by
+ * forbidding `deposit-link` on a pending-booking fixture (see the `depositAfterBooking`
+ * field doc). Extracted from `evaluateOracle` to keep that function's branch count down.
+ */
+function evaluateDepositOrdering(
+  toolCalls: ReadonlyArray<{ toolId: string; operation?: string }>,
+): OracleViolation[] {
+  const violations: OracleViolation[] = [];
+  let sawBooking = false;
+  for (const call of toolCalls) {
+    if (call.toolId === "calendar-book" && call.operation === "booking.create") {
+      sawBooking = true;
+    } else if (
+      call.toolId === "deposit-link" &&
+      call.operation === "deposit.issue" &&
+      !sawBooking
+    ) {
+      violations.push({
+        code: "deposit-before-booking",
+        detail:
+          "deposit-link.deposit.issue was called before any calendar-book.booking.create (deposit only after a confirmed booking)",
+      });
+    }
+  }
+  return violations;
 }
 
 /**
@@ -192,6 +242,11 @@ export function evaluateOracle(
         });
       }
     }
+  }
+
+  // Deposit-only-after-a-booking (extracted helper keeps this function's branches low).
+  if (oracle.depositAfterBooking) {
+    violations.push(...evaluateDepositOrdering(toolCalls));
   }
 
   return { pass: violations.length === 0, violations };

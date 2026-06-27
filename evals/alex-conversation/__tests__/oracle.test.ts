@@ -212,3 +212,62 @@ describe("bookingWithinWindow (slot-vs-window)", () => {
     expect(result.violations.map((v) => v.code)).not.toContain("booking-outside-window");
   });
 });
+
+describe("depositAfterBooking (deposit-only-after-a-booking ordering)", () => {
+  /** Build an ordered (toolId, operation) trajectory. */
+  function ops(...pairs: Array<[string, string]>): Array<{ toolId: string; operation: string }> {
+    return pairs.map(([toolId, operation]) => ({ toolId, operation }));
+  }
+
+  it("accepts a well-formed depositAfterBooking oracle", () => {
+    expect(
+      ConversationOracleSchema.safeParse({
+        expectsBooking: true,
+        expectedTools: ["deposit-link"],
+        depositAfterBooking: true,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects depositAfterBooking:true with deposit-link forbidden (contradiction)", () => {
+    expect(
+      ConversationOracleSchema.safeParse({
+        depositAfterBooking: true,
+        forbiddenTools: ["deposit-link"],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("flags a deposit issued before any booking.create", () => {
+    const result = evaluateOracle(
+      ops(["deposit-link", "deposit.issue"], ["calendar-book", "booking.create"]),
+      { depositAfterBooking: true },
+    );
+    expect(result.pass).toBe(false);
+    expect(result.violations.map((v) => v.code)).toContain("deposit-before-booking");
+  });
+
+  it("flags a deposit issued with no booking.create at all", () => {
+    const result = evaluateOracle(ops(["deposit-link", "deposit.issue"]), {
+      depositAfterBooking: true,
+    });
+    expect(result.pass).toBe(false);
+    expect(result.violations.map((v) => v.code)).toContain("deposit-before-booking");
+  });
+
+  it("passes when the deposit.issue comes after a booking.create", () => {
+    const result = evaluateOracle(
+      ops(["calendar-book", "booking.create"], ["deposit-link", "deposit.issue"]),
+      { depositAfterBooking: true },
+    );
+    expect(result.pass).toBe(true);
+    expect(result.violations).toEqual([]);
+  });
+
+  it("does not flag when no deposit was issued", () => {
+    const result = evaluateOracle(ops(["calendar-book", "booking.create"]), {
+      depositAfterBooking: true,
+    });
+    expect(result.pass).toBe(true);
+  });
+});
