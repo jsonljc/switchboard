@@ -16,6 +16,10 @@ import {
   buildRobinRecoverySendExecutor,
   buildRobinRecoverySendRetryExecutor,
 } from "./robin-recovery-executor.js";
+import {
+  buildWhatsAppSendContext,
+  getRecoverySendContext as readRecoverySendContext,
+} from "./whatsapp-send-context.js";
 import { resolveOrgWhatsAppSendCreds } from "../lib/whatsapp-send-creds.js";
 import type { PlatformIngress, SubmitWorkResponse } from "@switchboard/core/platform";
 import type { ChildWorkRequest } from "@switchboard/core/platform";
@@ -286,7 +290,6 @@ export async function bootstrapContainedWorkflows(
     await import("../services/workflows/conversation-followup-send-workflow.js");
   const { buildConversationReminderSendWorkflow } =
     await import("../services/workflows/conversation-reminder-send-workflow.js");
-  const { parseTemplateApprovalOverlay } = await import("@switchboard/core");
   const { buildMetaLeadRecordInquiryWorkflow } =
     await import("../services/workflows/meta-lead-record-inquiry-workflow.js");
   const { buildCreativePublishWorkflow } =
@@ -379,62 +382,12 @@ export async function bootstrapContainedWorkflows(
   // the monitor that submits it is wired; registering the handler now makes the dispatch target real.
   const rileyResetExecutor = await buildRileyResetBudgetExecutorHandler(prismaClient);
 
-  // Shared assembly for both proactive-send contexts (follow-up + reminder). The ONLY
-  // difference between callers is how the WhatsApp 24h-window timestamp is resolved
-  // (follow-up: by threadId; reminder: by the contactId+org compound key), so each caller
-  // looks that up and passes it in.
-  type WhatsAppSendContext = {
-    consentGrantedAt: Date | string | null;
-    consentRevokedAt: Date | string | null;
-    pdpaJurisdiction: "SG" | "MY" | null;
-    messagingOptIn: boolean;
-    lastWhatsAppInboundAt: Date | null;
-    jurisdiction: "SG" | "MY" | null;
-    leadName: string;
-    businessName: string;
-    phone: string | null;
-    approvalOverlay: ReturnType<typeof parseTemplateApprovalOverlay>;
-  };
-  const buildWhatsAppSendContext = async (
-    prisma: import("@switchboard/db").PrismaClient,
-    orgId: string,
-    contactId: string,
-    lastWhatsAppInboundAt: Date | null,
-  ): Promise<WhatsAppSendContext> => {
-    const contact = await prisma.contact.findFirst({
-      where: { id: contactId, organizationId: orgId },
-      select: {
-        name: true,
-        phone: true,
-        messagingOptIn: true,
-        pdpaJurisdiction: true,
-        consentGrantedAt: true,
-        consentRevokedAt: true,
-      },
-    });
-    const org = await prisma.organizationConfig.findUnique({
-      where: { id: orgId },
-      select: { name: true, runtimeConfig: true },
-    });
-    // Org-resolvable template-approval source: an operator/config-driven map persisted
-    // under runtimeConfig.whatsappTemplateApprovals (metaTemplateName -> status). Parsed
-    // defensively; absent/malformed → empty overlay → the static registry default (draft)
-    // keeps proactive sends blocked. No new schema column.
-    const runtimeConfig = (org?.runtimeConfig ?? {}) as { whatsappTemplateApprovals?: unknown };
-    const approvalOverlay = parseTemplateApprovalOverlay(runtimeConfig.whatsappTemplateApprovals);
-    return {
-      consentGrantedAt: contact?.consentGrantedAt ?? null,
-      consentRevokedAt: contact?.consentRevokedAt ?? null,
-      pdpaJurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
-      messagingOptIn: contact?.messagingOptIn ?? false,
-      lastWhatsAppInboundAt,
-      jurisdiction: (contact?.pdpaJurisdiction as "SG" | "MY" | null) ?? null,
-      leadName: contact?.name ?? "there",
-      businessName: org?.name ?? "our clinic",
-      phone: contact?.phone ?? null,
-      approvalOverlay,
-    };
-  };
+  // Shared assembly for all four proactive-send contexts (follow-up, reminder, greeting,
+  // Robin recovery). The ONLY difference between callers is how the WhatsApp 24h-window
+  // timestamp is resolved (follow-up: by threadId; reminder/greeting/recovery: by the
+  // contactId+org compound key), so each caller looks that up and passes it in. The
+  // assembly itself lives in ./whatsapp-send-context.ts (extracted so Robin's behavioural
+  // eval can drive the real thread-read → eligibility chain — EV-7).
 
   // Multi-tenant WhatsApp send credentials: resolve the sending org's own
   // {token, phoneNumberId} from its canonical "whatsapp" Connection, shared by all
@@ -500,22 +453,16 @@ export async function bootstrapContainedWorkflows(
     prismaClient as ConstructorParameters<typeof PrismaBookingStore>[0],
   );
   // Shared send-context resolver for both the cohort executor and the retry executor.
-  // Looks up the contact's phone + consent + org name + template-approval overlay;
-  // reuses the thread's lastWhatsAppInboundAt (or null when no thread exists yet).
-  // Extracted here so the retry path does NOT duplicate this logic.
-  const getRecoverySendContext = async (orgId: string, contactId: string) => {
-    const prisma = prismaClient as import("@switchboard/db").PrismaClient;
-    const thread = await prisma.conversationThread.findUnique({
-      where: { contactId_organizationId: { contactId, organizationId: orgId } },
-      select: { lastWhatsAppInboundAt: true },
-    });
-    return buildWhatsAppSendContext(
-      prisma,
+  // Looks up the contact's phone + consent + org name + template-approval overlay; reuses
+  // the thread's lastWhatsAppInboundAt (or null when no thread exists yet). The real
+  // thread-read → context assembly lives in ./whatsapp-send-context.ts; this binds the
+  // shared prisma client so the retry path does NOT duplicate the logic.
+  const getRecoverySendContext = (orgId: string, contactId: string) =>
+    readRecoverySendContext(
+      prismaClient as import("@switchboard/db").PrismaClient,
       orgId,
       contactId,
-      thread?.lastWhatsAppInboundAt ?? null,
     );
-  };
 
   const robinRecoverySendExecutor = buildRobinRecoverySendExecutor({
     store: robinRecoverySendStore,
