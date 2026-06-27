@@ -6,6 +6,7 @@ import {
   type RankedProvider,
 } from "../provider-router.js";
 import { deriveApprovalState, evaluateRealism, type RealismScorerDeps } from "../realism-scorer.js";
+import { parseClaimsPolicyTag } from "../claim-safety.js";
 import { buildFrameQaDeps } from "../frame-qa-deps.js";
 import { buildUgcVideoRequest } from "../video-prompt.js";
 import { downloadVideoToTmp } from "../video-download.js";
@@ -22,7 +23,9 @@ interface CreativeSpecInput {
   creatorId: string;
   structureId: string;
   platform: string;
-  script: { text: string; language: string };
+  // `claimsPolicyTag` is the validated claim-safety verdict derived at scripting
+  // (EV-13). The production gate parses + enforces it before any paid generation.
+  script: { text: string; language: string; claimsPolicyTag?: string };
   /** SceneStyle from scripting (slice-3 spec 3.2); parsed in the prompt builder. */
   style?: unknown;
   /** UgcDirection from scripting; parsed in the prompt builder. */
@@ -276,6 +279,17 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
   const costTracker = { total: 0 };
 
   for (const spec of specs) {
+    // Claim-safety gate (EV-13 / BUG-8): a script the deterministic detector
+    // flagged at scripting carries claimsPolicyTag "review_required". Parse it
+    // FAIL-CLOSED (a tampered/garbage tag also blocks) and route the spec to the
+    // human-review surface (failedSpecs) WITHOUT spending a cent on generation.
+    // First in the loop so a flagged script is blocked even before the budget
+    // guard. Absent tag = clean (backward compatible; see parseClaimsPolicyTag).
+    if (parseClaimsPolicyTag(spec.script.claimsPolicyTag) === "review_required") {
+      failedSpecs.push({ specId: spec.specId, reason: "claim_safety_blocked" });
+      continue;
+    }
+
     // Budget guard
     if (costTracker.total > input.budget.totalJobBudget) {
       failedSpecs.push({ specId: spec.specId, reason: "budget exceeded" });
