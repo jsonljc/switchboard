@@ -26,7 +26,7 @@ export async function executeModeDispatch(
         ...eventData,
         mode: "ugc",
         pipelineVersion: "ugc_v2",
-        dispatchedAt: new Date(),
+        dispatchedAt: new Date().toISOString(),
       },
     });
   } else {
@@ -35,7 +35,7 @@ export async function executeModeDispatch(
       data: {
         ...eventData,
         mode: "polished",
-        dispatchedAt: new Date(),
+        dispatchedAt: new Date().toISOString(),
       },
     });
   }
