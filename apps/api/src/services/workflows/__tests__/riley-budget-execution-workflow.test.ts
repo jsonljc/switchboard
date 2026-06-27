@@ -587,7 +587,7 @@ describe("buildRileyBudgetExecutionWorkflow — in-flight kill-switch (runbook �
   });
 });
 
-describe("buildRileyBudgetExecutionWorkflow — EV-11 pre-flip gate (MONEY-9: fresh client per Graph call)", () => {
+describe("buildRileyBudgetExecutionWorkflow - EV-11 pre-flip gate (MONEY-9: fresh client per Graph call)", () => {
   it("builds a FRESH MetaAdsClient for each of the four Graph operations (no shared 60s-limited instance)", async () => {
     // MONEY-9 dispatch call-site contract. The per-instance 60s limiter paces the audit crons, NOT
     // this human-latency reallocate dispatch: the read-modify-re-read executor builds a fresh client
