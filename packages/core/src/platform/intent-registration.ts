@@ -44,6 +44,25 @@ export interface IntentRegistration {
   /** See {@link ApprovalMode}. Defaults to `"policy"` when omitted. */
   approvalMode?: ApprovalMode;
   /**
+   * Opt an `approvalMode: "system_auto_approved"` intent into still consulting the
+   * org-scoped POLICY layer (deny / require_approval) before its execute short-circuit,
+   * WITHOUT running identity resolution. Defaults to `false` when omitted.
+   *
+   * The auto-approve short-circuit returns `execute` before the policy engine runs, so
+   * an operator's per-org governance dial (a deny / require_approval Policy) is normally
+   * never consulted for an auto-approved intent. A non-financial draft-only handoff such
+   * as `creative.concept.draft` legitimately needs the fast path (its delegate-tool caller
+   * submits with an UNSEEDED agent actor, so the full path's `loadIdentitySpec` would throw
+   * and hard-deny) yet should still honor an org DENY — exactly like its sibling
+   * `creative.brief.compose`, which is a real `allow` Policy. When set, the gate consults
+   * `consultAutoApproveOrgPolicy` (governance/auto-approve-policy-consult.ts): a matching
+   * deny denies, a matching require_approval parks, and no match keeps the auto-approve
+   * fast path (execute). Leave `false` for every other auto-approved intent — particularly
+   * safety-reversal auto-execs (e.g. budget reset) that must never be deniable by a stray
+   * policy. See the P3-6 second-wave gap-eval finding.
+   */
+  consultOrgPolicyOnAutoApprove?: boolean;
+  /**
    * Marks an intent that commits OUTBOUND spend — an amount the spend-approval
    * threshold and the hard spend-limit floor are meant to gate (e.g. an
    * ad-campaign budget change; the values `extractSpendAmount` reads:
