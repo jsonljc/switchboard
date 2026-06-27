@@ -137,4 +137,49 @@ describe("TestCenter", () => {
     fireEvent.click(screen.getByText(/go live/i));
     expect(screen.getByText(/haven't tested/i)).toBeTruthy();
   });
+
+  it("gates 'Go live anyway' behind a type-to-confirm (no soft-click launch with zero tests)", () => {
+    const onAdvance = vi.fn();
+    render(
+      <TestCenter
+        prompts={mockPrompts}
+        onSendPrompt={vi.fn()}
+        onRerunPrompt={vi.fn()}
+        onAdvance={onAdvance}
+        responses={[]}
+        isSimulating={false}
+      />,
+    );
+    // Open the zero-test gate.
+    fireEvent.click(screen.getByText(/go live/i));
+
+    // "Go live anyway" must NOT be a soft click — it's disabled until confirmed.
+    const goLiveAnyway = screen.getByRole("button", { name: /go live anyway/i });
+    expect(goLiveAnyway).toBeDisabled();
+    fireEvent.click(goLiveAnyway);
+    expect(onAdvance).not.toHaveBeenCalled();
+
+    // Typing the exact phrase enables it.
+    fireEvent.change(screen.getByPlaceholderText(/go live/i), { target: { value: "go live" } });
+    expect(goLiveAnyway).not.toBeDisabled();
+    fireEvent.click(goLiveAnyway);
+    expect(onAdvance).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts the confirm phrase case-insensitively and trims whitespace", () => {
+    render(
+      <TestCenter
+        prompts={mockPrompts}
+        onSendPrompt={vi.fn()}
+        onRerunPrompt={vi.fn()}
+        onAdvance={vi.fn()}
+        responses={[]}
+        isSimulating={false}
+      />,
+    );
+    fireEvent.click(screen.getByText(/go live/i));
+    const goLiveAnyway = screen.getByRole("button", { name: /go live anyway/i });
+    fireEvent.change(screen.getByPlaceholderText(/go live/i), { target: { value: "  GO Live " } });
+    expect(goLiveAnyway).not.toBeDisabled();
+  });
 });
