@@ -59,7 +59,7 @@ reproduce the defect before asserting it.
 | EV-14 | CHAN-1, 2, 3, 7, 8                  | cross-tenant route sweep            | P1  | yes     | not started       |
 | EV-15 | CHAN-4..6, 9, 10 (BUG-4, BUG-5)     | channel delivery fixes + evals      | P2  | -       | merged #1369      |
 | EV-16 | INFRA-2 + SPINE-6                   | real-Postgres integration tier      | P1  | -       | merged #1305      |
-| EV-17 | SPINE-7..12 (BUG-6, BUG-7, BUG-11)  | spine async-correctness             | P2  | -       | not started       |
+| EV-17 | SPINE-7..12 (BUG-6, BUG-7, BUG-11)  | spine async-correctness             | P2  | -       | merged #1372      |
 | EV-18 | APP-1, APP-2, APP-3                 | dashboard/app state evals           | P2  | -       | not started       |
 | EV-19 | INFRA-4, INFRA-5, GOV-9, GOV-10     | eval-infra housekeeping             | P3  | -       | not started       |
 
@@ -407,6 +407,48 @@ tier.
   query. SPINE-9 - UGC-complete-with-stale-`currentStage` reads terminal. SPINE-10 - replay to a
   terminal job is a no-op. SPINE-12 - malformed stored JSON -> typed default at each seam.
 - **Acceptance:** each defect has a red-without test; the dual-lifecycle reader cannot misclassify.
+- **Shipped (#1372)** (2026-06-27; squash `2e1fcdf50`; independent review Ready-to-merge Yes, 0 Critical;
+  NON-SURFACE). Three confirmed defects fixed with red-without teeth + a regression guard:
+  - **SPINE-7 / BUG-6:** `mode-dispatcher.ts` emitted `dispatchedAt: new Date()` into the Inngest step
+    payload (both UGC + polished); a `Date` is not a JSON primitive, so it does not survive
+    memoization/replay as the same type. Now `.toISOString()`; teeth = a JSON round-trip identity +
+    no-`Date`-in-payload invariant. Also typed `CreativePipelineEvents.dispatchedAt` as `string` (the
+    type had lied as `Date`).
+  - **SPINE-8 / BUG-7:** `listTasteCandidates` Leg-2 did `take: limit` (newest-first) THEN JS-filtered to
+    re-decided rows, so an old re-decision starved behind a full newest-N page. The watermark
+    (`reviewDecidedAt > tasteCapturedAt`) is a column-to-column compare Prisma's typed `where` cannot
+    express, so it is pushed into a `$queryRaw` (`Prisma.sql`, parameterized LIMIT) with
+    `ORDER BY reviewDecidedAt ASC` so the bound applies AFTER the filter. Teeth = a **DATABASE_URL**-gated
+    real-PG test (runs in the EV-16 "Integration - Real Postgres" job; RED before the fix) seeding an old
+    re-decision behind a fresh non-re-decided page; mocked slice2 tests updated for the `$queryRaw` seam.
+  - **SPINE-11 / BUG-11:** `sweepExpiredLifecycles` existed but had NO caller (prod-inert dead code).
+    Registered an hourly Inngest cron (`lifecycle-expiry-sweep.ts`, mirrors `lifecycle-stalled-sweep`)
+    backed by a `PrismaLifecycleStore` + `ApprovalLifecycleService` built in the inngest bootstrap, and
+    bounded `listExpiredPendingLifecycles(now?, limit?)` (oldest-expired first via `orderBy expiresAt asc +
+    take`, threaded `DEFAULT_EXPIRY_SWEEP_LIMIT=1000`). `expireLifecycle` is idempotent (non-pending =
+    no-op), so a retry/replay never double-acts; `ExpirySweepResult` is JSON-safe.
+  - **SPINE-9 (regression guard):** `mapCreativeJobToMiraStatus` branches on `mode` first, so a stale
+    `currentStage`/`ugcPhase` on the other axis cannot misclassify; a focused sibling test pins both
+    directions (teeth proven by a mutation that hoists a `currentStage` check above the mode branch).
+  - **SPINE-10 / SPINE-12 verified ALREADY-COVERED (no new code):** the publish-chain replay/terminal
+    matrix is comprehensive (`reconcilePublishTraceCompleted` no-ops on already-completed / already-failed
+    / locked-trace; `executeCreativePublish` resume-without-duplicate; the `trace.outcome !== "queued"`
+    early-return) plus the new lifecycle idempotency; the read-model seams are defended (`asRecord` +
+    malformed-string-no-throw + `deriveQa` `safeParse`). The remaining `JSON.parse` sites are trusted-write
+    proof-chain paths where a blind safeParse-default would MASK corruption - a deliberate per-site
+    mask-vs-throw call, out of this slice's safe scope.
+  - **GOVERNANCE-ACTIVATION conscious-ack (NON-SURFACE):** registering the sweep flips approval-lifecycle
+    expiry from dormant to active. Non-SURFACE because the read layer ALREADY enforces expiry
+    (`listOperatorActionableLifecycles` is "Pending (expiry-filtered)"; `listPendingLifecycles` filters
+    `expiresAt > now`), so the cron only makes persisted status consistent with already-enforced reads -
+    status-only, org-scoped, no money/dispatch/tenant. It implements the documented BUG-11 fix, not a new
+    defect; the plan classifies EV-17 NON-SURFACE.
+  - **LESSON (reusable):** a cross-org `$queryRaw` over a column-to-column watermark is the right tool when
+    Prisma's typed `where` cannot express the predicate - and the only way to prove filter-before-LIMIT is a
+    DATABASE_URL-gated real-PG test (mocked Prisma returns forced rows regardless of WHERE/ORDER/take). Seed
+    the asserted row with an EXTREME timestamp so a cross-org system read stays deterministic against
+    shared-DB pollution. A "defined-but-never-registered" sweep is prod-inert dead code: grep for the
+    caller before trusting a mechanism is live.
 
 ## EV-18 - Dashboard / app state evals (APP-1, APP-2, APP-3) [P2]
 
