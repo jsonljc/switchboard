@@ -304,4 +304,31 @@ describe("PrismaLifecycleStore", () => {
       expect(result).toBe(2);
     });
   });
+
+  describe("listExpiredPendingLifecycles", () => {
+    it("bounds the scan with take and orders oldest-expired first", async () => {
+      prisma.approvalLifecycle.findMany.mockResolvedValue([]);
+      const cutoff = new Date("2026-06-27T00:00:00Z");
+
+      await store.listExpiredPendingLifecycles(cutoff, 250);
+
+      expect(prisma.approvalLifecycle.findMany).toHaveBeenCalledWith({
+        where: { status: "pending", expiresAt: { lte: cutoff } },
+        orderBy: { expiresAt: "asc" },
+        take: 250,
+      });
+    });
+
+    it("omits take when no limit is given (the bounded caller always passes one)", async () => {
+      prisma.approvalLifecycle.findMany.mockResolvedValue([]);
+      const cutoff = new Date("2026-06-27T00:00:00Z");
+
+      await store.listExpiredPendingLifecycles(cutoff);
+
+      expect(prisma.approvalLifecycle.findMany).toHaveBeenCalledWith({
+        where: { status: "pending", expiresAt: { lte: cutoff } },
+        orderBy: { expiresAt: "asc" },
+      });
+    });
+  });
 });

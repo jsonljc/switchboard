@@ -282,13 +282,17 @@ export class PrismaLifecycleStore implements ApprovalLifecycleStore {
     return rows.map(toLifecycleRecord);
   }
 
-  async listExpiredPendingLifecycles(now?: Date): Promise<LifecycleRecord[]> {
+  async listExpiredPendingLifecycles(now?: Date, limit?: number): Promise<LifecycleRecord[]> {
     const cutoff = now ?? new Date();
+    // Oldest-expired first + a bounded take so a mass-expiry batch can never
+    // load the full pending table into memory in one sweep (BUG-11 / SPINE-11).
     const rows = await this.prisma.approvalLifecycle.findMany({
       where: {
         status: "pending",
         expiresAt: { lte: cutoff },
       },
+      orderBy: { expiresAt: "asc" },
+      ...(limit ? { take: limit } : {}),
     });
     return rows.map(toLifecycleRecord);
   }

@@ -239,11 +239,13 @@ export class InMemoryLifecycleStore implements ApprovalLifecycleStore {
       .map((lc) => ({ ...lc }));
   }
 
-  async listExpiredPendingLifecycles(now?: Date): Promise<LifecycleRecord[]> {
+  async listExpiredPendingLifecycles(now?: Date, limit?: number): Promise<LifecycleRecord[]> {
     const cutoff = now ?? new Date();
-    return [...this.lifecycles.values()]
+    const expired = [...this.lifecycles.values()]
       .filter((lc) => lc.status === "pending" && lc.expiresAt <= cutoff)
+      .sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime())
       .map((lc) => ({ ...lc }));
+    return limit ? expired.slice(0, limit) : expired;
   }
 
   async listRecoveryRequiredLifecycles(organizationId?: string): Promise<LifecycleRecord[]> {

@@ -107,7 +107,7 @@ export interface ApprovalLifecycleStore {
   ): Promise<DispatchRecord>;
 
   listPendingLifecycles(organizationId?: string): Promise<LifecycleRecord[]>;
-  listExpiredPendingLifecycles(now?: Date): Promise<LifecycleRecord[]>;
+  listExpiredPendingLifecycles(now?: Date, limit?: number): Promise<LifecycleRecord[]>;
   /** Lifecycles whose dispatch failed after approval (status "recovery_required"). */
   listRecoveryRequiredLifecycles(organizationId?: string): Promise<LifecycleRecord[]>;
   /** Number of dispatch records ever created for one executable work unit. */
