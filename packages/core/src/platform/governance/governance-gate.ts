@@ -17,6 +17,7 @@ import { assertNotSpendBearingAutoApprove } from "../intent-registration.js";
 import type { GovernanceDecision, ExecutionConstraints } from "../governance-types.js";
 import { toActionProposal, toEvaluationContext } from "./work-unit-adapter.js";
 import { toGovernanceDecision } from "./decision-adapter.js";
+import { consultAutoApproveOrgPolicy } from "./auto-approve-policy-consult.js";
 import { applySpendApprovalThreshold } from "./spend-approval-threshold.js";
 import { DEFAULT_CARTRIDGE_CONSTRAINTS } from "./default-constraints.js";
 import { createGuardrailState } from "../../engine/policy-engine.js";
@@ -184,6 +185,22 @@ export class GovernanceGate {
       // structural invariant, not a convention (#931,
       // feedback_system_auto_approved_bypasses_spend_gates).
       if (!isFinancialIntent(registration, proposal)) {
+        // P3-6: an intent that opts in via consultOrgPolicyOnAutoApprove still honors
+        // the operator's per-org governance dial — an org-scoped DENY / require_approval
+        // Policy — before the execute short-circuit, WITHOUT resolving identity. The
+        // short-circuit otherwise returns execute before loadPolicies, so a deny is never
+        // consulted (the gap). We consult ONLY the org-policy layer because the draft
+        // child is also submitted with an unseeded agent actor (delegate tool); the full
+        // path's loadIdentitySpec would throw and hard-deny. No flag ⇒ unchanged fast path.
+        if (registration.consultOrgPolicyOnAutoApprove) {
+          const policies = await this.deps.loadPolicies(workUnit.organizationId);
+          const consulted = consultAutoApproveOrgPolicy(
+            policies,
+            toEvaluationContext(workUnit, registration),
+            constraints,
+          );
+          if (consulted) return consulted;
+        }
         return {
           outcome: "execute",
           riskScore: 0,

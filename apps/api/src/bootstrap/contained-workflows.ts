@@ -547,6 +547,7 @@ export async function bootstrapContainedWorkflows(
     budgetClass: "cheap" | "standard" | "expensive";
     approvalPolicy: "none" | "threshold" | "always";
     approvalMode?: "system_auto_approved";
+    consultOrgPolicyOnAutoApprove?: boolean;
     allowedTriggers: Array<"api" | "chat" | "schedule" | "internal">;
   }> = [
     {
@@ -595,11 +596,16 @@ export async function bootstrapContainedWorkflows(
       // on a no-outbound draft. It STILL flows through ingress (entitlement,
       // idempotency, WorkTrace, audit, dispatch). Spend-bearing targets must NOT
       // copy this — they keep approvalPolicy:"threshold" and park for approval.
+      // consultOrgPolicyOnAutoApprove keeps the per-org governance dial real for this
+      // step (P3-6): the gate still honors an org-scoped DENY / require_approval Policy
+      // before the execute short-circuit — WITHOUT resolving identity (the delegate-tool
+      // caller's agent actor is unseeded) — exactly like the sibling creative.brief.compose.
       intent: "creative.concept.draft",
       workflowId: "creative.concept.draft",
       budgetClass: "cheap",
       approvalPolicy: "none",
       approvalMode: "system_auto_approved",
+      consultOrgPolicyOnAutoApprove: true,
       allowedTriggers: ["internal"],
     },
     {
@@ -747,6 +753,7 @@ export async function bootstrapContainedWorkflows(
       budgetClass: reg.budgetClass,
       approvalPolicy: reg.approvalPolicy,
       approvalMode: reg.approvalMode,
+      consultOrgPolicyOnAutoApprove: reg.consultOrgPolicyOnAutoApprove,
       idempotent: false,
       allowedTriggers: reg.allowedTriggers,
       timeoutMs: 300_000,
