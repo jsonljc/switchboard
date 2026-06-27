@@ -324,4 +324,67 @@ describe("DeterministicSafetyGateHook.afterSkill", () => {
     expect(result.response).toContain("clinic team");
     expect(spies.conversationStore.setConversationStatus).toHaveBeenCalled();
   });
+
+  // -------------------------------------------------------------------------
+  // EV-9b / GOV-8 — a persistence failure must NOT let a banned phrase through.
+  // The existing case above covers verdictStore.save throwing; these cover the
+  // other two side-stores. The hook's contract is emission integrity >
+  // persistence completeness: when handoffStore or conversationStore throw, the
+  // error is swallowed and the banned output is STILL replaced with the handoff
+  // template. The redaction (`result.response = handoffText`) is the last step,
+  // so any unguarded throw in those writes would skip it and leak the phrase.
+  // -------------------------------------------------------------------------
+
+  it("GOV-8: still blocks (redacts output) when handoffStore.save throws", async () => {
+    const failingHandoffStore = {
+      save: vi.fn().mockRejectedValue(new Error("handoff store down")),
+      getById: vi.fn(),
+      getBySessionId: vi.fn(),
+      updateStatus: vi.fn(),
+      listPending: vi.fn(),
+    };
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({
+        status: "resolved",
+        config: {
+          jurisdiction: "SG",
+          clinicType: "medical",
+          deterministicGate: { mode: "enforce" },
+        },
+      }),
+      handoff: failingHandoffStore,
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    // The banned phrase is gone; the handoff template is in its place.
+    expect(result.response).not.toContain("guaranteed");
+    expect(result.response).toContain("clinic team");
+    expect(spies.handoffStore.save).toHaveBeenCalled();
+  });
+
+  it("GOV-8: still blocks (redacts output) when conversationStore.setConversationStatus throws", async () => {
+    const failingConversationStore = {
+      setConversationStatus: vi.fn().mockRejectedValue(new Error("status store down")),
+    };
+    const { deps, spies } = buildDeps({
+      resolver: async () => ({
+        status: "resolved",
+        config: {
+          jurisdiction: "SG",
+          clinicType: "medical",
+          deterministicGate: { mode: "enforce" },
+        },
+      }),
+      conv: failingConversationStore,
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    expect(result.response).not.toContain("guaranteed");
+    expect(result.response).toContain("clinic team");
+    // The status flip was attempted (and threw); the handoff persist still ran.
+    expect(spies.conversationStore.setConversationStatus).toHaveBeenCalled();
+    expect(spies.handoffStore.save).toHaveBeenCalled();
+  });
 });
