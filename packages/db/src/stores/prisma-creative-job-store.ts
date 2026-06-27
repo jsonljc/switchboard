@@ -401,11 +401,15 @@ export class PrismaCreativeJobStore {
    *
    *   leg 1: never-captured rows (tasteCapturedAt null), oldest decision
    *          first — the dominant case, fully SQL-bounded.
-   *   leg 2: captured rows, NEWEST decision first — a pending re-decision has
-   *          a fresh reviewDecidedAt by construction (the route stamps now()
-   *          on every decision write), so it always sorts into the window;
-   *          the column-to-column watermark compare (not expressible in a
-   *          Prisma where) runs in JS on this bounded set.
+   *   leg 2: re-decided rows (tasteCapturedAt set AND a strictly newer
+   *          reviewDecidedAt). The watermark is a column-to-column comparison
+   *          Prisma's typed `where` cannot express, so it is pushed into SQL
+   *          here: the LIMIT therefore applies AFTER the re-decided filter
+   *          (oldest-decision-first), so an old re-decision can never starve
+   *          behind a full page of newest non-re-decided captured rows
+   *          (BUG-7 / SPINE-8). A prior `take`-before-JS-filter dropped such
+   *          rows whenever the newest `limit` captured rows were all already
+   *          captured.
    *
    * Merged oldest-decision-first. Cross-org by design (system cron read);
    * every WRITE stays org-scoped per row.
@@ -430,19 +434,21 @@ export class PrismaCreativeJobStore {
       take: limit,
     })) as TasteCandidate[];
 
-    const captured = (await this.prisma.creativeJob.findMany({
-      where: { reviewDecision: { not: null }, tasteCapturedAt: { not: null } },
-      select,
-      orderBy: { reviewDecidedAt: "desc" },
-      take: limit,
-    })) as TasteCandidate[];
-
-    const redecided = captured.filter(
-      (r) =>
-        r.reviewDecidedAt != null &&
-        r.tasteCapturedAt != null &&
-        r.reviewDecidedAt.getTime() > r.tasteCapturedAt.getTime(),
-    );
+    // Leg 2 pushes the watermark predicate into SQL so the LIMIT bounds the
+    // result AFTER filtering to re-decided rows (oldest decision first). Raw SQL
+    // is required because Prisma's typed `where` cannot express a
+    // column-to-column comparison; the prior findMany `take`-before-JS-filter
+    // starved old re-decisions behind a full newest-N page of captured rows.
+    const redecided = (await this.prisma.$queryRaw<TasteCandidate[]>(Prisma.sql`
+      SELECT "id", "organizationId", "deploymentId", "mode", "stageOutputs",
+             "ugcPhaseOutputs", "reviewDecision", "reviewDecidedAt", "tasteCapturedAt"
+      FROM "CreativeJob"
+      WHERE "reviewDecision" IS NOT NULL
+        AND "tasteCapturedAt" IS NOT NULL
+        AND "reviewDecidedAt" > "tasteCapturedAt"
+      ORDER BY "reviewDecidedAt" ASC
+      LIMIT ${limit}
+    `)) as TasteCandidate[];
 
     return [...uncaptured.filter((r) => r.reviewDecidedAt != null), ...redecided]
       .sort((a, b) => a.reviewDecidedAt!.getTime() - b.reviewDecidedAt!.getTime())

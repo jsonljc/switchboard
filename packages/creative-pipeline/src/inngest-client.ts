@@ -39,7 +39,7 @@ export type CreativePipelineEvents = {
       organizationId: string;
       deploymentId: string;
       mode: "polished";
-      dispatchedAt: Date;
+      dispatchedAt: string;
     };
   };
   "creative-pipeline/stage.approved": {
@@ -56,7 +56,7 @@ export type CreativePipelineEvents = {
       deploymentId: string;
       mode: "ugc";
       pipelineVersion: string;
-      dispatchedAt: Date;
+      dispatchedAt: string;
     };
   };
   "creative-pipeline/ugc-phase.completed": {

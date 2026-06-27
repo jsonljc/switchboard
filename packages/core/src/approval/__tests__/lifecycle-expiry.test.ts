@@ -76,4 +76,19 @@ describe("sweepExpiredLifecycles", () => {
     expect(result.failed).toBe(0);
     expect(service.expireLifecycle).not.toHaveBeenCalled();
   });
+
+  it("threads a bounded limit into the store list query (default 1000, overridable)", async () => {
+    const list = vi.fn().mockResolvedValue([]);
+    const store = {
+      listExpiredPendingLifecycles: list,
+    } as unknown as ApprovalLifecycleStore;
+    const service = { expireLifecycle: vi.fn() } as unknown as ApprovalLifecycleService;
+    const now = new Date("2026-06-27T00:00:00Z");
+
+    await sweepExpiredLifecycles(store, service, now);
+    expect(list).toHaveBeenCalledWith(now, 1000);
+
+    await sweepExpiredLifecycles(store, service, now, 50);
+    expect(list).toHaveBeenLastCalledWith(now, 50);
+  });
 });

@@ -12,6 +12,8 @@ function createMockPrisma() {
       updateMany: vi.fn(),
       findFirstOrThrow: vi.fn(),
     },
+    // listTasteCandidates Leg-2 pushes the re-decided watermark into raw SQL.
+    $queryRaw: vi.fn(),
   };
 }
 
@@ -113,54 +115,49 @@ describe("PrismaCreativeJobStore (slice-2 attribution + taste)", () => {
     }
 
     it("leg 1 bounds NEVER-CAPTURED rows in SQL so old captured rows cannot starve new gestures", async () => {
-      prisma.creativeJob.findMany
-        .mockResolvedValueOnce([decided({ id: "uncaptured" })]) // leg 1: tasteCapturedAt null
-        .mockResolvedValueOnce([]); // leg 2: captured (re-decision scan)
+      prisma.creativeJob.findMany.mockResolvedValueOnce([decided({ id: "uncaptured" })]); // leg 1
+      prisma.$queryRaw.mockResolvedValueOnce([]); // leg 2: re-decided (raw SQL)
 
       const out = await store.listTasteCandidates(500);
 
+      expect(prisma.creativeJob.findMany).toHaveBeenCalledTimes(1);
       expect(prisma.creativeJob.findMany).toHaveBeenNthCalledWith(1, {
         where: { reviewDecision: { not: null }, tasteCapturedAt: null },
         select: SELECT,
         orderBy: { reviewDecidedAt: "asc" },
         take: 500,
       });
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
       expect(out.map((j) => j.id)).toEqual(["uncaptured"]);
     });
 
-    it("leg 2 scans CAPTURED rows newest-first (re-decisions are always recent) and JS-filters the column-vs-column watermark", async () => {
-      prisma.creativeJob.findMany
-        .mockResolvedValueOnce([]) // leg 1
-        .mockResolvedValueOnce([
-          decided({ id: "redecided", tasteCapturedAt: new Date("2026-06-01T00:00:00Z") }),
-          // Boundary: equality means already captured (strict >) — SKIP.
-          decided({ id: "boundary", tasteCapturedAt: new Date("2026-06-03T10:00:00Z") }),
-          decided({ id: "stale", tasteCapturedAt: new Date("2026-06-04T00:00:00Z") }),
-        ]);
+    it("leg 2 filters re-decided rows in SQL (no take-before-JS-filter) so an old re-decision is not starved", async () => {
+      prisma.creativeJob.findMany.mockResolvedValueOnce([]); // leg 1
+      // The raw SQL already applies WHERE reviewDecidedAt > tasteCapturedAt + ORDER
+      // + LIMIT, so the store receives only re-decided rows — there is no second
+      // findMany scan and no JS watermark filter that could starve old re-decisions.
+      prisma.$queryRaw.mockResolvedValueOnce([
+        decided({ id: "redecided", tasteCapturedAt: new Date("2026-06-01T00:00:00Z") }),
+      ]);
 
       const out = await store.listTasteCandidates(500);
 
-      expect(prisma.creativeJob.findMany).toHaveBeenNthCalledWith(2, {
-        where: { reviewDecision: { not: null }, tasteCapturedAt: { not: null } },
-        select: SELECT,
-        orderBy: { reviewDecidedAt: "desc" },
-        take: 500,
-      });
+      expect(prisma.creativeJob.findMany).toHaveBeenCalledTimes(1); // leg 1 only
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
       expect(out.map((j) => j.id)).toEqual(["redecided"]);
     });
 
     it("merges both legs oldest-decision-first and respects the overall cap", async () => {
-      prisma.creativeJob.findMany
-        .mockResolvedValueOnce([
-          decided({ id: "new-gesture", reviewDecidedAt: new Date("2026-06-04T09:00:00Z") }),
-        ])
-        .mockResolvedValueOnce([
-          decided({
-            id: "old-redecision",
-            reviewDecidedAt: new Date("2026-06-02T09:00:00Z"),
-            tasteCapturedAt: new Date("2026-06-01T00:00:00Z"),
-          }),
-        ]);
+      prisma.creativeJob.findMany.mockResolvedValueOnce([
+        decided({ id: "new-gesture", reviewDecidedAt: new Date("2026-06-04T09:00:00Z") }),
+      ]); // leg 1
+      prisma.$queryRaw.mockResolvedValueOnce([
+        decided({
+          id: "old-redecision",
+          reviewDecidedAt: new Date("2026-06-02T09:00:00Z"),
+          tasteCapturedAt: new Date("2026-06-01T00:00:00Z"),
+        }),
+      ]); // leg 2
 
       const out = await store.listTasteCandidates(1);
 
@@ -169,9 +166,8 @@ describe("PrismaCreativeJobStore (slice-2 attribution + taste)", () => {
     });
 
     it("drops rows with a null reviewDecidedAt defensively", async () => {
-      prisma.creativeJob.findMany
-        .mockResolvedValueOnce([decided({ reviewDecidedAt: null })])
-        .mockResolvedValueOnce([]);
+      prisma.creativeJob.findMany.mockResolvedValueOnce([decided({ reviewDecidedAt: null })]); // leg 1
+      prisma.$queryRaw.mockResolvedValueOnce([]); // leg 2
       const out = await store.listTasteCandidates(500);
       expect(out).toEqual([]);
     });
