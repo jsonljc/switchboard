@@ -19,6 +19,40 @@ interface EscalateInput {
 
 export type EscalateToolFactory = (ctx: SkillRequestContext) => SkillTool;
 
+/**
+ * Exported input-schema constant — the single source of truth for the
+ * handoff.create input contract. The factory references it by value
+ * (behaviour-preserving); the alex-conversation eval imports it so its mock
+ * tool presents the EXACT production contract (EV-5/AGENT-5 mock-tool-blind gap).
+ */
+export const ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    reason: {
+      type: "string",
+      enum: [
+        "human_requested",
+        "missing_knowledge",
+        "complex_objection",
+        "negative_sentiment",
+        "compliance_concern",
+        "medical_safety",
+        "booking_failure",
+        "max_turns_exceeded",
+      ],
+    },
+    summary: {
+      type: "string",
+      description: "Brief summary of why escalation is needed and what the customer wants",
+    },
+    customerSentiment: {
+      type: "string",
+      enum: ["positive", "neutral", "frustrated", "angry"],
+    },
+  },
+  required: ["reason", "summary"],
+};
+
 export function createEscalateToolFactory(deps: EscalateToolBaseDeps): EscalateToolFactory {
   return (ctx: SkillRequestContext): SkillTool => ({
     id: "escalate",
@@ -39,33 +73,7 @@ export function createEscalateToolFactory(deps: EscalateToolBaseDeps): EscalateT
         // so only supervised needs the override.) Mirrors the booking.create fix.
         governanceOverride: { supervised: "auto-approve" as const },
         idempotent: false,
-        inputSchema: {
-          type: "object",
-          properties: {
-            reason: {
-              type: "string",
-              enum: [
-                "human_requested",
-                "missing_knowledge",
-                "complex_objection",
-                "negative_sentiment",
-                "compliance_concern",
-                "medical_safety",
-                "booking_failure",
-                "max_turns_exceeded",
-              ],
-            },
-            summary: {
-              type: "string",
-              description: "Brief summary of why escalation is needed and what the customer wants",
-            },
-            customerSentiment: {
-              type: "string",
-              enum: ["positive", "neutral", "frustrated", "angry"],
-            },
-          },
-          required: ["reason", "summary"],
-        },
+        inputSchema: ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA,
         execute: async (params: unknown): Promise<ToolResult> => {
           const input = params as EscalateInput;
 

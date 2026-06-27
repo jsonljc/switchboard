@@ -39,3 +39,26 @@ export const CreativeConceptDraftInput = z.object({
   rileyDiagnosis: RileyDiagnosisContext.optional(),
 });
 export type CreativeConceptDraftInput = z.infer<typeof CreativeConceptDraftInput>;
+
+/**
+ * The strict tool `inputSchema` projection of {@link CreativeConceptDraftInput}
+ * for the Alex -> Mira `delegate.creative_concept` operation. The single source
+ * of truth so the live delegate target (apps/api delegation-targets.ts) and the
+ * alex-conversation eval mock present the EXACT same contract (EV-5/AGENT-5
+ * mock-tool-blind parity). Strict tools 400 on min/max, so the Zod parse in
+ * `mapInput` carries the min(1) + optional-field validation this schema cannot.
+ */
+export const CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    productDescription: {
+      type: "string",
+      description: "Treatment/offer the lead is interested in, e.g. 'Botox for first-time clients'",
+    },
+    targetAudience: {
+      type: "string",
+      description: "Who the concept targets, e.g. 'women 30-45, anti-aging curious'",
+    },
+  },
+  required: ["productDescription", "targetAudience"],
+};

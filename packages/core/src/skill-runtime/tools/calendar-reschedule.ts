@@ -77,6 +77,40 @@ function resolveTarget(bookings: UpcomingBooking[], service?: string): TargetRes
   return { kind: "ok", booking: match };
 }
 
+/**
+ * Exported per-operation input-schema constants — the single source of truth for
+ * the reschedule/cancel input contracts. `buildRescheduleOperations` references
+ * these by value (behaviour-preserving); the alex-conversation eval imports them
+ * so its mock tool presents the EXACT production contract (EV-5/AGENT-5
+ * mock-tool-blind gap). The target booking is resolved from the trusted
+ * ctx.contactId, never from LLM tool input — so no contactId appears here.
+ */
+export const CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    slotStart: { type: "string", description: "ISO 8601 new start" },
+    slotEnd: { type: "string", description: "ISO 8601 new end" },
+    calendarId: { type: "string" },
+    service: {
+      type: "string",
+      description: "Optional: which service's appointment, if the lead has more than one",
+    },
+  },
+  required: ["slotStart", "slotEnd", "calendarId"],
+};
+
+export const CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    service: {
+      type: "string",
+      description: "Optional: which service's appointment, if more than one",
+    },
+    reason: { type: "string", description: "Optional short reason" },
+  },
+  required: [],
+};
+
 export function buildRescheduleOperations(
   ctx: SkillRequestContext,
   deps: CalendarRescheduleDeps,
@@ -94,19 +128,7 @@ export function buildRescheduleOperations(
       // relaxation); the deferred park-for-review posture is the F2 work.
       governanceOverride: { supervised: "auto-approve" as const, guided: "auto-approve" as const },
       idempotent: false,
-      inputSchema: {
-        type: "object",
-        properties: {
-          slotStart: { type: "string", description: "ISO 8601 new start" },
-          slotEnd: { type: "string", description: "ISO 8601 new end" },
-          calendarId: { type: "string" },
-          service: {
-            type: "string",
-            description: "Optional: which service's appointment, if the lead has more than one",
-          },
-        },
-        required: ["slotStart", "slotEnd", "calendarId"],
-      },
+      inputSchema: CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA,
       execute: async (params: unknown): Promise<ToolResult> => {
         const { orgId, contactId } = ctx;
         if (!contactId) return NO_CONTACT();
@@ -208,17 +230,7 @@ export function buildRescheduleOperations(
       // relaxation); the deferred park-for-review posture is the F2 work.
       governanceOverride: { supervised: "auto-approve" as const, guided: "auto-approve" as const },
       idempotent: false,
-      inputSchema: {
-        type: "object",
-        properties: {
-          service: {
-            type: "string",
-            description: "Optional: which service's appointment, if more than one",
-          },
-          reason: { type: "string", description: "Optional short reason" },
-        },
-        required: [],
-      },
+      inputSchema: CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA,
       execute: async (params: unknown): Promise<ToolResult> => {
         const { orgId, contactId } = ctx;
         if (!contactId) return NO_CONTACT();

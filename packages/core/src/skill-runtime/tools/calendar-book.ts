@@ -56,6 +56,38 @@ export async function resolveProviderOrFail(
 export type CalendarBookToolFactory = (ctx: SkillRequestContext) => SkillTool;
 
 /**
+ * Exported per-operation input-schema constants — the single source of truth for
+ * each operation's LLM-facing input contract. The factory references these by
+ * value (behaviour-preserving); the alex-conversation eval imports them so its
+ * mock tools present the EXACT production contract (EV-5/AGENT-5 mock-tool-blind
+ * gap). `booking.create` accepts NO contactId / attendee fields — contactId is
+ * sourced from the trusted SkillRequestContext, never from LLM tool input (AI-1),
+ * and the attendee name/email are read from the contact record, not the model.
+ */
+export const CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    dateFrom: { type: "string", description: "ISO 8601 start date" },
+    dateTo: { type: "string", description: "ISO 8601 end date" },
+    durationMinutes: { type: "number", description: "Appointment duration in minutes" },
+    service: { type: "string", description: "Service type" },
+    timezone: { type: "string", description: "IANA timezone" },
+  },
+  required: ["dateFrom", "dateTo", "durationMinutes", "service", "timezone"],
+};
+
+export const CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    service: { type: "string" },
+    slotStart: { type: "string", description: "ISO 8601" },
+    slotEnd: { type: "string", description: "ISO 8601" },
+    calendarId: { type: "string" },
+  },
+  required: ["service", "slotStart", "slotEnd", "calendarId"],
+};
+
+/**
  * Factory-with-context pattern (matches `escalate.ts`). The `orgId` is sourced
  * from the trusted `SkillRequestContext` injected at execution time, NEVER from
  * LLM-controlled tool input. This closes the AI-1 prompt-injection vector.
@@ -68,17 +100,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
         description: "Query available calendar slots for a date range.",
         effectCategory: "read" as const,
         idempotent: true,
-        inputSchema: {
-          type: "object",
-          properties: {
-            dateFrom: { type: "string", description: "ISO 8601 start date" },
-            dateTo: { type: "string", description: "ISO 8601 end date" },
-            durationMinutes: { type: "number", description: "Appointment duration in minutes" },
-            service: { type: "string", description: "Service type" },
-            timezone: { type: "string", description: "IANA timezone" },
-          },
-          required: ["dateFrom", "dateTo", "durationMinutes", "service", "timezone"],
-        },
+        inputSchema: CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA,
         execute: async (params: unknown) => {
           // safeParse (not parse): SlotQuerySchema is stricter than the coarse
           // runtime input guard (int/positive/min-length), so malformed LLM input
@@ -133,16 +155,7 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
           guided: "auto-approve" as const,
         },
         idempotent: true,
-        inputSchema: {
-          type: "object",
-          properties: {
-            service: { type: "string" },
-            slotStart: { type: "string", description: "ISO 8601" },
-            slotEnd: { type: "string", description: "ISO 8601" },
-            calendarId: { type: "string" },
-          },
-          required: ["service", "slotStart", "slotEnd", "calendarId"],
-        },
+        inputSchema: CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA,
         execute: async (params: unknown): Promise<ToolResult> => {
           const input = params as {
             service: string;
