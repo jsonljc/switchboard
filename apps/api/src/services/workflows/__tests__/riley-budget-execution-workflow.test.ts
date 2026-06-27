@@ -232,6 +232,7 @@ function harness(opts?: {
     getApprovalContext,
     isReallocateKilled,
     getDeploymentCredentials,
+    createAdsClient,
     getCampaign,
     updateCampaignBudget,
     getAccountDailySpendCents,
@@ -583,5 +584,22 @@ describe("buildRileyBudgetExecutionWorkflow â€” in-flight kill-switch (runbook Â
     // The kill-switch never ran (the replay short-circuited first); no new Meta write.
     expect(h.isReallocateKilled).not.toHaveBeenCalled();
     expect(h.updateCampaignBudget).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildRileyBudgetExecutionWorkflow - EV-11 pre-flip gate (MONEY-9: fresh client per Graph call)", () => {
+  it("builds a FRESH MetaAdsClient for each of the four Graph operations (no shared 60s-limited instance)", async () => {
+    // MONEY-9 dispatch call-site contract. The per-instance 60s limiter paces the audit crons, NOT
+    // this human-latency reallocate dispatch: the read-modify-re-read executor builds a fresh client
+    // for the pre-read, the account-spend read, the budget write, and the post-write re-read so
+    // independent operator-approved moves never serialize behind one another's 60s window. Teeth:
+    // hoisting one client and reusing it across the ops drops this count below four.
+    const h = harness();
+    const res = await h.handler.execute(workUnit(), services);
+    expect(res.outcome).toBe("completed");
+    expect(h.createAdsClient).toHaveBeenCalledTimes(4);
+    for (const call of h.createAdsClient.mock.calls) {
+      expect(call[0]).toEqual({ accessToken: "tok", accountId: "act_1" });
+    }
   });
 });

@@ -53,7 +53,7 @@ reproduce the defect before asserting it.
 | EV-9a | GOV-1, GOV-6                        | consent fail-closed branches        | P1  | yes     | not started       |
 | EV-9b | GOV-3, GOV-4, GOV-5, GOV-7, GOV-8   | approval + operator-binding iso     | P1  | yes     | not started       |
 | EV-10 | SPINE-3 (BUG-3), SPINE-4            | skill-runtime constraints / inert   | P1  | -       | not started       |
-| EV-11 | MONEY-1, 3, 8, 9, 10                | pre-real-money-flip gate            | P1  | yes     | not started       |
+| EV-11 | MONEY-1, 3, 8, 9, 10                | pre-real-money-flip gate            | P1  | yes     | surfaced #1365    |
 | EV-12 | MONEY-4 (BUG-10), MONEY-5, MONEY-6  | attribution chain                   | P1  | yes     | not started       |
 | EV-13 | MONEY-7 (BUG-8)                     | creative medical-claim judge        | P1  | yes     | not started       |
 | EV-14 | CHAN-1, 2, 3, 7, 8                  | cross-tenant route sweep            | P1  | yes     | not started       |
@@ -297,6 +297,19 @@ analyzers/opportunity-arbitrator,analyzers/source-reallocation,meta-ads-client}.
   MONEY-8 - flag-default-OFF wiring (no submitter wired when unset; pause needs env AND per-org).
   MONEY-9 - fresh-client-per-call usage contract. MONEY-10 - direct sane-ceiling + NaN guards.
 - **Acceptance:** the five form a named "pre-flip" eval group, all green before any flip. SURFACE.
+- **Surfaced (#1365):** the named group is `packages/ad-optimizer/src/__tests__/pre-flip-money-gate.test.ts`
+  (MONEY-1/3/9/10 model-free legs) + the MONEY-9 call-site contract in the riley budget/pause
+  execution-workflow tests + the MONEY-8 env half via a new pure `selfExecutionEnvEnabled` helper
+  wired at `inngest.ts`. **Scope note:** most MONEY rows were already covered, so the residuals are
+  narrow - MONEY-3 exact 0.7 boundary + const pin; MONEY-9 fresh-client CALL-SITE count (the 60s
+  interval was already tested); MONEY-10 inclusive $1M ceiling + ±Infinity; MONEY-8 the env half (the
+  per-org∧dep gate is covered by `inngest-functions-handoff.test.ts`). **Finding for the merge owner:**
+  MONEY-1's "arbitration submits only the primary" premise is FALSE for the reallocate dollar move -
+  reallocate is NOT primary-gated (`recommendation-sink.ts:543` dispatches per scale rec; only pause
+  is primary-only, `riley-pause-dispatch.ts:57`), so its runaway envelope is PER-MOVE (blast-radius
+  dollar + account-share cap) + MANDATORY per-move human approval, with no aggregate cap. MONEY-1 was
+  rewritten to pin that true envelope. The group is a runbook convention, not yet a CI flip-blocker;
+  wire it as a required check before flipping `RILEY_*_SELF_EXECUTION_ENABLED`. Awaiting human merge.
 
 ## EV-12 - Attribution chain (MONEY-4 / BUG-10, MONEY-5, MONEY-6) [P1, SURFACE]
 

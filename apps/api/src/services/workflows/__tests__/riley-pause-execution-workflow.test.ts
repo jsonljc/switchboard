@@ -458,3 +458,21 @@ describe("D5-2a: last-mile approved-lifecycle check", () => {
     expect(h.deps.getDeploymentCredentials).not.toHaveBeenCalled();
   });
 });
+
+describe("riley pause execution workflow - EV-11 pre-flip gate (MONEY-9: fresh client per Graph call)", () => {
+  it("builds a FRESH MetaAdsClient for each Graph operation (status pre-read + pause write)", async () => {
+    // MONEY-9 dispatch call-site contract. The pause executor runs inside the operator's approval
+    // HTTP request; the per-instance 60s limiter must not hold it open, so the status pre-read and
+    // the pause write each build a fresh client. Teeth: reusing one client across the two ops drops
+    // this count below two.
+    const h = harness();
+    const handler = buildRileyPauseExecutionWorkflow(h.deps);
+    const result = await handler.execute(workUnit(), services);
+    expect(result.outcome).toBe("completed");
+    const createAdsClient = vi.mocked(h.deps.createAdsClient);
+    expect(createAdsClient).toHaveBeenCalledTimes(2);
+    for (const call of createAdsClient.mock.calls) {
+      expect(call[0]).toEqual({ accessToken: "tok", accountId: "act_1" });
+    }
+  });
+});

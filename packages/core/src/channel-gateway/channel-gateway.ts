@@ -272,29 +272,33 @@ export class ChannelGateway {
         identity.contactId,
       );
 
-      // Phase 1c — also record PDPA revocation when consent gate is configured.
-      // The WhatsApp opt-out path is a channel-layer signal; PDPA revocation is
-      // the data-subject-rights superset. Recording both keeps the audit trail
-      // aligned and ensures enforce-mode consent gates fire on subsequent turns.
+      // Phase 1c: also record the PDPA revocation when the consent gate is configured.
+      // FAIL CLOSED (P2-15): a STOP is itself inbound, so the WhatsApp 24h window is
+      // freshly open and messagingOptIn=false is inert within it, leaving the durable
+      // consentRevokedAt write as the SOLE suppressor of future proactive sends inside
+      // that window (see notifications/proactive-eligibility.ts). The previous swallow
+      // confirmed an opt-out we had not durably recorded and left only an ephemeral log
+      // of the failure. Let the failure propagate instead (mirroring the sibling enforce
+      // path in consent-revocation-gate.ts): the webhook caller records it to the
+      // failed-message DLQ (durable + operator-visible) and returns 200, and
+      // OPT_OUT_CONFIRMATION below is reached only after the revocation persists, so a
+      // STOP is never falsely confirmed. recordRevocation is idempotent, so replaying a
+      // DLQ entry is safe; recordMessagingOptOut stays first as the safer partial state.
+      // NOTE: the DLQ is not auto-drained today, so fully guaranteeing the eventual
+      // write (auto-replay / a consent outbox) is a separate, larger follow-up.
       if (this.config.consentRevocationGate) {
         const cfg = this.config.consentRevocationGate;
         const contactId = identity.contactId;
-        try {
-          await cfg.consentService.recordRevocation({
-            contactId,
-            source: "inbound_keyword_revocation",
-            revokedAt: cfg.clock(),
-            actor: "system:whatsapp_opt_out",
-            notes: `WhatsApp opt-out keyword on channel ${message.channel}`,
-            openConversationSessionId: message.sessionId,
-            organizationId: resolved.organizationId,
-            deploymentId: resolved.deploymentId,
-          });
-        } catch (err) {
-          console.error("[channel-gateway] PDPA revocation from WhatsApp opt-out failed", err);
-          // Do not block — the WhatsApp opt-out is the primary signal; PDPA
-          // mirror is best-effort.
-        }
+        await cfg.consentService.recordRevocation({
+          contactId,
+          source: "inbound_keyword_revocation",
+          revokedAt: cfg.clock(),
+          actor: "system:whatsapp_opt_out",
+          notes: `WhatsApp opt-out keyword on channel ${message.channel}`,
+          openConversationSessionId: message.sessionId,
+          organizationId: resolved.organizationId,
+          deploymentId: resolved.deploymentId,
+        });
       }
 
       await replySink.send(OPT_OUT_CONFIRMATION);
