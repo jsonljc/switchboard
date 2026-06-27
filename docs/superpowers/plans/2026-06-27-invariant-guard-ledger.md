@@ -17,17 +17,19 @@ Design: `docs/superpowers/specs/2026-06-27-invariant-guard-loop-design.md`.
   `guard-covers`) INSIDE the same PR that adds the guard. The row-flip is atomic with the guard that
   justifies it, so `main` always reflects reality and there is no separate per-run ledger-churn commit.
 - **Sibling rows** are new rows in this same ledger, each linking back to its parent id (e.g. a
-  parent `G1` spawns `G1-S1`). The parent holds `status = sibling-open` until its siblings land.
+  parent `G1` spawns `G1-S1`). The parent holds `status = sibling-open` until its siblings land;
+  once all of them land, the parent flips back to `guarded`.
 - The loop never selects an `operational-skip` row, and never builds a guard for a row already
   `guarded` (it confirms the existing guard covers the specific case, then moves on).
 
 ## Row schema
 
 ```
-| id | lesson (feedback_*.md) | invariant predicate (1 line) | blast-radius | guard-type | status | guard location | guard-covers (sites + known gaps) | siblings |
+| id | lesson (feedback_*.md) | invariant predicate (1 line) | blast-radius | regression-likelihood | guard-type | status | guard location | guard-covers (sites + known gaps) | siblings |
 ```
 
 - `blast-radius`: Crit | High | Med | Low
+- `regression-likelihood`: Hi | Med | Lo (a fix that lives in one place, on a hot-change path, with known siblings ranks Hi)
 - `guard-type`: arch | lint | test | ci | type | n-a
 - `status`: unguarded | guarded | sibling-open | operational-skip
 - `guard location`: path of the guard once written; for an `already-guarded` row, the existing guard
@@ -48,16 +50,16 @@ No silent cap: slice 0 records the count in each bucket so coverage is honest an
 
 ## Seed rows (worked examples; full schema)
 
-| id | lesson | invariant predicate (1 line) | blast | guard-type | status | guard location | guard-covers | siblings |
-|----|--------|------------------------------|-------|------------|--------|----------------|--------------|----------|
-| G1 | `feedback_consent_status_revoked_masking` | `deriveConsentStatus` checks revoked BEFORE the null-jurisdiction short-circuit; the calendar-book consent gate reads the resolved non-null jurisdiction | Crit | test | unguarded | - | - | calendar-book-consent (file as `G1-S1` at run; known regulated sibling) |
-| G2 | `feedback_governed_dispatch_check_full_submit_response` | every governed-dispatch caller treats `outcome !== "completed"` as failure, never `approvalRequired` alone | Crit | test | unguarded | - | - | - (type-level exhaustiveness is a stretch goal) |
-| G3 | `feedback_reaper_freeing_slot_needs_guarded_claimant` | every re-claim path for a freed resource is a status compare-and-set (`updateMany` with a status predicate), not an id-only update | High | test | unguarded | - | - | - |
-| G4 | `feedback_messaging_optin_is_platform_not_marketing_consent` | proactive sends gate via `evaluateProactiveSendEligibility` (PDPA-first), never on `messagingOptIn` | Crit | test | unguarded | - | - | - |
-| G5 | `feedback_next_public_dynamic_env_not_inlined` | no computed-member `process.env[var]` read in dashboard client code (browser bundle) | Med | lint | guarded | `.eslintrc.json` overrides + `scripts/check-no-dynamic-public-env.ts` (PR #1003) | dashboard client browser bundle | - |
-| G6 | `feedback_allowed_triggers_not_a_public_edge_gate` | auto-exec-only intents are gated by `SERVICE_ONLY_INGRESS_INTENTS`, not by `allowedTriggers` | Crit | test | unguarded | - | - | - |
-| G7 | `feedback_new_mutating_route_needs_route_allowlist` | a new mutating route must appear in `.agent/tools/route-allowlist.yaml` | High | ci | guarded | `scripts/local-verify-fast.ts` -> `.agent/tools/check-routes` | all mutating routes (allowlist-enforced) | - |
-| G8 | `feedback_no_em_dashes` | avoid em-dashes (an agent writing-style preference, not a code invariant) | Low | n-a | operational-skip | - | - | - |
+| id | lesson | invariant predicate (1 line) | blast | reg-lik | guard-type | status | guard location | guard-covers | siblings |
+|----|--------|------------------------------|-------|---------|------------|--------|----------------|--------------|----------|
+| G1 | `feedback_consent_status_revoked_masking` | `deriveConsentStatus` checks revoked BEFORE the null-jurisdiction short-circuit; the calendar-book consent gate reads the resolved non-null jurisdiction | Crit | Hi | test | unguarded | - | - | calendar-book-consent (file as `G1-S1` at run; known regulated sibling) |
+| G2 | `feedback_governed_dispatch_check_full_submit_response` | every governed-dispatch caller treats `outcome !== "completed"` as failure, never `approvalRequired` alone | Crit | Hi | test | unguarded | - | - | - (type-level exhaustiveness is a stretch goal) |
+| G3 | `feedback_reaper_freeing_slot_needs_guarded_claimant` | every re-claim path for a freed resource is a status compare-and-set (`updateMany` with a status predicate), not an id-only update | High | Med | test | unguarded | - | - | - |
+| G4 | `feedback_messaging_optin_is_platform_not_marketing_consent` | proactive sends gate via `evaluateProactiveSendEligibility` (PDPA-first), never on `messagingOptIn` | Crit | Hi | test | unguarded | - | - | - |
+| G5 | `feedback_next_public_dynamic_env_not_inlined` | no computed-member `process.env[var]` read in dashboard client code (browser bundle) | Med | Lo | lint | guarded | `.eslintrc.json` overrides + `scripts/check-no-dynamic-public-env.ts` (PR #1003) | dashboard client browser bundle | - |
+| G6 | `feedback_allowed_triggers_not_a_public_edge_gate` | auto-exec-only intents are gated by `SERVICE_ONLY_INGRESS_INTENTS`, not by `allowedTriggers` | Crit | Med | test | unguarded | - | - | - |
+| G7 | `feedback_new_mutating_route_needs_route_allowlist` | a new mutating route must appear in `.agent/tools/route-allowlist.yaml` | High | Lo | ci | guarded | `scripts/local-verify-fast.ts` -> `.agent/tools/check-routes` | all mutating routes (allowlist-enforced) | - |
+| G8 | `feedback_no_em_dashes` | avoid em-dashes (an agent writing-style preference, not a code invariant) | Low | Lo | n-a | operational-skip | - | - | - |
 
 Notes on the seed:
 - G5 and G7 are deliberately included as `already-guarded` examples (both surfaced during

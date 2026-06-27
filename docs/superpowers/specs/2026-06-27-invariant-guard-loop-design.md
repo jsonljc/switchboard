@@ -89,10 +89,12 @@ The loop mirrors the second-wave pattern of a durable plan plus an ephemeral per
    across sessions. Row schema:
 
    ```
-   | id | lesson (feedback_*.md) | invariant predicate (1 line) | blast-radius | guard-type | status | guard location | guard-covers (sites + known gaps) | siblings |
+   | id | lesson (feedback_*.md) | invariant predicate (1 line) | blast-radius | regression-likelihood | guard-type | status | guard location | guard-covers (sites + known gaps) | siblings |
    ```
 
    - `blast-radius`: Crit | High | Med | Low (see the rubric below).
+   - `regression-likelihood`: Hi | Med | Lo - the second rubric factor, stored so cross-session
+     selection is deterministic (a fix in one place, on a hot-change path, with known siblings ranks Hi).
    - `guard-type`: arch | lint | test | ci | type | n-a.
    - `status`: unguarded | guarded | sibling-open | operational-skip.
    - `guard location`: the path of the guard once written (e.g. `packages/core/src/...test.ts`); for
