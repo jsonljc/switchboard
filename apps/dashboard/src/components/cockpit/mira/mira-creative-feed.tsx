@@ -84,10 +84,11 @@ export function MiraCreativeFeed() {
 
   // Keys-pending-safe gating: useMiraFeed is enabled:!!keys, so while the org
   // scope resolves React Query reports a disabled query as isLoading:false /
-  // data:undefined / isError:false. A plain `if (isLoading)` gate is skipped here
-  // and falls through to the empty state, flashing a false "no drafts". Derive
-  // loading from {data, error} (resolveQueryState precedence: data ▸ error ▸
-  // loading) so keys-pending — and the initial load — render the skeleton.
+  // data:undefined / isError:false. A plain `if (isLoading)` gate is skipped in
+  // that state and falls through to the empty state, flashing a false "no drafts".
+  // Derive loading from the absence of {data, error} instead, so both keys-pending
+  // and the initial load render the skeleton. (Error still takes precedence over a
+  // stale cached list below, preserving the prior behaviour.)
   if (data == null && !isError) {
     return (
       <div

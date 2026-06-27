@@ -31,7 +31,7 @@ export function assertSafeDashboardAuthEnv(): void {
     throw new Error("NEXTAUTH_SECRET must be set in production");
   }
 
-  // The dashboard talks to Postgres directly — the NextAuth Prisma adapter and the
+  // The dashboard talks to Postgres directly: the NextAuth Prisma adapter and the
   // per-org API client both `new PrismaClient()`. A missing DATABASE_URL otherwise
   // fails lazily at the first query with a cryptic Prisma error; preflight it so the
   // deploy refuses to start instead. (Mirrors the launch-checklist env requirement.)
