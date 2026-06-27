@@ -193,7 +193,7 @@ describe("executeProductionPhase", () => {
     expect(result.failedSpecs).toHaveLength(0);
   });
 
-  it("persists every produced asset as requires_human_review — QA never auto-approves an unseen video", async () => {
+  it("persists every produced asset as requires_human_review - QA never auto-approves an unseen video", async () => {
     const input: ProductionInput = {
       specs: [makeSpec("spec_1")],
       providerRegistry: [],

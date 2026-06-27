@@ -12,12 +12,12 @@ import {
 // asserts personal safety, claims FDA approval, diagnoses, or fabricates an offer
 // must be flagged so it never reaches paid production unreviewed.
 
-describe("evaluateClaimSafety — clean scripts pass", () => {
+describe("evaluateClaimSafety - clean scripts pass", () => {
   it("passes a compliant UGC script that explains generally and routes to a consult", () => {
     const text =
       "Hey so honestly I've been curious about these injectable treatments for a while. " +
       "I booked a consultation and the doctor walked me through what it actually does and " +
-      "whether it even made sense for me. No pressure at all — I just liked that they take " +
+      "whether it even made sense for me. No pressure at all - I just liked that they take " +
       "the time to explain things. If you're curious too, book a consult and ask them.";
     const result = evaluateClaimSafety({ text });
     expect(result.verdict).toBe("clean");
@@ -36,7 +36,7 @@ describe("evaluateClaimSafety — clean scripts pass", () => {
   });
 });
 
-describe("evaluateClaimSafety — banned medical claims are flagged", () => {
+describe("evaluateClaimSafety - banned medical claims are flagged", () => {
   it("flags a guaranteed-results / efficacy claim (claim-boundaries: never guarantee results)", () => {
     const result = evaluateClaimSafety({
       text: "Trust me, you will see guaranteed results and it will permanently fix your skin.",
@@ -102,10 +102,10 @@ describe("evaluateClaimSafety — banned medical claims are flagged", () => {
   });
 });
 
-describe("evaluateClaimSafety — hallucinated offers + forbidden phrases", () => {
+describe("evaluateClaimSafety - hallucinated offers + forbidden phrases", () => {
   it("flags a hallucinated discount offer (no operator-grounded offer copy exists here)", () => {
     const result = evaluateClaimSafety({
-      text: "Get 50% off your first session — money-back guarantee if you don't love it!",
+      text: "Get 50% off your first session - money-back guarantee if you don't love it!",
     });
     expect(result.verdict).toBe("flagged");
     expect(result.violations.map((v) => v.category)).toContain("hallucinated-offer");
@@ -140,7 +140,7 @@ describe("evaluateClaimSafety — hallucinated offers + forbidden phrases", () =
   });
 });
 
-describe("deriveClaimsPolicyTag — producer side (scripting)", () => {
+describe("deriveClaimsPolicyTag - producer side (scripting)", () => {
   it("maps a clean verdict to 'clean'", () => {
     expect(deriveClaimsPolicyTag({ verdict: "clean", violations: [] })).toBe("clean");
   });
@@ -155,7 +155,7 @@ describe("deriveClaimsPolicyTag — producer side (scripting)", () => {
   });
 });
 
-describe("parseClaimsPolicyTag — consumer side (production gate)", () => {
+describe("parseClaimsPolicyTag - consumer side (production gate)", () => {
   it("treats a missing tag as clean (backward compatible: absent = not evaluated)", () => {
     expect(parseClaimsPolicyTag(undefined)).toBe("clean");
     expect(parseClaimsPolicyTag(null)).toBe("clean");
@@ -172,7 +172,7 @@ describe("parseClaimsPolicyTag — consumer side (production gate)", () => {
   });
 });
 
-describe("CLAIM_SAFETY_RULES — ruleset is grounded + traceable", () => {
+describe("CLAIM_SAFETY_RULES - ruleset is grounded + traceable", () => {
   it("every rule cites the claim-boundary / source rule it enforces", () => {
     expect(CLAIM_SAFETY_RULES.length).toBeGreaterThan(0);
     for (const rule of CLAIM_SAFETY_RULES) {

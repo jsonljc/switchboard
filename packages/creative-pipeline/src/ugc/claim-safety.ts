@@ -9,7 +9,7 @@
 //
 // GROUNDING: the ruleset is a faithful lexical projection of the non-negotiable
 // rules in `skills/alex/references/medspa/claim-boundaries.md` (the same doctrine
-// the conversational claim classifier enforces). It is NOT a divergent ruleset —
+// the conversational claim classifier enforces). It is NOT a divergent ruleset -
 // it reuses the @switchboard/schemas `ClaimType` taxonomy so the creative surface
 // and the conversational surface share one vocabulary. creative-pipeline is a
 // Layer-2 package (schemas-only), so it cannot import the Layer-3 core classifier;
@@ -91,7 +91,7 @@ const DIAGNOSIS_RULE = "claim-boundaries: Never diagnose.";
 const REGULATORY_RULE =
   "claim-boundaries (superiority/efficacy): no unevidenced regulatory-authority claim (e.g. 'FDA-approved').";
 const OFFER_RULE =
-  "claim-boundaries (urgency): a concrete discount/offer is unsubstantiated unless the operator provided factual offer copy in Business Facts — none is plumbed into the script writer.";
+  "claim-boundaries (urgency): a concrete discount/offer is unsubstantiated unless the operator provided factual offer copy in Business Facts - none is plumbed into the script writer.";
 
 export const CLAIM_SAFETY_RULES: readonly ClaimRule[] = [
   // efficacy / guaranteed results / outcomes / timelines
@@ -253,7 +253,7 @@ function escapeRegExp(s: string): string {
 /**
  * Deterministically inspect a generated UGC script for banned/unsubstantiated
  * medical claims, hallucinated offers, and forbidden phrases. No network, no
- * API key — pure lexical analysis grounded in claim-boundaries.md.
+ * API key - pure lexical analysis grounded in claim-boundaries.md.
  */
 export function evaluateClaimSafety(input: ClaimSafetyInput): ClaimSafetyResult {
   const text = input.text ?? "";
@@ -308,12 +308,12 @@ export function deriveClaimsPolicyTag(result: ClaimSafetyResult): ClaimsPolicyTa
 /**
  * Consumer side (production gate): parse + validate a spec's `claimsPolicyTag`.
  *
- * - absent (undefined/null): treated as "clean" — backward compatible, a spec
+ * - absent (undefined/null): treated as "clean" - backward compatible, a spec
  *   produced before this gate existed (or by another path) is not retroactively
  *   blocked.
  * - recognized value: passed through.
  * - present but unrecognized (tampered/garbage/wrong type): FAIL CLOSED to
- *   "review_required" — a malformed safety tag is never trusted to allow spend.
+ *   "review_required" - a malformed safety tag is never trusted to allow spend.
  */
 export function parseClaimsPolicyTag(raw: unknown): ClaimsPolicyTag {
   if (raw === undefined || raw === null) return "clean";

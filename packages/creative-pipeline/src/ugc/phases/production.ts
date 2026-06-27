@@ -100,7 +100,7 @@ export interface ProductionOutput {
 // ── Hash helper ──
 
 function hashInputs(spec: CreativeSpecInput): Record<string, string> {
-  // Simple hash — upgrade to content-addressable hashing when asset deduplication is needed
+  // Simple hash - upgrade to content-addressable hashing when asset deduplication is needed
   return {
     promptHash: Buffer.from(spec.script.text).toString("base64").slice(0, 16),
     referencesHash: "none",
@@ -205,7 +205,7 @@ async function processSpec(
 
         return { asset: assetData, qaHistory };
       } catch {
-        // Generation error — try next attempt/provider (bounded by the
+        // Generation error - try next attempt/provider (bounded by the
         // per-provider attemptsFor, not the global max).
         if (attempt === attemptsFor - 1) break;
       }
@@ -273,7 +273,7 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
   // the evaluator actually receives deps in this path.
   const qaDeps = buildFrameQaDeps(deps.apiKey, deps.model);
 
-  // Process specs sequentially — add p-limit parallelism when concurrent provider calls are needed.
+  // Process specs sequentially - add p-limit parallelism when concurrent provider calls are needed.
   // The tracker accrues per ATTEMPT inside processSpec (qa-fail retries spend
   // real money), so the budget guard caps worst-case retry spend.
   const costTracker = { total: 0 };

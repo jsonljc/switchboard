@@ -208,7 +208,7 @@ describe("executeScriptingPhase", () => {
 
   it("stamps 'review_required' when the generated script makes a banned medical claim", async () => {
     vi.mocked(callClaude).mockResolvedValueOnce({
-      text: "Trust me, you will see guaranteed results — it's FDA-approved and completely safe for you.",
+      text: "Trust me, you will see guaranteed results - it's FDA-approved and completely safe for you.",
       language: "en",
     });
     const result = await executeScriptingPhase(baseInput);
