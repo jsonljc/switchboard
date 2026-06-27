@@ -57,7 +57,7 @@ reproduce the defect before asserting it.
 | EV-12 | MONEY-4 (BUG-10), MONEY-5, MONEY-6  | attribution chain                   | P1  | yes     | not started       |
 | EV-13 | MONEY-7 (BUG-8)                     | creative medical-claim judge        | P1  | yes     | not started       |
 | EV-14 | CHAN-1, 2, 3, 7, 8                  | cross-tenant route sweep            | P1  | yes     | not started       |
-| EV-15 | CHAN-4..6, 9, 10 (BUG-4, BUG-5)     | channel delivery fixes + evals      | P2  | -       | not started       |
+| EV-15 | CHAN-4..6, 9, 10 (BUG-4, BUG-5)     | channel delivery fixes + evals      | P2  | -       | merged #1369      |
 | EV-16 | INFRA-2 + SPINE-6                   | real-Postgres integration tier      | P1  | -       | merged #1305      |
 | EV-17 | SPINE-7..12 (BUG-6, BUG-7, BUG-11)  | spine async-correctness             | P2  | -       | not started       |
 | EV-18 | APP-1, APP-2, APP-3                 | dashboard/app state evals           | P2  | -       | not started       |
@@ -357,6 +357,23 @@ Biggest creative-side exposure for a regulated vertical.
   oversized/deeply-nested webhook bounded; Slack >5-min skew rejected; surface the silent
   flow-JSON-parse swallow.
 - **Acceptance:** each fix has a red-without test; the two confirmed bugs (CHAN-4, CHAN-5) fixed.
+- **Shipped (#1369):** CHAN-4 - a shared 64-byte guard (`packages/core/src/notifications/telegram-callback-data.ts`)
+  on BOTH Telegram producers (core `TelegramApprovalNotifier` + chat `TelegramAdapter.sendApprovalCard`):
+  emit the inline keyboard only when every button's `callback_data` fits, else deliver the card without
+  buttons + a dashboard-fallback line + a `console.warn`. This stops the silent total card-drop (a real
+  approval's `{action, appr_<uuid>, sha256}` JSON is ~150 bytes). **Design note:** lossless encoding under
+  64 bytes is impossible (action + 16-byte uuid + 32-byte hash max-packs to ~65 chars), and the wire
+  `bindingHash` uniquely guards the lifecycle revision-stale check, so a server-side hash recovery would
+  weaken governance. **Restoring _functional_ in-channel Telegram buttons (a shared cross-process
+  callback-token store or a deliberate binding-hash contract change) is a follow-up design call** - this
+  slice delivers the bounded "never silently drop the card" fix only. CHAN-5 - timing-safe IG
+  `verify_token` parity with whatsapp.ts (behaviorally equivalent to `===`; value is timing-side-channel +
+  consistency). CHAN-9 - regression pins for the already-correct WA/IG approval-card limits (teeth by
+  mutation). CHAN-10 - the silent WhatsApp flow `response_json` parse swallow now `console.warn`s (still
+  falls through, never crashes) + a Slack >5-min skew regression pin. CHAN-6 - **no change:** WhatsApp
+  status-callback idempotency is already guaranteed by the `PrismaWhatsAppStatusStore` upsert on the
+  `(messageId, status)` composite unique key (already asserted), so no double-count is possible. Non-SURFACE
+  (outbound rendering only; the inbound approval/auth/governance path is untouched - review-confirmed).
 
 ## EV-16 - Real-Postgres integration eval CI job (INFRA-2) [P1]
 
