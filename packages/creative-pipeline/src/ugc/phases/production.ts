@@ -6,6 +6,7 @@ import {
   type RankedProvider,
 } from "../provider-router.js";
 import { deriveApprovalState, evaluateRealism, type RealismScorerDeps } from "../realism-scorer.js";
+import { parseClaimsPolicyTag } from "../claim-safety.js";
 import { buildFrameQaDeps } from "../frame-qa-deps.js";
 import { buildUgcVideoRequest } from "../video-prompt.js";
 import { downloadVideoToTmp } from "../video-download.js";
@@ -22,7 +23,9 @@ interface CreativeSpecInput {
   creatorId: string;
   structureId: string;
   platform: string;
-  script: { text: string; language: string };
+  // `claimsPolicyTag` is the validated claim-safety verdict derived at scripting
+  // (EV-13). The production gate parses + enforces it before any paid generation.
+  script: { text: string; language: string; claimsPolicyTag?: string };
   /** SceneStyle from scripting (slice-3 spec 3.2); parsed in the prompt builder. */
   style?: unknown;
   /** UgcDirection from scripting; parsed in the prompt builder. */
@@ -97,7 +100,7 @@ export interface ProductionOutput {
 // ── Hash helper ──
 
 function hashInputs(spec: CreativeSpecInput): Record<string, string> {
-  // Simple hash — upgrade to content-addressable hashing when asset deduplication is needed
+  // Simple hash - upgrade to content-addressable hashing when asset deduplication is needed
   return {
     promptHash: Buffer.from(spec.script.text).toString("base64").slice(0, 16),
     referencesHash: "none",
@@ -202,7 +205,7 @@ async function processSpec(
 
         return { asset: assetData, qaHistory };
       } catch {
-        // Generation error — try next attempt/provider (bounded by the
+        // Generation error - try next attempt/provider (bounded by the
         // per-provider attemptsFor, not the global max).
         if (attempt === attemptsFor - 1) break;
       }
@@ -270,12 +273,23 @@ export async function executeProductionPhase(input: ProductionInput): Promise<Pr
   // the evaluator actually receives deps in this path.
   const qaDeps = buildFrameQaDeps(deps.apiKey, deps.model);
 
-  // Process specs sequentially — add p-limit parallelism when concurrent provider calls are needed.
+  // Process specs sequentially - add p-limit parallelism when concurrent provider calls are needed.
   // The tracker accrues per ATTEMPT inside processSpec (qa-fail retries spend
   // real money), so the budget guard caps worst-case retry spend.
   const costTracker = { total: 0 };
 
   for (const spec of specs) {
+    // Claim-safety gate (EV-13 / BUG-8): a script the deterministic detector
+    // flagged at scripting carries claimsPolicyTag "review_required". Parse it
+    // FAIL-CLOSED (a tampered/garbage tag also blocks) and route the spec to the
+    // human-review surface (failedSpecs) WITHOUT spending a cent on generation.
+    // First in the loop so a flagged script is blocked even before the budget
+    // guard. Absent tag = clean (backward compatible; see parseClaimsPolicyTag).
+    if (parseClaimsPolicyTag(spec.script.claimsPolicyTag) === "review_required") {
+      failedSpecs.push({ specId: spec.specId, reason: "claim_safety_blocked" });
+      continue;
+    }
+
     // Budget guard
     if (costTracker.total > input.budget.totalJobBudget) {
       failedSpecs.push({ specId: spec.specId, reason: "budget exceeded" });

@@ -6,6 +6,7 @@ import type { StructureSelection } from "../structure-engine.js";
 import { runUgcScriptWriter } from "../ugc-script-writer.js";
 import { generateDirection } from "../ugc-director.js";
 import { getProviderRef } from "../identity-refs.js";
+import { evaluateClaimSafety, deriveClaimsPolicyTag } from "../claim-safety.js";
 
 // ── Types ──
 
@@ -143,6 +144,24 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
       model,
     });
 
+    // Claim-safety gate (EV-13 / BUG-8): run the deterministic detector over the
+    // generated script and DERIVE the validated `claimsPolicyTag` from its
+    // verdict, superseding any unvalidated model-emitted tag. A flagged script is
+    // tagged "review_required"; the production phase blocks it before any paid
+    // video generation. The creator's forbidden phrases join the global UGC list.
+    const claimSafety = evaluateClaimSafety({
+      text: scriptResult.text,
+      forbiddenPhrases: (creator.personality as { forbiddenPhrases?: string[] }).forbiddenPhrases,
+    });
+    const claimsPolicyTag = deriveClaimsPolicyTag(claimSafety);
+    if (claimSafety.verdict === "flagged") {
+      console.warn(
+        `[scripting] claim-safety flagged the generated script for creator "${creator.name}" ` +
+          `(spec routed to human review, blocked from paid production): ` +
+          claimSafety.violations.map((v) => `${v.category}:"${v.matchedText}"`).join(", "),
+      );
+    }
+
     // Generate direction (pure function)
     const { sceneStyle, ugcDirection } = generateDirection({
       creator: {
@@ -181,7 +200,9 @@ export async function executeScriptingPhase(input: ScriptingInput): Promise<Scri
       script: {
         text: scriptResult.text,
         language: scriptResult.language,
-        claimsPolicyTag: scriptResult.claimsPolicyTag,
+        // Validated + derived from the deterministic detector, NOT the raw model
+        // string (which was captured but never parsed/enforced before EV-13).
+        claimsPolicyTag,
       },
       style: sceneStyle as unknown as Record<string, unknown>,
       direction: ugcDirection as unknown as Record<string, unknown>,

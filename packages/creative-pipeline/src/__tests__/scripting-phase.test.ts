@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { executeScriptingPhase, type ScriptingInput } from "../ugc/phases/scripting.js";
 import type { StructureId } from "../ugc/structure-engine.js";
+import { callClaude } from "../stages/call-claude.js";
 
 vi.mock("../stages/call-claude.js", () => ({
   callClaude: vi.fn().mockResolvedValue({
@@ -196,5 +197,32 @@ describe("executeScriptingPhase", () => {
     };
     const result = await executeScriptingPhase(emptyInput);
     expect(result.specs).toEqual([]);
+  });
+
+  // ── Claim-safety enforcement (EV-13 / BUG-8) ──
+
+  it("stamps a validated claimsPolicyTag 'clean' on a compliant generated script", async () => {
+    const result = await executeScriptingPhase(baseInput);
+    expect(result.specs[0]!.script.claimsPolicyTag).toBe("clean");
+  });
+
+  it("stamps 'review_required' when the generated script makes a banned medical claim", async () => {
+    vi.mocked(callClaude).mockResolvedValueOnce({
+      text: "Trust me, you will see guaranteed results - it's FDA-approved and completely safe for you.",
+      language: "en",
+    });
+    const result = await executeScriptingPhase(baseInput);
+    expect(result.specs[0]!.script.claimsPolicyTag).toBe("review_required");
+  });
+
+  it("derives the tag from the detector, overriding any model-emitted claimsPolicyTag string", async () => {
+    vi.mocked(callClaude).mockResolvedValueOnce({
+      text: "You will see guaranteed permanent results.",
+      language: "en",
+      // The model claims the script is clean; the deterministic detector wins.
+      claimsPolicyTag: "clean",
+    });
+    const result = await executeScriptingPhase(baseInput);
+    expect(result.specs[0]!.script.claimsPolicyTag).toBe("review_required");
   });
 });

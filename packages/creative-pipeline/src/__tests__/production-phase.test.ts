@@ -116,7 +116,84 @@ describe("executeProductionPhase", () => {
     expect(result.failedSpecs).toHaveLength(0);
   });
 
-  it("persists every produced asset as requires_human_review — QA never auto-approves an unseen video", async () => {
+  // ── Claim-safety gate (EV-13 / BUG-8) ──
+
+  it("blocks a review_required spec before any paid generation (claim money-stop)", async () => {
+    const input: ProductionInput = {
+      specs: [
+        makeSpec("spec_flagged", {
+          script: {
+            text: "You will see guaranteed results, it's FDA-approved.",
+            language: "en",
+            claimsPolicyTag: "review_required",
+          },
+        }),
+      ],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(result.assets).toHaveLength(0);
+    expect(result.failedSpecs).toEqual([
+      { specId: "spec_flagged", reason: "claim_safety_blocked" },
+    ]);
+    // Hard money-stop: the paid provider was never called.
+    expect(deps.providerClients.klingClient.generateVideo).not.toHaveBeenCalled();
+  });
+
+  it("fails closed on a garbage/tampered claimsPolicyTag (never spends on an unparseable tag)", async () => {
+    const input: ProductionInput = {
+      specs: [
+        makeSpec("spec_garbage", {
+          script: { text: "Hey so honestly...", language: "en", claimsPolicyTag: "trust-me" },
+        }),
+      ],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(result.failedSpecs).toEqual([
+      { specId: "spec_garbage", reason: "claim_safety_blocked" },
+    ]);
+    expect(deps.providerClients.klingClient.generateVideo).not.toHaveBeenCalled();
+  });
+
+  it("lets a clean spec proceed to generation", async () => {
+    const input: ProductionInput = {
+      specs: [
+        makeSpec("spec_clean", {
+          script: { text: "Hey so honestly...", language: "en", claimsPolicyTag: "clean" },
+        }),
+      ],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(result.assets).toHaveLength(1);
+    expect(result.failedSpecs).toHaveLength(0);
+    expect(deps.providerClients.klingClient.generateVideo).toHaveBeenCalled();
+  });
+
+  it("lets a spec with no tag proceed (backward compatible: absent = not evaluated)", async () => {
+    const input: ProductionInput = {
+      specs: [makeSpec("spec_legacy")],
+      providerRegistry: [],
+      retryConfig: { maxAttempts: 3, maxProviderFallbacks: 2 },
+      budget: { totalJobBudget: 100, costAuthority: "estimated" as const },
+      deps: deps as never,
+    };
+    const result = await executeProductionPhase(input);
+    expect(result.assets).toHaveLength(1);
+    expect(result.failedSpecs).toHaveLength(0);
+  });
+
+  it("persists every produced asset as requires_human_review - QA never auto-approves an unseen video", async () => {
     const input: ProductionInput = {
       specs: [makeSpec("spec_1")],
       providerRegistry: [],

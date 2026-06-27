@@ -35,6 +35,20 @@ export { executePlanningPhase } from "./ugc/phases/planning.js";
 export type { PlanningInput, PlanningOutput } from "./ugc/phases/planning.js";
 export { generateDirection } from "./ugc/ugc-director.js";
 export { buildUgcScriptPrompt, runUgcScriptWriter } from "./ugc/ugc-script-writer.js";
+export {
+  evaluateClaimSafety,
+  deriveClaimsPolicyTag,
+  parseClaimsPolicyTag,
+  ClaimsPolicyTagSchema,
+  CLAIM_SAFETY_RULES,
+} from "./ugc/claim-safety.js";
+export type {
+  ClaimSafetyInput,
+  ClaimSafetyResult,
+  ClaimViolation,
+  ClaimViolationCategory,
+  ClaimsPolicyTag,
+} from "./ugc/claim-safety.js";
 export { executeScriptingPhase } from "./ugc/phases/scripting.js";
 export type { ScriptingInput, ScriptingOutput } from "./ugc/phases/scripting.js";
 export { rankProviders, getDefaultProviderRegistry } from "./ugc/provider-router.js";
