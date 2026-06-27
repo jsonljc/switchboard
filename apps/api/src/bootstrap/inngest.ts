@@ -37,6 +37,7 @@ import {
   PrismaFailedMessageRetentionStore,
   PrismaLeadIntakeStore,
   PrismaRobinRecoverySendStore,
+  PrismaLifecycleStore,
   decryptCredentials,
 } from "@switchboard/db";
 import {
@@ -45,6 +46,7 @@ import {
   resolveLifecycleTaggingMechanicalConfig,
 } from "@switchboard/schemas";
 import {
+  ApprovalLifecycleService,
   emitRecommendation,
   executeDailyPatternDecay,
   getMetrics,
@@ -153,6 +155,7 @@ import type { ReminderSendSubmitInput } from "../services/workflows/reminder-sen
 import { createPcdRegistryBackfillCron } from "../services/cron/pcd-registry-backfill.js";
 import type { PcdRegistryBackfillDeps } from "../services/cron/pcd-registry-backfill.js";
 import { createLifecycleStalledSweepCron } from "../services/cron/lifecycle-stalled-sweep.js";
+import { createLifecycleExpirySweepCron } from "../services/cron/lifecycle-expiry-sweep.js";
 import { createStrandedClaimReaperCron } from "../services/cron/stranded-claim-reaper.js";
 import { createStalledBookingReaperCron } from "../services/cron/stalled-booking-reaper.js";
 import {
@@ -1520,6 +1523,12 @@ export async function registerInngest(
   });
   const creativeTasteProvider = buildCreativeTasteProvider(deploymentMemoryStoreForTaste);
 
+  // EV-17 / SPINE-11: the approval-lifecycle expiry sweep needs the approval
+  // lifecycle store + service. Constructed here (cheap + stateless) so the sweep
+  // runs whenever the async surface is up, independent of app.lifecycleService.
+  const approvalLifecycleStore = new PrismaLifecycleStore(app.prisma);
+  const approvalLifecycleService = new ApprovalLifecycleService({ store: approvalLifecycleStore });
+
   await app.register(inngestFastify, {
     client: inngestClient,
     functions: [
@@ -1625,6 +1634,16 @@ export async function registerInngest(
         writer: lifecycleWriter,
         history: lifecycleHistory,
         readMode: lifecycleReadMode,
+      }),
+      // EV-17 / SPINE-11 / BUG-11: hourly approval-lifecycle expiry sweep. Ages
+      // `pending` lifecycles past expiresAt to `expired` via the lifecycle service.
+      // The sweep is bounded (DEFAULT_EXPIRY_SWEEP_LIMIT, oldest-expired first) and
+      // expireLifecycle is idempotent, so a replay/retry never double-acts.
+      createLifecycleExpirySweepCron({
+        failure: asyncFailure,
+        store: approvalLifecycleStore,
+        service: approvalLifecycleService,
+        logger: { warn: (m) => app.log.warn(m) },
       }),
       // EV-2 / SPINE-2: age orphaned `running` ingress idempotency claims to the
       // needs_reconciliation dead-letter sink (counter + operator alert). Reuses the
