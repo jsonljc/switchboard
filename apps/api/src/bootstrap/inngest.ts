@@ -93,6 +93,7 @@ import type { RileyPauseSubmitInput } from "../services/workflows/riley-pause-su
 import type { RileyBudgetSubmitInput } from "../services/workflows/riley-budget-submit-request.js";
 import { buildRileyPauseSubmitter } from "./riley-pause-submitter.js";
 import { buildRileyBudgetSubmitter } from "./riley-budget-submitter.js";
+import { selfExecutionEnvEnabled } from "./self-execution-flags.js";
 import { buildRileyCredentialResolver } from "./riley-credential-resolver.js";
 import { buildCreateCoverageValidator } from "./coverage-validator-factory.js";
 import {
@@ -602,7 +603,7 @@ export async function registerInngest(
     // Kill switch: RILEY_PAUSE_SELF_EXECUTION_ENABLED=true wires the pause
     // initiator; default absent = the deploy is dark (the per-deployment
     // governanceSettings flag then gates per org). Both default OFF.
-    ...(process.env["RILEY_PAUSE_SELF_EXECUTION_ENABLED"] === "true"
+    ...(selfExecutionEnvEnabled(process.env, "RILEY_PAUSE_SELF_EXECUTION_ENABLED")
       ? { rileyPauseSubmitter }
       : {}),
     // SPEC-1B: RILEY_REALLOCATE_SELF_EXECUTION_ENABLED=true wires the budget reallocate
@@ -617,7 +618,7 @@ export async function registerInngest(
     // (riley-reallocate-act-leg-e2e.test.ts). REMAINING is OPERATIONAL only: the single LIVE-Meta
     // exercise, a Tier-0 credentialed pilot org, and real campaign-attributed paid-value data. An
     // off-flag is not a safety boundary (Knight Capital). See docs/runbooks/riley-reallocation-go-live.md.
-    ...(process.env["RILEY_REALLOCATE_SELF_EXECUTION_ENABLED"] === "true"
+    ...(selfExecutionEnvEnabled(process.env, "RILEY_REALLOCATE_SELF_EXECUTION_ENABLED")
       ? { rileyBudgetSubmitter }
       : {}),
     // Gate 0 (D9-4): RILEY_COVERAGE_GATE_ENABLED=true wires the production coverage
