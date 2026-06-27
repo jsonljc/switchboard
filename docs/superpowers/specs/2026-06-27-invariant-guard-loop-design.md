@@ -309,7 +309,10 @@ autonomous session that drives ONE guard slice per run. Sections:
 
 These prove the format and give the loop a non-empty starting backlog. Each is a real lesson with a
 real predicate and a concrete guard sketch; the loop confirms each gap on `origin/main` before
-building (some may already be partially guarded).
+building (some may already be partially guarded). The table below is a COMPACT view (selected columns
+only, for readability); the authoritative full 10-column schema (matching "Two artifacts" above) and
+the populated rows live single-source in the seed ledger
+`docs/superpowers/plans/2026-06-27-invariant-guard-ledger.md`, so the two never drift.
 
 | id | lesson | invariant predicate (1 line) | blast | guard-type | status |
 |----|--------|------------------------------|-------|-----------|--------|
