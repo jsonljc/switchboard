@@ -605,6 +605,9 @@ importers:
 
   evals/riley-recommendation:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: 0.91.1
+        version: 0.91.1(zod@3.25.76)
       '@switchboard/ad-optimizer':
         specifier: workspace:*
         version: link:../../packages/ad-optimizer
