@@ -4,6 +4,7 @@ import {
   deriveClaimsPolicyTag,
   parseClaimsPolicyTag,
   CLAIM_SAFETY_RULES,
+  type ClaimViolationCategory,
 } from "../ugc/claim-safety.js";
 
 // EV-13 / MONEY-7. The deterministic, no-key claim-safety detector over generated
@@ -136,6 +137,124 @@ describe("evaluateClaimSafety - hallucinated offers + forbidden phrases", () => 
     for (const v of result.violations) {
       expect(v.matchedText.length).toBeGreaterThan(0);
       expect(v.rule.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+// ── Review-finding hardening (EV-13 follow-up) ───────────────────────────────
+// Each block below pins a fix from the PR review: a dead rule, the superiority
+// words claim-boundaries.md explicitly lists, and the paraphrase/synonym residual
+// the lexical block-time gate was missing. The benign corpus proves the additions
+// add coverage WITHOUT new false positives (this is a regulated-vertical gate).
+
+describe("evaluateClaimSafety - hardening: the $NN-off rule was dead (leading \\b bug)", () => {
+  it("now catches a dollar-prefixed offer ('$NN off') that previously slipped clean", () => {
+    // "$" is a non-word char, so a leading \b before a group starting with "$"
+    // never matched a space/start-prefixed "$50 off" -> it reached paid production.
+    for (const text of ["Get $50 off your first visit.", "spend $100 off retail"]) {
+      const result = evaluateClaimSafety({ text });
+      expect(result.verdict, text).toBe("flagged");
+      expect(
+        result.violations.map((v) => v.category),
+        text,
+      ).toContain("hallucinated-offer");
+    }
+  });
+
+  it("keeps the existing letter-currency offer matches ('RM50 off' / 'usd 20 off')", () => {
+    for (const text of ["RM50 off every package", "usd 20 off today only stuff aside"]) {
+      const result = evaluateClaimSafety({ text });
+      expect(result.verdict, text).toBe("flagged");
+      expect(
+        result.violations.map((v) => v.category),
+        text,
+      ).toContain("hallucinated-offer");
+    }
+  });
+});
+
+describe("evaluateClaimSafety - hardening: superiority words from claim-boundaries.md", () => {
+  it("flags 'leading <noun>', 'unrivaled', and 'No.1'/'No. 1'", () => {
+    const cases = [
+      "We are the leading clinic for laser in the region.",
+      "Honestly our results here are simply unrivaled.",
+      "We're the No.1 medspa for this, hands down.",
+      "Voted No. 1 clinic three years running.",
+    ];
+    for (const text of cases) {
+      const result = evaluateClaimSafety({ text });
+      expect(result.verdict, text).toBe("flagged");
+      expect(
+        result.violations.map((v) => v.category),
+        text,
+      ).toContain("superiority");
+    }
+  });
+
+  it("does not false-positive on benign 'leading' uses", () => {
+    for (const text of [
+      "Leading up to your appointment, please drink plenty of water.",
+      "The leading edge of the table was a little scratched.",
+    ]) {
+      expect(evaluateClaimSafety({ text }).verdict, text).toBe("clean");
+    }
+  });
+});
+
+describe("evaluateClaimSafety - hardening: paraphrase / synonym residual now flagged", () => {
+  it("flags each previously-missed paraphrase with the right category", () => {
+    const cases: Array<{ text: string; category: ClaimViolationCategory }> = [
+      // efficacy paraphrases
+      { text: "This will completely transform your skin in one session.", category: "efficacy" },
+      { text: "Trust me, transform your skin in weeks.", category: "efficacy" },
+      { text: "This serum is going to fix your acne.", category: "efficacy" },
+      { text: "This treatment will fix your acne for good.", category: "efficacy" },
+      { text: "Your wrinkles will disappear, I'm telling you.", category: "efficacy" },
+      { text: "Dark spots disappear after 3 sessions.", category: "efficacy" },
+      { text: "It eliminates acne fast.", category: "efficacy" },
+      { text: "This will eliminate your wrinkles.", category: "efficacy" },
+      { text: "I promise you real results.", category: "efficacy" },
+      { text: "I promise visible results, trust me.", category: "efficacy" },
+      { text: "It's 100 percent effective.", category: "efficacy" },
+      { text: "This is ninety percent effective at clearing acne.", category: "efficacy" },
+      // safety
+      { text: "The whole treatment is completely painless.", category: "safety-claim" },
+      // credentials (reversed word order, not just 'FDA-approved')
+      { text: "This device is approved by the FDA.", category: "credentials" },
+      // offers (spelled-out, not just '%' / '$')
+      { text: "Get fifty percent off your first visit.", category: "hallucinated-offer" },
+      { text: "Everything is half price this month.", category: "hallucinated-offer" },
+    ];
+    for (const { text, category } of cases) {
+      const result = evaluateClaimSafety({ text });
+      expect(result.verdict, text).toBe("flagged");
+      expect(
+        result.violations.map((v) => v.category),
+        text,
+      ).toContain(category);
+    }
+  });
+});
+
+describe("evaluateClaimSafety - hardening: the new rules add NO false positives", () => {
+  it("keeps a benign corpus clean (paraphrase/superiority/offer additions do not over-trip)", () => {
+    const benign = [
+      "Leading up to your appointment, please drink plenty of water.",
+      "The leading edge of the table was a little scratched.",
+      "Transform your routine with one small daily habit.",
+      "I promise to call you back about your appointment.",
+      "Let's eliminate the guesswork and just book a consult.",
+      "This is going to fix my schedule once and for all.",
+      "We're fully booked this week, thanks everyone.",
+      "The swelling tends to go down after a couple of days.",
+      "Half the fun is the consultation itself.",
+      "Ninety percent of people book a follow-up consult.",
+      "Endorsed by our happiest regulars, honestly.",
+    ];
+    for (const text of benign) {
+      const result = evaluateClaimSafety({ text });
+      expect(result.verdict, text).toBe("clean");
+      expect(result.violations, text).toHaveLength(0);
     }
   });
 });

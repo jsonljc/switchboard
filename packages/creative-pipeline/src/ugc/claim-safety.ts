@@ -17,6 +17,18 @@
 //
 // It is intentionally conservative: when a script is ambiguous the safe direction
 // is to over-flag (route to human review), never to under-flag and spend.
+//
+// LIMITATION (accepted, documented risk): this block-time gate is DETERMINISTIC
+// and LEXICAL. It catches the banned vocabulary plus the high-value paraphrase /
+// synonym families enumerated below, but it cannot catch an arbitrary NOVEL
+// paraphrase a model might invent for a banned claim (an unforeseen way to imply a
+// guaranteed outcome, etc.). That semantic residual is delegated to the key-gated
+// LLM claim-safety judge, which today is INFORMATIONAL only - it logs, it does not
+// block, and it is skipped entirely without an API key (see claim-safety-judge.test.ts).
+// So a sufficiently novel paraphrase could still reach paid production until the LLM
+// judge is promoted to a BLOCKING leg - a deliberate follow-up, not a closed gap.
+// The deterministic detector stays the blocking source of truth; it is widened
+// conservatively (over-flag, never under-flag) as new paraphrase families are confirmed.
 
 import { z } from "zod";
 import type { ClaimType } from "@switchboard/schemas";
@@ -93,6 +105,21 @@ const REGULATORY_RULE =
 const OFFER_RULE =
   "claim-boundaries (urgency): a concrete discount/offer is unsubstantiated unless the operator provided factual offer copy in Business Facts - none is plumbed into the script writer.";
 
+// Reusable fragment: cosmetic concerns / treatment-target nouns. The paraphrase
+// efficacy rules ("eliminate <concern>", "going to fix <concern>") anchor on this
+// so they only trip on a result-promise aimed at a real concern, not a benign use
+// of "fix" / "eliminate" ("eliminate the guesswork", "going to fix my schedule").
+const CONCERN =
+  "(?:acne|wrinkles?|fine\\s+lines?|lines?|scars?|scarring|pigmentation|" +
+  "melasma|rosacea|eczema|redness|pores?|sagging|blemishes?|breakouts?|" +
+  "dark\\s+spots?|sun\\s+spots?|cellulite|dullness|texture|skin|complexion)";
+
+// Reusable fragment: discount magnitudes (digit or spelled-out) for the
+// spelled-out "N percent off" offer rule. "hundred" is intentionally excluded so
+// the idiom "a hundred percent off the grid" is not misread as a discount.
+const NUM_WORD =
+  "(?:\\d{1,3}|ten|fifteen|twenty(?:-five)?|thirty|forty|fifty|sixty|seventy|eighty|ninety)";
+
 export const CLAIM_SAFETY_RULES: readonly ClaimRule[] = [
   // efficacy / guaranteed results / outcomes / timelines
   { category: "efficacy", rule: GUARANTEE_RULE, pattern: /\bguarantee(?:d|s|ing)?\b/gi },
@@ -118,6 +145,61 @@ export const CLAIM_SAFETY_RULES: readonly ClaimRule[] = [
     pattern: /\b(?:results?|difference)\s+in\s+\d+\s+(?:days?|weeks?|months?)\b/gi,
   },
 
+  // efficacy paraphrases / synonyms (semantic equivalents of a guaranteed outcome
+  // the lexical gate must still catch; word-boundary + concern anchored to avoid
+  // benign "transform your routine" / "eliminate the guesswork" false positives)
+  {
+    category: "efficacy",
+    rule: GUARANTEE_RULE,
+    pattern: /\b(?:completely|totally|fully)\s+transform(?:s|ing|ed)?\b/gi,
+  },
+  {
+    category: "efficacy",
+    rule: GUARANTEE_RULE,
+    pattern: /\btransform(?:s|ing|ed)?\s+your\s+(?:skin|face|look|appearance|complexion)\b/gi,
+  },
+  {
+    category: "efficacy",
+    rule: GUARANTEE_RULE,
+    pattern: new RegExp(
+      `\\b(?:going\\s+to|gonna)\\s+fix\\s+(?:your\\s+|the\\s+|my\\s+|that\\s+)?${CONCERN}\\b`,
+      "gi",
+    ),
+  },
+  {
+    category: "efficacy",
+    rule: GUARANTEE_RULE,
+    pattern: /\bwill\s+(?:fix|clear|erase|remove|get\s+rid\s+of)\b[^.?!]*\bfor\s+good\b/gi,
+  },
+  {
+    category: "efficacy",
+    rule: GUARANTEE_RULE,
+    pattern: /\b(?:will|they'?ll|it'?ll|you'?ll|we'?ll)\s+disappear\b/gi,
+  },
+  {
+    category: "efficacy",
+    rule: GUARANTEE_RULE,
+    pattern:
+      /\bdisappear(?:s|ed|ing)?\s+(?:after|in|within)\s+[\w\s]{0,20}?(?:sessions?|treatments?|visits?|weeks?|days?)\b/gi,
+  },
+  {
+    category: "efficacy",
+    rule: GUARANTEE_RULE,
+    pattern: new RegExp(
+      `\\b(?:eliminates?|eliminating|will\\s+eliminate)\\s+(?:your\\s+|the\\s+|all\\s+(?:your\\s+|the\\s+)?|that\\s+)?${CONCERN}\\b`,
+      "gi",
+    ),
+  },
+  {
+    category: "efficacy",
+    rule: GUARANTEE_RULE,
+    pattern: /\bpromise\s+(?:you\s+)?(?!to\b)(?:\w[\w']*\s+){0,3}results?\b/gi,
+  },
+  // spelled-out absolutes ("100 percent", "ninety percent effective") - the
+  // word-form siblings of the existing "100%" rule
+  { category: "efficacy", rule: GUARANTEE_RULE, pattern: /\b100\s+percent\b/gi },
+  { category: "efficacy", rule: GUARANTEE_RULE, pattern: /\bpercent\s+effective\b/gi },
+
   // safety-claim / personal safety / no side effects / no downtime
   { category: "safety-claim", rule: SAFETY_RULE, pattern: /\bsafe\s+for\s+you\b/gi },
   {
@@ -137,6 +219,7 @@ export const CLAIM_SAFETY_RULES: readonly ClaimRule[] = [
   },
   { category: "safety-claim", rule: SAFETY_RULE, pattern: /\bno\s+downtime\b/gi },
   { category: "safety-claim", rule: SAFETY_RULE, pattern: /\bpain[-\s]?free\b/gi },
+  { category: "safety-claim", rule: SAFETY_RULE, pattern: /\bpainless\b/gi },
 
   // superiority
   {
@@ -148,7 +231,23 @@ export const CLAIM_SAFETY_RULES: readonly ClaimRule[] = [
   { category: "superiority", rule: SUPERIORITY_RULE, pattern: /\b#\s?1\b/gi },
   { category: "superiority", rule: SUPERIORITY_RULE, pattern: /\bnumber\s+one\b/gi },
   { category: "superiority", rule: SUPERIORITY_RULE, pattern: /\bmost\s+effective\b/gi },
-  { category: "superiority", rule: SUPERIORITY_RULE, pattern: /\b(?:un(?:matched|beatable))\b/gi },
+  {
+    category: "superiority",
+    rule: SUPERIORITY_RULE,
+    pattern: /\b(?:un(?:matched|beatable|rivaled|rivalled))\b/gi,
+  },
+  // claim-boundaries.md explicitly lists "leading" as a banned superiority word.
+  // Anchor it to a clinic/result noun so benign "leading up to" / "leading edge"
+  // do not false-positive.
+  {
+    category: "superiority",
+    rule: SUPERIORITY_RULE,
+    pattern:
+      /\bleading\s+(?:clinic|provider|results?|treatment|doctor|expert|choice|brand|name|medspa|aesthetic|specialists?|practice)\b/gi,
+  },
+  // "No.1" / "No. 1" (the period-anchored sibling of "#1"); the dot avoids benign
+  // "no 1 right answer".
+  { category: "superiority", rule: SUPERIORITY_RULE, pattern: /\bno\.\s?1\b/gi },
   {
     category: "superiority",
     rule: SUPERIORITY_RULE,
@@ -206,14 +305,32 @@ export const CLAIM_SAFETY_RULES: readonly ClaimRule[] = [
     pattern: /\bfda[-\s]?(?:approved|cleared)\b/gi,
   },
   { category: "credentials", rule: REGULATORY_RULE, pattern: /\bhsa[-\s]?approved\b/gi },
+  // reversed word order ("approved by the FDA", "cleared by HSA")
+  {
+    category: "credentials",
+    rule: REGULATORY_RULE,
+    pattern: /\b(?:approved|cleared|endorsed)\s+by\s+(?:the\s+)?(?:fda|hsa)\b/gi,
+  },
 
   // hallucinated offers (concrete discount/price/money-back, ungrounded)
   { category: "hallucinated-offer", rule: OFFER_RULE, pattern: /\b\d{1,3}\s?%\s+off\b/gi },
   {
     category: "hallucinated-offer",
     rule: OFFER_RULE,
-    pattern: /\b(?:rm|sgd|myr|usd|\$)\s?\d+\s+off\b/gi,
+    // Boundary fix: the old leading \b before a group that can start with "$" (a
+    // non-word char) meant a space/start-prefixed "$NN off" never formed a word
+    // boundary, so "$50 off" / "$100 off" silently missed. Anchor the LETTER
+    // currencies with \b, but let "$" match without one.
+    pattern: /(?:\b(?:rm|sgd|myr|usd)|\$)\s?\d+\s+off\b/gi,
   },
+  // spelled-out discounts ("fifty percent off", "half price") - word-form siblings
+  // of the "% off" / "$NN off" rules above
+  {
+    category: "hallucinated-offer",
+    rule: OFFER_RULE,
+    pattern: new RegExp(`\\b${NUM_WORD}\\s+percent\\s+off\\b`, "gi"),
+  },
+  { category: "hallucinated-offer", rule: OFFER_RULE, pattern: /\bhalf[-\s]?(?:price|off)\b/gi },
   {
     category: "hallucinated-offer",
     rule: OFFER_RULE,
