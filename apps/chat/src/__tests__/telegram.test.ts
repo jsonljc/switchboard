@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TelegramAdapter } from "../adapters/telegram.js";
+import type { ApprovalCardPayload } from "../adapters/adapter.js";
 
 describe("TelegramAdapter", () => {
   const adapter = new TelegramAdapter("fake-bot-token");
@@ -98,5 +99,95 @@ describe("TelegramAdapter", () => {
       const id = adapter.extractMessageId({ update_id: 999 });
       expect(id).toBeNull();
     });
+  });
+});
+
+// CHAN-4 / BUG-4: Telegram rejects the whole sendMessage when any inline
+// button's callback_data exceeds 64 bytes (UTF-8). A real approval card carries
+// `{action, approvalId, bindingHash}` JSON (~150 bytes), so the card would be
+// silently dropped. The adapter must never emit an oversized callback_data:
+// deliver the card without buttons + a dashboard fallback instead.
+describe("TelegramAdapter — sendApprovalCard callback_data cap (CHAN-4)", () => {
+  const fetchSpy = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
+
+  beforeEach(() => {
+    fetchSpy.mockReset();
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      text: async () => "",
+    } as Response);
+    vi.stubGlobal("fetch", fetchSpy);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function sentBody(): Record<string, unknown> {
+    const init = fetchSpy.mock.calls[0]?.[1];
+    return JSON.parse(String(init?.body ?? "{}"));
+  }
+
+  function card(buttons: ApprovalCardPayload["buttons"]): ApprovalCardPayload {
+    return {
+      summary: "Pause campaign ABC",
+      riskCategory: "medium",
+      explanation: "Budget exceeds limit",
+      buttons,
+    };
+  }
+
+  it("sends inline approve/reject buttons when callback_data fits", async () => {
+    const adapter = new TelegramAdapter("fake-bot-token");
+    await adapter.sendApprovalCard(
+      "5555",
+      card([
+        {
+          label: "Approve",
+          callbackData: '{"action":"approve","approvalId":"a","bindingHash":"b"}',
+        },
+        { label: "Reject", callbackData: '{"action":"reject","approvalId":"a","bindingHash":"b"}' },
+      ]),
+    );
+
+    const body = sentBody();
+    const buttons = (
+      body["reply_markup"] as { inline_keyboard: Array<Array<{ callback_data: string }>> }
+    ).inline_keyboard.flat();
+    expect(buttons).toHaveLength(2);
+    for (const b of buttons) {
+      expect(Buffer.byteLength(b.callback_data, "utf8")).toBeLessThanOrEqual(64);
+    }
+  });
+
+  it("omits the keyboard and falls back to the dashboard when callback_data is oversized", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const adapter = new TelegramAdapter("fake-bot-token");
+
+    const oversized = JSON.stringify({
+      action: "approve",
+      approvalId: "appr_550e8400-e29b-41d4-a716-446655440000",
+      bindingHash: "a".repeat(64),
+    });
+    expect(Buffer.byteLength(oversized, "utf8")).toBeGreaterThan(64);
+
+    await adapter.sendApprovalCard(
+      "5555",
+      card([
+        { label: "Approve", callbackData: oversized },
+        { label: "Reject", callbackData: oversized.replace("approve", "reject") },
+      ]),
+    );
+
+    const body = sentBody();
+    // No inline keyboard (it would make Telegram reject the whole message)...
+    expect(body["reply_markup"]).toBeUndefined();
+    // ...the card text is still delivered with a dashboard fallback...
+    expect(String(body["text"])).toContain("Approve or reject this from the dashboard");
+    // ...and the drop is observable.
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
