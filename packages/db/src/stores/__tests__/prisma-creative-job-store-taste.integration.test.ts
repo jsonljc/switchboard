@@ -98,11 +98,13 @@ describe.skipIf(!process.env["DATABASE_URL"])(
     it("an OLD re-decided row still surfaces under a full newest-N page of non-re-decided captured rows", async () => {
       const LIMIT = 3;
       // OLD re-decided row: its (re)decision is strictly newer than its last
-      // capture (so it IS a pending gesture), but older than the fresh page below.
+      // capture (so it IS a pending gesture), but its decision is extreme-old so
+      // it always sorts within leg-2's oldest-first LIMIT even on a shared DB
+      // carrying other re-decided rows. It is far older than the fresh page below.
       await seedJob({
         id: "old-redecided",
-        reviewDecidedAt: new Date("2026-06-01T00:00:00Z"),
-        tasteCapturedAt: new Date("2026-05-20T00:00:00Z"),
+        reviewDecidedAt: new Date("2020-01-02T00:00:00Z"),
+        tasteCapturedAt: new Date("2020-01-01T00:00:00Z"),
       });
       // LIMIT newer captured rows that are NOT re-decided (captured AFTER decision),
       // so they fill the newest-N page but carry no pending gesture.
