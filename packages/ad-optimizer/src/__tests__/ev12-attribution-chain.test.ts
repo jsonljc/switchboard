@@ -10,9 +10,11 @@ import type { ConversionEvent } from "@switchboard/schemas";
  * ConversionEvent -> dispatched Meta event` chain at the dispatch boundary.
  *
  * This file covers the ad-optimizer end of the chain (the dispatcher + legacy
- * client + the CTWA intake builder). The Layer-3 contact-fold half (MONEY-5 fold
- * preservation) lives in
- * `packages/core/src/attribution/__tests__/ev12-attribution-fold.test.ts`
+ * client + the CTWA intake builder) — i.e. chain ENTRY plus the dispatch
+ * boundary. The Layer-3 fold half — where a folded Contact's `ctwa_clid` would
+ * fold into the booked conversion payload, and where that fold is found to DROP
+ * `ctwa_clid` (a SURFACED MONEY-5 attribution-loss finding) — is pinned in
+ * `packages/core/src/skill-runtime/__tests__/ev12-attribution-fold.test.ts`,
  * because ad-optimizer (Layer 2) cannot import `@switchboard/core` (Layer 3).
  *
  * Groups:
@@ -21,7 +23,10 @@ import type { ConversionEvent } from "@switchboard/schemas";
  *    dispatch wall-clock. Also resolves BUG-10 — the `meta-capi-client.ts:36`
  *    `fbc` path stamps a wall-clock `Date.now()` where `MetaCAPIDispatcher` uses
  *    the conversion's `occurredAt`. See the PR body for the SURFACE finding.
- *  - MONEY-5 (entry point): the CTWA `ctwa_clid` is captured into the LeadIntake.
+ *  - MONEY-5 (chain ENTRY only): the CTWA `ctwa_clid` is captured into the
+ *    LeadIntake by `buildCtwaIntake`. This is the ENTRY of the chain, not the
+ *    fold: the fold-into-booked-payload half (and the ctwa_clid-DROP finding) is
+ *    pinned in the core sibling file referenced above.
  *  - MONEY-6: `event_id` is DETERMINISTIC on retry (same conversion re-dispatched
  *    -> same `event_id` -> Meta dedups on `event_id`, not `event_time`).
  */
