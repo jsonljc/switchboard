@@ -177,6 +177,31 @@ describe("composeVerdict — ACTIVE shape (decisionCount > 0)", () => {
       });
       expect(m.proof).not.toContain("oldest waiting");
     });
+
+    it("humanizes an oldest-wait of an hour or more (no raw 'NNNN min')", () => {
+      // The live bug: a ~5-day-old lead rendered "oldest waiting 6975 min".
+      const days = composeVerdict({
+        ...baseSignals,
+        decisionCount: 1,
+        oldestWaitMin: 6975,
+        now: at(9),
+      });
+      expect(days.proof).toContain("oldest waiting ~5 days");
+      expect(days.proof).not.toMatch(/\d{3,} min/);
+
+      const hours = composeVerdict({
+        ...baseSignals,
+        decisionCount: 1,
+        oldestWaitMin: 90,
+        now: at(9),
+      });
+      expect(hours.proof).toContain("oldest waiting ~2 hours");
+    });
+
+    it("keeps sub-hour waits in minutes", () => {
+      const m = composeVerdict({ ...baseSignals, decisionCount: 1, oldestWaitMin: 8, now: at(9) });
+      expect(m.proof).toContain("oldest waiting 8 min");
+    });
   });
 });
 
