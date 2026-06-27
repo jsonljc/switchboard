@@ -31,7 +31,7 @@ export type CrmWriteToolFactory = (ctx: SkillRequestContext) => SkillTool;
  * gap). orgId + deploymentId are ctx-injected, never LLM input (AI-1), so they
  * never appear here.
  */
-export const CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA: Record<string, unknown> = {
+export const CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {
     opportunityId: { type: "string", description: "Opportunity UUID" },
@@ -41,9 +41,9 @@ export const CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA: Record<string, unknown> = {
     },
   },
   required: ["opportunityId", "stage"],
-};
+});
 
-export const CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA: Record<string, unknown> = {
+export const CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {
     eventType: {
@@ -53,7 +53,7 @@ export const CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA: Record<string, unknown> = {
     description: { type: "string" },
   },
   required: ["eventType", "description"],
-};
+});
 
 /**
  * Factory-with-context pattern (matches `escalate.ts`). `orgId` and

@@ -48,7 +48,7 @@ export type DepositLinkToolFactory = (ctx: SkillRequestContext) => SkillTool;
  * presents the EXACT production contract (EV-5/AGENT-5 mock-tool-blind gap).
  * orgId is ctx-injected (AI-1), so only bookingId appears here.
  */
-export const DEPOSIT_LINK_ISSUE_INPUT_SCHEMA: Record<string, unknown> = {
+export const DEPOSIT_LINK_ISSUE_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {
     bookingId: {
@@ -57,7 +57,7 @@ export const DEPOSIT_LINK_ISSUE_INPUT_SCHEMA: Record<string, unknown> = {
     },
   },
   required: ["bookingId"],
-};
+});
 
 /**
  * Issues a first-party deposit link against an ALREADY-APPROVED, confirmed

@@ -31,7 +31,7 @@ export type ScheduleFollowUpToolFactory = (ctx: SkillRequestContext) => SkillToo
  * (behaviour-preserving); the alex-conversation eval imports it so its mock tool
  * presents the EXACT production contract (EV-5/AGENT-5 mock-tool-blind gap).
  */
-export const FOLLOW_UP_SCHEDULE_INPUT_SCHEMA: Record<string, unknown> = {
+export const FOLLOW_UP_SCHEDULE_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {
     reason: {
@@ -48,7 +48,7 @@ export const FOLLOW_UP_SCHEDULE_INPUT_SCHEMA: Record<string, unknown> = {
     },
   },
   required: ["reason", "delay"],
-};
+});
 
 /**
  * Lets Alex schedule a single re-engagement follow-up for the CURRENT contact.

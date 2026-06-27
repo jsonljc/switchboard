@@ -25,7 +25,7 @@ export type EscalateToolFactory = (ctx: SkillRequestContext) => SkillTool;
  * (behaviour-preserving); the alex-conversation eval imports it so its mock
  * tool presents the EXACT production contract (EV-5/AGENT-5 mock-tool-blind gap).
  */
-export const ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA: Record<string, unknown> = {
+export const ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {
     reason: {
@@ -51,7 +51,7 @@ export const ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA: Record<string, unknown> = {
     },
   },
   required: ["reason", "summary"],
-};
+});
 
 export function createEscalateToolFactory(deps: EscalateToolBaseDeps): EscalateToolFactory {
   return (ctx: SkillRequestContext): SkillTool => ({

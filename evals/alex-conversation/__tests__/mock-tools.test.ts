@@ -125,6 +125,12 @@ describe("mock-tools — tool input-schema parity with production (mock-tool-bli
   it.each(PRODUCTION_TOOL_PARITY)(
     "$toolId.$operation presents the EXACT production input schema (by import) + effect/idempotent",
     ({ toolId, operation, schema, effectCategory, idempotent }) => {
+      // Non-vacuous guard: the imported production constant must be a real schema
+      // object, so `toBe(schema)` below can never pass vacuously (e.g. were the
+      // export ever undefined at runtime, undefined === undefined would slip by).
+      expect(schema, `imported schema for ${toolId}.${operation} is not an object`).toMatchObject({
+        type: "object",
+      });
       const tool = tools.get(toolId);
       expect(tool, `mock is missing tool ${toolId}`).toBeDefined();
       const op = tool!.operations[operation];

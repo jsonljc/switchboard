@@ -64,7 +64,7 @@ export type CalendarBookToolFactory = (ctx: SkillRequestContext) => SkillTool;
  * sourced from the trusted SkillRequestContext, never from LLM tool input (AI-1),
  * and the attendee name/email are read from the contact record, not the model.
  */
-export const CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA: Record<string, unknown> = {
+export const CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {
     dateFrom: { type: "string", description: "ISO 8601 start date" },
@@ -74,9 +74,9 @@ export const CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA: Record<string, unknown> = {
     timezone: { type: "string", description: "IANA timezone" },
   },
   required: ["dateFrom", "dateTo", "durationMinutes", "service", "timezone"],
-};
+});
 
-export const CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA: Record<string, unknown> = {
+export const CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {
     service: { type: "string" },
@@ -85,7 +85,7 @@ export const CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA: Record<string, unknown> 
     calendarId: { type: "string" },
   },
   required: ["service", "slotStart", "slotEnd", "calendarId"],
-};
+});
 
 /**
  * Factory-with-context pattern (matches `escalate.ts`). The `orgId` is sourced

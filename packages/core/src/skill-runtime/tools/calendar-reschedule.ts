@@ -85,21 +85,23 @@ function resolveTarget(bookings: UpcomingBooking[], service?: string): TargetRes
  * mock-tool-blind gap). The target booking is resolved from the trusted
  * ctx.contactId, never from LLM tool input — so no contactId appears here.
  */
-export const CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA: Record<string, unknown> = {
-  type: "object",
-  properties: {
-    slotStart: { type: "string", description: "ISO 8601 new start" },
-    slotEnd: { type: "string", description: "ISO 8601 new end" },
-    calendarId: { type: "string" },
-    service: {
-      type: "string",
-      description: "Optional: which service's appointment, if the lead has more than one",
+export const CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA: Record<string, unknown> = Object.freeze(
+  {
+    type: "object",
+    properties: {
+      slotStart: { type: "string", description: "ISO 8601 new start" },
+      slotEnd: { type: "string", description: "ISO 8601 new end" },
+      calendarId: { type: "string" },
+      service: {
+        type: "string",
+        description: "Optional: which service's appointment, if the lead has more than one",
+      },
     },
+    required: ["slotStart", "slotEnd", "calendarId"],
   },
-  required: ["slotStart", "slotEnd", "calendarId"],
-};
+);
 
-export const CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA: Record<string, unknown> = {
+export const CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {
     service: {
@@ -109,7 +111,7 @@ export const CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA: Record<string, unknown> 
     reason: { type: "string", description: "Optional short reason" },
   },
   required: [],
-};
+});
 
 export function buildRescheduleOperations(
   ctx: SkillRequestContext,

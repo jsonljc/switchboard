@@ -20,19 +20,19 @@ interface ActivityStoreSubset {
  * input (AI-1). `activity.list` accepts only an optional `limit`; orgId +
  * deploymentId are likewise ctx-injected, never LLM input.
  */
-export const CRM_QUERY_CONTACT_GET_INPUT_SCHEMA: Record<string, unknown> = {
+export const CRM_QUERY_CONTACT_GET_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {},
   required: [],
-};
+});
 
-export const CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA: Record<string, unknown> = {
+export const CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {
     limit: { type: "number", description: "Max results (default 20)" },
   },
   required: [],
-};
+});
 
 /** Factory-with-context: trust-bound ids (orgId, contactId, deploymentId) are
  * closed in from the SkillRequestContext, never accepted from LLM tool input. */

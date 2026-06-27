@@ -48,7 +48,7 @@ export type CreativeConceptDraftInput = z.infer<typeof CreativeConceptDraftInput
  * mock-tool-blind parity). Strict tools 400 on min/max, so the Zod parse in
  * `mapInput` carries the min(1) + optional-field validation this schema cannot.
  */
-export const CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA: Record<string, unknown> = {
+export const CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
   type: "object",
   properties: {
     productDescription: {
@@ -61,4 +61,4 @@ export const CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA: Record<string, unknown> = {
     },
   },
   required: ["productDescription", "targetAudience"],
-};
+});
