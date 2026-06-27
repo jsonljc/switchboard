@@ -170,7 +170,12 @@ export async function runClaimEnforceGate(args: RunClaimEnforceGateArgs): Promis
       listPending: async () => [],
     },
     conversationStore: {
-      setConversationStatus: async (sessionId, status) => {
+      // Signature is (sessionId, organizationId, status, upsertContext?): orgId is
+      // the SECOND positional arg, added in #1346 (per-org ConversationState scoping).
+      // The escalate-detection below keys off the THIRD arg (the human_override the
+      // real escalate path writes); reading the 2nd arg as "status" silently captured
+      // orgId, so a genuine escalate was misread as a rewrite (EV-4 #1344 stale stub).
+      setConversationStatus: async (sessionId, _orgId, status) => {
         statusWrites.push({ sessionId, status });
       },
     },
