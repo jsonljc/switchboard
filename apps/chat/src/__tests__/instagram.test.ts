@@ -243,6 +243,56 @@ describe("InstagramAdapter", () => {
 
       expect(result.status).toBe(403);
     });
+
+    // CHAN-5 (BUG-5): the verify_token must be compared with a constant-time
+    // `timingSafeEqual` (parity with whatsapp.ts:113-117 and this adapter's own
+    // signature path), guarded by a length pre-check that both fails closed on an
+    // unconfigured token and never throws on a different-length token.
+    it("rejects a different-length token without throwing (length pre-check)", () => {
+      expect(() =>
+        adapter.handleVerification({
+          "hub.mode": "subscribe",
+          // One char shorter than the configured "verify_me" — a naked
+          // timingSafeEqual without the length guard would throw here.
+          "hub.verify_token": "verify_m",
+          "hub.challenge": "challenge_123",
+        }),
+      ).not.toThrow();
+      const result = adapter.handleVerification({
+        "hub.mode": "subscribe",
+        "hub.verify_token": "verify_m",
+        "hub.challenge": "challenge_123",
+      });
+      expect(result.status).toBe(403);
+    });
+
+    it("rejects a longer token without throwing", () => {
+      const result = adapter.handleVerification({
+        "hub.mode": "subscribe",
+        "hub.verify_token": "verify_me_plus_extra",
+        "hub.challenge": "challenge_123",
+      });
+      expect(result.status).toBe(403);
+    });
+
+    it("fails closed when no verify token is configured", () => {
+      const noTokenAdapter = new InstagramAdapter({ pageAccessToken: "tok", channel: "instagram" });
+      const result = noTokenAdapter.handleVerification({
+        "hub.mode": "subscribe",
+        "hub.verify_token": "anything",
+        "hub.challenge": "challenge_123",
+      });
+      expect(result.status).toBe(403);
+    });
+
+    it("rejects when mode is not subscribe even with the correct token", () => {
+      const result = adapter.handleVerification({
+        "hub.mode": "unsubscribe",
+        "hub.verify_token": "verify_me",
+        "hub.challenge": "challenge_123",
+      });
+      expect(result.status).toBe(403);
+    });
   });
 
   describe("extractMessageId", () => {
