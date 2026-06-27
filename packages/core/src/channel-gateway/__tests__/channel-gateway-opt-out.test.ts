@@ -238,11 +238,18 @@ describe("ChannelGateway — WhatsApp opt-out + PDPA consent mirror (Phase 1c)",
     expect(send).toHaveBeenCalledTimes(1);
     const reply = send.mock.calls[0]?.[0] as string;
     expect(reply.toLowerCase()).toContain("opt");
+    // Ack only AFTER the durable revoke: recordRevocation resolves before the confirmation.
+    const revokeOrder = (consentService.recordRevocation as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0];
+    const sendOrder = send.mock.invocationCallOrder[0];
+    expect(revokeOrder).toBeDefined();
+    expect(sendOrder).toBeDefined();
+    expect(revokeOrder).toBeLessThan(sendOrder as number);
     // Skill dispatch did NOT fire (opt-out short-circuit holds)
     expect(config.platformIngress.submit).not.toHaveBeenCalled();
   });
 
-  it("does not block opt-out confirmation when PDPA mirror fails", async () => {
+  it("fails closed: propagates and does NOT confirm the opt-out when the PDPA revocation write fails", async () => {
     const contactStore = makeContactStore();
     const { gate, consentService } = makeConsentRevocationGate();
     (consentService.recordRevocation as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
@@ -252,17 +259,25 @@ describe("ChannelGateway — WhatsApp opt-out + PDPA consent mirror (Phase 1c)",
     const gateway = new ChannelGateway(config);
     const send = vi.fn().mockResolvedValue(undefined);
 
-    // Should not throw — PDPA mirror is best-effort
+    // A STOP is itself inbound, so the WhatsApp 24h window is freshly open and
+    // messagingOptIn=false is inert within it, so consentRevokedAt is the SOLE
+    // suppressor of future proactive sends. A swallowed revocation write would
+    // confirm an opt-out we did not durably honour. The branch must fail CLOSED:
+    // propagate the failure (the webhook caller records it to the failed-message
+    // DLQ and returns 200) and send NO confirmation.
     await expect(
       gateway.handleIncoming(
         { channel: "whatsapp", token: "wa-token", sessionId: "+6599999999", text: "STOP" },
         { send },
       ),
-    ).resolves.not.toThrow();
+    ).rejects.toThrow("store unavailable");
 
-    expect(contactStore.recordMessagingOptOut).toHaveBeenCalled();
-    expect(send).toHaveBeenCalledTimes(1);
+    // No false "you're unsubscribed" confirmation when the durable revoke did not land.
+    expect(send).not.toHaveBeenCalled();
+    // Skill dispatch still skipped (terminal opt-out branch holds).
     expect(config.platformIngress.submit).not.toHaveBeenCalled();
+    // The channel opt-out ran first; its success is the safer partial-failure state.
+    expect(contactStore.recordMessagingOptOut).toHaveBeenCalled();
   });
 
   it("skips PDPA mirror when consentRevocationGate is not wired", async () => {
