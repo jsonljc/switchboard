@@ -78,8 +78,14 @@ export function parseInteractiveMessage(
           attachments: [],
           organizationId: null,
         };
-      } catch {
-        // Invalid JSON in response_json — fall through
+      } catch (err) {
+        // Invalid JSON in the flow response: don't crash the webhook, fall
+        // through to the no-text path below. Surface it (CHAN-10) so a malformed
+        // flow submit is observable instead of silently swallowed.
+        console.warn(
+          "[whatsapp] failed to parse nfm_reply response_json; ignoring flow payload",
+          err,
+        );
       }
     }
   }

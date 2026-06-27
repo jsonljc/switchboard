@@ -96,5 +96,46 @@ describe("WhatsAppAdapter — Flows", () => {
         }),
       );
     });
+
+    // CHAN-10: a malformed flow response_json was silently swallowed by an empty
+    // catch. It must not crash the webhook, and the drop must be observable.
+    it("does not throw and surfaces a warning on malformed response_json", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  contacts: [{ profile: { name: "Flow User" }, wa_id: "15551234567" }],
+                  messages: [
+                    {
+                      from: "15551234567",
+                      id: "wamid.flow_bad",
+                      timestamp: "1700000000",
+                      type: "interactive",
+                      interactive: {
+                        type: "nfm_reply",
+                        nfm_reply: { response_json: "{not valid json", body: "Sent", name: "flow" },
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      let msg: ReturnType<typeof adapter.parseIncomingMessage>;
+      expect(() => {
+        msg = adapter.parseIncomingMessage(payload);
+      }).not.toThrow();
+      // Malformed flow payload falls through to the no-text path -> null.
+      expect(msg!).toBeNull();
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
   });
 });

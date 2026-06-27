@@ -110,12 +110,22 @@ export class InstagramAdapter implements ChannelAdapter {
   /**
    * Handle webhook verification challenge (GET request).
    * Same hub.mode / hub.verify_token / hub.challenge flow as WhatsApp.
+   *
+   * The verify_token is compared with a constant-time `timingSafeEqual`, matching
+   * the WhatsApp adapter and this adapter's own HMAC signature path rather than a
+   * plain `===`. The length pre-check both avoids a different-length throw and
+   * fails closed when the adapter has no configured token (`verifyToken === null`).
    */
   handleVerification(query: Record<string, string | undefined>): {
     status: number;
     body: string;
   } {
-    if (query["hub.mode"] === "subscribe" && query["hub.verify_token"] === this.verifyToken) {
+    const providedToken = query["hub.verify_token"] ?? "";
+    const tokenMatch =
+      this.verifyToken !== null &&
+      providedToken.length === this.verifyToken.length &&
+      timingSafeEqual(Buffer.from(providedToken), Buffer.from(this.verifyToken));
+    if (query["hub.mode"] === "subscribe" && tokenMatch) {
       return { status: 200, body: query["hub.challenge"] ?? "" };
     }
     return { status: 403, body: "Verification failed" };

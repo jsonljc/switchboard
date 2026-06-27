@@ -243,6 +243,56 @@ describe("InstagramAdapter", () => {
 
       expect(result.status).toBe(403);
     });
+
+    // CHAN-5 (BUG-5): the verify_token must be compared with a constant-time
+    // `timingSafeEqual` (parity with whatsapp.ts:113-117 and this adapter's own
+    // signature path), guarded by a length pre-check that both fails closed on an
+    // unconfigured token and never throws on a different-length token.
+    it("rejects a different-length token without throwing (length pre-check)", () => {
+      expect(() =>
+        adapter.handleVerification({
+          "hub.mode": "subscribe",
+          // One char shorter than the configured "verify_me" — a naked
+          // timingSafeEqual without the length guard would throw here.
+          "hub.verify_token": "verify_m",
+          "hub.challenge": "challenge_123",
+        }),
+      ).not.toThrow();
+      const result = adapter.handleVerification({
+        "hub.mode": "subscribe",
+        "hub.verify_token": "verify_m",
+        "hub.challenge": "challenge_123",
+      });
+      expect(result.status).toBe(403);
+    });
+
+    it("rejects a longer token without throwing", () => {
+      const result = adapter.handleVerification({
+        "hub.mode": "subscribe",
+        "hub.verify_token": "verify_me_plus_extra",
+        "hub.challenge": "challenge_123",
+      });
+      expect(result.status).toBe(403);
+    });
+
+    it("fails closed when no verify token is configured", () => {
+      const noTokenAdapter = new InstagramAdapter({ pageAccessToken: "tok", channel: "instagram" });
+      const result = noTokenAdapter.handleVerification({
+        "hub.mode": "subscribe",
+        "hub.verify_token": "anything",
+        "hub.challenge": "challenge_123",
+      });
+      expect(result.status).toBe(403);
+    });
+
+    it("rejects when mode is not subscribe even with the correct token", () => {
+      const result = adapter.handleVerification({
+        "hub.mode": "unsubscribe",
+        "hub.verify_token": "verify_me",
+        "hub.challenge": "challenge_123",
+      });
+      expect(result.status).toBe(403);
+    });
   });
 
   describe("extractMessageId", () => {
@@ -425,6 +475,28 @@ describe("InstagramAdapter: default API version", () => {
     await a.sendTextReply("user_1", "hello");
     const calledUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
     expect(calledUrl).toContain("/v21.0/");
+  });
+
+  // CHAN-9: Instagram/Messenger quick replies are capped at 3, with 20-char
+  // titles, so an approval card never exceeds the platform's message limits.
+  it("caps approval quick replies at 3 with 20-char titles", async () => {
+    fetchMock.mockClear();
+    const a = new InstagramAdapter({ pageAccessToken: "tok", channel: "instagram" });
+    await a.sendApprovalCard("user_1", {
+      summary: "Pause campaign",
+      riskCategory: "medium",
+      explanation: "Budget exceeds limit",
+      buttons: Array.from({ length: 5 }, (_, i) => ({
+        label: `A very long approval button label ${i}`,
+        callbackData: `cb_${i}`,
+      })),
+    });
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}"));
+    const quickReplies = body.message.quick_replies as Array<{ title: string }>;
+    expect(quickReplies).toHaveLength(3);
+    for (const qr of quickReplies) {
+      expect(qr.title.length).toBeLessThanOrEqual(20);
+    }
   });
 });
 

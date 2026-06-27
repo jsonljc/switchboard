@@ -1,7 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "@switchboard/schemas";
 import type { ChannelAdapter, ApprovalCardPayload, ResultCardPayload } from "./adapter.js";
-import { withRetry } from "@switchboard/core";
+import {
+  withRetry,
+  isWithinTelegramCallbackLimit,
+  TELEGRAM_APPROVAL_DASHBOARD_FALLBACK,
+  TELEGRAM_CALLBACK_DATA_MAX_BYTES,
+} from "@switchboard/core";
 
 /** Error carrying HTTP status for retry decisions. */
 class TelegramApiError extends Error {
@@ -220,12 +225,29 @@ export class TelegramAdapter implements ChannelAdapter {
       { text: btn.label, callback_data: btn.callbackData },
     ]);
 
-    await this.apiCall("sendMessage", {
+    // Telegram rejects the ENTIRE sendMessage when any inline button's
+    // callback_data exceeds 64 bytes, silently dropping the whole approval card.
+    // When the buttons don't fit, send the card without them plus a dashboard
+    // fallback so the operator still sees the approval (CHAN-4 / BUG-4).
+    const deliverable = card.buttons.every((btn) =>
+      isWithinTelegramCallbackLimit(btn.callbackData),
+    );
+    const baseText = card.summary + "\n\n" + card.explanation;
+    const body: Record<string, unknown> = {
       chat_id: threadId,
-      text: card.summary + "\n\n" + card.explanation,
+      text: deliverable ? baseText : `${baseText}\n\n${TELEGRAM_APPROVAL_DASHBOARD_FALLBACK}`,
       parse_mode: "Markdown",
-      reply_markup: { inline_keyboard: inlineKeyboard },
-    });
+    };
+    if (deliverable) {
+      body["reply_markup"] = { inline_keyboard: inlineKeyboard };
+    } else {
+      console.warn(
+        `[TelegramAdapter] approval callback_data exceeds ${TELEGRAM_CALLBACK_DATA_MAX_BYTES} bytes; ` +
+          "sending card without inline buttons (dashboard fallback).",
+      );
+    }
+
+    await this.apiCall("sendMessage", body);
   }
 
   async sendResultCard(threadId: string, card: ResultCardPayload): Promise<void> {

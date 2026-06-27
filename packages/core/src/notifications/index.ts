@@ -2,6 +2,11 @@ export { NoopNotifier, CompositeNotifier, buildApprovalNotification } from "./no
 export type { ApprovalNotifier, ApprovalNotification } from "./notifier.js";
 export { WebhookApprovalNotifier } from "./webhook-notifier.js";
 export { TelegramApprovalNotifier } from "./telegram-notifier.js";
+export {
+  TELEGRAM_CALLBACK_DATA_MAX_BYTES,
+  isWithinTelegramCallbackLimit,
+  TELEGRAM_APPROVAL_DASHBOARD_FALLBACK,
+} from "./telegram-callback-data.js";
 export { SlackApprovalNotifier } from "./slack-notifier.js";
 export type { SlackNotifierOptions } from "./slack-notifier.js";
 export { WhatsAppApprovalNotifier } from "./whatsapp-notifier.js";
