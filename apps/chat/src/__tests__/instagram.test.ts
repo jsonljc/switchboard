@@ -476,6 +476,28 @@ describe("InstagramAdapter: default API version", () => {
     const calledUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
     expect(calledUrl).toContain("/v21.0/");
   });
+
+  // CHAN-9: Instagram/Messenger quick replies are capped at 3, with 20-char
+  // titles, so an approval card never exceeds the platform's message limits.
+  it("caps approval quick replies at 3 with 20-char titles", async () => {
+    fetchMock.mockClear();
+    const a = new InstagramAdapter({ pageAccessToken: "tok", channel: "instagram" });
+    await a.sendApprovalCard("user_1", {
+      summary: "Pause campaign",
+      riskCategory: "medium",
+      explanation: "Budget exceeds limit",
+      buttons: Array.from({ length: 5 }, (_, i) => ({
+        label: `A very long approval button label ${i}`,
+        callbackData: `cb_${i}`,
+      })),
+    });
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}"));
+    const quickReplies = body.message.quick_replies as Array<{ title: string }>;
+    expect(quickReplies).toHaveLength(3);
+    for (const qr of quickReplies) {
+      expect(qr.title.length).toBeLessThanOrEqual(20);
+    }
+  });
 });
 
 describe("ChannelGateway detection", () => {

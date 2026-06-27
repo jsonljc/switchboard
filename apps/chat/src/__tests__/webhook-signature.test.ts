@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createHmac } from "node:crypto";
 import { TelegramAdapter } from "../adapters/telegram.js";
 import { WhatsAppAdapter } from "../adapters/whatsapp.js";
+import { verifySlackSignature } from "../adapters/slack.js";
 
 describe("Webhook signature verification", () => {
   describe("TelegramAdapter", () => {
@@ -79,6 +80,34 @@ describe("Webhook signature verification", () => {
       });
       const result = adapter.verifyRequest('{"test": true}', {});
       expect(result).toBe(false);
+    });
+  });
+
+  // CHAN-10: Slack request signatures embed a timestamp; a request older than 5
+  // minutes is rejected even when the HMAC is otherwise valid (replay defense).
+  describe("SlackAdapter — verifySlackSignature timestamp skew", () => {
+    const signingSecret = "slack-signing-secret";
+    const sign = (timestamp: string, body: string): string =>
+      "v0=" + createHmac("sha256", signingSecret).update(`v0:${timestamp}:${body}`).digest("hex");
+
+    it("accepts a fresh, correctly-signed request", () => {
+      const ts = String(Math.floor(Date.now() / 1000));
+      const body = '{"ok":true}';
+      expect(verifySlackSignature(signingSecret, ts, body, sign(ts, body))).toBe(true);
+    });
+
+    it("rejects a correctly-signed request older than 5 minutes (replay)", () => {
+      const staleTs = String(Math.floor(Date.now() / 1000) - 6 * 60);
+      const body = '{"ok":true}';
+      // The signature is VALID for this timestamp+body; only the skew is stale.
+      expect(verifySlackSignature(signingSecret, staleTs, body, sign(staleTs, body))).toBe(false);
+    });
+
+    it("rejects a non-numeric timestamp", () => {
+      const body = '{"ok":true}';
+      expect(verifySlackSignature(signingSecret, "not-a-number", body, sign("x", body))).toBe(
+        false,
+      );
     });
   });
 });
