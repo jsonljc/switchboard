@@ -135,8 +135,13 @@ export class ConversionStreamDrainer {
         continue;
       }
 
+      // Drain the WHOLE already-read batch before honoring stop(). readGroup uses
+      // ">", so this batch is already CLAIMED into this consumer's PEL; breaking
+      // out mid-batch on !running would orphan the unprocessed tail (a fresh
+      // consumer-${pid} + deferred XAUTOCLAIM never re-reads it) = silent
+      // conversion / CAPI loss. The outer `while (this.running)` still governs
+      // whether we read the NEXT batch, so stop() latency stays bounded by BLOCK.
       for (const { id, event } of messages) {
-        if (!this.running) break;
         try {
           await this.bus.dispatch(event);
           await this.bus.ack(this.groupName, id);

@@ -182,6 +182,60 @@ describe("ConversionStreamDrainer", () => {
     });
   });
 
+  it("drains the already-read batch before honoring stop() (no orphaned PEL messages)", async () => {
+    // readGroup uses ">", so a returned batch is already CLAIMED into this
+    // consumer's PEL. If stop() flips running=false while the loop is parked in
+    // the BLOCK read, the unblocking read still returns the whole batch. Those
+    // messages are ours and are NOT re-read by a fresh consumer on restart
+    // (consumer-${pid} changes; XAUTOCLAIM is deferred), so they must be fully
+    // drained (dispatched + acked) before the loop honors stop(), or they are
+    // silently lost -> dropped conversions / Meta CAPI deliveries.
+    const handler = vi.fn().mockResolvedValue(undefined);
+    bus.subscribe("*", handler);
+
+    // Defer the first read so the loop parks on it exactly as under a real BLOCK,
+    // letting us flip stop() BEFORE the already-claimed batch is returned.
+    let resolveRead!: (value: Array<[string, Array<[string, string[]]>]>) => void;
+    redis.xreadgroup
+      .mockImplementationOnce(
+        () =>
+          new Promise<Array<[string, Array<[string, string[]]>]>>((res) => {
+            resolveRead = res;
+          }),
+      )
+      .mockImplementation(blockEmpty);
+
+    const d = newDrainer();
+    await d.start();
+
+    // Wait until the loop is parked on the deferred read.
+    await vi.waitFor(() => {
+      expect(redis.xreadgroup).toHaveBeenCalledTimes(1);
+    });
+
+    // stop() flips running=false synchronously, THEN awaits the loop. Do not await
+    // it yet: resolve the read so the already-claimed batch comes back post-stop.
+    const stopP = d.stop();
+    resolveRead([
+      [
+        STREAM_KEY,
+        [
+          ["1-0", ["data", serialize(makeEvent({ eventId: "a" }))]],
+          ["2-0", ["data", serialize(makeEvent({ eventId: "b" }))]],
+          ["3-0", ["data", serialize(makeEvent({ eventId: "c" }))]],
+        ],
+      ],
+    ]);
+    await stopP;
+
+    // Every message in the already-read batch must be dispatched AND acked.
+    expect(handler).toHaveBeenCalledTimes(3);
+    expect(redis.xack).toHaveBeenCalledWith(STREAM_KEY, GROUP, "1-0");
+    expect(redis.xack).toHaveBeenCalledWith(STREAM_KEY, GROUP, "2-0");
+    expect(redis.xack).toHaveBeenCalledWith(STREAM_KEY, GROUP, "3-0");
+    expect(redis.xack).toHaveBeenCalledTimes(3);
+  });
+
   it("stop() cleanly terminates the loop (no further reads after stop resolves)", async () => {
     redis.xreadgroup.mockImplementation(blockEmpty); // always empty -> loop idles
 
