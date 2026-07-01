@@ -142,6 +142,18 @@ describe("MiraCreativeFeed", () => {
     expect(screen.getByTestId("mira-feed-skeleton")).toBeInTheDocument();
   });
 
+  it("keys-pending (isLoading:false, no data, no error) → skeleton, not a false-empty", () => {
+    // useMiraFeed is enabled:!!keys; while the org scope resolves React Query
+    // reports a disabled query as isLoading:false / data:undefined / isError:false.
+    // A plain `if (isLoading)` gate is skipped here and flashes the empty state.
+    // The feed must derive loading from {data, error} so keys-pending shows the
+    // skeleton, not "No drafts to review yet".
+    feed.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    renderFeed();
+    expect(screen.queryByText(/No drafts to review yet/i)).toBeNull();
+    expect(screen.getByTestId("mira-feed-skeleton")).toBeInTheDocument();
+  });
+
   it("error → ConnectionTrouble card with retry wiring", () => {
     const retrySpy = vi.fn();
     feed.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch: retrySpy });
