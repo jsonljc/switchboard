@@ -17,6 +17,7 @@ export default defineConfig({
       "claim-boundary/__tests__/**/*.test.ts",
       "mira-self-brief/__tests__/**/*.test.ts",
       "mira-injection/__tests__/**/*.test.ts",
+      "skill-prompt-golden/__tests__/**/*.test.ts",
     ],
     environment: "node",
   },

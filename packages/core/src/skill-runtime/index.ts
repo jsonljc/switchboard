@@ -36,6 +36,7 @@ export { AnthropicToolCallingAdapter } from "./tool-calling-adapter.js";
 export { AnthropicToolAdapter } from "./adapters/anthropic-tool-adapter.js";
 export { interpolate } from "./template-engine.js";
 export { getGovernanceConstraints } from "./governance-injector.js";
+export { buildSystemPrompt } from "./system-prompt.js";
 export { ToolRegistry } from "./tool-registry.js";
 export {
   getToolGovernanceDecision,

@@ -22,8 +22,8 @@ import type {
 } from "./types.js";
 import { SkillExecutionBudgetError, DEFAULT_SKILL_RUNTIME_POLICY } from "./types.js";
 import type { GovernanceLogEntry } from "./governance.js";
-import { interpolate } from "./template-engine.js";
-import { getGovernanceConstraints, getSafetyRecencyReminder } from "./governance-injector.js";
+import { buildSystemPrompt } from "./system-prompt.js";
+import { getSafetyRecencyReminder } from "./governance-injector.js";
 import { recordSkillContextFill, recordMutatedThenEscalated } from "../telemetry/metrics.js";
 import { composeSkillRequestContext } from "./skill-request-context.js";
 import { denied, pendingApproval, fail, ok } from "./tool-result.js";
@@ -302,9 +302,7 @@ export class SkillExecutorImpl implements SkillExecutor {
       | GovernanceHook
       | undefined;
 
-    const interpolated = interpolate(params.skill.body, params.parameters, params.skill.parameters);
-
-    const system = `${interpolated}\n\n${getGovernanceConstraints()}`;
+    const system = buildSystemPrompt(params.skill, params.parameters);
 
     const toolDefinitions = this.buildToolDefinitions(params.skill.tools);
 
