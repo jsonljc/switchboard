@@ -6,6 +6,7 @@ import { ContextRequirementSchema, ReferenceMetadataSchema } from "@switchboard/
 import type { ContextRequirement } from "@switchboard/schemas";
 import { SkillParseError, SkillValidationError } from "./types.js";
 import type { SkillDefinition, ParameterDeclaration, SkillReferenceFile } from "./types.js";
+import { composePackBody } from "./pack-composer.js";
 
 const ParameterDeclarationSchema = z.object({
   name: z.string(),
@@ -31,6 +32,7 @@ const SkillFrontmatterSchema = z.object({
   version: z.string(),
   description: z.string(),
   author: z.string(),
+  pack: z.string().optional(),
   parameters: z.array(ParameterDeclarationSchema),
   tools: z.array(z.string()),
   minimumModelTier: z.enum(["default", "premium", "critical"]).optional(),
@@ -209,7 +211,7 @@ export function loadSkill(slug: string, skillsDir: string): SkillDefinition {
     throw new SkillParseError(`Skill file not found: ${skillPath}`);
   }
 
-  const { frontmatterStr, body } = splitFrontmatter(raw);
+  const { frontmatterStr, body: rawBody } = splitFrontmatter(raw);
 
   let frontmatterRaw: unknown;
   try {
@@ -225,6 +227,13 @@ export function loadSkill(slug: string, skillsDir: string): SkillDefinition {
   }
 
   const frontmatter = parseResult.data;
+
+  // Splice vertical pack blocks into the skeleton at load time. composePackBody is
+  // fail-closed on an orphan marker (no pack declared) or a missing pack file; a
+  // body with no markers is returned unchanged (every non-pack skill is a no-op).
+  const packDir = frontmatter.pack ? join(skillsDir, slug, "packs", frontmatter.pack) : undefined;
+  const body = composePackBody(rawBody, packDir);
+
   const issues: string[] = [];
 
   issues.push(...validateParameters(frontmatter.parameters));

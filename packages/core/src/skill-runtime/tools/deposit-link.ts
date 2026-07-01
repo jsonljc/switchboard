@@ -42,6 +42,24 @@ interface DepositLinkToolDeps {
 export type DepositLinkToolFactory = (ctx: SkillRequestContext) => SkillTool;
 
 /**
+ * Exported input-schema constant — the single source of truth for the
+ * deposit.issue input contract. The factory references it by value
+ * (behaviour-preserving); the alex-conversation eval imports it so its mock tool
+ * presents the EXACT production contract (EV-5/AGENT-5 mock-tool-blind gap).
+ * orgId is ctx-injected (AI-1), so only bookingId appears here.
+ */
+export const DEPOSIT_LINK_ISSUE_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
+  type: "object",
+  properties: {
+    bookingId: {
+      type: "string",
+      description: "The confirmed booking to attach a deposit to",
+    },
+  },
+  required: ["bookingId"],
+});
+
+/**
  * Issues a first-party deposit link against an ALREADY-APPROVED, confirmed
  * booking. This is an idempotent external read riding on the booking's prior
  * approval — NO new approval is required (spec §8). `orgId` is sourced from the
@@ -80,16 +98,7 @@ export function createDepositLinkToolFactory(deps: DepositLinkToolDeps): Deposit
         // this file's sibling deposit-link.test.ts.
         effectCategory: "read" as const,
         idempotent: true,
-        inputSchema: {
-          type: "object",
-          properties: {
-            bookingId: {
-              type: "string",
-              description: "The confirmed booking to attach a deposit to",
-            },
-          },
-          required: ["bookingId"],
-        },
+        inputSchema: DEPOSIT_LINK_ISSUE_INPUT_SCHEMA,
         execute: async (params: unknown): Promise<ToolResult> => {
           const { bookingId } = params as { bookingId: string };
           // orgId is sourced from the trusted SkillRequestContext (AI-1).

@@ -30,6 +30,25 @@ export function assertSafeDashboardAuthEnv(): void {
   if (!process.env.NEXTAUTH_SECRET) {
     throw new Error("NEXTAUTH_SECRET must be set in production");
   }
+
+  // The dashboard talks to Postgres directly: the NextAuth Prisma adapter and the
+  // per-org API client both `new PrismaClient()`. A missing DATABASE_URL otherwise
+  // fails lazily at the first query with a cryptic Prisma error; preflight it so the
+  // deploy refuses to start instead. (Mirrors the launch-checklist env requirement.)
+  if (!process.env.DATABASE_URL) {
+    throw new Error(
+      "DATABASE_URL must be set in production. The dashboard reads Postgres directly; refusing to start without it.",
+    );
+  }
+
+  // CREDENTIALS_ENCRYPTION_KEY decrypts each org's API credentials (get-api-client)
+  // and must match the secret the API server encrypted them with. Without it, every
+  // authenticated dashboard request fails lazily at the first decrypt; preflight it.
+  if (!process.env.CREDENTIALS_ENCRYPTION_KEY) {
+    throw new Error(
+      "CREDENTIALS_ENCRYPTION_KEY must be set in production. It decrypts per-org API credentials and must match the API server; refusing to start without it.",
+    );
+  }
 }
 
 export function isDevBypassEnabled(): boolean {

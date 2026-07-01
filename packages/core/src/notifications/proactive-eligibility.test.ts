@@ -37,6 +37,25 @@ describe("evaluateProactiveSendEligibility", () => {
     expect(r).toEqual({ eligible: false, reason: "consent_revoked" });
   });
 
+  it("blocks a revoked-but-unstamped contact (null jurisdiction + revoke set) with consent_revoked", () => {
+    // A first inbound "STOP" revokes without stamping pdpaJurisdiction. Revocation must
+    // win over the null-jurisdiction not_applicable masking, else a proactive send to a
+    // revoked contact would slip past the PDPA bar. (firstTouch does not relax revocation.)
+    const r = evaluateProactiveSendEligibility({
+      contact: {
+        ...optedInContact,
+        pdpaJurisdiction: null,
+        consentGrantedAt: null,
+        consentRevokedAt: "2026-05-10T00:00:00.000Z",
+      },
+      lastWhatsAppInboundAt: outsideWindow,
+      intentClass: "re-engagement-offer",
+      jurisdiction: "SG",
+      allowMarketingTemplate: true,
+    });
+    expect(r).toEqual({ eligible: false, reason: "consent_revoked" });
+  });
+
   it("blocks proactive sends when consent is pending (jurisdiction stamped, never granted)", () => {
     const r = evaluateProactiveSendEligibility({
       contact: { ...optedInContact, consentGrantedAt: null },

@@ -118,6 +118,20 @@ describe("deriveConsentStatus", () => {
       }),
     ).toBe("revoked");
   });
+
+  it("revoked but UNSTAMPED jurisdiction → revoked, NOT not_applicable", () => {
+    // A first inbound "STOP" revokes via ConsentService.recordRevocation, which sets
+    // consentRevokedAt WITHOUT stamping pdpaJurisdiction. Revocation must win over the
+    // null-jurisdiction short-circuit, else a revoked contact masks as not_applicable
+    // and consumers (e.g. the F15 booking precondition) read it as ALLOW.
+    expect(
+      deriveConsentStatus({
+        pdpaJurisdiction: null,
+        consentGrantedAt: null,
+        consentRevokedAt: "2026-05-10T00:00:00.000Z",
+      }),
+    ).toBe("revoked");
+  });
 });
 
 describe("evaluateConsentGate", () => {
@@ -205,5 +219,27 @@ describe("evaluateConsentGate", () => {
         messageClass: "proactive",
       }),
     ).toEqual({ action: "block", status: "revoked", reasonCode: "consent_revoked" });
+  });
+
+  // Revoked-but-unstamped (null jurisdiction + revoke set): revocation wins, so BOTH
+  // classes must block. Previously this masked as not_applicable → allow on both paths.
+  const revokedUnstamped = {
+    pdpaJurisdiction: null,
+    consentGrantedAt: null,
+    consentRevokedAt: "2026-05-10T00:00:00.000Z",
+  };
+
+  it("operational + revoked-but-unstamped → block (consent_revoked)", () => {
+    expect(evaluateConsentGate({ contact: revokedUnstamped, messageClass: "operational" })).toEqual(
+      { action: "block", status: "revoked", reasonCode: "consent_revoked" },
+    );
+  });
+
+  it("proactive + revoked-but-unstamped → block (consent_revoked)", () => {
+    expect(evaluateConsentGate({ contact: revokedUnstamped, messageClass: "proactive" })).toEqual({
+      action: "block",
+      status: "revoked",
+      reasonCode: "consent_revoked",
+    });
   });
 });

@@ -83,6 +83,12 @@ export const actionLifecycleRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
+      // Approver-role floor (#9b): undo reverses a previously approved AND executed
+      // action, an equally privileged dispatch as /execute; only approver/operator/
+      // admin may trigger it, the SAME floor /execute enforces. Dev mode
+      // (authDisabled) bypasses, matching assertOrgAccess. Runs before the org gate.
+      if (!(await requireRole(request, reply, ...APPROVER_ROLES))) return;
+
       const envelope = await app.storageContext.envelopes.getById(id);
       if (!envelope) {
         return reply.code(404).send({ error: "Envelope not found", statusCode: 404 });

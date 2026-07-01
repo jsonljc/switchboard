@@ -18,6 +18,7 @@ export default defineConfig({
       "mira-self-brief/__tests__/**/*.test.ts",
       "mira-injection/__tests__/**/*.test.ts",
       "resolver/**/*.test.ts",
+      "skill-prompt-golden/__tests__/**/*.test.ts",
     ],
     environment: "node",
   },

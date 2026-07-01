@@ -36,6 +36,7 @@ export { AnthropicToolCallingAdapter } from "./tool-calling-adapter.js";
 export { AnthropicToolAdapter } from "./adapters/anthropic-tool-adapter.js";
 export { interpolate } from "./template-engine.js";
 export { getGovernanceConstraints } from "./governance-injector.js";
+export { buildSystemPrompt } from "./system-prompt.js";
 export { ToolRegistry } from "./tool-registry.js";
 export {
   getToolGovernanceDecision,
@@ -55,6 +56,20 @@ export {
   buildRescheduleOperations,
   resolveBookedValueCents,
   enforceConsentPrecondition,
+  // Tool input-schema constants — the single source of truth for each Alex tool
+  // operation's LLM-facing input contract. Imported by the alex-conversation eval
+  // mock so it presents the EXACT production contract (EV-5/AGENT-5 parity).
+  CRM_QUERY_CONTACT_GET_INPUT_SCHEMA,
+  CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA,
+  CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA,
+  CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA,
+  CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA,
+  CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA,
+  CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA,
+  CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA,
+  ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA,
+  FOLLOW_UP_SCHEDULE_INPUT_SCHEMA,
+  DEPOSIT_LINK_ISSUE_INPUT_SCHEMA,
 } from "./tools/index.js";
 export type {
   EscalateToolFactory,

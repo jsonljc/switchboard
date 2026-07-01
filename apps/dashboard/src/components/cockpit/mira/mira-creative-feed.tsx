@@ -12,7 +12,7 @@ import { T } from "@/components/cockpit/tokens";
 import { MiraClipCard } from "./mira-clip-card";
 
 export function MiraCreativeFeed() {
-  const { data, isLoading, isError, refetch } = useMiraFeed();
+  const { data, isError, refetch } = useMiraFeed();
   const [activeIndex, setActiveIndex] = useState(0);
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
@@ -82,7 +82,14 @@ export function MiraCreativeFeed() {
     return () => io.disconnect();
   }, [jobs.length]);
 
-  if (isLoading) {
+  // Keys-pending-safe gating: useMiraFeed is enabled:!!keys, so while the org
+  // scope resolves React Query reports a disabled query as isLoading:false /
+  // data:undefined / isError:false. A plain `if (isLoading)` gate is skipped in
+  // that state and falls through to the empty state, flashing a false "no drafts".
+  // Derive loading from the absence of {data, error} instead, so both keys-pending
+  // and the initial load render the skeleton. (Error still takes precedence over a
+  // stale cached list below, preserving the prior behaviour.)
+  if (data == null && !isError) {
     return (
       <div
         data-testid="mira-feed-skeleton"

@@ -31,9 +31,10 @@ describe("evaluateExceptions", () => {
   });
 
   it("does NOT raise missing_consent for a null-jurisdiction contact (not-applicable)", () => {
-    // No PDPA jurisdiction means consent is not_applicable (matches the booking gate and the
-    // completeness report which scopes bookable to pdpaJurisdiction != null). An absent or revoked
-    // consent on such a contact must not pollute the proof-quality worklist with an un-actionable flag.
+    // No PDPA jurisdiction scopes this contact OUT of receipts PDPA exceptions (matching the
+    // completeness report, which scopes bookable to pdpaJurisdiction != null), so an absent or
+    // revoked consent must not pollute the proof-quality worklist with an un-actionable flag. NOTE:
+    // this intentionally differs from deriveConsentStatus, now revoked-first regardless of jurisdiction.
     expect(codes({ ...clean, pdpaJurisdiction: null, consentGrantedAt: null })).not.toContain(
       "missing_consent",
     );

@@ -1,5 +1,19 @@
 import { ok, fail, pendingApproval } from "@switchboard/core/skill-runtime";
 import type { SkillTool, ToolResult } from "@switchboard/core/skill-runtime";
+import {
+  CRM_QUERY_CONTACT_GET_INPUT_SCHEMA,
+  CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA,
+  CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA,
+  CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA,
+  CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA,
+  CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA,
+  CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA,
+  CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA,
+  ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA,
+  FOLLOW_UP_SCHEDULE_INPUT_SCHEMA,
+  DEPOSIT_LINK_ISSUE_INPUT_SCHEMA,
+} from "@switchboard/core/skill-runtime";
+import { CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA } from "@switchboard/schemas";
 
 /**
  * Per-fixture booking behavior for the `calendar-book.booking.create` mock.
@@ -33,11 +47,18 @@ export interface RecordedToolCall {
  * array that records every operation invocation in order.
  *
  * The tool ids, operation names, effect categories, and input schemas mirror the
- * real Alex tools (crm-query / crm-write / calendar-book / escalate / follow-up) so the LLM
- * sees the same tool definitions production registers — but every `execute`
- * returns a benign `ok(...)` and performs no side effects. Because the eval
- * executor runs with NO governance hooks, write/external_mutation operations are
- * NOT gated here; the mocks simply succeed and record the call.
+ * real Alex tools (crm-query / crm-write / calendar-book / escalate / follow-up /
+ * delegate / deposit-link) so the LLM sees the same tool definitions production
+ * registers — but every `execute` returns a benign `ok(...)` and performs no side
+ * effects. Because the eval executor runs with NO governance hooks,
+ * write/external_mutation operations are NOT gated here; the mocks simply succeed
+ * and record the call.
+ *
+ * EV-5 / AGENT-5: each operation's `inputSchema` is the SAME exported constant the
+ * real tool uses (imported above), NOT a hand-copied literal. This makes the eval
+ * present the EXACT production input contract and makes drift impossible — pinned
+ * by the parity assertions in `__tests__/mock-tools.test.ts`. Operation-level
+ * `description` strings remain the mock's own (documentation, not the contract).
  */
 export interface MockTools {
   tools: Map<string, SkillTool>;
@@ -71,7 +92,7 @@ export function createMockTools(
     toolId: string,
     operation: string,
     description: string,
-    effectCategory: "read" | "write" | "external_mutation",
+    effectCategory: SkillTool["operations"][string]["effectCategory"],
     inputSchema: Record<string, unknown>,
     data: () => Record<string, unknown> | undefined,
     idempotent = true,
@@ -92,16 +113,9 @@ export function createMockTools(
       "contact.get": recordingOp(
         "crm-query",
         "contact.get",
-        "Get a contact by ID. Returns name, phone, email, stage, source.",
+        "Get the current contact. Returns name, stage, source.",
         "read",
-        {
-          type: "object",
-          properties: {
-            contactId: { type: "string", description: "Contact UUID" },
-            orgId: { type: "string", description: "Organization ID" },
-          },
-          required: ["contactId", "orgId"],
-        },
+        CRM_QUERY_CONTACT_GET_INPUT_SCHEMA,
         () => ({
           id: "mock-contact",
           name: null,
@@ -114,17 +128,9 @@ export function createMockTools(
       "activity.list": recordingOp(
         "crm-query",
         "activity.list",
-        "List recent activity logs for a deployment.",
+        "List recent activity for this deployment.",
         "read",
-        {
-          type: "object",
-          properties: {
-            orgId: { type: "string" },
-            deploymentId: { type: "string" },
-            limit: { type: "number", description: "Max results (default 20)" },
-          },
-          required: ["orgId", "deploymentId"],
-        },
+        CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA,
         () => ({ activities: [] }),
       ),
     },
@@ -138,26 +144,7 @@ export function createMockTools(
         "stage.update",
         "Update an opportunity's pipeline stage.",
         "write",
-        {
-          type: "object",
-          properties: {
-            opportunityId: { type: "string", description: "Opportunity UUID" },
-            stage: {
-              type: "string",
-              enum: [
-                "interested",
-                "qualified",
-                "quoted",
-                "booked",
-                "showed",
-                "won",
-                "lost",
-                "nurturing",
-              ],
-            },
-          },
-          required: ["opportunityId", "stage"],
-        },
+        CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA,
         () => ({ ok: true }),
       ),
       "activity.log": recordingOp(
@@ -165,14 +152,7 @@ export function createMockTools(
         "activity.log",
         "Log an activity event.",
         "write",
-        {
-          type: "object",
-          properties: {
-            eventType: { type: "string", description: "e.g. opt-out, qualification, handoff" },
-            description: { type: "string" },
-          },
-          required: ["eventType", "description"],
-        },
+        CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA,
         () => undefined,
         false,
       ),
@@ -187,17 +167,7 @@ export function createMockTools(
         "slots.query",
         "Query available calendar slots for a date range.",
         "read",
-        {
-          type: "object",
-          properties: {
-            dateFrom: { type: "string", description: "ISO 8601 start date" },
-            dateTo: { type: "string", description: "ISO 8601 end date" },
-            durationMinutes: { type: "number", description: "Appointment duration in minutes" },
-            service: { type: "string", description: "Service type" },
-            timezone: { type: "string", description: "IANA timezone" },
-          },
-          required: ["dateFrom", "dateTo", "durationMinutes", "service", "timezone"],
-        },
+        CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA,
         () => ({
           slots:
             opts.slotsBehavior === "empty"
@@ -213,19 +183,7 @@ export function createMockTools(
           "Book a calendar slot for a contact. Persists booking, creates calendar event, emits booked event via outbox.",
         effectCategory: "external_mutation",
         idempotent: true,
-        inputSchema: {
-          type: "object",
-          properties: {
-            contactId: { type: "string" },
-            service: { type: "string" },
-            slotStart: { type: "string", description: "ISO 8601" },
-            slotEnd: { type: "string", description: "ISO 8601" },
-            calendarId: { type: "string" },
-            attendeeName: { type: "string" },
-            attendeeEmail: { type: "string" },
-          },
-          required: ["contactId", "service", "slotStart", "slotEnd", "calendarId"],
-        },
+        inputSchema: CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA,
         execute: async (params: unknown): Promise<ToolResult> => {
           // Record the call FIRST so the oracle still sees a calendar-book call
           // even when the booking parks for approval or the slot was taken.
@@ -249,16 +207,7 @@ export function createMockTools(
         "booking.reschedule",
         "Reschedule the contact's upcoming appointment to a new slot.",
         "external_mutation",
-        {
-          type: "object",
-          properties: {
-            slotStart: { type: "string" },
-            slotEnd: { type: "string" },
-            calendarId: { type: "string" },
-            service: { type: "string" },
-          },
-          required: ["slotStart", "slotEnd", "calendarId"],
-        },
+        CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA,
         () => ({ bookingId: "mock-booking", status: "rescheduled" }),
         false,
       ),
@@ -267,10 +216,7 @@ export function createMockTools(
         "booking.cancel",
         "Cancel the contact's upcoming appointment.",
         "external_mutation",
-        {
-          type: "object",
-          properties: { service: { type: "string" }, reason: { type: "string" } },
-        },
+        CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA,
         () => ({ bookingId: "mock-booking", status: "cancelled" }),
         false,
       ),
@@ -285,33 +231,7 @@ export function createMockTools(
         "handoff.create",
         "Escalate the conversation to a human team member. Use when the customer's question is outside your scope, when business knowledge is missing, or when the customer is frustrated.",
         "write",
-        {
-          type: "object",
-          properties: {
-            reason: {
-              type: "string",
-              enum: [
-                "human_requested",
-                "missing_knowledge",
-                "complex_objection",
-                "negative_sentiment",
-                "compliance_concern",
-                "medical_safety",
-                "booking_failure",
-                "max_turns_exceeded",
-              ],
-            },
-            summary: {
-              type: "string",
-              description: "Brief summary of why escalation is needed and what the customer wants",
-            },
-            customerSentiment: {
-              type: "string",
-              enum: ["positive", "neutral", "frustrated", "angry"],
-            },
-          },
-          required: ["reason", "summary"],
-        },
+        ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA,
         () => ({ handoffId: "mock-handoff", status: "pending" }),
         false,
       ),
@@ -330,30 +250,7 @@ export function createMockTools(
         "followup.schedule",
         "Schedule a single WhatsApp re-engagement follow-up for this lead, to be sent automatically later (only if consent, the messaging window, and an approved template all allow). Use when a qualified lead has gone quiet or hesitant. Do not schedule more than one follow-up per conversation.",
         "write",
-        {
-          type: "object",
-          properties: {
-            reason: {
-              type: "string",
-              enum: [
-                "hesitation",
-                "price_concern",
-                "timing_not_now",
-                "awaiting_info",
-                "went_quiet",
-              ],
-            },
-            delay: {
-              type: "string",
-              enum: ["in_1_day", "in_3_days", "in_1_week"],
-            },
-            note: {
-              type: "string",
-              description: "Optional short context for the team (not sent to the customer).",
-            },
-          },
-          required: ["reason", "delay"],
-        },
+        FOLLOW_UP_SCHEDULE_INPUT_SCHEMA,
         () => ({
           followUpId: "mock-followup",
           scheduledFor: "2026-06-04T00:00:00.000Z",
@@ -363,25 +260,26 @@ export function createMockTools(
     },
   };
 
+  // Mirrors the real `delegate` tool (core skill-runtime/tools/delegate.ts) as
+  // wired for Alex (apps/api bootstrap/delegation-targets.ts CREATIVE_CONCEPT_TARGET):
+  // the single allowlisted target is the Alex -> Mira `creative_concept` handoff,
+  // effectCategory "propose" (the child carries the real governance weight at
+  // PlatformIngress). The input schema is the shared CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA
+  // constant the live target also uses. The description mirrors the live target's
+  // (it is documentation, not the asserted contract). The mock only records the call.
   const delegate: SkillTool = {
     id: "delegate",
     operations: {
-      "task.delegate": recordingOp(
+      creative_concept: recordingOp(
         "delegate",
-        "task.delegate",
-        "Delegate a task to another agent (e.g. Mira for creative). Use for governed agent-to-agent handoffs.",
-        "write",
-        {
-          type: "object",
-          properties: {
-            targetAgent: { type: "string", description: "Target agent slug" },
-            taskDescription: { type: "string", description: "What to do" },
-            context: { type: "string", description: "Relevant context to pass" },
-          },
-          required: ["targetAgent", "taskDescription"],
-        },
-        () => ({ delegationId: "del_mock", status: "pending" }),
-        false,
+        "creative_concept",
+        "Hand a creative concept to Mira (the creative agent) as a DRAFT for the team to review. " +
+          "Use ONLY for a clearly interested, qualified lead who would benefit from a tailored offer/creative. " +
+          "This creates an internal draft on the team's board - it does NOT send anything to the customer and " +
+          "does NOT replace escalate. Provide the treatment/offer the lead wants and who it targets.",
+        "propose",
+        CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA,
+        () => ({ childWorkUnitId: "cwu_mock", outcome: "queued" }),
       ),
     },
   };
@@ -399,16 +297,7 @@ export function createMockTools(
         "deposit.issue",
         "Issue a deposit payment link for a confirmed booking. Idempotent; returns the same link on replay.",
         "read",
-        {
-          type: "object",
-          properties: {
-            bookingId: {
-              type: "string",
-              description: "The confirmed booking to attach a deposit to",
-            },
-          },
-          required: ["bookingId"],
-        },
+        DEPOSIT_LINK_ISSUE_INPUT_SCHEMA,
         () => ({
           url: "https://pay.mock/deposit/mock-booking",
           externalReference: "mock-deposit-ref",
