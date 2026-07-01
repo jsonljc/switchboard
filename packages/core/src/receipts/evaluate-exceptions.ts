@@ -8,10 +8,13 @@ import type { AttributionConfidence, ExceptionEntry, PdpaJurisdiction } from "@s
 export interface ExceptionContext {
   attributionConfidence: AttributionConfidence;
   /**
-   * Contact.pdpaJurisdiction. Null/undefined means PDPA is not_applicable (matching the booking
-   * gate's deriveConsentStatus and the completeness report scoping bookable to pdpaJurisdiction !=
-   * null), so no consent is required and missing_consent is NOT raised. Only a contact IN a PDPA
-   * jurisdiction can have an actionable missing_consent.
+   * Contact.pdpaJurisdiction. Null/undefined scopes this contact OUT of PDPA exceptions here: no
+   * consent is required and missing_consent is NOT raised, matching the completeness report's
+   * bookable denominator (scoped to pdpaJurisdiction != null) so the worklist and the rate math
+   * stay in sync. This jurisdiction-first scoping intentionally DIFFERS from deriveConsentStatus,
+   * which returns "revoked" for a revoked contact regardless of jurisdiction; the receipts worklist
+   * deliberately does not act on a null-jurisdiction contact. Only a contact IN a PDPA jurisdiction
+   * can have an actionable missing_consent.
    */
   pdpaJurisdiction?: PdpaJurisdiction | null;
   consentGrantedAt?: Date | null;
