@@ -230,3 +230,55 @@ describe("POST /api/actions/:id/undo — non-completed undo surfaces a handle", 
     await app.close();
   });
 });
+
+describe("POST /api/actions/:id/undo — approver-role floor (#9b)", () => {
+  // Undo unwinds an already-approved, already-executed action, an equally
+  // privileged dispatch as /execute. It must enforce the SAME approver-role floor
+  // (A16) that /execute does; a requester-only principal must never be able to
+  // reverse an executed action, and the floor must run before requestUndo.
+  it("403s a requester-only principal and never reaches requestUndo", async () => {
+    const { app, requestUndo } = await buildApp({
+      authDisabled: false,
+      authOrgId: "org_a",
+      principalId: "req_1",
+      roles: ["requester"],
+      envelope: envOwnedBy("org_a"),
+    });
+    const res = await app.inject({ method: "POST", url: "/api/actions/env_1/undo" });
+    expect(res.statusCode).toBe(403);
+    expect(requestUndo).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("403s when auth is enabled but no principal is bound", async () => {
+    const { app, requestUndo } = await buildApp({
+      authDisabled: false,
+      authOrgId: "org_a",
+      principalId: undefined,
+      envelope: envOwnedBy("org_a"),
+    });
+    const res = await app.inject({ method: "POST", url: "/api/actions/env_1/undo" });
+    expect(res.statusCode).toBe(403);
+    expect(requestUndo).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("lets an operator-role principal past the role floor and undo", async () => {
+    const requestUndo = vi.fn().mockResolvedValue({
+      undoSubmitted: true,
+      undoWorkUnitId: "wu_undo_1",
+    });
+    const { app } = await buildApp({
+      authDisabled: false,
+      authOrgId: "org_a",
+      principalId: "op_1",
+      roles: ["operator"],
+      envelope: envOwnedBy("org_a"),
+      requestUndo,
+    });
+    const res = await app.inject({ method: "POST", url: "/api/actions/env_1/undo" });
+    expect(res.statusCode).toBe(201);
+    expect(requestUndo).toHaveBeenCalled();
+    await app.close();
+  });
+});
