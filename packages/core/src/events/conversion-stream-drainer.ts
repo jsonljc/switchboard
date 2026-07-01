@@ -45,8 +45,9 @@ const DEFAULT_READ_ERROR_BACKOFF_MS = 1000;
  * `RedisStreamConversionBus.emit` only XADDs to the stream (PRODUCE); without a
  * consumer the registered handlers (conversion record write, Meta CAPI delivery)
  * never run, so with `REDIS_URL` set those deliveries go dark. This drain loop is
- * that consumer: `ensureConsumerGroup` at start, then repeatedly `readGroup` →
- * `dispatch` each message to the registered handler(s) → `ack`. The structural
+ * that consumer: `ensureConsumerGroup` (retried until success inside the loop, so
+ * a boot-time Redis outage self-heals), then repeatedly `readGroup` → `dispatch`
+ * each message to the registered handler(s) → `ack`. The structural
  * fix this lands is closing that dark-delivery gap: the stream is now consumed.
  *
  * Delivery semantics, stated precisely (this is narrower than blanket
@@ -88,18 +89,22 @@ export class ConversionStreamDrainer {
   }
 
   /**
-   * Ensure the consumer group exists, then launch the background drain loop.
-   * Non-blocking: resolves once the group is ensured and the loop is scheduled.
+   * Launch the background drain loop. Non-blocking and — deliberately — CANNOT
+   * reject: it only flips `running` and schedules `runLoop`, which now owns
+   * ensuring the consumer group (retried until success, see {@link runLoop}).
+   * Making start() reject-free is the point: the bootstrap invokes it
+   * fire-and-forget (`void start().catch(log)`), so if ensureConsumerGroup were
+   * awaited here and Redis were down at boot, start() would reject, the loop would
+   * never run, and it would never retry — conversions + Meta CAPI go dark for the
+   * process lifetime (asymmetric with OutboxPublisher's self-healing interval).
    * Idempotent — a second call while already running is a no-op.
    */
   async start(): Promise<void> {
     if (this.running) return;
-    // Set intent BEFORE the await so a stop() that interleaves during
-    // ensureConsumerGroup is observed below and we never start an orphan loop
-    // that stop() couldn't await.
     this.running = true;
-    await this.bus.ensureConsumerGroup(this.groupName);
-    if (!this.running) return; // stop() was called while ensuring the group
+    // Schedule the loop synchronously (no await): runLoop() ensures the group as
+    // its first, retrying phase, so stop() — which awaits `this.loop` — also awaits
+    // any in-flight ensure, and no orphan loop can outlive a stop() during startup.
     this.loop = this.runLoop();
   }
 
@@ -113,6 +118,24 @@ export class ConversionStreamDrainer {
   }
 
   private async runLoop(): Promise<void> {
+    // Ensure the consumer group exists, retrying until success while `running`.
+    // This used to be a single awaited call in start(); if Redis was down at boot
+    // it rejected, the bootstrap swallowed that (fire-and-forget), and the loop
+    // never ran or retried — dark conversion / Meta CAPI delivery for the process
+    // lifetime. Retrying here (same backoff as the read-error path below; a
+    // BUSYGROUP on any retry is already swallowed as success by the bus) self-heals
+    // a boot-time outage. Living inside `this.loop` also means stop() awaits an
+    // in-flight ensure. `break` on success falls through to the read loop.
+    while (this.running) {
+      try {
+        await this.bus.ensureConsumerGroup(this.groupName);
+        break;
+      } catch (err) {
+        console.error("[ConversionStreamDrainer] ensureConsumerGroup failed; backing off:", err);
+        await new Promise((resolve) => setTimeout(resolve, this.readErrorBackoffMs));
+      }
+    }
+
     while (this.running) {
       let messages: Array<{ id: string; event: ConversionEvent }>;
       try {

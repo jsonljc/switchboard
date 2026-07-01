@@ -282,4 +282,102 @@ describe("ConversionStreamDrainer", () => {
     // The loop must never have started: no reads issued.
     expect(redis.xreadgroup).not.toHaveBeenCalled();
   });
+
+  it("self-heals a boot-time ensureConsumerGroup outage: retries until ensured, then drains", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const event = makeEvent({ eventId: "evt_boot_retry" });
+
+    // Redis is DOWN at boot: ensureConsumerGroup (xgroup) REJECTS the first two
+    // calls, then SUCCEEDS once Redis recovers. On the pre-fix code start() awaits
+    // this exactly ONCE and rejects; the bootstrap calls start() fire-and-forget
+    // (`void start().catch(log)`), so that rejection is swallowed, the drain loop
+    // never runs, and it never retries -> queued conversions + Meta CAPI go dark
+    // for the whole process lifetime. The fix retries ensure INSIDE the loop.
+    redis.xgroup
+      .mockRejectedValueOnce(new Error("ECONNREFUSED"))
+      .mockRejectedValueOnce(new Error("ECONNREFUSED"))
+      .mockResolvedValue("OK");
+
+    // Two subscribers (mirrors the record-write + Meta CAPI handlers in the
+    // bootstrap): BOTH must fire when the message is finally drained.
+    const handlerA = vi.fn().mockResolvedValue(undefined);
+    const handlerB = vi.fn().mockResolvedValue(undefined);
+    bus.subscribe("*", handlerA);
+    bus.subscribe("*", handlerB);
+
+    // One conversion is waiting on the stream, then the stream is empty.
+    redis.xreadgroup
+      .mockResolvedValueOnce(streamReply("77-0", event))
+      .mockImplementation(blockEmpty);
+
+    drainer = new ConversionStreamDrainer(bus, {
+      groupName: GROUP,
+      consumerName: "consumer-test",
+      count: 8,
+      blockMs: 1,
+      readErrorBackoffMs: 10, // short ensure-retry backoff for the test
+    });
+    // Exactly how the bootstrap invokes it: fire-and-forget, rejection swallowed.
+    // Pre-fix, start() rejects here and the loop never runs.
+    await drainer.start().catch(() => {});
+
+    // The money-path symptom under test: the queued conversion is dispatched to
+    // BOTH handlers and acked. Pre-fix the loop never runs, so neither handler is
+    // ever called (RED: "expected handlerA to have been called ... Number of
+    // calls: 0"); post-fix the drainer self-heals past the boot outage.
+    await vi.waitFor(() => {
+      expect(handlerA).toHaveBeenCalledWith(expect.objectContaining({ eventId: "evt_boot_retry" }));
+      expect(handlerB).toHaveBeenCalledWith(expect.objectContaining({ eventId: "evt_boot_retry" }));
+    });
+    await vi.waitFor(() => {
+      expect(redis.xack).toHaveBeenCalledWith(STREAM_KEY, GROUP, "77-0");
+    });
+
+    // Proof it actually retried past the outage rather than ensuring once: the
+    // group was ensured only after the two initial failures (>= 3 xgroup calls).
+    expect(redis.xgroup.mock.calls.length).toBeGreaterThanOrEqual(3);
+
+    errSpy.mockRestore();
+  });
+
+  it("stop() during the ensure-retry phase resolves cleanly (no drain, no unhandled rejection)", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Redis stays DOWN: ensureConsumerGroup rejects on every attempt, so the loop
+    // parks in the retry-until-success ensure phase and never reaches readGroup.
+    redis.xgroup.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    const handler = vi.fn().mockResolvedValue(undefined);
+    bus.subscribe("*", handler);
+
+    drainer = new ConversionStreamDrainer(bus, {
+      groupName: GROUP,
+      consumerName: "consumer-test",
+      count: 8,
+      blockMs: 1,
+      readErrorBackoffMs: 15,
+    });
+    await drainer.start().catch(() => {});
+
+    // Wait until the loop has attempted (and failed) the ensure at least once, so
+    // stop() genuinely interrupts an in-flight ensure-retry phase.
+    await vi.waitFor(() => {
+      expect(redis.xgroup.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    // stop() flips running=false and awaits the loop parked in the ensure-retry.
+    // It must resolve cleanly (the rejection is caught inside the loop, so there
+    // is no unhandled rejection to surface).
+    await expect(drainer.stop()).resolves.toBeUndefined();
+
+    // Never advanced past ensure: nothing was read and nothing was dispatched.
+    expect(redis.xreadgroup).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+
+    // The loop is dead after stop() resolves: no further ensure attempts.
+    const callsAtStop = redis.xgroup.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 40));
+    expect(redis.xgroup.mock.calls.length).toBe(callsAtStop);
+
+    errSpy.mockRestore();
+  });
 });
