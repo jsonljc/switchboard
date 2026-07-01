@@ -19,11 +19,21 @@ function makeEvent(overrides?: Partial<ConversionEvent>): ConversionEvent {
 
 const logger = { info: vi.fn(), warn: vi.fn() };
 
+// Simulate XREADGROUP BLOCK on an empty stream: resolve null over a macrotask so
+// the drain loop yields instead of hot-spinning (matches production BLOCK).
+function blockEmpty(): Promise<null> {
+  return new Promise((resolve) => setTimeout(() => resolve(null), 5));
+}
+
+function streamReply(id: string, payload: Record<string, unknown>) {
+  return [["switchboard:conversions", [[id, ["data", JSON.stringify(payload)]]]]];
+}
+
 describe("bootstrapConversionBus", () => {
   let handle: ConversionBusHandle;
 
-  afterEach(() => {
-    handle?.stop();
+  afterEach(async () => {
+    await handle?.stop();
   });
 
   it("uses InMemoryConversionBus when redis is null", async () => {
@@ -110,6 +120,86 @@ describe("bootstrapConversionBus", () => {
   it("warns when prisma is null", async () => {
     handle = await bootstrapConversionBus({ redis: null, prisma: null, logger });
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("no Prisma client"));
+  });
+
+  it("redis-backed start() drains a queued message to the subscriber and ACKs", async () => {
+    // Without the drainer this message would sit in the stream forever: emit()
+    // only XADDs, so the record subscriber never fires (dark delivery).
+    delete process.env["META_PIXEL_ID"];
+    delete process.env["META_CAPI_ACCESS_TOKEN"];
+
+    const recordFn = vi.fn().mockResolvedValue(undefined);
+    const xack = vi.fn().mockResolvedValue(1);
+    const payload = {
+      eventId: "evt_stream_1",
+      type: "booked",
+      contactId: "ct_1",
+      organizationId: "org_1",
+      value: 250,
+      occurredAt: "2026-04-18T12:00:00Z",
+      source: "calendar-book",
+      metadata: { bookingId: "bk_1" },
+    };
+
+    const fakeRedis = {
+      xadd: vi.fn().mockResolvedValue("1-0"),
+      xgroup: vi.fn().mockResolvedValue("OK"),
+      xreadgroup: vi
+        .fn()
+        .mockResolvedValueOnce(streamReply("9-0", payload))
+        .mockImplementation(blockEmpty),
+      xack,
+    };
+
+    vi.doMock("@switchboard/db", () => ({
+      PrismaOutboxStore: class {
+        fetchPending = vi.fn().mockResolvedValue([]);
+        markPublished = vi.fn();
+        recordFailure = vi.fn();
+      },
+      PrismaConversionRecordStore: class {
+        record = recordFn;
+      },
+    }));
+
+    handle = await bootstrapConversionBus({
+      redis: fakeRedis as never,
+      prisma: {} as never,
+      logger,
+    });
+
+    handle.start();
+
+    await vi.waitFor(() => {
+      expect(recordFn).toHaveBeenCalledWith(expect.objectContaining({ eventId: "evt_stream_1" }));
+    });
+    await vi.waitFor(() => {
+      expect(xack).toHaveBeenCalledWith("switchboard:conversions", expect.any(String), "9-0");
+    });
+
+    await handle.stop();
+    vi.doUnmock("@switchboard/db");
+  });
+
+  it("does NOT wire a drainer when prisma is null (no subscribers to drain to)", async () => {
+    const fakeRedis = {
+      xadd: vi.fn().mockResolvedValue("1-0"),
+      xgroup: vi.fn().mockResolvedValue("OK"),
+      xreadgroup: vi.fn().mockImplementation(blockEmpty),
+      xack: vi.fn().mockResolvedValue(1),
+    };
+
+    handle = await bootstrapConversionBus({
+      redis: fakeRedis as never,
+      prisma: null,
+      logger,
+    });
+    handle.start();
+    await new Promise((r) => setTimeout(r, 30));
+
+    // No consumer group ensured, no reads — the drainer was never created.
+    expect(fakeRedis.xgroup).not.toHaveBeenCalled();
+    expect(fakeRedis.xreadgroup).not.toHaveBeenCalled();
   });
 
   it("OutboxPublisher relays outbox events through bus to subscriber", async () => {
