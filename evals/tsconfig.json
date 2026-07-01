@@ -13,6 +13,7 @@
     "adversarial-injection/**/*.ts",
     "claim-boundary/**/*.ts",
     "mira-self-brief/**/*.ts",
-    "mira-injection/**/*.ts"
+    "mira-injection/**/*.ts",
+    "resolver/**/*.ts"
   ]
 }
