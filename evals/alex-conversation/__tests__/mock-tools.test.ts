@@ -1,6 +1,195 @@
 import { describe, it, expect } from "vitest";
 import { createMockTools } from "../mock-tools.js";
 import { ALEX_ALLOWED_TOOL_IDS } from "../grade.js";
+import {
+  CRM_QUERY_CONTACT_GET_INPUT_SCHEMA,
+  CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA,
+  CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA,
+  CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA,
+  CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA,
+  CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA,
+  CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA,
+  CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA,
+  ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA,
+  FOLLOW_UP_SCHEDULE_INPUT_SCHEMA,
+  DEPOSIT_LINK_ISSUE_INPUT_SCHEMA,
+} from "@switchboard/core/skill-runtime";
+import { CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA } from "@switchboard/schemas";
+
+/**
+ * EV-5 / AGENT-5 — tool input-schema parity. The alex-conversation eval is the
+ * highest-coverage agent eval; it must present Alex the EXACT tool input
+ * contracts production registers, or it silently tests against a fictional
+ * contract (the "mock-tool-blind" gap). Each real tool exports its operation
+ * input schema as a constant (the live tool references it), and the mock below
+ * imports + reuses those SAME constants — so this table asserts identity (`toBe`),
+ * which can never pass against a drifted literal. The table is the canonical
+ * Alex tool surface: { toolId, operation } -> { real schema const, effect, idempotent }.
+ */
+const PRODUCTION_TOOL_PARITY: ReadonlyArray<{
+  toolId: string;
+  operation: string;
+  schema: Record<string, unknown>;
+  effectCategory: string;
+  idempotent: boolean;
+}> = [
+  {
+    toolId: "crm-query",
+    operation: "contact.get",
+    schema: CRM_QUERY_CONTACT_GET_INPUT_SCHEMA,
+    effectCategory: "read",
+    idempotent: true,
+  },
+  {
+    toolId: "crm-query",
+    operation: "activity.list",
+    schema: CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA,
+    effectCategory: "read",
+    idempotent: true,
+  },
+  {
+    toolId: "crm-write",
+    operation: "stage.update",
+    schema: CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA,
+    effectCategory: "write",
+    idempotent: true,
+  },
+  {
+    toolId: "crm-write",
+    operation: "activity.log",
+    schema: CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA,
+    effectCategory: "write",
+    idempotent: false,
+  },
+  {
+    toolId: "calendar-book",
+    operation: "slots.query",
+    schema: CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA,
+    effectCategory: "read",
+    idempotent: true,
+  },
+  {
+    toolId: "calendar-book",
+    operation: "booking.create",
+    schema: CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA,
+    effectCategory: "external_mutation",
+    idempotent: true,
+  },
+  {
+    toolId: "calendar-book",
+    operation: "booking.reschedule",
+    schema: CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA,
+    effectCategory: "external_mutation",
+    idempotent: false,
+  },
+  {
+    toolId: "calendar-book",
+    operation: "booking.cancel",
+    schema: CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA,
+    effectCategory: "external_mutation",
+    idempotent: false,
+  },
+  {
+    toolId: "escalate",
+    operation: "handoff.create",
+    schema: ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA,
+    effectCategory: "write",
+    idempotent: false,
+  },
+  {
+    toolId: "follow-up",
+    operation: "followup.schedule",
+    schema: FOLLOW_UP_SCHEDULE_INPUT_SCHEMA,
+    effectCategory: "write",
+    idempotent: true,
+  },
+  {
+    toolId: "delegate",
+    operation: "creative_concept",
+    schema: CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA,
+    effectCategory: "propose",
+    idempotent: true,
+  },
+  {
+    toolId: "deposit-link",
+    operation: "deposit.issue",
+    schema: DEPOSIT_LINK_ISSUE_INPUT_SCHEMA,
+    effectCategory: "read",
+    idempotent: true,
+  },
+];
+
+describe("mock-tools — tool input-schema parity with production (mock-tool-blind gap, EV-5/AGENT-5)", () => {
+  const { tools } = createMockTools();
+
+  it.each(PRODUCTION_TOOL_PARITY)(
+    "$toolId.$operation presents the EXACT production input schema (by import) + effect/idempotent",
+    ({ toolId, operation, schema, effectCategory, idempotent }) => {
+      // Non-vacuous guard: the imported production constant must be a real schema
+      // object, so `toBe(schema)` below can never pass vacuously (e.g. were the
+      // export ever undefined at runtime, undefined === undefined would slip by).
+      expect(schema, `imported schema for ${toolId}.${operation} is not an object`).toMatchObject({
+        type: "object",
+      });
+      const tool = tools.get(toolId);
+      expect(tool, `mock is missing tool ${toolId}`).toBeDefined();
+      const op = tool!.operations[operation];
+      expect(op, `mock ${toolId} is missing operation ${operation}`).toBeDefined();
+      // Identity (toBe), NOT deepEqual: the mock must REFERENCE the same exported
+      // schema constant the real tool uses, so the eval can never silently drift
+      // from the production tool contract. A re-inlined literal fails this.
+      expect(op!.inputSchema).toBe(schema);
+      expect(op!.effectCategory).toBe(effectCategory);
+      expect(op!.idempotent ?? false).toBe(idempotent);
+    },
+  );
+
+  it("the mock tool-id set equals Alex's real registered toolset (ALEX_ALLOWED_TOOL_IDS)", () => {
+    expect([...tools.keys()].sort()).toEqual([...ALEX_ALLOWED_TOOL_IDS].sort());
+  });
+
+  it("the mock exposes exactly the production operations per tool (no invented/missing ops)", () => {
+    const opsByTool = new Map<string, string[]>();
+    for (const { toolId, operation } of PRODUCTION_TOOL_PARITY) {
+      opsByTool.set(toolId, [...(opsByTool.get(toolId) ?? []), operation]);
+    }
+    for (const [toolId, ops] of opsByTool) {
+      expect(Object.keys(tools.get(toolId)!.operations).sort()).toEqual([...ops].sort());
+    }
+  });
+
+  // Targeted drift pins — the specific contract regressions this slice closes.
+  // These assert on the EXPORTED production constants (the source of truth), so
+  // they pin the real tool contract, not just the mock.
+  it("booking.create accepts NO contactId / attendee fields (contactId is ctx-injected, AI-1)", () => {
+    const props = CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA["properties"] as Record<
+      string,
+      unknown
+    >;
+    const required = CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA["required"] as string[];
+    expect(Object.keys(props).sort()).toEqual(["calendarId", "service", "slotEnd", "slotStart"]);
+    expect(required).not.toContain("contactId");
+    for (const banned of ["contactId", "attendeeName", "attendeeEmail"]) {
+      expect(props).not.toHaveProperty(banned);
+    }
+  });
+
+  it("crm-query operations accept NO trust-bound ids (orgId/contactId/deploymentId are ctx-injected)", () => {
+    expect(CRM_QUERY_CONTACT_GET_INPUT_SCHEMA["properties"]).toEqual({});
+    expect(CRM_QUERY_CONTACT_GET_INPUT_SCHEMA["required"]).toEqual([]);
+    expect(Object.keys(CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA["properties"] as object)).toEqual([
+      "limit",
+    ]);
+    expect(CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA["required"]).toEqual([]);
+  });
+
+  it("delegate exposes the real creative_concept operation, not a fictional task.delegate", () => {
+    const delegate = tools.get("delegate")!;
+    expect(Object.keys(delegate.operations)).toEqual(["creative_concept"]);
+    expect(delegate.operations["creative_concept"]!.effectCategory).toBe("propose");
+    expect(delegate.operations["task.delegate"]).toBeUndefined();
+  });
+});
 
 // A3 (#785/#786) added a `follow-up` tool to Alex's SKILL.md (frontmatter
 // `tools:` + a "Scheduling a follow-up" section). The eval harness must mirror
@@ -94,7 +283,6 @@ describe("mock-tools — booking lifecycle (reschedule / cancel / pending / slot
   it("default booking.create books successfully (status:success, confirmed)", async () => {
     const { tools, calls } = createMockTools();
     const result = await tools.get("calendar-book")!.operations["booking.create"]!.execute({
-      contactId: "c",
       service: "filler",
       slotStart: "x",
       slotEnd: "y",
@@ -109,7 +297,6 @@ describe("mock-tools — booking lifecycle (reschedule / cancel / pending / slot
   it("bookingBehavior:'pending' makes booking.create park for approval (status:pending_approval)", async () => {
     const { tools, calls } = createMockTools({ bookingBehavior: "pending" });
     const result = await tools.get("calendar-book")!.operations["booking.create"]!.execute({
-      contactId: "c",
       service: "filler",
       slotStart: "x",
       slotEnd: "y",
@@ -124,7 +311,6 @@ describe("mock-tools — booking lifecycle (reschedule / cancel / pending / slot
   it("bookingBehavior:'slot_taken' makes booking.create fail with retryable SLOT_TAKEN", async () => {
     const { tools, calls } = createMockTools({ bookingBehavior: "slot_taken" });
     const result = await tools.get("calendar-book")!.operations["booking.create"]!.execute({
-      contactId: "c",
       service: "filler",
       slotStart: "x",
       slotEnd: "y",

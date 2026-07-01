@@ -10,6 +10,30 @@ interface ActivityStoreSubset {
   listByDeployment(orgId: string, deploymentId: string, opts: { limit: number }): Promise<unknown>;
 }
 
+/**
+ * Exported per-operation input-schema constants — the single source of truth for
+ * each operation's LLM-facing input contract. The factory references these by
+ * value (behaviour-preserving); the alex-conversation eval imports them so its
+ * mock tools present the EXACT production contract, catching tool-contract drift
+ * (EV-5/AGENT-5 "mock-tool-blind" gap). `contact.get` accepts NO input — the
+ * contactId is sourced from the trusted SkillRequestContext, never from LLM tool
+ * input (AI-1). `activity.list` accepts only an optional `limit`; orgId +
+ * deploymentId are likewise ctx-injected, never LLM input.
+ */
+export const CRM_QUERY_CONTACT_GET_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
+  type: "object",
+  properties: {},
+  required: [],
+});
+
+export const CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
+  type: "object",
+  properties: {
+    limit: { type: "number", description: "Max results (default 20)" },
+  },
+  required: [],
+});
+
 /** Factory-with-context: trust-bound ids (orgId, contactId, deploymentId) are
  * closed in from the SkillRequestContext, never accepted from LLM tool input. */
 export function createCrmQueryToolFactory(
@@ -23,7 +47,7 @@ export function createCrmQueryToolFactory(
         description: "Get the current contact. Returns name, stage, source.",
         effectCategory: "read" as const,
         idempotent: true,
-        inputSchema: { type: "object", properties: {}, required: [] },
+        inputSchema: CRM_QUERY_CONTACT_GET_INPUT_SCHEMA,
         execute: async (_params: unknown) => {
           if (!ctx.contactId) {
             return fail("MISSING_CONTACT", "No contact is associated with this conversation.", {
@@ -47,13 +71,7 @@ export function createCrmQueryToolFactory(
         description: "List recent activity for this deployment.",
         effectCategory: "read" as const,
         idempotent: true,
-        inputSchema: {
-          type: "object",
-          properties: {
-            limit: { type: "number", description: "Max results (default 20)" },
-          },
-          required: [],
-        },
+        inputSchema: CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA,
         execute: async (params: unknown) => {
           const { limit } = params as { limit?: number };
           // Trust-bound: read THIS deployment's activity only. deploymentId is

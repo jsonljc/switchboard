@@ -1,5 +1,8 @@
 import type { DelegationTarget } from "@switchboard/core/skill-runtime";
-import { CreativeConceptDraftInput } from "@switchboard/schemas";
+import {
+  CreativeConceptDraftInput,
+  CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA,
+} from "@switchboard/schemas";
 
 /**
  * Alex -> Mira: draft a creative concept for an interested, qualified lead.
@@ -20,21 +23,7 @@ export const CREATIVE_CONCEPT_TARGET: DelegationTarget = {
     "Use ONLY for a clearly interested, qualified lead who would benefit from a tailored offer/creative. " +
     "This creates an internal draft on the team's board - it does NOT send anything to the customer and " +
     "does NOT replace escalate. Provide the treatment/offer the lead wants and who it targets.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      productDescription: {
-        type: "string",
-        description:
-          "Treatment/offer the lead is interested in, e.g. 'Botox for first-time clients'",
-      },
-      targetAudience: {
-        type: "string",
-        description: "Who the concept targets, e.g. 'women 30-45, anti-aging curious'",
-      },
-    },
-    required: ["productDescription", "targetAudience"],
-  },
+  inputSchema: CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA,
   mapInput: (input: unknown) => {
     const i = CreativeConceptDraftInput.parse(input);
     return {

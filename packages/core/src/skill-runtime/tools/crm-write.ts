@@ -24,6 +24,38 @@ interface ActivityStoreSubset {
 export type CrmWriteToolFactory = (ctx: SkillRequestContext) => SkillTool;
 
 /**
+ * Exported per-operation input-schema constants — the single source of truth for
+ * each operation's LLM-facing input contract. The factory references these by
+ * value (behaviour-preserving); the alex-conversation eval imports them so its
+ * mock tools present the EXACT production contract (EV-5/AGENT-5 mock-tool-blind
+ * gap). orgId + deploymentId are ctx-injected, never LLM input (AI-1), so they
+ * never appear here.
+ */
+export const CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
+  type: "object",
+  properties: {
+    opportunityId: { type: "string", description: "Opportunity UUID" },
+    stage: {
+      type: "string",
+      enum: ["interested", "qualified", "quoted", "booked", "showed", "won", "lost", "nurturing"],
+    },
+  },
+  required: ["opportunityId", "stage"],
+});
+
+export const CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
+  type: "object",
+  properties: {
+    eventType: {
+      type: "string",
+      description: "e.g. opt-out, qualification, handoff",
+    },
+    description: { type: "string" },
+  },
+  required: ["eventType", "description"],
+});
+
+/**
  * Factory-with-context pattern (matches `escalate.ts`). `orgId` and
  * `deploymentId` are sourced from the trusted `SkillRequestContext` injected
  * at execution time, NEVER from LLM-controlled tool input. This closes the
@@ -48,26 +80,7 @@ export function createCrmWriteToolFactory(
         // class as activity.log). guided/autonomous already auto-approve "write".
         governanceOverride: { supervised: "auto-approve" as const },
         idempotent: true,
-        inputSchema: {
-          type: "object",
-          properties: {
-            opportunityId: { type: "string", description: "Opportunity UUID" },
-            stage: {
-              type: "string",
-              enum: [
-                "interested",
-                "qualified",
-                "quoted",
-                "booked",
-                "showed",
-                "won",
-                "lost",
-                "nurturing",
-              ],
-            },
-          },
-          required: ["opportunityId", "stage"],
-        },
+        inputSchema: CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA,
         execute: async (params: unknown) => {
           const { opportunityId, stage } = params as {
             opportunityId: string;
@@ -115,17 +128,7 @@ export function createCrmWriteToolFactory(
         // autonomous already auto-approve "write", so only supervised needs it.
         governanceOverride: { supervised: "auto-approve" as const },
         idempotent: false,
-        inputSchema: {
-          type: "object",
-          properties: {
-            eventType: {
-              type: "string",
-              description: "e.g. opt-out, qualification, handoff",
-            },
-            description: { type: "string" },
-          },
-          required: ["eventType", "description"],
-        },
+        inputSchema: CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA,
         execute: async (params: unknown) => {
           const input = params as {
             eventType: string;

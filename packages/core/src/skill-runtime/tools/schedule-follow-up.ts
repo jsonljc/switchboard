@@ -26,6 +26,31 @@ interface ScheduleFollowUpInput {
 export type ScheduleFollowUpToolFactory = (ctx: SkillRequestContext) => SkillTool;
 
 /**
+ * Exported input-schema constant — the single source of truth for the
+ * followup.schedule input contract. The factory references it by value
+ * (behaviour-preserving); the alex-conversation eval imports it so its mock tool
+ * presents the EXACT production contract (EV-5/AGENT-5 mock-tool-blind gap).
+ */
+export const FOLLOW_UP_SCHEDULE_INPUT_SCHEMA: Record<string, unknown> = Object.freeze({
+  type: "object",
+  properties: {
+    reason: {
+      type: "string",
+      enum: ["hesitation", "price_concern", "timing_not_now", "awaiting_info", "went_quiet"],
+    },
+    delay: {
+      type: "string",
+      enum: ["in_1_day", "in_3_days", "in_1_week"],
+    },
+    note: {
+      type: "string",
+      description: "Optional short context for the team (not sent to the customer).",
+    },
+  },
+  required: ["reason", "delay"],
+});
+
+/**
  * Lets Alex schedule a single re-engagement follow-up for the CURRENT contact.
  * Trust-bound ids (orgId, contactId, sessionId, deploymentId, workUnitId) come
  * from the injected SkillRequestContext, NEVER from LLM input (AI-1). The tool
@@ -58,30 +83,7 @@ export function createScheduleFollowUpToolFactory(
         // without bypassing any send-time guard. guided/autonomous already auto.
         governanceOverride: { supervised: "auto-approve" as const },
         idempotent: true,
-        inputSchema: {
-          type: "object",
-          properties: {
-            reason: {
-              type: "string",
-              enum: [
-                "hesitation",
-                "price_concern",
-                "timing_not_now",
-                "awaiting_info",
-                "went_quiet",
-              ],
-            },
-            delay: {
-              type: "string",
-              enum: ["in_1_day", "in_3_days", "in_1_week"],
-            },
-            note: {
-              type: "string",
-              description: "Optional short context for the team (not sent to the customer).",
-            },
-          },
-          required: ["reason", "delay"],
-        },
+        inputSchema: FOLLOW_UP_SCHEDULE_INPUT_SCHEMA,
         execute: async (params: unknown): Promise<ToolResult> => {
           const contactId = ctx.contactId;
           if (!contactId) {
