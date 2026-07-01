@@ -825,6 +825,21 @@ describe("createCalendarBookToolFactory", () => {
       });
     });
 
+    it("stamps the originating agent (ctx.deploymentId) on the booked conversion outbox payload (ROI breakdown-by-agent)", async () => {
+      const { t, outboxCreate } = buildToolWithValueCapture({
+        getServicesForOrg: async () => PRICED_SERVICES,
+        existingOpp: { id: "opp_1" },
+      });
+      const result = await t.operations["booking.create"]!.execute(input);
+      expect(result.status).toBe("success");
+      const ob = outboxCreate.mock.calls[0]![0] as {
+        data: { payload: { agentDeploymentId?: string } };
+      };
+      // TRUSTED_CTX.deploymentId is "dep_1"; the booked record must carry it so
+      // funnelByAgent groups this conversion under the originating deployment.
+      expect(ob.data.payload.agentDeploymentId).toBe("dep_1");
+    });
+
     it("new opp: stamps the resolved playbook value on the booked transition + conversion", async () => {
       const { t, outboxCreate, updateManySpy } = buildToolWithValueCapture({
         getServicesForOrg: async () => PRICED_SERVICES,

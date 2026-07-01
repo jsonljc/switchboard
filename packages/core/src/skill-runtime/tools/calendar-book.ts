@@ -368,6 +368,10 @@ export function createCalendarBookToolFactory(deps: CalendarBookToolDeps): Calen
                     // below in metadata.slotStart for any consumer that needs it.
                     occurredAt: new Date().toISOString(),
                     source: "calendar-book",
+                    // Stamp the originating agent (trust-bound ctx.deploymentId, never
+                    // LLM-supplied) so the booked ConversionRecord is attributable and the
+                    // ROI breakdown-by-agent funnel (funnelByAgent) is non-empty.
+                    agentDeploymentId: ctx.deploymentId,
                     metadata: {
                       bookingId: booking.id,
                       opportunityId,
