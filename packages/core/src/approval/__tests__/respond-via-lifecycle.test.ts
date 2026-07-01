@@ -267,6 +267,31 @@ describe("respondToApproval lifecycle fork: unified dispatch chain", () => {
     expect(w.store.listDispatchRecords()[0]?.state).toBe("failed");
   });
 
+  it("payload-commit failure -> recovery_required + action.failed audit, never stranded in approved (P2-16)", async () => {
+    const w = await makeWorld({ withAuditLedger: true });
+    // The pre-dispatch payload write to the trace is REJECTED (integrity-locked
+    // trace). approveLifecycle has already moved the lifecycle to "approved"; the
+    // failure must NOT strand it there with no dispatch and no recovery. It must
+    // compensate to recovery_required, audit action.failed, and rethrow.
+    (w.workTraceStore.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      reason: "trace integrity locked",
+    });
+
+    await expect(
+      respondToApproval(w.deps, approveParams(w.revision.bindingHash), w.approval),
+    ).rejects.toThrow(/worktrace update rejected/i);
+
+    expect((await w.lifecycleService.getLifecycleById(w.lifecycle.id))?.status).toBe(
+      "recovery_required",
+    );
+    expect(w.executeApproved).not.toHaveBeenCalled();
+    expect(w.store.listDispatchRecords()).toHaveLength(0);
+    // Operator-visible failure record; the terminal action.approved is never reached.
+    expect(w.ledgerEvents.map((e) => e.eventType)).toContain("action.failed");
+    expect(w.ledgerEvents.map((e) => e.eventType)).not.toContain("action.approved");
+  });
+
   it("quorum 1-of-2 approve records a partial approval and does NOT touch the lifecycle", async () => {
     const w = await makeWorld({ quorum: { required: 2 } });
     const result = await respondToApproval(
