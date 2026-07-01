@@ -5,9 +5,9 @@ describe("buildRunReconciliation", () => {
   it("produces a real store-backed report (not the stub)", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     const run = buildRunReconciliation({
-      bookingStore: { countConfirmed: vi.fn().mockResolvedValue(10) },
+      bookingStore: { countConfirmedInWindow: vi.fn().mockResolvedValue(10) },
       conversionRecordStore: { countByType: vi.fn().mockResolvedValue(8) },
-      opportunityStore: { countByStage: vi.fn().mockResolvedValue(9) },
+      opportunityStore: { countCurrentlyAtStageUpdatedInWindow: vi.fn().mockResolvedValue(9) },
       reconciliationStore: { save },
     });
 

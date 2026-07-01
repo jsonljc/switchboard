@@ -97,9 +97,19 @@ export class PrismaBookingStore {
     return this.prisma.booking.findFirst({ where: { id: bookingId, organizationId } });
   }
 
-  async countConfirmed(orgId: string) {
+  // Confirmed bookings whose row was created within [from, to]. `createdAt` is the booked-at
+  // axis: a booking is created then confirmed inside one synchronous tool call, so createdAt
+  // tracks the booked-conversion's occurredAt (confirm-time) and is the indexed
+  // (@@index([organizationId, createdAt])) timestamp; there is no confirmedAt column. The
+  // interval is CLOSED to mirror the booked-conversion count (countByType, gte/lte) this is
+  // reconciled against (P2-20 like-for-like windowing).
+  async countConfirmedInWindow(orgId: string, from: Date, to: Date) {
     return this.prisma.booking.count({
-      where: { organizationId: orgId, status: "confirmed" },
+      where: {
+        organizationId: orgId,
+        status: "confirmed",
+        createdAt: { gte: from, lte: to },
+      },
     });
   }
 

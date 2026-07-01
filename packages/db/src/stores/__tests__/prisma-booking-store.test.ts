@@ -150,10 +150,21 @@ describe("PrismaBookingStore", () => {
     });
   });
 
-  it("counts confirmed bookings for an org", async () => {
-    (prisma.booking.count as ReturnType<typeof vi.fn>).mockResolvedValue(5);
-    const count = await store.countConfirmed("org_1");
-    expect(count).toBe(5);
+  it("counts confirmed bookings created within the window (createdAt, closed interval)", async () => {
+    (prisma.booking.count as ReturnType<typeof vi.fn>).mockResolvedValue(3);
+    const from = new Date("2026-06-19T00:00:00Z");
+    const to = new Date("2026-06-26T00:00:00Z");
+
+    const count = await store.countConfirmedInWindow("org_1", from, to);
+
+    expect(count).toBe(3);
+    expect(prisma.booking.count).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org_1",
+        status: "confirmed",
+        createdAt: { gte: from, lte: to },
+      },
+    });
   });
 
   it("finds a booking by slot fields", async () => {
