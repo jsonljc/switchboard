@@ -1,1 +1,6 @@
 docs/audits/*/_templates/**
+
+# Vertical-pack blocks are verbatim slices of a skill body, spliced back
+# byte-identically at load time (composePackBody). Prettier must not reformat
+# them or the golden prompt-diff harness reddens.
+skills/*/packs/**
