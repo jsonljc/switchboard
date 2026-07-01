@@ -4,6 +4,9 @@ import {
   scoreHandoff,
   scoreParkedApproval,
   decisionSortComparator,
+  dollarCapForVertical,
+  DOLLAR_CAP_BY_VERTICAL,
+  DEFAULT_DOLLAR_CAP,
 } from "../urgency.js";
 import type { Decision } from "../types.js";
 
@@ -83,6 +86,40 @@ describe("scoreRecommendation", () => {
       riskLevel: "low",
     });
     expect(score).toBe(0);
+  });
+});
+
+describe("per-vertical dollar cap", () => {
+  const rec = {
+    ...baseRec,
+    confidence: 0.9,
+    dollarsAtRisk: 1000,
+    riskLevel: "low" as const,
+  };
+
+  it("medspa is the seed cap of 2000", () => {
+    expect(DEFAULT_DOLLAR_CAP).toBe(2000);
+    expect(DOLLAR_CAP_BY_VERTICAL.medspa).toBe(2000);
+    expect(dollarCapForVertical("medspa")).toBe(2000);
+  });
+
+  it("an unseeded vertical falls back to the default cap", () => {
+    expect(dollarCapForVertical("fitness")).toBe(DEFAULT_DOLLAR_CAP);
+  });
+
+  it("the default dollarCap preserves current scoring output exactly", () => {
+    // No cap arg (production call site) must equal an explicit medspa cap.
+    expect(scoreRecommendation(rec)).toBe(scoreRecommendation(rec, DEFAULT_DOLLAR_CAP));
+  });
+
+  it("a different vertical cap flows through the score (not ignored)", () => {
+    // $1000 at risk: medspa cap 2000 -> factor 0.5 -> 0.9*0.5*100 = 45.
+    // A tighter cap (another vertical's band) saturates sooner -> higher score.
+    const atMedspaCap = scoreRecommendation(rec, dollarCapForVertical("medspa"));
+    const atTighterCap = scoreRecommendation(rec, 500); // factor min(1000/500,1)=1 -> 90
+    expect(atMedspaCap).toBe(45);
+    expect(atTighterCap).toBe(90);
+    expect(atTighterCap).toBeGreaterThan(atMedspaCap);
   });
 });
 

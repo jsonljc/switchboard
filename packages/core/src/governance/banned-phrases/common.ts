@@ -1,4 +1,5 @@
 import type { BannedPhraseEntry } from "./types.js";
+import type { Vertical } from "../../vertical.js";
 
 export const COMMON_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
   // Superlative — pair root with marketing-claim noun class
@@ -175,3 +176,15 @@ export const COMMON_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
     severity: "block",
   },
 ];
+
+/**
+ * Vertical-keyed view of the common banned-phrase table. `medspa` is the seed
+ * vertical (the table above is its floor); a vertical absent here inherits the
+ * medspa floor in the loader until its own pack lands. Keyed so the loader can
+ * re-key on (vertical, jurisdiction) without changing any call site.
+ */
+export const COMMON_BANNED_PHRASES_BY_VERTICAL: Partial<
+  Record<Vertical, ReadonlyArray<BannedPhraseEntry>>
+> = {
+  medspa: COMMON_BANNED_PHRASES,
+};

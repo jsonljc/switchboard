@@ -1,4 +1,5 @@
 import type { EscalationTriggerEntry } from "./types.js";
+import type { Vertical } from "../../vertical.js";
 
 export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> = [
   {
@@ -190,3 +191,15 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
     ],
   },
 ];
+
+/**
+ * Vertical-keyed view of the common escalation-trigger table. `medspa` is the
+ * seed vertical (the table above is its floor); a vertical absent here inherits
+ * the medspa floor in the loader until its own pack lands. Keyed so the loader
+ * can re-key on (vertical, jurisdiction) without changing any call site.
+ */
+export const COMMON_ESCALATION_TRIGGERS_BY_VERTICAL: Partial<
+  Record<Vertical, ReadonlyArray<EscalationTriggerEntry>>
+> = {
+  medspa: COMMON_ESCALATION_TRIGGERS,
+};

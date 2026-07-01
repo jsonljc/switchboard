@@ -1,18 +1,44 @@
 import type { Recommendation } from "../recommendations/types.js";
 import type { Decision } from "./types.js";
+import { DEFAULT_VERTICAL, type Vertical } from "../vertical.js";
 
 // Vertical-tuned: $2k cap reflects med spa / beauty / dental LTV bands.
 // Botox/fillers $400-1200, hydrafacial $200-500, Invisalign $4-8k.
 // $2k captures "moderately significant" without letting one Invisalign rec dominate.
-const DOLLAR_CAP = 2_000;
+// This is the medspa seed band; a vertical pack tunes its own via DOLLAR_CAP_BY_VERTICAL.
+export const DEFAULT_DOLLAR_CAP = 2_000;
+
+/**
+ * Per-vertical dollar cap for the recommendation urgency scorer. `medspa` is the
+ * seed vertical (the $2k band above); a vertical absent here falls back to
+ * DEFAULT_DOLLAR_CAP via `dollarCapForVertical`, so scoring stays defined for
+ * every vertical until its pack tunes the band.
+ */
+export const DOLLAR_CAP_BY_VERTICAL: Partial<Record<Vertical, number>> = {
+  medspa: DEFAULT_DOLLAR_CAP,
+};
+
+/** Resolve the dollar cap for a vertical, defaulting to the medspa seed band. */
+export function dollarCapForVertical(vertical: Vertical = DEFAULT_VERTICAL): number {
+  return DOLLAR_CAP_BY_VERTICAL[vertical] ?? DEFAULT_DOLLAR_CAP;
+}
+
 const RISK_FLOOR: Record<"low" | "medium" | "high", number> = {
   low: 0,
   medium: 40,
   high: 60,
 };
 
-export function scoreRecommendation(row: Recommendation): number {
-  const dollarFactor = Math.min(row.dollarsAtRisk / DOLLAR_CAP, 1);
+/**
+ * Score a recommendation's urgency. `dollarCap` is the per-vertical saturation
+ * band, threaded so a vertical pack can widen/narrow it; it defaults to the
+ * medspa seed cap so no-arg production call sites are byte-identical.
+ */
+export function scoreRecommendation(
+  row: Recommendation,
+  dollarCap: number = DEFAULT_DOLLAR_CAP,
+): number {
+  const dollarFactor = Math.min(row.dollarsAtRisk / dollarCap, 1);
   const base = row.confidence * dollarFactor * 100;
   const floor = RISK_FLOOR[row.riskLevel];
   return Math.round(Math.max(base, floor));
