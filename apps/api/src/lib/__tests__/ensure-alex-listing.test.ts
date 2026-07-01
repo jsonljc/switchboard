@@ -1,6 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ensureAlexListingForOrg } from "../ensure-alex-listing.js";
 import { buildObserveGovernanceConfig } from "@switchboard/schemas";
+import { selectPackGovernanceConfig } from "@switchboard/db";
+
+// Wrap the shared (vertical, market) pack-selection seam with a passthrough spy so the
+// threading tests can prove this seeder forwards its onboarding input into it, while every
+// other test keeps the real medspa/SG selection behaviour (…actual spread + real impl).
+vi.mock("@switchboard/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@switchboard/db")>();
+  return { ...actual, selectPackGovernanceConfig: vi.fn(actual.selectPackGovernanceConfig) };
+});
 
 type UpsertFn = ReturnType<typeof vi.fn>;
 
@@ -77,6 +86,11 @@ function buildStatefulMockDb(): MockDb & {
 const OBSERVE_SG = buildObserveGovernanceConfig({ jurisdiction: "SG", clinicType: "medical" });
 
 describe("ensureAlexListingForOrg", () => {
+  beforeEach(() => {
+    // Clear the pack-seam spy's call history between tests (its passthrough impl survives).
+    vi.clearAllMocks();
+  });
+
   it("first call creates listing and deployment, returns ids", async () => {
     const db = buildStatefulMockDb();
     const result = await ensureAlexListingForOrg("org_a", db as never);
@@ -200,5 +214,43 @@ describe("ensureAlexListingForOrg", () => {
     expect(tx.agentDeployment.upsert).toHaveBeenCalledTimes(1);
     // Returned governanceConfig was null → guarded backfill ran once.
     expect(tx.agentDeployment.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("threads onboarding (vertical, market) through selectPackGovernanceConfig into the seeded config (MY)", async () => {
+    const db = buildStatefulMockDb();
+    await ensureAlexListingForOrg("org_my", db as never, { vertical: "medspa", market: "MY" });
+    // Forward proof: the seeder hands its onboarding input to the shared pack seam verbatim.
+    // This is the apps/api half of the dual-provisioning sync obligation (the db twin
+    // ensureAlexForOrg forwards the same shape): change one seeder, change both.
+    expect(selectPackGovernanceConfig).toHaveBeenCalledWith({ vertical: "medspa", market: "MY" });
+    // Output proof: the seam's MY/medical observe config (distinct from the SG default) is
+    // what lands on the deployment, so the market param is not silently dropped.
+    const dep = db.deployments.get("org_my::listing_1")!;
+    expect(dep.governanceConfig).toEqual(
+      buildObserveGovernanceConfig({ jurisdiction: "MY", clinicType: "medical" }),
+    );
+  });
+
+  it("an explicit governanceSeedContext still wins and bypasses the pack seam (derived-context path preserved)", async () => {
+    const db = buildStatefulMockDb();
+    await ensureAlexListingForOrg("org_ctx", db as never, {
+      governanceSeedContext: { jurisdiction: "MY", clinicType: "nonMedical" },
+    });
+    // GET /config derives governanceSeedContext from the org timezone; it must keep
+    // precedence over the (vertical, market) default seam, so the pack selector is not
+    // consulted and the derived MY/nonMedical config is preserved unchanged.
+    expect(selectPackGovernanceConfig).not.toHaveBeenCalled();
+    const dep = db.deployments.get("org_ctx::listing_1")!;
+    expect(dep.governanceConfig).toEqual(
+      buildObserveGovernanceConfig({ jurisdiction: "MY", clinicType: "nonMedical" }),
+    );
+  });
+
+  it("with no options, the default routes through the pack seam to the byte-identical SG/medical observe config", async () => {
+    const db = buildStatefulMockDb();
+    await ensureAlexListingForOrg("org_default", db as never);
+    expect(selectPackGovernanceConfig).toHaveBeenCalledTimes(1);
+    const dep = db.deployments.get("org_default::listing_1")!;
+    expect(dep.governanceConfig).toEqual(OBSERVE_SG);
   });
 });

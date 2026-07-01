@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PrismaClient } from "@prisma/client";
+import { buildObserveGovernanceConfig } from "@switchboard/schemas";
 import { provisionOrgAgentDeployments, ensureAlexForOrg } from "./provision-org-agents.js";
 // Direct source import (NOT the @switchboard/db barrel) to avoid a self-referential
 // cycle now that the orchestrator is also exported from index.ts.
 import { recommendationHandoffApprovalPolicyId } from "./recommendation-handoff-governance.js";
 import { rileyPauseAllowPolicyId, rileyPauseApprovalPolicyId } from "./riley-pause-governance.js";
 import { MEDSPA_PILOT_GOVERNANCE_CONFIG } from "./medspa-governance-config.js";
+// Namespace import so the threading test can spy on the pack-selection seam the seeder
+// consults; the seeder imports the same live binding, so the spy observes its calls.
+import * as packSelector from "./pack-governance-config.js";
 
 interface ListingUpsertArgs {
   where: { slug: string };
@@ -295,6 +299,37 @@ describe("provisionOrgAgentDeployments", () => {
       await ensureAlexForOrg(prisma, "org_acme");
       const second = prisma._deploymentUpserts[1]!.create;
       expect(second).toEqual(first);
+    });
+
+    it("with no onboarding input, stamps the byte-identical medspa/SG default (existing orgs unchanged)", async () => {
+      // Belt-and-suspenders for the default seam: the two backfill callers below pass no
+      // opts, so the seeded governanceConfig must equal the exact constant stamped before
+      // this slice routed selection through selectPackGovernanceConfig.
+      await ensureAlexForOrg(prisma, "org_acme");
+      expect(prisma._deploymentUpserts[0]!.create.governanceConfig).toBe(
+        MEDSPA_PILOT_GOVERNANCE_CONFIG,
+      );
+    });
+
+    it("threads the onboarding (vertical, market) into selectPackGovernanceConfig (not ignored)", async () => {
+      const selectSpy = vi.spyOn(packSelector, "selectPackGovernanceConfig");
+      await ensureAlexForOrg(prisma, "org_my", { vertical: "medspa", market: "MY" });
+      // The seeder must FORWARD the caller's onboarding input verbatim to the seam, even
+      // though the default would resolve to the same medspa config. This proves it is wired,
+      // not dropped. This is the db half of the dual-provisioning sync obligation.
+      expect(selectSpy).toHaveBeenCalledWith({ vertical: "medspa", market: "MY" });
+      selectSpy.mockRestore();
+    });
+
+    it("stamps the selector's config for the passed market (MY -> distinct MY/medical observe)", async () => {
+      await ensureAlexForOrg(prisma, "org_my", { market: "MY" });
+      const dep = prisma._deploymentUpserts[0]!;
+      // MY differs from the SG default, so a stamped MY/medical config proves the market
+      // flows through the selector into the create payload (output wiring, not just a call).
+      expect(dep.create.governanceConfig).toEqual(
+        buildObserveGovernanceConfig({ jurisdiction: "MY", clinicType: "medical" }),
+      );
+      expect(dep.create.governanceConfig).not.toEqual(MEDSPA_PILOT_GOVERNANCE_CONFIG);
     });
   });
 

@@ -5,7 +5,11 @@ import { seedMiraCreativeDeployment } from "./seed-mira-creative-deployment.js";
 import { seedMiraPilotOrgs } from "./seed-mira-pilot-orgs.js";
 import { seedRobinRecoveryPolicies } from "./robin-recovery-governance.js";
 import { seedProactiveIntakePolicies } from "./proactive-intake-governance.js";
-import { MEDSPA_PILOT_GOVERNANCE_CONFIG } from "./medspa-governance-config.js";
+import {
+  selectPackGovernanceConfig,
+  type ProvisioningVertical,
+  type ProvisioningMarket,
+} from "./pack-governance-config.js";
 
 export interface ProvisionOrgAgentsResult {
   riley: { deploymentId: string };
@@ -42,6 +46,17 @@ export interface EnsureAlexResult {
   deploymentId: string;
 }
 
+export interface EnsureAlexOptions {
+  /**
+   * Onboarding-derived pack selection. Both default to medspa / SG (via
+   * `selectPackGovernanceConfig`), so a caller that omits them provisions the exact
+   * byte-identical medspa observe posture a pilot org got before this seam existed.
+   * The pilot CLI threads these once onboarding captures them.
+   */
+  vertical?: ProvisioningVertical;
+  market?: ProvisioningMarket;
+}
+
 /**
  * Idempotently ensures Alex's global listing + this org's active Alex deployment.
  *
@@ -60,7 +75,18 @@ export interface EnsureAlexResult {
 export async function ensureAlexForOrg(
   db: PrismaDbClient,
   orgId: string,
+  opts: EnsureAlexOptions = {},
 ): Promise<EnsureAlexResult> {
+  // Route governance-config selection through the (vertical, market) pack-selection seam
+  // instead of hardcoding the medspa constant. Defaults to medspa / SG, which returns the
+  // exact MEDSPA_PILOT_GOVERNANCE_CONFIG constant, so an org onboarded without explicit
+  // input is byte-identical to before. MUST stay in sync with the apps/api sibling
+  // ensureAlexListingForOrg, which now consults the same seam.
+  const governanceConfig = selectPackGovernanceConfig({
+    vertical: opts.vertical,
+    market: opts.market,
+  });
+
   const listing = await db.agentListing.upsert({
     where: { slug: "alex-conversion" },
     update: {},
@@ -90,9 +116,10 @@ export async function ensureAlexForOrg(
       skillSlug: "alex",
       // P2-A: seed the all-gates-observe governanceConfig so a CLI-onboarded pilot's
       // afterSkill gates run as telemetry on the first inbound lead, not inert until a
-      // dashboard GET /config load. SG/medical default (pilots are SG medspas); the
-      // apps/api sibling derives jurisdiction from the org timezone where available.
-      governanceConfig: MEDSPA_PILOT_GOVERNANCE_CONFIG,
+      // dashboard GET /config load. The medspa / SG default resolves to the same
+      // SG/medical observe posture (pilots are SG medspas); the apps/api sibling derives
+      // jurisdiction from the org timezone where available.
+      governanceConfig,
     },
   });
 
@@ -102,7 +129,7 @@ export async function ensureAlexForOrg(
   if (deployment.governanceConfig === null || deployment.governanceConfig === undefined) {
     await db.agentDeployment.update({
       where: { id: deployment.id },
-      data: { governanceConfig: MEDSPA_PILOT_GOVERNANCE_CONFIG },
+      data: { governanceConfig },
     });
   }
 

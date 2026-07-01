@@ -196,7 +196,16 @@ export {
   ensureAlexForOrg,
   type ProvisionOrgAgentsResult,
   type EnsureAlexResult,
+  type EnsureAlexOptions,
 } from "./seed/provision-org-agents.js";
+export {
+  selectPackGovernanceConfig,
+  DEFAULT_PROVISIONING_VERTICAL,
+  DEFAULT_PROVISIONING_MARKET,
+  type ProvisioningVertical,
+  type ProvisioningMarket,
+  type PackProvisioningInput,
+} from "./seed/pack-governance-config.js";
 export {
   provisionOrgWithOwner,
   provisionPilotOrg,
