@@ -36,4 +36,17 @@ describe("composePackBody", () => {
     const body = "x\n<!-- @pack:does-not-exist -->\ny";
     expect(() => composePackBody(body, packDir)).toThrow(/does-not-exist/);
   });
+
+  it("throws (fail-closed) on a malformed non-kebab slot instead of leaking the marker verbatim", () => {
+    for (const slot of ["Safety", "safety_escalation", "2fa"]) {
+      const body = `x\n<!-- @pack:${slot} -->\ny`;
+      expect(() => composePackBody(body, packDir)).toThrow(SkillValidationError);
+    }
+  });
+
+  it("throws (fail-closed) when the pack file exists but is empty/whitespace", () => {
+    writeFileSync(join(packDir, "empty-block.md"), "\n");
+    const body = "x\n<!-- @pack:empty-block -->\ny";
+    expect(() => composePackBody(body, packDir)).toThrow(/empty/i);
+  });
 });
