@@ -93,3 +93,29 @@ describe("loadEscalationTriggers", () => {
     }
   });
 });
+
+describe("loadEscalationTriggers vertical keying", () => {
+  beforeEach(() => {
+    _resetEscalationTriggerCache();
+  });
+
+  it("defaults to the medspa vertical: no-vertical call === explicit medspa call", () => {
+    const implicit = loadEscalationTriggers("SG");
+    const explicit = loadEscalationTriggers("SG", "medspa");
+    // Same (vertical, jurisdiction) cache key -> same frozen instance, byte-identical.
+    expect(explicit).toBe(implicit);
+    expect(explicit.length).toBe(COMMON_ESCALATION_TRIGGERS.length + SG_ESCALATION_TRIGGERS.length);
+  });
+
+  it("keys the cache on (vertical, jurisdiction): a non-seed vertical is a distinct entry", () => {
+    const medspa = loadEscalationTriggers("SG", "medspa");
+    const fitness = loadEscalationTriggers("SG", "fitness");
+    expect(fitness).not.toBe(medspa);
+  });
+
+  it("a non-seed vertical inherits the medspa floor (over-restrict is the safe direction)", () => {
+    const medspa = loadEscalationTriggers("MY", "medspa");
+    const fitness = loadEscalationTriggers("MY", "fitness");
+    expect(fitness.map((e) => e.id)).toEqual(medspa.map((e) => e.id));
+  });
+});

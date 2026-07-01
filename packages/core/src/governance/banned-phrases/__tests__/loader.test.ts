@@ -106,3 +106,29 @@ describe("loadBannedPhrases", () => {
     }
   });
 });
+
+describe("loadBannedPhrases vertical keying", () => {
+  beforeEach(() => {
+    _resetBannedPhraseCache();
+  });
+
+  it("defaults to the medspa vertical: no-vertical call === explicit medspa call", () => {
+    const implicit = loadBannedPhrases("SG");
+    const explicit = loadBannedPhrases("SG", "medspa");
+    // Same (vertical, jurisdiction) cache key -> same frozen instance, byte-identical.
+    expect(explicit).toBe(implicit);
+    expect(explicit.length).toBe(COMMON_BANNED_PHRASES.length + SG_BANNED_PHRASES.length);
+  });
+
+  it("keys the cache on (vertical, jurisdiction): a non-seed vertical is a distinct entry", () => {
+    const medspa = loadBannedPhrases("SG", "medspa");
+    const fitness = loadBannedPhrases("SG", "fitness");
+    expect(fitness).not.toBe(medspa);
+  });
+
+  it("a non-seed vertical inherits the medspa floor (over-restrict is the safe direction)", () => {
+    const medspa = loadBannedPhrases("MY", "medspa");
+    const fitness = loadBannedPhrases("MY", "fitness");
+    expect(fitness.map((e) => e.id)).toEqual(medspa.map((e) => e.id));
+  });
+});

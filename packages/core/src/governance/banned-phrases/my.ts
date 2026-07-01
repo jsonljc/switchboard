@@ -1,4 +1,5 @@
 import type { BannedPhraseEntry } from "./types.js";
+import type { Vertical } from "../../vertical.js";
 
 export const MY_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
   {
@@ -42,3 +43,13 @@ export const MY_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
       "KKM — artificial urgency around appointment scarcity is prohibited in MY health advertising.",
   },
 ];
+
+/**
+ * Vertical-keyed view of the MY jurisdiction table. `medspa` is the seed
+ * vertical; a vertical absent here inherits the medspa MY floor in the loader.
+ */
+export const MY_BANNED_PHRASES_BY_VERTICAL: Partial<
+  Record<Vertical, ReadonlyArray<BannedPhraseEntry>>
+> = {
+  medspa: MY_BANNED_PHRASES,
+};

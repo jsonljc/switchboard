@@ -1,4 +1,5 @@
 import type { BannedPhraseEntry } from "./types.js";
+import type { Vertical } from "../../vertical.js";
 
 export const SG_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
   {
@@ -43,3 +44,13 @@ export const SG_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
       "HCSA/HSA — regulatory endorsement cannot be combined with superlative marketing claims.",
   },
 ];
+
+/**
+ * Vertical-keyed view of the SG jurisdiction table. `medspa` is the seed
+ * vertical; a vertical absent here inherits the medspa SG floor in the loader.
+ */
+export const SG_BANNED_PHRASES_BY_VERTICAL: Partial<
+  Record<Vertical, ReadonlyArray<BannedPhraseEntry>>
+> = {
+  medspa: SG_BANNED_PHRASES,
+};

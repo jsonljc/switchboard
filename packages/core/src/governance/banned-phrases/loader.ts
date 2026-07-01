@@ -1,8 +1,9 @@
 import type { BannedPhraseEntry } from "./types.js";
-import { COMMON_BANNED_PHRASES } from "./common.js";
-import { SG_BANNED_PHRASES } from "./sg.js";
-import { MY_BANNED_PHRASES } from "./my.js";
+import { COMMON_BANNED_PHRASES, COMMON_BANNED_PHRASES_BY_VERTICAL } from "./common.js";
+import { SG_BANNED_PHRASES, SG_BANNED_PHRASES_BY_VERTICAL } from "./sg.js";
+import { MY_BANNED_PHRASES, MY_BANNED_PHRASES_BY_VERTICAL } from "./my.js";
 import { normalizeRegex } from "../text/regex.js";
+import { DEFAULT_VERTICAL, type Vertical } from "../../vertical.js";
 
 function normalizePattern(p: string | RegExp): string | RegExp {
   if (typeof p === "string") return p;
@@ -16,22 +17,42 @@ function normalizeEntry(entry: BannedPhraseEntry): BannedPhraseEntry {
   };
 }
 
-const cache = new Map<"SG" | "MY", ReadonlyArray<BannedPhraseEntry>>();
+// Cache keyed on (vertical, jurisdiction), the composite the loader now keys on.
+const cache = new Map<string, ReadonlyArray<BannedPhraseEntry>>();
 
-export function loadBannedPhrases(jurisdiction: "SG" | "MY"): ReadonlyArray<BannedPhraseEntry> {
-  const cached = cache.get(jurisdiction);
+/**
+ * Load the merged banned-phrase table for a (vertical, jurisdiction) pair.
+ *
+ * `jurisdiction` stays the FIRST positional param and `vertical` is an optional
+ * second param defaulting to `medspa`, so every existing single-arg caller (and
+ * the by-reference `bannedPhraseLoader: loadBannedPhrases` wiring) stays
+ * byte-identical: same merged set, same order, same frozen instance per key.
+ * A vertical without its own table inherits the medspa seed floor (over-restrict
+ * is the safe direction until that vertical's pack lands).
+ */
+export function loadBannedPhrases(
+  jurisdiction: "SG" | "MY",
+  vertical: Vertical = DEFAULT_VERTICAL,
+): ReadonlyArray<BannedPhraseEntry> {
+  const cacheKey = `${vertical}:${jurisdiction}`;
+  const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const merged: BannedPhraseEntry[] = [
-    ...COMMON_BANNED_PHRASES,
-    ...(jurisdiction === "SG" ? SG_BANNED_PHRASES : MY_BANNED_PHRASES),
-  ].map(normalizeEntry);
+  const common = COMMON_BANNED_PHRASES_BY_VERTICAL[vertical] ?? COMMON_BANNED_PHRASES;
+  const jurisdictionTable =
+    jurisdiction === "SG"
+      ? (SG_BANNED_PHRASES_BY_VERTICAL[vertical] ?? SG_BANNED_PHRASES)
+      : (MY_BANNED_PHRASES_BY_VERTICAL[vertical] ?? MY_BANNED_PHRASES);
+
+  const merged: BannedPhraseEntry[] = [...common, ...jurisdictionTable].map(normalizeEntry);
 
   // Assert ID uniqueness
   const seen = new Set<string>();
   for (const entry of merged) {
     if (seen.has(entry.id)) {
-      throw new Error(`Duplicate banned-phrase id "${entry.id}" in ${jurisdiction} merged set`);
+      throw new Error(
+        `Duplicate banned-phrase id "${entry.id}" in ${vertical}/${jurisdiction} merged set`,
+      );
     }
     seen.add(entry.id);
   }
@@ -46,7 +67,7 @@ export function loadBannedPhrases(jurisdiction: "SG" | "MY"): ReadonlyArray<Bann
       const prev = patternIndex.get(key);
       if (prev && prev !== entry.id) {
         console.warn(
-          `Banned-phrase duplicate pattern in ${jurisdiction}: "${key}" appears in both ${prev} and ${entry.id}`,
+          `Banned-phrase duplicate pattern in ${vertical}/${jurisdiction}: "${key}" appears in both ${prev} and ${entry.id}`,
         );
       }
       patternIndex.set(key, entry.id);
@@ -54,7 +75,7 @@ export function loadBannedPhrases(jurisdiction: "SG" | "MY"): ReadonlyArray<Bann
   }
 
   const frozen = Object.freeze(merged);
-  cache.set(jurisdiction, frozen);
+  cache.set(cacheKey, frozen);
   return frozen;
 }
 
