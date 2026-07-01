@@ -11,6 +11,7 @@ import type { ExecutionMode } from "../execution-context.js";
 import type { CanonicalSubmitRequest } from "../canonical-request.js";
 import type { WorkTrace } from "../work-trace.js";
 import type { WorkOutcome } from "../types.js";
+import type { OrganizationEntitlement } from "../../billing/index.js";
 
 const testConstraints: ExecutionConstraints = {
   allowedModelTiers: ["default"],
@@ -210,6 +211,45 @@ function resolvedTraceFixture(
     ingressPath,
   } as unknown as WorkTrace;
 }
+
+describe("PlatformIngress - idempotency replay after de-entitlement (GOV-9)", () => {
+  const entitledNow = (): OrganizationEntitlement => ({ entitled: true, reason: "active" });
+  const blockedNow = (): OrganizationEntitlement => ({
+    entitled: false,
+    reason: "blocked",
+    blockedStatus: "canceled",
+  });
+
+  it("replays a previously-authorized request from cache even after the org is de-entitled", async () => {
+    // Pins the intentional ordering in platform-ingress.ts: the idempotency replay
+    // runs BEFORE the entitlement check, so a replay of an already-authorized
+    // mutation returns the identical cached response even once the org has become
+    // unentitled. The first submission was authorized at the time; idempotency
+    // guarantees identical replay; entitlement gates only NEW (non-cached) submits.
+    let entitled = true;
+    const resolveSpy = vi.fn(async () => (entitled ? entitledNow() : blockedNow()));
+    const config: PlatformIngressConfig = {
+      ...createConfig({ traceStore: inMemoryTraceStore() }),
+      entitlementResolver: { resolve: resolveSpy },
+    };
+    const ingress = new PlatformIngress(config);
+    const request = { ...baseRequest, idempotencyKey: "k-deent" };
+
+    // 1) First submission while entitled: passes the gate, executes, caches a keyed trace.
+    const first = await ingress.submit(request);
+    expect(first.ok).toBe(true);
+
+    // 2) Org is de-entitled; the SAME idempotency key is replayed.
+    entitled = false;
+    const replay = await ingress.submit(request);
+
+    // The cached result is returned, NOT entitlement_required...
+    expect(replay.ok).toBe(true);
+    // ...and entitlement was consulted ONLY on the first (non-cached) submission:
+    // the replay short-circuited before the entitlement gate (the pinned ordering).
+    expect(resolveSpy).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("PlatformIngress", () => {
   it("returns IngressError for unknown intent", async () => {

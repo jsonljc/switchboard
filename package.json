@@ -48,7 +48,8 @@
     "eval:adversarial-injection": "tsx evals/adversarial-injection/run-eval.ts",
     "eval:claim-boundary": "tsx evals/claim-boundary/run-eval.ts",
     "eval:mira-self-brief": "tsx evals/mira-self-brief/run-eval.ts",
-    "eval:mira-injection": "tsx evals/mira-injection/run-eval.ts"
+    "eval:mira-injection": "tsx evals/mira-injection/run-eval.ts",
+    "eval:resolver": "tsx evals/resolver/run-eval.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
