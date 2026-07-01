@@ -1,4 +1,9 @@
-import type { PrismaDbClient } from "@switchboard/db";
+import {
+  selectPackGovernanceConfig,
+  type PrismaDbClient,
+  type ProvisioningVertical,
+  type ProvisioningMarket,
+} from "@switchboard/db";
 import {
   buildObserveGovernanceConfig,
   type ObserveGovernanceConfigInput,
@@ -11,18 +16,21 @@ export interface EnsureAlexListingResult {
 
 export interface EnsureAlexListingOptions {
   /**
-   * Jurisdiction + clinicType used to build the seeded observe governanceConfig.
-   * Defaults to SG/medical (the pilot posture) when omitted — safe because observe
-   * never blocks a reply. Callers that know the org's context (GET /config via
-   * deriveAlexGovernanceSeedContext) should pass it.
+   * Jurisdiction + clinicType used to build the seeded observe governanceConfig. When
+   * provided (GET /config derives it from the org timezone via
+   * deriveAlexGovernanceSeedContext) it takes precedence over the (vertical, market) pack
+   * default below. Safe either way because observe never blocks a reply.
    */
   governanceSeedContext?: ObserveGovernanceConfigInput;
+  /**
+   * Onboarding-derived pack selection, routed through the shared selectPackGovernanceConfig
+   * seam (the same one the db pilot-CLI twin ensureAlexForOrg consults). Both default to
+   * medspa / SG, so a caller that omits this AND governanceSeedContext seeds the exact
+   * byte-identical SG/medical observe posture as before this seam existed.
+   */
+  vertical?: ProvisioningVertical;
+  market?: ProvisioningMarket;
 }
-
-const DEFAULT_SEED_CONTEXT: ObserveGovernanceConfigInput = {
-  jurisdiction: "SG",
-  clinicType: "medical",
-};
 
 /**
  * Idempotently ensures the Alex listing exists (global, slug-keyed) and that the
@@ -64,9 +72,12 @@ export async function ensureAlexListingForOrg(
     update: {},
   });
 
-  const governanceConfig = buildObserveGovernanceConfig(
-    opts.governanceSeedContext ?? DEFAULT_SEED_CONTEXT,
-  );
+  // An explicit governanceSeedContext (the org-timezone-derived path) wins; otherwise route
+  // the pack default through the shared (vertical, market) seam so this apps/api seeder and
+  // the db ensureAlexForOrg twin can never drift on seeded posture.
+  const governanceConfig = opts.governanceSeedContext
+    ? buildObserveGovernanceConfig(opts.governanceSeedContext)
+    : selectPackGovernanceConfig({ vertical: opts.vertical, market: opts.market });
 
   const deployment = await db.agentDeployment.upsert({
     where: {
