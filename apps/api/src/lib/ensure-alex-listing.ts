@@ -6,6 +6,7 @@ import {
 } from "@switchboard/db";
 import {
   buildObserveGovernanceConfig,
+  type ObserveGovernanceConfig,
   type ObserveGovernanceConfigInput,
 } from "@switchboard/schemas";
 
@@ -18,8 +19,11 @@ export interface EnsureAlexListingOptions {
   /**
    * Jurisdiction + clinicType used to build the seeded observe governanceConfig. When
    * provided (GET /config derives it from the org timezone via
-   * deriveAlexGovernanceSeedContext) it takes precedence over the (vertical, market) pack
-   * default below. Safe either way because observe never blocks a reply.
+   * deriveAlexGovernanceSeedContext) and no `vertical` is threaded, it builds the observe
+   * posture. Precedence (SH-4): an explicit `vertical` selects the pack/floor posture and
+   * WINS over this seedContext (the seedContext jurisdiction is still used as the market
+   * fallback); without a vertical, this seedContext wins over the medspa/SG selector
+   * default. Safe either way because observe never blocks a reply.
    */
   governanceSeedContext?: ObserveGovernanceConfigInput;
   /**
@@ -72,12 +76,28 @@ export async function ensureAlexListingForOrg(
     update: {},
   });
 
-  // An explicit governanceSeedContext (the org-timezone-derived path) wins; otherwise route
-  // the pack default through the shared (vertical, market) seam so this apps/api seeder and
-  // the db ensureAlexForOrg twin can never drift on seeded posture.
-  const governanceConfig = opts.governanceSeedContext
-    ? buildObserveGovernanceConfig(opts.governanceSeedContext)
-    : selectPackGovernanceConfig({ vertical: opts.vertical, market: opts.market });
+  // Precedence (SH-4, D5 reconciliation): a threaded pack `vertical` selects the
+  // pack/floor posture via the shared (vertical, market) seam and WINS over the
+  // org-timezone seedContext. organizations.ts ALWAYS passes a truthy
+  // governanceSeedContext (deriveAlexGovernanceSeedContext never returns undefined),
+  // which previously shadowed the selector on this api hot path and would have
+  // stamped a self-serve `generic` agent a medspa-medical config instead of the
+  // floor. Without a vertical, an explicit seedContext still builds the observe
+  // posture; otherwise the medspa/SG selector default. When a vertical is threaded
+  // without an explicit market, the market falls back to the seedContext jurisdiction
+  // (else the SG default) so a derived jurisdiction is never silently lost. Byte-identical
+  // for every current caller (which passes a seedContext and no vertical).
+  let governanceConfig: ObserveGovernanceConfig;
+  if (opts.vertical) {
+    governanceConfig = selectPackGovernanceConfig({
+      vertical: opts.vertical,
+      market: opts.market ?? opts.governanceSeedContext?.jurisdiction,
+    });
+  } else if (opts.governanceSeedContext) {
+    governanceConfig = buildObserveGovernanceConfig(opts.governanceSeedContext);
+  } else {
+    governanceConfig = selectPackGovernanceConfig({ market: opts.market });
+  }
 
   const deployment = await db.agentDeployment.upsert({
     where: {

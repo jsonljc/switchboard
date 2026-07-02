@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ensureAlexListingForOrg } from "../ensure-alex-listing.js";
-import { buildObserveGovernanceConfig } from "@switchboard/schemas";
+import { buildObserveGovernanceConfig, buildSafeHarborFloorConfig } from "@switchboard/schemas";
 import { selectPackGovernanceConfig } from "@switchboard/db";
 
 // Wrap the shared (vertical, market) pack-selection seam with a passthrough spy so the
@@ -148,6 +148,44 @@ describe("ensureAlexListingForOrg", () => {
     const dep = db.deployments.get("org_my::listing_1")!;
     expect(dep.governanceConfig).toEqual(
       buildObserveGovernanceConfig({ jurisdiction: "MY", clinicType: "nonMedical" }),
+    );
+  });
+
+  it("SH-4 precedence: a threaded generic vertical WINS over the org-timezone seedContext", async () => {
+    const db = buildStatefulMockDb();
+    await ensureAlexListingForOrg("org_floor", db as never, {
+      governanceSeedContext: { jurisdiction: "SG", clinicType: "medical" },
+      vertical: "generic",
+      market: "SG",
+    });
+    const dep = db.deployments.get("org_floor::listing_1")!;
+    // Before SH-4 the seedContext shadowed the selector, silently stamping a
+    // medspa-medical config. The floor selector must win: generic + nonMedical.
+    expect(dep.governanceConfig).toEqual(buildSafeHarborFloorConfig({ jurisdiction: "SG" }));
+    expect((dep.governanceConfig as { vertical?: string }).vertical).toBe("generic");
+    expect((dep.governanceConfig as { clinicType: string }).clinicType).toBe("nonMedical");
+  });
+
+  it("SH-4: a generic vertical without an explicit market derives the market from the seedContext", async () => {
+    const db = buildStatefulMockDb();
+    await ensureAlexListingForOrg("org_floor_my", db as never, {
+      governanceSeedContext: { jurisdiction: "MY", clinicType: "medical" },
+      vertical: "generic",
+    });
+    const dep = db.deployments.get("org_floor_my::listing_1")!;
+    // The seedContext jurisdiction is not lost: the floor is built for MY, not the SG default.
+    expect(dep.governanceConfig).toEqual(buildSafeHarborFloorConfig({ jurisdiction: "MY" }));
+    expect((dep.governanceConfig as { jurisdiction: string }).jurisdiction).toBe("MY");
+  });
+
+  it("SH-4: without a vertical, an explicit seedContext still wins (byte-identical to before)", async () => {
+    const db = buildStatefulMockDb();
+    await ensureAlexListingForOrg("org_sc", db as never, {
+      governanceSeedContext: { jurisdiction: "MY", clinicType: "medical" },
+    });
+    const dep = db.deployments.get("org_sc::listing_1")!;
+    expect(dep.governanceConfig).toEqual(
+      buildObserveGovernanceConfig({ jurisdiction: "MY", clinicType: "medical" }),
     );
   });
 

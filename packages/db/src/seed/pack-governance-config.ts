@@ -1,18 +1,20 @@
 import {
   buildObserveGovernanceConfig,
+  buildSafeHarborFloorConfig,
   type Jurisdiction,
   type ObserveGovernanceConfig,
 } from "@switchboard/schemas";
 import { MEDSPA_PILOT_GOVERNANCE_CONFIG } from "./medspa-governance-config.js";
 
 /**
- * The onboarding-selected service vertical (the vetted "pack" a tenant provisions under).
- * Today the platform ships a single vetted pack (medspa); a new pack (fitness, dental, ...)
- * extends this union and MUST gain a case in `selectPackGovernanceConfig`. The exhaustive
- * switch there makes an unhandled vertical a compile error, so a pack can never ship
+ * The onboarding-selected service vertical. `medspa` is the vetted pack; `generic`
+ * is the universal safe-harbor floor (no vetted pack: what a self-serve / unpacked
+ * tenant provisions under). A new vetted pack (fitness, dental, ...) extends this
+ * union and MUST gain a case in `selectPackGovernanceConfig`. The exhaustive switch
+ * there makes an unhandled vertical a compile error, so a pack can never ship
  * without a declared governance posture.
  */
-export type ProvisioningVertical = "medspa";
+export type ProvisioningVertical = "medspa" | "generic";
 
 /**
  * The onboarding-selected market. Reuses the schema's closed `Jurisdiction` union (SG|MY)
@@ -66,6 +68,12 @@ export function selectPackGovernanceConfig(
       return market === "SG"
         ? MEDSPA_PILOT_GOVERNANCE_CONFIG
         : buildObserveGovernanceConfig({ jurisdiction: market, clinicType: "medical" });
+    case "generic":
+      // The universal safe-harbor floor: no vetted pack. A self-serve / unpacked
+      // deployment boots into the all-gates-observe floor carrying the generic
+      // vertical marker that the core loader gates read (via resolveVertical) to
+      // select the generic floor tables instead of the medspa seed.
+      return buildSafeHarborFloorConfig({ jurisdiction: market });
     default: {
       // Exhaustiveness guard: adding a `ProvisioningVertical` without a case here is a
       // compile error AT THIS DEFINITION, so a new pack can never ship with no posture.

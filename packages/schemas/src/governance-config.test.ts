@@ -3,6 +3,7 @@ import {
   GovernanceConfigSchema,
   JURISDICTIONS,
   buildObserveGovernanceConfig,
+  buildSafeHarborFloorConfig,
   currencyForJurisdiction,
   resolveGovernanceMode,
   resolveClaimClassifierConfig,
@@ -82,5 +83,30 @@ describe("currencyForJurisdiction", () => {
     for (const j of JURISDICTIONS) {
       expect(["SGD", "MYR"]).toContain(currencyForJurisdiction(j));
     }
+  });
+});
+
+describe("buildSafeHarborFloorConfig", () => {
+  it("returns the all-gates-observe floor with the generic marker and nonMedical clinicType", () => {
+    const floor = buildSafeHarborFloorConfig({ jurisdiction: "SG" });
+    expect(floor.vertical).toBe("generic");
+    expect(floor.clinicType).toBe("nonMedical");
+    expect(floor.jurisdiction).toBe("SG");
+    expect(floor.deterministicGate.mode).toBe("observe");
+    expect(floor.claimClassifier.mode).toBe("observe");
+    expect(floor.consentState.mode).toBe("observe");
+  });
+
+  it("is buildObserveGovernanceConfig(nonMedical) plus the generic marker (single-source discipline)", () => {
+    const floor = buildSafeHarborFloorConfig({ jurisdiction: "SG" });
+    const { vertical, ...rest } = floor;
+    expect(vertical).toBe("generic");
+    expect(rest).toEqual(
+      buildObserveGovernanceConfig({ jurisdiction: "SG", clinicType: "nonMedical" }),
+    );
+  });
+
+  it("keys on jurisdiction: MY yields the MY floor", () => {
+    expect(buildSafeHarborFloorConfig({ jurisdiction: "MY" }).jurisdiction).toBe("MY");
   });
 });
