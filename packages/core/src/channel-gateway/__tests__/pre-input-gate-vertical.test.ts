@@ -59,4 +59,53 @@ describe("runPreInputGate vertical threading (SH-3)", () => {
     expect(calls).toContainEqual({ jurisdiction: "SG", vertical: "medspa" });
     expect(cache.lastKnown("dep-1")?.vertical).toBe("medspa");
   });
+
+  // ---------------------------------------------------------------------------
+  // Cached-enforce (resolver-error) path — asserts the SECOND argument passed
+  // to escalationTriggerLoader (the vertical), mirroring
+  // handleInputGateResolverError's `posture.vertical ?? DEFAULT_VERTICAL`
+  // expression at pre-input-gate.ts:269-271. The normal-path cases above never
+  // exercise this branch.
+  // ---------------------------------------------------------------------------
+
+  function makeResolverErrorConfig(
+    cache: InMemoryGovernancePostureCache,
+    calls: Array<{ jurisdiction: unknown; vertical: unknown }>,
+  ): ChannelGatewayConfig {
+    return {
+      governanceConfigResolver: async () => ({
+        status: "error" as const,
+        error: new Error("db blip"),
+      }),
+      escalationTriggerLoader: ((jurisdiction: unknown, vertical: unknown) => {
+        calls.push({ jurisdiction, vertical });
+        return [] as never; // empty triggers: no match, gate returns false (proceed)
+      }) as never,
+      verdictStore: { save: vi.fn().mockResolvedValue(undefined) } as never,
+      postureCache: cache,
+    } as unknown as ChannelGatewayConfig;
+  }
+
+  it("cached-enforce resolver-error path threads the cached vertical (SG/generic)", async () => {
+    const calls: Array<{ jurisdiction: unknown; vertical: unknown }> = [];
+    const cache = new InMemoryGovernancePostureCache();
+    cache.remember("dep-1", {
+      mode: "enforce",
+      jurisdiction: "SG",
+      clinicType: "nonMedical",
+      vertical: "generic",
+    });
+    const config = makeResolverErrorConfig(cache, calls);
+    await runPreInputGate(config, "hello there", "sess-1", "web", "dep-1", "org-1", replySink);
+    expect(calls).toContainEqual({ jurisdiction: "SG", vertical: "generic" });
+  });
+
+  it("cached-enforce resolver-error path falls back to DEFAULT_VERTICAL when the cached posture carries no vertical", async () => {
+    const calls: Array<{ jurisdiction: unknown; vertical: unknown }> = [];
+    const cache = new InMemoryGovernancePostureCache();
+    cache.remember("dep-1", { mode: "enforce", jurisdiction: "SG", clinicType: "nonMedical" });
+    const config = makeResolverErrorConfig(cache, calls);
+    await runPreInputGate(config, "hello there", "sess-1", "web", "dep-1", "org-1", replySink);
+    expect(calls).toContainEqual({ jurisdiction: "SG", vertical: "medspa" });
+  });
 });
