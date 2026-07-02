@@ -300,3 +300,26 @@ export function buildObserveGovernanceConfig(
     },
   };
 }
+
+/**
+ * The universal safe-harbor floor config: the all-gates-observe posture a
+ * self-serve / unpacked agent boots into before any vertical pack applies. It is
+ * `buildObserveGovernanceConfig` with the least-medical-assuming clinicType
+ * ("nonMedical") plus a passthrough `vertical: "generic"` marker.
+ *
+ * The marker is what the core loader gates read (via resolveVertical) to thread
+ * the generic floor tables. It rides as JSON on the passthrough GovernanceConfig
+ * column, so no Prisma migration is needed (the established extension pattern).
+ * Built on the single-source `buildObserveGovernanceConfig` so the floor posture
+ * and the observe posture can never drift.
+ */
+export type SafeHarborFloorConfig = ObserveGovernanceConfig & { vertical: "generic" };
+
+export function buildSafeHarborFloorConfig(input: {
+  jurisdiction: Jurisdiction;
+}): SafeHarborFloorConfig {
+  return {
+    ...buildObserveGovernanceConfig({ jurisdiction: input.jurisdiction, clinicType: "nonMedical" }),
+    vertical: "generic",
+  };
+}

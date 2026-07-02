@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildObserveGovernanceConfig } from "@switchboard/schemas";
+import { buildObserveGovernanceConfig, buildSafeHarborFloorConfig } from "@switchboard/schemas";
 import {
   selectPackGovernanceConfig,
   DEFAULT_PROVISIONING_VERTICAL,
@@ -41,5 +41,28 @@ describe("selectPackGovernanceConfig: the (vertical, market) pack-selection seam
   it("exposes the medspa / SG defaults as named constants", () => {
     expect(DEFAULT_PROVISIONING_VERTICAL).toBe("medspa");
     expect(DEFAULT_PROVISIONING_MARKET).toBe("SG");
+  });
+});
+
+describe("selectPackGovernanceConfig: the generic safe-harbor floor (SH-4)", () => {
+  it("returns the safe-harbor floor for the generic vertical (SG): observe, nonMedical, generic marker", () => {
+    const floor = selectPackGovernanceConfig({ vertical: "generic", market: "SG" });
+    expect(floor).toEqual(buildSafeHarborFloorConfig({ jurisdiction: "SG" }));
+    expect((floor as { vertical?: string }).vertical).toBe("generic");
+    expect(floor.clinicType).toBe("nonMedical");
+    expect(floor.deterministicGate.mode).toBe("observe");
+  });
+
+  it("keys the floor on market: MY yields the MY floor", () => {
+    const my = selectPackGovernanceConfig({ vertical: "generic", market: "MY" });
+    expect(my.jurisdiction).toBe("MY");
+    expect((my as { vertical?: string }).vertical).toBe("generic");
+  });
+
+  it("does not disturb the medspa default (still the byte-identical constant)", () => {
+    expect(selectPackGovernanceConfig()).toBe(MEDSPA_PILOT_GOVERNANCE_CONFIG);
+    expect(selectPackGovernanceConfig({ vertical: "medspa", market: "SG" })).toBe(
+      MEDSPA_PILOT_GOVERNANCE_CONFIG,
+    );
   });
 });
