@@ -2,7 +2,9 @@ import type { EscalationTriggerEntry } from "./types.js";
 import { COMMON_ESCALATION_TRIGGERS, COMMON_ESCALATION_TRIGGERS_BY_VERTICAL } from "./common.js";
 import { SG_ESCALATION_TRIGGERS, SG_ESCALATION_TRIGGERS_BY_VERTICAL } from "./sg.js";
 import { MY_ESCALATION_TRIGGERS, MY_ESCALATION_TRIGGERS_BY_VERTICAL } from "./my.js";
-import { DEFAULT_VERTICAL, type Vertical } from "../../vertical.js";
+import { DEFAULT_VERTICAL, resolveVerticalTable, type Vertical } from "../../vertical.js";
+import { assertFloorCoverage, ESCALATION_FLOOR_MANIFEST } from "../floor-manifest.js";
+import { scanForEscalationTriggers } from "../scanner/escalation-trigger-scanner.js";
 
 function normalizePattern(p: string | RegExp): string | RegExp {
   if (typeof p === "string") return p;
@@ -39,11 +41,15 @@ export function loadEscalationTriggers(
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const common = COMMON_ESCALATION_TRIGGERS_BY_VERTICAL[vertical] ?? COMMON_ESCALATION_TRIGGERS;
+  const common = resolveVerticalTable(
+    COMMON_ESCALATION_TRIGGERS_BY_VERTICAL,
+    vertical,
+    COMMON_ESCALATION_TRIGGERS,
+  );
   const jurisdictionTable =
     jurisdiction === "SG"
-      ? (SG_ESCALATION_TRIGGERS_BY_VERTICAL[vertical] ?? SG_ESCALATION_TRIGGERS)
-      : (MY_ESCALATION_TRIGGERS_BY_VERTICAL[vertical] ?? MY_ESCALATION_TRIGGERS);
+      ? resolveVerticalTable(SG_ESCALATION_TRIGGERS_BY_VERTICAL, vertical, SG_ESCALATION_TRIGGERS)
+      : resolveVerticalTable(MY_ESCALATION_TRIGGERS_BY_VERTICAL, vertical, MY_ESCALATION_TRIGGERS);
 
   const merged: EscalationTriggerEntry[] = [...common, ...jurisdictionTable].map(normalizeEntry);
 
@@ -56,6 +62,16 @@ export function loadEscalationTriggers(
     }
     seen.add(entry.id);
   }
+
+  // Fail-closed floor guard (SH-1): a vertical's merged table must cover every
+  // floor safety boundary. medspa passes with zero edits; a deficient or empty
+  // pack throws at load rather than silently running under-protected.
+  assertFloorCoverage(
+    merged,
+    ESCALATION_FLOOR_MANIFEST,
+    (probe, entries) => scanForEscalationTriggers(probe, entries).length > 0,
+    `${vertical}/${jurisdiction} escalation-triggers`,
+  );
 
   const frozen = Object.freeze(merged);
   cache.set(cacheKey, frozen);

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { loadEscalationTriggers, _resetEscalationTriggerCache } from "../loader.js";
-import { COMMON_ESCALATION_TRIGGERS } from "../common.js";
-import { SG_ESCALATION_TRIGGERS } from "../sg.js";
-import { MY_ESCALATION_TRIGGERS } from "../my.js";
+import { COMMON_ESCALATION_TRIGGERS, COMMON_ESCALATION_TRIGGERS_BY_VERTICAL } from "../common.js";
+import { SG_ESCALATION_TRIGGERS, SG_ESCALATION_TRIGGERS_BY_VERTICAL } from "../sg.js";
+import { MY_ESCALATION_TRIGGERS, MY_ESCALATION_TRIGGERS_BY_VERTICAL } from "../my.js";
+import type { Vertical } from "../../../vertical.js";
 
 describe("loadEscalationTriggers", () => {
   beforeEach(() => {
@@ -117,5 +118,31 @@ describe("loadEscalationTriggers vertical keying", () => {
     const medspa = loadEscalationTriggers("MY", "medspa");
     const fitness = loadEscalationTriggers("MY", "fitness");
     expect(fitness.map((e) => e.id)).toEqual(medspa.map((e) => e.id));
+  });
+});
+
+describe("loadEscalationTriggers floor coverage guard (SH-1)", () => {
+  beforeEach(() => {
+    _resetEscalationTriggerCache();
+  });
+
+  it("every registered vertical passes the floor guard in both jurisdictions", () => {
+    const registered = new Set<Vertical>([
+      ...(Object.keys(COMMON_ESCALATION_TRIGGERS_BY_VERTICAL) as Vertical[]),
+      ...(Object.keys(SG_ESCALATION_TRIGGERS_BY_VERTICAL) as Vertical[]),
+      ...(Object.keys(MY_ESCALATION_TRIGGERS_BY_VERTICAL) as Vertical[]),
+    ]);
+    expect(registered.size).toBeGreaterThan(0);
+    for (const v of registered) {
+      for (const j of ["SG", "MY"] as const) {
+        _resetEscalationTriggerCache();
+        expect(() => loadEscalationTriggers(j, v), `${v}/${j}`).not.toThrow();
+      }
+    }
+  });
+
+  it("a non-seed vertical inheriting the medspa floor still passes the guard", () => {
+    expect(() => loadEscalationTriggers("SG", "fitness")).not.toThrow();
+    expect(() => loadEscalationTriggers("MY", "fitness")).not.toThrow();
   });
 });

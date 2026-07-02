@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { loadBannedPhrases, _resetBannedPhraseCache } from "../loader.js";
-import { COMMON_BANNED_PHRASES } from "../common.js";
-import { SG_BANNED_PHRASES } from "../sg.js";
-import { MY_BANNED_PHRASES } from "../my.js";
+import { COMMON_BANNED_PHRASES, COMMON_BANNED_PHRASES_BY_VERTICAL } from "../common.js";
+import { SG_BANNED_PHRASES, SG_BANNED_PHRASES_BY_VERTICAL } from "../sg.js";
+import { MY_BANNED_PHRASES, MY_BANNED_PHRASES_BY_VERTICAL } from "../my.js";
+import type { Vertical } from "../../../vertical.js";
 
 describe("loadBannedPhrases", () => {
   beforeEach(() => {
@@ -130,5 +131,31 @@ describe("loadBannedPhrases vertical keying", () => {
     const medspa = loadBannedPhrases("MY", "medspa");
     const fitness = loadBannedPhrases("MY", "fitness");
     expect(fitness.map((e) => e.id)).toEqual(medspa.map((e) => e.id));
+  });
+});
+
+describe("loadBannedPhrases floor coverage guard (SH-1)", () => {
+  beforeEach(() => {
+    _resetBannedPhraseCache();
+  });
+
+  it("every registered vertical passes the floor guard in both jurisdictions", () => {
+    const registered = new Set<Vertical>([
+      ...(Object.keys(COMMON_BANNED_PHRASES_BY_VERTICAL) as Vertical[]),
+      ...(Object.keys(SG_BANNED_PHRASES_BY_VERTICAL) as Vertical[]),
+      ...(Object.keys(MY_BANNED_PHRASES_BY_VERTICAL) as Vertical[]),
+    ]);
+    expect(registered.size).toBeGreaterThan(0);
+    for (const v of registered) {
+      for (const j of ["SG", "MY"] as const) {
+        _resetBannedPhraseCache();
+        expect(() => loadBannedPhrases(j, v), `${v}/${j}`).not.toThrow();
+      }
+    }
+  });
+
+  it("a non-seed vertical inheriting the medspa floor still passes the guard", () => {
+    expect(() => loadBannedPhrases("SG", "fitness")).not.toThrow();
+    expect(() => loadBannedPhrases("MY", "fitness")).not.toThrow();
   });
 });
