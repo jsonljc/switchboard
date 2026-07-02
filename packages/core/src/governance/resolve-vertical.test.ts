@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { GovernanceConfig } from "@switchboard/schemas";
+import { buildSafeHarborFloorConfig } from "@switchboard/schemas";
 import { resolveVertical } from "./resolve-vertical.js";
 import { DEFAULT_VERTICAL } from "../vertical.js";
 
@@ -43,5 +44,12 @@ describe("resolveVertical", () => {
     expect(resolveVertical(withVertical(null))).toBe("medspa");
     expect(errSpy).not.toHaveBeenCalled();
     errSpy.mockRestore();
+  });
+});
+
+describe("floor seam: schemas factory -> core resolver", () => {
+  it("resolves the safe-harbor floor config to the generic vertical (SG and MY)", () => {
+    expect(resolveVertical(buildSafeHarborFloorConfig({ jurisdiction: "SG" }))).toBe("generic");
+    expect(resolveVertical(buildSafeHarborFloorConfig({ jurisdiction: "MY" }))).toBe("generic");
   });
 });

@@ -33,7 +33,7 @@ const cache = new Map<string, ReadonlyArray<EscalationTriggerEntry>>();
  * second param defaulting to `medspa`, so every existing single-arg caller (and
  * the by-reference `escalationTriggerLoader: loadEscalationTriggers` wiring)
  * stays byte-identical: same merged set, same order, same frozen instance per
- * key. A vertical without its own table inherits the medspa seed floor
+ * key. A vertical without its own table resolves the generic safe-harbor floor (SH-2)
  * (over-restrict is the safe direction until that vertical's pack lands).
  */
 export function loadEscalationTriggers(
