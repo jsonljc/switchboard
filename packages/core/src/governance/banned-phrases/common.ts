@@ -1,4 +1,4 @@
-import type { BannedPhraseEntry } from "./types.js";
+import type { BannedPhraseEntry, BannedPhraseCategory } from "./types.js";
 import type { Vertical } from "../../vertical.js";
 
 export const COMMON_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
@@ -178,13 +178,41 @@ export const COMMON_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> = [
 ];
 
 /**
+ * The universal safe-harbor floor (SH-2): the vertical-agnostic subset of the
+ * medspa common table. Every self-serve / unpacked agent resolves this instead
+ * of the medspa seed. A STRICT SUBSET of medspa by construction (a filter over
+ * COMMON_BANNED_PHRASES), so medspa keeps passing the floor manifest with zero
+ * edits and the loader floor stays a subset of medspa.
+ *
+ * Included: the universal claim boundaries (guarantee, superlative, urgency,
+ * testimonial) plus the generic health-cure ban. Excluded: the medspa-specific
+ * medical-claim entries (treats/fixes/eliminates/reverse-aging/removes), which
+ * are aesthetic-condition specific and belong to the medspa pack, not the floor.
+ */
+const GENERIC_BANNED_CATEGORIES = new Set<BannedPhraseCategory>([
+  "guarantee",
+  "superlative",
+  "urgency",
+  "testimonial",
+]);
+const GENERIC_BANNED_EXTRA_IDS = new Set<string>(["medical_cure"]);
+export const GENERIC_COMMON_BANNED_PHRASES: ReadonlyArray<BannedPhraseEntry> =
+  COMMON_BANNED_PHRASES.filter(
+    (entry) =>
+      GENERIC_BANNED_CATEGORIES.has(entry.category) || GENERIC_BANNED_EXTRA_IDS.has(entry.id),
+  );
+
+/**
  * Vertical-keyed view of the common banned-phrase table. `medspa` is the seed
- * vertical (the table above is its floor); a vertical absent here inherits the
- * medspa floor in the loader until its own pack lands. Keyed so the loader can
- * re-key on (vertical, jurisdiction) without changing any call site.
+ * vertical (its table is the medspa pack); `generic` is the universal floor. A
+ * vertical absent here falls back to the generic floor in the loader (SH-2),
+ * over-restricting only on the jurisdiction regulatory overlay until its pack
+ * lands. Keyed so the loader re-keys on (vertical, jurisdiction) with no
+ * call-site change.
  */
 export const COMMON_BANNED_PHRASES_BY_VERTICAL: Partial<
   Record<Vertical, ReadonlyArray<BannedPhraseEntry>>
 > = {
   medspa: COMMON_BANNED_PHRASES,
+  generic: GENERIC_COMMON_BANNED_PHRASES,
 };

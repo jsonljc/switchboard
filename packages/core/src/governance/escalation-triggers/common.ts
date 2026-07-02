@@ -1,4 +1,4 @@
-import type { EscalationTriggerEntry } from "./types.js";
+import type { EscalationTriggerEntry, EscalationTriggerCategory } from "./types.js";
 import type { Vertical } from "../../vertical.js";
 
 export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> = [
@@ -193,13 +193,32 @@ export const COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
 ];
 
 /**
+ * The universal safe-harbor escalation floor (SH-2): the vertical-agnostic
+ * subset of the medspa common triggers. A STRICT SUBSET of medspa by
+ * construction. Included categories: sensitive_keyword (minor / medical
+ * condition / mental-health crisis), prior_complaint, competitor_negative. The
+ * medspa-procedure-specific triggers (pregnancy, prior adverse reaction,
+ * anticoagulant use, suspicious lesion, recent procedure, multi-treatment combo)
+ * belong to the medspa pack, not the floor.
+ */
+const GENERIC_ESCALATION_CATEGORIES = new Set<EscalationTriggerCategory>([
+  "sensitive_keyword",
+  "prior_complaint",
+  "competitor_negative",
+]);
+export const GENERIC_COMMON_ESCALATION_TRIGGERS: ReadonlyArray<EscalationTriggerEntry> =
+  COMMON_ESCALATION_TRIGGERS.filter((entry) => GENERIC_ESCALATION_CATEGORIES.has(entry.category));
+
+/**
  * Vertical-keyed view of the common escalation-trigger table. `medspa` is the
- * seed vertical (the table above is its floor); a vertical absent here inherits
- * the medspa floor in the loader until its own pack lands. Keyed so the loader
- * can re-key on (vertical, jurisdiction) without changing any call site.
+ * seed vertical (its table is the medspa pack); `generic` is the universal
+ * floor. A vertical absent here falls back to the generic floor in the loader
+ * (SH-2). Keyed so the loader re-keys on (vertical, jurisdiction) with no
+ * call-site change.
  */
 export const COMMON_ESCALATION_TRIGGERS_BY_VERTICAL: Partial<
   Record<Vertical, ReadonlyArray<EscalationTriggerEntry>>
 > = {
   medspa: COMMON_ESCALATION_TRIGGERS,
+  generic: GENERIC_COMMON_ESCALATION_TRIGGERS,
 };
