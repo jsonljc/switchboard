@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { currencyForMarket, resolveMarket } from "./market-registry.js";
 import { currencyForJurisdiction, JURISDICTIONS } from "./governance-config.js";
+import type { GovernanceConfig } from "./governance-config.js";
 
 describe("currencyForMarket", () => {
   it("maps SG to SGD", () => {
@@ -61,5 +62,47 @@ describe("prototype-chain fail-closed", () => {
 
   it("currencyForMarket returns null for an inherited Object.prototype key", () => {
     expect(currencyForMarket("constructor")).toBeNull();
+  });
+});
+
+describe("resolveMarket (config-form)", () => {
+  it("falls back to the legacy jurisdiction field when no market marker is present", () => {
+    expect(
+      resolveMarket({ jurisdiction: "SG", clinicType: "medical" } as GovernanceConfig)?.id,
+    ).toBe("SG");
+  });
+
+  it("honors the market marker over jurisdiction when present", () => {
+    expect(
+      resolveMarket({
+        jurisdiction: "SG",
+        clinicType: "medical",
+        market: "MY",
+      } as unknown as GovernanceConfig)?.id,
+    ).toBe("MY");
+  });
+
+  it("fails closed to null for an unregistered market marker", () => {
+    expect(
+      resolveMarket({
+        jurisdiction: "SG",
+        clinicType: "medical",
+        market: "TH",
+      } as unknown as GovernanceConfig),
+    ).toBeNull();
+  });
+
+  it("resolves currency via the legacy jurisdiction fallback", () => {
+    expect(
+      resolveMarket({ jurisdiction: "MY", clinicType: "nonMedical" } as GovernanceConfig)?.currency,
+    ).toBe("MYR");
+  });
+
+  it("returns null for a null config", () => {
+    expect(resolveMarket(null)).toBeNull();
+  });
+
+  it("still resolves the id-form (regression guard)", () => {
+    expect(resolveMarket("SG")?.id).toBe("SG");
   });
 });
