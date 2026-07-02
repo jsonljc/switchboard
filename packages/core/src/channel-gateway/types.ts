@@ -4,6 +4,7 @@ import type { CanonicalSubmitRequest } from "../platform/canonical-request.js";
 import type { ApprovalStore, IdentityStore } from "../storage/interfaces.js";
 import type { GovernanceConfigResolver } from "../governance/governance-config-resolver.js";
 import type { EscalationTriggerEntry } from "../governance/escalation-triggers/types.js";
+import type { Vertical } from "../vertical.js";
 import type { GovernanceVerdictStore } from "../governance/governance-verdict-store/types.js";
 import type { GovernancePostureCache } from "../governance/posture-cache.js";
 import type { HandoffStore } from "../handoff/types.js";
@@ -126,7 +127,10 @@ export interface ChannelGatewayConfig {
   /**
    * Loads escalation trigger entries for a jurisdiction. When omitted, the gate is skipped.
    */
-  escalationTriggerLoader?: (jurisdiction: "SG" | "MY") => ReadonlyArray<EscalationTriggerEntry>;
+  escalationTriggerLoader?: (
+    jurisdiction: "SG" | "MY",
+    vertical: Vertical,
+  ) => ReadonlyArray<EscalationTriggerEntry>;
   /**
    * Persists governance audit verdicts. When omitted, the gate is skipped.
    */

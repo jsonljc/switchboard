@@ -3,6 +3,8 @@ import type { GovernanceConfigResolver } from "../../governance/governance-confi
 import type { BannedPhraseEntry } from "../../governance/banned-phrases/types.js";
 import { REASON_CODE_BY_CATEGORY } from "../../governance/banned-phrases/types.js";
 import { scanForBannedPhrases } from "../../governance/scanner/banned-phrase-scanner.js";
+import { resolveVertical } from "../../governance/resolve-vertical.js";
+import { DEFAULT_VERTICAL, type Vertical } from "../../vertical.js";
 import { renderHandoffTemplate } from "../../governance/handoff-template.js";
 import type {
   GovernanceVerdictStore,
@@ -48,7 +50,10 @@ export interface ConversationStatusSetter {
 
 export interface DeterministicSafetyGateHookDeps {
   governanceConfigResolver: GovernanceConfigResolver;
-  bannedPhraseLoader: (jurisdiction: "SG" | "MY") => ReadonlyArray<BannedPhraseEntry>;
+  bannedPhraseLoader: (
+    jurisdiction: "SG" | "MY",
+    vertical: Vertical,
+  ) => ReadonlyArray<BannedPhraseEntry>;
   verdictStore: GovernanceVerdictStore;
   handoffStore: HandoffStore;
   conversationStore: ConversationStatusSetter;
@@ -120,18 +125,20 @@ export class DeterministicSafetyGateHook implements SkillHook {
     // ------------------------------------------------------------------
     const { config } = resolution;
     const mode = resolveGovernanceMode(config);
+    const vertical = resolveVertical(config);
 
     postureCache.remember(deploymentId, {
       mode,
       jurisdiction: config.jurisdiction,
       clinicType: config.clinicType,
+      vertical,
     });
 
     if (mode === "off") {
       return;
     }
 
-    const entries = bannedPhraseLoader(config.jurisdiction);
+    const entries = bannedPhraseLoader(config.jurisdiction, vertical);
     const matches = scanForBannedPhrases(result.response, entries);
 
     if (matches.length === 0) {
@@ -237,7 +244,9 @@ export class DeterministicSafetyGateHook implements SkillHook {
       error,
     );
 
-    const entries = bannedPhraseLoader(posture.jurisdiction);
+    // Cached-enforce path: thread the cached vertical if present, else fall back
+    // to the default vertical (medspa) which over-restricts (the safe direction).
+    const entries = bannedPhraseLoader(posture.jurisdiction, posture.vertical ?? DEFAULT_VERTICAL);
     const matches = scanForBannedPhrases(result.response, entries);
 
     if (matches.length === 0) {
