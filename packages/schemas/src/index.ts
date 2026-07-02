@@ -250,3 +250,7 @@ export * from "./robin-recovery.js";
 
 // Robin v1 recovery-send dedup key + status (the per-recipient send log)
 export * from "./robin-recovery-send.js";
+
+// Open, fail-closed market registry (L1 S2-1): generalizes Jurisdiction beyond the
+// closed SG/MY union; currencyForJurisdiction stays the legacy chokepoint, untouched.
+export * from "./market-registry.js";
