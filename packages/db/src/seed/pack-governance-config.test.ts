@@ -1,68 +1,76 @@
 import { describe, it, expect } from "vitest";
-import { buildObserveGovernanceConfig, buildSafeHarborFloorConfig } from "@switchboard/schemas";
 import {
-  selectPackGovernanceConfig,
-  DEFAULT_PROVISIONING_VERTICAL,
-  DEFAULT_PROVISIONING_MARKET,
-} from "./pack-governance-config.js";
+  buildObserveGovernanceConfig,
+  buildSafeHarborFloorConfig,
+  resolveMarket,
+} from "@switchboard/schemas";
+import { selectPackGovernanceConfig } from "./pack-governance-config.js";
 import { MEDSPA_PILOT_GOVERNANCE_CONFIG } from "./medspa-governance-config.js";
 
-describe("selectPackGovernanceConfig: the (vertical, market) pack-selection seam", () => {
-  it("defaults to medspa / SG and returns the EXISTING MEDSPA_PILOT_GOVERNANCE_CONFIG constant", () => {
-    // Byte-identical guarantee for existing orgs: the default seam must return the very
-    // constant the db seeder stamped before this slice, not a look-alike rebuild.
+describe("selectPackGovernanceConfig: medspa stays byte-identical (vetted profile, never markers)", () => {
+  it("medspa / SG returns the EXISTING MEDSPA_PILOT_GOVERNANCE_CONFIG constant (by reference)", () => {
+    // Byte-identical guarantee for existing orgs: the vetted-profile SG path must return
+    // the very db constant the seeders stamped before this seam, not a look-alike rebuild.
+    expect(selectPackGovernanceConfig({ regulatoryProfileId: "medspa", market: "SG" })).toBe(
+      MEDSPA_PILOT_GOVERNANCE_CONFIG,
+    );
+  });
+
+  it("defaults (no input) resolve to the medspa / SG constant (by reference)", () => {
     expect(selectPackGovernanceConfig()).toBe(MEDSPA_PILOT_GOVERNANCE_CONFIG);
     expect(selectPackGovernanceConfig({})).toBe(MEDSPA_PILOT_GOVERNANCE_CONFIG);
   });
 
-  it("returns the medspa constant for an explicit medspa / SG selection", () => {
-    expect(selectPackGovernanceConfig({ vertical: "medspa", market: "SG" })).toBe(
-      MEDSPA_PILOT_GOVERNANCE_CONFIG,
-    );
-  });
-
-  it("the medspa / SG default is the all-gates-observe SG/medical posture", () => {
-    expect(selectPackGovernanceConfig()).toEqual(
-      buildObserveGovernanceConfig({ jurisdiction: "SG", clinicType: "medical" }),
-    );
-    expect(selectPackGovernanceConfig().deterministicGate.mode).toBe("observe");
-  });
-
-  it("keys the OBSERVE posture on market: MY yields the MY/medical observe config, distinct from SG", () => {
-    const my = selectPackGovernanceConfig({ market: "MY" });
+  it("medspa / MY is the marker-free MY/medical observe posture (exact SH-4 output preserved)", () => {
+    const my = selectPackGovernanceConfig({ regulatoryProfileId: "medspa", market: "MY" });
     expect(my).toEqual(buildObserveGovernanceConfig({ jurisdiction: "MY", clinicType: "medical" }));
-    // Proves market is a real selection key, not ignored (a dropped param would return the SG default).
-    expect(my).not.toEqual(selectPackGovernanceConfig({ market: "SG" }));
+    // The vetted-profile path NEVER stamps the passthrough markers (they would drift the
+    // byte-identical output). A dropped market param would return the SG default, so this
+    // also proves market is a real selection key.
+    expect("market" in my).toBe(false);
+    expect("regulatoryProfileId" in my).toBe(false);
     expect(my.jurisdiction).toBe("MY");
-    // Still observe (the pack default posture is never enforce).
     expect(my.deterministicGate.mode).toBe("observe");
-  });
-
-  it("exposes the medspa / SG defaults as named constants", () => {
-    expect(DEFAULT_PROVISIONING_VERTICAL).toBe("medspa");
-    expect(DEFAULT_PROVISIONING_MARKET).toBe("SG");
   });
 });
 
-describe("selectPackGovernanceConfig: the generic safe-harbor floor (SH-4)", () => {
-  it("returns the safe-harbor floor for the generic vertical (SG): observe, nonMedical, generic marker", () => {
-    const floor = selectPackGovernanceConfig({ vertical: "generic", market: "SG" });
-    expect(floor).toEqual(buildSafeHarborFloorConfig({ jurisdiction: "SG" }));
-    expect((floor as { vertical?: string }).vertical).toBe("generic");
-    expect(floor.clinicType).toBe("nonMedical");
-    expect(floor.deterministicGate.mode).toBe("observe");
-  });
-
-  it("keys the floor on market: MY yields the MY floor", () => {
-    const my = selectPackGovernanceConfig({ vertical: "generic", market: "MY" });
-    expect(my.jurisdiction).toBe("MY");
-    expect((my as { vertical?: string }).vertical).toBe("generic");
-  });
-
-  it("does not disturb the medspa default (still the byte-identical constant)", () => {
-    expect(selectPackGovernanceConfig()).toBe(MEDSPA_PILOT_GOVERNANCE_CONFIG);
-    expect(selectPackGovernanceConfig({ vertical: "medspa", market: "SG" })).toBe(
-      MEDSPA_PILOT_GOVERNANCE_CONFIG,
+describe("selectPackGovernanceConfig: generic / self-serve stamps market + profile markers", () => {
+  it("generic / SG is the safe-harbor floor plus the market + regulatoryProfileId markers", () => {
+    const expected = {
+      ...buildSafeHarborFloorConfig({ jurisdiction: "SG" }),
+      market: "SG",
+      regulatoryProfileId: "generic",
+    };
+    expect(selectPackGovernanceConfig({ regulatoryProfileId: "generic", market: "SG" })).toEqual(
+      expected,
     );
+  });
+
+  it("an unknown profile fails closed to generic (the RESOLVED id is stamped) and never throws", () => {
+    const expected = {
+      ...buildSafeHarborFloorConfig({ jurisdiction: "SG" }),
+      market: "SG",
+      regulatoryProfileId: "generic",
+    };
+    expect(() =>
+      selectPackGovernanceConfig({ regulatoryProfileId: "salon", market: "SG" }),
+    ).not.toThrow();
+    const result = selectPackGovernanceConfig({ regulatoryProfileId: "salon", market: "SG" });
+    expect(result).toEqual(expected);
+    // The stamped id is the resolved "generic", not the unknown "salon" request.
+    expect((result as { regulatoryProfileId?: string }).regulatoryProfileId).toBe("generic");
+  });
+
+  it("an unknown market fails closed: loader jurisdiction SG, real market preserved, resolveMarket null", () => {
+    expect(() =>
+      selectPackGovernanceConfig({ regulatoryProfileId: "generic", market: "TH" }),
+    ).not.toThrow();
+    const result = selectPackGovernanceConfig({ regulatoryProfileId: "generic", market: "TH" });
+    // The stored `jurisdiction` only holds the SG/MY loader jurisdiction, so it falls back to SG...
+    expect(result.jurisdiction).toBe("SG");
+    // ...but the real requested market rides as a passthrough marker so it is not silently lost...
+    expect((result as { market?: string }).market).toBe("TH");
+    // ...and because TH is unregistered, resolveMarket is null → currency/PDPA fail closed downstream.
+    expect(resolveMarket(result)).toBeNull();
   });
 });

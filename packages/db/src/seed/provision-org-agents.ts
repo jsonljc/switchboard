@@ -5,11 +5,8 @@ import { seedMiraCreativeDeployment } from "./seed-mira-creative-deployment.js";
 import { seedMiraPilotOrgs } from "./seed-mira-pilot-orgs.js";
 import { seedRobinRecoveryPolicies } from "./robin-recovery-governance.js";
 import { seedProactiveIntakePolicies } from "./proactive-intake-governance.js";
-import {
-  selectPackGovernanceConfig,
-  type ProvisioningVertical,
-  type ProvisioningMarket,
-} from "./pack-governance-config.js";
+import { selectPackGovernanceConfig } from "./pack-governance-config.js";
+import type { MarketId, RegulatoryProfileId } from "@switchboard/schemas";
 
 export interface ProvisionOrgAgentsResult {
   riley: { deploymentId: string };
@@ -48,13 +45,13 @@ export interface EnsureAlexResult {
 
 export interface EnsureAlexOptions {
   /**
-   * Onboarding-derived pack selection. Both default to medspa / SG (via
+   * Onboarding-derived provisioning selection. Both default to medspa / SG (via
    * `selectPackGovernanceConfig`), so a caller that omits them provisions the exact
    * byte-identical medspa observe posture a pilot org got before this seam existed.
    * The pilot CLI threads these once onboarding captures them.
    */
-  vertical?: ProvisioningVertical;
-  market?: ProvisioningMarket;
+  regulatoryProfileId?: RegulatoryProfileId;
+  market?: MarketId;
 }
 
 /**
@@ -77,13 +74,13 @@ export async function ensureAlexForOrg(
   orgId: string,
   opts: EnsureAlexOptions = {},
 ): Promise<EnsureAlexResult> {
-  // Route governance-config selection through the (vertical, market) pack-selection seam
-  // instead of hardcoding the medspa constant. Defaults to medspa / SG, which returns the
-  // exact MEDSPA_PILOT_GOVERNANCE_CONFIG constant, so an org onboarded without explicit
+  // Route governance-config selection through the (regulatoryProfileId, market) provisioning
+  // seam instead of hardcoding the medspa constant. Defaults to medspa / SG, which returns
+  // the exact MEDSPA_PILOT_GOVERNANCE_CONFIG constant, so an org onboarded without explicit
   // input is byte-identical to before. MUST stay in sync with the apps/api sibling
   // ensureAlexListingForOrg, which now consults the same seam.
   const governanceConfig = selectPackGovernanceConfig({
-    vertical: opts.vertical,
+    regulatoryProfileId: opts.regulatoryProfileId,
     market: opts.market,
   });
 

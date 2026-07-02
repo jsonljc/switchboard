@@ -25,6 +25,19 @@ describe("buildResolveCurrency", () => {
     expect(await resolve("dep_1")).toBe("SGD");
   });
 
+  it("returns null (fail-closed) for a config whose market marker is an unregistered market", async () => {
+    // A self-serve agent provisioned into an unregistered market (e.g. TH) carries a
+    // `market` passthrough marker but only an SG/MY loader `jurisdiction`. Currency must
+    // fail closed to null on the real market, never fall back to the loader jurisdiction's
+    // currency (which would silently charge SGD in an unsupported market).
+    const thConfig = {
+      ...buildObserveGovernanceConfig({ jurisdiction: "SG", clinicType: "medical" }),
+      market: "TH",
+    };
+    const resolve = over({ status: "resolved", config: thConfig });
+    expect(await resolve("dep_1")).toBeNull();
+  });
+
   it("returns null (fail-closed) when the config is missing", async () => {
     const resolve = over({ status: "missing" });
     expect(await resolve("dep_1")).toBeNull();

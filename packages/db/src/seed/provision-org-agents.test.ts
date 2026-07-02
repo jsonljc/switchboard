@@ -311,13 +311,13 @@ describe("provisionOrgAgentDeployments", () => {
       );
     });
 
-    it("threads the onboarding (vertical, market) into selectPackGovernanceConfig (not ignored)", async () => {
+    it("threads the onboarding (regulatoryProfileId, market) into selectPackGovernanceConfig (not ignored)", async () => {
       const selectSpy = vi.spyOn(packSelector, "selectPackGovernanceConfig");
-      await ensureAlexForOrg(prisma, "org_my", { vertical: "medspa", market: "MY" });
+      await ensureAlexForOrg(prisma, "org_my", { regulatoryProfileId: "medspa", market: "MY" });
       // The seeder must FORWARD the caller's onboarding input verbatim to the seam, even
       // though the default would resolve to the same medspa config. This proves it is wired,
       // not dropped. This is the db half of the dual-provisioning sync obligation.
-      expect(selectSpy).toHaveBeenCalledWith({ vertical: "medspa", market: "MY" });
+      expect(selectSpy).toHaveBeenCalledWith({ regulatoryProfileId: "medspa", market: "MY" });
       selectSpy.mockRestore();
     });
 
