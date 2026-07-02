@@ -8,8 +8,12 @@
  * this seam stays additive and fully reversible until the VerticalPack registry
  * lands. The vocabulary mirrors the schemas `reference-metadata` vertical enum
  * (minus "none", which never carries governance data).
+ *
+ * Single source: the type derives from VERTICALS so the runtime list (used by
+ * resolveVertical's marker validation) and the union can never drift apart.
  */
-export type Vertical = "medspa" | "dental" | "fitness" | "generic";
+export const VERTICALS = ["medspa", "dental", "fitness", "generic"] as const;
+export type Vertical = (typeof VERTICALS)[number];
 
 /**
  * Default vertical. Every existing caller keys on this, so re-keying the loaders

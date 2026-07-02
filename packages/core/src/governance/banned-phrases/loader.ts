@@ -1,5 +1,5 @@
 import type { BannedPhraseEntry } from "./types.js";
-import { COMMON_BANNED_PHRASES, COMMON_BANNED_PHRASES_BY_VERTICAL } from "./common.js";
+import { COMMON_BANNED_PHRASES_BY_VERTICAL, GENERIC_COMMON_BANNED_PHRASES } from "./common.js";
 import { SG_BANNED_PHRASES, SG_BANNED_PHRASES_BY_VERTICAL } from "./sg.js";
 import { MY_BANNED_PHRASES, MY_BANNED_PHRASES_BY_VERTICAL } from "./my.js";
 import { normalizeRegex } from "../text/regex.js";
@@ -40,10 +40,13 @@ export function loadBannedPhrases(
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
+  // Fallback floor is the GENERIC safe-harbor table (SH-2): an absent/empty
+  // vertical resolves the universal floor, not the medspa pack. medspa is
+  // registered so it resolves its own table verbatim (byte-identical).
   const common = resolveVerticalTable(
     COMMON_BANNED_PHRASES_BY_VERTICAL,
     vertical,
-    COMMON_BANNED_PHRASES,
+    GENERIC_COMMON_BANNED_PHRASES,
   );
   const jurisdictionTable =
     jurisdiction === "SG"
