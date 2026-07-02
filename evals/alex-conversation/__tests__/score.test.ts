@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { compareAgainstBaseline, summarizeResults } from "../score.js";
+import {
+  compareAgainstBaseline,
+  summarizeResults,
+  deterministicRegressions,
+  judgeRegressions,
+} from "../score.js";
 import type { ScenarioResult } from "../score.js";
 import type { Baseline } from "../schema.js";
 
@@ -480,6 +485,197 @@ describe("compareAgainstBaseline — claim warnings are informational only", () 
 
     const { passed } = compareAgainstBaseline(current, baseline);
     expect(passed).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// taggedRegressions - kind-tagged regressions (EV-5 gate separation)
+// ---------------------------------------------------------------------------
+//
+// compareAgainstBaseline must ALSO emit a structured, kind-tagged view of the
+// same regressions so a caller can separate the DETERMINISTIC rule (Rule 1)
+// from the two JUDGE rules (Rules 2 + 3). This is the enabler for gating the
+// alex live leg on deterministic signal only.
+
+describe("compareAgainstBaseline - taggedRegressions", () => {
+  it("tags a Rule-1 (deterministic) regression, split away from judgeRegressions", () => {
+    const baseline = makeBaseline({
+      scenarios: [
+        {
+          id: "sg-price-objection",
+          deterministicPass: true,
+          judgeScore: 4,
+          requiredBehaviorsMet: [],
+          violations: [],
+        },
+      ],
+    });
+
+    const current = [
+      makeResult("sg-price-objection", {
+        deterministicPass: false,
+        violations: ["claim:efficacy"],
+      }),
+    ];
+
+    const result = compareAgainstBaseline(current, baseline);
+
+    expect(result.passed).toBe(false);
+    expect(result.taggedRegressions).toHaveLength(1);
+    expect(result.taggedRegressions[0]).toMatchObject({
+      scenarioId: "sg-price-objection",
+      kind: "deterministic",
+    });
+    expect(deterministicRegressions(result)).toEqual(result.taggedRegressions);
+    expect(judgeRegressions(result)).toHaveLength(0);
+  });
+
+  it("tags a Rule-2 (judge-hard-rule) regression, split away from deterministicRegressions", () => {
+    const baseline = makeBaseline({
+      scenarios: [
+        {
+          id: "my-booking-pressure",
+          deterministicPass: true,
+          judgeScore: 4,
+          requiredBehaviorsMet: [],
+          violations: [],
+        },
+      ],
+    });
+
+    const current = [
+      makeResult("my-booking-pressure", {
+        semanticHardRulePass: false,
+        violations: ["guarantees results"],
+      }),
+    ];
+
+    const result = compareAgainstBaseline(current, baseline);
+
+    expect(result.passed).toBe(false);
+    expect(result.taggedRegressions).toHaveLength(1);
+    expect(result.taggedRegressions[0]).toMatchObject({
+      scenarioId: "my-booking-pressure",
+      kind: "judge-hard-rule",
+    });
+    expect(judgeRegressions(result)).toEqual(result.taggedRegressions);
+    expect(deterministicRegressions(result)).toHaveLength(0);
+  });
+
+  it("tags a Rule-3 (judge-score) regression as a judge regression", () => {
+    const baseline = makeBaseline({
+      judgeScoreTolerance: 1,
+      scenarios: [
+        {
+          id: "sg-price-objection",
+          deterministicPass: true,
+          judgeScore: 4,
+          requiredBehaviorsMet: [],
+          violations: [],
+        },
+      ],
+    });
+
+    const current = [makeResult("sg-price-objection", { judgeScore: 2 })];
+    // drop = 4 - 2 = 2, which exceeds tolerance 1
+
+    const result = compareAgainstBaseline(current, baseline);
+
+    expect(result.passed).toBe(false);
+    expect(result.taggedRegressions).toHaveLength(1);
+    expect(result.taggedRegressions[0]).toMatchObject({
+      scenarioId: "sg-price-objection",
+      kind: "judge-score",
+    });
+    expect(judgeRegressions(result)).toEqual(result.taggedRegressions);
+    expect(deterministicRegressions(result)).toHaveLength(0);
+  });
+
+  it("leaves taggedRegressions empty and passed true for a clean scenario (regressions strings stay empty too)", () => {
+    const baseline = makeBaseline({
+      judgeScoreTolerance: 1,
+      scenarios: [
+        {
+          id: "sg-price-objection",
+          deterministicPass: true,
+          judgeScore: 4,
+          requiredBehaviorsMet: [],
+          violations: [],
+        },
+      ],
+    });
+
+    const current = [
+      makeResult("sg-price-objection", {
+        deterministicPass: true,
+        judgeScore: 4,
+        semanticHardRulePass: true,
+      }),
+    ];
+
+    const result = compareAgainstBaseline(current, baseline);
+
+    expect(result.taggedRegressions).toHaveLength(0);
+    expect(result.passed).toBe(true);
+    expect(result.regressions).toHaveLength(0);
+  });
+
+  it("does NOT tag a brand-new scenario absent from baseline, but keeps the [info] string (back-compat)", () => {
+    const baseline = makeBaseline({ scenarios: [] });
+
+    const current = [makeResult("brand-new-scenario", { deterministicPass: true, judgeScore: 5 })];
+
+    const result = compareAgainstBaseline(current, baseline);
+
+    expect(result.taggedRegressions).toHaveLength(0);
+    expect(result.passed).toBe(true);
+    expect(
+      result.regressions.some((r) => r.includes("[info]") && r.includes("brand-new-scenario")),
+    ).toBe(true);
+  });
+
+  it("splits a scenario tripping BOTH a deterministic and a judge rule across the two helpers", () => {
+    const baseline = makeBaseline({
+      judgeScoreTolerance: 1,
+      scenarios: [
+        {
+          id: "sg-double-regression",
+          deterministicPass: true,
+          judgeScore: 4,
+          requiredBehaviorsMet: [],
+          violations: [],
+        },
+      ],
+    });
+
+    const current = [
+      makeResult("sg-double-regression", {
+        deterministicPass: false,
+        semanticHardRulePass: false,
+        judgeScore: 4,
+        violations: ["unexpected-tool:payment-gateway", "guarantees-results"],
+      }),
+    ];
+
+    const result = compareAgainstBaseline(current, baseline);
+
+    expect(result.passed).toBe(false);
+    expect(result.taggedRegressions).toHaveLength(2);
+
+    const det = deterministicRegressions(result);
+    const judge = judgeRegressions(result);
+
+    expect(det).toHaveLength(1);
+    expect(det[0]).toMatchObject({ scenarioId: "sg-double-regression", kind: "deterministic" });
+
+    expect(judge).toHaveLength(1);
+    expect(judge[0]).toMatchObject({
+      scenarioId: "sg-double-regression",
+      kind: "judge-hard-rule",
+    });
+
+    // The two helpers are disjoint and together cover every tagged regression.
+    expect(det.length + judge.length).toBe(result.taggedRegressions.length);
   });
 });
 
