@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Vertical } from "./vertical.js";
 
 export const GovernanceModeSchema = z.enum(["off", "observe", "enforce"]);
 export type GovernanceMode = z.infer<typeof GovernanceModeSchema>;
@@ -312,8 +313,14 @@ export function buildObserveGovernanceConfig(
  * column, so no Prisma migration is needed (the established extension pattern).
  * Built on the single-source `buildObserveGovernanceConfig` so the floor posture
  * and the observe posture can never drift.
+ *
+ * The marker's type references the `Vertical` union (via `Extract`) rather than a
+ * bare `"generic"` literal, so a `VERTICALS` rename that drops `"generic"` breaks
+ * compilation HERE (compile-time complement to the resolveVertical seam test).
  */
-export type SafeHarborFloorConfig = ObserveGovernanceConfig & { vertical: "generic" };
+export type SafeHarborFloorConfig = ObserveGovernanceConfig & {
+  vertical: Extract<Vertical, "generic">;
+};
 
 export function buildSafeHarborFloorConfig(input: {
   jurisdiction: Jurisdiction;
