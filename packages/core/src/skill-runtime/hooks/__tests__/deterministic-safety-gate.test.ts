@@ -388,3 +388,73 @@ describe("DeterministicSafetyGateHook.afterSkill", () => {
     expect(spies.handoffStore.save).toHaveBeenCalled();
   });
 });
+
+describe("DeterministicSafetyGateHook vertical threading (SH-3)", () => {
+  function makeRecordingDeps(
+    config: Record<string, unknown>,
+    cache?: InMemoryGovernancePostureCache,
+  ): {
+    deps: DeterministicSafetyGateHookDeps;
+    calls: Array<{ jurisdiction: unknown; vertical: unknown }>;
+  } {
+    const calls: Array<{ jurisdiction: unknown; vertical: unknown }> = [];
+    const deps: DeterministicSafetyGateHookDeps = {
+      governanceConfigResolver: async () => ({
+        status: "resolved" as const,
+        config: config as never,
+      }),
+      bannedPhraseLoader: ((jurisdiction: unknown, vertical: unknown) => {
+        calls.push({ jurisdiction, vertical });
+        return BANNED_ENTRIES as never;
+      }) as never,
+      verdictStore: makeVerdictStoreSpy() as never,
+      handoffStore: makeHandoffStoreSpy() as never,
+      conversationStore: makeConversationStoreSpy() as never,
+      postureCache: cache ?? new InMemoryGovernancePostureCache(),
+      clock: () => new Date("2026-05-10T12:00:00.000Z"),
+    };
+    return { deps, calls };
+  }
+
+  it("threads the resolved vertical marker into the banned-phrase loader", async () => {
+    const { deps, calls } = makeRecordingDeps({
+      jurisdiction: "SG",
+      clinicType: "nonMedical",
+      deterministicGate: { mode: "observe" },
+      vertical: "generic",
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    expect(calls).toContainEqual({ jurisdiction: "SG", vertical: "generic" });
+  });
+
+  it("defaults to the medspa vertical when the config carries no marker (byte-identical)", async () => {
+    const { deps, calls } = makeRecordingDeps({
+      jurisdiction: "SG",
+      clinicType: "medical",
+      deterministicGate: { mode: "observe" },
+    });
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("This is guaranteed.");
+    await hook.afterSkill(ctx, result);
+    expect(calls).toContainEqual({ jurisdiction: "SG", vertical: "medspa" });
+  });
+
+  it("caches the vertical in the posture so the fail-closed path can thread it", async () => {
+    const cache = new InMemoryGovernancePostureCache();
+    const { deps } = makeRecordingDeps(
+      {
+        jurisdiction: "SG",
+        clinicType: "nonMedical",
+        deterministicGate: { mode: "enforce" },
+        vertical: "generic",
+      },
+      cache,
+    );
+    const hook = new DeterministicSafetyGateHook(deps);
+    const { ctx, result } = makeCtxAndResult("A clean, honest sentence.");
+    await hook.afterSkill(ctx, result);
+    expect(cache.lastKnown("dep-1")?.vertical).toBe("generic");
+  });
+});

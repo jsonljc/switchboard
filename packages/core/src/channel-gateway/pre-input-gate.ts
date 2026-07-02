@@ -1,5 +1,7 @@
 import { createId } from "@paralleldrive/cuid2";
 import { resolveGovernanceMode } from "@switchboard/schemas";
+import { resolveVertical } from "../governance/resolve-vertical.js";
+import { DEFAULT_VERTICAL } from "../vertical.js";
 import type { ChannelGatewayConfig, ConversationStatusUpsertContext, ReplySink } from "./types.js";
 import type { GatewayConversationStatusSetter } from "./types.js";
 import { scanForEscalationTriggers } from "../governance/scanner/escalation-trigger-scanner.js";
@@ -87,18 +89,20 @@ export async function runPreInputGate(
   // ------------------------------------------------------------------
   const { config: governance } = resolution;
   const mode = resolveGovernanceMode(governance);
+  const vertical = resolveVertical(governance);
 
   postureCache.remember(deploymentId, {
     mode,
     jurisdiction: governance.jurisdiction,
     clinicType: governance.clinicType,
+    vertical,
   });
 
   if (mode === "off") {
     return false;
   }
 
-  const entries = escalationTriggerLoader(governance.jurisdiction);
+  const entries = escalationTriggerLoader(governance.jurisdiction, vertical);
   const matches = scanForEscalationTriggers(inboundText, entries);
 
   if (matches.length === 0) {
@@ -260,7 +264,12 @@ async function handleInputGateResolverError(
     return false;
   }
 
-  const triggers = escalationTriggerLoader(posture.jurisdiction);
+  // Cached-enforce path: thread the cached vertical if present, else fall back
+  // to the default vertical (medspa) which over-restricts (the safe direction).
+  const triggers = escalationTriggerLoader(
+    posture.jurisdiction,
+    posture.vertical ?? DEFAULT_VERTICAL,
+  );
   const matches = scanForEscalationTriggers(inboundText, triggers);
 
   if (matches.length === 0) {

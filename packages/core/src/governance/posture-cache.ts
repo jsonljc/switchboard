@@ -1,9 +1,19 @@
 import type { GovernanceMode } from "@switchboard/schemas";
+import type { Vertical } from "../vertical.js";
 
 export type GovernancePosture = {
   mode: GovernanceMode;
   jurisdiction: "SG" | "MY";
   clinicType: "medical" | "nonMedical";
+  /**
+   * The vertical the deployment runs under (SH-3). Optional: the loader gates
+   * (deterministic-safety-gate, pre-input-gate) populate it so the fail-closed
+   * path can thread the same vertical into the (vertical, jurisdiction) loaders.
+   * When absent (e.g. a non-loader gate wrote the posture last), the
+   * cached-enforce path falls back to the default vertical (medspa), the
+   * over-restrictive safe direction.
+   */
+  vertical?: Vertical;
 };
 
 export interface GovernancePostureCache {
