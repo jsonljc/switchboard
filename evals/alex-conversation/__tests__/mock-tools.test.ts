@@ -4,163 +4,149 @@ import { ALEX_ALLOWED_TOOL_IDS } from "../grade.js";
 import {
   CRM_QUERY_CONTACT_GET_INPUT_SCHEMA,
   CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA,
-  CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA,
-  CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA,
-  CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA,
   CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA,
-  CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA,
-  CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA,
-  ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA,
-  FOLLOW_UP_SCHEDULE_INPUT_SCHEMA,
-  DEPOSIT_LINK_ISSUE_INPUT_SCHEMA,
+  createCrmQueryToolFactory,
+  createCrmWriteToolFactory,
+  createCalendarBookToolFactory,
+  createEscalateToolFactory,
+  createScheduleFollowUpToolFactory,
+  createDelegateToolFactory,
+  createDepositLinkToolFactory,
+  type SkillTool,
+  type DelegateToolDeps,
 } from "@switchboard/core/skill-runtime";
+// Still needed (not dropped): createDelegateToolFactory's op schema is INJECTED via
+// deps.targets (apps/api/src/bootstrap/delegation-targets.ts), not baked into the
+// factory like every other tool's schema constants are, so buildRealAlexTools()
+// below must supply the SAME constant itself to construct the real creative_concept
+// operation. See delegateDeps for why.
 import { CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA } from "@switchboard/schemas";
 
 /**
- * EV-5 / AGENT-5 — tool input-schema parity. The alex-conversation eval is the
- * highest-coverage agent eval; it must present Alex the EXACT tool input
- * contracts production registers, or it silently tests against a fictional
- * contract (the "mock-tool-blind" gap). Each real tool exports its operation
- * input schema as a constant (the live tool references it), and the mock below
- * imports + reuses those SAME constants — so this table asserts identity (`toBe`),
- * which can never pass against a drifted literal. The table is the canonical
- * Alex tool surface: { toolId, operation } -> { real schema const, effect, idempotent }.
+ * EV-5 / AGENT-5: tool-contract parity with production, pinned to the REAL Alex
+ * tools BY CONSTRUCTION (not a hand-maintained table). The alex-conversation eval
+ * is the highest-coverage agent eval; it must present Alex the EXACT tool contracts
+ * production registers, or it silently tests a fictional surface (the
+ * "mock-tool-blind" gap). We construct each real Alex tool factory (stub deps: the
+ * assertions read ONLY static operation metadata (effectCategory / idempotent /
+ * inputSchema / op keys), so `execute` is never called and the stub deps are never
+ * touched) and assert the mock is identical to it. This pins op-set, effect,
+ * idempotent, AND input schema to the real tools by identity: a real-tool contract
+ * change (an effectCategory flip, a renamed op, a re-inlined schema) reds this test,
+ * which the old hand-typed literal table could not catch.
  */
-const PRODUCTION_TOOL_PARITY: ReadonlyArray<{
-  toolId: string;
-  operation: string;
-  schema: Record<string, unknown>;
-  effectCategory: string;
-  idempotent: boolean;
-}> = [
-  {
-    toolId: "crm-query",
-    operation: "contact.get",
-    schema: CRM_QUERY_CONTACT_GET_INPUT_SCHEMA,
-    effectCategory: "read",
-    idempotent: true,
-  },
-  {
-    toolId: "crm-query",
-    operation: "activity.list",
-    schema: CRM_QUERY_ACTIVITY_LIST_INPUT_SCHEMA,
-    effectCategory: "read",
-    idempotent: true,
-  },
-  {
-    toolId: "crm-write",
-    operation: "stage.update",
-    schema: CRM_WRITE_STAGE_UPDATE_INPUT_SCHEMA,
-    effectCategory: "write",
-    idempotent: true,
-  },
-  {
-    toolId: "crm-write",
-    operation: "activity.log",
-    schema: CRM_WRITE_ACTIVITY_LOG_INPUT_SCHEMA,
-    effectCategory: "write",
-    idempotent: false,
-  },
-  {
-    toolId: "calendar-book",
-    operation: "slots.query",
-    schema: CALENDAR_BOOK_SLOTS_QUERY_INPUT_SCHEMA,
-    effectCategory: "read",
-    idempotent: true,
-  },
-  {
-    toolId: "calendar-book",
-    operation: "booking.create",
-    schema: CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA,
-    effectCategory: "external_mutation",
-    idempotent: true,
-  },
-  {
-    toolId: "calendar-book",
-    operation: "booking.reschedule",
-    schema: CALENDAR_BOOK_BOOKING_RESCHEDULE_INPUT_SCHEMA,
-    effectCategory: "external_mutation",
-    idempotent: false,
-  },
-  {
-    toolId: "calendar-book",
-    operation: "booking.cancel",
-    schema: CALENDAR_BOOK_BOOKING_CANCEL_INPUT_SCHEMA,
-    effectCategory: "external_mutation",
-    idempotent: false,
-  },
-  {
-    toolId: "escalate",
-    operation: "handoff.create",
-    schema: ESCALATE_HANDOFF_CREATE_INPUT_SCHEMA,
-    effectCategory: "write",
-    idempotent: false,
-  },
-  {
-    toolId: "follow-up",
-    operation: "followup.schedule",
-    schema: FOLLOW_UP_SCHEDULE_INPUT_SCHEMA,
-    effectCategory: "write",
-    idempotent: true,
-  },
-  {
-    toolId: "delegate",
-    operation: "creative_concept",
-    schema: CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA,
-    effectCategory: "propose",
-    idempotent: true,
-  },
-  {
-    toolId: "deposit-link",
-    operation: "deposit.issue",
-    schema: DEPOSIT_LINK_ISSUE_INPUT_SCHEMA,
-    effectCategory: "read",
-    idempotent: true,
-  },
-];
+function buildRealAlexTools(): Map<string, SkillTool> {
+  // The real factories set operation metadata statically and touch deps/ctx only
+  // inside `execute`; these parity assertions never execute, so empty stubs suffice
+  // for every factory EXCEPT delegate (see delegateDeps below).
+  const noDeps = {} as never;
+  const noCtx = {} as never;
+  // createDelegateToolFactory eagerly iterates `deps.targets` WHILE BUILDING the
+  // tool (packages/core/src/skill-runtime/tools/delegate.ts: `for (const target of
+  // deps.targets)`), not inside `execute`, so `{} as never` throws "deps.targets is
+  // not iterable" at construction. Alex's real (and only) wired target is the
+  // `creative_concept` handoff to Mira (apps/api/src/bootstrap/delegation-targets.ts
+  // CREATIVE_CONCEPT_TARGET), reproduced here as the minimal stub that avoids the
+  // throw and reflects the real op-set. Fidelity boundary: `effectCategory` and
+  // `idempotent` come from the REAL core factory (delegate.ts) so they are
+  // production-pinned; the op-name and inputSchema are supplied by this stub because
+  // the eval harness deliberately never imports from apps/*, so renaming
+  // CREATIVE_CONCEPT_TARGET.operation or swapping its inputSchema in apps/api would
+  // NOT red this test. inputSchema still references the shared
+  // CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA constant the mock uses, so the `toBe` holds.
+  // `submitter` and `mapInput` satisfy the required types but are only read inside
+  // `execute`, which these assertions never call.
+  const delegateDeps: DelegateToolDeps = {
+    submitter: {
+      submitChildWork: () => {
+        throw new Error("stub submitter: construction-only, execute is never called here");
+      },
+    },
+    targets: [
+      {
+        operation: "creative_concept",
+        intent: "creative.concept.draft",
+        description: "stub target for construction-only tool-metadata assertions",
+        inputSchema: CREATIVE_CONCEPT_TOOL_INPUT_SCHEMA,
+        mapInput: (input: unknown) => input as Record<string, unknown>,
+      },
+    ],
+  };
+  const constructed: SkillTool[] = [
+    // crm-query/crm-write take two positional store deps (not one deps object);
+    // `noDeps` satisfies both positions since neither is dereferenced outside
+    // `execute`.
+    createCrmQueryToolFactory(noDeps, noDeps)(noCtx),
+    createCrmWriteToolFactory(noDeps, noDeps)(noCtx),
+    // calendar-book includes booking.reschedule/cancel (spread inside the factory).
+    createCalendarBookToolFactory(noDeps)(noCtx),
+    createEscalateToolFactory(noDeps)(noCtx),
+    createScheduleFollowUpToolFactory(noDeps)(noCtx),
+    createDelegateToolFactory(delegateDeps)(noCtx),
+    createDepositLinkToolFactory(noDeps)(noCtx),
+  ];
+  return new Map(constructed.map((t) => [t.id, t]));
+}
 
-describe("mock-tools — tool input-schema parity with production (mock-tool-blind gap, EV-5/AGENT-5)", () => {
-  const { tools } = createMockTools();
+describe("mock-tools - tool-contract parity with the REAL Alex tools (by construction)", () => {
+  const { tools: mock } = createMockTools();
+  const real = buildRealAlexTools();
 
-  it.each(PRODUCTION_TOOL_PARITY)(
-    "$toolId.$operation presents the EXACT production input schema (by import) + effect/idempotent",
-    ({ toolId, operation, schema, effectCategory, idempotent }) => {
-      // Non-vacuous guard: the imported production constant must be a real schema
-      // object, so `toBe(schema)` below can never pass vacuously (e.g. were the
-      // export ever undefined at runtime, undefined === undefined would slip by).
-      expect(schema, `imported schema for ${toolId}.${operation} is not an object`).toMatchObject({
+  it("mock tool-id set === real constructed tool-id set === ALEX_ALLOWED_TOOL_IDS", () => {
+    const realIds = [...real.keys()].sort();
+    expect([...mock.keys()].sort(), "mock toolset drifted from the real Alex tools").toEqual(
+      realIds,
+    );
+    expect([...ALEX_ALLOWED_TOOL_IDS].sort(), "ALEX_ALLOWED_TOOL_IDS drifted from real").toEqual(
+      realIds,
+    );
+  });
+
+  const opPairs = [...real].flatMap(([toolId, tool]) =>
+    Object.keys(tool.operations).map((operation) => ({
+      toolId,
+      operation,
+      // Precomputed so the vitest reporter renders "crm-query.contact.get"; a
+      // "$toolId.$operation" title interpolates as "undefined" (vitest treats the
+      // dot as a property path on toolId).
+      name: `${toolId}.${operation}`,
+    })),
+  );
+
+  it.each(opPairs)(
+    "$name: mock effectCategory / idempotent / inputSchema are IDENTICAL to the real tool",
+    ({ toolId, operation }) => {
+      const realOp = real.get(toolId)!.operations[operation]!;
+      const mockTool = mock.get(toolId);
+      expect(mockTool, `mock is missing tool ${toolId}`).toBeDefined();
+      const mockOp = mockTool!.operations[operation];
+      expect(mockOp, `mock ${toolId} is missing operation ${operation}`).toBeDefined();
+      // Non-vacuous guard: the real op is a genuine schema-bearing operation, so the
+      // identity assertions below cannot pass vacuously.
+      expect(realOp.inputSchema, `real ${toolId}.${operation} has no inputSchema`).toMatchObject({
         type: "object",
       });
-      const tool = tools.get(toolId);
-      expect(tool, `mock is missing tool ${toolId}`).toBeDefined();
-      const op = tool!.operations[operation];
-      expect(op, `mock ${toolId} is missing operation ${operation}`).toBeDefined();
-      // Identity (toBe), NOT deepEqual: the mock must REFERENCE the same exported
-      // schema constant the real tool uses, so the eval can never silently drift
-      // from the production tool contract. A re-inlined literal fails this.
-      expect(op!.inputSchema).toBe(schema);
-      expect(op!.effectCategory).toBe(effectCategory);
-      expect(op!.idempotent ?? false).toBe(idempotent);
+      // Identity (toBe), NOT deepEqual: the mock must present the SAME frozen schema
+      // constant the real tool references, and the SAME effect/idempotent, so the eval
+      // can never silently drift from the production tool contract.
+      expect(mockOp!.inputSchema).toBe(realOp.inputSchema);
+      expect(mockOp!.effectCategory).toBe(realOp.effectCategory);
+      expect(mockOp!.idempotent ?? false).toBe(realOp.idempotent ?? false);
     },
   );
 
-  it("the mock tool-id set equals Alex's real registered toolset (ALEX_ALLOWED_TOOL_IDS)", () => {
-    expect([...tools.keys()].sort()).toEqual([...ALEX_ALLOWED_TOOL_IDS].sort());
-  });
-
-  it("the mock exposes exactly the production operations per tool (no invented/missing ops)", () => {
-    const opsByTool = new Map<string, string[]>();
-    for (const { toolId, operation } of PRODUCTION_TOOL_PARITY) {
-      opsByTool.set(toolId, [...(opsByTool.get(toolId) ?? []), operation]);
-    }
-    for (const [toolId, ops] of opsByTool) {
-      expect(Object.keys(tools.get(toolId)!.operations).sort()).toEqual([...ops].sort());
+  it("mock exposes exactly the real op-set per tool (no invented / missing ops)", () => {
+    for (const [toolId, tool] of real) {
+      expect(
+        Object.keys(mock.get(toolId)!.operations).sort(),
+        `mock ${toolId} op-set drifted from real`,
+      ).toEqual(Object.keys(tool.operations).sort());
     }
   });
 
-  // Targeted drift pins — the specific contract regressions this slice closes.
-  // These assert on the EXPORTED production constants (the source of truth), so
-  // they pin the real tool contract, not just the mock.
+  // Targeted contract-shape drift pins on the exported schema constants (source of
+  // truth). These pin the SHAPE of the highest-risk contracts, complementing the
+  // by-construction identity checks above.
   it("booking.create accepts NO contactId / attendee fields (contactId is ctx-injected, AI-1)", () => {
     const props = CALENDAR_BOOK_BOOKING_CREATE_INPUT_SCHEMA["properties"] as Record<
       string,
@@ -184,7 +170,7 @@ describe("mock-tools — tool input-schema parity with production (mock-tool-bli
   });
 
   it("delegate exposes the real creative_concept operation, not a fictional task.delegate", () => {
-    const delegate = tools.get("delegate")!;
+    const delegate = mock.get("delegate")!;
     expect(Object.keys(delegate.operations)).toEqual(["creative_concept"]);
     expect(delegate.operations["creative_concept"]!.effectCategory).toBe("propose");
     expect(delegate.operations["task.delegate"]).toBeUndefined();
