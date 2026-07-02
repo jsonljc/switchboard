@@ -1,4 +1,4 @@
-import { currencyForJurisdiction, type SupportedCurrency } from "@switchboard/schemas";
+import { resolveMarket, type SupportedCurrency } from "@switchboard/schemas";
 import type { GovernanceConfigResolver } from "@switchboard/core/skill-runtime";
 
 /**
@@ -17,6 +17,10 @@ export function buildResolveCurrency(
   return async (deploymentId: string): Promise<SupportedCurrency | null> => {
     const resolution = await resolver(deploymentId);
     if (resolution.status !== "resolved") return null;
-    return currencyForJurisdiction(resolution.config.jurisdiction);
+    // resolveMarket(config) reads the optional `market` passthrough marker first (null for an
+    // unregistered market), else the legacy `jurisdiction`; `?.currency ?? null` is the single
+    // fail-closed expression. A `?? config.jurisdiction` fallback would re-open the fail-close
+    // (an unregistered market:"TH" config would resolve SGD instead of null).
+    return resolveMarket(resolution.config)?.currency ?? null;
   };
 }

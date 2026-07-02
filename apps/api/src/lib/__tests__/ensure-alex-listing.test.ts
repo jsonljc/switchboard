@@ -151,30 +151,40 @@ describe("ensureAlexListingForOrg", () => {
     );
   });
 
-  it("SH-4 precedence: a threaded generic vertical WINS over the org-timezone seedContext", async () => {
+  it("SH-4 precedence: a threaded generic profile WINS over the org-timezone seedContext", async () => {
     const db = buildStatefulMockDb();
     await ensureAlexListingForOrg("org_floor", db as never, {
       governanceSeedContext: { jurisdiction: "SG", clinicType: "medical" },
-      vertical: "generic",
+      regulatoryProfileId: "generic",
       market: "SG",
     });
     const dep = db.deployments.get("org_floor::listing_1")!;
     // Before SH-4 the seedContext shadowed the selector, silently stamping a
-    // medspa-medical config. The floor selector must win: generic + nonMedical.
-    expect(dep.governanceConfig).toEqual(buildSafeHarborFloorConfig({ jurisdiction: "SG" }));
+    // medspa-medical config. The floor selector must win: generic + nonMedical, now with
+    // the S2-4 market + regulatoryProfileId passthrough markers on the self-serve path.
+    expect(dep.governanceConfig).toEqual({
+      ...buildSafeHarborFloorConfig({ jurisdiction: "SG" }),
+      market: "SG",
+      regulatoryProfileId: "generic",
+    });
     expect((dep.governanceConfig as { vertical?: string }).vertical).toBe("generic");
     expect((dep.governanceConfig as { clinicType: string }).clinicType).toBe("nonMedical");
   });
 
-  it("SH-4: a generic vertical without an explicit market derives the market from the seedContext", async () => {
+  it("SH-4: a generic profile without an explicit market derives the market from the seedContext", async () => {
     const db = buildStatefulMockDb();
     await ensureAlexListingForOrg("org_floor_my", db as never, {
       governanceSeedContext: { jurisdiction: "MY", clinicType: "medical" },
-      vertical: "generic",
+      regulatoryProfileId: "generic",
     });
     const dep = db.deployments.get("org_floor_my::listing_1")!;
-    // The seedContext jurisdiction is not lost: the floor is built for MY, not the SG default.
-    expect(dep.governanceConfig).toEqual(buildSafeHarborFloorConfig({ jurisdiction: "MY" }));
+    // The seedContext jurisdiction is not lost: the floor is built for MY, not the SG default,
+    // and the real MY market rides as the S2-4 passthrough marker.
+    expect(dep.governanceConfig).toEqual({
+      ...buildSafeHarborFloorConfig({ jurisdiction: "MY" }),
+      market: "MY",
+      regulatoryProfileId: "generic",
+    });
     expect((dep.governanceConfig as { jurisdiction: string }).jurisdiction).toBe("MY");
   });
 
@@ -254,13 +264,19 @@ describe("ensureAlexListingForOrg", () => {
     expect(tx.agentDeployment.update).toHaveBeenCalledTimes(1);
   });
 
-  it("threads onboarding (vertical, market) through selectPackGovernanceConfig into the seeded config (MY)", async () => {
+  it("threads onboarding (regulatoryProfileId, market) through selectPackGovernanceConfig into the seeded config (MY)", async () => {
     const db = buildStatefulMockDb();
-    await ensureAlexListingForOrg("org_my", db as never, { vertical: "medspa", market: "MY" });
+    await ensureAlexListingForOrg("org_my", db as never, {
+      regulatoryProfileId: "medspa",
+      market: "MY",
+    });
     // Forward proof: the seeder hands its onboarding input to the shared pack seam verbatim.
     // This is the apps/api half of the dual-provisioning sync obligation (the db twin
     // ensureAlexForOrg forwards the same shape): change one seeder, change both.
-    expect(selectPackGovernanceConfig).toHaveBeenCalledWith({ vertical: "medspa", market: "MY" });
+    expect(selectPackGovernanceConfig).toHaveBeenCalledWith({
+      regulatoryProfileId: "medspa",
+      market: "MY",
+    });
     // Output proof: the seam's MY/medical observe config (distinct from the SG default) is
     // what lands on the deployment, so the market param is not silently dropped.
     const dep = db.deployments.get("org_my::listing_1")!;

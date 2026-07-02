@@ -1,13 +1,10 @@
-import {
-  selectPackGovernanceConfig,
-  type PrismaDbClient,
-  type ProvisioningVertical,
-  type ProvisioningMarket,
-} from "@switchboard/db";
+import { selectPackGovernanceConfig, type PrismaDbClient } from "@switchboard/db";
 import {
   buildObserveGovernanceConfig,
+  type MarketId,
   type ObserveGovernanceConfig,
   type ObserveGovernanceConfigInput,
+  type RegulatoryProfileId,
 } from "@switchboard/schemas";
 
 export interface EnsureAlexListingResult {
@@ -19,21 +16,22 @@ export interface EnsureAlexListingOptions {
   /**
    * Jurisdiction + clinicType used to build the seeded observe governanceConfig. When
    * provided (GET /config derives it from the org timezone via
-   * deriveAlexGovernanceSeedContext) and no `vertical` is threaded, it builds the observe
-   * posture. Precedence (SH-4): an explicit `vertical` selects the pack/floor posture and
-   * WINS over this seedContext (the seedContext jurisdiction is still used as the market
-   * fallback); without a vertical, this seedContext wins over the medspa/SG selector
-   * default. Safe either way because observe never blocks a reply.
+   * deriveAlexGovernanceSeedContext) and no `regulatoryProfileId` is threaded, it builds the
+   * observe posture. Precedence (SH-4): an explicit `regulatoryProfileId` selects the
+   * profile/floor posture and WINS over this seedContext (the seedContext jurisdiction is
+   * still used as the market fallback); without a profile, this seedContext wins over the
+   * medspa/SG selector default. Safe either way because observe never blocks a reply.
    */
   governanceSeedContext?: ObserveGovernanceConfigInput;
   /**
-   * Onboarding-derived pack selection, routed through the shared selectPackGovernanceConfig
-   * seam (the same one the db pilot-CLI twin ensureAlexForOrg consults). Both default to
-   * medspa / SG, so a caller that omits this AND governanceSeedContext seeds the exact
-   * byte-identical SG/medical observe posture as before this seam existed.
+   * Onboarding-derived provisioning selection, routed through the shared
+   * selectPackGovernanceConfig seam (the same one the db pilot-CLI twin ensureAlexForOrg
+   * consults). Both default to medspa / SG, so a caller that omits this AND
+   * governanceSeedContext seeds the exact byte-identical SG/medical observe posture as
+   * before this seam existed.
    */
-  vertical?: ProvisioningVertical;
-  market?: ProvisioningMarket;
+  regulatoryProfileId?: RegulatoryProfileId;
+  market?: MarketId;
 }
 
 /**
@@ -76,21 +74,21 @@ export async function ensureAlexListingForOrg(
     update: {},
   });
 
-  // Precedence (SH-4, D5 reconciliation): a threaded pack `vertical` selects the
-  // pack/floor posture via the shared (vertical, market) seam and WINS over the
+  // Precedence (SH-4, D5 reconciliation): a threaded `regulatoryProfileId` selects the
+  // profile/floor posture via the shared (regulatoryProfileId, market) seam and WINS over the
   // org-timezone seedContext. organizations.ts ALWAYS passes a truthy
   // governanceSeedContext (deriveAlexGovernanceSeedContext never returns undefined),
   // which previously shadowed the selector on this api hot path and would have
   // stamped a self-serve `generic` agent a medspa-medical config instead of the
-  // floor. Without a vertical, an explicit seedContext still builds the observe
-  // posture; otherwise the medspa/SG selector default. When a vertical is threaded
+  // floor. Without a profile, an explicit seedContext still builds the observe
+  // posture; otherwise the medspa/SG selector default. When a profile is threaded
   // without an explicit market, the market falls back to the seedContext jurisdiction
   // (else the SG default) so a derived jurisdiction is never silently lost. Byte-identical
-  // for every current caller (which passes a seedContext and no vertical).
+  // for every current caller (which passes a seedContext and no profile).
   let governanceConfig: ObserveGovernanceConfig;
-  if (opts.vertical) {
+  if (opts.regulatoryProfileId) {
     governanceConfig = selectPackGovernanceConfig({
-      vertical: opts.vertical,
+      regulatoryProfileId: opts.regulatoryProfileId,
       market: opts.market ?? opts.governanceSeedContext?.jurisdiction,
     });
   } else if (opts.governanceSeedContext) {
