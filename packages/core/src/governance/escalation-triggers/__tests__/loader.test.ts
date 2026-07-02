@@ -114,10 +114,13 @@ describe("loadEscalationTriggers vertical keying", () => {
     expect(fitness).not.toBe(medspa);
   });
 
-  it("a non-seed vertical inherits the medspa floor (over-restrict is the safe direction)", () => {
+  it("a non-seed vertical inherits the generic safe-harbor floor (SH-2), not the medspa pack", () => {
     const medspa = loadEscalationTriggers("MY", "medspa");
     const fitness = loadEscalationTriggers("MY", "fitness");
-    expect(fitness.map((e) => e.id)).toEqual(medspa.map((e) => e.id));
+    const generic = loadEscalationTriggers("MY", "generic");
+    // fitness (unpacked) resolves the generic floor, a strict subset of medspa.
+    expect(fitness.map((e) => e.id)).toEqual(generic.map((e) => e.id));
+    expect(fitness.length).toBeLessThan(medspa.length);
   });
 });
 
@@ -141,7 +144,7 @@ describe("loadEscalationTriggers floor coverage guard (SH-1)", () => {
     }
   });
 
-  it("a non-seed vertical inheriting the medspa floor still passes the guard", () => {
+  it("a non-seed vertical inheriting the generic floor still passes the guard", () => {
     expect(() => loadEscalationTriggers("SG", "fitness")).not.toThrow();
     expect(() => loadEscalationTriggers("MY", "fitness")).not.toThrow();
   });
