@@ -1,4 +1,4 @@
-import type { SupportedCurrency } from "./governance-config.js";
+import type { GovernanceConfig, SupportedCurrency } from "./governance-config.js";
 import type { PdpaJurisdiction } from "./pdpa-consent.js";
 
 /**
@@ -15,6 +15,13 @@ import type { PdpaJurisdiction } from "./pdpa-consent.js";
  * not spun up speculatively on this path. `currencyForJurisdiction` (the existing money
  * chokepoint in `governance-config.ts`) is left untouched by this module; `currencyForMarket`
  * below is pinned to it via a parity test so the two can never silently drift apart.
+ *
+ * `resolveMarket` accepts either an id-form (`MarketId` string) or a config-form (a stored
+ * `GovernanceConfig`). The config-form reads the optional `market` passthrough marker first
+ * (mirroring the `vertical` marker read by `resolveVertical`), then falls back to the legacy
+ * `jurisdiction` field (SG/MY) when no marker is present: every pre-marker config resolves
+ * the same market it always did. The marker is written by the S2-4 provisioning selector;
+ * this module only reads it.
  */
 export type MarketId = string;
 
@@ -54,8 +61,27 @@ export function currencyForMarket(id: MarketId): SupportedCurrency | null {
   return MARKETS[id]?.currency ?? null;
 }
 
-/** The full market record, or null if not registered. (id-form; a config-reading
- *  overload is added in a later slice, so keep this parameter a plain MarketId string.) */
-export function resolveMarket(id: MarketId): Market | null {
-  return MARKETS[id] ?? null;
+/**
+ * The full market record, or null if not registered / resolvable.
+ *
+ * - id-form: `resolveMarket(id)` looks up a `MarketId` string directly.
+ * - config-form: `resolveMarket(config)` resolves a market from a stored `GovernanceConfig`:
+ *   it reads the optional `market` passthrough marker first, and falls back to the legacy
+ *   `jurisdiction` field (SG/MY) when no marker is present. This keeps every existing
+ *   (pre-marker) config byte-identical: `jurisdiction` alone still resolves the market it
+ *   always did.
+ *
+ * Both forms fail closed to `null` for an unregistered id: `MARKETS` is the null-prototype
+ * map above, so an inherited/unknown key never resolves to a wrong value.
+ */
+export function resolveMarket(id: MarketId): Market | null;
+export function resolveMarket(config: GovernanceConfig | null): Market | null;
+export function resolveMarket(arg: MarketId | GovernanceConfig | null): Market | null {
+  if (arg === null) return null;
+  if (typeof arg === "string") return MARKETS[arg] ?? null;
+  // Config form: honor the optional `market` passthrough marker; else fall back to
+  // the legacy `jurisdiction` field (SG/MY). An unregistered/absent market fails closed to null.
+  const marker = (arg as unknown as Record<string, unknown>).market;
+  const key = typeof marker === "string" ? marker : arg.jurisdiction;
+  return MARKETS[key] ?? null;
 }
