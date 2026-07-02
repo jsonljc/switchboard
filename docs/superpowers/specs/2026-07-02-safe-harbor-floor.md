@@ -1,12 +1,15 @@
 # Universal Safe-Harbor Floor (Design Spec)
 
-> **Status: DRAFT, pending owner decisions.** This is a proposal. It resolves the
-> mechanism for the safe-harbor floor and the PR series that would build it, but
-> the three Open Questions at the end must be confirmed by the product owner
-> before any implementation PR is opened. No product/runtime code changes here.
+> **Status: BASELINE (owner-approved 2026-07-02).** The three Open Questions in
+> Section 6 are RESOLVED = yes: build the floor's primitives now on the current
+> (pre-L1) config model (Q1), express them via the reused Slice-2 `generic`
+> vertical loader seam + the existing claim-boundary gate (Q2), and go spec-first
+> with the SH-1..SH-5 implementation series to follow (Q3). This doc is the design
+> baseline the implementation PRs consume; it lives on `main`.
 >
-> Authority: SURFACE-before-merge. Land this spec as a focused docs PR to `main`;
-> do not merge until reviewed.
+> Dependencies #1380 (pack selector) and #1381 (loader re-key + `Vertical` type)
+> are now MERGED (Slices 3 and 2). Section 2 was written against their post-merge
+> shape and re-verified against `main` before SH-1.
 
 ## 1. Why (design intent)
 
@@ -34,9 +37,9 @@ Design intent hubs: `project_open_self_serve.md`,
 
 ## 2. Ground truth (current code, and what it already gives us)
 
-The floor assembles almost entirely from primitives that already exist or are in
-flight. Two of those primitives live in **still-open** PRs; this spec depends on
-them landing first (see Dependencies).
+The floor assembles almost entirely from primitives that already exist. Two of
+those primitives landed in **recently-merged** PRs (#1380, #1381); the floor's
+implementation builds on them (see Dependencies).
 
 **Governance config (`packages/schemas/src/governance-config.ts`, on `main`):**
 
@@ -52,7 +55,7 @@ them landing first (see Dependencies).
   `assertNever` chokepoint: these are the surfaces L1 opens, and the reason the
   pre-L1 floor is SG/MY-only.
 
-**Provisioning selector (`packages/db/src/seed/pack-governance-config.ts`, PR #1380, OPEN):**
+**Provisioning selector (`packages/db/src/seed/pack-governance-config.ts`, PR #1380, MERGED):**
 
 - `selectPackGovernanceConfig({ vertical, market })` is the single routing point
   both seeders (`provision-org-agents.ts` in db, `ensure-alex-listing.ts` in api)
@@ -62,7 +65,7 @@ them landing first (see Dependencies).
   `MEDSPA_PILOT_GOVERNANCE_CONFIG` constant **by reference**, so every existing
   org is byte-identical.
 
-**Re-keyed loaders (`packages/core/src/...`, PR #1381, OPEN):**
+**Re-keyed loaders (`packages/core/src/...`, PR #1381, MERGED):**
 
 - `packages/core/src/vertical.ts`: `Vertical = "medspa" | "dental" | "fitness" |
   "generic"`, `DEFAULT_VERTICAL = "medspa"`. Deliberately a LOCAL core type, NOT
@@ -114,10 +117,11 @@ every pack slice.
 
 ### Dependencies
 
-This spec is designed against the POST-#1380/#1381 code shape. Both PRs are
-currently OPEN. The floor's implementation PRs must land AFTER #1380 (pack
-selector) and #1381 (loader re-key + `Vertical` type). If either changes shape
-before merge, re-check Section 2 against the merged code.
+This spec is designed against the POST-#1380/#1381 code shape. Both PRs are now
+MERGED (Slices 3 and 2 of the pack-extraction workstream). The floor's
+implementation PRs build on #1380 (pack selector) and #1381 (loader re-key +
+`Vertical` type); Section 2 was re-verified against the merged `main` shape
+before SH-1.
 
 ## 3. The floor, as three reused seams
 
@@ -360,12 +364,12 @@ Out of the floor's scope (do NOT bundle): the L1 open-`regulatoryProfileId`
 refactor (its own costed series), the fitness pack content, self-serve billing,
 and T&S/KYC. The floor is the prerequisite envelope those land on top of.
 
-## 6. Open questions (owner to confirm)
+## 6. Open questions (RESOLVED 2026-07-02)
 
 **Q1. Sequencing.** Build the floor's primitives NOW on the current
 (pre-L1) config model, applied to the `generic`/medspa-default selector; L1 later
 generalizes them to the universal default.
-**Recommendation: yes.** The primitives (generic loader tables, floor config
+**RESOLVED (owner, 2026-07-02): yes.** The primitives (generic loader tables, floor config
 factory, `resolveVertical`, fail-closed merge, manifest assertion) are additive
 and reversible on the current model, harness-guarded on every PR. L1 then swaps
 the closed unions for the open registry with the floor already in place (D5), so
@@ -375,14 +379,14 @@ acceptable for the first open-self-serve markets.
 **Q2. Mechanism.** Express the floor's claim-boundaries via the `generic`
 vertical loader seam + the existing claim-boundary gate (reuse Slice-2), not a
 new governance primitive.
-**Recommendation: yes.** The `(vertical, jurisdiction)` loaders, the `generic`
+**RESOLVED (owner, 2026-07-02): yes.** The `(vertical, jurisdiction)` loaders, the `generic`
 member, and the deterministic + pre-input gates already exist; the floor
 completes that seam. A new primitive would duplicate the machinery and add a
 second governance pass, violating Doctrine #4/#5 (D3). Affirmative boundaries
 that are not pattern-scannable ride the reused `composePackBody` prompt floor.
 
 **Q3. Output.** Spec-first (this PR), implement after review.
-**Recommendation: yes.** The mechanism has real fail-closed and byte-identical
+**RESOLVED (owner, 2026-07-02): yes.** The mechanism has real fail-closed and byte-identical
 hazards (the empty-array trap, the id-uniqueness assertion interaction, the
 provisioning precedence shadow) that are cheaper to settle in review than in
 code. Land this spec, confirm Q1/Q2, then open SH-1.
@@ -403,8 +407,8 @@ code. Land this spec, confirm Q1/Q2, then open SH-1.
   `assertNever` restrict the pre-L1 floor to SG/MY. Other markets await L1.
 - **Prompt-floor skill coupling**: the no-pack block's home depends on whether
   self-serve reuses `alex`; resolve in SH-5, keep disjoint from the medspa block.
-- **Dependency on open PRs**: #1380 and #1381 must merge first and are the design
-  baseline; re-verify Section 2 against merged code before SH-1.
+- **Dependency on merged PRs**: #1380 and #1381 (now merged) are the design
+  baseline; Section 2 was re-verified against merged `main` before SH-1.
 
 ## 8. Non-goals
 
