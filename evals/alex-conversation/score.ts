@@ -37,6 +37,36 @@ export interface ScenarioResult {
 }
 
 // ---------------------------------------------------------------------------
+// TaggedRegression
+// ---------------------------------------------------------------------------
+
+/**
+ * Which enforcement tier produced a regression:
+ *  - "deterministic": Rule 1 (deterministicPass flipped true → false). Backed
+ *    by the unexpected-tool + trajectory oracle checks, which are fully
+ *    deterministic and safe to gate a blocking CI job on.
+ *  - "judge-hard-rule": Rule 2 (semanticHardRulePass === false). Backed by the
+ *    nondeterministic LLM judge's hard-rule verdict.
+ *  - "judge-score": Rule 3 (judgeScore dropped beyond tolerance). Backed by
+ *    the nondeterministic LLM judge's soft score.
+ */
+export type RegressionKind = "deterministic" | "judge-hard-rule" | "judge-score";
+
+/**
+ * A single regression, tagged by kind so callers can separate the
+ * deterministic signal from the judge signal. See `deterministicRegressions`
+ * and `judgeRegressions` below.
+ */
+export interface TaggedRegression {
+  /** The scenario id the regression was detected on. */
+  scenarioId: string;
+  /** Which rule/tier produced this regression. */
+  kind: RegressionKind;
+  /** Human-readable detail (same text as in `regressions`, minus the id prefix). */
+  detail: string;
+}
+
+// ---------------------------------------------------------------------------
 // compareAgainstBaseline
 // ---------------------------------------------------------------------------
 
@@ -45,6 +75,12 @@ export interface BaselineComparisonResult {
   passed: boolean;
   /** One string per regression, each prefixed with the scenario id. */
   regressions: string[];
+  /**
+   * Every regression, tagged by kind. Does NOT include the `[info]`
+   * new-scenario note (that is not a regression). `passed` is derived from
+   * this array being empty.
+   */
+  taggedRegressions: TaggedRegression[];
 }
 
 /**
@@ -62,12 +98,22 @@ export interface BaselineComparisonResult {
  * (they are new — they cannot regress from something that was never measured).
  * A note is still recorded in `regressions` for visibility, but it does NOT
  * cause `passed` to be false.
+ *
+ * Each regression is recorded twice: as a human-readable string in
+ * `regressions` (back-compat) and as a `TaggedRegression` in
+ * `taggedRegressions`, tagged with which rule produced it (Rule 1 tags
+ * "deterministic"; Rules 2 and 3 tag "judge-hard-rule" and "judge-score").
+ * `passed` is derived from `taggedRegressions` being empty, which is
+ * equivalent to the old "no `[regression]`-prefixed string" check because
+ * every `[regression]` string has exactly one corresponding
+ * `TaggedRegression` pushed alongside it.
  */
 export function compareAgainstBaseline(
   current: ScenarioResult[],
   baseline: Baseline,
 ): BaselineComparisonResult {
   const regressions: string[] = [];
+  const taggedRegressions: TaggedRegression[] = [];
 
   // Index baseline scenarios by id for O(1) lookup.
   const baselineMap = new Map(baseline.scenarios.map((s) => [s.id, s]));
@@ -85,38 +131,64 @@ export function compareAgainstBaseline(
 
     // Rule 1: deterministic pass flipped true → false.
     if (baselineScenario.deterministicPass === true && result.deterministicPass === false) {
-      regressions.push(
-        `[regression] scenario "${result.id}": deterministicPass flipped true → false` +
-          (result.violations.length > 0 ? ` (violations: ${result.violations.join(", ")})` : ""),
-      );
+      const detail =
+        `deterministicPass flipped true → false` +
+        (result.violations.length > 0 ? ` (violations: ${result.violations.join(", ")})` : "");
+      regressions.push(`[regression] scenario "${result.id}": ${detail}`);
+      taggedRegressions.push({ scenarioId: result.id, kind: "deterministic", detail });
     }
 
     // Rule 2: semantic hard-rule violation appeared.
     if (result.semanticHardRulePass === false) {
-      regressions.push(
-        `[regression] scenario "${result.id}": semanticHardRulePass is false` +
-          (result.violations.length > 0 ? ` (violations: ${result.violations.join(", ")})` : ""),
-      );
+      const detail =
+        `semanticHardRulePass is false` +
+        (result.violations.length > 0 ? ` (violations: ${result.violations.join(", ")})` : "");
+      regressions.push(`[regression] scenario "${result.id}": ${detail}`);
+      taggedRegressions.push({ scenarioId: result.id, kind: "judge-hard-rule", detail });
     }
 
     // Rule 3: judge score dropped beyond tolerance.
     const scoreDrop = baselineScenario.judgeScore - result.judgeScore;
     if (scoreDrop > baseline.judgeScoreTolerance) {
-      regressions.push(
-        `[regression] scenario "${result.id}": judgeScore dropped from ` +
-          `${baselineScenario.judgeScore} → ${result.judgeScore} ` +
-          `(drop ${scoreDrop.toFixed(2)} exceeds tolerance ${baseline.judgeScoreTolerance})`,
-      );
+      const detail =
+        `judgeScore dropped from ${baselineScenario.judgeScore} → ${result.judgeScore} ` +
+        `(drop ${scoreDrop.toFixed(2)} exceeds tolerance ${baseline.judgeScoreTolerance})`;
+      regressions.push(`[regression] scenario "${result.id}": ${detail}`);
+      taggedRegressions.push({ scenarioId: result.id, kind: "judge-score", detail });
     }
   }
 
-  // A run passes iff there are no actual regressions (info notes don't count).
-  const actualRegressions = regressions.filter((r) => r.startsWith("[regression]"));
-
   return {
-    passed: actualRegressions.length === 0,
+    passed: taggedRegressions.length === 0,
     regressions,
+    taggedRegressions,
   };
+}
+
+// ---------------------------------------------------------------------------
+// deterministicRegressions / judgeRegressions
+// ---------------------------------------------------------------------------
+
+/**
+ * Narrow a comparison result down to the deterministic-only regressions
+ * (Rule 1). These come from the unexpected-tool + trajectory oracle checks,
+ * not the LLM judge, so this subset is safe to gate a blocking CI job on
+ * without inheriting judge flakiness.
+ */
+export function deterministicRegressions(result: BaselineComparisonResult): TaggedRegression[] {
+  return result.taggedRegressions.filter((r) => r.kind === "deterministic");
+}
+
+/**
+ * Narrow a comparison result down to the judge-driven regressions (Rules 2
+ * and 3: hard-rule violation or score drop). Both are produced by the
+ * nondeterministic LLM judge, so this subset should not gate a blocking CI
+ * job without accepting judge flakiness.
+ */
+export function judgeRegressions(result: BaselineComparisonResult): TaggedRegression[] {
+  return result.taggedRegressions.filter(
+    (r) => r.kind === "judge-hard-rule" || r.kind === "judge-score",
+  );
 }
 
 // ---------------------------------------------------------------------------
