@@ -1,9 +1,11 @@
 import type { BannedPhraseEntry } from "./types.js";
-import { COMMON_BANNED_PHRASES, COMMON_BANNED_PHRASES_BY_VERTICAL } from "./common.js";
+import { COMMON_BANNED_PHRASES_BY_VERTICAL, GENERIC_COMMON_BANNED_PHRASES } from "./common.js";
 import { SG_BANNED_PHRASES, SG_BANNED_PHRASES_BY_VERTICAL } from "./sg.js";
 import { MY_BANNED_PHRASES, MY_BANNED_PHRASES_BY_VERTICAL } from "./my.js";
 import { normalizeRegex } from "../text/regex.js";
-import { DEFAULT_VERTICAL, type Vertical } from "../../vertical.js";
+import { DEFAULT_VERTICAL, resolveVerticalTable, type Vertical } from "../../vertical.js";
+import { assertFloorCoverage, BANNED_PHRASE_FLOOR_MANIFEST } from "../floor-manifest.js";
+import { scanForBannedPhrases } from "../scanner/banned-phrase-scanner.js";
 
 function normalizePattern(p: string | RegExp): string | RegExp {
   if (typeof p === "string") return p;
@@ -38,11 +40,18 @@ export function loadBannedPhrases(
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const common = COMMON_BANNED_PHRASES_BY_VERTICAL[vertical] ?? COMMON_BANNED_PHRASES;
+  // Fallback floor is the GENERIC safe-harbor table (SH-2): an absent/empty
+  // vertical resolves the universal floor, not the medspa pack. medspa is
+  // registered so it resolves its own table verbatim (byte-identical).
+  const common = resolveVerticalTable(
+    COMMON_BANNED_PHRASES_BY_VERTICAL,
+    vertical,
+    GENERIC_COMMON_BANNED_PHRASES,
+  );
   const jurisdictionTable =
     jurisdiction === "SG"
-      ? (SG_BANNED_PHRASES_BY_VERTICAL[vertical] ?? SG_BANNED_PHRASES)
-      : (MY_BANNED_PHRASES_BY_VERTICAL[vertical] ?? MY_BANNED_PHRASES);
+      ? resolveVerticalTable(SG_BANNED_PHRASES_BY_VERTICAL, vertical, SG_BANNED_PHRASES)
+      : resolveVerticalTable(MY_BANNED_PHRASES_BY_VERTICAL, vertical, MY_BANNED_PHRASES);
 
   const merged: BannedPhraseEntry[] = [...common, ...jurisdictionTable].map(normalizeEntry);
 
@@ -73,6 +82,16 @@ export function loadBannedPhrases(
       patternIndex.set(key, entry.id);
     }
   }
+
+  // Fail-closed floor guard (SH-1): a vertical's merged table must cover every
+  // floor safety boundary. medspa passes with zero edits; a deficient or empty
+  // pack throws at load rather than silently running under-protected.
+  assertFloorCoverage(
+    merged,
+    BANNED_PHRASE_FLOOR_MANIFEST,
+    (probe, entries) => scanForBannedPhrases(probe, entries).length > 0,
+    `${vertical}/${jurisdiction} banned-phrases`,
+  );
 
   const frozen = Object.freeze(merged);
   cache.set(cacheKey, frozen);
