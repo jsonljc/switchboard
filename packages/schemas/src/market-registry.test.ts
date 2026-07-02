@@ -51,3 +51,15 @@ describe("parity with the legacy currency chokepoint", () => {
     }
   });
 });
+
+describe("prototype-chain fail-closed", () => {
+  it("resolveMarket returns null for inherited Object.prototype keys, not the inherited value", () => {
+    expect(resolveMarket("constructor")).toBeNull();
+    expect(resolveMarket("__proto__")).toBeNull();
+    expect(resolveMarket("toString")).toBeNull();
+  });
+
+  it("currencyForMarket returns null for an inherited Object.prototype key", () => {
+    expect(currencyForMarket("constructor")).toBeNull();
+  });
+});

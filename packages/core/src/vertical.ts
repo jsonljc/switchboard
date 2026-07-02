@@ -4,22 +4,18 @@
  *
  * `medspa` is the seed (reference-tenant) vertical: those subsystems key on it so
  * a later vertical pack can layer its own tables / LTV band without a call-site
- * change. Kept as a LOCAL core type (deliberately NOT an L1 schema union) so
- * this seam stays additive and fully reversible until the VerticalPack registry
- * lands. The vocabulary mirrors the schemas `reference-metadata` vertical enum
- * (minus "none", which never carries governance data).
+ * change. Promoted to an L1 schema union (L1 S2-2) so the regulatory-profile
+ * registry can type `loaderVertical` without a layer violation; re-exported here
+ * so every existing core importer of `../vertical.js` resolves unchanged. The
+ * vocabulary mirrors the schemas `reference-metadata` vertical enum (minus
+ * "none", which never carries governance data).
  *
  * Single source: the type derives from VERTICALS so the runtime list (used by
  * resolveVertical's marker validation) and the union can never drift apart.
  */
-export const VERTICALS = ["medspa", "dental", "fitness", "generic"] as const;
-export type Vertical = (typeof VERTICALS)[number];
-
-/**
- * Default vertical. Every existing caller keys on this, so re-keying the loaders
- * and the scorer on (vertical, jurisdiction) leaves medspa behavior byte-identical.
- */
-export const DEFAULT_VERTICAL: Vertical = "medspa";
+export { VERTICALS, DEFAULT_VERTICAL } from "@switchboard/schemas";
+export type { Vertical } from "@switchboard/schemas";
+import type { Vertical } from "@switchboard/schemas";
 
 /**
  * Resolve a vertical's table from a `_BY_VERTICAL` map with a fail-CLOSED

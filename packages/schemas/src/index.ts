@@ -254,3 +254,11 @@ export * from "./robin-recovery-send.js";
 // Open, fail-closed market registry (L1 S2-1): generalizes Jurisdiction beyond the
 // closed SG/MY union; currencyForJurisdiction stays the legacy chokepoint, untouched.
 export * from "./market-registry.js";
+
+// Vertical axis (L1 S2-2): promoted from core, which re-exports these same symbols
+// from `../vertical.js` so every existing core importer resolves unchanged.
+export * from "./vertical.js";
+
+// Curated regulatory-profile registry (L1 S2-2): generic + medspa only, no
+// pack-authoring surface. resolveRegulatoryProfile fails closed to generic.
+export * from "./regulatory-profile-registry.js";

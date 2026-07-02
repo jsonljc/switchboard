@@ -19,29 +19,35 @@ import type { PdpaJurisdiction } from "./pdpa-consent.js";
 export type MarketId = string;
 
 export interface Market {
-  id: MarketId;
-  currency: SupportedCurrency;
-  pdpaJurisdiction: PdpaJurisdiction | null;
-  loaderJurisdiction: "SG" | "MY";
-  timezone: string;
+  readonly id: MarketId;
+  readonly currency: SupportedCurrency;
+  readonly pdpaJurisdiction: PdpaJurisdiction | null;
+  readonly loaderJurisdiction: "SG" | "MY";
+  readonly timezone: string;
 }
 
-const MARKETS: Readonly<Record<string, Market>> = Object.freeze({
-  SG: {
-    id: "SG",
-    currency: "SGD",
-    pdpaJurisdiction: "SG",
-    loaderJurisdiction: "SG",
-    timezone: "Asia/Singapore",
-  },
-  MY: {
-    id: "MY",
-    currency: "MYR",
-    pdpaJurisdiction: "MY",
-    loaderJurisdiction: "MY",
-    timezone: "Asia/Kuala_Lumpur",
-  },
-});
+// Null-prototype backing map: a plain object literal inherits from Object.prototype,
+// so `MARKETS["constructor"]` (or "__proto__" / "toString" / etc.) would resolve to the
+// inherited value instead of undefined, defeating the `?? null` fail-closed fallback below.
+// Object.create(null) removes the prototype chain so only explicitly-seeded keys resolve.
+const MARKETS: Readonly<Record<MarketId, Market>> = Object.freeze(
+  Object.assign(Object.create(null) as Record<MarketId, Market>, {
+    SG: {
+      id: "SG",
+      currency: "SGD",
+      pdpaJurisdiction: "SG",
+      loaderJurisdiction: "SG",
+      timezone: "Asia/Singapore",
+    },
+    MY: {
+      id: "MY",
+      currency: "MYR",
+      pdpaJurisdiction: "MY",
+      loaderJurisdiction: "MY",
+      timezone: "Asia/Kuala_Lumpur",
+    },
+  } satisfies Record<MarketId, Market>),
+);
 
 /** The market's settlement currency, or null if the market is not registered. */
 export function currencyForMarket(id: MarketId): SupportedCurrency | null {
